@@ -1,0 +1,17 @@
+[[permission]]
+identifier = "notebook-commands"
+description = "오답노트 데이터 및 이미지 명령"
+commands.allow = [
+  "load_entries",
+  "save_entries",
+  "load_settings",
+  "save_settings",
+  "save_image",
+  "get_image_file_path",
+  "delete_image",
+  "create_backup_zip",
+  "create_auto_backup",
+  "restore_backup_zip",
+  "run_integrity_check",
+  "cleanup_orphan_images",
+]

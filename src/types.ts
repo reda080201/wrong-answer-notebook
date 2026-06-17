@@ -1,0 +1,191 @@
+export type AnnotationTool = "underline" | "highlight";
+
+export interface TextRangeAnnotation {
+  id: string;
+  target: "question";
+  kind: "text";
+  start: number;
+  end: number;
+  tool: AnnotationTool;
+}
+
+export interface ImageRectAnnotation {
+  id: string;
+  target: "question";
+  kind: "image";
+  imageId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  tool: AnnotationTool;
+}
+
+export type Annotation = TextRangeAnnotation | ImageRectAnnotation;
+
+/** 오답 한 건 vs 문제지(전체) 보관 vs 개념 */
+export type EntryKind = "wrong_answer" | "problem_sheet" | "concept";
+
+export type Difficulty = "high" | "medium" | "low" | "none";
+
+export interface ExplanationPart {
+  id: string;
+  text: string;
+  images: string[];
+}
+
+export interface SheetAnswerItem {
+  id: string;
+  questionNumber: string;
+  answer: string;
+  explanation: string;
+  notes?: string;
+  importantPoints: string[];
+  difficulty?: Difficulty;
+  concepts?: string[];
+  needsReview?: boolean;
+  sourceNote?: string;
+}
+
+export interface SheetFigureItem {
+  id: string;
+  questionNumber: string;
+  title: string;
+  caption: string;
+  image?: string;
+  source: "original" | "gpt_cleaned";
+  needsReview?: boolean;
+}
+
+export type ReviewResult = "again" | "hard" | "good";
+
+export interface ReviewEvent {
+  id: string;
+  reviewedAt: string;
+  result: ReviewResult;
+  nextDueAt: string | null;
+  intervalDays: number;
+}
+
+export interface ReviewState {
+  dueAt: string | null;
+  lastReviewedAt?: string;
+  intervalDays: number;
+  streak: number;
+  history: ReviewEvent[];
+}
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
+export interface EntryTemplate {
+  id: string;
+  name: string;
+  entryKind: EntryKind;
+  data: Partial<EntryFormData>;
+}
+
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  content: string;
+  builtIn?: boolean;
+}
+
+export interface MemoTemplate {
+  id: string;
+  name: string;
+  content: string;
+  builtIn?: boolean;
+}
+
+export interface AppSettings {
+  templates: EntryTemplate[];
+  promptTemplates: PromptTemplate[];
+  memoTemplates: MemoTemplate[];
+  importPreferences: {
+    lastPromptTemplateId?: string;
+  };
+  answerViewPreferences: {
+    viewMode: "card" | "table";
+    hideAnswers: boolean;
+  };
+  autoBackup: {
+    enabled: boolean;
+    lastBackupAt?: string;
+  };
+}
+
+export type IntegritySeverity = "info" | "warning" | "error";
+
+export interface IntegrityIssue {
+  id: string;
+  severity: IntegritySeverity;
+  message: string;
+  entryId?: string;
+}
+
+export interface IntegrityReport {
+  checkedAt: string;
+  issues: IntegrityIssue[];
+}
+
+export interface WrongAnswerEntry {
+  id: string;
+  subject: string;
+  title: string;
+  question: string;
+  questionImages: string[];
+  /** 오답 / 문제지 / 개념 */
+  entryKind: EntryKind;
+  /** 어려운 문제 표시 (필터용) */
+  difficult: boolean;
+  /** 난이도 레벨 */
+  difficulty?: Difficulty;
+  myAnswer: string;
+  correctAnswer: string;
+  /** 여러 해설 블록 (해설 1, 해설 2 …) */
+  explanationParts: ExplanationPart[];
+  memo: string;
+  annotations: Annotation[];
+  tags: string[];
+  answerKey?: SheetAnswerItem[];
+  figures?: SheetFigureItem[];
+  review?: ReviewState;
+  checklist?: ChecklistItem[];
+  /** @deprecated 마이그레이션용 — explanationParts로 이전됨 */
+  explanation?: string;
+  /** @deprecated */
+  explanationImages?: string[];
+  /** @deprecated 이전 버전 호환용 */
+  images?: string[];
+  createdAt: string;
+  updatedAt: string;
+  mastered: boolean;
+}
+
+export type EntryFormData = Omit<
+  WrongAnswerEntry,
+  "id" | "createdAt" | "updatedAt" | "images" | "explanation" | "explanationImages"
+>;
+
+export const SUBJECTS = [
+  "국어",
+  "영어",
+  "수학",
+  "과학",
+  "사회",
+  "역사",
+  "기타",
+] as const;
+
+export type Subject = (typeof SUBJECTS)[number];
+
+export type SortKey = "date-desc" | "date-asc" | "title-asc" | "title-desc";
+
+export type ThemeMode = "light" | "dark" | "system";
+
+export type ListFilter = "all" | "pending" | "mastered" | "difficult" | "due";

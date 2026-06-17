@@ -1,0 +1,148 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+import EntryForm from "./EntryForm";
+
+vi.mock("../api", () => ({
+  getImageUrl: vi.fn(),
+  pickImages: vi.fn(),
+  saveImageFiles: vi.fn(),
+}));
+
+describe("EntryForm", () => {
+  it("keeps the form open and shows an error when save fails", async () => {
+    const onClose = vi.fn();
+    const onSave = vi.fn().mockRejectedValue(new Error("disk full"));
+
+    render(
+      <EntryForm
+        onSave={onSave}
+        onClose={onClose}
+        defaultEntryKind="wrong_answer"
+        prefilledTitle="저장 실패 테스트"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("disk full");
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("applies templates and cleans question text", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryForm
+        onSave={onSave}
+        onClose={vi.fn()}
+        defaultEntryKind="wrong_answer"
+        templates={[
+          {
+            id: "template-1",
+            name: "시험지 기본",
+            entryKind: "problem_sheet",
+            data: {
+              title: "모의고사",
+              question: "1. 문제  ① 답",
+              subject: "국어",
+              questionImages: [],
+              explanationParts: [],
+              annotations: [],
+              tags: [],
+              difficult: false,
+              difficulty: "none",
+              mastered: false,
+            },
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("템플릿"), {
+      target: { value: "template-1" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "텍스트 정리" }));
+
+    expect(screen.getByLabelText("제목")).toHaveValue("모의고사");
+    expect(screen.getByLabelText("문제지 · 지문 (텍스트)")).toHaveValue("1. 문제\n① 답");
+  });
+
+  it("uses imported initial data as editable form values", () => {
+    render(
+      <EntryForm
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        defaultEntryKind="problem_sheet"
+        initialData={{
+          entryKind: "problem_sheet",
+          subject: "국어",
+          title: "가져온 시험지",
+          question: "1. 가져온 문제",
+          tags: ["GPT변환", "시험지"],
+          questionImages: ["img_imported.png"],
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("제목")).toHaveValue("가져온 시험지");
+    expect(screen.getByLabelText("문제지 · 지문 (텍스트)")).toHaveValue("1. 가져온 문제");
+    expect(screen.getByText("#GPT변환")).toBeInTheDocument();
+  });
+
+  it("fills and edits imported answer key values for problem sheets", () => {
+    render(
+      <EntryForm
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        defaultEntryKind="problem_sheet"
+        initialData={{
+          entryKind: "problem_sheet",
+          title: "답안 포함 시험지",
+          question: "1. 문제",
+          answerKey: [
+            {
+              id: "answer-1",
+              questionNumber: "1",
+              answer: "③",
+              explanation: "조건을 확인한다.",
+              importantPoints: ["보기 비교"],
+            },
+          ],
+        }}
+      />,
+    );
+
+    expect(screen.getByLabelText("문항 번호")).toHaveValue("1");
+    expect(screen.getByLabelText("정답")).toHaveValue("③");
+    expect(screen.getByLabelText("상세 풀이")).toHaveValue("조건을 확인한다.");
+    expect(screen.getByLabelText("중요 포인트")).toHaveValue("보기 비교");
+
+    fireEvent.change(screen.getByLabelText("정답"), { target: { value: "④" } });
+
+    expect(screen.getByLabelText("정답")).toHaveValue("④");
+  });
+
+  it("clears all tags at once for problem sheets", () => {
+    render(
+      <EntryForm
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        defaultEntryKind="problem_sheet"
+        initialData={{
+          entryKind: "problem_sheet",
+          title: "태그 있는 시험지",
+          question: "1. 문제",
+          tags: ["중간고사", "함수"],
+        }}
+      />,
+    );
+
+    expect(screen.getByText("#중간고사")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "태그 전체 삭제" }));
+
+    expect(screen.queryByText("#중간고사")).not.toBeInTheDocument();
+    expect(screen.queryByText("#함수")).not.toBeInTheDocument();
+  });
+});

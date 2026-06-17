@@ -1,0 +1,546 @@
+import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
+import { open, save } from "@tauri-apps/plugin-dialog";
+import { v4 as uuidv4 } from "uuid";
+import type { AppSettings, IntegrityReport, MemoTemplate, PromptTemplate, WrongAnswerEntry } from "./types";
+import { normalizeEntry } from "./utils/entry";
+
+const imageUrlCache = new Map<string, string>();
+const ENTRIES_STORAGE_KEY = "wrong-answer-entries";
+const SETTINGS_STORAGE_KEY = "wrong-answer-settings";
+const MAX_BROWSER_IMAGE_BYTES = 10 * 1024 * 1024;
+
+export const defaultSettings: AppSettings = {
+  templates: [],
+  promptTemplates: [],
+  memoTemplates: [],
+  importPreferences: {},
+  answerViewPreferences: {
+    viewMode: "card",
+    hideAnswers: false,
+  },
+  autoBackup: {
+    enabled: false,
+  },
+};
+
+export const builtInPromptTemplates: PromptTemplate[] = [
+  {
+    id: "builtin-sheet-png-package",
+    name: "시험지+답안지+PNG 패키지",
+    builtIn: true,
+    content: `사진 속 문제지와 답안지를 오답노트 앱에 넣을 import.json과 PNG 이미지 파일로 정리해줘.
+
+규칙:
+- 가능하면 import.json과 graph_1.png 같은 이미지 파일들을 ZIP 하나로 묶어줘.
+- ZIP이 어렵다면 import.json과 PNG/JPG/WebP 파일들을 따로 내려받을 수 있게 제공해줘.
+- JSON에 base64 이미지, data URL, Markdown 이미지 링크는 절대 넣지 마.
+- JSON은 순수 객체 1개여야 하고, import.json 파일 안에 저장할 내용만 포함해줘.
+- 도표/그래프/그림은 가능한 한 깨끗한 PNG로 다시 만들고, JSON figures[].image에 실제 파일명만 적어줘.
+- figures[].image 파일명과 실제 이미지 파일명은 대소문자까지 정확히 맞춰줘.
+- 문제 번호가 불확실한 도표는 questionNumber를 빈 문자열로 두고 needsReview를 true로 표시해줘.
+- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 제외해줘.
+- tags 필드와 최상위 difficulty 필드는 만들지 마.
+
+import.json 형식:
+{
+  "title": "시험지 제목",
+  "subject": "수학",
+  "question": "1. ...\\n① ...",
+  "importantNotes": ["전체적으로 알아둘 점"],
+  "memo": "전체 학습 메모",
+  "answerKey": [
+    {
+      "questionNumber": "1",
+      "answer": "③",
+      "explanation": "풀이",
+      "notes": "이 문항에서만 다시 볼 메모",
+      "importantPoints": ["주의할 점"],
+      "concepts": ["함수"],
+      "needsReview": false,
+      "sourceNote": "답안지 1번과 연결"
+    }
+  ],
+  "figures": [
+    {
+      "questionNumber": "1",
+      "title": "1번 그래프",
+      "caption": "그래프의 축, 교점, 표시값을 설명",
+      "image": "graph_1.png",
+      "source": "gpt_cleaned",
+      "needsReview": false
+    }
+  ],
+  "concepts": ["함수", "그래프"]
+}`,
+  },
+  {
+    id: "builtin-sheet-answer-json",
+    name: "시험지+답안지 JSON",
+    builtIn: true,
+    content: `사진 속 문제지와 답안지를 오답노트 앱에 넣을 JSON으로 정리해줘.
+
+규칙:
+- 반드시 순수 JSON 객체 1개만 출력해줘. 첫 글자는 {, 마지막 글자는 } 이어야 해.
+- 설명문, Markdown, 코드블록, \`\`\`json, 파일 첨부 안내 문구는 절대 넣지 마.
+- 문제 원문은 question에 줄바꿈을 살려 넣어줘.
+- 도표/그래프/표는 빠뜨리지 말고 Markdown 표, 축·범례·값 설명, 또는 [도표/그래프 설명] 블록으로 옮겨줘.
+- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 마.
+- 답안지에 인쇄된 정답·해설·정답 근거는 유지하되, 시험지 위 학생 필기와 구분해줘.
+- 시험지 전체에 해당하는 학습 포인트만 importantNotes에 넣어줘.
+- 특정 문제에만 해당하는 메모는 importantNotes나 memo에 넣지 말고 반드시 answerKey[].notes에 넣어줘.
+- 답안지는 answerKey 배열로 문제 번호, 정답, 풀이, 문제별 메모, 중요 포인트, 개념을 연결해줘.
+- 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.
+- 근거가 부족하면 difficulty 필드를 생략해줘. 모든 문항에 같은 difficulty를 반복해서 채우지 마.
+- 답안 번호가 불확실하면 questionNumber를 추측하지 말고 빈 문자열로 두고 needsReview를 true로 표시해줘.
+- 모르는 값은 추측하지 말고 빈 문자열이나 빈 배열로 둬.
+- tags 필드는 만들지 마.
+- 최상위 difficulty 필드는 만들지 마.
+
+형식:
+{
+  "title": "시험지 제목",
+  "subject": "수학",
+  "question": "1. ...\\n① ...",
+  "importantNotes": ["전체적으로 알아둘 점"],
+  "memo": "추가 메모",
+  "answerKey": [
+    {
+      "questionNumber": "1",
+      "answer": "③",
+      "explanation": "풀이",
+      "notes": "이 문항에서만 다시 볼 메모",
+      "importantPoints": ["주의할 점"],
+      "concepts": ["함수"],
+      "needsReview": false,
+      "sourceNote": "답안지 1번과 연결"
+    }
+  ],
+  "concepts": ["함수", "그래프"]
+}`,
+  },
+  {
+    id: "builtin-important-notes",
+    name: "중요 포인트 중심",
+    builtIn: true,
+    content: "문제지와 답안지의 인쇄된 내용만 기준으로, 시험지 전체 핵심은 importantNotes에, 특정 문항 메모는 answerKey[].notes에, 문항별 풀이 포인트는 answerKey[].importantPoints에 정리해줘. 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 모두 제외해줘. tags 필드와 최상위 difficulty 필드는 만들지 말고, 첫 글자가 {이고 마지막 글자가 }인 순수 JSON만 출력해줘.",
+  },
+  {
+    id: "builtin-concept-links",
+    name: "개념 링크 강화",
+    builtIn: true,
+    content: "인쇄된 문제와 답안지 해설에 등장하는 핵심 개념을 concepts 배열에 정리하고, question이나 memo 안에서 자연스럽게 연결할 수 있는 개념명은 [[개념명]] 형태로 표시해줘. 손글씨/밑줄/별표/여백 메모는 제외하고, 도표/그래프는 Markdown 표나 [도표/그래프 설명]으로 보존해줘. tags 필드 없이 순수 JSON 객체 1개만 출력해줘.",
+  },
+];
+
+export const builtInMemoTemplates: MemoTemplate[] = [
+  {
+    id: "builtin-review-memo",
+    name: "복습 메모",
+    builtIn: true,
+    content: "핵심 개념\n- \n\n실수 원인\n- \n\n다시 볼 포인트\n- \n\n다음 복습\n- ",
+  },
+  {
+    id: "builtin-answer-analysis",
+    name: "답안 분석",
+    builtIn: true,
+    content: "정답 근거\n- \n\n헷갈린 보기\n- \n\n암기/공식\n- ",
+  },
+];
+
+export function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) {
+    return `${fallback} (${error.message})`;
+  }
+  if (typeof error === "string" && error.trim()) {
+    return `${fallback} (${error})`;
+  }
+  return fallback;
+}
+
+export async function loadEntries(): Promise<WrongAnswerEntry[]> {
+  try {
+    let data: WrongAnswerEntry[];
+    if (isTauri()) {
+      data = await invoke<WrongAnswerEntry[]>("load_entries");
+    } else {
+      const raw = localStorage.getItem(ENTRIES_STORAGE_KEY);
+      data = raw ? JSON.parse(raw) : [];
+    }
+    return data.map(normalizeEntry);
+  } catch (error) {
+    throw new Error(errorMessage(error, "저장된 노트를 불러오지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function saveEntries(entries: WrongAnswerEntry[]): Promise<void> {
+  try {
+    if (isTauri()) {
+      await invoke("save_entries", { entries });
+      return;
+    }
+    localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(entries));
+  } catch (error) {
+    throw new Error(errorMessage(error, "노트를 저장하지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function loadSettings(): Promise<AppSettings> {
+  try {
+    if (isTauri()) {
+      const data = await invoke<AppSettings>("load_settings");
+      return normalizeSettings(data);
+    }
+    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+    return normalizeSettings(raw ? JSON.parse(raw) : defaultSettings);
+  } catch (error) {
+    throw new Error(errorMessage(error, "설정을 불러오지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function saveSettings(settings: AppSettings): Promise<void> {
+  try {
+    const normalized = normalizeSettings(settings);
+    if (isTauri()) {
+      await invoke("save_settings", { settings: normalized });
+      return;
+    }
+    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
+  } catch (error) {
+    throw new Error(errorMessage(error, "설정을 저장하지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+function mergeBuiltInPromptTemplates(templates: PromptTemplate[]): PromptTemplate[] {
+  const userTemplates = templates.filter((template) => !template.builtIn);
+  return [
+    ...builtInPromptTemplates,
+    ...userTemplates.filter(
+      (template) => !builtInPromptTemplates.some((builtIn) => builtIn.id === template.id),
+    ),
+  ];
+}
+
+function mergeBuiltInMemoTemplates(templates: MemoTemplate[]): MemoTemplate[] {
+  const userTemplates = templates.filter((template) => !template.builtIn);
+  return [
+    ...builtInMemoTemplates,
+    ...userTemplates.filter(
+      (template) => !builtInMemoTemplates.some((builtIn) => builtIn.id === template.id),
+    ),
+  ];
+}
+
+function normalizePromptTemplates(raw: unknown): PromptTemplate[] {
+  const templates = Array.isArray(raw)
+    ? raw
+        .filter((template): template is Partial<PromptTemplate> =>
+          Boolean(template && typeof template === "object"),
+        )
+        .map((template) => ({
+          id: `${template.id ?? uuidv4()}`,
+          name: `${template.name ?? ""}`.trim(),
+          content: `${template.content ?? ""}`.trim(),
+          builtIn: Boolean(template.builtIn),
+        }))
+        .filter((template) => template.name && template.content)
+    : [];
+  return mergeBuiltInPromptTemplates(templates);
+}
+
+function normalizeMemoTemplates(raw: unknown): MemoTemplate[] {
+  const templates = Array.isArray(raw)
+    ? raw
+        .filter((template): template is Partial<MemoTemplate> =>
+          Boolean(template && typeof template === "object"),
+        )
+        .map((template) => ({
+          id: `${template.id ?? uuidv4()}`,
+          name: `${template.name ?? ""}`.trim(),
+          content: `${template.content ?? ""}`,
+          builtIn: Boolean(template.builtIn),
+        }))
+        .filter((template) => template.name && template.content.trim())
+    : [];
+  return mergeBuiltInMemoTemplates(templates);
+}
+
+function normalizeSettings(raw: AppSettings): AppSettings {
+  return {
+    templates: Array.isArray(raw?.templates)
+      ? raw.templates
+          .filter((template) => template && template.id && template.name)
+          .map((template) => ({
+            ...template,
+            data: template.data ?? {},
+          }))
+      : [],
+    promptTemplates: normalizePromptTemplates(raw?.promptTemplates),
+    memoTemplates: normalizeMemoTemplates(raw?.memoTemplates),
+    importPreferences: {
+      lastPromptTemplateId:
+        typeof raw?.importPreferences?.lastPromptTemplateId === "string"
+          ? raw.importPreferences.lastPromptTemplateId
+          : undefined,
+    },
+    answerViewPreferences: {
+      viewMode: raw?.answerViewPreferences?.viewMode === "table" ? "table" : "card",
+      hideAnswers: Boolean(raw?.answerViewPreferences?.hideAnswers),
+    },
+    autoBackup: {
+      enabled: Boolean(raw?.autoBackup?.enabled),
+      lastBackupAt: raw?.autoBackup?.lastBackupAt,
+    },
+  };
+}
+
+export async function pickImages(): Promise<string[]> {
+  if (!isTauri()) {
+    return pickImagesBrowser();
+  }
+
+  const selected = await open({
+    multiple: true,
+    filters: [{ name: "이미지", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
+  });
+
+  if (!selected) return [];
+
+  const paths = Array.isArray(selected) ? selected : [selected];
+  const saved: string[] = [];
+
+  for (const path of paths) {
+    try {
+      const filename = await invoke<string>("save_image", { sourcePath: path });
+      saved.push(filename);
+    } catch (error) {
+      throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), {
+        cause: error,
+      });
+    }
+  }
+
+  return saved;
+}
+
+export function createBrowserImageKey(filename: string): string {
+  return `img_${uuidv4()}_${filename}`;
+}
+
+export async function saveImageFiles(files: FileList | File[]): Promise<string[]> {
+  const names: string[] = [];
+  for (const file of Array.from(files)) {
+    if (!file.type.startsWith("image/")) continue;
+    if (file.size > MAX_BROWSER_IMAGE_BYTES) {
+      throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 10MB 이하만 저장할 수 있습니다.`);
+    }
+    const dataUrl = await fileToDataUrl(file);
+    const key = createBrowserImageKey(file.name);
+    localStorage.setItem(key, dataUrl);
+    names.push(key);
+  }
+  return names;
+}
+
+async function pickImagesBrowser(): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.multiple = true;
+    input.onchange = async () => {
+      const files = input.files;
+      if (!files?.length) {
+        resolve([]);
+        return;
+      }
+      try {
+        const names = await saveImageFiles(files);
+        resolve(names);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    input.click();
+  });
+}
+
+function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+export async function getImageUrl(filename: string): Promise<string> {
+  const cached = imageUrlCache.get(filename);
+  if (cached) return cached;
+
+  const localDataUrl = localStorage.getItem(filename);
+  if (localDataUrl) {
+    imageUrlCache.set(filename, localDataUrl);
+    return localDataUrl;
+  }
+
+  if (!isTauri()) {
+    return "";
+  }
+
+  try {
+    const path = await invoke<string>("get_image_file_path", { filename });
+    const url = convertFileSrc(path);
+    imageUrlCache.set(filename, url);
+    return url;
+  } catch (error) {
+    throw new Error(errorMessage(error, "이미지를 불러오지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function deleteImage(filename: string): Promise<void> {
+  try {
+    imageUrlCache.delete(filename);
+    if (localStorage.getItem(filename)) {
+      localStorage.removeItem(filename);
+      if (!isTauri()) return;
+    }
+    if (!isTauri()) {
+      return;
+    }
+    await invoke("delete_image", { filename });
+  } catch (error) {
+    throw new Error(errorMessage(error, "이미지를 삭제하지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export interface BackupPayload {
+  meta: {
+    version: 1;
+    createdAt: string;
+    source: "browser";
+  };
+  entries: WrongAnswerEntry[];
+  settings: AppSettings;
+  browserImages: Record<string, string>;
+}
+
+export async function createBackup(entries: WrongAnswerEntry[], settings: AppSettings): Promise<string> {
+  try {
+    if (isTauri()) {
+      const backupPath = await save({
+        title: "백업 저장",
+        defaultPath: `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+        filters: [{ name: "ZIP", extensions: ["zip"] }],
+      });
+      if (!backupPath) return "백업이 취소되었습니다.";
+      await invoke("create_backup_zip", { backupPath });
+      return `백업을 저장했습니다: ${backupPath}`;
+    }
+
+    const payload: BackupPayload = {
+      meta: {
+        version: 1,
+        createdAt: new Date().toISOString(),
+        source: "browser",
+      },
+      entries,
+      settings,
+      browserImages: Object.fromEntries(
+        Object.keys(localStorage)
+          .filter((key) => key.startsWith("img_"))
+          .map((key) => [key, localStorage.getItem(key) ?? ""]),
+      ),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    return "브라우저 백업 파일을 내려받았습니다.";
+  } catch (error) {
+    throw new Error(errorMessage(error, "백업을 만들지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function restoreBackup(): Promise<BackupPayload | null> {
+  try {
+    if (isTauri()) {
+      const selected = await open({
+        multiple: false,
+        filters: [{ name: "ZIP", extensions: ["zip"] }],
+      });
+      if (!selected || Array.isArray(selected)) return null;
+      await invoke("restore_backup_zip", { backupPath: selected });
+      return null;
+    }
+
+    return new Promise((resolve, reject) => {
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "application/json,.json";
+      input.onchange = async () => {
+        const file = input.files?.[0];
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        try {
+          const payload = JSON.parse(await file.text()) as BackupPayload;
+          resolve(payload);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      input.click();
+    });
+  } catch (error) {
+    throw new Error(errorMessage(error, "백업을 복원하지 못했습니다."), {
+      cause: error,
+    });
+  }
+}
+
+export async function runNativeIntegrityCheck(): Promise<IntegrityReport | null> {
+  if (!isTauri()) return null;
+  return invoke<IntegrityReport>("run_integrity_check");
+}
+
+export async function cleanupOrphanImages(referencedImages: string[]): Promise<number> {
+  if (isTauri()) {
+    return invoke<number>("cleanup_orphan_images", { referencedImages });
+  }
+
+  let removed = 0;
+  const referenced = new Set(referencedImages);
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith("img_") && !referenced.has(key)) {
+      localStorage.removeItem(key);
+      imageUrlCache.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
+export async function createAutoBackup(): Promise<string | null> {
+  if (!isTauri()) return null;
+  return invoke<string>("create_auto_backup");
+}
