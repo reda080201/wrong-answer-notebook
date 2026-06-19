@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
+import { recommendedStrategyForAnalysis } from "./mistakeAnalysis";
 
 export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -52,6 +53,8 @@ export function applyReviewResult(
     result,
     nextDueAt: next.nextDueAt,
     intervalDays: next.intervalDays,
+    causeSnapshot: entry.mistakeAnalysis?.causes.map((cause) => cause.type),
+    strategy: recommendedStrategyForAnalysis(entry.mistakeAnalysis),
   };
 
   const review: ReviewState = {

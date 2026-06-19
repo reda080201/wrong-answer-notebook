@@ -1,7 +1,16 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { v4 as uuidv4 } from "uuid";
-import type { AppSettings, IntegrityReport, MemoTemplate, PromptTemplate, WrongAnswerEntry } from "./types";
+import type {
+  AiProviderSettings,
+  AiProviderStatus,
+  AiProviderType,
+  AppSettings,
+  IntegrityReport,
+  MemoTemplate,
+  PromptTemplate,
+  WrongAnswerEntry,
+} from "./types";
 import { normalizeEntry } from "./utils/entry";
 
 const imageUrlCache = new Map<string, string>();
@@ -13,6 +22,12 @@ export const defaultSettings: AppSettings = {
   templates: [],
   promptTemplates: [],
   memoTemplates: [],
+  aiProvider: {
+    type: "manual",
+    enabled: false,
+    keySource: "env",
+    hasStoredKey: false,
+  },
   importPreferences: {},
   answerViewPreferences: {
     viewMode: "card",
@@ -89,6 +104,8 @@ import.json 형식:
 - 시험지 전체에 해당하는 학습 포인트만 importantNotes에 넣어줘.
 - 특정 문제에만 해당하는 메모는 importantNotes나 memo에 넣지 말고 반드시 answerKey[].notes에 넣어줘.
 - 답안지는 answerKey 배열로 문제 번호, 정답, 풀이, 문제별 메모, 중요 포인트, 개념을 연결해줘.
+- 왜 틀리기 쉬운지 판단 가능한 경우 mistakeAnalysis.causes에 오답 원인을 넣어줘. 허용 type은 calculation, condition_misread, concept_gap, strategy_gap, time_pressure, choice_trap, careless, unknown 이야.
+- 오답 원인은 추측이 약하면 unknown만 쓰거나 causes를 비워둬.
 - 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.
 - 근거가 부족하면 difficulty 필드를 생략해줘. 모든 문항에 같은 difficulty를 반복해서 채우지 마.
 - 답안 번호가 불확실하면 questionNumber를 추측하지 말고 빈 문자열로 두고 needsReview를 true로 표시해줘.
@@ -103,6 +120,15 @@ import.json 형식:
   "question": "1. ...\\n① ...",
   "importantNotes": ["전체적으로 알아둘 점"],
   "memo": "추가 메모",
+  "mistakeAnalysis": {
+    "causes": [
+      { "type": "concept_gap", "severity": "medium", "note": "핵심 개념 확인 필요" }
+    ],
+    "primaryCause": "concept_gap",
+    "confidence": "gpt",
+    "preventionNote": "풀이 전 조건과 개념을 먼저 적기",
+    "practiceMode": "concept_review"
+  },
   "answerKey": [
     {
       "questionNumber": "1",
@@ -122,7 +148,7 @@ import.json 형식:
     id: "builtin-important-notes",
     name: "중요 포인트 중심",
     builtIn: true,
-    content: "문제지와 답안지의 인쇄된 내용만 기준으로, 시험지 전체 핵심은 importantNotes에, 특정 문항 메모는 answerKey[].notes에, 문항별 풀이 포인트는 answerKey[].importantPoints에 정리해줘. 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 모두 제외해줘. tags 필드와 최상위 difficulty 필드는 만들지 말고, 첫 글자가 {이고 마지막 글자가 }인 순수 JSON만 출력해줘.",
+    content: "문제지와 답안지의 인쇄된 내용만 기준으로, 시험지 전체 핵심은 importantNotes에, 특정 문항 메모는 answerKey[].notes에, 문항별 풀이 포인트는 answerKey[].importantPoints에 정리해줘. 판단 가능한 오답 원인은 mistakeAnalysis.causes에 calculation/condition_misread/concept_gap/strategy_gap/time_pressure/choice_trap/careless/unknown 중에서 넣어줘. 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 모두 제외해줘. tags 필드와 최상위 difficulty 필드는 만들지 말고, 첫 글자가 {이고 마지막 글자가 }인 순수 JSON만 출력해줘.",
   },
   {
     id: "builtin-concept-links",
@@ -272,7 +298,29 @@ function normalizeMemoTemplates(raw: unknown): MemoTemplate[] {
   return mergeBuiltInMemoTemplates(templates);
 }
 
-function normalizeSettings(raw: AppSettings): AppSettings {
+function normalizeAiProvider(raw: unknown): AiProviderSettings {
+  if (!isTauri()) {
+    return {
+      type: "manual",
+      enabled: false,
+      keySource: "env",
+      hasStoredKey: false,
+    };
+  }
+  const value = raw && typeof raw === "object" ? raw as Partial<AiProviderSettings> : {};
+  const type: AiProviderType =
+    value.type === "gemini-flash-lite" || value.type === "gemini-3.5-flash"
+      ? value.type
+      : "manual";
+  return {
+    type,
+    enabled: type !== "manual" && Boolean(value.enabled),
+    keySource: value.keySource === "tauri-settings" ? "tauri-settings" : "env",
+    hasStoredKey: Boolean(value.hasStoredKey),
+  };
+}
+
+export function normalizeSettings(raw: AppSettings): AppSettings {
   return {
     templates: Array.isArray(raw?.templates)
       ? raw.templates
@@ -284,6 +332,7 @@ function normalizeSettings(raw: AppSettings): AppSettings {
       : [],
     promptTemplates: normalizePromptTemplates(raw?.promptTemplates),
     memoTemplates: normalizeMemoTemplates(raw?.memoTemplates),
+    aiProvider: normalizeAiProvider(raw?.aiProvider),
     importPreferences: {
       lastPromptTemplateId:
         typeof raw?.importPreferences?.lastPromptTemplateId === "string"
@@ -299,6 +348,55 @@ function normalizeSettings(raw: AppSettings): AppSettings {
       lastBackupAt: raw?.autoBackup?.lastBackupAt,
     },
   };
+}
+
+export async function getAiProviderStatus(): Promise<AiProviderStatus> {
+  if (!isTauri()) {
+    return {
+      type: "manual",
+      enabled: false,
+      keySource: "env",
+      hasStoredKey: false,
+      hasEnvKey: false,
+      available: false,
+      message: "브라우저 모드는 manual provider만 지원합니다.",
+    };
+  }
+  try {
+    return await invoke<AiProviderStatus>("get_ai_provider_status");
+  } catch (error) {
+    return {
+      type: "manual",
+      enabled: false,
+      keySource: "env",
+      hasStoredKey: false,
+      hasEnvKey: false,
+      available: false,
+      message: errorMessage(error, "AI provider 상태를 확인하지 못했습니다."),
+    };
+  }
+}
+
+export async function saveAiProviderConfig(config: AiProviderSettings): Promise<AiProviderStatus> {
+  if (!isTauri()) return getAiProviderStatus();
+  return invoke<AiProviderStatus>("save_ai_provider_config", { config });
+}
+
+export async function saveAiProviderKey(apiKey: string): Promise<AiProviderStatus> {
+  if (!isTauri()) return getAiProviderStatus();
+  return invoke<AiProviderStatus>("save_ai_provider_key", { apiKey });
+}
+
+export async function clearAiProviderKey(): Promise<AiProviderStatus> {
+  if (!isTauri()) return getAiProviderStatus();
+  return invoke<AiProviderStatus>("clear_ai_provider_key");
+}
+
+export async function generateImportWithAi(prompt: string, inputText: string): Promise<string> {
+  if (!isTauri()) {
+    throw new Error("AI provider는 데스크톱 앱에서만 사용할 수 있습니다.");
+  }
+  return invoke<string>("generate_import_with_ai", { prompt, inputText });
 }
 
 export async function pickImages(): Promise<string[]> {

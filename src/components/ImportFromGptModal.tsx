@@ -2,7 +2,16 @@ import { useEffect, useMemo, useState } from "react";
 import JSZip from "jszip";
 import { v4 as uuidv4 } from "uuid";
 import { saveImageFiles } from "../api";
-import type { EntryFormData, PromptTemplate, SheetAnswerItem, SheetFigureItem, Subject, WrongAnswerEntry } from "../types";
+import type {
+  AiProviderSettings,
+  AiProviderStatus,
+  EntryFormData,
+  PromptTemplate,
+  SheetAnswerItem,
+  SheetFigureItem,
+  Subject,
+  WrongAnswerEntry,
+} from "../types";
 import { SUBJECTS } from "../types";
 import {
   parseImportedStudyText,
@@ -21,6 +30,9 @@ interface ImportFromGptModalProps {
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode) => void;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
+  aiProvider?: AiProviderSettings;
+  aiProviderStatus?: AiProviderStatus | null;
+  onGenerateWithAi?: (prompt: string, inputText: string) => Promise<string>;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
   onSavePromptTemplate?: (template: PromptTemplate) => Promise<void>;
@@ -210,6 +222,9 @@ export default function ImportFromGptModal({
   onApply,
   fallbackSubject,
   promptTemplates = [],
+  aiProvider,
+  aiProviderStatus,
+  onGenerateWithAi,
   selectedPromptTemplateId,
   onPromptTemplateSelect,
   onSavePromptTemplate,
@@ -242,6 +257,7 @@ export default function ImportFromGptModal({
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [watchClipboard, setWatchClipboard] = useState(false);
   const [applyMode, setApplyMode] = useState<GptSolutionApplyMode>("fill");
+  const [aiGenerating, setAiGenerating] = useState(false);
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
@@ -297,6 +313,13 @@ export default function ImportFromGptModal({
   const questionCount = questionBlocks.filter((block) => block.kind === "question").length;
   const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft) : null), [draft]);
   const canApply = Boolean(draft?.question?.trim());
+  const canUseAiProvider = Boolean(
+    onGenerateWithAi &&
+    aiProvider &&
+    aiProvider.enabled &&
+    aiProvider.type !== "manual" &&
+    aiProviderStatus?.available,
+  );
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -338,6 +361,40 @@ export default function ImportFromGptModal({
       setCopyMessage("클립보드에서 가져왔습니다.");
     } catch {
       setError("클립보드에서 읽지 못했습니다. GPT 답변을 직접 붙여넣어 주세요.");
+    }
+  };
+
+  const generateWithAiProvider = async () => {
+    if (!activePrompt || !onGenerateWithAi) return;
+    setAiGenerating(true);
+    setError(null);
+    try {
+      const inputText = isSolutionMode && sourceEntry
+        ? [
+            sourceEntry.title,
+            sourceEntry.question,
+            sourceEntry.myAnswer && `내 답: ${sourceEntry.myAnswer}`,
+            sourceEntry.correctAnswer && `정답: ${sourceEntry.correctAnswer}`,
+            sourceEntry.memo && `메모: ${sourceEntry.memo}`,
+          ].filter(Boolean).join("\n\n")
+        : rawText;
+      const aiText = await onGenerateWithAi(activePrompt.content, inputText);
+      const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
+      validateImportedStudyData(parsedText.data);
+      setRawText(aiText);
+      setFilename("gemini.json");
+      setDraftOverride(null);
+      setCopyMessage("AI provider 결과를 가져왔습니다.");
+    } catch (aiError) {
+      setError(
+        `${
+          aiError instanceof Error && aiError.message
+            ? aiError.message
+            : "AI provider 호출에 실패했습니다."
+        } manual 모드로 붙여넣기를 계속 사용할 수 있습니다.`,
+      );
+    } finally {
+      setAiGenerating(false);
     }
   };
 
@@ -478,6 +535,7 @@ export default function ImportFromGptModal({
 
   const apply = () => {
     if (!draft || !canApply) return;
+    validateImportedStudyData(draft);
     onApply({
       ...draft,
       question: cleanQuestionText(draft.question ?? ""),
@@ -529,10 +587,27 @@ export default function ImportFromGptModal({
                             템플릿 저장
                           </button>
                         )}
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={generateWithAiProvider}
+                          disabled={!canUseAiProvider || aiGenerating}
+                          title={canUseAiProvider ? "Tauri에서 Gemini provider를 호출합니다." : "manual provider 또는 API 비활성 상태입니다."}
+                        >
+                          {aiGenerating ? "AI 가져오는 중..." : "AI로 가져오기"}
+                        </button>
                       </div>
                     </div>
                   </div>
                   <pre>{activePrompt?.content}</pre>
+                  <p className="form-hint">
+                    Provider: {aiProvider?.type ?? "manual"}
+                    {aiProvider?.type === "manual" || !aiProvider?.enabled
+                      ? " · manual 붙여넣기 모드"
+                      : aiProviderStatus?.available
+                        ? " · API 사용 가능"
+                        : " · API key 또는 설정 확인 필요"}
+                  </p>
                   {copyMessage && <p className="form-hint">{copyMessage}</p>}
                 </div>
               )}

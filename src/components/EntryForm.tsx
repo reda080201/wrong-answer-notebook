@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, WrongAnswerEntry } from "../types";
+import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, MistakeCauseType, ReviewStrategy, WrongAnswerEntry } from "../types";
 import { hasEntryContent } from "../utils/entry";
+import {
+  MISTAKE_CAUSE_OPTIONS,
+  PRACTICE_MODE_LABELS,
+  mistakeCauseLabel,
+  recommendedStrategyForCause,
+} from "../utils/mistakeAnalysis";
 import { cleanQuestionText } from "../utils/textCleanup";
 import { SUBJECTS } from "../types";
 import ImageField from "./ImageField";
@@ -40,6 +46,7 @@ const emptyForm: EntryFormData = {
   tags: [],
   answerKey: [],
   figures: [],
+  mistakeAnalysis: { causes: [] },
   mastered: false,
 };
 
@@ -71,6 +78,13 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
       concepts: item.concepts ? [...item.concepts] : [],
     })),
     figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
+    mistakeAnalysis: {
+      causes: entry.mistakeAnalysis?.causes.map((cause) => ({ ...cause })) ?? [],
+      primaryCause: entry.mistakeAnalysis?.primaryCause,
+      confidence: entry.mistakeAnalysis?.confidence,
+      preventionNote: entry.mistakeAnalysis?.preventionNote ?? "",
+      practiceMode: entry.mistakeAnalysis?.practiceMode,
+    },
     mastered: entry.mastered,
     review: entry.review,
     checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],
@@ -98,6 +112,12 @@ function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
+    mistakeAnalysis: data.mistakeAnalysis
+      ? {
+          ...data.mistakeAnalysis,
+          causes: data.mistakeAnalysis.causes.map((cause) => ({ ...cause })),
+        }
+      : { causes: [] },
     checklist: data.checklist ? data.checklist.map((item) => ({ ...item })) : [],
   };
 }
@@ -248,6 +268,55 @@ export default function EntryForm({
     }));
   };
 
+  const toggleMistakeCause = (type: MistakeCauseType) => {
+    setForm((current) => {
+      const analysis = current.mistakeAnalysis ?? { causes: [] };
+      const exists = analysis.causes.some((cause) => cause.type === type);
+      const causes = exists
+        ? analysis.causes.filter((cause) => cause.type !== type)
+        : [
+            ...analysis.causes,
+            {
+              type,
+              label: mistakeCauseLabel(type),
+              severity: "medium" as const,
+              note: "",
+            },
+          ];
+      const primaryCause = causes.some((cause) => cause.type === analysis.primaryCause)
+        ? analysis.primaryCause
+        : causes[0]?.type;
+      return {
+        ...current,
+        mistakeAnalysis: {
+          ...analysis,
+          causes,
+          primaryCause,
+          practiceMode:
+            analysis.practiceMode ??
+            (primaryCause ? recommendedStrategyForCause(primaryCause) : undefined),
+          confidence: "user",
+        },
+      };
+    });
+  };
+
+  const updateMistakeCause = (
+    type: MistakeCauseType,
+    patch: Partial<NonNullable<EntryFormData["mistakeAnalysis"]>["causes"][number]>,
+  ) => {
+    setForm((current) => ({
+      ...current,
+      mistakeAnalysis: {
+        ...(current.mistakeAnalysis ?? { causes: [] }),
+        causes: (current.mistakeAnalysis?.causes ?? []).map((cause) =>
+          cause.type === type ? { ...cause, ...patch } : cause,
+        ),
+        confidence: "user",
+      },
+    }));
+  };
+
   const removeAnswerKeyItem = (id: string) => {
     setForm((current) => ({
       ...current,
@@ -299,6 +368,7 @@ export default function EntryForm({
         tags: form.tags,
         answerKey: form.answerKey,
         figures: form.figures,
+        mistakeAnalysis: form.mistakeAnalysis,
         questionImages: [],
         annotations: [],
         mastered: false,
@@ -455,6 +525,136 @@ export default function EntryForm({
                 </label>
               </div>
             </div>
+
+            {form.entryKind !== "concept" && (
+              <div className="mistake-analysis-editor">
+                <div className="explanation-parts-header">
+                  <h3 className="form-section-title">오답 원인</h3>
+                </div>
+                <p className="form-hint">
+                  왜 틀렸는지를 구조화해 두면 약점 분석과 복습 방식 추천에 사용됩니다.
+                </p>
+                <div className="mistake-cause-chips" aria-label="오답 원인 선택">
+                  {MISTAKE_CAUSE_OPTIONS.map((option) => {
+                    const active = (form.mistakeAnalysis?.causes ?? []).some(
+                      (cause) => cause.type === option.type,
+                    );
+                    return (
+                      <button
+                        key={option.type}
+                        type="button"
+                        className={`mistake-cause-chip ${active ? "active" : ""}`}
+                        onClick={() => toggleMistakeCause(option.type)}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {(form.mistakeAnalysis?.causes ?? []).length > 0 && (
+                  <>
+                    <div className="form-row form-row--2">
+                      <div className="form-field">
+                        <label htmlFor="primaryCause">대표 원인</label>
+                        <select
+                          id="primaryCause"
+                          value={form.mistakeAnalysis?.primaryCause ?? ""}
+                          onChange={(event) => {
+                            const primaryCause = event.target.value as MistakeCauseType;
+                            setForm((current) => ({
+                              ...current,
+                              mistakeAnalysis: {
+                                ...(current.mistakeAnalysis ?? { causes: [] }),
+                                primaryCause,
+                                practiceMode: recommendedStrategyForCause(primaryCause),
+                                confidence: "user",
+                              },
+                            }));
+                          }}
+                        >
+                          {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
+                            <option key={cause.type} value={cause.type}>
+                              {mistakeCauseLabel(cause.type)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-field">
+                        <label htmlFor="practiceMode">추천 훈련</label>
+                        <select
+                          id="practiceMode"
+                          value={form.mistakeAnalysis?.practiceMode ?? ""}
+                          onChange={(event) =>
+                            setForm((current) => ({
+                              ...current,
+                              mistakeAnalysis: {
+                                ...(current.mistakeAnalysis ?? { causes: [] }),
+                                practiceMode: event.target.value
+                                  ? (event.target.value as ReviewStrategy)
+                                  : undefined,
+                                confidence: "user",
+                              },
+                            }))
+                          }
+                        >
+                          <option value="">자동 추천</option>
+                          {Object.entries(PRACTICE_MODE_LABELS).map(([value, label]) => (
+                            <option key={value} value={value}>
+                              {label}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                    <div className="mistake-cause-detail-list">
+                      {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
+                        <div key={cause.type} className="mistake-cause-detail">
+                          <strong>{mistakeCauseLabel(cause.type)}</strong>
+                          <select
+                            aria-label={`${mistakeCauseLabel(cause.type)} 심각도`}
+                            value={cause.severity}
+                            onChange={(event) =>
+                              updateMistakeCause(cause.type, {
+                                severity: event.target.value as typeof cause.severity,
+                              })
+                            }
+                          >
+                            <option value="low">낮음</option>
+                            <option value="medium">보통</option>
+                            <option value="high">높음</option>
+                          </select>
+                          <input
+                            value={cause.note ?? ""}
+                            onChange={(event) =>
+                              updateMistakeCause(cause.type, { note: event.target.value })
+                            }
+                            placeholder="원인 메모"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="form-field full">
+                      <label htmlFor="preventionNote">다음에 피할 방법</label>
+                      <textarea
+                        id="preventionNote"
+                        value={form.mistakeAnalysis?.preventionNote ?? ""}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            mistakeAnalysis: {
+                              ...(current.mistakeAnalysis ?? { causes: [] }),
+                              preventionNote: event.target.value,
+                              confidence: "user",
+                            },
+                          }))
+                        }
+                        placeholder="예: 조건에 밑줄 긋고, 단위 변환을 마지막에 한 번 더 확인"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="form-field full">
               <label htmlFor="title">제목</label>

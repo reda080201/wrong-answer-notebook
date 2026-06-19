@@ -97,10 +97,66 @@ fn settings_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir(app)?.join("settings.json"))
 }
 
+fn ai_provider_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app_dir(app)?.join("ai_provider_key.txt"))
+}
+
 fn images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app_dir(app)?.join("images");
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum AiProviderType {
+    #[serde(rename = "manual")]
+    Manual,
+    #[serde(rename = "gemini-flash-lite")]
+    GeminiFlashLite,
+    #[serde(rename = "gemini-3.5-flash")]
+    Gemini35Flash,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+enum AiProviderKeySource {
+    #[serde(rename = "env")]
+    Env,
+    #[serde(rename = "tauri-settings")]
+    TauriSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiProviderConfig {
+    #[serde(rename = "type")]
+    provider_type: AiProviderType,
+    enabled: bool,
+    key_source: AiProviderKeySource,
+    #[serde(default)]
+    has_stored_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AiProviderStatus {
+    #[serde(rename = "type")]
+    provider_type: AiProviderType,
+    enabled: bool,
+    key_source: AiProviderKeySource,
+    has_stored_key: bool,
+    has_env_key: bool,
+    available: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    message: Option<String>,
+}
+
+fn default_ai_provider_config() -> AiProviderConfig {
+    AiProviderConfig {
+        provider_type: AiProviderType::Manual,
+        enabled: false,
+        key_source: AiProviderKeySource::Env,
+        has_stored_key: false,
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -250,6 +306,121 @@ fn load_settings_raw(app: &tauri::AppHandle) -> Result<String, String> {
     }
 }
 
+fn has_env_ai_key() -> bool {
+    std::env::var("GOOGLE_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
+        || std::env::var("GEMINI_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
+}
+
+fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
+    let raw = load_settings_raw(app).unwrap_or_else(|_| "{}".into());
+    let value: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
+    let mut config = value
+        .get("aiProvider")
+        .cloned()
+        .and_then(|item| serde_json::from_value::<AiProviderConfig>(item).ok())
+        .unwrap_or_else(default_ai_provider_config);
+    config.has_stored_key = ai_provider_key_file(app)
+        .map(|path| path.exists() && fs::read_to_string(path).map(|key| !key.trim().is_empty()).unwrap_or(false))
+        .unwrap_or(false);
+    if matches!(config.provider_type, AiProviderType::Manual) {
+        config.enabled = false;
+    }
+    config
+}
+
+fn save_ai_provider_config_to_settings(
+    app: &tauri::AppHandle,
+    config: &AiProviderConfig,
+) -> Result<(), String> {
+    let raw = load_settings_raw(app)?;
+    let mut value: serde_json::Value =
+        serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
+    if !value.is_object() {
+        value = serde_json::json!({});
+    }
+    let mut public_config = serde_json::to_value(config).map_err(|e| e.to_string())?;
+    if let Some(obj) = public_config.as_object_mut() {
+        obj.insert("hasStoredKey".into(), serde_json::Value::Bool(config.has_stored_key));
+    }
+    value["aiProvider"] = public_config;
+    write_json_atomic(&settings_file(app)?, &value)
+}
+
+fn ai_provider_status(app: &tauri::AppHandle) -> AiProviderStatus {
+    let config = load_ai_provider_config(app);
+    let has_env_key = has_env_ai_key();
+    let has_key = match config.key_source {
+        AiProviderKeySource::Env => has_env_key,
+        AiProviderKeySource::TauriSettings => config.has_stored_key,
+    };
+    let available = config.enabled && !matches!(config.provider_type, AiProviderType::Manual) && has_key;
+    AiProviderStatus {
+        provider_type: config.provider_type,
+        enabled: config.enabled,
+        key_source: config.key_source,
+        has_stored_key: config.has_stored_key,
+        has_env_key,
+        available,
+        message: if available {
+            None
+        } else {
+            Some("manual provider 대기 상태입니다.".into())
+        },
+    }
+}
+
+fn ai_provider_key(app: &tauri::AppHandle, config: &AiProviderConfig) -> Result<String, String> {
+    match config.key_source {
+        AiProviderKeySource::Env => std::env::var("GOOGLE_API_KEY")
+            .or_else(|_| std::env::var("GEMINI_API_KEY"))
+            .map(|key| key.trim().to_string())
+            .map_err(|_| "Gemini API key 환경변수를 찾지 못했습니다.".to_string()),
+        AiProviderKeySource::TauriSettings => {
+            let key = fs::read_to_string(ai_provider_key_file(app)?).map_err(|_| {
+                "저장된 Gemini API key를 찾지 못했습니다.".to_string()
+            })?;
+            let trimmed = key.trim().to_string();
+            if trimmed.is_empty() {
+                Err("저장된 Gemini API key가 비어 있습니다.".into())
+            } else {
+                Ok(trimmed)
+            }
+        }
+    }
+}
+
+fn gemini_model(provider: &AiProviderType) -> &'static str {
+    match provider {
+        AiProviderType::Manual => "",
+        AiProviderType::GeminiFlashLite => "gemini-2.5-flash-lite",
+        AiProviderType::Gemini35Flash => "gemini-3.5-flash",
+    }
+}
+
+fn extract_gemini_text(value: serde_json::Value) -> Result<String, String> {
+    let candidates = value
+        .get("candidates")
+        .and_then(|item| item.as_array())
+        .ok_or_else(|| "Gemini 응답에 candidates가 없습니다.".to_string())?;
+    for candidate in candidates {
+        if let Some(parts) = candidate
+            .get("content")
+            .and_then(|content| content.get("parts"))
+            .and_then(|parts| parts.as_array())
+        {
+            let text = parts
+                .iter()
+                .filter_map(|part| part.get("text").and_then(|text| text.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n");
+            if !text.trim().is_empty() {
+                return Ok(text);
+            }
+        }
+    }
+    Err("Gemini 응답에서 텍스트를 찾지 못했습니다.".into())
+}
+
 fn unix_time_string() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -284,6 +455,106 @@ fn load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
 #[tauri::command]
 fn save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<(), String> {
     write_json_atomic(&settings_file(&app)?, &settings)
+}
+
+#[tauri::command]
+fn get_ai_provider_status(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
+    Ok(ai_provider_status(&app))
+}
+
+#[tauri::command]
+fn save_ai_provider_config(
+    app: tauri::AppHandle,
+    mut config: AiProviderConfig,
+) -> Result<AiProviderStatus, String> {
+    config.has_stored_key = ai_provider_key_file(&app)
+        .map(|path| path.exists() && fs::read_to_string(path).map(|key| !key.trim().is_empty()).unwrap_or(false))
+        .unwrap_or(false);
+    if matches!(config.provider_type, AiProviderType::Manual) {
+        config.enabled = false;
+    }
+    save_ai_provider_config_to_settings(&app, &config)?;
+    Ok(ai_provider_status(&app))
+}
+
+#[tauri::command]
+fn save_ai_provider_key(app: tauri::AppHandle, api_key: String) -> Result<AiProviderStatus, String> {
+    let trimmed = api_key.trim();
+    if trimmed.is_empty() {
+        return Err("API key가 비어 있습니다.".into());
+    }
+    write_bytes_atomic(&ai_provider_key_file(&app)?, trimmed.as_bytes())?;
+    let mut config = load_ai_provider_config(&app);
+    config.has_stored_key = true;
+    save_ai_provider_config_to_settings(&app, &config)?;
+    Ok(ai_provider_status(&app))
+}
+
+#[tauri::command]
+fn clear_ai_provider_key(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
+    let path = ai_provider_key_file(&app)?;
+    if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    let mut config = load_ai_provider_config(&app);
+    config.has_stored_key = false;
+    save_ai_provider_config_to_settings(&app, &config)?;
+    Ok(ai_provider_status(&app))
+}
+
+#[tauri::command]
+fn generate_import_with_ai(
+    app: tauri::AppHandle,
+    prompt: String,
+    input_text: String,
+) -> Result<String, String> {
+    let config = load_ai_provider_config(&app);
+    if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
+        return Err("AI provider가 비활성화되어 있습니다.".into());
+    }
+    let key = ai_provider_key(&app, &config)?;
+    let model = gemini_model(&config.provider_type);
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+        model
+    );
+    let text = if input_text.trim().is_empty() {
+        prompt
+    } else {
+        format!("{}\n\n입력:\n{}", prompt, input_text)
+    };
+    let body = serde_json::json!({
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{ "text": text }]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2,
+            "responseMimeType": "application/json"
+        }
+    });
+    let client = reqwest::blocking::Client::new();
+    let response = client
+        .post(url)
+        .header("x-goog-api-key", key)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("Gemini 호출에 실패했습니다: {e}"))?;
+    let status = response.status();
+    let value: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("Gemini 응답 JSON을 읽지 못했습니다: {e}"))?;
+    if !status.is_success() {
+        let message = value
+            .get("error")
+            .and_then(|error| error.get("message"))
+            .and_then(|message| message.as_str())
+            .unwrap_or("Gemini API 오류");
+        return Err(format!("Gemini API 오류({status}): {message}"));
+    }
+    extract_gemini_text(value)
 }
 
 #[tauri::command]
@@ -619,6 +890,11 @@ pub fn run() {
             save_entries,
             load_settings,
             save_settings,
+            get_ai_provider_status,
+            save_ai_provider_config,
+            save_ai_provider_key,
+            clear_ai_provider_key,
+            generate_import_with_ai,
             save_image,
             get_image_file_path,
             delete_image,

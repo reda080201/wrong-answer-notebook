@@ -1,6 +1,7 @@
 import type { ChecklistItem, Difficulty, EntryFormData, ExplanationPart, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeFigures } from "./entry";
+import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 
@@ -28,6 +29,7 @@ interface ImportJsonShape {
   concepts?: unknown;
   difficulty?: unknown;
   difficultyByQuestion?: unknown;
+  mistakeAnalysis?: unknown;
 }
 
 const DEFAULT_TAGS: string[] = [];
@@ -77,6 +79,7 @@ export function parseImportedStudyText(
             correctAnswer: "",
             explanationParts: [],
             answerKey: [],
+            mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
             annotations: [],
             mastered: false,
           },
@@ -109,6 +112,7 @@ export function parseImportedStudyText(
           tags: normalizeTags(parsed.tags),
           answerKey,
           figures: normalizeImportFigures(parsed.figures),
+          mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
           questionImages: [],
           difficult: false,
           difficulty: "none",
@@ -140,6 +144,7 @@ export function parseImportedStudyText(
       memo: mergeMemoAndImportantNotes(markdown.memo, markdown.importantNotes),
       answerKey: markdown.answerKey,
       figures: [],
+      mistakeAnalysis: { causes: [] },
       annotations: [],
       mastered: false,
     },

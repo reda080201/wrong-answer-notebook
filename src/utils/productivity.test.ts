@@ -35,6 +35,7 @@ const settings: AppSettings = {
   templates: [],
   promptTemplates: [],
   memoTemplates: [],
+  aiProvider: { type: "manual", enabled: false, keySource: "env", hasStoredKey: false },
   importPreferences: {},
   answerViewPreferences: { viewMode: "card", hideAnswers: false },
   autoBackup: { enabled: false },

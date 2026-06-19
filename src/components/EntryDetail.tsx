@@ -3,6 +3,13 @@ import { v4 as uuidv4 } from "uuid";
 import type { Annotation, AnnotationTool, ChecklistItem, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
+import { buildConceptAnalytics } from "../utils/conceptAnalytics";
+import {
+  PRACTICE_MODE_LABELS,
+  mistakeCauseLabel,
+  recommendedStrategyForAnalysis,
+  summarizeMistakeAnalysis,
+} from "../utils/mistakeAnalysis";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 import CollapsibleSection from "./CollapsibleSection";
@@ -158,6 +165,16 @@ export default function EntryDetail({
     () => (isConcept ? getRelatedEntries(entry, allEntries) : []),
     [allEntries, entry, isConcept],
   );
+  const conceptAnalytics = useMemo(() => {
+    if (!isConcept || !entry.title.trim()) return undefined;
+    return buildConceptAnalytics(allEntries).find(
+      (item) => item.concept.trim().toLowerCase() === entry.title.trim().toLowerCase(),
+    );
+  }, [allEntries, entry.title, isConcept]);
+  const diagnosisStrategy = recommendedStrategyForAnalysis(entry.mistakeAnalysis);
+  const hasMistakeAnalysis =
+    (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
+    Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
 
   useEffect(() => {
     localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
@@ -1033,6 +1050,45 @@ export default function EntryDetail({
           </section>
         )}
 
+        {!isFocusExpanded && !isConcept && (
+          <CollapsibleSection
+            title="오답 원인"
+            badge={hasMistakeAnalysis ? summarizeMistakeAnalysis(entry) : "미분류"}
+            defaultOpen={hasMistakeAnalysis}
+          >
+            {hasMistakeAnalysis ? (
+              <div className="mistake-analysis-detail">
+                <div className="mistake-analysis-cause-list">
+                  {(entry.mistakeAnalysis?.causes ?? []).map((cause) => (
+                    <div key={cause.type} className={`mistake-analysis-cause mistake-analysis-cause--${cause.severity}`}>
+                      <strong>{mistakeCauseLabel(cause.type)}</strong>
+                      <span>
+                        {cause.severity === "high" ? "높음" : cause.severity === "low" ? "낮음" : "보통"}
+                      </span>
+                      {cause.note && <p>{cause.note}</p>}
+                    </div>
+                  ))}
+                </div>
+                {diagnosisStrategy && (
+                  <p className="mistake-analysis-strategy">
+                    추천 복습: {PRACTICE_MODE_LABELS[diagnosisStrategy]}
+                  </p>
+                )}
+                {entry.mistakeAnalysis?.preventionNote && (
+                  <div className="mistake-analysis-prevention">
+                    <strong>다음에 피할 방법</strong>
+                    <p>{entry.mistakeAnalysis.preventionNote}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="concept-graph-empty">
+                아직 오답 원인이 없습니다. 수정 화면에서 계산 실수, 조건 해석 실패, 개념 누락 등을 선택해 주세요.
+              </p>
+            )}
+          </CollapsibleSection>
+        )}
+
         {!isFocusExpanded && hasExplanationContent(entry) && (
           <CollapsibleSection
             title="해설"
@@ -1077,6 +1133,34 @@ export default function EntryDetail({
               focusEntry={entry}
               onOpenEntry={(entryId) => onOpenEntry?.(entryId)}
             />
+            {conceptAnalytics && (
+              <div className="concept-analytics-strip">
+                <div>
+                  <strong>{conceptAnalytics.relatedEntries.length}</strong>
+                  <span>연결 오답</span>
+                </div>
+                <div>
+                  <strong>{conceptAnalytics.dueCount}</strong>
+                  <span>복습 필요</span>
+                </div>
+                <div>
+                  <strong>
+                    {conceptAnalytics.reviewSuccessRate === null
+                      ? "-"
+                      : `${Math.round(conceptAnalytics.reviewSuccessRate * 100)}%`}
+                  </strong>
+                  <span>복습 성공률</span>
+                </div>
+                <div>
+                  <strong>
+                    {conceptAnalytics.primaryCauses[0]
+                      ? mistakeCauseLabel(conceptAnalytics.primaryCauses[0].type)
+                      : "-"}
+                  </strong>
+                  <span>주요 원인</span>
+                </div>
+              </div>
+            )}
             {relatedEntries.length > 0 && (
               <div className="related-entry-list">
                 {relatedEntries.map((related) => (

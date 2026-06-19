@@ -60,6 +60,7 @@ export default function ConceptGraph({ entries, focusEntry, onOpenEntry }: Conce
             x2={to.x}
             y2={to.y}
             className="concept-graph-edge"
+            strokeWidth={Math.min(6, 1 + (edge.weight ?? 1))}
           />
         );
       })}
