@@ -1068,13 +1068,16 @@ export default function App() {
           promptTemplates={settings.promptTemplates}
           aiProvider={settings.aiProvider}
           aiProviderStatus={aiProviderStatus}
-          onGenerateWithAi={async (prompt, inputText) => {
+          onGenerateWithAi={async (prompt, inputText, imageFilenames) => {
             try {
-              return await generateImportWithAi(prompt, inputText);
+              return await generateImportWithAi(prompt, inputText, imageFilenames);
             } catch (aiError) {
               await updateAiProviderConfig({ enabled: false, type: "manual" });
               throw aiError;
             }
+          }}
+          onAiFallback={() => {
+            void updateAiProviderConfig({ enabled: false, type: "manual" });
           }}
           selectedPromptTemplateId={settings.importPreferences.lastPromptTemplateId}
           onPromptTemplateSelect={(templateId) =>

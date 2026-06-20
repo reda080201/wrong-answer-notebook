@@ -20,6 +20,12 @@ import {
   type ImportedStudyText,
 } from "../utils/importStudyText";
 import { validateImportedStudyData } from "../utils/importValidation";
+import {
+  normalizeImportAudit,
+  normalizeRejectedNotes,
+  removeRejectedNotes,
+  scrubRejectedNotesFromAnswers,
+} from "../utils/importAudit";
 import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../utils/gptSolution";
 import { cleanQuestionText } from "../utils/textCleanup";
 import { parseQuestionText } from "../utils/textLayout";
@@ -32,7 +38,8 @@ interface ImportFromGptModalProps {
   promptTemplates?: PromptTemplate[];
   aiProvider?: AiProviderSettings;
   aiProviderStatus?: AiProviderStatus | null;
-  onGenerateWithAi?: (prompt: string, inputText: string) => Promise<string>;
+  onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
+  onAiFallback?: () => void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
   onSavePromptTemplate?: (template: PromptTemplate) => Promise<void>;
@@ -53,6 +60,14 @@ function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
+    importAudit: data.importAudit ? {
+      ...data.importAudit,
+      expectedQuestionNumbers: [...data.importAudit.expectedQuestionNumbers],
+      detectedQuestionNumbers: [...data.importAudit.detectedQuestionNumbers],
+      missingQuestionNumbers: [...data.importAudit.missingQuestionNumbers],
+      uncertainQuestionNumbers: [...data.importAudit.uncertainQuestionNumbers],
+    } : undefined,
+    rejectedNotes: data.rejectedNotes ? [...data.rejectedNotes] : [],
   };
 }
 
@@ -225,6 +240,7 @@ export default function ImportFromGptModal({
   aiProvider,
   aiProviderStatus,
   onGenerateWithAi,
+  onAiFallback,
   selectedPromptTemplateId,
   onPromptTemplateSelect,
   onSavePromptTemplate,
@@ -378,14 +394,21 @@ export default function ImportFromGptModal({
             sourceEntry.memo && `메모: ${sourceEntry.memo}`,
           ].filter(Boolean).join("\n\n")
         : rawText;
-      const aiText = await onGenerateWithAi(activePrompt.content, inputText);
+      const imageFilenames = isSolutionMode && sourceEntry
+        ? sourceEntry.questionImages
+        : images;
+      const aiText = await onGenerateWithAi(activePrompt.content, inputText, imageFilenames);
       const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
+      if (parsedText.detectedFormat !== "json") {
+        throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
+      }
       validateImportedStudyData(parsedText.data);
       setRawText(aiText);
       setFilename("gemini.json");
       setDraftOverride(null);
       setCopyMessage("AI provider 결과를 가져왔습니다.");
     } catch (aiError) {
+      onAiFallback?.();
       setError(
         `${
           aiError instanceof Error && aiError.message
@@ -535,10 +558,22 @@ export default function ImportFromGptModal({
 
   const apply = () => {
     if (!draft || !canApply) return;
-    validateImportedStudyData(draft);
-    onApply({
+    const rejectedNotes = normalizeRejectedNotes(draft.rejectedNotes);
+    const answerKey = scrubRejectedNotesFromAnswers(draft.answerKey ?? [], rejectedNotes);
+    const question = cleanQuestionText(removeRejectedNotes(draft.question ?? "", rejectedNotes));
+    const normalizedDraft = {
       ...draft,
-      question: cleanQuestionText(draft.question ?? ""),
+      question,
+      memo: removeRejectedNotes(draft.memo ?? "", rejectedNotes),
+      answerKey,
+      rejectedNotes,
+      importAudit: draft.importAudit
+        ? normalizeImportAudit(draft.importAudit, { question, answerKey, figures: draft.figures })
+        : undefined,
+    };
+    validateImportedStudyData(normalizedDraft);
+    onApply({
+      ...normalizedDraft,
       questionImages: isSolutionMode ? sourceEntry?.questionImages ?? [] : images,
     }, isSolutionMode ? applyMode : undefined);
   };
@@ -688,6 +723,15 @@ export default function ImportFromGptModal({
   "subject": "수학",
   "question": "1. ...\\n① ...",
   "importantNotes": ["문제 3은 조건 해석이 핵심"],
+  "rejectedNotes": [],
+  "audit": {
+    "expectedQuestionNumbers": ["1"],
+    "detectedQuestionNumbers": ["1"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "handwritingExcluded": true,
+    "needsReviewCount": 0
+  },
   "concepts": ["함수", "그래프"],
   "answerKey": [
     {
@@ -744,6 +788,25 @@ export default function ImportFromGptModal({
                 <div className="import-preview-empty">붙여넣기 또는 파일 업로드를 하면 미리보기가 표시됩니다.</div>
               ) : (
                 <>
+                  {validationReport?.audit && (
+                    <div className={`import-audit-summary ${validationReport.issues.some((issue) => issue.severity === "error") ? "import-audit-summary--danger" : ""}`} role="alert">
+                      <strong>AI 판독 감사</strong>
+                      <span>예상 {validationReport.audit.expectedQuestionNumbers.length} · 감지 {validationReport.audit.detectedQuestionNumbers.length} · 검토 {validationReport.audit.needsReviewCount}</span>
+                      {validationReport.audit.missingQuestionNumbers.length > 0 && (
+                        <p>누락 문제: {validationReport.audit.missingQuestionNumbers.join(", ")}</p>
+                      )}
+                      {validationReport.audit.uncertainQuestionNumbers.length > 0 && (
+                        <p>불확실 문제: {validationReport.audit.uncertainQuestionNumbers.join(", ")}</p>
+                      )}
+                      {!validationReport.audit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+                      {(draft.rejectedNotes ?? []).length > 0 && (
+                        <div className="import-rejected-notes">
+                          <b>학습 데이터에서 제외된 학생 필기</b>
+                          <ul>{(draft.rejectedNotes ?? []).map((note) => <li key={note}>{note}</li>)}</ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {parsed.detectedFormat !== "json" && (
                     <div className="import-format-warning" role="alert">
                       JSON이 아닌 텍스트로 감지되었습니다. GPT 프롬프트를 다시 복사해 순수 JSON 객체로 받아오면 답안지와 난이도 연결이 더 정확합니다.

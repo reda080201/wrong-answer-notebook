@@ -19,6 +19,8 @@ import {
 } from "../utils/textLayout";
 import { renderWikiLinksInNodes } from "../utils/wikiLinks";
 import ImageGallery from "./ImageGallery";
+import MathText, { renderMathInNodes } from "./MathText";
+import ZoomableImageViewer from "./ZoomableImageViewer";
 
 interface AnnotatableQuestionProps {
   question: string;
@@ -32,6 +34,7 @@ interface AnnotatableQuestionProps {
   existingTargets: Set<string>;
   sheetLayout?: "single" | "columns";
   searchQuery?: string;
+  zoomableImages?: boolean;
 }
 
 interface FocusedQuestionViewProps {
@@ -91,10 +94,10 @@ function StructuredTextSegment({
           {segments.map((segment, index) =>
             typeof segment === "string" ? (
               <span key={`text-${index}`}>
-                {highlightSearchNodes(
+                {renderMathInNodes(highlightSearchNodes(
                   renderWikiLinksInNodes([segment], onWikiLinkClick, existingTargets),
                   searchQuery,
-                )}
+                ))}
               </span>
             ) : (
               <MarkdownTable key={`table-${index}`} table={segment} />
@@ -107,10 +110,10 @@ function StructuredTextSegment({
 
   return (
     <span className={className} data-text-start={start}>
-      {highlightSearchNodes(
+      {renderMathInNodes(highlightSearchNodes(
         renderWikiLinksInNodes(nodes, onWikiLinkClick, existingTargets),
         searchQuery,
-      )}
+      ))}
     </span>
   );
 }
@@ -122,7 +125,7 @@ function MarkdownTable({ table }: { table: MarkdownTableSegment }) {
       <thead>
         <tr>
           {head.map((cell, index) => (
-            <th key={`${cell}-${index}`}>{cell}</th>
+            <th key={`${cell}-${index}`}><MathText text={cell} /></th>
           ))}
         </tr>
       </thead>
@@ -130,7 +133,7 @@ function MarkdownTable({ table }: { table: MarkdownTableSegment }) {
         {body.map((row, rowIndex) => (
           <tr key={rowIndex}>
             {row.map((cell, cellIndex) => (
-              <td key={`${cell}-${cellIndex}`}>{cell}</td>
+              <td key={`${cell}-${cellIndex}`}><MathText text={cell} /></td>
             ))}
           </tr>
         ))}
@@ -292,6 +295,10 @@ export function FocusedQuestionView({
     (a): a is Extract<Annotation, { kind: "text" }> => a.kind === "text",
   );
   const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, questionBlock));
+  const focusImageFilenames = [
+    ...matchedFigures.flatMap((figure) => figure.image ? [figure.image] : []),
+    ...questionImages,
+  ].filter((filename, index, values) => values.indexOf(filename) === index);
 
   return (
     <article className="focused-question-view">
@@ -354,9 +361,10 @@ export function FocusedQuestionView({
         {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
       </section>
 
-      {showImages && questionImages.length > 0 && (
+      {showImages && focusImageFilenames.length > 0 && (
         <section className="focused-image-panel">
           <span className="focused-section-label">첨부 이미지</span>
+          <ZoomableImageViewer filenames={focusImageFilenames} />
           <div className="image-gallery--fill">
             {questionImages.map((filename) => (
               <AnnotatableImage
@@ -582,6 +590,7 @@ export default function AnnotatableQuestion({
   existingTargets,
   sheetLayout = "single",
   searchQuery,
+  zoomableImages = false,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -634,19 +643,22 @@ export default function AnnotatableQuestion({
         </div>
       )}
       {hasImages && (
-        <div className="image-gallery--fill">
-          {questionImages.map((f) => (
-            <AnnotatableImage
-              key={f}
-              filename={f}
-              annotations={questionAnns}
-              memoMode={memoMode}
-              activeTool={activeTool}
-              allAnnotations={annotations}
-              onAnnotationsChange={onAnnotationsChange}
-            />
-          ))}
-        </div>
+        <>
+          {zoomableImages && <ZoomableImageViewer filenames={questionImages} />}
+          <div className="image-gallery--fill">
+            {questionImages.map((f) => (
+              <AnnotatableImage
+                key={f}
+                filename={f}
+                annotations={questionAnns}
+                memoMode={memoMode}
+                activeTool={activeTool}
+                allAnnotations={annotations}
+                onAnnotationsChange={onAnnotationsChange}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

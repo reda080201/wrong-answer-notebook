@@ -30,6 +30,39 @@ describe("ImportFromGptModal", () => {
     mastered: false,
   };
 
+  it("sends stored question images to the Gemini provider", async () => {
+    const onGenerateWithAi = vi.fn().mockResolvedValue(JSON.stringify({
+      title: "Vision 결과",
+      question: "1. 문제",
+      rejectedNotes: [],
+      audit: {
+        expectedQuestionNumbers: ["1"],
+        detectedQuestionNumbers: ["1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    }));
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        sourceEntry={sourceEntry}
+        mode="solution"
+        aiProvider={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false }}
+        aiProviderStatus={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }}
+        onGenerateWithAi={onGenerateWithAi}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "AI로 가져오기" }));
+    await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
+    expect(onGenerateWithAi.mock.calls[0][2]).toEqual(["q1.png"]);
+    expect(await screen.findByText("AI 판독 감사")).toBeInTheDocument();
+  });
+
   it("shows preview after paste and applies parsed data", () => {
     const onApply = vi.fn();
     render(

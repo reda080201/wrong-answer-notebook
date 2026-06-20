@@ -2969,6 +2969,141 @@
   line-height: 1.5;
 }
 
+.import-audit-summary {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #d8a62b;
+  border-left-width: 5px;
+  border-radius: 6px;
+  background: #fff9e8;
+  color: #5f4500;
+}
+
+.import-audit-summary--danger {
+  border-color: #d14343;
+  background: #fff1f1;
+  color: #7a1f1f;
+}
+
+.import-audit-summary p,
+.import-audit-summary ul {
+  margin: 0;
+}
+
+.import-rejected-notes {
+  padding-top: 8px;
+  border-top: 1px solid currentColor;
+}
+
+.import-validation-issue--error {
+  border-left-color: #d14343;
+  background: #fff1f1;
+  color: #7a1f1f;
+}
+
+.math-fragment--display {
+  display: block;
+  max-width: 100%;
+  margin: 12px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.math-fragment--invalid {
+  color: inherit;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.zoom-viewer-launcher {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.zoom-viewer-launcher button {
+  position: relative;
+  min-height: 120px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+.zoom-viewer-launcher img {
+  width: 100%;
+  height: 150px;
+  object-fit: contain;
+}
+
+.zoom-viewer-launcher span {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: rgba(18, 24, 38, 0.82);
+  color: #fff;
+  font-size: 12px;
+}
+
+.zoom-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  background: #15171b;
+  color: #fff;
+}
+
+.zoom-viewer-toolbar,
+.zoom-viewer-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 54px;
+  padding: 8px 16px;
+  background: #20242b;
+}
+
+.zoom-viewer-toolbar button,
+.zoom-viewer-navigation button {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid #555d69;
+  border-radius: 5px;
+  background: #2d333d;
+  color: #fff;
+}
+
+.zoom-viewer-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+}
+
+.zoom-viewer-viewport:active {
+  cursor: grabbing;
+}
+
+.zoom-viewer-viewport img {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  max-height: none;
+  transform-origin: center;
+  user-select: none;
+  translate: -50% -50%;
+}
+
 .clipboard-actions,
 .apply-mode-toggle {
   display: flex;

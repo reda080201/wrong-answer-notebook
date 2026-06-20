@@ -13,6 +13,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
+import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 
 function isEntryKind(v: unknown): v is EntryKind {
   return v === "wrong_answer" || v === "problem_sheet" || v === "concept";
@@ -224,6 +225,9 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     difficulty = "high";
   }
 
+  const answerKey = normalizeAnswerKey(rest.answerKey);
+  const figures = normalizeFigures(rest.figures);
+
   return {
     ...rest,
     title,
@@ -238,8 +242,12 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     memo: rest.memo ?? "",
     annotations: rest.annotations ?? [],
     tags: Array.isArray(rest.tags) ? rest.tags : [],
-    answerKey: normalizeAnswerKey(rest.answerKey),
-    figures: normalizeFigures(rest.figures),
+    answerKey,
+    figures,
+    importAudit: rest.importAudit
+      ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures })
+      : undefined,
+    rejectedNotes: normalizeRejectedNotes(rest.rejectedNotes),
     mistakeAnalysis: normalizeMistakeAnalysis(rest.mistakeAnalysis),
     review: normalizeReview(rest.review),
     checklist: entryKind === "concept" ? normalizeChecklist(rest.checklist) : rest.checklist ?? [],

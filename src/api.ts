@@ -53,7 +53,8 @@ export const builtInPromptTemplates: PromptTemplate[] = [
 - 도표/그래프/그림은 가능한 한 깨끗한 PNG로 다시 만들고, JSON figures[].image에 실제 파일명만 적어줘.
 - figures[].image 파일명과 실제 이미지 파일명은 대소문자까지 정확히 맞춰줘.
 - 문제 번호가 불확실한 도표는 questionNumber를 빈 문자열로 두고 needsReview를 true로 표시해줘.
-- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 제외해줘.
+- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey에 넣지 말고 rejectedNotes에만 기록해줘.
+- audit에는 예상/감지/누락/불확실 문제 번호, 손글씨 제외 여부, 검토 필요 개수를 반드시 기록해줘.
 - tags 필드와 최상위 difficulty 필드는 만들지 마.
 
 import.json 형식:
@@ -63,6 +64,15 @@ import.json 형식:
   "question": "1. ...\\n① ...",
   "importantNotes": ["전체적으로 알아둘 점"],
   "memo": "전체 학습 메모",
+  "rejectedNotes": ["학생 필기로 의심되어 제외한 내용"],
+  "audit": {
+    "expectedQuestionNumbers": ["1"],
+    "detectedQuestionNumbers": ["1"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "handwritingExcluded": true,
+    "needsReviewCount": 0
+  },
   "answerKey": [
     {
       "questionNumber": "1",
@@ -99,7 +109,8 @@ import.json 형식:
 - 설명문, Markdown, 코드블록, \`\`\`json, 파일 첨부 안내 문구는 절대 넣지 마.
 - 문제 원문은 question에 줄바꿈을 살려 넣어줘.
 - 도표/그래프/표는 빠뜨리지 말고 Markdown 표, 축·범례·값 설명, 또는 [도표/그래프 설명] 블록으로 옮겨줘.
-- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 마.
+- 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 말고 rejectedNotes에만 기록해줘.
+- audit에는 이미지에서 예상되는 문제 번호, 실제 감지 번호, 누락 번호, 불확실 번호, 손글씨 제외 여부, 검토 필요 개수를 반드시 기록해줘.
 - 답안지에 인쇄된 정답·해설·정답 근거는 유지하되, 시험지 위 학생 필기와 구분해줘.
 - 시험지 전체에 해당하는 학습 포인트만 importantNotes에 넣어줘.
 - 특정 문제에만 해당하는 메모는 importantNotes나 memo에 넣지 말고 반드시 answerKey[].notes에 넣어줘.
@@ -120,6 +131,15 @@ import.json 형식:
   "question": "1. ...\\n① ...",
   "importantNotes": ["전체적으로 알아둘 점"],
   "memo": "추가 메모",
+  "rejectedNotes": ["학생 필기로 의심되어 제외한 내용"],
+  "audit": {
+    "expectedQuestionNumbers": ["1"],
+    "detectedQuestionNumbers": ["1"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "handwritingExcluded": true,
+    "needsReviewCount": 0
+  },
   "mistakeAnalysis": {
     "causes": [
       { "type": "concept_gap", "severity": "medium", "note": "핵심 개념 확인 필요" }
@@ -392,11 +412,15 @@ export async function clearAiProviderKey(): Promise<AiProviderStatus> {
   return invoke<AiProviderStatus>("clear_ai_provider_key");
 }
 
-export async function generateImportWithAi(prompt: string, inputText: string): Promise<string> {
+export async function generateImportWithAi(
+  prompt: string,
+  inputText: string,
+  imageFilenames: string[] = [],
+): Promise<string> {
   if (!isTauri()) {
     throw new Error("AI provider는 데스크톱 앱에서만 사용할 수 있습니다.");
   }
-  return invoke<string>("generate_import_with_ai", { prompt, inputText });
+  return invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
 }
 
 export async function pickImages(): Promise<string[]> {

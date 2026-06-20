@@ -76,6 +76,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - 설명문, Markdown, 코드블록, 파일 안내 문구는 넣지 마.
 - tags 필드는 만들지 마.
 - 문제를 못 읽겠거나 답이 불확실하면 needsReview를 true로 표시해줘.
+- 학생 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 question, answerKey, memo에 넣지 말고 rejectedNotes에만 기록해줘.
+- audit에 expectedQuestionNumbers, detectedQuestionNumbers, missingQuestionNumbers, uncertainQuestionNumbers, handwritingExcluded, needsReviewCount를 기록해줘.
 - 수식은 가능한 한 LaTeX 문자열로 깔끔하게 적어줘.
 - 풀이 과정은 학생이 다시 봐도 이해되도록 단계별로 써줘.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
@@ -93,6 +95,15 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
   ],
   "memo": "핵심 개념과 자주 하는 실수",
   "importantNotes": ["검산 포인트"],
+  "rejectedNotes": [],
+  "audit": {
+    "expectedQuestionNumbers": ["1"],
+    "detectedQuestionNumbers": ["1"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "handwritingExcluded": true,
+    "needsReviewCount": 0
+  },
   "answerKey": [
     {
       "questionNumber": "${isSheet ? "1" : "1"}",
@@ -141,6 +152,8 @@ export function mergeGptSolutionIntoEntry(
         : base.explanationParts,
     memo: shouldOverwrite || !hasText(base.memo) ? imported.memo ?? base.memo : base.memo,
     answerKey: mergeAnswerKey(base.answerKey, imported.answerKey, mode),
+    importAudit: imported.importAudit ?? base.importAudit,
+    rejectedNotes: imported.rejectedNotes?.length ? imported.rejectedNotes : base.rejectedNotes,
     questionImages: base.questionImages,
     entryKind: base.entryKind,
     tags: base.tags,
@@ -169,6 +182,15 @@ export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
       importantPoints: [...item.importantPoints],
       concepts: item.concepts ? [...item.concepts] : [],
     })),
+    figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
+    importAudit: entry.importAudit ? {
+      ...entry.importAudit,
+      expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],
+      detectedQuestionNumbers: [...entry.importAudit.detectedQuestionNumbers],
+      missingQuestionNumbers: [...entry.importAudit.missingQuestionNumbers],
+      uncertainQuestionNumbers: [...entry.importAudit.uncertainQuestionNumbers],
+    } : undefined,
+    rejectedNotes: [...(entry.rejectedNotes ?? [])],
     mastered: entry.mastered,
     review: entry.review,
     checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],

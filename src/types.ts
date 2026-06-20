@@ -57,6 +57,15 @@ export interface SheetFigureItem {
   needsReview?: boolean;
 }
 
+export interface ImportAudit {
+  expectedQuestionNumbers: string[];
+  detectedQuestionNumbers: string[];
+  missingQuestionNumbers: string[];
+  uncertainQuestionNumbers: string[];
+  handwritingExcluded: boolean;
+  needsReviewCount: number;
+}
+
 export type MistakeCauseType =
   | "calculation"
   | "condition_misread"
@@ -211,6 +220,8 @@ export interface WrongAnswerEntry {
   tags: string[];
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
+  importAudit?: ImportAudit;
+  rejectedNotes?: string[];
   mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
   checklist?: ChecklistItem[];

@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
@@ -8,6 +9,8 @@ use uuid::Uuid;
 use zip::write::FileOptions;
 
 const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_AI_IMAGE_COUNT: usize = 20;
+const MAX_AI_IMAGE_TOTAL_BYTES: u64 = 14 * 1024 * 1024;
 const MAX_BACKUP_ZIP_BYTES: u64 = 50 * 1024 * 1024;
 const MAX_BACKUP_JSON_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_BACKUP_IMAGE_COUNT: usize = 20;
@@ -65,6 +68,10 @@ pub struct WrongAnswerEntry {
     pub answer_key: Vec<serde_json::Value>,
     #[serde(default)]
     pub figures: Vec<SheetFigureItem>,
+    #[serde(default)]
+    pub import_audit: Option<serde_json::Value>,
+    #[serde(default)]
+    pub rejected_notes: Vec<String>,
     #[serde(default)]
     pub review: Option<serde_json::Value>,
     #[serde(default)]
@@ -233,6 +240,63 @@ fn validate_image_magic(path: &Path, ext: &str) -> Result<(), String> {
     let mut header = [0u8; 12];
     let read = file.read(&mut header).map_err(|e| e.to_string())?;
     validate_image_header_bytes(&header[..read], ext)
+}
+
+fn vision_image_mime(filename: &str) -> Result<&'static str, String> {
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    match ext.as_str() {
+        "png" => Ok("image/png"),
+        "jpg" | "jpeg" => Ok("image/jpeg"),
+        "webp" => Ok("image/webp"),
+        _ => Err("Gemini Vision은 PNG, JPEG, WebP 이미지만 지원합니다.".into()),
+    }
+}
+
+fn gemini_inline_data_part(mime_type: &str, bytes: &[u8]) -> serde_json::Value {
+    serde_json::json!({
+        "inline_data": {
+            "mime_type": mime_type,
+            "data": BASE64_STANDARD.encode(bytes)
+        }
+    })
+}
+
+fn build_gemini_parts(
+    app: &tauri::AppHandle,
+    text: String,
+    image_filenames: &[String],
+) -> Result<Vec<serde_json::Value>, String> {
+    if image_filenames.len() > MAX_AI_IMAGE_COUNT {
+        return Err(format!("AI 분석 이미지는 한 번에 {MAX_AI_IMAGE_COUNT}개 이하만 사용할 수 있습니다."));
+    }
+    let mut parts = vec![serde_json::json!({ "text": text })];
+    let mut total_bytes = 0_u64;
+    for filename in image_filenames {
+        let mime_type = vision_image_mime(filename)?;
+        let path = image_path(app, filename)?;
+        if !path.exists() {
+            return Err(format!("AI 분석 이미지가 없습니다: {filename}"));
+        }
+        let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+        total_bytes = total_bytes
+            .checked_add(metadata.len())
+            .ok_or_else(|| "AI 분석 이미지 용량을 계산하지 못했습니다.".to_string())?;
+        if total_bytes > MAX_AI_IMAGE_TOTAL_BYTES {
+            return Err("AI 분석 이미지 전체 용량은 14MB 이하여야 합니다.".into());
+        }
+        let ext = Path::new(filename)
+            .extension()
+            .and_then(|value| value.to_str())
+            .unwrap_or_default();
+        validate_image_magic(&path, ext)?;
+        let bytes = fs::read(&path).map_err(|e| format!("AI 분석 이미지를 읽지 못했습니다: {e}"))?;
+        parts.push(gemini_inline_data_part(mime_type, &bytes));
+    }
+    Ok(parts)
 }
 
 fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
@@ -507,6 +571,7 @@ fn generate_import_with_ai(
     app: tauri::AppHandle,
     prompt: String,
     input_text: String,
+    image_filenames: Vec<String>,
 ) -> Result<String, String> {
     let config = load_ai_provider_config(&app);
     if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
@@ -523,11 +588,12 @@ fn generate_import_with_ai(
     } else {
         format!("{}\n\n입력:\n{}", prompt, input_text)
     };
+    let parts = build_gemini_parts(&app, text, &image_filenames)?;
     let body = serde_json::json!({
         "contents": [
             {
                 "role": "user",
-                "parts": [{ "text": text }]
+                "parts": parts
             }
         ],
         "generationConfig": {
@@ -829,6 +895,8 @@ mod tests {
             tags: vec![],
             answer_key: vec![],
             figures: vec![],
+            import_audit: None,
+            rejected_notes: vec![],
             review: None,
             checklist: vec![],
             images: vec![],
@@ -854,6 +922,21 @@ mod tests {
         assert!(validate_image_header_bytes(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a], "png").is_ok());
         assert!(validate_image_header_bytes(&[0xff, 0xd8, 0xff], "jpg").is_ok());
         assert!(validate_image_header_bytes(b"not an image", "png").is_err());
+    }
+
+    #[test]
+    fn maps_vision_mime_types_and_rejects_gif() {
+        assert_eq!(vision_image_mime("page.png").unwrap(), "image/png");
+        assert_eq!(vision_image_mime("page.JPG").unwrap(), "image/jpeg");
+        assert_eq!(vision_image_mime("page.webp").unwrap(), "image/webp");
+        assert!(vision_image_mime("page.gif").is_err());
+    }
+
+    #[test]
+    fn builds_gemini_inline_data_part() {
+        let part = gemini_inline_data_part("image/png", b"png");
+        assert_eq!(part["inline_data"]["mime_type"], "image/png");
+        assert_eq!(part["inline_data"]["data"], "cG5n");
     }
 
     #[test]

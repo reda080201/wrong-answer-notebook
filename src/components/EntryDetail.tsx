@@ -16,6 +16,7 @@ import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
+import MathText from "./MathText";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -330,7 +331,7 @@ export default function EntryDetail({
                 {item.questionNumber || "검토"}번
               </button>
               <strong className={hideAnswers ? "answer-hidden" : ""}>
-                {hideAnswers ? "•••" : item.answer || "정답 없음"}
+                {hideAnswers ? "•••" : <MathText text={item.answer || "정답 없음"} />}
               </strong>
               <span>{item.difficulty === "high" ? "상" : item.difficulty === "medium" ? "중" : item.difficulty === "low" ? "하" : "-"}</span>
               <span>{item.concepts?.join(", ") || "-"}</span>
@@ -357,7 +358,7 @@ export default function EntryDetail({
                   {item.questionNumber || "검토"}번
                 </button>
                 <strong className={hideAnswers ? "answer-hidden" : ""}>
-                  {hideAnswers ? "•••" : item.answer || "정답 없음"}
+                  {hideAnswers ? "•••" : <MathText text={item.answer || "정답 없음"} />}
                 </strong>
                 {item.needsReview && <span className="answer-review-badge">검토 필요</span>}
                 {item.difficulty && (
@@ -441,7 +442,7 @@ export default function EntryDetail({
         <header>
           <span className="focused-section-label">답지</span>
           <strong className={hideAnswers ? "answer-hidden" : ""}>
-            {hideAnswers ? "•••" : focusedAnswer.answer || "정답 없음"}
+            {hideAnswers ? "•••" : <MathText text={focusedAnswer.answer || "정답 없음"} />}
           </strong>
           {focusedAnswer.needsReview && <span className="answer-review-badge">검토 필요</span>}
         </header>
@@ -803,6 +804,7 @@ export default function EntryDetail({
                   existingTargets={existingTargets}
                   sheetLayout="single"
                   searchQuery=""
+                  zoomableImages={activeStudyPanel === "images"}
                 />
               </div>
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
@@ -863,6 +865,28 @@ export default function EntryDetail({
             />
           )}
         </section>
+
+        {!isFocusExpanded && (entry.importAudit || (entry.rejectedNotes?.length ?? 0) > 0) && (
+          <section className={`import-audit-summary detail-import-audit ${entry.importAudit?.missingQuestionNumbers.length || entry.importAudit?.handwritingExcluded === false ? "import-audit-summary--danger" : ""}`}>
+            <strong>AI 가져오기 검토</strong>
+            {entry.importAudit && (
+              <>
+                <span>
+                  예상 {entry.importAudit.expectedQuestionNumbers.length} · 감지 {entry.importAudit.detectedQuestionNumbers.length} · 검토 {entry.importAudit.needsReviewCount}
+                </span>
+                {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
+                {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
+                {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+              </>
+            )}
+            {(entry.rejectedNotes?.length ?? 0) > 0 && (
+              <div className="import-rejected-notes">
+                <b>제외된 학생 필기</b>
+                <ul>{entry.rejectedNotes?.map((note) => <li key={note}><MathText text={note} /></li>)}</ul>
+              </div>
+            )}
+          </section>
+        )}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
           <section className="sheet-study-panel sheet-study-panel--answers">

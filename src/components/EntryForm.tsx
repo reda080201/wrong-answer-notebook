@@ -78,6 +78,14 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
       concepts: item.concepts ? [...item.concepts] : [],
     })),
     figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
+    importAudit: entry.importAudit ? {
+      ...entry.importAudit,
+      expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],
+      detectedQuestionNumbers: [...entry.importAudit.detectedQuestionNumbers],
+      missingQuestionNumbers: [...entry.importAudit.missingQuestionNumbers],
+      uncertainQuestionNumbers: [...entry.importAudit.uncertainQuestionNumbers],
+    } : undefined,
+    rejectedNotes: [...(entry.rejectedNotes ?? [])],
     mistakeAnalysis: {
       causes: entry.mistakeAnalysis?.causes.map((cause) => ({ ...cause })) ?? [],
       primaryCause: entry.mistakeAnalysis?.primaryCause,
@@ -112,6 +120,14 @@ function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
+    importAudit: data.importAudit ? {
+      ...data.importAudit,
+      expectedQuestionNumbers: [...data.importAudit.expectedQuestionNumbers],
+      detectedQuestionNumbers: [...data.importAudit.detectedQuestionNumbers],
+      missingQuestionNumbers: [...data.importAudit.missingQuestionNumbers],
+      uncertainQuestionNumbers: [...data.importAudit.uncertainQuestionNumbers],
+    } : undefined,
+    rejectedNotes: data.rejectedNotes ? [...data.rejectedNotes] : [],
     mistakeAnalysis: data.mistakeAnalysis
       ? {
           ...data.mistakeAnalysis,

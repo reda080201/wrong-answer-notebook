@@ -1,4 +1,5 @@
 import { cloneElement, isValidElement, type ReactNode } from "react";
+import MathText from "../components/MathText";
 
 export interface ParsedWikiPart {
   isLink: boolean;
@@ -76,7 +77,7 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets }: Linki
             </span>
           );
         }
-        return part.raw;
+        return <MathText key={`math-${part.index}`} text={part.raw} />;
       })}
     </span>
   );
