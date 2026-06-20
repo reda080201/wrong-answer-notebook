@@ -57,6 +57,52 @@ export interface SheetFigureItem {
   needsReview?: boolean;
 }
 
+export interface ImportAudit {
+  expectedQuestionNumbers: string[];
+  detectedQuestionNumbers: string[];
+  missingQuestionNumbers: string[];
+  uncertainQuestionNumbers: string[];
+  handwritingExcluded: boolean;
+  needsReviewCount: number;
+}
+
+export type MistakeCauseType =
+  | "calculation"
+  | "condition_misread"
+  | "concept_gap"
+  | "strategy_gap"
+  | "time_pressure"
+  | "choice_trap"
+  | "careless"
+  | "unknown";
+
+export type MistakeCauseSeverity = "low" | "medium" | "high";
+
+export type MistakeAnalysisConfidence = "user" | "gpt" | "inferred";
+
+export type ReviewStrategy =
+  | "concept_review"
+  | "drill"
+  | "similar_problem"
+  | "timed_retry"
+  | "choice_review"
+  | "solution_pattern_review";
+
+export interface MistakeCause {
+  type: MistakeCauseType;
+  label?: string;
+  severity: MistakeCauseSeverity;
+  note?: string;
+}
+
+export interface MistakeAnalysis {
+  causes: MistakeCause[];
+  primaryCause?: MistakeCauseType;
+  confidence?: MistakeAnalysisConfidence;
+  preventionNote?: string;
+  practiceMode?: ReviewStrategy;
+}
+
 export type ReviewResult = "again" | "hard" | "good";
 
 export interface ReviewEvent {
@@ -65,6 +111,8 @@ export interface ReviewEvent {
   result: ReviewResult;
   nextDueAt: string | null;
   intervalDays: number;
+  causeSnapshot?: MistakeCauseType[];
+  strategy?: ReviewStrategy;
 }
 
 export interface ReviewState {
@@ -102,10 +150,28 @@ export interface MemoTemplate {
   builtIn?: boolean;
 }
 
+export type AiProviderType = "manual" | "gemini-flash-lite" | "gemini-3.5-flash";
+
+export type AiProviderKeySource = "env" | "tauri-settings";
+
+export interface AiProviderSettings {
+  type: AiProviderType;
+  enabled: boolean;
+  keySource: AiProviderKeySource;
+  hasStoredKey: boolean;
+}
+
+export interface AiProviderStatus extends AiProviderSettings {
+  hasEnvKey: boolean;
+  available: boolean;
+  message?: string;
+}
+
 export interface AppSettings {
   templates: EntryTemplate[];
   promptTemplates: PromptTemplate[];
   memoTemplates: MemoTemplate[];
+  aiProvider: AiProviderSettings;
   importPreferences: {
     lastPromptTemplateId?: string;
   };
@@ -154,6 +220,9 @@ export interface WrongAnswerEntry {
   tags: string[];
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
+  importAudit?: ImportAudit;
+  rejectedNotes?: string[];
+  mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
   checklist?: ChecklistItem[];
   /** @deprecated 마이그레이션용 — explanationParts로 이전됨 */

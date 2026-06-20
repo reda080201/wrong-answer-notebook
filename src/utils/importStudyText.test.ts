@@ -114,6 +114,42 @@ describe("importStudyText", () => {
     );
   });
 
+  it("recomputes import audit and removes rejected handwriting from study fields", () => {
+    const result = parseImportedStudyText(JSON.stringify({
+      title: "감사 시험지",
+      question: "1. 인쇄 문제\n학생풀이 x=3",
+      memo: "전체 메모 학생풀이 x=3",
+      rejectedNotes: ["학생풀이 x=3"],
+      answerKey: [{
+        questionNumber: "1",
+        answer: "2 학생풀이 x=3",
+        explanation: "인쇄 해설",
+        importantPoints: [],
+      }],
+      audit: {
+        expectedQuestionNumbers: ["01", "2번"],
+        detectedQuestionNumbers: ["99"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: ["#2"],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    }));
+
+    expect(result.data.question).not.toContain("학생풀이");
+    expect(result.data.memo).not.toContain("학생풀이");
+    expect(result.data.answerKey?.[0].answer).toBe("2");
+    expect(result.data.rejectedNotes).toEqual(["학생풀이 x=3"]);
+    expect(result.data.importAudit).toEqual(expect.objectContaining({
+      expectedQuestionNumbers: ["1", "2"],
+      detectedQuestionNumbers: ["1"],
+      missingQuestionNumbers: ["2"],
+      uncertainQuestionNumbers: ["2"],
+      handwritingExcluded: true,
+      needsReviewCount: 1,
+    }));
+  });
+
   it("merges JSON important notes into memo and normalizes answer key", () => {
     const result = parseImportedStudyText(
       JSON.stringify({

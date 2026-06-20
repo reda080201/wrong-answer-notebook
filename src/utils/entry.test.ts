@@ -81,4 +81,28 @@ describe("normalizeEntry", () => {
     );
     expect(getAllImageFilenames(entry)).toContain("graph_1.png");
   });
+
+  it("normalizes persisted import audit and rejected notes", () => {
+    const entry = normalizeEntry(rawEntry({
+      entryKind: "problem_sheet",
+      question: "01. 첫 문제",
+      importAudit: {
+        expectedQuestionNumbers: ["01", "2번"],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: ["#2"],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+      rejectedNotes: [" 학생 계산 ", "학생 계산"],
+    }));
+
+    expect(entry.importAudit).toEqual(expect.objectContaining({
+      expectedQuestionNumbers: ["1", "2"],
+      detectedQuestionNumbers: ["1"],
+      missingQuestionNumbers: ["2"],
+      uncertainQuestionNumbers: ["2"],
+    }));
+    expect(entry.rejectedNotes).toEqual(["학생 계산"]);
+  });
 });

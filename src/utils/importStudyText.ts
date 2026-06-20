@@ -1,6 +1,13 @@
 import type { ChecklistItem, Difficulty, EntryFormData, ExplanationPart, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeFigures } from "./entry";
+import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
+import {
+  normalizeImportAudit,
+  normalizeRejectedNotes,
+  removeRejectedNotes,
+  scrubRejectedNotesFromAnswers,
+} from "./importAudit";
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 
@@ -28,6 +35,9 @@ interface ImportJsonShape {
   concepts?: unknown;
   difficulty?: unknown;
   difficultyByQuestion?: unknown;
+  mistakeAnalysis?: unknown;
+  audit?: unknown;
+  rejectedNotes?: unknown;
 }
 
 const DEFAULT_TAGS: string[] = [];
@@ -77,6 +87,7 @@ export function parseImportedStudyText(
             correctAnswer: "",
             explanationParts: [],
             answerKey: [],
+            mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
             annotations: [],
             mastered: false,
           },
@@ -84,16 +95,28 @@ export function parseImportedStudyText(
       }
     }
 
-    const question = getString(parsed.question);
-    if (question.trim()) {
+    const rawQuestion = getString(parsed.question);
+    if (rawQuestion.trim()) {
+      const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
+      const question = removeRejectedNotes(rawQuestion, rejectedNotes);
       const importantNotes = splitImportantNotes(parsed.importantNotes);
-      const answerKey = applyQuestionMetadata(
+      const answerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
         attachQuestionNotes(normalizeAnswerKey(parsed.answerKey), importantNotes.questionNotes),
         parsed.difficultyByQuestion,
         question,
-      );
+      ), rejectedNotes);
       const concepts = normalizeTextList(parsed.concepts);
       const questionWithConceptLinks = suggestConceptLinks(cleanQuestionText(question), concepts);
+      const figures = normalizeImportFigures(parsed.figures);
+      const memo = removeRejectedNotes(mergeMemoAndImportantNotes(getString(parsed.memo), [
+        ...importantNotes.globalNotes,
+        ...concepts.map((concept) => `연결 개념: [[${concept}]]`),
+      ]), rejectedNotes);
+      const importAudit = normalizeImportAudit(parsed.audit, {
+        question: questionWithConceptLinks,
+        answerKey,
+        figures,
+      });
       return {
         detectedFormat: "json",
         data: {
@@ -101,14 +124,14 @@ export function parseImportedStudyText(
           subject: normalizeSubject(parsed.subject, fallbackSubject),
           title: getString(parsed.title) || titleFromFilename(filename) || titleFromText(question),
           question: questionWithConceptLinks,
-          memo: mergeMemoAndImportantNotes(getString(parsed.memo), [
-            ...importantNotes.globalNotes,
-            ...concepts.map((concept) => `연결 개념: [[${concept}]]`),
-          ]),
+          memo,
           correctAnswer: getString(parsed.correctAnswer),
           tags: normalizeTags(parsed.tags),
           answerKey,
-          figures: normalizeImportFigures(parsed.figures),
+          figures,
+          importAudit,
+          rejectedNotes,
+          mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
           questionImages: [],
           difficult: false,
           difficulty: "none",
@@ -140,6 +163,8 @@ export function parseImportedStudyText(
       memo: mergeMemoAndImportantNotes(markdown.memo, markdown.importantNotes),
       answerKey: markdown.answerKey,
       figures: [],
+      rejectedNotes: [],
+      mistakeAnalysis: { causes: [] },
       annotations: [],
       mastered: false,
     },

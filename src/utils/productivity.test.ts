@@ -35,6 +35,7 @@ const settings: AppSettings = {
   templates: [],
   promptTemplates: [],
   memoTemplates: [],
+  aiProvider: { type: "manual", enabled: false, keySource: "env", hasStoredKey: false },
   importPreferences: {},
   answerViewPreferences: { viewMode: "card", hideAnswers: false },
   autoBackup: { enabled: false },
@@ -78,6 +79,31 @@ describe("duplicate detection", () => {
 });
 
 describe("import validation and export", () => {
+  it("strongly reports audit gaps, excluded handwriting, and unlinked figures", () => {
+    const report = validateImportedStudyData({
+      ...form,
+      entryKind: "problem_sheet",
+      question: "1. 첫 문제",
+      rejectedNotes: ["연필로 쓴 풀이"],
+      importAudit: {
+        expectedQuestionNumbers: ["1", "2"],
+        detectedQuestionNumbers: ["1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: ["2"],
+        handwritingExcluded: false,
+        needsReviewCount: 0,
+      },
+      figures: [{ id: "f1", questionNumber: "1", title: "그래프", caption: "", source: "gpt_cleaned" }],
+    });
+
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "audit-missing-question-2", severity: "error" }),
+      expect.objectContaining({ id: "audit-handwriting-not-excluded", severity: "error" }),
+      expect.objectContaining({ id: "audit-rejected-notes" }),
+      expect.objectContaining({ id: "unlinked-figure-f1", severity: "error" }),
+    ]));
+  });
+
   it("reports answer key mismatches and empty answers", () => {
     const report = validateImportedStudyData({
       ...form,

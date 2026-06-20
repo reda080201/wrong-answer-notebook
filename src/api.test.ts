@@ -7,7 +7,8 @@ describe("builtInPromptTemplates", () => {
 
     expect(prompt?.content).toContain("도표/그래프/표");
     expect(prompt?.content).toContain("순수 JSON 객체 1개");
-    expect(prompt?.content).toContain("학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 마");
+    expect(prompt?.content).toContain("학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 말고 rejectedNotes에만 기록");
+    expect(prompt?.content).toContain("expectedQuestionNumbers");
     expect(prompt?.content).toContain("needsReview");
     expect(prompt?.content).toContain("모든 문항에 같은 difficulty를 반복해서 채우지 마");
     expect(prompt?.content).not.toContain('"tags"');

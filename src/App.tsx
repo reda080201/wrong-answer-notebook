@@ -11,8 +11,13 @@ import {
   cleanupOrphanImages,
   createAutoBackup,
   createBackup,
+  clearAiProviderKey,
+  generateImportWithAi,
+  getAiProviderStatus,
   restoreBackup,
   runNativeIntegrityCheck,
+  saveAiProviderConfig,
+  saveAiProviderKey,
 } from "./api";
 import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
@@ -20,6 +25,9 @@ import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
 import type {
   Difficulty,
+  AiProviderSettings,
+  AiProviderStatus,
+  AiProviderType,
   EntryFormData,
   EntryKind,
   EntryTemplate,
@@ -35,6 +43,7 @@ import type {
 } from "./types";
 import { SUBJECTS } from "./types";
 import { findDuplicateEntries } from "./utils/duplicates";
+import { buildLearningDashboardStats } from "./utils/conceptAnalytics";
 import { collectExplanationSearchText, getAllImageFilenames, getEntryTitle } from "./utils/entry";
 import { downloadMarkdown, openPrintableEntry } from "./utils/exportEntry";
 import {
@@ -50,6 +59,7 @@ import {
   getTodayReviewCandidates,
   shuffleEntries,
 } from "./utils/review";
+import { mistakeCauseLabel } from "./utils/mistakeAnalysis";
 
 function sortEntries(list: WrongAnswerEntry[], sortKey: SortKey) {
   const copy = [...list];
@@ -144,6 +154,8 @@ export default function App() {
   const [reviewSeed, setReviewSeed] = useState<WrongAnswerEntry[]>([]);
   const [integrityReport, setIntegrityReport] = useState<IntegrityReport | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [aiProviderStatus, setAiProviderStatus] = useState<AiProviderStatus | null>(null);
+  const [aiProviderKeyInput, setAiProviderKeyInput] = useState("");
   const [editingEntry, setEditingEntry] = useState<WrongAnswerEntry | undefined>();
 
   const filtered = useMemo(() => {
@@ -207,6 +219,11 @@ export default function App() {
     () => getTodayReviewCandidates(entries).length,
     [entries],
   );
+  const learningStats = useMemo(() => buildLearningDashboardStats(entries), [entries]);
+
+  useEffect(() => {
+    void getAiProviderStatus().then(setAiProviderStatus);
+  }, [settings.aiProvider]);
 
   const subjectCounts = useMemo(() => {
     const map: Record<string, number> = {};
@@ -373,6 +390,49 @@ export default function App() {
         (template) => template.id !== templateId || template.builtIn,
       ),
     });
+  };
+
+  const updateAiProviderConfig = async (patch: Partial<AiProviderSettings>) => {
+    const next: AiProviderSettings = {
+      ...settings.aiProvider,
+      ...patch,
+    };
+    if (next.type === "manual") next.enabled = false;
+    try {
+      const status = await saveAiProviderConfig(next);
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("AI Provider 설정을 저장했습니다.");
+    } catch (configError) {
+      setSettingsMessage(configError instanceof Error ? configError.message : "AI Provider 설정 저장에 실패했습니다.");
+    }
+  };
+
+  const storeAiProviderKey = async () => {
+    if (!aiProviderKeyInput.trim()) {
+      setSettingsMessage("저장할 API key를 입력하세요.");
+      return;
+    }
+    try {
+      const status = await saveAiProviderKey(aiProviderKeyInput.trim());
+      setAiProviderKeyInput("");
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("AI Provider key를 저장했습니다.");
+    } catch (keyError) {
+      setSettingsMessage(keyError instanceof Error ? keyError.message : "API key 저장에 실패했습니다.");
+    }
+  };
+
+  const removeAiProviderKey = async () => {
+    try {
+      const status = await clearAiProviderKey();
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("저장된 AI Provider key를 삭제했습니다.");
+    } catch (keyError) {
+      setSettingsMessage(keyError instanceof Error ? keyError.message : "API key 삭제에 실패했습니다.");
+    }
   };
 
   const addMemoTemplate = async () => {
@@ -547,6 +607,25 @@ export default function App() {
           </div>
         </div>
 
+        <div className="learning-insights">
+          <div className="learning-insight">
+            <span>7일 복습</span>
+            <strong>{learningStats.recentReviewCount}</strong>
+          </div>
+          <div className="learning-insight">
+            <span>주요 원인</span>
+            <strong>
+              {learningStats.topCauses[0]
+                ? mistakeCauseLabel(learningStats.topCauses[0].type)
+                : "미분류"}
+            </strong>
+          </div>
+          <div className="learning-insight">
+            <span>약점 개념</span>
+            <strong>{learningStats.weakConcepts[0]?.concept ?? "-"}</strong>
+          </div>
+        </div>
+
         <div className="filter-section">
           <h3>과목</h3>
           <SubjectList
@@ -601,6 +680,70 @@ export default function App() {
                     {label}
                   </button>
                 ))}
+              </div>
+              <p className="settings-label">AI Provider</p>
+              <div className="ai-provider-settings">
+                <div className="form-field">
+                  <label htmlFor="ai-provider-type">Provider</label>
+                  <select
+                    id="ai-provider-type"
+                    value={settings.aiProvider.type}
+                    disabled={!isTauri()}
+                    onChange={(event) =>
+                      updateAiProviderConfig({
+                        type: event.target.value as AiProviderType,
+                      })
+                    }
+                  >
+                    <option value="manual">manual</option>
+                    <option value="gemini-flash-lite">gemini-flash-lite</option>
+                    <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                  </select>
+                </div>
+                <label className="settings-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={settings.aiProvider.enabled}
+                    disabled={!isTauri() || settings.aiProvider.type === "manual"}
+                    onChange={(event) => updateAiProviderConfig({ enabled: event.target.checked })}
+                  />
+                  API 사용 {isTauri() ? "(선택)" : "(데스크톱 앱에서 사용 가능)"}
+                </label>
+                <div className="theme-options">
+                  {(["env", "tauri-settings"] as const).map((source) => (
+                    <button
+                      key={source}
+                      type="button"
+                      className={`theme-btn ${settings.aiProvider.keySource === source ? "active" : ""}`}
+                      disabled={!isTauri()}
+                      onClick={() => updateAiProviderConfig({ keySource: source })}
+                    >
+                      {source === "env" ? "환경변수" : "앱에 저장"}
+                    </button>
+                  ))}
+                </div>
+                <div className="ai-provider-status">
+                  <span>환경변수 key: {aiProviderStatus?.hasEnvKey ? "감지됨" : "없음"}</span>
+                  <span>저장 key: {aiProviderStatus?.hasStoredKey ? "저장됨" : "없음"}</span>
+                  <span>상태: {aiProviderStatus?.available ? "사용 가능" : "manual 대기"}</span>
+                </div>
+                {settings.aiProvider.keySource === "tauri-settings" && (
+                  <div className="ai-provider-key-row">
+                    <input
+                      type="password"
+                      value={aiProviderKeyInput}
+                      disabled={!isTauri()}
+                      onChange={(event) => setAiProviderKeyInput(event.target.value)}
+                      placeholder="Gemini API key"
+                    />
+                    <button type="button" className="theme-btn" disabled={!isTauri()} onClick={storeAiProviderKey}>
+                      key 저장
+                    </button>
+                    <button type="button" className="theme-btn" disabled={!isTauri()} onClick={removeAiProviderKey}>
+                      key 삭제
+                    </button>
+                  </div>
+                )}
               </div>
               <p className="settings-label">데이터 관리</p>
               <div className="settings-actions">
@@ -923,6 +1066,19 @@ export default function App() {
               : importFallbackSubject
           }
           promptTemplates={settings.promptTemplates}
+          aiProvider={settings.aiProvider}
+          aiProviderStatus={aiProviderStatus}
+          onGenerateWithAi={async (prompt, inputText, imageFilenames) => {
+            try {
+              return await generateImportWithAi(prompt, inputText, imageFilenames);
+            } catch (aiError) {
+              await updateAiProviderConfig({ enabled: false, type: "manual" });
+              throw aiError;
+            }
+          }}
+          onAiFallback={() => {
+            void updateAiProviderConfig({ enabled: false, type: "manual" });
+          }}
           selectedPromptTemplateId={settings.importPreferences.lastPromptTemplateId}
           onPromptTemplateSelect={(templateId) =>
             setSettings({

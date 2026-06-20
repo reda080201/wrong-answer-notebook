@@ -3,12 +3,20 @@ import { v4 as uuidv4 } from "uuid";
 import type { Annotation, AnnotationTool, ChecklistItem, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
+import { buildConceptAnalytics } from "../utils/conceptAnalytics";
+import {
+  PRACTICE_MODE_LABELS,
+  mistakeCauseLabel,
+  recommendedStrategyForAnalysis,
+  summarizeMistakeAnalysis,
+} from "../utils/mistakeAnalysis";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
+import MathText from "./MathText";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -158,6 +166,16 @@ export default function EntryDetail({
     () => (isConcept ? getRelatedEntries(entry, allEntries) : []),
     [allEntries, entry, isConcept],
   );
+  const conceptAnalytics = useMemo(() => {
+    if (!isConcept || !entry.title.trim()) return undefined;
+    return buildConceptAnalytics(allEntries).find(
+      (item) => item.concept.trim().toLowerCase() === entry.title.trim().toLowerCase(),
+    );
+  }, [allEntries, entry.title, isConcept]);
+  const diagnosisStrategy = recommendedStrategyForAnalysis(entry.mistakeAnalysis);
+  const hasMistakeAnalysis =
+    (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
+    Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
 
   useEffect(() => {
     localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
@@ -313,7 +331,7 @@ export default function EntryDetail({
                 {item.questionNumber || "검토"}번
               </button>
               <strong className={hideAnswers ? "answer-hidden" : ""}>
-                {hideAnswers ? "•••" : item.answer || "정답 없음"}
+                {hideAnswers ? "•••" : <MathText text={item.answer || "정답 없음"} />}
               </strong>
               <span>{item.difficulty === "high" ? "상" : item.difficulty === "medium" ? "중" : item.difficulty === "low" ? "하" : "-"}</span>
               <span>{item.concepts?.join(", ") || "-"}</span>
@@ -340,7 +358,7 @@ export default function EntryDetail({
                   {item.questionNumber || "검토"}번
                 </button>
                 <strong className={hideAnswers ? "answer-hidden" : ""}>
-                  {hideAnswers ? "•••" : item.answer || "정답 없음"}
+                  {hideAnswers ? "•••" : <MathText text={item.answer || "정답 없음"} />}
                 </strong>
                 {item.needsReview && <span className="answer-review-badge">검토 필요</span>}
                 {item.difficulty && (
@@ -424,7 +442,7 @@ export default function EntryDetail({
         <header>
           <span className="focused-section-label">답지</span>
           <strong className={hideAnswers ? "answer-hidden" : ""}>
-            {hideAnswers ? "•••" : focusedAnswer.answer || "정답 없음"}
+            {hideAnswers ? "•••" : <MathText text={focusedAnswer.answer || "정답 없음"} />}
           </strong>
           {focusedAnswer.needsReview && <span className="answer-review-badge">검토 필요</span>}
         </header>
@@ -786,6 +804,7 @@ export default function EntryDetail({
                   existingTargets={existingTargets}
                   sheetLayout="single"
                   searchQuery=""
+                  zoomableImages={activeStudyPanel === "images"}
                 />
               </div>
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
@@ -846,6 +865,28 @@ export default function EntryDetail({
             />
           )}
         </section>
+
+        {!isFocusExpanded && (entry.importAudit || (entry.rejectedNotes?.length ?? 0) > 0) && (
+          <section className={`import-audit-summary detail-import-audit ${entry.importAudit?.missingQuestionNumbers.length || entry.importAudit?.handwritingExcluded === false ? "import-audit-summary--danger" : ""}`}>
+            <strong>AI 가져오기 검토</strong>
+            {entry.importAudit && (
+              <>
+                <span>
+                  예상 {entry.importAudit.expectedQuestionNumbers.length} · 감지 {entry.importAudit.detectedQuestionNumbers.length} · 검토 {entry.importAudit.needsReviewCount}
+                </span>
+                {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
+                {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
+                {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+              </>
+            )}
+            {(entry.rejectedNotes?.length ?? 0) > 0 && (
+              <div className="import-rejected-notes">
+                <b>제외된 학생 필기</b>
+                <ul>{entry.rejectedNotes?.map((note) => <li key={note}><MathText text={note} /></li>)}</ul>
+              </div>
+            )}
+          </section>
+        )}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
           <section className="sheet-study-panel sheet-study-panel--answers">
@@ -1033,6 +1074,45 @@ export default function EntryDetail({
           </section>
         )}
 
+        {!isFocusExpanded && !isConcept && (
+          <CollapsibleSection
+            title="오답 원인"
+            badge={hasMistakeAnalysis ? summarizeMistakeAnalysis(entry) : "미분류"}
+            defaultOpen={hasMistakeAnalysis}
+          >
+            {hasMistakeAnalysis ? (
+              <div className="mistake-analysis-detail">
+                <div className="mistake-analysis-cause-list">
+                  {(entry.mistakeAnalysis?.causes ?? []).map((cause) => (
+                    <div key={cause.type} className={`mistake-analysis-cause mistake-analysis-cause--${cause.severity}`}>
+                      <strong>{mistakeCauseLabel(cause.type)}</strong>
+                      <span>
+                        {cause.severity === "high" ? "높음" : cause.severity === "low" ? "낮음" : "보통"}
+                      </span>
+                      {cause.note && <p>{cause.note}</p>}
+                    </div>
+                  ))}
+                </div>
+                {diagnosisStrategy && (
+                  <p className="mistake-analysis-strategy">
+                    추천 복습: {PRACTICE_MODE_LABELS[diagnosisStrategy]}
+                  </p>
+                )}
+                {entry.mistakeAnalysis?.preventionNote && (
+                  <div className="mistake-analysis-prevention">
+                    <strong>다음에 피할 방법</strong>
+                    <p>{entry.mistakeAnalysis.preventionNote}</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p className="concept-graph-empty">
+                아직 오답 원인이 없습니다. 수정 화면에서 계산 실수, 조건 해석 실패, 개념 누락 등을 선택해 주세요.
+              </p>
+            )}
+          </CollapsibleSection>
+        )}
+
         {!isFocusExpanded && hasExplanationContent(entry) && (
           <CollapsibleSection
             title="해설"
@@ -1077,6 +1157,34 @@ export default function EntryDetail({
               focusEntry={entry}
               onOpenEntry={(entryId) => onOpenEntry?.(entryId)}
             />
+            {conceptAnalytics && (
+              <div className="concept-analytics-strip">
+                <div>
+                  <strong>{conceptAnalytics.relatedEntries.length}</strong>
+                  <span>연결 오답</span>
+                </div>
+                <div>
+                  <strong>{conceptAnalytics.dueCount}</strong>
+                  <span>복습 필요</span>
+                </div>
+                <div>
+                  <strong>
+                    {conceptAnalytics.reviewSuccessRate === null
+                      ? "-"
+                      : `${Math.round(conceptAnalytics.reviewSuccessRate * 100)}%`}
+                  </strong>
+                  <span>복습 성공률</span>
+                </div>
+                <div>
+                  <strong>
+                    {conceptAnalytics.primaryCauses[0]
+                      ? mistakeCauseLabel(conceptAnalytics.primaryCauses[0].type)
+                      : "-"}
+                  </strong>
+                  <span>주요 원인</span>
+                </div>
+              </div>
+            )}
             {relatedEntries.length > 0 && (
               <div className="related-entry-list">
                 {relatedEntries.map((related) => (

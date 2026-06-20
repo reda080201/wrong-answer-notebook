@@ -12,6 +12,7 @@ export interface ConceptGraphNode {
 export interface ConceptGraphEdge {
   from: string;
   to: string;
+  weight?: number;
 }
 
 export interface ConceptGraph {
@@ -36,8 +37,23 @@ export function getEntryConceptLinks(entry: WrongAnswerEntry): string[] {
       ...extractConceptLinks(entry.correctAnswer),
       ...entry.explanationParts.flatMap((part) => extractConceptLinks(part.text)),
       ...extractConceptLinks(entry.memo),
+      ...(entry.answerKey ?? []).flatMap((item) => [
+        ...(item.concepts ?? []),
+        ...extractConceptLinks(item.explanation),
+        ...extractConceptLinks(item.notes ?? ""),
+        ...item.importantPoints.flatMap(extractConceptLinks),
+      ]),
     ]),
   ];
+}
+
+function addWeightedEdge(edges: ConceptGraphEdge[], from: string, to: string) {
+  const existing = edges.find((edge) => edge.from === from && edge.to === to);
+  if (existing) {
+    existing.weight = (existing.weight ?? 1) + 1;
+  } else {
+    edges.push({ from, to, weight: 1 });
+  }
 }
 
 export function buildConceptGraph(entries: WrongAnswerEntry[]): ConceptGraph {
@@ -67,7 +83,7 @@ export function buildConceptGraph(entries: WrongAnswerEntry[]): ConceptGraph {
           kind: "concept",
         });
       }
-      edges.push({ from: entry.id, to: conceptId });
+      addWeightedEdge(edges, entry.id, conceptId);
     }
   }
 

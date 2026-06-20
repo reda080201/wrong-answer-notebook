@@ -1,7 +1,8 @@
-import type { EntryFormData } from "../types";
+import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
+import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 
-export type ImportValidationSeverity = "info" | "warning";
+export type ImportValidationSeverity = "info" | "warning" | "error";
 
 export interface ImportValidationIssue {
   id: string;
@@ -13,6 +14,7 @@ export interface ImportValidationReport {
   questionNumbers: string[];
   answerNumbers: string[];
   issues: ImportValidationIssue[];
+  audit?: ImportAudit;
 }
 
 function duplicates(values: string[]): string[] {
@@ -53,6 +55,55 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   const questionNumberSet = new Set(connectableQuestionNumbers.map(normalizeNumber));
   const answerNumberSet = new Set(answerNumbers.map(normalizeNumber));
   const issues: ImportValidationIssue[] = [];
+  const audit = data.importAudit
+    ? normalizeImportAudit(data.importAudit, data)
+    : undefined;
+  const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
+
+  for (const number of audit?.missingQuestionNumbers ?? []) {
+    issues.push({
+      id: `audit-missing-question-${number}`,
+      severity: "error",
+      message: `${number}번 문제가 이미지에서 예상됐지만 본문에 감지되지 않았습니다.`,
+    });
+  }
+  if (audit?.uncertainQuestionNumbers.length) {
+    issues.push({
+      id: "audit-uncertain-questions",
+      severity: "warning",
+      message: `번호 또는 내용 확인이 필요한 문항: ${audit.uncertainQuestionNumbers.join(", ")}`,
+    });
+  }
+  if (audit && !audit.handwritingExcluded) {
+    issues.push({
+      id: "audit-handwriting-not-excluded",
+      severity: "error",
+      message: "학생 손글씨와 풀이 흔적이 완전히 제외됐는지 확인되지 않았습니다.",
+    });
+  }
+  if (rejectedNotes.length) {
+    issues.push({
+      id: "audit-rejected-notes",
+      severity: "warning",
+      message: `학생 필기 의심 내용 ${rejectedNotes.length}개가 학습 데이터에서 제외되었습니다.`,
+    });
+  }
+  if (audit?.needsReviewCount) {
+    issues.push({
+      id: "audit-needs-review",
+      severity: "warning",
+      message: `답안·도표 연결 등 ${audit.needsReviewCount}개 항목을 확인해야 합니다.`,
+    });
+  }
+  for (const [index, figure] of (data.figures ?? []).entries()) {
+    if (!figure.image) {
+      issues.push({
+        id: `unlinked-figure-${figure.id || index}`,
+        severity: "error",
+        message: `${figure.questionNumber || "번호 미상"} 도표/그림에 연결된 이미지가 없습니다.`,
+      });
+    }
+  }
 
   for (const number of duplicates(questionNumbers)) {
     issues.push({
@@ -142,5 +193,5 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     });
   }
 
-  return { questionNumbers, answerNumbers, issues };
+  return { questionNumbers, answerNumbers, issues, audit };
 }
