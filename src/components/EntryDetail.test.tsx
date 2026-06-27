@@ -4,7 +4,7 @@ import type { WrongAnswerEntry } from "../types";
 import EntryDetail from "./EntryDetail";
 
 vi.mock("../api", () => ({
-  getImageUrl: vi.fn(),
+  getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
 }));
 
 const sheetEntry: WrongAnswerEntry = {
@@ -379,6 +379,42 @@ describe("EntryDetail sheet layout", () => {
       expect(screen.getByRole("button", { name: "문제" })).toHaveClass("active");
     });
     expect(screen.getByRole("button", { name: "이미지" })).toBeDisabled();
+  });
+
+  it("enables focused image panel when the current sheet question has a linked figure image", async () => {
+    render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          figures: [
+            {
+              id: "figure-1",
+              questionNumber: "1",
+              title: "그래프",
+              caption: "문제 1 그래프",
+              image: "figure-1.png",
+              source: "gpt_cleaned",
+            },
+          ],
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    const imageButton = screen.getByRole("button", { name: "이미지" });
+
+    expect(imageButton).not.toBeDisabled();
+    fireEvent.click(imageButton);
+
+    expect(imageButton).toHaveClass("active");
+    expect(screen.getByText("첨부 이미지")).toBeInTheDocument();
   });
 
   it("opens focused reading mode for a wrong-answer entry", () => {

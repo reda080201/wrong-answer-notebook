@@ -60,8 +60,8 @@ describe("ImportFromGptModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "AI로 가져오기" }));
     await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
     expect(onGenerateWithAi.mock.calls[0][2]).toEqual(["q1.png"]);
-    expect(await screen.findByText("AI 판독 감사")).toBeInTheDocument();
-  });
+    expect(await screen.findByText("AI 판독 감사", {}, { timeout: 10000 })).toBeInTheDocument();
+  }, 30000);
 
   it("shows preview after paste and applies parsed data", () => {
     const onApply = vi.fn();

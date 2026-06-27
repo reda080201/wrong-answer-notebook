@@ -699,6 +699,10 @@ export default function App() {
                     <option value="gemini-flash-lite">gemini-flash-lite</option>
                     <option value="gemini-3.5-flash">gemini-3.5-flash</option>
                   </select>
+                  <div className="provider-hint" style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.4rem", lineHeight: "1.4" }}>
+                    • <b>flash-lite</b>: 빠르고 저렴하며 텍스트 기반의 간단한 문제에 적합합니다.<br/>
+                    • <b>3.5-flash</b>: 추론이 필요한 복잡한 문제나 이미지 인식(OCR)에 적합합니다.
+                  </div>
                 </div>
                 <label className="settings-checkbox">
                   <input

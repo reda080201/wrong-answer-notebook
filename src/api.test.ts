@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { builtInPromptTemplates, saveImageFiles } from "./api";
+import {
+  builtInPromptTemplates,
+  generateImportWithAi,
+  getAiProviderStatus,
+  saveImageFiles,
+} from "./api";
 
 describe("builtInPromptTemplates", () => {
   it("keeps the sheet JSON prompt strict about raw JSON, printed content, and excluded handwriting", () => {
@@ -33,5 +38,18 @@ describe("image file security limits", () => {
     });
 
     await expect(saveImageFiles([largeImage])).rejects.toThrow("10MB 이하");
+  });
+});
+
+describe("browser ai provider fallback", () => {
+  it("keeps browser mode manual-only and refuses frontend AI calls", async () => {
+    const status = await getAiProviderStatus();
+
+    expect(status).toEqual(expect.objectContaining({
+      type: "manual",
+      enabled: false,
+      available: false,
+    }));
+    await expect(generateImportWithAi("prompt", "", [])).rejects.toThrow("데스크톱 앱");
   });
 });

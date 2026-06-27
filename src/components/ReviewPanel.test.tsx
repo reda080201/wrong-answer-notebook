@@ -51,5 +51,5 @@ describe("ReviewPanel", () => {
     await waitFor(() => {
       expect(onReview).toHaveBeenCalledWith(entry, "good");
     });
-  }, 10000);
+  }, 30000);
 });

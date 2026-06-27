@@ -284,6 +284,21 @@ export default function EntryDetail({
   const focusedAnswer = focusedQuestion
     ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, focusedQuestion))
     : undefined;
+  const focusedFigureImageFilenames = focusedQuestion
+    ? (entry.figures ?? [])
+      .filter((figure) => {
+        const normalized = normalizeQuestionNumber(figure.questionNumber);
+        return (
+          normalized === String(focusedQuestion.displayNumber) ||
+          normalized === normalizeQuestionNumber(focusedQuestion.numberLabel)
+        );
+      })
+      .flatMap((figure) => figure.image ? [figure.image] : [])
+    : [];
+  const focusedImageFilenames = [
+    ...focusedFigureImageFilenames,
+    ...entry.questionImages,
+  ].filter((filename, index, values) => values.indexOf(filename) === index);
 
   const focusedHasNotes = Boolean(
     entry.memo.trim() ||
@@ -299,7 +314,7 @@ export default function EntryDetail({
     (activeStudyPanel === "answer" && (isSheet ? sheetAnswerKey.length > 0 : hasWrongAnswerText)) ||
     (activeStudyPanel === "explanation" && !isSheet && hasExplanationContent(entry)) ||
     (activeStudyPanel === "notes" && (isSheet ? focusedHasNotes : wrongAnswerHasNotes)) ||
-    (activeStudyPanel === "images" && entry.questionImages.length > 0);
+    (activeStudyPanel === "images" && (isSheet ? focusedImageFilenames.length > 0 : entry.questionImages.length > 0));
 
   useEffect(() => {
     if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
@@ -779,7 +794,7 @@ export default function EntryDetail({
                     type="button"
                     className={activeStudyPanel === "images" ? "active" : ""}
                     onClick={() => setActiveStudyPanel("images")}
-                    disabled={entry.questionImages.length === 0}
+                    disabled={focusedImageFilenames.length === 0}
                   >
                     이미지
                   </button>
