@@ -340,11 +340,8 @@ export default function ImportFromGptModal({
     aiProvider.type !== "manual" &&
     aiProviderStatus?.available,
   );
-  const canRunAiProvider = Boolean(
-    canUseAiProvider &&
-    hasAiVisionImages &&
-    !aiGenerating,
-  );
+  const canRunTextAiProvider = Boolean(canUseAiProvider && !aiGenerating);
+  const canRunVisionAiProvider = Boolean(canUseAiProvider && hasAiVisionImages && !aiGenerating);
 
   useEffect(() => {
     setConfirmedValidationErrors(false);
@@ -393,7 +390,7 @@ export default function ImportFromGptModal({
     }
   };
 
-  const generateWithAiProvider = async () => {
+  const generateWithAiProvider = async (mode: "text" | "vision") => {
     if (!activePrompt || !onGenerateWithAi) return;
     setAiGenerating(true);
     setError(null);
@@ -407,10 +404,10 @@ export default function ImportFromGptModal({
             sourceEntry.memo && `메모: ${sourceEntry.memo}`,
           ].filter(Boolean).join("\n\n")
         : rawText;
-      if (!hasAiVisionImages) {
+      if (mode === "vision" && !hasAiVisionImages) {
         throw new Error("Gemini Vision을 사용하려면 먼저 문제/답안지 이미지를 첨부해 주세요.");
       }
-      const aiText = await onGenerateWithAi(activePrompt.content, inputText, aiImageFilenames);
+      const aiText = await onGenerateWithAi(activePrompt.content, inputText, mode === "vision" ? aiImageFilenames : []);
       const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
       if (parsedText.detectedFormat !== "json") {
         throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
@@ -642,17 +639,30 @@ export default function ImportFromGptModal({
                         <button
                           type="button"
                           className="btn-secondary btn-sm"
-                          onClick={generateWithAiProvider}
-                          disabled={!canRunAiProvider}
+                          onClick={() => generateWithAiProvider("text")}
+                          disabled={!canRunTextAiProvider}
+                          title={
+                            !canUseAiProvider
+                              ? "manual provider 또는 API 비활성 상태입니다."
+                              : "이미지 없이 현재 텍스트만 Gemini provider로 정리합니다."
+                          }
+                        >
+                          {aiGenerating ? "AI 가져오는 중..." : "텍스트 AI 정리"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => generateWithAiProvider("vision")}
+                          disabled={!canRunVisionAiProvider}
                           title={
                             !canUseAiProvider
                               ? "manual provider 또는 API 비활성 상태입니다."
                               : !hasAiVisionImages
                                 ? "Gemini Vision 분석에는 첨부 이미지가 필요합니다."
-                                : "Tauri에서 Gemini provider를 호출합니다."
+                                : "이미지와 텍스트를 함께 Gemini provider로 분석합니다."
                           }
                         >
-                          {aiGenerating ? "AI 가져오는 중..." : "AI로 가져오기"}
+                          {aiGenerating ? "AI 가져오는 중..." : "이미지 AI 분석"}
                         </button>
                       </div>
                     </div>

@@ -16,6 +16,8 @@ const MAX_BACKUP_JSON_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_BACKUP_IMAGE_COUNT: usize = 20;
 const MAX_BACKUP_TOTAL_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_BACKUP_ENTRY_COUNT: usize = 100;
+const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
+const AI_KEYRING_USER: &str = "gemini-api-key";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -106,6 +108,11 @@ fn settings_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 fn ai_provider_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir(app)?.join("ai_provider_key.txt"))
+}
+
+fn ai_provider_key_entry() -> Result<keyring::Entry, String> {
+    keyring::Entry::new(AI_KEYRING_SERVICE, AI_KEYRING_USER)
+        .map_err(|e| format!("OS 보안 저장소를 열지 못했습니다: {e}"))
 }
 
 fn images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -375,6 +382,77 @@ fn has_env_ai_key() -> bool {
         || std::env::var("GEMINI_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
 }
 
+fn legacy_ai_provider_key(app: &tauri::AppHandle) -> Result<Option<String>, String> {
+    let path = ai_provider_key_file(app)?;
+    if !path.exists() {
+        return Ok(None);
+    }
+    let key = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+    let trimmed = key.trim().to_string();
+    if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(trimmed))
+    }
+}
+
+fn remove_legacy_ai_provider_key(app: &tauri::AppHandle) {
+    if let Ok(path) = ai_provider_key_file(app) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+fn stored_ai_provider_key() -> Result<Option<String>, String> {
+    match ai_provider_key_entry()?.get_password() {
+        Ok(key) => {
+            let trimmed = key.trim().to_string();
+            if trimmed.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(trimmed))
+            }
+        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(e) => Err(format!("저장된 Gemini API key를 읽지 못했습니다: {e}")),
+    }
+}
+
+fn has_stored_ai_provider_key(app: &tauri::AppHandle) -> bool {
+    stored_ai_provider_key()
+        .map(|key| key.is_some())
+        .unwrap_or(false)
+        || legacy_ai_provider_key(app).map(|key| key.is_some()).unwrap_or(false)
+}
+
+fn save_stored_ai_provider_key(app: &tauri::AppHandle, api_key: &str) -> Result<(), String> {
+    ai_provider_key_entry()?
+        .set_password(api_key)
+        .map_err(|e| format!("Gemini API key를 OS 보안 저장소에 저장하지 못했습니다: {e}"))?;
+    remove_legacy_ai_provider_key(app);
+    Ok(())
+}
+
+fn clear_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<(), String> {
+    match ai_provider_key_entry()?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => {
+            remove_legacy_ai_provider_key(app);
+            Ok(())
+        }
+        Err(e) => Err(format!("저장된 Gemini API key를 삭제하지 못했습니다: {e}")),
+    }
+}
+
+fn read_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<String, String> {
+    if let Some(key) = stored_ai_provider_key()? {
+        return Ok(key);
+    }
+    if let Some(key) = legacy_ai_provider_key(app)? {
+        save_stored_ai_provider_key(app, &key)?;
+        return Ok(key);
+    }
+    Err("저장된 Gemini API key를 찾지 못했습니다.".into())
+}
+
 fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
     let raw = load_settings_raw(app).unwrap_or_else(|_| "{}".into());
     let value: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
@@ -383,9 +461,7 @@ fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
         .cloned()
         .and_then(|item| serde_json::from_value::<AiProviderConfig>(item).ok())
         .unwrap_or_else(default_ai_provider_config);
-    config.has_stored_key = ai_provider_key_file(app)
-        .map(|path| path.exists() && fs::read_to_string(path).map(|key| !key.trim().is_empty()).unwrap_or(false))
-        .unwrap_or(false);
+    config.has_stored_key = has_stored_ai_provider_key(app);
     if matches!(config.provider_type, AiProviderType::Manual) {
         config.enabled = false;
     }
@@ -439,17 +515,7 @@ fn ai_provider_key(app: &tauri::AppHandle, config: &AiProviderConfig) -> Result<
             .or_else(|_| std::env::var("GEMINI_API_KEY"))
             .map(|key| key.trim().to_string())
             .map_err(|_| "Gemini API key 환경변수를 찾지 못했습니다.".to_string()),
-        AiProviderKeySource::TauriSettings => {
-            let key = fs::read_to_string(ai_provider_key_file(app)?).map_err(|_| {
-                "저장된 Gemini API key를 찾지 못했습니다.".to_string()
-            })?;
-            let trimmed = key.trim().to_string();
-            if trimmed.is_empty() {
-                Err("저장된 Gemini API key가 비어 있습니다.".into())
-            } else {
-                Ok(trimmed)
-            }
-        }
+        AiProviderKeySource::TauriSettings => read_stored_ai_provider_key(app),
     }
 }
 
@@ -531,9 +597,7 @@ fn save_ai_provider_config(
     app: tauri::AppHandle,
     mut config: AiProviderConfig,
 ) -> Result<AiProviderStatus, String> {
-    config.has_stored_key = ai_provider_key_file(&app)
-        .map(|path| path.exists() && fs::read_to_string(path).map(|key| !key.trim().is_empty()).unwrap_or(false))
-        .unwrap_or(false);
+    config.has_stored_key = has_stored_ai_provider_key(&app);
     if matches!(config.provider_type, AiProviderType::Manual) {
         config.enabled = false;
     }
@@ -547,7 +611,7 @@ fn save_ai_provider_key(app: tauri::AppHandle, api_key: String) -> Result<AiProv
     if trimmed.is_empty() {
         return Err("API key가 비어 있습니다.".into());
     }
-    write_bytes_atomic(&ai_provider_key_file(&app)?, trimmed.as_bytes())?;
+    save_stored_ai_provider_key(&app, trimmed)?;
     let mut config = load_ai_provider_config(&app);
     config.has_stored_key = true;
     save_ai_provider_config_to_settings(&app, &config)?;
@@ -556,10 +620,7 @@ fn save_ai_provider_key(app: tauri::AppHandle, api_key: String) -> Result<AiProv
 
 #[tauri::command]
 fn clear_ai_provider_key(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
-    let path = ai_provider_key_file(&app)?;
-    if path.exists() {
-        fs::remove_file(path).map_err(|e| e.to_string())?;
-    }
+    clear_stored_ai_provider_key(&app)?;
     let mut config = load_ai_provider_config(&app);
     config.has_stored_key = false;
     save_ai_provider_config_to_settings(&app, &config)?;

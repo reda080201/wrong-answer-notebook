@@ -722,10 +722,15 @@ export default function App() {
                       disabled={!isTauri()}
                       onClick={() => updateAiProviderConfig({ keySource: source })}
                     >
-                      {source === "env" ? "환경변수" : "앱에 저장"}
+                      {source === "env" ? "환경변수" : "OS 보안 저장소"}
                     </button>
                   ))}
                 </div>
+                {settings.aiProvider.keySource === "tauri-settings" && (
+                  <p className="form-hint">
+                    저장 key는 Windows Credential Manager 등 OS 보안 저장소에 보관됩니다. 이전 버전의 평문 key 파일이 있으면 사용 시 자동 이전됩니다.
+                  </p>
+                )}
                 <div className="ai-provider-status">
                   <span>환경변수 key: {aiProviderStatus?.hasEnvKey ? "감지됨" : "없음"}</span>
                   <span>저장 key: {aiProviderStatus?.hasStoredKey ? "저장됨" : "없음"}</span>

@@ -62,13 +62,26 @@ describe("ImportFromGptModal", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "AI로 가져오기" }));
+    fireEvent.click(screen.getByRole("button", { name: "이미지 AI 분석" }));
     await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
     expect(onGenerateWithAi.mock.calls[0][2]).toEqual(["q1.png"]);
     expect(await screen.findByText("AI 판독 감사", {}, { timeout: 10000 })).toBeInTheDocument();
   }, 30000);
 
-  it("keeps Gemini Vision disabled until an image is available", () => {
+  it("keeps Gemini Vision disabled until an image is available while allowing text AI", async () => {
+    const onGenerateWithAi = vi.fn().mockResolvedValue(JSON.stringify({
+      title: "텍스트 결과",
+      question: "1. 문제",
+      rejectedNotes: [],
+      audit: {
+        expectedQuestionNumbers: ["1"],
+        detectedQuestionNumbers: ["1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    }));
     render(
       <ImportFromGptModal
         fallbackSubject="수학"
@@ -78,12 +91,16 @@ describe("ImportFromGptModal", () => {
         mode="solution"
         aiProvider={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false }}
         aiProviderStatus={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }}
-        onGenerateWithAi={vi.fn()}
+        onGenerateWithAi={onGenerateWithAi}
       />,
     );
 
-    expect(screen.getByRole("button", { name: "AI로 가져오기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "이미지 AI 분석" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "텍스트 AI 정리" })).not.toBeDisabled();
     expect(screen.getByText(/Gemini Vision을 쓰려면/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "텍스트 AI 정리" }));
+    await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
+    expect(onGenerateWithAi.mock.calls[0][2]).toEqual([]);
   });
 
   it("requires confirmation before applying imports with validation errors", () => {
@@ -293,6 +310,15 @@ describe("ImportFromGptModal", () => {
       correctAnswer: "x = 1",
       explanationParts: [{ id: "solution", text: "양변에서 1을 뺀다.", images: [] }],
       memo: "이항 확인",
+      rejectedNotes: [],
+      audit: {
+        expectedQuestionNumbers: ["1"],
+        detectedQuestionNumbers: ["1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
     }));
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", {
