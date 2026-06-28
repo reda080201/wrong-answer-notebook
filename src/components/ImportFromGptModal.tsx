@@ -19,7 +19,7 @@ import {
   readImportFile,
   type ImportedStudyText,
 } from "../utils/importStudyText";
-import { validateImportedStudyData } from "../utils/importValidation";
+import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
 import {
   normalizeImportAudit,
   normalizeRejectedNotes,
@@ -39,7 +39,6 @@ interface ImportFromGptModalProps {
   aiProvider?: AiProviderSettings;
   aiProviderStatus?: AiProviderStatus | null;
   onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
-  onAiFallback?: () => void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
   onSavePromptTemplate?: (template: PromptTemplate) => Promise<void>;
@@ -240,7 +239,6 @@ export default function ImportFromGptModal({
   aiProvider,
   aiProviderStatus,
   onGenerateWithAi,
-  onAiFallback,
   selectedPromptTemplateId,
   onPromptTemplateSelect,
   onSavePromptTemplate,
@@ -329,8 +327,18 @@ export default function ImportFromGptModal({
   const questionBlocks = useMemo(() => parseQuestionText(question), [question]);
   const questionCount = questionBlocks.filter((block) => block.kind === "question").length;
   const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft) : null), [draft]);
-  const hasValidationErrors = Boolean(validationReport?.issues.some((issue) => issue.severity === "error"));
-  const canApply = Boolean(draft?.question?.trim()) && (!hasValidationErrors || confirmedValidationErrors);
+  const validationPolicy = useMemo(
+    () =>
+      validationReport
+        ? classifyImportValidationIssues(validationReport)
+        : { blocking: [], confirmable: [], other: [] },
+    [validationReport],
+  );
+  const hasBlockingValidationIssues = validationPolicy.blocking.length > 0;
+  const hasConfirmableValidationIssues = validationPolicy.confirmable.length > 0;
+  const canApply = Boolean(draft?.question?.trim()) &&
+    !hasBlockingValidationIssues &&
+    (!hasConfirmableValidationIssues || confirmedValidationErrors);
   const aiImageFilenames = isSolutionMode && sourceEntry ? sourceEntry.questionImages : images;
   const hasAiVisionImages = aiImageFilenames.length > 0;
   const canUseAiProvider = Boolean(
@@ -418,13 +426,12 @@ export default function ImportFromGptModal({
       setDraftOverride(null);
       setCopyMessage("AI provider 결과를 가져왔습니다.");
     } catch (aiError) {
-      onAiFallback?.();
       setError(
         `${
           aiError instanceof Error && aiError.message
             ? aiError.message
             : "AI provider 호출에 실패했습니다."
-        } manual 모드로 붙여넣기를 계속 사용할 수 있습니다.`,
+        } 이번 호출만 실패했으며 설정은 유지됩니다. manual 붙여넣기를 사용할 수 있습니다.`,
       );
     } finally {
       setAiGenerating(false);
@@ -581,9 +588,13 @@ export default function ImportFromGptModal({
         ? normalizeImportAudit(draft.importAudit, { question, answerKey, figures: draft.figures })
         : undefined,
     };
-    const finalReport = validateImportedStudyData(normalizedDraft);
-    if (finalReport.issues.some((issue) => issue.severity === "error") && !confirmedValidationErrors) {
-      setError("위험 검증 항목을 확인한 뒤 체크박스를 선택해야 적용할 수 있습니다.");
+    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft));
+    if (finalPolicy.blocking.length > 0) {
+      setError("누락 문제가 있어 적용할 수 없습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.");
+      return;
+    }
+    if (finalPolicy.confirmable.length > 0 && !confirmedValidationErrors) {
+      setError("손글씨/도표 연결 위험 항목을 확인한 뒤 체크박스를 선택해야 적용할 수 있습니다.");
       return;
     }
     onApply({
@@ -907,7 +918,28 @@ export default function ImportFromGptModal({
 
                   {validationReport && validationReport.issues.length > 0 && (
                     <div className="import-validation-report">
-                      {validationReport.issues.slice(0, 8).map((issue) => (
+                      {validationPolicy.blocking.length > 0 && (
+                        <div className="import-validation-section import-validation-section--blocking">
+                          <strong>적용 불가</strong>
+                          <p>누락 문제를 해결해야 적용할 수 있습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.</p>
+                          {validationPolicy.blocking.slice(0, 6).map((issue) => (
+                            <p key={issue.id} className="import-validation-issue import-validation-issue--error">
+                              {issue.message}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {validationPolicy.confirmable.length > 0 && (
+                        <div className="import-validation-section import-validation-section--confirmable">
+                          <strong>확인 후 적용 가능</strong>
+                          {validationPolicy.confirmable.slice(0, 6).map((issue) => (
+                            <p key={issue.id} className="import-validation-issue import-validation-issue--error">
+                              {issue.message}
+                            </p>
+                          ))}
+                        </div>
+                      )}
+                      {validationPolicy.other.slice(0, 8).map((issue) => (
                         <p key={issue.id} className={`import-validation-issue import-validation-issue--${issue.severity}`}>
                           {issue.message}
                         </p>
@@ -915,14 +947,14 @@ export default function ImportFromGptModal({
                     </div>
                   )}
 
-                  {hasValidationErrors && (
+                  {!hasBlockingValidationIssues && hasConfirmableValidationIssues && (
                     <label className="settings-checkbox import-danger-confirm">
                       <input
                         type="checkbox"
                         checked={confirmedValidationErrors}
                         onChange={(event) => setConfirmedValidationErrors(event.target.checked)}
                       />
-                      위험 검증 항목을 확인했고, 누락 문제·손글씨 혼입·도표 연결 상태를 직접 검토했습니다.
+                      손글씨/도표 연결 위험 항목을 확인했습니다.
                     </label>
                   )}
 

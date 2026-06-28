@@ -2961,6 +2961,29 @@
   background: var(--surface);
 }
 
+.import-validation-section {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.65rem;
+  border-radius: 8px;
+}
+
+.import-validation-section p {
+  margin: 0;
+}
+
+.import-validation-section--blocking {
+  border: 1px solid #d14343;
+  background: #fff1f1;
+  color: #7a1f1f;
+}
+
+.import-validation-section--confirmable {
+  border: 1px solid rgba(245, 166, 35, 0.5);
+  background: rgba(245, 166, 35, 0.12);
+  color: #6c4a00;
+}
+
 .import-format-warning {
   padding: 0.65rem 0.75rem;
   border: 1px solid rgba(245, 166, 35, 0.45);

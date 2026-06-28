@@ -17,6 +17,34 @@ export interface ImportValidationReport {
   audit?: ImportAudit;
 }
 
+export interface ImportValidationClassification {
+  blocking: ImportValidationIssue[];
+  confirmable: ImportValidationIssue[];
+  other: ImportValidationIssue[];
+}
+
+export function classifyImportValidationIssues(report: ImportValidationReport): ImportValidationClassification {
+  const blocking: ImportValidationIssue[] = [];
+  const confirmable: ImportValidationIssue[] = [];
+  const other: ImportValidationIssue[] = [];
+
+  for (const issue of report.issues) {
+    if (issue.id.startsWith("audit-missing-question-")) {
+      blocking.push(issue);
+    } else if (
+      issue.id === "audit-handwriting-not-excluded" ||
+      issue.id === "rejected-note-possible-leak" ||
+      issue.id.startsWith("unlinked-figure-")
+    ) {
+      confirmable.push(issue);
+    } else {
+      other.push(issue);
+    }
+  }
+
+  return { blocking, confirmable, other };
+}
+
 function duplicates(values: string[]): string[] {
   const seen = new Set<string>();
   const duplicate = new Set<string>();
