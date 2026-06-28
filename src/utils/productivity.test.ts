@@ -104,6 +104,27 @@ describe("import validation and export", () => {
     ]));
   });
 
+  it("reports possible rejected handwriting leaks in learning fields", () => {
+    const report = validateImportedStudyData({
+      ...form,
+      entryKind: "problem_sheet",
+      question: "1. 첫 문제\n학생 풀이 조건 변환 실수",
+      rejectedNotes: ["학생 풀이: 조건 변환 실수"],
+      importAudit: {
+        expectedQuestionNumbers: ["1"],
+        detectedQuestionNumbers: ["1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    });
+
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "rejected-note-possible-leak", severity: "error" }),
+    ]));
+  });
+
   it("reports answer key mismatches and empty answers", () => {
     const report = validateImportedStudyData({
       ...form,

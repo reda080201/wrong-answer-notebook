@@ -277,6 +277,7 @@ export default function ImportFromGptModal({
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
+  const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
 
   const parsed: ImportedStudyText | null = useMemo(() => {
     if (!rawText.trim()) return null;
@@ -328,7 +329,10 @@ export default function ImportFromGptModal({
   const questionBlocks = useMemo(() => parseQuestionText(question), [question]);
   const questionCount = questionBlocks.filter((block) => block.kind === "question").length;
   const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft) : null), [draft]);
-  const canApply = Boolean(draft?.question?.trim());
+  const hasValidationErrors = Boolean(validationReport?.issues.some((issue) => issue.severity === "error"));
+  const canApply = Boolean(draft?.question?.trim()) && (!hasValidationErrors || confirmedValidationErrors);
+  const aiImageFilenames = isSolutionMode && sourceEntry ? sourceEntry.questionImages : images;
+  const hasAiVisionImages = aiImageFilenames.length > 0;
   const canUseAiProvider = Boolean(
     onGenerateWithAi &&
     aiProvider &&
@@ -336,6 +340,15 @@ export default function ImportFromGptModal({
     aiProvider.type !== "manual" &&
     aiProviderStatus?.available,
   );
+  const canRunAiProvider = Boolean(
+    canUseAiProvider &&
+    hasAiVisionImages &&
+    !aiGenerating,
+  );
+
+  useEffect(() => {
+    setConfirmedValidationErrors(false);
+  }, [draft, rawText]);
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
@@ -394,10 +407,10 @@ export default function ImportFromGptModal({
             sourceEntry.memo && `메모: ${sourceEntry.memo}`,
           ].filter(Boolean).join("\n\n")
         : rawText;
-      const imageFilenames = isSolutionMode && sourceEntry
-        ? sourceEntry.questionImages
-        : images;
-      const aiText = await onGenerateWithAi(activePrompt.content, inputText, imageFilenames);
+      if (!hasAiVisionImages) {
+        throw new Error("Gemini Vision을 사용하려면 먼저 문제/답안지 이미지를 첨부해 주세요.");
+      }
+      const aiText = await onGenerateWithAi(activePrompt.content, inputText, aiImageFilenames);
       const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
       if (parsedText.detectedFormat !== "json") {
         throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
@@ -571,7 +584,11 @@ export default function ImportFromGptModal({
         ? normalizeImportAudit(draft.importAudit, { question, answerKey, figures: draft.figures })
         : undefined,
     };
-    validateImportedStudyData(normalizedDraft);
+    const finalReport = validateImportedStudyData(normalizedDraft);
+    if (finalReport.issues.some((issue) => issue.severity === "error") && !confirmedValidationErrors) {
+      setError("위험 검증 항목을 확인한 뒤 체크박스를 선택해야 적용할 수 있습니다.");
+      return;
+    }
     onApply({
       ...normalizedDraft,
       questionImages: isSolutionMode ? sourceEntry?.questionImages ?? [] : images,
@@ -626,8 +643,14 @@ export default function ImportFromGptModal({
                           type="button"
                           className="btn-secondary btn-sm"
                           onClick={generateWithAiProvider}
-                          disabled={!canUseAiProvider || aiGenerating}
-                          title={canUseAiProvider ? "Tauri에서 Gemini provider를 호출합니다." : "manual provider 또는 API 비활성 상태입니다."}
+                          disabled={!canRunAiProvider}
+                          title={
+                            !canUseAiProvider
+                              ? "manual provider 또는 API 비활성 상태입니다."
+                              : !hasAiVisionImages
+                                ? "Gemini Vision 분석에는 첨부 이미지가 필요합니다."
+                                : "Tauri에서 Gemini provider를 호출합니다."
+                          }
                         >
                           {aiGenerating ? "AI 가져오는 중..." : "AI로 가져오기"}
                         </button>
@@ -643,6 +666,11 @@ export default function ImportFromGptModal({
                         ? " · API 사용 가능"
                         : " · API key 또는 설정 확인 필요"}
                   </p>
+                  {canUseAiProvider && !hasAiVisionImages && (
+                    <p className="form-hint import-vision-warning">
+                      Gemini Vision을 쓰려면 먼저 문제/답안지 이미지를 첨부하거나, 기존 항목에 이미지를 추가해 주세요.
+                    </p>
+                  )}
                   {copyMessage && <p className="form-hint">{copyMessage}</p>}
                 </div>
               )}
@@ -802,6 +830,7 @@ export default function ImportFromGptModal({
                       {(draft.rejectedNotes ?? []).length > 0 && (
                         <div className="import-rejected-notes">
                           <b>학습 데이터에서 제외된 학생 필기</b>
+                          <p>자동 제거는 같은 문구 중심으로만 보장됩니다. 문제 본문, 메모, 답안지에 학생 필기가 남았는지 직접 확인하세요.</p>
                           <ul>{(draft.rejectedNotes ?? []).map((note) => <li key={note}>{note}</li>)}</ul>
                         </div>
                       )}
@@ -874,6 +903,17 @@ export default function ImportFromGptModal({
                         </p>
                       ))}
                     </div>
+                  )}
+
+                  {hasValidationErrors && (
+                    <label className="settings-checkbox import-danger-confirm">
+                      <input
+                        type="checkbox"
+                        checked={confirmedValidationErrors}
+                        onChange={(event) => setConfirmedValidationErrors(event.target.checked)}
+                      />
+                      위험 검증 항목을 확인했고, 누락 문제·손글씨 혼입·도표 연결 상태를 직접 검토했습니다.
+                    </label>
                   )}
 
                   <div className="form-row form-row--2">

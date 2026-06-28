@@ -35,6 +35,40 @@ function memoLooksQuestionSpecific(memo: string): boolean {
   return /(?:문제|문항)\s*#?\d{1,3}\s*(?:번)?|#?\d{1,3}\s*번\s*(?:문제|문항|메모|포인트|풀이)/.test(memo);
 }
 
+function compactText(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+function tokenSet(value: string): Set<string> {
+  return new Set(
+    value
+      .toLowerCase()
+      .split(/[^0-9a-z가-힣]+/i)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 2),
+  );
+}
+
+function hasRejectedNoteLeak(note: string, fields: string[]): boolean {
+  const compactNote = compactText(note);
+  if (compactNote.length < 4) return false;
+  const noteTokens = tokenSet(note);
+  for (const field of fields) {
+    const compactField = compactText(field);
+    if (!compactField) continue;
+    if (compactField.includes(compactNote)) return true;
+    if (compactNote.length >= 8 && compactField.includes(compactNote.slice(0, Math.max(6, Math.floor(compactNote.length * 0.7))))) {
+      return true;
+    }
+    if (noteTokens.size >= 3) {
+      const fieldTokens = tokenSet(field);
+      const overlap = [...noteTokens].filter((token) => fieldTokens.has(token)).length;
+      if (overlap >= Math.ceil(noteTokens.size * 0.7)) return true;
+    }
+  }
+  return false;
+}
+
 export function getQuestionNumbers(question: string): string[] {
   return parseQuestionText(question)
     .filter((block) => block.kind === "question")
@@ -87,6 +121,25 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
       severity: "warning",
       message: `학생 필기 의심 내용 ${rejectedNotes.length}개가 학습 데이터에서 제외되었습니다.`,
     });
+    const learningFields = [
+      data.question ?? "",
+      data.memo ?? "",
+      ...(data.answerKey ?? []).flatMap((item) => [
+        item.answer,
+        item.explanation,
+        item.notes ?? "",
+        item.sourceNote ?? "",
+        ...item.importantPoints,
+      ]),
+    ];
+    const leakedNotes = rejectedNotes.filter((note) => hasRejectedNoteLeak(note, learningFields));
+    if (leakedNotes.length) {
+      issues.push({
+        id: "rejected-note-possible-leak",
+        severity: "error",
+        message: "학생 필기 의심 내용이 문제/메모/답안에 남아 있을 수 있습니다. 미리보기에서 직접 확인하세요.",
+      });
+    }
   }
   if (audit?.needsReviewCount) {
     issues.push({

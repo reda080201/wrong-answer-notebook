@@ -2998,6 +2998,20 @@
   border-top: 1px solid currentColor;
 }
 
+.import-danger-confirm {
+  align-items: flex-start;
+  padding: 0.75rem;
+  border: 1px solid #d14343;
+  border-radius: 8px;
+  background: #fff1f1;
+  color: #7a1f1f;
+}
+
+.import-vision-warning {
+  color: var(--warning);
+  font-weight: 700;
+}
+
 .import-validation-issue--error {
   border-left-color: #d14343;
   background: #fff1f1;

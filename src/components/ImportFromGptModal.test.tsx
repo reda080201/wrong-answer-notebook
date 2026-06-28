@@ -9,6 +9,11 @@ vi.mock("../api", () => ({
   saveImageFiles: vi.fn().mockResolvedValue(["img_mock.png"]),
 }));
 
+function confirmDangerousImportIfShown() {
+  const checkbox = screen.queryByLabelText(/위험 검증 항목을 확인했고/);
+  if (checkbox) fireEvent.click(checkbox);
+}
+
 describe("ImportFromGptModal", () => {
   const sourceEntry: WrongAnswerEntry = {
     id: "entry-1",
@@ -62,6 +67,64 @@ describe("ImportFromGptModal", () => {
     expect(onGenerateWithAi.mock.calls[0][2]).toEqual(["q1.png"]);
     expect(await screen.findByText("AI 판독 감사", {}, { timeout: 10000 })).toBeInTheDocument();
   }, 30000);
+
+  it("keeps Gemini Vision disabled until an image is available", () => {
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        sourceEntry={{ ...sourceEntry, questionImages: [] }}
+        mode="solution"
+        aiProvider={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false }}
+        aiProviderStatus={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }}
+        onGenerateWithAi={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "AI로 가져오기" })).toBeDisabled();
+    expect(screen.getByText(/Gemini Vision을 쓰려면/)).toBeInTheDocument();
+  });
+
+  it("requires confirmation before applying imports with validation errors", () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: {
+        value: JSON.stringify({
+          question: "1. 문제",
+          audit: {
+            expectedQuestionNumbers: ["1", "2"],
+            detectedQuestionNumbers: ["1"],
+            missingQuestionNumbers: ["2"],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 0,
+          },
+        }),
+      },
+    });
+
+    expect(screen.getByText(/2번 문제가 이미지에서 예상됐지만/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+
+    fireEvent.click(screen.getByLabelText(/위험 검증 항목을 확인했고/));
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+
+    expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        question: "1. 문제",
+      }),
+      undefined,
+    );
+  });
 
   it("shows preview after paste and applies parsed data", () => {
     const onApply = vi.fn();
@@ -176,6 +239,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText("답안지 미리보기")).toBeInTheDocument();
     expect(screen.getByText("③")).toBeInTheDocument();
 
+    confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
 
     expect(onApply).toHaveBeenCalledWith(
@@ -250,6 +314,7 @@ describe("ImportFromGptModal", () => {
 
     expect(await screen.findByText("JSON")).toBeInTheDocument();
     expect(screen.getByText("q1.png")).toBeInTheDocument();
+    confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "해설 적용하기" }));
 
     expect(onApply).toHaveBeenCalledWith(
@@ -306,6 +371,7 @@ describe("ImportFromGptModal", () => {
       target: { value: "수정 풀이" },
     });
 
+    confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
 
     expect(onApply).toHaveBeenCalledWith(
@@ -345,6 +411,7 @@ describe("ImportFromGptModal", () => {
     });
 
     fireEvent.click(screen.getByRole("button", { name: "태그 전체 삭제" }));
+    confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
 
     expect(onApply).toHaveBeenCalledWith(
