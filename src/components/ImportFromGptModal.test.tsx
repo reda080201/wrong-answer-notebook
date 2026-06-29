@@ -102,6 +102,40 @@ describe("ImportFromGptModal", () => {
     expect(onGenerateWithAi.mock.calls[0][0]).toContain("예상 문제 번호는 1, 2, 3 입니다");
   }, 30000);
 
+  it("adds special expected question identifiers to Gemini prompts", async () => {
+    const onGenerateWithAi = vi.fn().mockResolvedValue(JSON.stringify({
+      title: "Vision 결과",
+      question: "A-1. 문제",
+      rejectedNotes: [],
+      audit: {
+        expectedQuestionNumbers: ["A-1"],
+        detectedQuestionNumbers: ["A-1"],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    }));
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        sourceEntry={sourceEntry}
+        mode="solution"
+        aiProvider={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false }}
+        aiProviderStatus={{ type: "gemini-flash-lite", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }}
+        onGenerateWithAi={onGenerateWithAi}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("예상 문제 번호"), { target: { value: "A-1, A-2, Ⅰ-1" } });
+    fireEvent.click(screen.getByRole("button", { name: "이미지 AI 분석" }));
+
+    await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
+    expect(onGenerateWithAi.mock.calls[0][0]).toContain("예상 문제 번호는 A-1, A-2, Ⅰ-1 입니다");
+  }, 30000);
+
   it("keeps Gemini Vision disabled until an image is available while allowing text AI", async () => {
     const onGenerateWithAi = vi.fn().mockResolvedValue(JSON.stringify({
       title: "텍스트 결과",
@@ -229,6 +263,40 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it("blocks applying when a special expected question identifier is missing", () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("예상 문제 번호"), { target: { value: "A-1, A-2" } });
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: {
+        value: JSON.stringify({
+          question: "A-1. 문제",
+          audit: {
+            expectedQuestionNumbers: ["A-1"],
+            detectedQuestionNumbers: ["A-1"],
+            missingQuestionNumbers: [],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 0,
+          },
+        }),
+      },
+    });
+
+    expect(screen.getByText(/A-2 문제가 이미지에서 예상됐지만/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+
     expect(onApply).not.toHaveBeenCalled();
   });
 

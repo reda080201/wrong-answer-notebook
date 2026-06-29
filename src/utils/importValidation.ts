@@ -59,6 +59,10 @@ function normalizeNumber(value: string): string {
   return value.trim().replace(/^#/, "").replace(/[.)번]\s*$/, "").replace(/^0+/, "") || value.trim();
 }
 
+function questionLabel(value: string): string {
+  return /^\d+$/.test(value) ? `${value}번` : value;
+}
+
 function memoLooksQuestionSpecific(memo: string): boolean {
   return /(?:문제|문항)\s*#?\d{1,3}\s*(?:번)?|#?\d{1,3}\s*번\s*(?:문제|문항|메모|포인트|풀이)/.test(memo);
 }
@@ -126,7 +130,7 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     issues.push({
       id: `audit-missing-question-${number}`,
       severity: "error",
-      message: `${number}번 문제가 이미지에서 예상됐지만 본문에 감지되지 않았습니다.`,
+      message: `${questionLabel(number)} 문제가 이미지에서 예상됐지만 본문에 감지되지 않았습니다.`,
     });
   }
   if (audit?.uncertainQuestionNumbers.length) {

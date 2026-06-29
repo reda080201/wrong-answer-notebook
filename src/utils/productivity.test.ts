@@ -84,12 +84,37 @@ describe("import validation and export", () => {
     expect(parseExpectedQuestionNumbers("1-5").numbers).toEqual(["1", "2", "3", "4", "5"]);
     expect(parseExpectedQuestionNumbers("01-03, 5").numbers).toEqual(["1", "2", "3", "5"]);
     expect(parseExpectedQuestionNumbers("1, 1 2 02").numbers).toEqual(["1", "2"]);
+    expect(parseExpectedQuestionNumbers("A-1, A-2, Ⅰ-1").numbers).toEqual(["A-1", "A-2", "Ⅰ-1"]);
   });
 
   it("reports invalid expected question number input", () => {
     expect(parseExpectedQuestionNumbers("20-1").error).toBeTruthy();
     expect(parseExpectedQuestionNumbers("1-a").numbers).toEqual([]);
+    expect(parseExpectedQuestionNumbers("A-1-A-5").error).toBeTruthy();
     expect(parseExpectedQuestionNumbers("")).toEqual({ numbers: [] });
+  });
+
+  it("matches special expected question identifiers against the question text", () => {
+    const report = validateImportedStudyData({
+      ...form,
+      entryKind: "problem_sheet",
+      question: "A-1. 첫 문제\n\nA-2. 둘째 문제",
+      importAudit: {
+        expectedQuestionNumbers: ["A-1", "A-2"],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+      answerKey: [
+        { id: "a1", questionNumber: "A-1", answer: "①", explanation: "", importantPoints: [] },
+        { id: "a2", questionNumber: "A-2", answer: "②", explanation: "", importantPoints: [] },
+      ],
+    });
+
+    expect(report.audit?.missingQuestionNumbers).toEqual([]);
+    expect(report.issues.map((issue) => issue.id)).not.toContain("audit-missing-question-A-2");
   });
 
   it("strongly reports audit gaps, excluded handwriting, and unlinked figures", () => {

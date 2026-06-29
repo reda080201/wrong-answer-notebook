@@ -41,6 +41,25 @@ npm run tauri build
 
 빌드 결과는 `src-tauri/target/release/bundle/` 에 생성됩니다.
 
+## 로컬 검증
+
+프론트엔드 변경 후에는 아래 명령을 확인합니다.
+
+```bash
+npm run check
+```
+
+Tauri/Rust 변경이 있으면 Rust 설치와 PATH 등록 후 아래 명령도 확인합니다.
+
+```bash
+cd src-tauri
+cargo check
+cd ..
+npm run tauri dev
+```
+
+`cargo` 명령을 찾지 못하면 Rust 설치 후 터미널을 다시 열어 주세요.
+
 ## 데이터 위치
 
 - **Tauri 앱**: `%APPDATA%\com.wronganswer.notebook\`
