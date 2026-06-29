@@ -22,6 +22,7 @@ import {
 import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
 import {
   normalizeImportAudit,
+  parseExpectedQuestionNumbers,
   normalizeRejectedNotes,
   removeRejectedNotes,
   scrubRejectedNotesFromAnswers,
@@ -102,6 +103,37 @@ const MAX_IMPORT_ZIP_ENTRIES = 100;
 const MAX_IMPORT_IMAGE_COUNT = 20;
 const MAX_IMPORT_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_IMPORT_TOTAL_IMAGE_BYTES = 100 * 1024 * 1024;
+
+function withExpectedQuestionNumbers(
+  data: Partial<EntryFormData>,
+  expectedQuestionNumbers: string[],
+): Partial<EntryFormData> {
+  if (!expectedQuestionNumbers.length) return data;
+  const sourceAudit = data.importAudit;
+  const importAudit = normalizeImportAudit(
+    {
+      expectedQuestionNumbers,
+      uncertainQuestionNumbers: sourceAudit?.uncertainQuestionNumbers ?? [],
+      handwritingExcluded: sourceAudit?.handwritingExcluded ?? true,
+    },
+    {
+      question: data.question,
+      answerKey: data.answerKey,
+      figures: data.figures,
+    },
+  );
+  return { ...data, importAudit };
+}
+
+function expectedPromptInstruction(expectedQuestionNumbers: string[]): string {
+  if (!expectedQuestionNumbers.length) return "";
+  return [
+    "",
+    "추가 사용자 기준:",
+    `- 예상 문제 번호는 ${expectedQuestionNumbers.join(", ")} 입니다.`,
+    "- 이 번호가 모두 감지되는지 audit.expectedQuestionNumbers와 audit.missingQuestionNumbers에 반드시 반영하세요.",
+  ].join("\n");
+}
 
 function assertImportJsonSize(name: string, size: number) {
   if (size > MAX_IMPORT_JSON_BYTES) {
@@ -276,19 +308,29 @@ export default function ImportFromGptModal({
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
   const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
+  const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
 
   const parsed: ImportedStudyText | null = useMemo(() => {
     if (!rawText.trim()) return null;
     return parseImportedStudyText(rawText, filename, fallbackSubject);
   }, [fallbackSubject, filename, rawText]);
+  const expectedQuestionParse = useMemo(
+    () => parseExpectedQuestionNumbers(expectedQuestionInput),
+    [expectedQuestionInput],
+  );
+  const expectedQuestionNumbers = useMemo(
+    () => (expectedQuestionParse.error ? [] : expectedQuestionParse.numbers),
+    [expectedQuestionParse],
+  );
 
   useEffect(() => {
     setActivePromptId(defaultPromptId);
   }, [defaultPromptId]);
 
   useEffect(() => {
-    setDraft(draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null);
-  }, [draftOverride, parsed]);
+    const nextDraft = draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null;
+    setDraft(nextDraft ? withExpectedQuestionNumbers(nextDraft, expectedQuestionNumbers) : null);
+  }, [draftOverride, expectedQuestionNumbers, parsed]);
 
   useEffect(() => {
     if (!watchClipboard) return;
@@ -320,6 +362,7 @@ export default function ImportFromGptModal({
   }, [rawText, watchClipboard]);
 
   const activePrompt = availablePromptTemplates.find((template) => template.id === activePromptId);
+  const activePromptContent = `${activePrompt?.content ?? ""}${expectedPromptInstruction(expectedQuestionNumbers)}`;
   const question = draft?.question ?? "";
   const answerKey = draft?.answerKey ?? [];
   const figures = draft?.figures ?? [];
@@ -374,7 +417,7 @@ export default function ImportFromGptModal({
   const copyPrompt = async () => {
     if (!activePrompt) return;
     try {
-      await navigator.clipboard.writeText(activePrompt.content);
+      await navigator.clipboard.writeText(activePromptContent);
       setCopyMessage("프롬프트를 복사했습니다.");
     } catch {
       setCopyMessage("클립보드 복사에 실패했습니다.");
@@ -415,7 +458,7 @@ export default function ImportFromGptModal({
       if (mode === "vision" && !hasAiVisionImages) {
         throw new Error("Gemini Vision을 사용하려면 먼저 문제/답안지 이미지를 첨부해 주세요.");
       }
-      const aiText = await onGenerateWithAi(activePrompt.content, inputText, mode === "vision" ? aiImageFilenames : []);
+      const aiText = await onGenerateWithAi(activePromptContent, inputText, mode === "vision" ? aiImageFilenames : []);
       const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
       if (parsedText.detectedFormat !== "json") {
         throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
@@ -678,7 +721,7 @@ export default function ImportFromGptModal({
                       </div>
                     </div>
                   </div>
-                  <pre>{activePrompt?.content}</pre>
+                  <pre>{activePromptContent}</pre>
                   <p className="form-hint">
                     Provider: {aiProvider?.type ?? "manual"}
                     {aiProvider?.type === "manual" || !aiProvider?.enabled
@@ -695,6 +738,26 @@ export default function ImportFromGptModal({
                   {copyMessage && <p className="form-hint">{copyMessage}</p>}
                 </div>
               )}
+
+              <div className="form-field full">
+                <label htmlFor="expected-question-numbers">예상 문제 번호</label>
+                <input
+                  id="expected-question-numbers"
+                  value={expectedQuestionInput}
+                  onChange={(event) => {
+                    setExpectedQuestionInput(event.target.value);
+                    setConfirmedValidationErrors(false);
+                  }}
+                  placeholder="예: 1-20 또는 1,2,3,5"
+                />
+                <p className={expectedQuestionParse.error ? "image-field-error" : "form-hint"}>
+                  {expectedQuestionParse.error
+                    ? expectedQuestionParse.error
+                    : expectedQuestionNumbers.length
+                      ? `사용자 기준 ${expectedQuestionNumbers.length}개 문항으로 누락을 검사합니다.`
+                      : "비워두면 GPT/Gemini가 만든 audit 기준을 사용합니다."}
+                </p>
+              </div>
 
               <div className="form-field full">
                 <label htmlFor="gpt-import-text">GPT 답변 붙여넣기</label>
@@ -839,7 +902,10 @@ export default function ImportFromGptModal({
                 <>
                   {validationReport?.audit && (
                     <div className={`import-audit-summary ${validationReport.issues.some((issue) => issue.severity === "error") ? "import-audit-summary--danger" : ""}`} role="alert">
-                      <strong>AI 판독 감사</strong>
+                      <strong>
+                        AI 판독 감사
+                        {expectedQuestionNumbers.length > 0 && <span className="import-user-expected-badge">사용자 기준</span>}
+                      </strong>
                       <span>예상 {validationReport.audit.expectedQuestionNumbers.length} · 감지 {validationReport.audit.detectedQuestionNumbers.length} · 검토 {validationReport.audit.needsReviewCount}</span>
                       {validationReport.audit.missingQuestionNumbers.length > 0 && (
                         <p>누락 문제: {validationReport.audit.missingQuestionNumbers.join(", ")}</p>
@@ -922,6 +988,7 @@ export default function ImportFromGptModal({
                         <div className="import-validation-section import-validation-section--blocking">
                           <strong>적용 불가</strong>
                           <p>누락 문제를 해결해야 적용할 수 있습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.</p>
+                          {expectedQuestionNumbers.length > 0 && <p>사용자 입력 기준 누락이 감지되었습니다.</p>}
                           {validationPolicy.blocking.slice(0, 6).map((issue) => (
                             <p key={issue.id} className="import-validation-issue import-validation-issue--error">
                               {issue.message}

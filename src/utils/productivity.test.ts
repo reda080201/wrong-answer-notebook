@@ -3,6 +3,7 @@ import type { AppSettings, EntryFormData, WrongAnswerEntry } from "../types";
 import { buildConceptGraph, extractConceptLinks, getRelatedEntries } from "./concepts";
 import { duplicateScore, findDuplicateEntry, findDuplicateEntries, similarity } from "./duplicates";
 import { entryToMarkdown } from "./exportEntry";
+import { parseExpectedQuestionNumbers } from "./importAudit";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import { runClientIntegrityCheck } from "./integrity";
 import { cleanQuestionText } from "./textCleanup";
@@ -79,6 +80,18 @@ describe("duplicate detection", () => {
 });
 
 describe("import validation and export", () => {
+  it("parses expected question number ranges and lists", () => {
+    expect(parseExpectedQuestionNumbers("1-5").numbers).toEqual(["1", "2", "3", "4", "5"]);
+    expect(parseExpectedQuestionNumbers("01-03, 5").numbers).toEqual(["1", "2", "3", "5"]);
+    expect(parseExpectedQuestionNumbers("1, 1 2 02").numbers).toEqual(["1", "2"]);
+  });
+
+  it("reports invalid expected question number input", () => {
+    expect(parseExpectedQuestionNumbers("20-1").error).toBeTruthy();
+    expect(parseExpectedQuestionNumbers("1-a").numbers).toEqual([]);
+    expect(parseExpectedQuestionNumbers("")).toEqual({ numbers: [] });
+  });
+
   it("strongly reports audit gaps, excluded handwriting, and unlinked figures", () => {
     const report = validateImportedStudyData({
       ...form,

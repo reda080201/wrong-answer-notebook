@@ -7,6 +7,44 @@ export function normalizeImportQuestionNumber(value: unknown): string {
   return raw.replace(/^#/, "").replace(/^(?:문제|문항)\s*/, "").replace(/[.)번]\s*$/, "").replace(/^0+(?=\d)/, "").trim();
 }
 
+export interface ExpectedQuestionNumberParseResult {
+  numbers: string[];
+  error?: string;
+}
+
+export function parseExpectedQuestionNumbers(input: string): ExpectedQuestionNumberParseResult {
+  const trimmed = input.trim();
+  if (!trimmed) return { numbers: [] };
+  const numbers: string[] = [];
+  const parts = trimmed.split(/[,\s]+/).map((part) => part.trim()).filter(Boolean);
+
+  for (const part of parts) {
+    const rangeMatch = part.match(/^(.+?)-(.+)$/);
+    if (rangeMatch) {
+      const start = Number(normalizeImportQuestionNumber(rangeMatch[1]));
+      const end = Number(normalizeImportQuestionNumber(rangeMatch[2]));
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start <= 0 || end <= 0) {
+        return { numbers: [], error: "예상 문제 번호 범위를 읽지 못했습니다. 예: 1-20" };
+      }
+      if (start > end) {
+        return { numbers: [], error: "예상 문제 번호 범위는 작은 번호에서 큰 번호 순서로 입력해 주세요." };
+      }
+      for (let current = start; current <= end; current += 1) {
+        numbers.push(String(current));
+      }
+      continue;
+    }
+
+    const normalized = normalizeImportQuestionNumber(part);
+    if (!/^\d+$/.test(normalized)) {
+      return { numbers: [], error: "예상 문제 번호는 숫자, 쉼표, 범위만 사용할 수 있습니다. 예: 1-20 또는 1,2,3,5" };
+    }
+    numbers.push(normalized);
+  }
+
+  return { numbers: [...new Set(numbers)] };
+}
+
 function normalizeNumberList(value: unknown): string[] {
   const values = Array.isArray(value) ? value : typeof value === "string" ? value.split(/[,\s]+/) : [];
   return [...new Set(values.map(normalizeImportQuestionNumber).filter(Boolean))];
