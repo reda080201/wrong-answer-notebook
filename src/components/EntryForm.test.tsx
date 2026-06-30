@@ -90,10 +90,11 @@ describe("EntryForm", () => {
     expect(screen.getByText("#GPT변환")).toBeInTheDocument();
   });
 
-  it("fills and edits imported answer key values for problem sheets", () => {
+  it("fills and edits imported structured answer key values for problem sheets", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
     render(
       <EntryForm
-        onSave={vi.fn()}
+        onSave={onSave}
         onClose={vi.fn()}
         defaultEntryKind="problem_sheet"
         initialData={{
@@ -106,6 +107,11 @@ describe("EntryForm", () => {
               questionNumber: "1",
               answer: "③",
               explanation: "조건을 확인한다.",
+              strategy: "조건을 먼저 본다",
+              steps: ["조건 정리"],
+              choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+              wrongPoint: "부호 실수",
+              reviewPoint: "부호 확인",
               importantPoints: ["보기 비교"],
             },
           ],
@@ -116,11 +122,27 @@ describe("EntryForm", () => {
     expect(screen.getByLabelText("문항 번호")).toHaveValue("1");
     expect(screen.getByLabelText("정답")).toHaveValue("③");
     expect(screen.getByLabelText("상세 풀이")).toHaveValue("조건을 확인한다.");
+    expect(screen.getByLabelText("풀이 전략")).toHaveValue("조건을 먼저 본다");
+    expect(screen.getByLabelText("풀이 단계")).toHaveValue("조건 정리");
+    expect(screen.getByLabelText("보기별 판단")).toHaveValue("①: 조건 불일치");
+    expect(screen.getByLabelText("오답 포인트")).toHaveValue("부호 실수");
+    expect(screen.getByLabelText("다음 복습 포인트")).toHaveValue("부호 확인");
     expect(screen.getByLabelText("중요 포인트")).toHaveValue("보기 비교");
 
     fireEvent.change(screen.getByLabelText("정답"), { target: { value: "④" } });
+    fireEvent.change(screen.getByLabelText("풀이 단계"), { target: { value: "조건 정리\n대입" } });
 
     expect(screen.getByLabelText("정답")).toHaveValue("④");
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0].answerKey[0]).toEqual(
+      expect.objectContaining({
+        answer: "④",
+        steps: ["조건 정리", "대입"],
+        choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+      }),
+    );
   });
 
   it("clears all tags at once for problem sheets", () => {

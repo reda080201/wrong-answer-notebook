@@ -241,6 +241,30 @@ function normalizeTextList(value: unknown): string[] {
   return [];
 }
 
+function normalizeChoiceJudgements(value: unknown): Array<{ marker: string; text: string }> {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item): { marker: string; text: string } | null => {
+      if (typeof item === "string") {
+        const match = item.match(/^\s*([^:：]{1,12})[:：]\s*(.+)$/);
+        return match
+          ? { marker: match[1].trim(), text: match[2].trim() }
+          : item.trim()
+            ? { marker: "", text: item.trim() }
+            : null;
+      }
+      if (!item || typeof item !== "object") return null;
+      const typed = item as Record<string, unknown>;
+      const text = getString(typed.text) || getString(typed.judgement) || getString(typed.judgment);
+      if (!text.trim()) return null;
+      return {
+        marker: getString(typed.marker),
+        text,
+      };
+    })
+    .filter((item): item is { marker: string; text: string } => Boolean(item));
+}
+
 function normalizeExplanationParts(value: unknown): ExplanationPart[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -303,6 +327,11 @@ interface QuestionMetadata {
   concepts?: string[];
   notes?: string;
   importantPoints?: string[];
+  strategy?: string;
+  steps?: string[];
+  choiceJudgements?: Array<{ marker: string; text: string }>;
+  wrongPoint?: string;
+  reviewPoint?: string;
 }
 
 function normalizeNumber(value: string): string {
@@ -327,6 +356,11 @@ function metadataFromObject(value: Record<string, unknown>): QuestionMetadata {
     concepts: normalizeTextList(value.concepts),
     notes: getString(value.notes) || getString(value.memo) || getString(value.note),
     importantPoints: normalizeTextList(value.importantPoints),
+    strategy: getString(value.strategy),
+    steps: normalizeTextList(value.steps),
+    choiceJudgements: normalizeChoiceJudgements(value.choiceJudgements),
+    wrongPoint: getString(value.wrongPoint),
+    reviewPoint: getString(value.reviewPoint),
   };
 }
 
@@ -366,6 +400,11 @@ function applyQuestionMetadata(answerKey: SheetAnswerItem[], raw: unknown, quest
       concepts: meta?.concepts?.length ? meta.concepts : item.concepts,
       notes: item.notes?.trim() ? item.notes : meta?.notes?.trim() || item.notes,
       importantPoints: meta?.importantPoints?.length ? meta.importantPoints : item.importantPoints,
+      strategy: item.strategy?.trim() ? item.strategy : meta?.strategy?.trim() || item.strategy,
+      steps: item.steps?.length ? item.steps : meta?.steps,
+      choiceJudgements: item.choiceJudgements?.length ? item.choiceJudgements : meta?.choiceJudgements,
+      wrongPoint: item.wrongPoint?.trim() ? item.wrongPoint : meta?.wrongPoint?.trim() || item.wrongPoint,
+      reviewPoint: item.reviewPoint?.trim() ? item.reviewPoint : meta?.reviewPoint?.trim() || item.reviewPoint,
     };
   });
 }

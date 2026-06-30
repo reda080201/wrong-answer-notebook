@@ -484,6 +484,11 @@ describe("ImportFromGptModal", () => {
               questionNumber: "1",
               answer: "③",
               explanation: "조건을 확인한다.",
+              strategy: "조건을 식으로 바꾼다",
+              steps: ["조건 정리"],
+              choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+              wrongPoint: "조건 누락",
+              reviewPoint: "조건 표시",
               importantPoints: ["보기 비교"],
             },
           ],
@@ -494,6 +499,11 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText("있음")).toBeInTheDocument();
     expect(screen.getByText("답안지 미리보기")).toBeInTheDocument();
     expect(screen.getByText("③")).toBeInTheDocument();
+    expect(screen.getByLabelText("1 풀이 전략")).toHaveValue("조건을 식으로 바꾼다");
+    expect(screen.getByLabelText("1 보기별 판단")).toHaveValue("①: 조건 불일치");
+    fireEvent.change(screen.getByLabelText("1 풀이 단계"), {
+      target: { value: "조건 정리\n대입" },
+    });
 
     confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
@@ -505,6 +515,11 @@ describe("ImportFromGptModal", () => {
           expect.objectContaining({
             questionNumber: "1",
             answer: "③",
+            strategy: "조건을 식으로 바꾼다",
+            steps: ["조건 정리", "대입"],
+            choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+            wrongPoint: "조건 누락",
+            reviewPoint: "조건 표시",
           }),
         ],
       }),

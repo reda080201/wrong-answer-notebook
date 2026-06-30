@@ -120,4 +120,24 @@ describe("AnnotatableQuestion", () => {
     expect(screen.getByRole("columnheader", { name: "구분" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "10" })).toBeInTheDocument();
   });
+
+  it("wraps condition and view lines without losing structured text", () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question={"1. 조건: x > 0\n<보기>\n자료 A는 양수이다\n① 자료 A"}
+        questionImages={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    expect(container.querySelector(".question-body-segment--condition")).toHaveTextContent("조건: x > 0");
+    expect(container.querySelector(".question-body-segment--view")).toHaveTextContent("자료 A는 양수이다");
+    expect(screen.getByText("①")).toBeInTheDocument();
+  });
 });

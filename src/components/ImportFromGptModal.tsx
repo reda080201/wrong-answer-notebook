@@ -57,6 +57,8 @@ function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
           ...item,
           importantPoints: [...item.importantPoints],
           concepts: item.concepts ? [...item.concepts] : [],
+          steps: item.steps ? [...item.steps] : [],
+          choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
@@ -850,6 +852,13 @@ export default function ImportFromGptModal({
       "questionNumber": "1",
       "answer": "③",
       "explanation": "조건을 대입하면 ...",
+      "strategy": "조건을 식으로 바꾸고 그래프 교점을 확인",
+      "steps": ["조건을 정리한다", "함숫값을 대입한다", "보기와 비교한다"],
+      "choiceJudgements": [
+        { "marker": "①", "text": "조건 A를 만족하지 않음" }
+      ],
+      "wrongPoint": "그래프 교점을 x절편으로 착각하기 쉬움",
+      "reviewPoint": "교점과 절편의 차이를 다시 확인",
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["보기 ②와 ③의 차이 확인"],
       "concepts": ["함수"],
@@ -1130,6 +1139,57 @@ export default function ImportFromGptModal({
                               aria-label={`${item.questionNumber || "답안"} 풀이`}
                               value={item.explanation}
                               onChange={(event) => updateAnswer(item.id, { explanation: event.target.value })}
+                            />
+                            <textarea
+                              aria-label={`${item.questionNumber || "답안"} 풀이 전략`}
+                              value={item.strategy ?? ""}
+                              onChange={(event) => updateAnswer(item.id, { strategy: event.target.value })}
+                              placeholder="풀이 전략"
+                            />
+                            <textarea
+                              aria-label={`${item.questionNumber || "답안"} 풀이 단계`}
+                              value={(item.steps ?? []).join("\n")}
+                              onChange={(event) =>
+                                updateAnswer(item.id, {
+                                  steps: event.target.value
+                                    .split(/\r?\n/)
+                                    .map((step) => step.trim())
+                                    .filter(Boolean),
+                                })
+                              }
+                              placeholder="한 줄에 한 단계"
+                            />
+                            <textarea
+                              aria-label={`${item.questionNumber || "답안"} 보기별 판단`}
+                              value={(item.choiceJudgements ?? [])
+                                .map((judgement) => [judgement.marker, judgement.text].filter(Boolean).join(": "))
+                                .join("\n")}
+                              onChange={(event) =>
+                                updateAnswer(item.id, {
+                                  choiceJudgements: event.target.value
+                                    .split(/\r?\n/)
+                                    .map((line) => {
+                                      const match = line.match(/^\s*([^:：]{1,12})[:：]\s*(.+)$/);
+                                      return match
+                                        ? { marker: match[1].trim(), text: match[2].trim() }
+                                        : { marker: "", text: line.trim() };
+                                    })
+                                    .filter((judgement) => judgement.text),
+                                })
+                              }
+                              placeholder="①: 조건 불만족"
+                            />
+                            <textarea
+                              aria-label={`${item.questionNumber || "답안"} 오답 포인트`}
+                              value={item.wrongPoint ?? ""}
+                              onChange={(event) => updateAnswer(item.id, { wrongPoint: event.target.value })}
+                              placeholder="오답 포인트"
+                            />
+                            <textarea
+                              aria-label={`${item.questionNumber || "답안"} 복습 포인트`}
+                              value={item.reviewPoint ?? ""}
+                              onChange={(event) => updateAnswer(item.id, { reviewPoint: event.target.value })}
+                              placeholder="복습 포인트"
                             />
                             <textarea
                               aria-label={`${item.questionNumber || "답안"} 문제별 메모`}

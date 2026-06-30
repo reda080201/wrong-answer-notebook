@@ -124,6 +124,27 @@ function normalizeImportantPoints(raw: unknown): string[] {
   return [];
 }
 
+function normalizeChoiceJudgements(raw: unknown): Array<{ marker: string; text: string }> {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): { marker: string; text: string } | null => {
+      if (typeof item === "string") {
+        const [marker = "", ...rest] = item.split(/[:：]/);
+        const text = rest.join(":").trim();
+        return text ? { marker: marker.trim(), text } : { marker: "", text: item.trim() };
+      }
+      if (!item || typeof item !== "object") return null;
+      const typed = item as { marker?: unknown; text?: unknown; judgement?: unknown; judgment?: unknown };
+      const text = `${typed.text ?? typed.judgement ?? typed.judgment ?? ""}`.trim();
+      if (!text) return null;
+      return {
+        marker: `${typed.marker ?? ""}`.trim(),
+        text,
+      };
+    })
+    .filter((item): item is { marker: string; text: string } => Boolean(item));
+}
+
 export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -134,6 +155,11 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       questionNumber: `${item.questionNumber ?? ""}`.trim(),
       answer: `${item.answer ?? ""}`.trim(),
       explanation: `${item.explanation ?? ""}`.trim(),
+      strategy: `${item.strategy ?? ""}`.trim(),
+      steps: normalizeImportantPoints(item.steps),
+      choiceJudgements: normalizeChoiceJudgements(item.choiceJudgements),
+      wrongPoint: `${item.wrongPoint ?? ""}`.trim(),
+      reviewPoint: `${item.reviewPoint ?? ""}`.trim(),
       notes: `${item.notes ?? ""}`.trim(),
       importantPoints: normalizeImportantPoints(item.importantPoints),
       difficulty: normalizeAnswerDifficulty(item.difficulty),
@@ -146,6 +172,11 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
         item.questionNumber ||
         item.answer ||
         item.explanation ||
+        item.strategy ||
+        item.steps.length ||
+        item.choiceJudgements.length ||
+        item.wrongPoint ||
+        item.reviewPoint ||
         item.notes ||
         item.importantPoints.length,
     );

@@ -34,6 +34,7 @@ describe("gptSolution", () => {
     expect(prompt).toContain("단계별");
     expect(prompt).toContain("needsReview");
     expect(prompt).toContain("answerKey[].notes");
+    expect(prompt).toContain("strategy, steps, choiceJudgements, wrongPoint, reviewPoint");
     expect(prompt).toContain("첨부 이미지 1개");
     expect(prompt).toContain("tags 필드는 만들지 마");
     expect(prompt).not.toContain('"tags"');
@@ -132,5 +133,53 @@ describe("gptSolution", () => {
 
     expect(merged.answerKey?.[0].notes).toBe("기존 문제별 메모");
     expect(merged.answerKey?.[0].answer).toBe("②");
+  });
+
+  it("fills structured answer fields without overwriting existing structured fields", () => {
+    const base = {
+      ...entryToFormData(entry),
+      entryKind: "problem_sheet" as const,
+      answerKey: [
+        {
+          id: "a1",
+          questionNumber: "1",
+          answer: "",
+          explanation: "",
+          strategy: "기존 전략",
+          importantPoints: [],
+        },
+      ],
+    };
+
+    const merged = mergeGptSolutionIntoEntry(
+      base,
+      {
+        answerKey: [
+          {
+            id: "incoming",
+            questionNumber: "1",
+            answer: "②",
+            explanation: "원문 해설",
+            strategy: "새 전략",
+            steps: ["조건 정리", "대입"],
+            choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+            wrongPoint: "부호 실수",
+            reviewPoint: "부호 확인",
+            importantPoints: [],
+          },
+        ],
+      },
+      "fill",
+    );
+
+    expect(merged.answerKey?.[0]).toEqual(
+      expect.objectContaining({
+        strategy: "기존 전략",
+        steps: ["조건 정리", "대입"],
+        choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
+        wrongPoint: "부호 실수",
+        reviewPoint: "부호 확인",
+      }),
+    );
   });
 });
