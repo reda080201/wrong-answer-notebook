@@ -466,6 +466,14 @@ export default function App() {
     });
   };
 
+  const handleQuickMemo = async (entry: WrongAnswerEntry, text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed) return;
+    await patchEntry(entry.id, {
+      memo: [entry.memo.trim(), trimmed].filter(Boolean).join("\n"),
+    });
+  };
+
   const runIntegrity = async () => {
     const nativeReport = await runNativeIntegrityCheck().catch(() => null);
     const report = nativeReport ?? runClientIntegrityCheck(entries, settings);
@@ -1031,6 +1039,8 @@ export default function App() {
               }}
               onExportMarkdown={() => downloadMarkdown(selected)}
               onOpenPrint={() => openPrintableEntry(selected)}
+              onReview={handleReview}
+              onQuickMemo={handleQuickMemo}
             />
           ) : (
             <div className="detail-panel empty-state">

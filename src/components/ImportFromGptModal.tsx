@@ -832,6 +832,9 @@ export default function ImportFromGptModal({
 
               <div className="import-json-example">
                 <span>권장 JSON 예시</span>
+                <p className="form-hint">
+                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint는 학습 내용칸 카드에 바로 반영됩니다.
+                </p>
                 <pre>{`{
   "title": "2026 중간고사 오답",
   "subject": "수학",

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChecklistItem, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ChecklistItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
@@ -16,9 +16,11 @@ import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
+import LearningContentPanel from "./LearningContentPanel";
 import MathText from "./MathText";
 import SolutionBookView from "./SolutionBookView";
 import StudyAnalysisView from "./StudyAnalysisView";
+import StudyControlBar from "./StudyControlBar";
 import StudyPaperView from "./StudyPaperView";
 
 interface EntryDetailProps {
@@ -36,6 +38,8 @@ interface EntryDetailProps {
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
+  onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
+  onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
 }
 
 type SheetLayout = "single" | "columns";
@@ -88,6 +92,21 @@ function normalizeQuestionNumber(value: string): string {
   return value.trim().replace(/^#/, "").replace(/[.)번]\s*$/, "").replace(/^0+/, "") || value.trim();
 }
 
+function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
+  if (event.ctrlKey || event.metaKey || event.altKey) return true;
+  const target = event.target as HTMLElement | null;
+  if (!target) return false;
+  const tagName = target.tagName?.toLowerCase();
+  if (!tagName) return false;
+  return (
+    tagName === "input" ||
+    tagName === "textarea" ||
+    tagName === "select" ||
+    target.isContentEditable ||
+    Boolean(target.closest("[role='dialog'], .form-modal, .import-modal, .review-panel, .study-quick-memo"))
+  );
+}
+
 export default function EntryDetail({
   entry,
   onEdit,
@@ -103,6 +122,8 @@ export default function EntryDetail({
   onQuickGptSolution,
   onExportMarkdown,
   onOpenPrint,
+  onReview,
+  onQuickMemo,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
@@ -116,6 +137,10 @@ export default function EntryDetail({
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
+  const [quickMemoOpen, setQuickMemoOpen] = useState(false);
+  const [quickMemoText, setQuickMemoText] = useState("");
+  const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
+  const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
@@ -144,7 +169,10 @@ export default function EntryDetail({
       item.importantPoints.length,
   );
   const questionBlocks = useMemo(() => parseQuestionText(entry.question), [entry.question]);
-  const questionAnchors = questionBlocks.filter((block) => block.kind === "question");
+  const questionAnchors = useMemo(
+    () => questionBlocks.filter((block) => block.kind === "question"),
+    [questionBlocks],
+  );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
@@ -218,28 +246,12 @@ export default function EntryDetail({
     }
   }, [focusedQuestionIndex, questionAnchors.length]);
 
-  useEffect(() => {
-    if (!isSheet || focusMode === "closed" || questionAnchors.length === 0) return;
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setFocusedQuestionIndex((index) => Math.max(0, index - 1));
-      }
-      if (event.key === "ArrowRight") {
-        event.preventDefault();
-        setFocusedQuestionIndex((index) => Math.min(questionAnchors.length - 1, index + 1));
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [focusMode, isSheet, questionAnchors.length]);
-
-  const scrollToQuestion = (start: number) => {
+  const scrollToQuestion = useCallback((start: number) => {
     document.getElementById(`sheet-question-${start}`)?.scrollIntoView({
       block: "start",
       behavior: "smooth",
     });
-  };
+  }, []);
 
   const moveSearch = (delta: number) => {
     if (sheetMatches.length === 0) return;
@@ -253,8 +265,67 @@ export default function EntryDetail({
     onChecklistChange?.(next);
   };
 
-  const moveFocusedQuestion = (delta: number) => {
-    setFocusedQuestionIndex((index) => Math.max(0, Math.min(questionAnchors.length - 1, index + delta)));
+  const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
+    const id = uuidv4();
+    setToasts((items) => [...items, { id, message, tone }].slice(-3));
+    window.setTimeout(() => {
+      setToasts((items) => items.filter((item) => item.id !== id));
+    }, 2400);
+  }, []);
+
+  const moveFocusedQuestion = useCallback((delta: number) => {
+    if (!isSheet || questionAnchors.length === 0) return;
+    setFocusedQuestionIndex((index) => {
+      const next = Math.max(0, Math.min(questionAnchors.length - 1, index + delta));
+      const target = questionAnchors[next] as QuestionBlock | undefined;
+      if (focusMode === "closed" && target) {
+        window.setTimeout(() => scrollToQuestion(target.start), 0);
+      }
+      return next;
+    });
+  }, [focusMode, isSheet, questionAnchors, scrollToQuestion]);
+
+  const handleReviewResult = useCallback(async (result: ReviewResult) => {
+    if (!onReview || reviewSaving) return;
+    setReviewSaving(result);
+    try {
+      await onReview(entry, result);
+      pushToast(
+        result === "again"
+          ? "다시 볼 문제로 기록했습니다."
+          : result === "hard"
+            ? "어려움으로 기록했습니다."
+            : "맞음으로 기록했습니다.",
+        "success",
+      );
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "복습 결과 저장에 실패했습니다.", "error");
+    } finally {
+      setReviewSaving(null);
+    }
+  }, [entry, onReview, pushToast, reviewSaving]);
+
+  const handleQuickMemoSubmit = async () => {
+    const text = quickMemoText.trim();
+    if (!text || !onQuickMemo) return;
+    try {
+      await onQuickMemo(entry, text);
+      setQuickMemoText("");
+      setQuickMemoOpen(false);
+      pushToast("빠른 메모를 추가했습니다.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "메모 저장에 실패했습니다.", "error");
+    }
+  };
+
+  const handleStudyModeChange = useCallback((mode: DetailViewMode) => {
+    setDetailViewMode(mode);
+    pushToast(mode === "paper" ? "문제지 모드" : mode === "solution" ? "해설지 모드" : "분석 모드", "info");
+  }, [pushToast]);
+
+  const handleToggleDifficultWithToast = () => {
+    onToggleDifficult();
+    pushToast(entry.difficult ? "북마크를 해제했습니다." : "북마크했습니다.", "success");
   };
 
   const cycleFocusTextSize = (delta: number) => {
@@ -326,6 +397,84 @@ export default function EntryDetail({
     if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
     setActiveStudyPanel("question");
   }, [canShowActiveStudyPanel, focusMode, isFocusable]);
+
+  useEffect(() => {
+    if (!isFocusable) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnoreStudyShortcut(event)) return;
+      const key = event.key.toLowerCase();
+
+      if (event.code === "Space" || key === " ") {
+        event.preventDefault();
+        setHideAnswers((value) => !value);
+        pushToast(hideAnswers ? "정답을 표시했습니다." : "정답을 가렸습니다.", "info");
+        return;
+      }
+
+      if (key === "arrowleft" || key === "j") {
+        if (isSheet) {
+          event.preventDefault();
+          moveFocusedQuestion(-1);
+        }
+        return;
+      }
+
+      if (key === "arrowright" || key === "k") {
+        if (isSheet) {
+          event.preventDefault();
+          moveFocusedQuestion(1);
+        }
+        return;
+      }
+
+      if (key === "1") {
+        event.preventDefault();
+        void handleReviewResult("again");
+        return;
+      }
+
+      if (key === "2") {
+        event.preventDefault();
+        void handleReviewResult("hard");
+        return;
+      }
+
+      if (key === "3") {
+        event.preventDefault();
+        void handleReviewResult("good");
+        return;
+      }
+
+      if (key === "p") {
+        event.preventDefault();
+        handleStudyModeChange("paper");
+        return;
+      }
+
+      if (key === "s") {
+        event.preventDefault();
+        handleStudyModeChange("solution");
+        return;
+      }
+
+      if (key === "a") {
+        event.preventDefault();
+        handleStudyModeChange("analysis");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [
+    handleReviewResult,
+    handleStudyModeChange,
+    hideAnswers,
+    isFocusable,
+    isSheet,
+    moveFocusedQuestion,
+    pushToast,
+    questionAnchors.length,
+    reviewSaving,
+  ]);
 
   const renderAnswerKey = () =>
     answerView === "table" ? (
@@ -537,7 +686,7 @@ export default function EntryDetail({
 
   return (
     <div
-      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""}`}
+      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""}`}
     >
       {!isFocusExpanded && (
       <div className="detail-toolbar">
@@ -565,21 +714,21 @@ export default function EntryDetail({
               <button
                 type="button"
                 className={detailViewMode === "paper" ? "active" : ""}
-                onClick={() => setDetailViewMode("paper")}
+                onClick={() => handleStudyModeChange("paper")}
               >
                 문제지
               </button>
               <button
                 type="button"
                 className={detailViewMode === "solution" ? "active" : ""}
-                onClick={() => setDetailViewMode("solution")}
+                onClick={() => handleStudyModeChange("solution")}
               >
                 해설지
               </button>
               <button
                 type="button"
                 className={detailViewMode === "analysis" ? "active" : ""}
-                onClick={() => setDetailViewMode("analysis")}
+                onClick={() => handleStudyModeChange("analysis")}
               >
                 분석
               </button>
@@ -629,7 +778,7 @@ export default function EntryDetail({
             <button
               type="button"
               className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
-              onClick={onToggleDifficult}
+              onClick={handleToggleDifficultWithToast}
               title="어려운 문제 표시"
             >
               ★ 어려움
@@ -791,26 +940,44 @@ export default function EntryDetail({
           )}
           {!isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
-              <SolutionBookView
-                entry={entry}
-                hideAnswers={hideAnswers}
-                onToggleHideAnswers={() => setHideAnswers((value) => !value)}
-                onWikiLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-              />
+              <div className="solution-learning-layout">
+                <div className="solution-learning-main">
+                  <SolutionBookView
+                    entry={entry}
+                    hideAnswers={hideAnswers}
+                    onToggleHideAnswers={() => setHideAnswers((value) => !value)}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                  />
+                </div>
+                <LearningContentPanel
+                  entry={entry}
+                  onWikiLinkClick={onWikiLinkClick}
+                  existingTargets={existingTargets}
+                />
+              </div>
             ) : detailViewMode === "analysis" ? (
               <StudyAnalysisView entry={entry} />
             ) : (
-              <StudyPaperView
-                entry={entry}
-                memoMode={memoMode}
-                activeTool={activeTool}
-                onAnnotationsChange={onAnnotationsChange}
-                onWikiLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                sheetLayout={isSheet ? sheetLayout : "single"}
-                searchQuery={isSheet ? sheetSearch : ""}
-              />
+              <>
+                <StudyPaperView
+                  entry={entry}
+                  memoMode={memoMode}
+                  activeTool={activeTool}
+                  onAnnotationsChange={onAnnotationsChange}
+                  onWikiLinkClick={onWikiLinkClick}
+                  existingTargets={existingTargets}
+                  sheetLayout={isSheet ? sheetLayout : "single"}
+                  searchQuery={isSheet ? sheetSearch : ""}
+                />
+                <CollapsibleSection title="학습 내용" defaultOpen={false}>
+                  <LearningContentPanel
+                    entry={entry}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                  />
+                </CollapsibleSection>
+              </>
             )
           ) : isSheet && isFocusExpanded ? (
             focusedQuestion ? (
@@ -1280,6 +1447,38 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
       </div>
+      {isFocusable && (
+        <StudyControlBar
+          isSheet={isSheet}
+          isConcept={isConcept}
+          questionIndex={focusedQuestionIndex}
+          questionCount={questionAnchors.length}
+          hideAnswers={hideAnswers}
+          detailViewMode={detailViewMode}
+          difficult={entry.difficult}
+          reviewSaving={reviewSaving}
+          quickMemoOpen={quickMemoOpen}
+          quickMemoText={quickMemoText}
+          onPrevious={() => moveFocusedQuestion(-1)}
+          onNext={() => moveFocusedQuestion(1)}
+          onToggleAnswers={() => setHideAnswers((value) => !value)}
+          onReview={(result) => void handleReviewResult(result)}
+          onToggleDifficult={handleToggleDifficultWithToast}
+          onModeChange={handleStudyModeChange}
+          onQuickMemoOpenChange={setQuickMemoOpen}
+          onQuickMemoTextChange={setQuickMemoText}
+          onQuickMemoSubmit={() => void handleQuickMemoSubmit()}
+        />
+      )}
+      {toasts.length > 0 && (
+        <div className="study-toast-stack" aria-live="polite">
+          {toasts.map((toast) => (
+            <div key={toast.id} className={`study-toast study-toast--${toast.tone}`}>
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
       {isFocusExpanded && (
         <div className="focus-floating-controls" aria-label="집중 보기 빠른 조작">
           <button type="button" onClick={() => setFocusMode("mini")}>

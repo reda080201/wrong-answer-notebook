@@ -514,6 +514,388 @@
   padding: 1.25rem 1.5rem 2rem;
 }
 
+.detail-panel--study-controls .detail-scroll {
+  padding-bottom: 8.5rem;
+}
+
+.study-control-bar {
+  position: sticky;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 30;
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.65rem 1rem;
+  border-top: 1px solid #cbd5e1;
+  background: rgba(248, 250, 252, 0.96);
+  box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.study-control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.study-control-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  min-width: 0;
+  padding: 0.25rem;
+  border: 1px solid #d7dee9;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.study-control-group button,
+.study-memo-toggle,
+.study-next-action,
+.study-quick-memo button {
+  min-height: 34px;
+  padding: 0.42rem 0.62rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #334155;
+  font-size: 0.8rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.study-control-group button:hover,
+.study-memo-toggle:hover,
+.study-next-action:hover,
+.study-quick-memo button:hover {
+  background: #eef4ff;
+  color: #1d4ed8;
+}
+
+.study-control-group button:disabled,
+.study-next-action:disabled,
+.study-quick-memo button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.study-control-group button.active,
+.study-memo-toggle.active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.study-control-counter {
+  min-width: 4.4rem;
+  padding: 0 0.35rem;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+}
+
+.study-next-action {
+  flex: 0 0 auto;
+  min-width: 7.4rem;
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.study-next-action:hover {
+  background: #1d4ed8;
+  color: #fff;
+}
+
+.study-memo-toggle {
+  margin-left: auto;
+  border-color: #d7dee9;
+  background: #fff;
+}
+
+.study-quick-memo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.5rem;
+}
+
+.study-quick-memo textarea {
+  min-height: 42px;
+  max-height: 96px;
+  padding: 0.55rem 0.7rem;
+  resize: vertical;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.study-quick-memo button {
+  align-self: stretch;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.study-toast-stack {
+  position: fixed;
+  right: 1.2rem;
+  bottom: 5.8rem;
+  z-index: 1600;
+  display: grid;
+  gap: 0.45rem;
+  width: min(320px, calc(100vw - 2rem));
+  pointer-events: none;
+}
+
+.study-toast {
+  padding: 0.72rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.study-toast--success {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.study-toast--error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #991b1b;
+}
+
+.solution-learning-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.solution-learning-main {
+  min-width: 0;
+}
+
+.learning-content-panel {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.84)),
+    var(--surface);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.collapsible .learning-content-panel {
+  position: static;
+  box-shadow: none;
+}
+
+.learning-content-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.learning-content-head span {
+  color: #2563eb;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.learning-content-head h3 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1rem;
+}
+
+.learning-content-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.learning-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.learning-card h4 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 0.86rem;
+}
+
+.learning-card p {
+  margin: 0;
+  color: #334155;
+  line-height: 1.65;
+}
+
+.concept-card {
+  border-color: #bfdbfe;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
+}
+
+.formula-card {
+  border-color: #d9f99d;
+  background: linear-gradient(180deg, #ffffff 0%, #f7fee7 100%);
+}
+
+.routine-card {
+  border-color: #ddd6fe;
+  background: linear-gradient(180deg, #ffffff 0%, #f5f3ff 100%);
+}
+
+.warning-card {
+  border-color: #fecaca;
+  background: linear-gradient(180deg, #ffffff 0%, #fff1f2 100%);
+}
+
+.review-card,
+.checklist-card {
+  border-color: #fed7aa;
+  background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.learning-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.formula-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-right: 0.35rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: rgba(239, 246, 255, 0.95);
+  color: #1d4ed8;
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+button.formula-chip {
+  cursor: pointer;
+}
+
+button.formula-chip:hover {
+  background: #dbeafe;
+}
+
+.learning-line-list,
+.learning-routine-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.learning-routine-list section {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.learning-routine-list ol,
+.learning-choice-list,
+.learning-checklist {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #334155;
+  line-height: 1.65;
+}
+
+.learning-choice-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.learning-choice-list li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.learning-severity {
+  display: inline-flex;
+  margin-right: 0.4rem;
+  padding: 0.16rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.learning-severity--high {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.learning-severity--medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-severity--low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.learning-memo {
+  padding: 0.65rem;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.82);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.learning-checklist li {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+}
+
+.learning-checklist li.checked {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.learning-muted,
+.learning-content-empty {
+  color: #64748b;
+  font-size: 0.84rem;
+}
+
+.learning-content-empty {
+  padding: 1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
 .detail-question-section {
   margin-bottom: 1.25rem;
 }
@@ -4469,6 +4851,52 @@
 }
 
 @media (max-width: 760px) {
+  .detail-panel--study-controls .detail-scroll {
+    padding-bottom: 11rem;
+  }
+
+  .study-control-row {
+    flex-wrap: wrap;
+  }
+
+  .study-control-group--nav,
+  .study-control-group--modes {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .study-control-group:not(.study-control-group--nav):not(.study-control-group--modes) {
+    flex: 1 1 auto;
+    overflow-x: auto;
+  }
+
+  .study-next-action {
+    flex: 1 1 9rem;
+  }
+
+  .study-memo-toggle {
+    flex: 1 1 8rem;
+    margin-left: 0;
+  }
+
+  .study-quick-memo {
+    grid-template-columns: 1fr;
+  }
+
+  .study-toast-stack {
+    right: 0.75rem;
+    bottom: 8.8rem;
+  }
+
+  .solution-learning-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .learning-content-panel {
+    position: static;
+    padding: 0.85rem;
+  }
+
   .review-panel {
     inset: 0.5rem;
   }

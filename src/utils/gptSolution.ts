@@ -104,7 +104,9 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - audit에 expectedQuestionNumbers, detectedQuestionNumbers, missingQuestionNumbers, uncertainQuestionNumbers, handwritingExcluded, needsReviewCount를 기록해줘.
 - 수식은 가능한 한 LaTeX 문자열로 깔끔하게 적어줘.
 - answerKey[].explanation에는 원문 해설 전체를 보관하고, 풀이 구조는 strategy, steps, choiceJudgements, wrongPoint, reviewPoint로 나눠줘.
-- steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
+- answerKey[].concepts, strategy, steps, choiceJudgements, wrongPoint, reviewPoint는 앱의 "학습 내용" 카드에 직접 표시되므로 가능한 한 비우지 말고 문항별로 구체적으로 채워줘.
+- concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
+- wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
 - 핵심 개념, 자주 하는 실수, 검산 포인트는 문항별이면 answerKey[].importantPoints에 넣어줘.
 - ${imageGuide}
@@ -143,6 +145,7 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
       "reviewPoint": "조건을 식으로 옮기는 연습",
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["핵심 개념", "자주 하는 실수"],
+      "concepts": ["일차함수", "조건 해석"],
       "needsReview": false
     }
   ]
