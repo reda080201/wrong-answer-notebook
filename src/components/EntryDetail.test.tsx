@@ -99,6 +99,102 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".question-search-mark")).toHaveTextContent("둘째");
   });
 
+  it("switches between textbook paper, solution, and analysis modes", () => {
+    render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          question: "1. 첫 문제\n① 답",
+          answerKey: [
+            {
+              id: "answer-1",
+              questionNumber: "1",
+              answer: "③",
+              explanation: "조건을 확인한다. 따라서 정답이다.",
+              notes: "조건 먼저 보기",
+              importantPoints: ["보기 비교"],
+              concepts: ["함수"],
+            },
+          ],
+          importAudit: {
+            expectedQuestionNumbers: ["1", "2"],
+            detectedQuestionNumbers: ["1"],
+            missingQuestionNumbers: ["2"],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 1,
+          },
+          rejectedNotes: ["연필 표시"],
+          mistakeAnalysis: {
+            causes: [{ type: "condition_misread", severity: "high", note: "조건을 놓침" }],
+            primaryCause: "condition_misread",
+            preventionNote: "조건에 밑줄",
+            practiceMode: "choice_review",
+          },
+          review: {
+            dueAt: "2026-01-03T00:00:00.000Z",
+            intervalDays: 3,
+            streak: 1,
+            history: [],
+          },
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set(["함수"])}
+      />,
+    );
+
+    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문제지" })).toHaveClass("active");
+
+    fireEvent.click(screen.getByRole("button", { name: "해설지" }));
+    expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
+    expect(screen.getByText("[해설 1]")).toBeInTheDocument();
+    expect(screen.getAllByText("조건 먼저 보기").length).toBeGreaterThan(0);
+    expect(screen.getByText("보기 비교")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "분석" }));
+    expect(screen.getByText("학습 분석")).toBeInTheDocument();
+    expect(screen.getByText("누락 문제: 2")).toBeInTheDocument();
+    expect(screen.getByText("연필 표시")).toBeInTheDocument();
+    expect(screen.getAllByText("조건 해석 실패").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("추천 복습: 보기 판단 훈련").length).toBeGreaterThan(0);
+  });
+
+  it("shows figure zoom launcher in textbook paper mode", async () => {
+    render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          figures: [
+            {
+              id: "figure-1",
+              questionNumber: "1",
+              title: "그래프",
+              caption: "문제 1 그래프",
+              image: "figure-1.png",
+              source: "gpt_cleaned",
+            },
+          ],
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    expect(screen.getByLabelText("문제 삽화 확대 보기")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /확대 보기/ })).toBeInTheDocument();
+  });
+
   it("updates concept checklist items", () => {
     const onChecklistChange = vi.fn();
     render(

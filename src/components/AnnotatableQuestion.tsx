@@ -51,6 +51,84 @@ interface FocusedQuestionViewProps {
   showImages: boolean;
 }
 
+interface QuestionBodySegment {
+  kind: "body" | "condition" | "view";
+  text: string;
+  start: number;
+  end: number;
+}
+
+interface BodyLine {
+  text: string;
+  start: number;
+  end: number;
+  rawEnd: number;
+}
+
+function getBodyLines(text: string): BodyLine[] {
+  const lines: BodyLine[] = [];
+  const re = /.*(?:\r\n|\n|\r|$)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = re.exec(text)) !== null) {
+    if (match[0] === "" && match.index === text.length) break;
+    const raw = match[0];
+    const lineText = raw.replace(/\r?\n|\r$/, "");
+    lines.push({
+      text: lineText,
+      start: match.index,
+      end: match.index + lineText.length,
+      rawEnd: match.index + raw.length,
+    });
+    if (re.lastIndex === text.length) break;
+  }
+
+  return lines;
+}
+
+function classifyBodyLine(line: string): QuestionBodySegment["kind"] {
+  const trimmed = line.trim();
+  if (/^<?\s*보기\s*>?$/.test(trimmed) || /^<[^>]{1,20}>$/.test(trimmed)) return "view";
+  if (/^(조건|자료|제시문|그림|도표|그래프|표)\s*[:：]/.test(trimmed)) return "condition";
+  return "body";
+}
+
+function splitQuestionBodySegments(text: string, absoluteStart: number): QuestionBodySegment[] {
+  if (!text.trim()) return [];
+  const lines = getBodyLines(text);
+  const segments: Array<{ kind: QuestionBodySegment["kind"]; start: number; end: number }> = [];
+
+  for (const line of lines) {
+    const previous = segments.at(-1);
+    const rawKind = line.text.trim() ? classifyBodyLine(line.text) : previous?.kind ?? "body";
+    const kind =
+      rawKind === "body" && (previous?.kind === "view" || previous?.kind === "condition")
+        ? previous.kind
+        : rawKind;
+    if (previous && previous.kind === kind) {
+      previous.end = line.rawEnd;
+    } else {
+      segments.push({ kind, start: line.start, end: line.rawEnd });
+    }
+  }
+
+  return segments
+    .map((segment) => {
+      const rawText = text.slice(segment.start, segment.end);
+      const leading = rawText.match(/^\s*/)?.[0].length ?? 0;
+      const trailing = rawText.match(/\s*$/)?.[0].length ?? 0;
+      const start = segment.start + leading;
+      const end = Math.max(start, segment.end - trailing);
+      return {
+        kind: segment.kind,
+        text: text.slice(start, end),
+        start: absoluteStart + start,
+        end: absoluteStart + end,
+      };
+    })
+    .filter((segment) => segment.text.trim());
+}
+
 function clipTextAnnotations(
   annotations: TextRangeAnnotation[],
   start: number,
@@ -194,6 +272,7 @@ function StructuredQuestionBlock({
   }
 
   const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, block));
+  const bodySegments = splitQuestionBodySegments(block.body, block.bodyStart);
 
   return (
     <section
@@ -201,23 +280,37 @@ function StructuredQuestionBlock({
       className="question-text-block question-text-block--question"
     >
       <div className="question-number">
-        <span className="question-number-main">{block.displayNumber}</span>
+        <span className="question-number-main" data-number={block.displayNumber}>{block.displayNumber}</span>
         {normalizeNumberLabel(block.numberLabel) !== String(block.displayNumber) && (
           <small>원문 {block.numberLabel}</small>
         )}
       </div>
-      <div className="question-body">
-        {block.body && (
-          <StructuredTextSegment
-            text={block.body}
-            start={block.bodyStart}
-            annotations={clipTextAnnotations(textAnnotations, block.bodyStart, block.bodyEnd)}
-            onWikiLinkClick={onWikiLinkClick}
-            existingTargets={existingTargets}
-            searchQuery={searchQuery}
-          />
-        )}
-      </div>
+      {bodySegments.length > 0 && (
+        <div className="question-body">
+          {bodySegments.map((segment) => (
+            <section
+              key={`${segment.kind}-${segment.start}-${segment.end}`}
+              className={`question-body-segment question-body-segment--${segment.kind}`}
+            >
+              {segment.kind !== "body" && (
+                <div className="question-body-segment-title">
+                  <span />
+                  <strong>{segment.kind === "view" ? "<보기>" : "조건"}</strong>
+                  <span />
+                </div>
+              )}
+              <StructuredTextSegment
+                text={segment.text}
+                start={segment.start}
+                annotations={clipTextAnnotations(textAnnotations, segment.start, segment.end)}
+                onWikiLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+                searchQuery={searchQuery}
+              />
+            </section>
+          ))}
+        </div>
+      )}
       {block.choices.length > 0 && (
         <ol className="question-choices">
           {block.choices.map((choice) => (

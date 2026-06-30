@@ -17,6 +17,9 @@ import ConceptGraph from "./ConceptGraph";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
 import MathText from "./MathText";
+import SolutionBookView from "./SolutionBookView";
+import StudyAnalysisView from "./StudyAnalysisView";
+import StudyPaperView from "./StudyPaperView";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -37,6 +40,7 @@ interface EntryDetailProps {
 
 type SheetLayout = "single" | "columns";
 type AnswerViewMode = "card" | "table";
+type DetailViewMode = "paper" | "solution" | "analysis";
 type FocusMode = "closed" | "expanded" | "mini";
 type FocusTextSize = "normal" | "large" | "xlarge";
 type StudyPanel = "question" | "answer" | "explanation" | "notes" | "images";
@@ -107,6 +111,7 @@ export default function EntryDetail({
   const [sheetLayout, setSheetLayout] = useState<SheetLayout>(loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
+  const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
   const [hideAnswers, setHideAnswers] = useState(loadAnswerHidden);
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
@@ -176,6 +181,7 @@ export default function EntryDetail({
   const hasMistakeAnalysis =
     (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
     Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
+  const showPaperSupplementSections = !isFocusExpanded && detailViewMode === "paper";
 
   useEffect(() => {
     localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
@@ -554,6 +560,31 @@ export default function EntryDetail({
               #{t}
             </span>
           ))}
+          {!isConcept && (
+            <div className="study-mode-tabs" aria-label="학습 보기 모드">
+              <button
+                type="button"
+                className={detailViewMode === "paper" ? "active" : ""}
+                onClick={() => setDetailViewMode("paper")}
+              >
+                문제지
+              </button>
+              <button
+                type="button"
+                className={detailViewMode === "solution" ? "active" : ""}
+                onClick={() => setDetailViewMode("solution")}
+              >
+                해설지
+              </button>
+              <button
+                type="button"
+                className={detailViewMode === "analysis" ? "active" : ""}
+                onClick={() => setDetailViewMode("analysis")}
+              >
+                분석
+              </button>
+            </div>
+          )}
           {isSheet && (
             <div className="sheet-layout-toggle" aria-label="시험지 보기 방식">
               <button
@@ -711,9 +742,17 @@ export default function EntryDetail({
 
         <section className="detail-question-section">
           <h3 className="section-heading">
-            {isSheet ? (isFocusExpanded ? "문제 집중 보기" : "문제지 · 지문") : isConcept ? "개념 설명" : "문제 · 지문"}
+            {isFocusExpanded
+              ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
+              : isConcept
+                ? "개념 설명"
+                : detailViewMode === "solution"
+                  ? "교재형 해설지"
+                  : detailViewMode === "analysis"
+                    ? "학습 분석"
+                    : isSheet ? "교재형 문제지" : "문제지"}
           </h3>
-          {isSheet && !isFocusExpanded && (
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
             <div className="sheet-reading-tools">
               {questionAnchors.length > 0 && (
                 <nav className="sheet-toc" aria-label="문제 번호 목차">
@@ -750,7 +789,30 @@ export default function EntryDetail({
               </div>
             </div>
           )}
-          {isSheet && isFocusExpanded ? (
+          {!isFocusExpanded && !isConcept ? (
+            detailViewMode === "solution" ? (
+              <SolutionBookView
+                entry={entry}
+                hideAnswers={hideAnswers}
+                onToggleHideAnswers={() => setHideAnswers((value) => !value)}
+                onWikiLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+              />
+            ) : detailViewMode === "analysis" ? (
+              <StudyAnalysisView entry={entry} />
+            ) : (
+              <StudyPaperView
+                entry={entry}
+                memoMode={memoMode}
+                activeTool={activeTool}
+                onAnnotationsChange={onAnnotationsChange}
+                onWikiLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+                sheetLayout={isSheet ? sheetLayout : "single"}
+                searchQuery={isSheet ? sheetSearch : ""}
+              />
+            )
+          ) : isSheet && isFocusExpanded ? (
             focusedQuestion ? (
               <>
                 <FocusedQuestionView
@@ -881,7 +943,7 @@ export default function EntryDetail({
           )}
         </section>
 
-        {!isFocusExpanded && (entry.importAudit || (entry.rejectedNotes?.length ?? 0) > 0) && (
+        {showPaperSupplementSections && (entry.importAudit || (entry.rejectedNotes?.length ?? 0) > 0) && (
           <section className={`import-audit-summary detail-import-audit ${entry.importAudit?.missingQuestionNumbers.length || entry.importAudit?.handwritingExcluded === false ? "import-audit-summary--danger" : ""}`}>
             <strong>AI 가져오기 검토</strong>
             {entry.importAudit && (
@@ -1049,7 +1111,7 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
 
-        {isSheet && !isFocusExpanded && sheetAnswerKey.length > 0 && (
+        {isSheet && showPaperSupplementSections && sheetAnswerKey.length > 0 && (
           <CollapsibleSection
             title="답안지"
             badge={`${sheetAnswerKey.length}개`}
@@ -1060,7 +1122,7 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
 
-        {!isFocusExpanded && !isSheet && !isConcept && (entry.myAnswer || entry.correctAnswer) && (
+        {showPaperSupplementSections && !isSheet && !isConcept && (entry.myAnswer || entry.correctAnswer) && (
           <section className="detail-answers-row">
             {entry.myAnswer && (
               <div className="answer-card answer-card--wrong">
@@ -1089,7 +1151,7 @@ export default function EntryDetail({
           </section>
         )}
 
-        {!isFocusExpanded && !isConcept && (
+        {showPaperSupplementSections && !isConcept && (
           <CollapsibleSection
             title="오답 원인"
             badge={hasMistakeAnalysis ? summarizeMistakeAnalysis(entry) : "미분류"}
@@ -1128,7 +1190,7 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
 
-        {!isFocusExpanded && hasExplanationContent(entry) && (
+        {showPaperSupplementSections && hasExplanationContent(entry) && (
           <CollapsibleSection
             title="해설"
             badge={explanationBadge}
@@ -1153,7 +1215,7 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
 
-        {!isFocusExpanded && entry.memo.trim() && (
+        {showPaperSupplementSections && entry.memo.trim() && (
           <CollapsibleSection title="텍스트 메모" defaultOpen={false}>
             <div className="memo-content">
               <LinkifiedText
