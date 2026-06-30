@@ -54,7 +54,8 @@ function SheetSolutionCard({
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }) {
-  const steps = explanationSteps(item.explanation);
+  const steps = item.steps?.length ? item.steps : explanationSteps(item.explanation);
+  const wrongPoints = item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints;
   return (
     <article className="solution-book-card">
       <header className="solution-book-card-head">
@@ -85,7 +86,7 @@ function SheetSolutionCard({
         )}
       </SolutionRow>
       <SolutionRow label="풀이 전략">
-        <MathText text={item.notes?.trim() || item.sourceNote?.trim() || "조건과 답안 연결을 확인합니다."} />
+        <MathText text={item.strategy?.trim() || item.notes?.trim() || item.sourceNote?.trim() || "조건과 답안 연결을 확인합니다."} />
       </SolutionRow>
       <SolutionRow label="풀이 과정">
         {hideAnswers ? (
@@ -102,10 +103,26 @@ function SheetSolutionCard({
           <span className="solution-empty">풀이 없음</span>
         )}
       </SolutionRow>
-      {item.importantPoints.length > 0 && (
+      {(item.choiceJudgements?.length ?? 0) > 0 && (
+        <SolutionRow label="보기별 판단">
+          {hideAnswers ? (
+            <span className="answer-hidden">답 가리기 모드입니다.</span>
+          ) : (
+            <ul className="solution-points solution-choice-judgements">
+              {item.choiceJudgements?.map((judgement, index) => (
+                <li key={`${item.id}-judgement-${index}`}>
+                  {judgement.marker && <strong>{judgement.marker}</strong>}
+                  <MathText text={judgement.text} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </SolutionRow>
+      )}
+      {wrongPoints.length > 0 && (
         <SolutionRow label="오답 포인트">
           <ul className="solution-points">
-            {item.importantPoints.map((point) => (
+            {wrongPoints.map((point) => (
               <li key={point}>
                 <MathText text={point} />
               </li>
@@ -114,7 +131,7 @@ function SheetSolutionCard({
         </SolutionRow>
       )}
       <SolutionRow label="다음 복습" muted>
-        <MathText text={item.needsReview ? "번호와 풀이 연결을 다시 확인하세요." : item.notes?.trim() || "같은 개념의 유사 문제로 확인하세요."} />
+        <MathText text={item.needsReview ? "번호와 풀이 연결을 다시 확인하세요." : item.reviewPoint?.trim() || item.notes?.trim() || "같은 개념의 유사 문제로 확인하세요."} />
       </SolutionRow>
     </article>
   );

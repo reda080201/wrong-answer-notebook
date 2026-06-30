@@ -248,6 +248,36 @@ describe("importStudyText", () => {
     );
   });
 
+  it("maps structured answer explanation fields from JSON", () => {
+    const result = parseImportedStudyText(
+      JSON.stringify({
+        question: "1. 함수 문제",
+        answerKey: [
+          {
+            questionNumber: "1",
+            answer: "③",
+            explanation: "원문 해설 전체",
+            strategy: "그래프 교점을 먼저 본다",
+            steps: ["조건 정리", "교점 확인"],
+            choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
+            wrongPoint: "절편과 교점을 혼동",
+            reviewPoint: "교점 정의 복습",
+          },
+        ],
+      }),
+    );
+
+    expect(result.data.answerKey?.[0]).toEqual(
+      expect.objectContaining({
+        strategy: "그래프 교점을 먼저 본다",
+        steps: ["조건 정리", "교점 확인"],
+        choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
+        wrongPoint: "절편과 교점을 혼동",
+        reviewPoint: "교점 정의 복습",
+      }),
+    );
+  });
+
   it("keeps problem-specific notes on answer key items", () => {
     const result = parseImportedStudyText(
       JSON.stringify({

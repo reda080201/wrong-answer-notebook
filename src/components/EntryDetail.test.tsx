@@ -111,6 +111,11 @@ describe("EntryDetail sheet layout", () => {
               questionNumber: "1",
               answer: "③",
               explanation: "조건을 확인한다. 따라서 정답이다.",
+              strategy: "그래프 교점을 먼저 본다",
+              steps: ["조건 정리", "교점 확인"],
+              choiceJudgements: [{ marker: "①", text: "교점 조건 불만족" }],
+              wrongPoint: "절편과 교점 혼동",
+              reviewPoint: "교점 정의 복습",
               notes: "조건 먼저 보기",
               importantPoints: ["보기 비교"],
               concepts: ["함수"],
@@ -154,8 +159,16 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.click(screen.getByRole("button", { name: "해설지" }));
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
     expect(screen.getByText("[해설 1]")).toBeInTheDocument();
-    expect(screen.getAllByText("조건 먼저 보기").length).toBeGreaterThan(0);
-    expect(screen.getByText("보기 비교")).toBeInTheDocument();
+    expect(screen.getByText("그래프 교점을 먼저 본다")).toBeInTheDocument();
+    expect(screen.getByText("조건 정리")).toBeInTheDocument();
+    expect(screen.getByText("교점 조건 불만족")).toBeInTheDocument();
+    expect(screen.getByText("절편과 교점 혼동")).toBeInTheDocument();
+    expect(screen.getByText("교점 정의 복습")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "답 가리기" }));
+    expect(screen.queryByText("조건 정리")).not.toBeInTheDocument();
+    expect(screen.queryByText("교점 조건 불만족")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "정답 보이기" }));
 
     fireEvent.click(screen.getByRole("button", { name: "분석" }));
     expect(screen.getByText("학습 분석")).toBeInTheDocument();

@@ -86,6 +86,16 @@ export function scrubRejectedNotesFromAnswers(answers: SheetAnswerItem[], reject
     answer: removeRejectedNotes(item.answer, rejectedNotes),
     explanation: removeRejectedNotes(item.explanation, rejectedNotes),
     notes: removeRejectedNotes(item.notes ?? "", rejectedNotes),
+    strategy: removeRejectedNotes(item.strategy ?? "", rejectedNotes),
+    steps: item.steps?.map((step) => removeRejectedNotes(step, rejectedNotes)).filter(Boolean),
+    choiceJudgements: item.choiceJudgements
+      ?.map((judgement) => ({
+        ...judgement,
+        text: removeRejectedNotes(judgement.text, rejectedNotes),
+      }))
+      .filter((judgement) => judgement.text),
+    wrongPoint: removeRejectedNotes(item.wrongPoint ?? "", rejectedNotes),
+    reviewPoint: removeRejectedNotes(item.reviewPoint ?? "", rejectedNotes),
     sourceNote: removeRejectedNotes(item.sourceNote ?? "", rejectedNotes),
     importantPoints: item.importantPoints.map((point) => removeRejectedNotes(point, rejectedNotes)).filter(Boolean),
   }));

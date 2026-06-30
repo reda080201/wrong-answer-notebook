@@ -16,6 +16,11 @@ function answerDifficultyLabel(item: SheetAnswerItem): string {
   return "";
 }
 
+function answerSteps(item: SheetAnswerItem): string[] {
+  if (item.steps?.length) return item.steps;
+  return item.explanation.trim() ? [item.explanation.trim()] : [];
+}
+
 export function entryToMarkdown(entry: WrongAnswerEntry): string {
   const lines: string[] = [
     `# ${getEntryTitle(entry)}`,
@@ -41,12 +46,25 @@ export function entryToMarkdown(entry: WrongAnswerEntry): string {
       const difficulty = answerDifficultyLabel(item);
       if (difficulty) lines.push(`- 난이도: ${difficulty}`);
       if (item.concepts?.length) lines.push(`- 개념: ${item.concepts.join(", ")}`);
+      if (item.strategy?.trim()) lines.push(`- 풀이 전략: ${item.strategy.trim()}`);
       if (item.notes?.trim()) lines.push(`- 문제별 메모: ${item.notes.trim()}`);
-      if (item.explanation.trim()) lines.push("", item.explanation.trim());
-      if (item.importantPoints.length) {
-        lines.push("", "중요 포인트");
-        for (const point of item.importantPoints) lines.push(`- ${point}`);
+      const steps = answerSteps(item);
+      if (steps.length) {
+        lines.push("", "풀이 과정");
+        for (const [index, step] of steps.entries()) lines.push(`${index + 1}. ${step}`);
       }
+      if (item.choiceJudgements?.length) {
+        lines.push("", "보기별 판단");
+        for (const judgement of item.choiceJudgements) {
+          lines.push(`- ${[judgement.marker, judgement.text].filter(Boolean).join(": ")}`);
+        }
+      }
+      const wrongPoints = item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints;
+      if (wrongPoints.length) {
+        lines.push("", "오답 포인트");
+        for (const point of wrongPoints) lines.push(`- ${point}`);
+      }
+      if (item.reviewPoint?.trim()) lines.push("", `다음 복습: ${item.reviewPoint.trim()}`);
       lines.push("");
     }
   }
@@ -108,9 +126,12 @@ export function openPrintableEntry(entry: WrongAnswerEntry): void {
       <strong>${escapeHtml(item.questionNumber || "?")}번 · ${escapeHtml(item.answer || "정답 없음")}</strong>
       ${item.difficulty ? `<p>난이도: ${escapeHtml(answerDifficultyLabel(item))}</p>` : ""}
       ${item.concepts?.length ? `<p>개념: ${escapeHtml(item.concepts.join(", "))}</p>` : ""}
+      ${item.strategy?.trim() ? `<p>풀이 전략: ${escapeHtml(item.strategy)}</p>` : ""}
       ${item.notes?.trim() ? `<p>문제별 메모: ${escapeHtml(item.notes)}</p>` : ""}
-      ${item.explanation.trim() ? `<pre>${escapeHtml(item.explanation)}</pre>` : ""}
-      ${item.importantPoints.length ? `<ul>${item.importantPoints.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}
+      ${answerSteps(item).length ? `<ol>${answerSteps(item).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>` : ""}
+      ${item.choiceJudgements?.length ? `<h3>보기별 판단</h3><ul>${item.choiceJudgements.map((judgement) => `<li>${escapeHtml([judgement.marker, judgement.text].filter(Boolean).join(": "))}</li>`).join("")}</ul>` : ""}
+      ${(item.wrongPoint?.trim() || item.importantPoints.length) ? `<h3>오답 포인트</h3><ul>${(item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints).map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}
+      ${item.reviewPoint?.trim() ? `<p>다음 복습: ${escapeHtml(item.reviewPoint)}</p>` : ""}
     </section>`).join("")}` : ""}
   ${(entry.figures ?? []).length ? `<h2>도표/그림</h2>${(entry.figures ?? []).map((figure) => `
     <section class="answer">

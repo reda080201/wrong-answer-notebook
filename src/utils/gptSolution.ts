@@ -15,7 +15,16 @@ function hasText(value: string | undefined): boolean {
 
 function firstAnswer(imported: Partial<EntryFormData>): SheetAnswerItem | undefined {
   return imported.answerKey?.find(
-    (item) => item.answer.trim() || item.explanation.trim() || item.notes?.trim() || item.importantPoints.length,
+    (item) =>
+      item.answer.trim() ||
+      item.explanation.trim() ||
+      item.strategy?.trim() ||
+      item.steps?.length ||
+      item.choiceJudgements?.length ||
+      item.wrongPoint?.trim() ||
+      item.reviewPoint?.trim() ||
+      item.notes?.trim() ||
+      item.importantPoints.length,
   );
 }
 
@@ -23,6 +32,11 @@ function explanationFromAnswer(answer: SheetAnswerItem | undefined): Explanation
   if (!answer) return undefined;
   const lines = [
     answer.explanation.trim(),
+    answer.strategy?.trim(),
+    ...(answer.steps ?? []),
+    ...(answer.choiceJudgements ?? []).map((item) => [item.marker, item.text].filter(Boolean).join(": ")),
+    answer.wrongPoint?.trim(),
+    answer.reviewPoint?.trim(),
     answer.notes?.trim(),
     ...answer.importantPoints.map((point) => `- ${point}`),
   ].filter(Boolean);
@@ -38,7 +52,12 @@ function mergeAnswerKey(
   if (!imported?.length) return base;
   if (mode === "overwrite" || !base?.length) return imported;
 
-  const next = base.map((item) => ({ ...item, importantPoints: [...item.importantPoints] }));
+  const next: SheetAnswerItem[] = base.map((item) => ({
+    ...item,
+    importantPoints: [...item.importantPoints],
+    steps: item.steps ? [...item.steps] : undefined,
+    choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : undefined,
+  }));
   for (const incoming of imported) {
     const matchIndex = next.findIndex(
       (item) => item.questionNumber.trim() === incoming.questionNumber.trim(),
@@ -52,6 +71,11 @@ function mergeAnswerKey(
       ...current,
       answer: current.answer.trim() ? current.answer : incoming.answer,
       explanation: current.explanation.trim() ? current.explanation : incoming.explanation,
+      strategy: current.strategy?.trim() ? current.strategy : incoming.strategy,
+      steps: current.steps?.length ? current.steps : incoming.steps,
+      choiceJudgements: current.choiceJudgements?.length ? current.choiceJudgements : incoming.choiceJudgements,
+      wrongPoint: current.wrongPoint?.trim() ? current.wrongPoint : incoming.wrongPoint,
+      reviewPoint: current.reviewPoint?.trim() ? current.reviewPoint : incoming.reviewPoint,
       notes: current.notes?.trim() ? current.notes : incoming.notes,
       importantPoints: current.importantPoints.length ? current.importantPoints : incoming.importantPoints,
       concepts: current.concepts?.length ? current.concepts : incoming.concepts,
@@ -79,7 +103,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - 학생 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 question, answerKey, memo에 넣지 말고 rejectedNotes에만 기록해줘.
 - audit에 expectedQuestionNumbers, detectedQuestionNumbers, missingQuestionNumbers, uncertainQuestionNumbers, handwritingExcluded, needsReviewCount를 기록해줘.
 - 수식은 가능한 한 LaTeX 문자열로 깔끔하게 적어줘.
-- 풀이 과정은 학생이 다시 봐도 이해되도록 단계별로 써줘.
+- answerKey[].explanation에는 원문 해설 전체를 보관하고, 풀이 구조는 strategy, steps, choiceJudgements, wrongPoint, reviewPoint로 나눠줘.
+- steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
 - 핵심 개념, 자주 하는 실수, 검산 포인트는 문항별이면 answerKey[].importantPoints에 넣어줘.
 - ${imageGuide}
@@ -108,7 +133,14 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
     {
       "questionNumber": "${isSheet ? "1" : "1"}",
       "answer": "정답",
-      "explanation": "단계별 풀이",
+      "explanation": "원문 해설 전체",
+      "strategy": "핵심 조건을 식으로 바꾼 뒤 대입한다",
+      "steps": ["조건을 정리한다", "식을 세운다", "정답을 검산한다"],
+      "choiceJudgements": [
+        { "marker": "①", "text": "조건 A를 만족하지 않는다" }
+      ],
+      "wrongPoint": "부호를 반대로 해석하기 쉽다",
+      "reviewPoint": "조건을 식으로 옮기는 연습",
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["핵심 개념", "자주 하는 실수"],
       "needsReview": false
@@ -181,6 +213,8 @@ export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
       ...item,
       importantPoints: [...item.importantPoints],
       concepts: item.concepts ? [...item.concepts] : [],
+      steps: item.steps ? [...item.steps] : undefined,
+      choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : undefined,
     })),
     figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
     importAudit: entry.importAudit ? {

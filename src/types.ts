@@ -39,6 +39,11 @@ export interface SheetAnswerItem {
   questionNumber: string;
   answer: string;
   explanation: string;
+  strategy?: string;
+  steps?: string[];
+  choiceJudgements?: Array<{ marker: string; text: string }>;
+  wrongPoint?: string;
+  reviewPoint?: string;
   notes?: string;
   importantPoints: string[];
   difficulty?: Difficulty;

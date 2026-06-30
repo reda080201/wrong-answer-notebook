@@ -76,6 +76,8 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
       ...item,
       importantPoints: [...item.importantPoints],
       concepts: item.concepts ? [...item.concepts] : [],
+      steps: item.steps ? [...item.steps] : [],
+      choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
     })),
     figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
     importAudit: entry.importAudit ? {
@@ -117,6 +119,8 @@ function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
           ...item,
           importantPoints: [...item.importantPoints],
           concepts: item.concepts ? [...item.concepts] : [],
+          steps: item.steps ? [...item.steps] : [],
+          choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
@@ -264,6 +268,11 @@ export default function EntryForm({
           questionNumber: "",
           answer: "",
           explanation: "",
+          strategy: "",
+          steps: [],
+          choiceJudgements: [],
+          wrongPoint: "",
+          reviewPoint: "",
           notes: "",
           importantPoints: [],
           concepts: [],
@@ -869,6 +878,86 @@ export default function EntryForm({
                           }
                           placeholder="풀이 또는 정답 근거"
                         />
+                      </div>
+                      <div className="form-field full">
+                        <label htmlFor={`answer-strategy-${item.id}`}>풀이 전략</label>
+                        <textarea
+                          id={`answer-strategy-${item.id}`}
+                          value={item.strategy ?? ""}
+                          onChange={(event) =>
+                            updateAnswerKeyItem(item.id, {
+                              strategy: event.target.value,
+                            })
+                          }
+                          placeholder="예: 조건을 식으로 바꾼 뒤 대입"
+                        />
+                      </div>
+                      <div className="form-field full">
+                        <label htmlFor={`answer-steps-${item.id}`}>풀이 단계</label>
+                        <textarea
+                          id={`answer-steps-${item.id}`}
+                          value={(item.steps ?? []).join("\n")}
+                          onChange={(event) =>
+                            updateAnswerKeyItem(item.id, {
+                              steps: event.target.value
+                                .split(/\r?\n/)
+                                .map((step) => step.trim())
+                                .filter(Boolean),
+                            })
+                          }
+                          placeholder="한 줄에 한 단계씩 입력"
+                        />
+                      </div>
+                      <div className="form-field full">
+                        <label htmlFor={`answer-choice-judgements-${item.id}`}>보기별 판단</label>
+                        <textarea
+                          id={`answer-choice-judgements-${item.id}`}
+                          value={(item.choiceJudgements ?? [])
+                            .map((judgement) => [judgement.marker, judgement.text].filter(Boolean).join(": "))
+                            .join("\n")}
+                          onChange={(event) =>
+                            updateAnswerKeyItem(item.id, {
+                              choiceJudgements: event.target.value
+                                .split(/\r?\n/)
+                                .map((line) => {
+                                  const match = line.match(/^\s*([^:：]{1,12})[:：]\s*(.+)$/);
+                                  return match
+                                    ? { marker: match[1].trim(), text: match[2].trim() }
+                                    : { marker: "", text: line.trim() };
+                                })
+                                .filter((judgement) => judgement.text),
+                            })
+                          }
+                          placeholder="예: ①: 조건 A를 만족하지 않음"
+                        />
+                      </div>
+                      <div className="form-row form-row--2">
+                        <div className="form-field">
+                          <label htmlFor={`answer-wrong-point-${item.id}`}>오답 포인트</label>
+                          <textarea
+                            id={`answer-wrong-point-${item.id}`}
+                            value={item.wrongPoint ?? ""}
+                            onChange={(event) =>
+                              updateAnswerKeyItem(item.id, {
+                                wrongPoint: event.target.value,
+                              })
+                            }
+                            placeholder="이 문제에서 틀리기 쉬운 지점"
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label htmlFor={`answer-review-point-${item.id}`}>다음 복습 포인트</label>
+                          <textarea
+                            id={`answer-review-point-${item.id}`}
+                            value={item.reviewPoint ?? ""}
+                            onChange={(event) =>
+                              updateAnswerKeyItem(item.id, {
+                                reviewPoint: event.target.value,
+                              })
+                            }
+                            placeholder="다시 볼 때 확인할 것"
+                          />
+                        </div>
                       </div>
                       <div className="form-field full">
                         <label htmlFor={`answer-notes-${item.id}`}>문제별 메모</label>
