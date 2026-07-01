@@ -18,6 +18,12 @@ export interface ChoiceBlock extends TextRange {
   text: string;
 }
 
+export interface QuestionBodySegment extends TextRange {
+  kind: "body" | "condition" | "view";
+  text: string;
+  label?: string;
+}
+
 export interface QuestionBlock extends TextRange {
   kind: "question";
   numberLabel: string;
@@ -25,6 +31,7 @@ export interface QuestionBlock extends TextRange {
   body: string;
   bodyStart: number;
   bodyEnd: number;
+  bodySegments: QuestionBodySegment[];
   choices: ChoiceBlock[];
 }
 
@@ -38,6 +45,9 @@ interface LineInfo {
 
 const QUESTION_RE = /^\s*(?:(문제\s*(0?[1-9]\d{0,2}))|(#(0?[1-9]\d{0,2}))|(0?[1-9]\d{0,2})([.)]|번))\s*/;
 const CHOICE_RE = /^\s*((?:[①②③④⑤⑥⑦⑧⑨⑩])|(?:\(\d{1,2}\))|(?:\d{1,2}\))|(?:[ㄱ-ㅎA-Ea-e][.)]))\s*/;
+const VIEW_MARKER_RE = /^\s*(?:<\s*보기\s*>|보기)\s*$/;
+const VIEW_ITEM_RE = /^\s*(?:[ㄱ-ㅎ][.)]|[ㄱ-ㅎ]\s*[:：])\s*/;
+const CONDITION_RE = /^\s*(?:(?:조건|자료|제시문|그림|도표|그래프|표)\s*[:：]|(?:\([가-힣]\)|[가-힣][.)])\s*)/;
 
 function getLines(text: string): LineInfo[] {
   const lines: LineInfo[] = [];
@@ -73,6 +83,61 @@ function matchQuestion(line: string) {
 
 function matchChoice(line: string) {
   return line.match(CHOICE_RE);
+}
+
+function isViewMarker(line: string): boolean {
+  return VIEW_MARKER_RE.test(line.trim());
+}
+
+function isViewItem(line: string): boolean {
+  return VIEW_ITEM_RE.test(line);
+}
+
+function conditionLabel(line: string): string | undefined {
+  const trimmed = line.trim();
+  const named = trimmed.match(/^((?:조건|자료|제시문|그림|도표|그래프|표))\s*[:：]/);
+  if (named) return named[1];
+  const letter = trimmed.match(/^(\([가-힣]\)|[가-힣][.)])/);
+  return letter?.[1];
+}
+
+function bodyLineKind(line: string, previousKind?: QuestionBodySegment["kind"]): QuestionBodySegment["kind"] {
+  if (!line.trim()) return previousKind ?? "body";
+  if (isViewMarker(line) || isViewItem(line)) return "view";
+  if (CONDITION_RE.test(line)) return "condition";
+  if (previousKind === "view" || previousKind === "condition") return previousKind;
+  return "body";
+}
+
+function splitBodySegments(text: string, ranges: TextRange[]): QuestionBodySegment[] {
+  if (!ranges.length) return [];
+  const segments: Array<{ kind: QuestionBodySegment["kind"]; start: number; end: number; label?: string }> = [];
+
+  for (const range of ranges) {
+    const line = text.slice(range.start, range.end);
+    const previous = segments.at(-1);
+    const kind = bodyLineKind(line, previous?.kind);
+    const label = kind === "condition" ? conditionLabel(line) : kind === "view" ? "<보기>" : undefined;
+    if (previous && previous.kind === kind) {
+      previous.end = range.end;
+      previous.label = previous.label ?? label;
+    } else {
+      segments.push({ kind, start: range.start, end: range.end, label });
+    }
+  }
+
+  return segments
+    .map((segment) => {
+      const range = trimRange(text, segment.start, segment.end);
+      return {
+        kind: segment.kind,
+        text: text.slice(range.start, range.end),
+        start: range.start,
+        end: range.end,
+        label: segment.label,
+      };
+    })
+    .filter((segment) => segment.text.trim());
 }
 
 function trimRange(text: string, start: number, end: number): TextRange {
@@ -111,6 +176,7 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
   const blockEnd = lines[lines.length - 1].end;
   const choices: ChoiceBlock[] = [];
   const bodyRanges: TextRange[] = [];
+  let insideView = false;
 
   for (const line of lines) {
     if (!line.text.trim()) continue;
@@ -119,8 +185,20 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
       continue;
     }
 
+    if (isViewMarker(line.text)) {
+      insideView = true;
+      bodyRanges.push({ start: line.start, end: line.end });
+      continue;
+    }
+
+    if (insideView && isViewItem(line.text)) {
+      bodyRanges.push({ start: line.start, end: line.end });
+      continue;
+    }
+
     const choiceMatch = matchChoice(line.text);
     if (choiceMatch) {
+      insideView = false;
       const choiceTextStart = line.start + choiceMatch[0].length;
       const choiceRange = trimRange(text, choiceTextStart, line.end);
       choices.push({
@@ -145,6 +223,7 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
     body: text.slice(bodyRange.start, bodyRange.end),
     bodyStart: bodyRange.start,
     bodyEnd: bodyRange.end,
+    bodySegments: splitBodySegments(text, bodyRanges),
     choices,
     start: numberStart,
     end: blockEnd,

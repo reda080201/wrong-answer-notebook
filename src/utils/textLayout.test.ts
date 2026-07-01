@@ -112,6 +112,37 @@ describe("parseQuestionText", () => {
     });
   });
 
+  it("splits Korean condition labels into condition body segments", () => {
+    const [block] = parseQuestionText("1. 다음 조건을 만족한다.\n(가) $x>0$\n(나) y는 정수\n① 참\n② 거짓");
+
+    expect(block).toMatchObject({
+      kind: "question",
+      choices: [
+        { marker: "①", text: "참" },
+        { marker: "②", text: "거짓" },
+      ],
+    });
+    if (block.kind !== "question") throw new Error("expected question block");
+    expect(block.bodySegments).toEqual([
+      expect.objectContaining({ kind: "body", text: "다음 조건을 만족한다." }),
+      expect.objectContaining({ kind: "condition", text: "(가) $x>0$\n(나) y는 정수", label: "(가)" }),
+    ]);
+  });
+
+  it("keeps view marker and ㄱㄴㄷ items in view instead of choices", () => {
+    const [block] = parseQuestionText("1. 옳은 것을 고르시오.\n<보기>\nㄱ. A는 참\nㄴ. B는 거짓\n① ㄱ\n② ㄱ, ㄴ");
+
+    if (block.kind !== "question") throw new Error("expected question block");
+    expect(block.bodySegments).toEqual([
+      expect.objectContaining({ kind: "body", text: "옳은 것을 고르시오." }),
+      expect.objectContaining({ kind: "view", text: "<보기>\nㄱ. A는 참\nㄴ. B는 거짓", label: "<보기>" }),
+    ]);
+    expect(block.choices).toEqual([
+      expect.objectContaining({ marker: "①", text: "ㄱ" }),
+      expect.objectContaining({ marker: "②", text: "ㄱ, ㄴ" }),
+    ]);
+  });
+
   it("detects markdown tables as table segments", () => {
     const segments = splitMarkdownTableSegments("자료\n| 구분 | 값 |\n| --- | --- |\n| A | 10 |\n끝");
 

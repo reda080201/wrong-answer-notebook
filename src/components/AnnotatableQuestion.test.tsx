@@ -124,7 +124,7 @@ describe("AnnotatableQuestion", () => {
   it("wraps condition and view lines without losing structured text", () => {
     const { container } = render(
       <AnnotatableQuestion
-        question={"1. 조건: x > 0\n<보기>\n자료 A는 양수이다\n① 자료 A"}
+        question={"1. 조건: $x > 0$\n<보기>\nㄱ. 자료 A는 양수이다\nㄴ. 자료 B는 음수이다\n① ㄱ\n② ㄱ, ㄴ"}
         questionImages={[]}
         annotations={[]}
         memoMode={false}
@@ -136,8 +136,12 @@ describe("AnnotatableQuestion", () => {
       />,
     );
 
-    expect(container.querySelector(".question-body-segment--condition")).toHaveTextContent("조건: x > 0");
-    expect(container.querySelector(".question-body-segment--view")).toHaveTextContent("자료 A는 양수이다");
+    expect(container.querySelector(".question-body-segment--condition")).toHaveTextContent("조건:");
+    expect(container.querySelector(".question-body-segment--condition .math-fragment")).toBeInTheDocument();
+    expect(container.querySelector(".question-body-segment--view")).toHaveTextContent("ㄱ. 자료 A는 양수이다");
+    expect(container.querySelector(".question-body-segment--view")).toHaveTextContent("ㄴ. 자료 B는 음수이다");
     expect(screen.getByText("①")).toBeInTheDocument();
+    expect(screen.getByText("②")).toBeInTheDocument();
+    expect(container.querySelectorAll(".question-choice")).toHaveLength(2);
   });
 });

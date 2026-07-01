@@ -14,6 +14,7 @@ import {
   type MarkdownTableSegment,
   type PassageBlock,
   type ParagraphBlock,
+  type QuestionBodySegment as ParsedQuestionBodySegment,
   type QuestionBlock,
   type QuestionTextBlock,
 } from "../utils/textLayout";
@@ -56,6 +57,7 @@ interface QuestionBodySegment {
   text: string;
   start: number;
   end: number;
+  label?: string;
 }
 
 interface BodyLine {
@@ -127,6 +129,22 @@ function splitQuestionBodySegments(text: string, absoluteStart: number): Questio
       };
     })
     .filter((segment) => segment.text.trim());
+}
+
+function parsedBodySegments(block: QuestionBlock): QuestionBodySegment[] {
+  return (block.bodySegments ?? []).map((segment: ParsedQuestionBodySegment) => ({
+    kind: segment.kind,
+    text: segment.text,
+    start: segment.start,
+    end: segment.end,
+    label: segment.label,
+  }));
+}
+
+function questionBodySegmentsForBlock(block: QuestionBlock): QuestionBodySegment[] {
+  return block.bodySegments?.length
+    ? parsedBodySegments(block)
+    : splitQuestionBodySegments(block.body, block.bodyStart);
 }
 
 function clipTextAnnotations(
@@ -272,7 +290,7 @@ function StructuredQuestionBlock({
   }
 
   const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, block));
-  const bodySegments = splitQuestionBodySegments(block.body, block.bodyStart);
+  const bodySegments = questionBodySegmentsForBlock(block);
 
   return (
     <section
@@ -285,32 +303,13 @@ function StructuredQuestionBlock({
           <small>원문 {block.numberLabel}</small>
         )}
       </div>
-      {bodySegments.length > 0 && (
-        <div className="question-body">
-          {bodySegments.map((segment) => (
-            <section
-              key={`${segment.kind}-${segment.start}-${segment.end}`}
-              className={`question-body-segment question-body-segment--${segment.kind}`}
-            >
-              {segment.kind !== "body" && (
-                <div className="question-body-segment-title">
-                  <span />
-                  <strong>{segment.kind === "view" ? "<보기>" : "조건"}</strong>
-                  <span />
-                </div>
-              )}
-              <StructuredTextSegment
-                text={segment.text}
-                start={segment.start}
-                annotations={clipTextAnnotations(textAnnotations, segment.start, segment.end)}
-                onWikiLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                searchQuery={searchQuery}
-              />
-            </section>
-          ))}
-        </div>
-      )}
+      <QuestionBodySegments
+        segments={bodySegments}
+        textAnnotations={textAnnotations}
+        onWikiLinkClick={onWikiLinkClick}
+        existingTargets={existingTargets}
+        searchQuery={searchQuery}
+      />
       {block.choices.length > 0 && (
         <ol className="question-choices">
           {block.choices.map((choice) => (
@@ -332,6 +331,48 @@ function StructuredQuestionBlock({
       )}
       {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
     </section>
+  );
+}
+
+function QuestionBodySegments({
+  segments,
+  textAnnotations,
+  onWikiLinkClick,
+  existingTargets,
+  searchQuery,
+}: {
+  segments: QuestionBodySegment[];
+  textAnnotations: TextRangeAnnotation[];
+  onWikiLinkClick: (target: string) => void;
+  existingTargets: Set<string>;
+  searchQuery?: string;
+}) {
+  if (!segments.length) return null;
+  return (
+    <div className="question-body">
+      {segments.map((segment) => (
+        <section
+          key={`${segment.kind}-${segment.start}-${segment.end}`}
+          className={`question-body-segment question-body-segment--${segment.kind}`}
+        >
+          {segment.kind !== "body" && (
+            <div className="question-body-segment-title">
+              <span />
+              <strong>{segment.kind === "view" ? "<보기>" : segment.label || "조건"}</strong>
+              <span />
+            </div>
+          )}
+          <StructuredTextSegment
+            text={segment.text}
+            start={segment.start}
+            annotations={clipTextAnnotations(textAnnotations, segment.start, segment.end)}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+            searchQuery={searchQuery}
+          />
+        </section>
+      ))}
+    </div>
   );
 }
 
@@ -388,6 +429,7 @@ export function FocusedQuestionView({
     (a): a is Extract<Annotation, { kind: "text" }> => a.kind === "text",
   );
   const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, questionBlock));
+  const bodySegments = questionBodySegmentsForBlock(questionBlock);
   const focusImageFilenames = [
     ...matchedFigures.flatMap((figure) => figure.image ? [figure.image] : []),
     ...questionImages,
@@ -421,17 +463,14 @@ export function FocusedQuestionView({
           </div>
         </header>
 
-        {questionBlock.body && (
-          <div className="focused-question-body">
-            <StructuredTextSegment
-              text={questionBlock.body}
-              start={questionBlock.bodyStart}
-              annotations={clipTextAnnotations(textAnns, questionBlock.bodyStart, questionBlock.bodyEnd)}
-              onWikiLinkClick={onWikiLinkClick}
-              existingTargets={existingTargets}
-            />
-          </div>
-        )}
+        <div className="focused-question-body">
+          <QuestionBodySegments
+            segments={bodySegments}
+            textAnnotations={textAnns}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+          />
+        </div>
 
         {questionBlock.choices.length > 0 && (
           <ol className="focused-question-choices">

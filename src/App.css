@@ -3672,7 +3672,8 @@ button.formula-chip:hover {
 }
 
 .study-paper .sheet-figure-list,
-.study-paper-figures {
+.study-paper-figures,
+.study-paper-diagrams {
   margin: 18px 22px 0;
 }
 
@@ -4165,6 +4166,25 @@ button.formula-chip:hover {
   margin: 28px 0 0;
   padding-top: 16px;
   border-top: 1px solid #e2e8f0;
+}
+
+.study-paper-diagrams {
+  margin: 28px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.study-paper-diagram-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.study-paper-diagram-item {
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .solution-book {

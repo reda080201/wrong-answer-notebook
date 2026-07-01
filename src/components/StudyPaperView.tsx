@@ -1,6 +1,7 @@
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
 import { parseQuestionText } from "../utils/textLayout";
 import AnnotatableQuestion from "./AnnotatableQuestion";
+import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 
 interface StudyPaperViewProps {
@@ -27,6 +28,24 @@ export default function StudyPaperView({
   const blocks = parseQuestionText(entry.question);
   const questionCount = blocks.filter((block) => block.kind === "question").length;
   const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
+  const diagramItems = [
+    ...(entry.answerKey ?? [])
+      .filter((item) => item.diagramSpec || item.diagramType)
+      .map((item) => ({
+        id: `answer-${item.id}`,
+        label: item.questionNumber.trim() ? `${item.questionNumber.trim()}번 시각화` : "문항 시각화",
+        diagramType: item.diagramType,
+        diagramSpec: item.diagramSpec,
+      })),
+    ...(entry.learningBlocks ?? [])
+      .filter((block) => block.diagramSpec || block.diagramType)
+      .map((block) => ({
+        id: `block-${block.id}`,
+        label: block.title || "학습 시각화",
+        diagramType: block.diagramType,
+        diagramSpec: block.diagramSpec,
+      })),
+  ];
 
   return (
     <div className="study-paper">
@@ -62,6 +81,24 @@ export default function StudyPaperView({
           searchQuery={searchQuery}
           zoomableImages
         />
+
+        {diagramItems.length > 0 && (
+          <section className="study-paper-diagrams" aria-label="문제 시각화">
+            <div className="study-paper-section-title">
+              <span />
+              <strong>시각화</strong>
+              <span />
+            </div>
+            <div className="study-paper-diagram-grid">
+              {diagramItems.map((item) => (
+                <div key={item.id} className="study-paper-diagram-item">
+                  <span className="formula-chip">{item.label}</span>
+                  <DiagramCard diagramType={item.diagramType} diagramSpec={item.diagramSpec} />
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {figureImages.length > 0 && (
           <section className="study-paper-figures" aria-label="문제 삽화 확대 보기">
