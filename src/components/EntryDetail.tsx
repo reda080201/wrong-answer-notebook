@@ -774,44 +774,45 @@ export default function EntryDetail({
               수정
             </button>
           </div>
-          <div className="detail-actions-secondary">
-            <button
-              type="button"
-              className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
-              onClick={handleToggleDifficultWithToast}
-              title="어려운 문제 표시"
-            >
-              ★ 어려움
-            </button>
-            {isSheet && (
-              <>
-                <button type="button" className="btn-icon" onClick={onExportMarkdown}>
-                  Markdown
-                </button>
-                <button type="button" className="btn-icon" onClick={onOpenPrint}>
-                  PDF 인쇄
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              className={`btn-icon btn-memo ${memoMode ? "active" : ""}`}
-              onClick={() => setMemoMode((m) => !m)}
-              title="메모·형광펜 모드"
-            >
-              ✎ 메모 {memoMode ? "ON" : "OFF"}
-            </button>
-            <button
-              type="button"
-              className={`btn-icon ${entry.mastered ? "success" : ""}`}
-              onClick={onToggleMastered}
-            >
-              {entry.mastered ? "✓ 완료" : "복습 완료"}
-            </button>
-            <button type="button" className="btn-icon danger" onClick={onDelete}>
-              삭제
-            </button>
-          </div>
+          <details className="detail-more-menu">
+            <summary className="btn-icon">더보기</summary>
+            <div className="detail-more-menu-popover">
+              <button
+                type="button"
+                className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
+                onClick={handleToggleDifficultWithToast}
+              >
+                어려움 표시
+              </button>
+              <button
+                type="button"
+                className={`btn-icon btn-memo ${memoMode ? "active" : ""}`}
+                onClick={() => setMemoMode((m) => !m)}
+              >
+                메모 {memoMode ? "ON" : "OFF"}
+              </button>
+              <button
+                type="button"
+                className={`btn-icon ${entry.mastered ? "success" : ""}`}
+                onClick={onToggleMastered}
+              >
+                {entry.mastered ? "완료 해제" : "복습 완료"}
+              </button>
+              {isSheet && (
+                <>
+                  <button type="button" className="btn-icon" onClick={onExportMarkdown}>
+                    Markdown
+                  </button>
+                  <button type="button" className="btn-icon" onClick={onOpenPrint}>
+                    PDF 인쇄
+                  </button>
+                </>
+              )}
+              <button type="button" className="btn-icon danger" onClick={onDelete}>
+                삭제
+              </button>
+            </div>
+          </details>
         </div>
       </div>
       )}

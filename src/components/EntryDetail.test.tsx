@@ -598,6 +598,11 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     expect(bar).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("맞음으로 기록");
+    expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 다시" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
 
     fireEvent.click(within(bar).getByRole("button", { name: "하단 해설지 모드" }));
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
@@ -607,6 +612,32 @@ describe("EntryDetail sheet layout", () => {
 
     fireEvent.click(within(bar).getByRole("button", { name: "하단 문제지 모드" }));
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+  });
+
+  it("uses NextActionButton for the primary review action and shows saving state", async () => {
+    const onReview = vi.fn(() => new Promise<void>(() => undefined));
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onReview={onReview}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const bar = screen.getByLabelText("학습 빠른 조작");
+    expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("맞음으로 기록");
+    expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 다음 행동" }));
+
+    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "good"));
+    expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("저장 중...");
   });
 
   it("handles keyboard shortcuts for answers, navigation, review, and modes", async () => {
@@ -769,6 +800,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
+    fireEvent.click(screen.getByText("더보기"));
     fireEvent.click(screen.getByRole("button", { name: "Markdown" }));
     fireEvent.click(screen.getByRole("button", { name: "PDF 인쇄" }));
 

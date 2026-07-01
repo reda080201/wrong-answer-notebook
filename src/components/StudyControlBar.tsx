@@ -41,6 +41,14 @@ function NextActionButton({
   onNext,
   onReviewGood,
 }: NextActionButtonProps) {
+  if (reviewSaving !== null) {
+    return (
+      <button type="button" className="study-next-action" aria-label="하단 다음 행동" disabled>
+        저장 중...
+      </button>
+    );
+  }
+
   if (hideAnswers) {
     return (
       <button type="button" className="study-next-action" aria-label="하단 다음 행동" onClick={onToggleAnswers}>
@@ -63,9 +71,8 @@ function NextActionButton({
       className="study-next-action"
       aria-label="하단 다음 행동"
       onClick={onReviewGood}
-      disabled={reviewSaving !== null}
     >
-      맞음
+      맞음으로 기록
     </button>
   );
 }
@@ -94,6 +101,7 @@ export default function StudyControlBar({
   const canMove = isSheet && questionCount > 1;
   const canGoPrevious = canMove && questionIndex > 0;
   const canGoNext = canMove && questionIndex < questionCount - 1;
+  const showSecondaryGood = !isConcept && (hideAnswers || canGoNext);
 
   return (
     <div className="study-control-bar" aria-label="학습 빠른 조작">
@@ -111,46 +119,62 @@ export default function StudyControlBar({
         </div>
       )}
 
-      <div className="study-control-row">
+      <div className="study-control-row study-control-row--primary">
         {!isConcept && (
-          <div className="study-control-group study-control-group--nav">
-            <button type="button" aria-label="하단 이전 문제" onClick={onPrevious} disabled={!canGoPrevious}>
-              이전
-            </button>
+          <button
+            type="button"
+            className="study-control-nav-button"
+            aria-label="하단 이전 문제"
+            onClick={onPrevious}
+            disabled={!canGoPrevious}
+          >
+            이전
+          </button>
+        )}
+
+        {!isConcept && (
+          <div className="study-next-action-wrap">
+            <NextActionButton
+              hideAnswers={hideAnswers}
+              canGoNext={canGoNext}
+              reviewSaving={reviewSaving}
+              onToggleAnswers={onToggleAnswers}
+              onNext={onNext}
+              onReviewGood={() => onReview("good")}
+            />
             <span className="study-control-counter">
               {isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}
             </span>
-            <button type="button" aria-label="하단 다음 문제" onClick={onNext} disabled={!canGoNext}>
-              다음
-            </button>
           </div>
         )}
 
         {!isConcept && (
-          <NextActionButton
-            hideAnswers={hideAnswers}
-            canGoNext={canGoNext}
-            reviewSaving={reviewSaving}
-            onToggleAnswers={onToggleAnswers}
-            onNext={onNext}
-            onReviewGood={() => onReview("good")}
-          />
+          <button
+            type="button"
+            className="study-control-nav-button"
+            aria-label="하단 다음 문제"
+            onClick={onNext}
+            disabled={!canGoNext}
+          >
+            다음
+          </button>
         )}
+      </div>
 
+      <div className="study-control-row study-control-row--secondary">
         {!isConcept && (
-          <div className="study-control-group">
-            <button type="button" aria-label={hideAnswers ? "하단 정답 보기" : "하단 답 가리기"} onClick={onToggleAnswers}>
-              {hideAnswers ? "정답 보기" : "답 가리기"}
-            </button>
+          <div className="study-control-group study-control-group--review">
             <button type="button" aria-label="하단 다시" onClick={() => onReview("again")} disabled={reviewSaving !== null}>
               다시
             </button>
             <button type="button" aria-label="하단 어려움" onClick={() => onReview("hard")} disabled={reviewSaving !== null}>
               어려움
             </button>
-            <button type="button" aria-label="하단 맞음" onClick={() => onReview("good")} disabled={reviewSaving !== null}>
-              맞음
-            </button>
+            {showSecondaryGood && (
+              <button type="button" aria-label="하단 맞음" onClick={() => onReview("good")} disabled={reviewSaving !== null}>
+                맞음
+              </button>
+            )}
             <button
               type="button"
               className={difficult ? "active" : ""}

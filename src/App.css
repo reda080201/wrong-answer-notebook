@@ -515,7 +515,7 @@
 }
 
 .detail-panel--study-controls .detail-scroll {
-  padding-bottom: 8.5rem;
+  padding-bottom: 9.75rem;
 }
 
 .study-control-bar {
@@ -540,6 +540,19 @@
   min-width: 0;
 }
 
+.study-control-row--primary {
+  display: grid;
+  grid-template-columns: minmax(4.2rem, auto) minmax(12rem, 24rem) minmax(4.2rem, auto);
+  justify-content: center;
+  align-items: center;
+}
+
+.study-control-row--secondary {
+  justify-content: center;
+  overflow-x: auto;
+  padding-bottom: 0.05rem;
+}
+
 .study-control-group {
   display: inline-flex;
   align-items: center;
@@ -553,6 +566,7 @@
 
 .study-control-group button,
 .study-memo-toggle,
+.study-control-nav-button,
 .study-next-action,
 .study-quick-memo button {
   min-height: 34px;
@@ -567,6 +581,7 @@
 
 .study-control-group button:hover,
 .study-memo-toggle:hover,
+.study-control-nav-button:hover,
 .study-next-action:hover,
 .study-quick-memo button:hover {
   background: #eef4ff;
@@ -574,6 +589,7 @@
 }
 
 .study-control-group button:disabled,
+.study-control-nav-button:disabled,
 .study-next-action:disabled,
 .study-quick-memo button:disabled {
   cursor: not-allowed;
@@ -588,20 +604,35 @@
 }
 
 .study-control-counter {
+  display: block;
+  margin-top: 0.22rem;
   min-width: 4.4rem;
-  padding: 0 0.35rem;
+  padding: 0;
   color: #64748b;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 900;
   text-align: center;
 }
 
+.study-next-action-wrap {
+  min-width: 0;
+  text-align: center;
+}
+
 .study-next-action {
-  flex: 0 0 auto;
-  min-width: 7.4rem;
+  width: 100%;
+  min-height: 46px;
+  min-width: 13rem;
+  padding: 0.68rem 1.35rem;
   background: #2563eb;
   color: #fff;
+  font-size: 1rem;
   box-shadow: 0 8px 18px rgba(37, 99, 235, 0.18);
+}
+
+.study-control-nav-button {
+  border-color: #d7dee9;
+  background: #fff;
 }
 
 .study-next-action:hover {
@@ -610,7 +641,7 @@
 }
 
 .study-memo-toggle {
-  margin-left: auto;
+  margin-left: 0;
   border-color: #d7dee9;
   background: #fff;
 }
@@ -3035,6 +3066,39 @@ button.formula-chip:hover {
   opacity: 0.92;
 }
 
+.detail-more-menu {
+  position: relative;
+}
+
+.detail-more-menu summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.detail-more-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.detail-more-menu-popover {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 80;
+  display: grid;
+  gap: 0.35rem;
+  min-width: 10.5rem;
+  padding: 0.45rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+}
+
+.detail-more-menu-popover .btn-icon {
+  justify-content: flex-start;
+  width: 100%;
+}
+
 .btn-focus-primary {
   border-color: var(--accent);
   background: var(--accent);
@@ -3046,8 +3110,8 @@ button.formula-chip:hover {
 }
 
 .detail-panel--focus-expanded .detail-scroll {
-  max-width: 980px;
-  padding: 1.25rem 1.5rem 7.5rem;
+  max-width: 900px;
+  padding: 1.1rem 1.25rem 8.5rem;
 }
 
 .detail-panel--focus-expanded .detail-title-block,
@@ -3058,7 +3122,7 @@ button.formula-chip:hover {
 .detail-panel--focus-expanded .focused-sheet-nav {
   top: 0;
   grid-template-columns: auto minmax(0, 1fr) auto auto;
-  max-width: 980px;
+  max-width: 900px;
   margin: 0 auto;
   border: 0;
   border-bottom: 1px solid var(--border);
@@ -3076,17 +3140,17 @@ button.formula-chip:hover {
 }
 
 .detail-panel--focus-expanded .focused-question-view {
-  max-width: 920px;
-  gap: 0.9rem;
+  max-width: 860px;
+  gap: 0.75rem;
 }
 
 .wrong-focus-question {
-  max-width: 920px;
+  max-width: 860px;
   margin: 0 auto;
 }
 
 .detail-panel--focus-expanded .wrong-focus-question .structured-question-text {
-  max-width: 920px;
+  max-width: 860px;
 }
 
 .detail-panel--focus-expanded .focused-passage,
@@ -3100,18 +3164,20 @@ button.formula-chip:hover {
 }
 
 .detail-panel--focus-expanded .focused-question-card {
-  padding: 1.5rem 1.6rem;
+  padding: 1.65rem 1.85rem;
+  border: 1px solid #d7dee9;
+  background: #fff;
 }
 
 .detail-panel--focus-expanded .focused-question-body {
-  max-width: 860px;
-  line-height: 2;
+  max-width: 800px;
+  line-height: 1.95;
 }
 
 .detail-panel--focus-expanded.detail-panel--focus-text-normal .focused-question-body,
 .detail-panel--focus-expanded.detail-panel--focus-text-normal .focused-question-choice,
 .detail-panel--focus-expanded.detail-panel--focus-text-normal .focused-passage {
-  font-size: 1.18rem;
+  font-size: 1.13rem;
 }
 
 .detail-panel--focus-expanded.detail-panel--focus-text-large .focused-question-body,
@@ -3135,7 +3201,7 @@ button.formula-chip:hover {
   border-bottom: 1px solid var(--border);
   border-radius: 0;
   background: transparent;
-  padding: 0.85rem 0.1rem;
+  padding: 0.75rem 0.1rem;
   line-height: 1.8;
 }
 
@@ -3178,7 +3244,7 @@ button.formula-chip:hover {
 }
 
 .detail-panel--focus-expanded .sheet-study-panel {
-  max-width: 920px;
+  max-width: 860px;
   margin: 0 auto;
   background: white;
 }
@@ -3977,11 +4043,11 @@ button.formula-chip:hover {
   border-color: #d5dbe5;
   border-radius: 4px;
   background: #fff;
-  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
 .study-paper-sheet {
-  padding: 22px 34px 34px;
+  padding: 18px 26px 28px;
 }
 
 .study-paper-cover,
@@ -4020,7 +4086,7 @@ button.formula-chip:hover {
 .study-paper .question-text-block--paragraph {
   position: relative;
   margin-bottom: 20px;
-  padding: 18px 22px;
+  padding: 14px 18px;
   border-color: #b8c3d2;
   border-radius: 4px;
   background: #fcfcfb;
@@ -4040,10 +4106,10 @@ button.formula-chip:hover {
 
 .study-paper .question-text-block--question {
   margin-bottom: 24px;
-  padding: 0 0 24px;
+  padding: 0 0 22px;
   border-color: #c9d3df;
   border-radius: 4px;
-  box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+  box-shadow: none;
 }
 
 .study-paper .question-number {
@@ -4073,7 +4139,7 @@ button.formula-chip:hover {
 .study-paper .question-body {
   display: grid;
   gap: 14px;
-  padding: 0 28px;
+  padding: 0 18px;
 }
 
 .study-paper .question-body-segment {
@@ -4082,7 +4148,7 @@ button.formula-chip:hover {
 
 .study-paper .question-body-segment--condition,
 .study-paper .question-body-segment--view {
-  padding: 16px 18px;
+  padding: 13px 15px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #fff;
@@ -4119,7 +4185,7 @@ button.formula-chip:hover {
 .study-paper .question-choices {
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0;
-  margin: 20px 28px 0;
+  margin: 18px 18px 0;
   padding: 0;
   overflow: hidden;
   border-color: #d1d5db;
@@ -4924,31 +4990,39 @@ button.formula-chip:hover {
 
 @media (max-width: 760px) {
   .detail-panel--study-controls .detail-scroll {
-    padding-bottom: 11rem;
+    padding-bottom: 9.5rem;
   }
 
-  .study-control-row {
-    flex-wrap: wrap;
+  .study-control-bar {
+    padding: 0.5rem 0.65rem;
   }
 
-  .study-control-group--nav,
-  .study-control-group--modes {
-    flex: 1 1 100%;
-    justify-content: center;
+  .study-control-row--primary {
+    grid-template-columns: auto minmax(9.5rem, 1fr) auto;
+    gap: 0.4rem;
+    width: 100%;
   }
 
-  .study-control-group:not(.study-control-group--nav):not(.study-control-group--modes) {
-    flex: 1 1 auto;
+  .study-control-row--secondary {
+    justify-content: flex-start;
+    flex-wrap: nowrap;
     overflow-x: auto;
+    scrollbar-width: thin;
   }
 
   .study-next-action {
-    flex: 1 1 9rem;
+    min-width: 0;
+    width: 100%;
+    min-height: 42px;
+    font-size: 0.92rem;
+  }
+
+  .study-control-group {
+    flex: 0 0 auto;
   }
 
   .study-memo-toggle {
-    flex: 1 1 8rem;
-    margin-left: 0;
+    flex: 0 0 auto;
   }
 
   .study-quick-memo {
