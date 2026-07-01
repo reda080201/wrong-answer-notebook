@@ -845,7 +845,7 @@ export default function ImportFromGptModal({
               <div className="import-json-example">
                 <span>권장 JSON 예시</span>
                 <p className="form-hint">
-                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다.
+                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다. diagramSpec은 허용 타입과 짧은 라벨만 사용하고 raw SVG/HTML/base64는 넣지 마세요.
                 </p>
                 <pre>{`{
   "title": "2026 중간고사 오답",
@@ -892,15 +892,16 @@ export default function ImportFromGptModal({
   ],
   "learningBlocks": [
     {
-      "type": "formula",
-      "title": "접선과 미분계수",
-      "content": "$f'(a)$는 x=a에서의 접선 기울기이다.",
+      "type": "diagram",
+      "title": "좌표 그래프 시각화",
+      "content": "그래프의 교점과 절편을 구분한다.",
       "sourceQuestionNumber": "1",
       "diagramSpec": {
-        "type": "derivative-tangent",
-        "title": "접선과 미분계수",
-        "pointLabel": "x=a",
-        "slopeLabel": "기울기 f'(a)"
+        "type": "coordinate-graph",
+        "title": "교점과 절편",
+        "curveLabel": "y=f(x)",
+        "pointLabels": ["교점", "절편"],
+        "interceptLabel": "x절편"
       }
     }
   ],

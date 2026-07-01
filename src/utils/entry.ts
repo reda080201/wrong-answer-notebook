@@ -35,7 +35,14 @@ function isLearningDiagramType(v: unknown): v is LearningDiagramType {
   return (
     v === "derivative-tangent" ||
     v === "absolute-value-corner" ||
-    v === "piecewise-differentiability"
+    v === "piecewise-differentiability" ||
+    v === "coordinate-graph" ||
+    v === "normal-distribution" ||
+    v === "probability-tree" ||
+    v === "venn-diagram" ||
+    v === "geometry-helper" ||
+    v === "trig-unit-circle" ||
+    v === "sequence-flow"
   );
 }
 
@@ -94,13 +101,84 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
+  if (value.type === "piecewise-differentiability") {
+    return {
+      ...base,
+      type: "piecewise-differentiability",
+      boundaryLabel: safeDiagramLabel(value.boundaryLabel),
+      leftLabel: safeDiagramLabel(value.leftLabel),
+      rightLabel: safeDiagramLabel(value.rightLabel),
+      conditionLabel: safeDiagramLabel(value.conditionLabel),
+    };
+  }
+
+  if (value.type === "coordinate-graph") {
+    return {
+      ...base,
+      type: "coordinate-graph",
+      curveLabel: safeDiagramLabel(value.curveLabel),
+      pointLabels: safeDiagramLabelList(value.pointLabels),
+      interceptLabel: safeDiagramLabel(value.interceptLabel),
+    };
+  }
+
+  if (value.type === "normal-distribution") {
+    return {
+      ...base,
+      type: "normal-distribution",
+      meanLabel: safeDiagramLabel(value.meanLabel),
+      sigmaLabels: safeDiagramLabelList(value.sigmaLabels),
+      shadedRegionLabel: safeDiagramLabel(value.shadedRegionLabel),
+    };
+  }
+
+  if (value.type === "probability-tree") {
+    return {
+      ...base,
+      type: "probability-tree",
+      rootLabel: safeDiagramLabel(value.rootLabel),
+      branchLabels: safeDiagramLabelList(value.branchLabels),
+      outcomeLabels: safeDiagramLabelList(value.outcomeLabels),
+    };
+  }
+
+  if (value.type === "venn-diagram") {
+    return {
+      ...base,
+      type: "venn-diagram",
+      setLabels: safeDiagramLabelList(value.setLabels),
+      intersectionLabel: safeDiagramLabel(value.intersectionLabel),
+      outsideLabel: safeDiagramLabel(value.outsideLabel),
+    };
+  }
+
+  if (value.type === "geometry-helper") {
+    return {
+      ...base,
+      type: "geometry-helper",
+      shapeLabel: safeDiagramLabel(value.shapeLabel),
+      angleLabels: safeDiagramLabelList(value.angleLabels),
+      lengthLabels: safeDiagramLabelList(value.lengthLabels),
+    };
+  }
+
+  if (value.type === "trig-unit-circle") {
+    return {
+      ...base,
+      type: "trig-unit-circle",
+      angleLabel: safeDiagramLabel(value.angleLabel),
+      sinLabel: safeDiagramLabel(value.sinLabel),
+      cosLabel: safeDiagramLabel(value.cosLabel),
+      pointLabel: safeDiagramLabel(value.pointLabel),
+    };
+  }
+
   return {
     ...base,
-    type: "piecewise-differentiability",
-    boundaryLabel: safeDiagramLabel(value.boundaryLabel),
-    leftLabel: safeDiagramLabel(value.leftLabel),
-    rightLabel: safeDiagramLabel(value.rightLabel),
-    conditionLabel: safeDiagramLabel(value.conditionLabel),
+    type: "sequence-flow",
+    startLabel: safeDiagramLabel(value.startLabel),
+    ruleLabel: safeDiagramLabel(value.ruleLabel),
+    termLabels: safeDiagramLabelList(value.termLabels),
   };
 }
 
@@ -111,7 +189,8 @@ function isLearningBlockType(v: unknown): v is LearningBlockType {
     v === "routine" ||
     v === "warning" ||
     v === "review" ||
-    v === "checklist"
+    v === "checklist" ||
+    v === "diagram"
   );
 }
 

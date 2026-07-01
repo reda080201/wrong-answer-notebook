@@ -254,16 +254,17 @@ describe("importStudyText", () => {
         question: "1. 함수 문제",
         learningBlocks: [
           {
-            type: "formula",
-            title: "미분계수",
-            content: "$f'(a)$는 접선 기울기",
+            type: "diagram",
+            title: "좌표 그래프",
+            content: "교점과 절편을 비교",
             sourceQuestionNumber: "1",
-            diagramType: "derivative-tangent",
+            diagramType: "coordinate-graph",
             diagramSpec: {
-              type: "derivative-tangent",
-              title: "접선 시각화",
-              pointLabel: "x=a",
-              slopeLabel: "f'(a)",
+              type: "coordinate-graph",
+              title: "교점 시각화",
+              curveLabel: "y=f(x)",
+              pointLabels: ["교점", "절편"],
+              interceptLabel: "x절편",
             },
           },
           {
@@ -316,13 +317,14 @@ describe("importStudyText", () => {
     );
     expect(result.data.learningBlocks).toEqual([
       expect.objectContaining({
-        type: "formula",
-        title: "미분계수",
-        diagramType: "derivative-tangent",
+        type: "diagram",
+        title: "좌표 그래프",
+        diagramType: "coordinate-graph",
         diagramSpec: expect.objectContaining({
-          type: "derivative-tangent",
-          title: "접선 시각화",
-          pointLabel: "x=a",
+          type: "coordinate-graph",
+          title: "교점 시각화",
+          curveLabel: "y=f(x)",
+          pointLabels: ["교점", "절편"],
         }),
       }),
       expect.objectContaining({

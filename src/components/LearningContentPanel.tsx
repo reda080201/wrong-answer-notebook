@@ -24,7 +24,7 @@ function Card({
   title,
   children,
 }: {
-  type: "concept-card" | "formula-card" | "routine-card" | "warning-card" | "review-card" | "checklist-card";
+  type: "concept-card" | "formula-card" | "routine-card" | "warning-card" | "review-card" | "checklist-card" | "diagram-card";
   title: string;
   children: ReactNode;
 }) {
@@ -213,12 +213,13 @@ function ChecklistCard({
   );
 }
 
-function cardTypeForBlock(block: LearningBlock): "concept-card" | "formula-card" | "routine-card" | "warning-card" | "review-card" | "checklist-card" {
+function cardTypeForBlock(block: LearningBlock): "concept-card" | "formula-card" | "routine-card" | "warning-card" | "review-card" | "checklist-card" | "diagram-card" {
   if (block.type === "concept") return "concept-card";
   if (block.type === "formula") return "formula-card";
   if (block.type === "routine") return "routine-card";
   if (block.type === "warning") return "warning-card";
   if (block.type === "review") return "review-card";
+  if (block.type === "diagram") return "diagram-card";
   return "checklist-card";
 }
 

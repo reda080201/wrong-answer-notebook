@@ -59,15 +59,16 @@ describe("LearningContentPanel", () => {
           learningBlocks: [
             {
               id: "block-1",
-              type: "formula",
-              title: "접선 공식",
-              content: "$f'(a)$는 접선의 기울기",
+              type: "diagram",
+              title: "단위원 그림",
+              content: "sin과 cos를 좌표로 연결",
               sourceQuestionNumber: "1",
               diagramSpec: {
-                type: "derivative-tangent",
-                title: "접선 그림",
-                pointLabel: "x=a",
-                slopeLabel: "f'(a)",
+                type: "trig-unit-circle",
+                title: "삼각함수 단위원",
+                angleLabel: "θ",
+                sinLabel: "sin θ",
+                cosLabel: "cos θ",
               },
             },
           ],
@@ -89,8 +90,9 @@ describe("LearningContentPanel", () => {
     expect(screen.getByText("조건 불일치")).toBeInTheDocument();
     expect(screen.getByText("절편과 교점을 혼동")).toBeInTheDocument();
     expect(screen.getByText("교점 정의 복습")).toBeInTheDocument();
-    expect(screen.getByText("접선 공식")).toBeInTheDocument();
-    expect(screen.getByText("접선 그림")).toBeInTheDocument();
+    expect(screen.getByText("단위원 그림")).toBeInTheDocument();
+    expect(screen.getByText("삼각함수 단위원")).toBeInTheDocument();
+    expect(screen.getByText("sin θ")).toBeInTheDocument();
     expect(screen.getByText("구간별 확인")).toBeInTheDocument();
     expect(screen.getByText("x=1")).toBeInTheDocument();
     expect(screen.queryByText("절댓값 뾰족점")).not.toBeInTheDocument();

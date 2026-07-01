@@ -117,7 +117,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - answerKey[].concepts, strategy, steps, choiceJudgements, wrongPoint, reviewPoint는 앱의 "학습 내용" 카드에 직접 표시되므로 가능한 한 비우지 말고 문항별로 구체적으로 채워줘.
 - concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
-- 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입과 짧은 라벨만 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability"뿐이야.
+- 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입과 짧은 라벨만 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability", "coordinate-graph", "normal-distribution", "probability-tree", "venn-diagram", "geometry-helper", "trig-unit-circle", "sequence-flow"뿐이야.
+- 그림 중심 학습 카드는 learningBlocks[].type을 "diagram"으로 쓰고 diagramSpec을 함께 채워줘.
 - diagramType은 구버전 호환용으로만 써도 되고, 가능하면 diagramSpec을 우선 사용해줘.
 - raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
@@ -173,8 +174,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
   ],
   "learningBlocks": [
     {
-      "type": "formula",
-      "title": "접선과 미분계수",
+      "type": "diagram",
+      "title": "접선과 미분계수 시각화",
       "content": "$f'(a)$는 x=a에서의 접선 기울기이다.",
       "sourceQuestionNumber": "1",
       "diagramSpec": {

@@ -38,6 +38,9 @@ describe("gptSolution", () => {
     expect(prompt).toContain("learningBlocks");
     expect(prompt).toContain("diagramSpec");
     expect(prompt).toContain("derivative-tangent");
+    expect(prompt).toContain("coordinate-graph");
+    expect(prompt).toContain("sequence-flow");
+    expect(prompt).toContain('learningBlocks[].type을 "diagram"');
     expect(prompt).toContain("raw HTML, raw SVG, base64 이미지");
     expect(prompt).toContain("pointLabel");
     expect(prompt).toContain("slopeLabel");

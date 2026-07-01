@@ -776,6 +776,11 @@
   background: linear-gradient(180deg, #ffffff 0%, #fff7ed 100%);
 }
 
+.diagram-card {
+  border-color: #bae6fd;
+  background: linear-gradient(180deg, #ffffff 0%, #f0f9ff 100%);
+}
+
 .learning-chip-list {
   display: flex;
   flex-wrap: wrap;

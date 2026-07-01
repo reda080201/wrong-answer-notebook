@@ -330,7 +330,14 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
 function normalizeDiagramType(value: unknown): SheetAnswerItem["diagramType"] {
   return value === "derivative-tangent" ||
     value === "absolute-value-corner" ||
-    value === "piecewise-differentiability"
+    value === "piecewise-differentiability" ||
+    value === "coordinate-graph" ||
+    value === "normal-distribution" ||
+    value === "probability-tree" ||
+    value === "venn-diagram" ||
+    value === "geometry-helper" ||
+    value === "trig-unit-circle" ||
+    value === "sequence-flow"
     ? value
     : undefined;
 }

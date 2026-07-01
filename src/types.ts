@@ -37,7 +37,14 @@ export interface ExplanationPart {
 export type LearningDiagramType =
   | "derivative-tangent"
   | "absolute-value-corner"
-  | "piecewise-differentiability";
+  | "piecewise-differentiability"
+  | "coordinate-graph"
+  | "normal-distribution"
+  | "probability-tree"
+  | "venn-diagram"
+  | "geometry-helper"
+  | "trig-unit-circle"
+  | "sequence-flow";
 
 export interface DiagramSpecBase {
   type: LearningDiagramType;
@@ -70,10 +77,67 @@ export interface PiecewiseDifferentiabilitySpec extends DiagramSpecBase {
   conditionLabel?: string;
 }
 
+export interface CoordinateGraphSpec extends DiagramSpecBase {
+  type: "coordinate-graph";
+  curveLabel?: string;
+  pointLabels?: string[];
+  interceptLabel?: string;
+}
+
+export interface NormalDistributionSpec extends DiagramSpecBase {
+  type: "normal-distribution";
+  meanLabel?: string;
+  sigmaLabels?: string[];
+  shadedRegionLabel?: string;
+}
+
+export interface ProbabilityTreeSpec extends DiagramSpecBase {
+  type: "probability-tree";
+  rootLabel?: string;
+  branchLabels?: string[];
+  outcomeLabels?: string[];
+}
+
+export interface VennDiagramSpec extends DiagramSpecBase {
+  type: "venn-diagram";
+  setLabels?: string[];
+  intersectionLabel?: string;
+  outsideLabel?: string;
+}
+
+export interface GeometryHelperSpec extends DiagramSpecBase {
+  type: "geometry-helper";
+  shapeLabel?: string;
+  angleLabels?: string[];
+  lengthLabels?: string[];
+}
+
+export interface TrigUnitCircleSpec extends DiagramSpecBase {
+  type: "trig-unit-circle";
+  angleLabel?: string;
+  sinLabel?: string;
+  cosLabel?: string;
+  pointLabel?: string;
+}
+
+export interface SequenceFlowSpec extends DiagramSpecBase {
+  type: "sequence-flow";
+  startLabel?: string;
+  ruleLabel?: string;
+  termLabels?: string[];
+}
+
 export type DiagramSpec =
   | DerivativeTangentSpec
   | AbsoluteValueCornerSpec
-  | PiecewiseDifferentiabilitySpec;
+  | PiecewiseDifferentiabilitySpec
+  | CoordinateGraphSpec
+  | NormalDistributionSpec
+  | ProbabilityTreeSpec
+  | VennDiagramSpec
+  | GeometryHelperSpec
+  | TrigUnitCircleSpec
+  | SequenceFlowSpec;
 
 export type LearningBlockType =
   | "concept"
@@ -81,7 +145,8 @@ export type LearningBlockType =
   | "routine"
   | "warning"
   | "review"
-  | "checklist";
+  | "checklist"
+  | "diagram";
 
 export interface LearningBlock {
   id: string;

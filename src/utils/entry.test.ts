@@ -112,17 +112,17 @@ describe("normalizeEntry", () => {
       learningBlocks: [
         {
           id: "block-1",
-          type: "formula",
+          type: "diagram",
           title: "접선 공식",
           content: "$f'(a)$ 확인",
           sourceQuestionNumber: "1",
-          diagramType: "derivative-tangent",
+          diagramType: "coordinate-graph",
           diagramSpec: {
-            type: "derivative-tangent",
-            title: "접선 그림",
-            pointLabel: "x=a",
-            functionLabel: "y=f(x)",
-            slopeLabel: "f'(a)",
+            type: "coordinate-graph",
+            title: "좌표 그래프",
+            curveLabel: "y=f(x)",
+            pointLabels: ["A", "<svg>제거</svg>", "data:image/png;base64,AAAA"],
+            interceptLabel: "x절편",
             highlights: ["순간변화율", "<svg>제거</svg>", "data:image/png;base64,AAAA"],
           },
         },
@@ -163,13 +163,15 @@ describe("normalizeEntry", () => {
 
     expect(entry.learningBlocks).toEqual([
       expect.objectContaining({
-        type: "formula",
+        type: "diagram",
           title: "접선 공식",
-          diagramType: "derivative-tangent",
+          diagramType: "coordinate-graph",
           diagramSpec: expect.objectContaining({
-            type: "derivative-tangent",
-            title: "접선 그림",
-            pointLabel: "x=a",
+            type: "coordinate-graph",
+            title: "좌표 그래프",
+            curveLabel: "y=f(x)",
+            pointLabels: ["A"],
+            interceptLabel: "x절편",
             highlights: ["순간변화율"],
           }),
         }),
@@ -212,5 +214,50 @@ describe("normalizeEntry", () => {
     expect(normalizeDiagramSpec({ type: "derivative-tangent", title: "<svg>bad</svg>" })).toEqual(
       expect.objectContaining({ type: "derivative-tangent", title: undefined }),
     );
+  });
+
+  it("normalizes every supported extended diagram spec", () => {
+    expect(normalizeDiagramSpec({
+      type: "normal-distribution",
+      meanLabel: "평균",
+      sigmaLabels: ["-1σ", "+1σ"],
+      shadedRegionLabel: "P(X>a)",
+    })).toEqual(expect.objectContaining({
+      type: "normal-distribution",
+      meanLabel: "평균",
+      sigmaLabels: ["-1σ", "+1σ"],
+      shadedRegionLabel: "P(X>a)",
+    }));
+    expect(normalizeDiagramSpec({
+      type: "probability-tree",
+      rootLabel: "시작",
+      branchLabels: ["A", "B"],
+      outcomeLabels: ["성공", "실패"],
+    })).toEqual(expect.objectContaining({ type: "probability-tree", rootLabel: "시작" }));
+    expect(normalizeDiagramSpec({
+      type: "venn-diagram",
+      setLabels: ["A", "B"],
+      intersectionLabel: "A∩B",
+      outsideLabel: "전체-A",
+    })).toEqual(expect.objectContaining({ type: "venn-diagram", intersectionLabel: "A∩B" }));
+    expect(normalizeDiagramSpec({
+      type: "geometry-helper",
+      shapeLabel: "삼각형",
+      angleLabels: ["A", "B", "C"],
+      lengthLabels: ["a", "b", "c"],
+    })).toEqual(expect.objectContaining({ type: "geometry-helper", angleLabels: ["A", "B", "C"] }));
+    expect(normalizeDiagramSpec({
+      type: "trig-unit-circle",
+      angleLabel: "θ",
+      sinLabel: "sin θ",
+      cosLabel: "cos θ",
+      pointLabel: "(cos θ, sin θ)",
+    })).toEqual(expect.objectContaining({ type: "trig-unit-circle", angleLabel: "θ" }));
+    expect(normalizeDiagramSpec({
+      type: "sequence-flow",
+      startLabel: "a1",
+      ruleLabel: "×2+1",
+      termLabels: ["a1", "a2", "a3"],
+    })).toEqual(expect.objectContaining({ type: "sequence-flow", termLabels: ["a1", "a2", "a3"] }));
   });
 });

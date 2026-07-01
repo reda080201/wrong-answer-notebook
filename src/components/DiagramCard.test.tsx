@@ -12,6 +12,27 @@ describe("DiagramCard", () => {
 
     rerender(<DiagramCard diagramType="piecewise-differentiability" />);
     expect(screen.getByRole("figure", { name: "구간별 미분가능성 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="coordinate-graph" />);
+    expect(screen.getByRole("figure", { name: "좌표 그래프 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="normal-distribution" />);
+    expect(screen.getByRole("figure", { name: "정규분포 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="probability-tree" />);
+    expect(screen.getByRole("figure", { name: "확률나무 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="venn-diagram" />);
+    expect(screen.getByRole("figure", { name: "벤 다이어그램 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="geometry-helper" />);
+    expect(screen.getByRole("figure", { name: "기하 보조선 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="trig-unit-circle" />);
+    expect(screen.getByRole("figure", { name: "삼각함수 단위원 다이어그램" })).toBeInTheDocument();
+
+    rerender(<DiagramCard diagramType="sequence-flow" />);
+    expect(screen.getByRole("figure", { name: "수열 흐름 다이어그램" })).toBeInTheDocument();
   });
 
   it("does not render unsupported diagram types", () => {
@@ -43,5 +64,26 @@ describe("DiagramCard", () => {
     expect(screen.getByText("기울기 4")).toBeInTheDocument();
     expect(screen.getByText("순간변화율 확인")).toBeInTheDocument();
     expect(screen.queryByText("절댓값 뾰족점")).not.toBeInTheDocument();
+  });
+
+  it("renders labels for extended diagram specs", () => {
+    render(
+      <DiagramCard
+        diagramSpec={{
+          type: "coordinate-graph",
+          title: "교점 그래프",
+          curveLabel: "y=g(x)",
+          pointLabels: ["교점", "절편"],
+          interceptLabel: "x절편",
+          highlights: ["좌표축과 교점 확인"],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("figure", { name: "교점 그래프 다이어그램" })).toBeInTheDocument();
+    expect(screen.getByText("y=g(x)")).toBeInTheDocument();
+    expect(screen.getByText("교점")).toBeInTheDocument();
+    expect(screen.getByText("x절편")).toBeInTheDocument();
+    expect(screen.getByText("좌표축과 교점 확인")).toBeInTheDocument();
   });
 });
