@@ -34,6 +34,65 @@ export interface ExplanationPart {
   images: string[];
 }
 
+export type LearningDiagramType =
+  | "derivative-tangent"
+  | "absolute-value-corner"
+  | "piecewise-differentiability";
+
+export interface DiagramSpecBase {
+  type: LearningDiagramType;
+  title?: string;
+  xLabel?: string;
+  yLabel?: string;
+  highlights?: string[];
+}
+
+export interface DerivativeTangentSpec extends DiagramSpecBase {
+  type: "derivative-tangent";
+  pointLabel?: string;
+  functionLabel?: string;
+  tangentLabel?: string;
+  slopeLabel?: string;
+}
+
+export interface AbsoluteValueCornerSpec extends DiagramSpecBase {
+  type: "absolute-value-corner";
+  cornerLabel?: string;
+  leftSlopeLabel?: string;
+  rightSlopeLabel?: string;
+}
+
+export interface PiecewiseDifferentiabilitySpec extends DiagramSpecBase {
+  type: "piecewise-differentiability";
+  boundaryLabel?: string;
+  leftLabel?: string;
+  rightLabel?: string;
+  conditionLabel?: string;
+}
+
+export type DiagramSpec =
+  | DerivativeTangentSpec
+  | AbsoluteValueCornerSpec
+  | PiecewiseDifferentiabilitySpec;
+
+export type LearningBlockType =
+  | "concept"
+  | "formula"
+  | "routine"
+  | "warning"
+  | "review"
+  | "checklist";
+
+export interface LearningBlock {
+  id: string;
+  type: LearningBlockType;
+  title: string;
+  content: string;
+  sourceQuestionNumber?: string;
+  diagramType?: LearningDiagramType;
+  diagramSpec?: DiagramSpec;
+}
+
 export interface SheetAnswerItem {
   id: string;
   questionNumber: string;
@@ -48,6 +107,8 @@ export interface SheetAnswerItem {
   importantPoints: string[];
   difficulty?: Difficulty;
   concepts?: string[];
+  diagramType?: LearningDiagramType;
+  diagramSpec?: DiagramSpec;
   needsReview?: boolean;
   sourceNote?: string;
 }
@@ -230,6 +291,7 @@ export interface WrongAnswerEntry {
   mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
   checklist?: ChecklistItem[];
+  learningBlocks?: LearningBlock[];
   /** @deprecated 마이그레이션용 — explanationParts로 이전됨 */
   explanation?: string;
   /** @deprecated */

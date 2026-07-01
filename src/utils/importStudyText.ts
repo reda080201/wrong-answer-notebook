@@ -1,6 +1,6 @@
 import type { ChecklistItem, Difficulty, EntryFormData, ExplanationPart, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
-import { normalizeAnswerKey, normalizeFigures } from "./entry";
+import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks } from "./entry";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import {
   normalizeImportAudit,
@@ -32,6 +32,7 @@ interface ImportJsonShape {
   importantNotes?: unknown;
   answerKey?: unknown;
   figures?: unknown;
+  learningBlocks?: unknown;
   concepts?: unknown;
   difficulty?: unknown;
   difficultyByQuestion?: unknown;
@@ -87,6 +88,7 @@ export function parseImportedStudyText(
             correctAnswer: "",
             explanationParts: [],
             answerKey: [],
+            learningBlocks: normalizeLearningBlocks(parsed.learningBlocks),
             mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
             annotations: [],
             mastered: false,
@@ -108,6 +110,7 @@ export function parseImportedStudyText(
       const concepts = normalizeTextList(parsed.concepts);
       const questionWithConceptLinks = suggestConceptLinks(cleanQuestionText(question), concepts);
       const figures = normalizeImportFigures(parsed.figures);
+      const learningBlocks = normalizeLearningBlocks(parsed.learningBlocks);
       const memo = removeRejectedNotes(mergeMemoAndImportantNotes(getString(parsed.memo), [
         ...importantNotes.globalNotes,
         ...concepts.map((concept) => `연결 개념: [[${concept}]]`),
@@ -129,6 +132,7 @@ export function parseImportedStudyText(
           tags: normalizeTags(parsed.tags),
           answerKey,
           figures,
+          learningBlocks,
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
@@ -163,6 +167,7 @@ export function parseImportedStudyText(
       memo: mergeMemoAndImportantNotes(markdown.memo, markdown.importantNotes),
       answerKey: markdown.answerKey,
       figures: [],
+      learningBlocks: [],
       rejectedNotes: [],
       mistakeAnalysis: { causes: [] },
       annotations: [],
@@ -322,9 +327,19 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
   return undefined;
 }
 
+function normalizeDiagramType(value: unknown): SheetAnswerItem["diagramType"] {
+  return value === "derivative-tangent" ||
+    value === "absolute-value-corner" ||
+    value === "piecewise-differentiability"
+    ? value
+    : undefined;
+}
+
 interface QuestionMetadata {
   difficulty?: Difficulty;
   concepts?: string[];
+  diagramType?: SheetAnswerItem["diagramType"];
+  diagramSpec?: SheetAnswerItem["diagramSpec"];
   notes?: string;
   importantPoints?: string[];
   strategy?: string;
@@ -354,6 +369,8 @@ function metadataFromObject(value: Record<string, unknown>): QuestionMetadata {
   return {
     difficulty: normalizeDifficulty(value.difficulty),
     concepts: normalizeTextList(value.concepts),
+    diagramType: normalizeDiagramType(value.diagramType),
+    diagramSpec: normalizeDiagramSpec(value.diagramSpec),
     notes: getString(value.notes) || getString(value.memo) || getString(value.note),
     importantPoints: normalizeTextList(value.importantPoints),
     strategy: getString(value.strategy),
@@ -398,6 +415,8 @@ function applyQuestionMetadata(answerKey: SheetAnswerItem[], raw: unknown, quest
           ? meta.difficulty
           : item.difficulty,
       concepts: meta?.concepts?.length ? meta.concepts : item.concepts,
+      diagramType: item.diagramType ?? meta?.diagramType,
+      diagramSpec: item.diagramSpec ?? meta?.diagramSpec,
       notes: item.notes?.trim() ? item.notes : meta?.notes?.trim() || item.notes,
       importantPoints: meta?.importantPoints?.length ? meta.importantPoints : item.importantPoints,
       strategy: item.strategy?.trim() ? item.strategy : meta?.strategy?.trim() || item.strategy,

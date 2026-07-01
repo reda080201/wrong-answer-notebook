@@ -252,6 +252,31 @@ describe("importStudyText", () => {
     const result = parseImportedStudyText(
       JSON.stringify({
         question: "1. 함수 문제",
+        learningBlocks: [
+          {
+            type: "formula",
+            title: "미분계수",
+            content: "$f'(a)$는 접선 기울기",
+            sourceQuestionNumber: "1",
+            diagramType: "derivative-tangent",
+            diagramSpec: {
+              type: "derivative-tangent",
+              title: "접선 시각화",
+              pointLabel: "x=a",
+              slopeLabel: "f'(a)",
+            },
+          },
+          {
+            type: "warning",
+            title: "미지원 다이어그램",
+            content: "표시하지 않음",
+            diagramType: "raw-svg",
+            diagramSpec: {
+              type: "raw-svg",
+              title: "<svg>bad</svg>",
+            },
+          },
+        ],
         answerKey: [
           {
             questionNumber: "1",
@@ -262,6 +287,13 @@ describe("importStudyText", () => {
             choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
             wrongPoint: "절편과 교점을 혼동",
             reviewPoint: "교점 정의 복습",
+            diagramType: "piecewise-differentiability",
+            diagramSpec: {
+              type: "piecewise-differentiability",
+              title: "구간별 미분가능",
+              boundaryLabel: "x=1",
+              conditionLabel: "연속과 좌우미분계수",
+            },
           },
         ],
       }),
@@ -274,8 +306,32 @@ describe("importStudyText", () => {
         choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
         wrongPoint: "절편과 교점을 혼동",
         reviewPoint: "교점 정의 복습",
+        diagramType: "piecewise-differentiability",
+        diagramSpec: expect.objectContaining({
+          type: "piecewise-differentiability",
+          title: "구간별 미분가능",
+          boundaryLabel: "x=1",
+        }),
       }),
     );
+    expect(result.data.learningBlocks).toEqual([
+      expect.objectContaining({
+        type: "formula",
+        title: "미분계수",
+        diagramType: "derivative-tangent",
+        diagramSpec: expect.objectContaining({
+          type: "derivative-tangent",
+          title: "접선 시각화",
+          pointLabel: "x=a",
+        }),
+      }),
+      expect.objectContaining({
+        type: "warning",
+        title: "미지원 다이어그램",
+        diagramType: undefined,
+        diagramSpec: undefined,
+      }),
+    ]);
   });
 
   it("keeps problem-specific notes on answer key items", () => {

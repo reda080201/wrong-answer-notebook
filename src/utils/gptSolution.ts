@@ -6,11 +6,15 @@ export type GptSolutionApplyMode = "fill" | "overwrite";
 
 type GptSolutionSource = Pick<
   WrongAnswerEntry,
-  "entryKind" | "subject" | "title" | "question" | "questionImages" | "answerKey" | "correctAnswer" | "explanationParts" | "memo"
+  "entryKind" | "subject" | "title" | "question" | "questionImages" | "answerKey" | "correctAnswer" | "explanationParts" | "memo" | "learningBlocks"
 >;
 
 function hasText(value: string | undefined): boolean {
   return Boolean(value?.trim());
+}
+
+function cloneDiagramSpec<T extends SheetAnswerItem["diagramSpec"]>(spec: T): T {
+  return spec ? ({ ...spec, highlights: spec.highlights ? [...spec.highlights] : undefined } as T) : spec;
 }
 
 function firstAnswer(imported: Partial<EntryFormData>): SheetAnswerItem | undefined {
@@ -23,6 +27,8 @@ function firstAnswer(imported: Partial<EntryFormData>): SheetAnswerItem | undefi
       item.choiceJudgements?.length ||
       item.wrongPoint?.trim() ||
       item.reviewPoint?.trim() ||
+      item.diagramType ||
+      item.diagramSpec ||
       item.notes?.trim() ||
       item.importantPoints.length,
   );
@@ -37,6 +43,8 @@ function explanationFromAnswer(answer: SheetAnswerItem | undefined): Explanation
     ...(answer.choiceJudgements ?? []).map((item) => [item.marker, item.text].filter(Boolean).join(": ")),
     answer.wrongPoint?.trim(),
     answer.reviewPoint?.trim(),
+    answer.diagramType ? `다이어그램: ${answer.diagramType}` : undefined,
+    answer.diagramSpec ? `다이어그램: ${answer.diagramSpec.title || answer.diagramSpec.type}` : undefined,
     answer.notes?.trim(),
     ...answer.importantPoints.map((point) => `- ${point}`),
   ].filter(Boolean);
@@ -79,6 +87,8 @@ function mergeAnswerKey(
       notes: current.notes?.trim() ? current.notes : incoming.notes,
       importantPoints: current.importantPoints.length ? current.importantPoints : incoming.importantPoints,
       concepts: current.concepts?.length ? current.concepts : incoming.concepts,
+      diagramType: current.diagramType ?? incoming.diagramType,
+      diagramSpec: current.diagramSpec ?? incoming.diagramSpec,
       difficulty: current.difficulty ?? incoming.difficulty,
       needsReview: current.needsReview || incoming.needsReview,
       sourceNote: current.sourceNote?.trim() ? current.sourceNote : incoming.sourceNote,
@@ -107,6 +117,9 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - answerKey[].concepts, strategy, steps, choiceJudgements, wrongPoint, reviewPoint는 앱의 "학습 내용" 카드에 직접 표시되므로 가능한 한 비우지 말고 문항별로 구체적으로 채워줘.
 - concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
+- 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입과 짧은 라벨만 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability"뿐이야.
+- diagramType은 구버전 호환용으로만 써도 되고, 가능하면 diagramSpec을 우선 사용해줘.
+- raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
 - 핵심 개념, 자주 하는 실수, 검산 포인트는 문항별이면 answerKey[].importantPoints에 넣어줘.
 - ${imageGuide}
@@ -146,10 +159,33 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["핵심 개념", "자주 하는 실수"],
       "concepts": ["일차함수", "조건 해석"],
+      "diagramSpec": {
+        "type": "derivative-tangent",
+        "title": "접선과 미분계수",
+        "pointLabel": "x=a",
+        "functionLabel": "y=f(x)",
+        "tangentLabel": "접선",
+        "slopeLabel": "기울기 f'(a)",
+        "highlights": ["접선 기울기와 순간변화율을 연결"]
+      },
       "needsReview": false
     }
+  ],
+  "learningBlocks": [
+    {
+      "type": "formula",
+      "title": "접선과 미분계수",
+      "content": "$f'(a)$는 x=a에서의 접선 기울기이다.",
+      "sourceQuestionNumber": "1",
+      "diagramSpec": {
+        "type": "derivative-tangent",
+        "title": "접선과 미분계수",
+        "pointLabel": "x=a",
+        "slopeLabel": "기울기 f'(a)"
+      }
+    }
   ]
-}
+} 
 
 현재 항목:
 - 제목: ${entry.title || "(제목 없음)"}
@@ -187,6 +223,10 @@ export function mergeGptSolutionIntoEntry(
         : base.explanationParts,
     memo: shouldOverwrite || !hasText(base.memo) ? imported.memo ?? base.memo : base.memo,
     answerKey: mergeAnswerKey(base.answerKey, imported.answerKey, mode),
+    learningBlocks:
+      shouldOverwrite || !(base.learningBlocks?.length)
+        ? imported.learningBlocks ?? base.learningBlocks
+        : base.learningBlocks,
     importAudit: imported.importAudit ?? base.importAudit,
     rejectedNotes: imported.rejectedNotes?.length ? imported.rejectedNotes : base.rejectedNotes,
     questionImages: base.questionImages,
@@ -216,10 +256,16 @@ export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
       ...item,
       importantPoints: [...item.importantPoints],
       concepts: item.concepts ? [...item.concepts] : [],
+      diagramType: item.diagramType,
+      diagramSpec: cloneDiagramSpec(item.diagramSpec),
       steps: item.steps ? [...item.steps] : undefined,
       choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : undefined,
     })),
     figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
+    learningBlocks: (entry.learningBlocks ?? []).map((block) => ({
+      ...block,
+      diagramSpec: cloneDiagramSpec(block.diagramSpec),
+    })),
     importAudit: entry.importAudit ? {
       ...entry.importAudit,
       expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],

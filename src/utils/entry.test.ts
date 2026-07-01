@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../types";
-import { getAllImageFilenames, normalizeEntry } from "./entry";
+import { getAllImageFilenames, normalizeDiagramSpec, normalizeEntry } from "./entry";
 
 function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
   return {
@@ -104,5 +104,113 @@ describe("normalizeEntry", () => {
       uncertainQuestionNumbers: ["2"],
     }));
     expect(entry.rejectedNotes).toEqual(["학생 계산"]);
+  });
+
+  it("normalizes learning blocks and diagram types safely", () => {
+    const entry = normalizeEntry(rawEntry({
+      entryKind: "problem_sheet",
+      learningBlocks: [
+        {
+          id: "block-1",
+          type: "formula",
+          title: "접선 공식",
+          content: "$f'(a)$ 확인",
+          sourceQuestionNumber: "1",
+          diagramType: "derivative-tangent",
+          diagramSpec: {
+            type: "derivative-tangent",
+            title: "접선 그림",
+            pointLabel: "x=a",
+            functionLabel: "y=f(x)",
+            slopeLabel: "f'(a)",
+            highlights: ["순간변화율", "<svg>제거</svg>", "data:image/png;base64,AAAA"],
+          },
+        },
+        {
+          id: "block-2",
+          type: "unknown" as never,
+          title: "잘못된 다이어그램",
+          content: "",
+          diagramType: "raw-svg" as never,
+        },
+      ],
+      answerKey: [
+        {
+          id: "answer-1",
+          questionNumber: "1",
+          answer: "②",
+          explanation: "",
+          importantPoints: [],
+          diagramType: "absolute-value-corner",
+          diagramSpec: {
+            type: "absolute-value-corner",
+            title: "절댓값 코너",
+            cornerLabel: "x=0",
+            leftSlopeLabel: "좌기울기 -1",
+            rightSlopeLabel: "우기울기 1",
+          },
+        },
+        {
+          id: "answer-2",
+          questionNumber: "2",
+          answer: "③",
+          explanation: "",
+          importantPoints: [],
+          diagramType: "unsafe" as never,
+        },
+      ],
+    }));
+
+    expect(entry.learningBlocks).toEqual([
+      expect.objectContaining({
+        type: "formula",
+          title: "접선 공식",
+          diagramType: "derivative-tangent",
+          diagramSpec: expect.objectContaining({
+            type: "derivative-tangent",
+            title: "접선 그림",
+            pointLabel: "x=a",
+            highlights: ["순간변화율"],
+          }),
+        }),
+      expect.objectContaining({
+        type: "concept",
+        title: "잘못된 다이어그램",
+        diagramType: undefined,
+      }),
+    ]);
+    expect(entry.answerKey?.[0].diagramType).toBe("absolute-value-corner");
+    expect(entry.answerKey?.[0].diagramSpec).toEqual(expect.objectContaining({
+      type: "absolute-value-corner",
+      cornerLabel: "x=0",
+    }));
+    expect(entry.answerKey?.[1].diagramType).toBeUndefined();
+  });
+
+  it("normalizes diagram specs without accepting raw markup or unsupported types", () => {
+    expect(normalizeDiagramSpec({
+      type: "piecewise-differentiability",
+      title: "구간별 확인",
+      boundaryLabel: "x=1",
+      leftLabel: "좌",
+      rightLabel: "우",
+      conditionLabel: "연속과 미분계수",
+      highlights: ["함숫값 비교", "<script>alert(1)</script>"],
+      extra: "<svg></svg>",
+    })).toEqual({
+      type: "piecewise-differentiability",
+      title: "구간별 확인",
+      xLabel: undefined,
+      yLabel: undefined,
+      highlights: ["함숫값 비교"],
+      boundaryLabel: "x=1",
+      leftLabel: "좌",
+      rightLabel: "우",
+      conditionLabel: "연속과 미분계수",
+    });
+    expect(normalizeDiagramSpec({ type: "raw-svg", title: "x" })).toBeUndefined();
+    expect(normalizeDiagramSpec({ type: "derivative-tangent", title: "<svg>bad</svg>" })).toEqual(
+      expect.objectContaining({ type: "derivative-tangent", title: undefined }),
+    );
   });
 });

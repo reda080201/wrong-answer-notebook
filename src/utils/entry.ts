@@ -1,9 +1,13 @@
 import { v4 as uuidv4 } from "uuid";
 import type {
   ChecklistItem,
+  DiagramSpec,
   Difficulty,
   EntryKind,
   ExplanationPart,
+  LearningBlock,
+  LearningBlockType,
+  LearningDiagramType,
   MistakeCauseType,
   ReviewEvent,
   ReviewResult,
@@ -25,6 +29,90 @@ function isDifficulty(v: unknown): v is Difficulty {
 
 function normalizeAnswerDifficulty(v: unknown): Exclude<Difficulty, "none"> | undefined {
   return v === "high" || v === "medium" || v === "low" ? v : undefined;
+}
+
+function isLearningDiagramType(v: unknown): v is LearningDiagramType {
+  return (
+    v === "derivative-tangent" ||
+    v === "absolute-value-corner" ||
+    v === "piecewise-differentiability"
+  );
+}
+
+const DIAGRAM_SPEC_LABEL_LIMIT = 80;
+const DIAGRAM_SPEC_LIST_LIMIT = 6;
+
+function safeDiagramLabel(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > DIAGRAM_SPEC_LABEL_LIMIT) return undefined;
+  if (/<\/?(script|svg|iframe|object|embed|img|html|body)\b/i.test(trimmed)) return undefined;
+  if (/data:image\/|base64,/i.test(trimmed)) return undefined;
+  return trimmed;
+}
+
+function safeDiagramLabelList(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const items = value
+    .map(safeDiagramLabel)
+    .filter((item): item is string => Boolean(item))
+    .slice(0, DIAGRAM_SPEC_LIST_LIMIT);
+  return items.length ? items : undefined;
+}
+
+export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (!isLearningDiagramType(value.type)) return undefined;
+
+  const base = {
+    type: value.type,
+    title: safeDiagramLabel(value.title),
+    xLabel: safeDiagramLabel(value.xLabel),
+    yLabel: safeDiagramLabel(value.yLabel),
+    highlights: safeDiagramLabelList(value.highlights),
+  };
+
+  if (value.type === "derivative-tangent") {
+    return {
+      ...base,
+      type: "derivative-tangent",
+      pointLabel: safeDiagramLabel(value.pointLabel),
+      functionLabel: safeDiagramLabel(value.functionLabel),
+      tangentLabel: safeDiagramLabel(value.tangentLabel),
+      slopeLabel: safeDiagramLabel(value.slopeLabel),
+    };
+  }
+
+  if (value.type === "absolute-value-corner") {
+    return {
+      ...base,
+      type: "absolute-value-corner",
+      cornerLabel: safeDiagramLabel(value.cornerLabel),
+      leftSlopeLabel: safeDiagramLabel(value.leftSlopeLabel),
+      rightSlopeLabel: safeDiagramLabel(value.rightSlopeLabel),
+    };
+  }
+
+  return {
+    ...base,
+    type: "piecewise-differentiability",
+    boundaryLabel: safeDiagramLabel(value.boundaryLabel),
+    leftLabel: safeDiagramLabel(value.leftLabel),
+    rightLabel: safeDiagramLabel(value.rightLabel),
+    conditionLabel: safeDiagramLabel(value.conditionLabel),
+  };
+}
+
+function isLearningBlockType(v: unknown): v is LearningBlockType {
+  return (
+    v === "concept" ||
+    v === "formula" ||
+    v === "routine" ||
+    v === "warning" ||
+    v === "review" ||
+    v === "checklist"
+  );
 }
 
 function isFigureSource(v: unknown): v is SheetFigureItem["source"] {
@@ -164,6 +252,8 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       importantPoints: normalizeImportantPoints(item.importantPoints),
       difficulty: normalizeAnswerDifficulty(item.difficulty),
       concepts: normalizeImportantPoints(item.concepts),
+      diagramType: isLearningDiagramType(item.diagramType) ? item.diagramType : undefined,
+      diagramSpec: normalizeDiagramSpec(item.diagramSpec),
       needsReview: Boolean(item.needsReview),
       sourceNote: `${item.sourceNote ?? ""}`.trim(),
     }))
@@ -178,8 +268,29 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
         item.wrongPoint ||
         item.reviewPoint ||
         item.notes ||
-        item.importantPoints.length,
+        item.importantPoints.length ||
+        item.diagramType ||
+        item.diagramSpec,
     );
+}
+
+export function normalizeLearningBlocks(raw: unknown): LearningBlock[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item) => Boolean(item && typeof item === "object"))
+    .map((item) => item as Partial<LearningBlock>)
+    .map((item) => ({
+      id: item.id || uuidv4(),
+      type: isLearningBlockType(item.type) ? item.type : "concept",
+      title: `${item.title ?? ""}`.trim(),
+      content: `${item.content ?? ""}`.trim(),
+      sourceQuestionNumber: item.sourceQuestionNumber
+        ? `${item.sourceQuestionNumber}`.trim()
+        : undefined,
+      diagramType: isLearningDiagramType(item.diagramType) ? item.diagramType : undefined,
+      diagramSpec: normalizeDiagramSpec(item.diagramSpec),
+    }))
+    .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec);
 }
 
 export function normalizeFigures(raw: unknown): SheetFigureItem[] {
@@ -258,6 +369,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
 
   const answerKey = normalizeAnswerKey(rest.answerKey);
   const figures = normalizeFigures(rest.figures);
+  const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
 
   return {
     ...rest,
@@ -275,6 +387,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     tags: Array.isArray(rest.tags) ? rest.tags : [],
     answerKey,
     figures,
+    learningBlocks,
     importAudit: rest.importAudit
       ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures })
       : undefined,

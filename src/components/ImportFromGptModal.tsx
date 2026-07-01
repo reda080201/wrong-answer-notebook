@@ -57,11 +57,23 @@ function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
           ...item,
           importantPoints: [...item.importantPoints],
           concepts: item.concepts ? [...item.concepts] : [],
+          diagramType: item.diagramType,
+          diagramSpec: item.diagramSpec
+            ? { ...item.diagramSpec, highlights: item.diagramSpec.highlights ? [...item.diagramSpec.highlights] : undefined }
+            : undefined,
           steps: item.steps ? [...item.steps] : [],
           choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
+    learningBlocks: data.learningBlocks
+      ? data.learningBlocks.map((block) => ({
+          ...block,
+          diagramSpec: block.diagramSpec
+            ? { ...block.diagramSpec, highlights: block.diagramSpec.highlights ? [...block.diagramSpec.highlights] : undefined }
+            : undefined,
+        }))
+      : [],
     importAudit: data.importAudit ? {
       ...data.importAudit,
       expectedQuestionNumbers: [...data.importAudit.expectedQuestionNumbers],
@@ -833,7 +845,7 @@ export default function ImportFromGptModal({
               <div className="import-json-example">
                 <span>권장 JSON 예시</span>
                 <p className="form-hint">
-                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint는 학습 내용칸 카드에 바로 반영됩니다.
+                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다.
                 </p>
                 <pre>{`{
   "title": "2026 중간고사 오답",
@@ -865,8 +877,31 @@ export default function ImportFromGptModal({
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["보기 ②와 ③의 차이 확인"],
       "concepts": ["함수"],
+      "diagramSpec": {
+        "type": "derivative-tangent",
+        "title": "접선과 미분계수",
+        "pointLabel": "x=a",
+        "functionLabel": "y=f(x)",
+        "tangentLabel": "접선",
+        "slopeLabel": "기울기 f'(a)",
+        "highlights": ["순간변화율과 접선 기울기 연결"]
+      },
       "needsReview": false,
       "sourceNote": "답안지 1번과 연결"
+    }
+  ],
+  "learningBlocks": [
+    {
+      "type": "formula",
+      "title": "접선과 미분계수",
+      "content": "$f'(a)$는 x=a에서의 접선 기울기이다.",
+      "sourceQuestionNumber": "1",
+      "diagramSpec": {
+        "type": "derivative-tangent",
+        "title": "접선과 미분계수",
+        "pointLabel": "x=a",
+        "slopeLabel": "기울기 f'(a)"
+      }
     }
   ],
   "figures": [

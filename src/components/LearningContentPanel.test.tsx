@@ -45,6 +45,30 @@ describe("LearningContentPanel", () => {
               reviewPoint: "교점 정의 복습",
               importantPoints: ["보기 비교"],
               concepts: ["함수", "그래프"],
+              diagramType: "absolute-value-corner",
+              diagramSpec: {
+                type: "piecewise-differentiability",
+                title: "구간별 확인",
+                boundaryLabel: "x=1",
+                leftLabel: "왼쪽",
+                rightLabel: "오른쪽",
+                conditionLabel: "값과 기울기 비교",
+              },
+            },
+          ],
+          learningBlocks: [
+            {
+              id: "block-1",
+              type: "formula",
+              title: "접선 공식",
+              content: "$f'(a)$는 접선의 기울기",
+              sourceQuestionNumber: "1",
+              diagramSpec: {
+                type: "derivative-tangent",
+                title: "접선 그림",
+                pointLabel: "x=a",
+                slopeLabel: "f'(a)",
+              },
             },
           ],
           mistakeAnalysis: {
@@ -65,6 +89,11 @@ describe("LearningContentPanel", () => {
     expect(screen.getByText("조건 불일치")).toBeInTheDocument();
     expect(screen.getByText("절편과 교점을 혼동")).toBeInTheDocument();
     expect(screen.getByText("교점 정의 복습")).toBeInTheDocument();
+    expect(screen.getByText("접선 공식")).toBeInTheDocument();
+    expect(screen.getByText("접선 그림")).toBeInTheDocument();
+    expect(screen.getByText("구간별 확인")).toBeInTheDocument();
+    expect(screen.getByText("x=1")).toBeInTheDocument();
+    expect(screen.queryByText("절댓값 뾰족점")).not.toBeInTheDocument();
     expect(screen.getByText("조건 해석 실패")).toBeInTheDocument();
     expect(screen.getByText("조건 표시하기")).toBeInTheDocument();
   });
@@ -86,6 +115,14 @@ describe("LearningContentPanel", () => {
               importantPoints: [],
             },
           ],
+          learningBlocks: [
+            {
+              id: "block-1",
+              type: "warning",
+              title: "외부 HTML 금지",
+              content: "<script>alert(2)</script>",
+            },
+          ],
         }}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
@@ -94,6 +131,7 @@ describe("LearningContentPanel", () => {
 
     expect(container.querySelector(".math-fragment")).toBeInTheDocument();
     expect(screen.getByText("<script>alert(1)</script>")).toBeInTheDocument();
+    expect(screen.getByText("<script>alert(2)</script>")).toBeInTheDocument();
     expect(container.querySelector("script")).not.toBeInTheDocument();
   });
 

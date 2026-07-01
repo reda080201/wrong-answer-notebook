@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
-import type { ChecklistItem, MistakeCause, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { ChecklistItem, LearningBlock, MistakeCause, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import { LinkifiedText } from "../utils/wikiLinks";
+import DiagramCard from "./DiagramCard";
 import MathText from "./MathText";
 
 interface LearningContentPanelProps {
@@ -62,16 +63,17 @@ function ConceptCard({
 }
 
 function StrategyCard({ items }: { items: SheetAnswerItem[] }) {
-  const strategies = items.filter((item) => item.strategy?.trim());
+  const strategies = items.filter((item) => item.strategy?.trim() || item.diagramType || item.diagramSpec);
   if (!strategies.length) return null;
   return (
     <Card type="formula-card" title="공식·풀이 전략">
       <div className="learning-line-list">
         {strategies.map((item) => (
-          <p key={`${item.id}-strategy`}>
+          <div key={`${item.id}-strategy`} className="learning-line-item">
             <span className="formula-chip">{answerLabel(item)}</span>
-            <MathText text={item.strategy ?? ""} />
-          </p>
+            {item.strategy?.trim() && <MathText text={item.strategy} />}
+            <DiagramCard diagramType={item.diagramType} diagramSpec={item.diagramSpec} />
+          </div>
         ))}
       </div>
     </Card>
@@ -211,6 +213,48 @@ function ChecklistCard({
   );
 }
 
+function cardTypeForBlock(block: LearningBlock): "concept-card" | "formula-card" | "routine-card" | "warning-card" | "review-card" | "checklist-card" {
+  if (block.type === "concept") return "concept-card";
+  if (block.type === "formula") return "formula-card";
+  if (block.type === "routine") return "routine-card";
+  if (block.type === "warning") return "warning-card";
+  if (block.type === "review") return "review-card";
+  return "checklist-card";
+}
+
+function LearningBlocksCard({
+  blocks,
+  onWikiLinkClick,
+  existingTargets,
+}: {
+  blocks: LearningBlock[];
+  onWikiLinkClick: (target: string) => void;
+  existingTargets: Set<string>;
+}) {
+  if (!blocks.length) return null;
+  return (
+    <>
+      {blocks.map((block) => (
+        <Card key={block.id} type={cardTypeForBlock(block)} title={block.title || "학습 블록"}>
+          {block.sourceQuestionNumber && (
+            <span className="formula-chip">{block.sourceQuestionNumber}번</span>
+          )}
+          {block.content.trim() && (
+            <div className="learning-block-content">
+              <LinkifiedText
+                text={block.content}
+                onLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+              />
+            </div>
+          )}
+          <DiagramCard diagramType={block.diagramType} diagramSpec={block.diagramSpec} />
+        </Card>
+      ))}
+    </>
+  );
+}
+
 export default function LearningContentPanel({
   entry,
   onWikiLinkClick,
@@ -225,13 +269,17 @@ export default function LearningContentPanel({
       item.wrongPoint?.trim() ||
       item.reviewPoint?.trim() ||
       item.importantPoints.length ||
+      item.diagramType ||
+      item.diagramSpec ||
       item.needsReview,
   );
   const concepts = unique(answerItems.flatMap((item) => item.concepts ?? []));
   const causes = entry.mistakeAnalysis?.causes ?? [];
+  const learningBlocks = entry.learningBlocks ?? [];
   const hasAnyContent =
     concepts.length ||
     answerItems.length ||
+    learningBlocks.length ||
     causes.length ||
     entry.memo.trim() ||
     (entry.checklist?.length ?? 0) > 0 ||
@@ -254,6 +302,11 @@ export default function LearningContentPanel({
           />
           <WarningCard items={answerItems} causes={causes} />
           <ReviewCard entry={entry} items={answerItems} />
+          <LearningBlocksCard
+            blocks={learningBlocks}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+          />
           <ChecklistCard
             memo={entry.memo}
             checklist={entry.checklist ?? []}

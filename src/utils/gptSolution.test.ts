@@ -35,6 +35,12 @@ describe("gptSolution", () => {
     expect(prompt).toContain("needsReview");
     expect(prompt).toContain("answerKey[].notes");
     expect(prompt).toContain("strategy, steps, choiceJudgements, wrongPoint, reviewPoint");
+    expect(prompt).toContain("learningBlocks");
+    expect(prompt).toContain("diagramSpec");
+    expect(prompt).toContain("derivative-tangent");
+    expect(prompt).toContain("raw HTML, raw SVG, base64 이미지");
+    expect(prompt).toContain("pointLabel");
+    expect(prompt).toContain("slopeLabel");
     expect(prompt).toContain("첨부 이미지 1개");
     expect(prompt).toContain("tags 필드는 만들지 마");
     expect(prompt).not.toContain('"tags"');
