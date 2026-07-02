@@ -54,6 +54,7 @@ const ANSWER_VIEW_KEY = "wrong-answer-answer-view";
 const ANSWER_HIDE_KEY = "wrong-answer-answer-hidden";
 const FOCUS_TEXT_SIZE_KEY = "wrong-answer-focus-text-size";
 const FOCUS_PANEL_KEY = "wrong-answer-focus-last-panel";
+const STUDY_CONTROL_COMPACT_KEY = "wrong-answer-study-control-compact";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("ko-KR", {
@@ -86,6 +87,13 @@ function loadFocusTextSize(): FocusTextSize {
 function loadFocusPanel(): StudyPanel {
   const saved = localStorage.getItem(FOCUS_PANEL_KEY);
   return saved === "answer" || saved === "explanation" || saved === "notes" || saved === "images" ? saved : "question";
+}
+
+function loadStudyControlCompact(): boolean {
+  const saved = localStorage.getItem(STUDY_CONTROL_COMPACT_KEY);
+  if (saved === "true") return true;
+  if (saved === "false") return false;
+  return typeof window !== "undefined" && window.matchMedia?.("(max-height: 760px)").matches;
 }
 
 function normalizeQuestionNumber(value: string): string {
@@ -139,6 +147,7 @@ export default function EntryDetail({
   const [newChecklistText, setNewChecklistText] = useState("");
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
   const [quickMemoText, setQuickMemoText] = useState("");
+  const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
@@ -230,6 +239,10 @@ export default function EntryDetail({
   useEffect(() => {
     localStorage.setItem(FOCUS_PANEL_KEY, activeStudyPanel);
   }, [activeStudyPanel]);
+
+  useEffect(() => {
+    localStorage.setItem(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
+  }, [studyControlCompact]);
 
   useEffect(() => {
     setActiveSearchIndex(0);
@@ -735,7 +748,7 @@ export default function EntryDetail({
 
   return (
     <div
-      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""}`}
+      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
     >
       {!isFocusExpanded && (
       <div className="detail-toolbar">
@@ -1509,6 +1522,8 @@ export default function EntryDetail({
           detailViewMode={detailViewMode}
           difficult={entry.difficult}
           reviewSaving={reviewSaving}
+          compact={studyControlCompact}
+          showModeControls={focusMode !== "closed"}
           quickMemoOpen={quickMemoOpen}
           quickMemoText={quickMemoText}
           onPrevious={() => moveFocusedQuestion(-1)}
@@ -1517,6 +1532,7 @@ export default function EntryDetail({
           onReview={(result) => void handleReviewResult(result)}
           onToggleDifficult={handleToggleDifficultWithToast}
           onModeChange={handleStudyModeChange}
+          onCompactChange={setStudyControlCompact}
           onQuickMemoOpenChange={setQuickMemoOpen}
           onQuickMemoTextChange={setQuickMemoText}
           onQuickMemoSubmit={() => void handleQuickMemoSubmit()}

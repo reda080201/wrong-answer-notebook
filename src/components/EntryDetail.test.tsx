@@ -582,7 +582,7 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByLabelText("오답 집중 보기")).toBeInTheDocument();
   });
 
-  it("shows the sticky study control bar and switches modes from it", () => {
+  it("shows the sticky study control bar and keeps normal mode switching in the top tabs", () => {
     render(
       <EntryDetail
         entry={sheetEntry}
@@ -604,19 +604,51 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).getByRole("button", { name: "하단 다시" })).toHaveTextContent("↺ 다시");
     expect(within(bar).getByRole("button", { name: "하단 어려움" })).toHaveTextContent("★ 어려움");
     expect(within(bar).getByRole("button", { name: "하단 북마크" })).toHaveTextContent("☆ 북마크");
-    expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
-    expect(within(bar).getByRole("button", { name: "하단 해설지 모드" })).toHaveTextContent("해설");
+    expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문제지" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "해설지" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toHaveTextContent("메모");
     expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 해설지 모드" }));
+    fireEvent.click(screen.getByRole("button", { name: "해설지" }));
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 분석 모드" }));
+    fireEvent.click(screen.getByRole("button", { name: "분석" }));
     expect(screen.getByText("학습 분석")).toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 문제지 모드" }));
+    fireEvent.click(screen.getByRole("button", { name: "문제지" }));
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
+    expect(within(bar).getByRole("button", { name: "하단 해설지 모드" })).toHaveTextContent("해설");
+  });
+
+  it("uses compact study controls with a tools drawer and persists the preference", () => {
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const bar = screen.getByLabelText("학습 빠른 조작");
+    fireEvent.click(within(bar).getByRole("button", { name: "하단바 컴팩트 모드" }));
+
+    expect(localStorage.getItem("wrong-answer-study-control-compact")).toBe("true");
+    expect(within(bar).getByRole("button", { name: "하단 도구 펼치기" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 빠른 메모" })).not.toBeInTheDocument();
+
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toBeInTheDocument();
+    fireEvent.click(within(bar).getByRole("button", { name: "하단바 펼침 모드" }));
+    expect(localStorage.getItem("wrong-answer-study-control-compact")).toBe("false");
   });
 
   it("uses NextActionButton for the primary review action and shows saving state", async () => {

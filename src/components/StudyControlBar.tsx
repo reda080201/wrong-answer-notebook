@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ReviewResult } from "../types";
 
 type DetailViewMode = "paper" | "solution" | "analysis";
@@ -20,6 +21,8 @@ interface StudyControlBarProps {
   detailViewMode: DetailViewMode;
   difficult: boolean;
   reviewSaving: ReviewResult | null;
+  compact: boolean;
+  showModeControls: boolean;
   quickMemoOpen: boolean;
   quickMemoText: string;
   onPrevious: () => void;
@@ -28,6 +31,7 @@ interface StudyControlBarProps {
   onReview: (result: ReviewResult) => void;
   onToggleDifficult: () => void;
   onModeChange: (mode: DetailViewMode) => void;
+  onCompactChange: (compact: boolean) => void;
   onQuickMemoOpenChange: (open: boolean) => void;
   onQuickMemoTextChange: (text: string) => void;
   onQuickMemoSubmit: () => void;
@@ -86,6 +90,8 @@ export default function StudyControlBar({
   detailViewMode,
   difficult,
   reviewSaving,
+  compact,
+  showModeControls,
   quickMemoOpen,
   quickMemoText,
   onPrevious,
@@ -94,6 +100,7 @@ export default function StudyControlBar({
   onReview,
   onToggleDifficult,
   onModeChange,
+  onCompactChange,
   onQuickMemoOpenChange,
   onQuickMemoTextChange,
   onQuickMemoSubmit,
@@ -102,24 +109,25 @@ export default function StudyControlBar({
   const canGoPrevious = canMove && questionIndex > 0;
   const canGoNext = canMove && questionIndex < questionCount - 1;
   const showSecondaryGood = !isConcept && (hideAnswers || canGoNext);
+  const [compactToolsOpen, setCompactToolsOpen] = useState(false);
 
-  return (
-    <div className="study-control-bar" aria-label="학습 빠른 조작">
-      {quickMemoOpen && (
-        <div className="study-quick-memo">
-          <textarea
-            value={quickMemoText}
-            onChange={(event) => onQuickMemoTextChange(event.target.value)}
-            placeholder="빠른 메모를 한 줄로 남기기"
-            aria-label="빠른 메모 입력"
-          />
-          <button type="button" onClick={onQuickMemoSubmit} disabled={!quickMemoText.trim()}>
-            메모 저장
-          </button>
-        </div>
-      )}
+  const renderQuickMemo = () =>
+    quickMemoOpen ? (
+      <div className="study-quick-memo">
+        <textarea
+          value={quickMemoText}
+          onChange={(event) => onQuickMemoTextChange(event.target.value)}
+          placeholder="빠른 메모를 한 줄로 남기기"
+          aria-label="빠른 메모 입력"
+        />
+        <button type="button" onClick={onQuickMemoSubmit} disabled={!quickMemoText.trim()}>
+          메모 저장
+        </button>
+      </div>
+    ) : null;
 
-      <div className="study-control-row study-control-row--primary">
+  const renderPrimaryRow = () => (
+    <div className={`study-control-row study-control-row--primary ${compact ? "study-control-row--compact" : ""}`}>
         {!isConcept && (
           <button
             type="button"
@@ -159,9 +167,27 @@ export default function StudyControlBar({
             다음
           </button>
         )}
-      </div>
 
-      <div className="study-control-row study-control-row--secondary">
+        {compact && (
+          <button
+            type="button"
+            className={`study-control-tools-button ${compactToolsOpen ? "active" : ""}`}
+            aria-label="하단 도구 펼치기"
+            aria-expanded={compactToolsOpen}
+            onClick={() => setCompactToolsOpen((open) => !open)}
+          >
+            도구
+          </button>
+        )}
+      </div>
+  );
+
+  const renderSecondaryRow = (isCompactTools = false) => (
+    <div
+      className={`study-control-row study-control-row--secondary ${
+        isCompactTools ? "study-control-row--compact-tools" : ""
+      }`}
+    >
         {!isConcept && (
           <div className="study-control-group study-control-group--review">
             <button type="button" aria-label="하단 다시" onClick={() => onReview("again")} disabled={reviewSaving !== null}>
@@ -187,34 +213,36 @@ export default function StudyControlBar({
           </div>
         )}
 
-        <div className="study-control-group study-control-group--modes">
-          <button
-            type="button"
-            className={detailViewMode === "paper" ? "active" : ""}
-            aria-label="하단 문제지 모드"
-            onClick={() => onModeChange("paper")}
-          >
-            문제
-          </button>
-          <button
-            type="button"
-            className={detailViewMode === "solution" ? "active" : ""}
-            aria-label="하단 해설지 모드"
-            onClick={() => onModeChange("solution")}
-            disabled={isConcept}
-          >
-            해설
-          </button>
-          <button
-            type="button"
-            className={detailViewMode === "analysis" ? "active" : ""}
-            aria-label="하단 분석 모드"
-            onClick={() => onModeChange("analysis")}
-            disabled={isConcept}
-          >
-            분석
-          </button>
-        </div>
+        {showModeControls && (
+          <div className="study-control-group study-control-group--modes">
+            <button
+              type="button"
+              className={detailViewMode === "paper" ? "active" : ""}
+              aria-label="하단 문제지 모드"
+              onClick={() => onModeChange("paper")}
+            >
+              문제
+            </button>
+            <button
+              type="button"
+              className={detailViewMode === "solution" ? "active" : ""}
+              aria-label="하단 해설지 모드"
+              onClick={() => onModeChange("solution")}
+              disabled={isConcept}
+            >
+              해설
+            </button>
+            <button
+              type="button"
+              className={detailViewMode === "analysis" ? "active" : ""}
+              aria-label="하단 분석 모드"
+              onClick={() => onModeChange("analysis")}
+              disabled={isConcept}
+            >
+              분석
+            </button>
+          </div>
+        )}
 
         <button
           type="button"
@@ -224,7 +252,26 @@ export default function StudyControlBar({
         >
           메모
         </button>
+        <button
+          type="button"
+          className="study-compact-toggle"
+          aria-label={compact ? "하단바 펼침 모드" : "하단바 컴팩트 모드"}
+          onClick={() => {
+            const nextCompact = !compact;
+            onCompactChange(nextCompact);
+            if (!nextCompact) setCompactToolsOpen(false);
+          }}
+        >
+          {compact ? "펼침" : "컴팩트"}
+        </button>
       </div>
+  );
+
+  return (
+    <div className={`study-control-bar ${compact ? "study-control-bar--compact" : ""}`} aria-label="학습 빠른 조작">
+      {renderQuickMemo()}
+      {renderPrimaryRow()}
+      {compact ? compactToolsOpen && renderSecondaryRow(true) : renderSecondaryRow()}
     </div>
   );
 }
