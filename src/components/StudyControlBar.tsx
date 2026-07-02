@@ -165,14 +165,14 @@ export default function StudyControlBar({
         {!isConcept && (
           <div className="study-control-group study-control-group--review">
             <button type="button" aria-label="하단 다시" onClick={() => onReview("again")} disabled={reviewSaving !== null}>
-              다시
+              ↺ 다시
             </button>
             <button type="button" aria-label="하단 어려움" onClick={() => onReview("hard")} disabled={reviewSaving !== null}>
-              어려움
+              ★ 어려움
             </button>
             {showSecondaryGood && (
               <button type="button" aria-label="하단 맞음" onClick={() => onReview("good")} disabled={reviewSaving !== null}>
-                맞음
+                ✓ 맞음
               </button>
             )}
             <button
@@ -180,9 +180,9 @@ export default function StudyControlBar({
               className={difficult ? "active" : ""}
               onClick={onToggleDifficult}
               aria-label={difficult ? "하단 북마크 해제" : "하단 북마크"}
-              aria-pressed={difficult}
-            >
-              {difficult ? "북마크 해제" : "북마크"}
+            aria-pressed={difficult}
+          >
+              {difficult ? "★ 북마크" : "☆ 북마크"}
             </button>
           </div>
         )}
@@ -194,7 +194,7 @@ export default function StudyControlBar({
             aria-label="하단 문제지 모드"
             onClick={() => onModeChange("paper")}
           >
-            문제지
+            문제
           </button>
           <button
             type="button"
@@ -203,7 +203,7 @@ export default function StudyControlBar({
             onClick={() => onModeChange("solution")}
             disabled={isConcept}
           >
-            해설지
+            해설
           </button>
           <button
             type="button"
@@ -222,7 +222,7 @@ export default function StudyControlBar({
           aria-label="하단 빠른 메모"
           onClick={() => onQuickMemoOpenChange(!quickMemoOpen)}
         >
-          빠른 메모
+          메모
         </button>
       </div>
     </div>

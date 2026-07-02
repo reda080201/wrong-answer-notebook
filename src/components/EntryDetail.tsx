@@ -361,6 +361,9 @@ export default function EntryDetail({
   const focusedAnswer = focusedQuestion
     ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, focusedQuestion))
     : undefined;
+  const isFocusedQuestionShort = focusedQuestion
+    ? `${focusedQuestion.body} ${focusedQuestion.choices.map((choice) => choice.text).join(" ")}`.trim().length < 360
+    : entry.question.trim().length < 360;
   const focusedFigureImageFilenames = focusedQuestion
     ? (entry.figures ?? [])
       .filter((figure) => {
@@ -392,6 +395,28 @@ export default function EntryDetail({
     (activeStudyPanel === "explanation" && !isSheet && hasExplanationContent(entry)) ||
     (activeStudyPanel === "notes" && (isSheet ? focusedHasNotes : wrongAnswerHasNotes)) ||
     (activeStudyPanel === "images" && (isSheet ? focusedImageFilenames.length > 0 : entry.questionImages.length > 0));
+
+  const focusedStudyHints = (() => {
+    if (!isFocusExpanded || !isFocusedQuestionShort) return [];
+    const hints: Array<{ label: string; text: string }> = [];
+    if (focusedAnswer?.reviewPoint?.trim()) hints.push({ label: "다음 복습", text: focusedAnswer.reviewPoint.trim() });
+    if (focusedAnswer?.wrongPoint?.trim()) hints.push({ label: "오답 포인트", text: focusedAnswer.wrongPoint.trim() });
+    if (focusedAnswer?.notes?.trim()) hints.push({ label: "문제 메모", text: focusedAnswer.notes.trim() });
+    for (const point of focusedAnswer?.importantPoints ?? []) {
+      if (point.trim()) hints.push({ label: "핵심", text: point.trim() });
+      if (hints.length >= 4) break;
+    }
+    if (!hints.length && entry.memo.trim()) {
+      hints.push({ label: "최근 메모", text: entry.memo.trim().slice(0, 160) });
+    }
+    return hints.slice(0, 4);
+  })();
+
+  const nextActionHint = hideAnswers
+    ? "정답을 먼저 확인하세요."
+    : isSheet && focusedQuestionIndex < questionAnchors.length - 1
+      ? "다음 문제로 넘어갈 차례입니다."
+      : "이 문제를 맞음으로 기록할 수 있습니다.";
 
   useEffect(() => {
     if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
@@ -643,6 +668,30 @@ export default function EntryDetail({
           </ul>
         )}
       </article>
+    );
+  };
+
+  const renderFocusStudyHints = () => {
+    if (!isFocusExpanded || !isFocusedQuestionShort) return null;
+    return (
+      <aside className="focus-study-hints" aria-label="집중 보기 학습 힌트">
+        <header>
+          <span>다음 행동</span>
+          <strong>{nextActionHint}</strong>
+        </header>
+        {focusedStudyHints.length > 0 ? (
+          <div className="focus-study-hint-list">
+            {focusedStudyHints.map((hint) => (
+              <p key={`${hint.label}-${hint.text}`}>
+                <span>{hint.label}</span>
+                <MathText text={hint.text} />
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p className="focus-study-hint-empty">짧은 문제는 정답 확인 후 바로 복습 결과를 남겨도 좋습니다.</p>
+        )}
+      </aside>
     );
   };
 
@@ -996,6 +1045,7 @@ export default function EntryDetail({
                   existingTargets={existingTargets}
                   showImages={activeStudyPanel === "images"}
                 />
+                {renderFocusStudyHints()}
                 <div className="focus-panel-tabs" aria-label="집중 보기 패널">
                   <button
                     type="button"
@@ -1052,6 +1102,7 @@ export default function EntryDetail({
                   zoomableImages={activeStudyPanel === "images"}
                 />
               </div>
+              {renderFocusStudyHints()}
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
                 <button
                   type="button"
