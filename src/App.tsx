@@ -4,6 +4,7 @@ import "./App.css";
 import EntryDetail from "./components/EntryDetail";
 import EntryForm from "./components/EntryForm";
 import ImportFromGptModal from "./components/ImportFromGptModal";
+import LearningImportModal from "./components/LearningImportModal";
 import QuickConceptPanel from "./components/QuickConceptPanel";
 import ReviewPanel from "./components/ReviewPanel";
 import SubjectList from "./components/SubjectList";
@@ -32,6 +33,8 @@ import type {
   EntryKind,
   EntryTemplate,
   IntegrityReport,
+  LearningBlock,
+  LectureSourceType,
   ListFilter,
   MemoTemplate,
   PromptTemplate,
@@ -90,12 +93,21 @@ function getEntryCardPreview(entry: WrongAnswerEntry): string {
   const text =
     entry.entryKind === "concept"
       ? entry.question.trim() || entry.memo.trim()
+      : entry.entryKind === "lecture"
+        ? (entry.learningBlocks ?? []).map((block) => `${block.title} ${block.content}`).join("\n").trim()
       : "";
   return text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .find(Boolean)
     ?.slice(0, 90) ?? "";
+}
+
+function entryKindName(kind: EntryKind): string {
+  if (kind === "concept") return "개념";
+  if (kind === "problem_sheet") return "시험지";
+  if (kind === "lecture") return "특강자료";
+  return "오답";
 }
 
 type DifficultyFilter = "all" | Difficulty;
@@ -146,6 +158,7 @@ export default function App() {
   const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showLearningImportModal, setShowLearningImportModal] = useState(false);
   const [importMode, setImportMode] = useState<"import" | "solution">("import");
   const [solutionSourceEntry, setSolutionSourceEntry] = useState<WrongAnswerEntry | undefined>();
   const [importedInitialData, setImportedInitialData] = useState<Partial<EntryFormData> | undefined>();
@@ -190,6 +203,8 @@ export default function App() {
             item.explanation,
             ...item.importantPoints,
           ]),
+          ...(e.learningBlocks ?? []).flatMap((block) => [block.title, block.content]),
+          ...(e.concepts ?? []),
           e.memo,
           e.subject,
           ...e.tags,
@@ -474,6 +489,64 @@ export default function App() {
     });
   };
 
+  const handleLearningBlocksChange = async (entry: WrongAnswerEntry, blocks: LearningBlock[] = []) => {
+    await patchEntry(entry.id, {
+      learningBlocks: blocks,
+    });
+  };
+
+  const createLectureEntry = async (
+    blocks: LearningBlock[],
+    meta: { title: string; sourceType: LectureSourceType },
+    linkedEntryIds: string[] = [],
+  ) => {
+    const subject: Subject =
+      subjectFilter && SUBJECTS.includes(subjectFilter as Subject)
+        ? (subjectFilter as Subject)
+        : selected && SUBJECTS.includes(selected.subject as Subject)
+          ? (selected.subject as Subject)
+          : "기타";
+    const id = await addEntry({
+      subject,
+      title: meta.title.trim() || "특강자료",
+      question: "",
+      questionImages: [],
+      entryKind: "lecture",
+      difficult: false,
+      difficulty: "none",
+      annotations: [],
+      myAnswer: "",
+      correctAnswer: "",
+      explanationParts: [],
+      memo: "",
+      tags: ["특강자료"],
+      answerKey: [],
+      figures: [],
+      mistakeAnalysis: { causes: [] },
+      mastered: false,
+      learningBlocks: blocks,
+      sourceType: meta.sourceType,
+      linkedEntryIds,
+      concepts: [],
+      checklist: [],
+    });
+    setActiveSection("lecture");
+    setSelectedId(id);
+  };
+
+  const handleLearningImportApply = async (
+    blocks: LearningBlock[],
+    meta: { title: string; sourceType: LectureSourceType },
+  ) => {
+    if (activeSection === "lecture" || !selected) {
+      await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
+      return;
+    }
+    await patchEntry(selected.id, {
+      learningBlocks: [...(selected.learningBlocks ?? []), ...blocks],
+    });
+  };
+
   const runIntegrity = async () => {
     const nativeReport = await runNativeIntegrityCheck().catch(() => null);
     const report = nativeReport ?? runClientIntegrityCheck(entries, settings);
@@ -521,6 +594,10 @@ export default function App() {
   };
 
   const openNew = () => {
+    if (activeSection === "lecture") {
+      setShowLearningImportModal(true);
+      return;
+    }
     setPrefilledTitle("");
     setImportedInitialData(undefined);
     setEditingEntry(undefined);
@@ -584,6 +661,7 @@ export default function App() {
               ["wrong_answer", "📕 오답노트"],
               ["concept", "💡 개념노트"],
               ["problem_sheet", "📄 시험지함"],
+              ["lecture", "🎓 특강자료"],
             ] as const
           ).map(([key, label]) => (
             <button
@@ -856,11 +934,16 @@ export default function App() {
             </div>
           )}
           <button type="button" className="btn-new" onClick={openNew}>
-            + 새 {activeSection === "concept" ? "개념" : activeSection === "problem_sheet" ? "시험지" : "오답"} 추가
+            + 새 {entryKindName(activeSection)} 추가
           </button>
           {(activeSection === "problem_sheet" || activeSection === "concept") && (
             <button type="button" className="btn-new btn-new--secondary" onClick={openImport}>
               GPT 결과 가져오기
+            </button>
+          )}
+          {activeSection === "lecture" && (
+            <button type="button" className="btn-new btn-new--secondary" onClick={() => setShowLearningImportModal(true)}>
+              HTML/MD/JSON 가져오기
             </button>
           )}
         </div>
@@ -884,7 +967,7 @@ export default function App() {
           <input
             type="search"
             className="search-input"
-            placeholder={activeSection === "concept" ? "개념명, 설명, 태그로 검색…" : "문제, 답, 태그로 검색…"}
+            placeholder={activeSection === "concept" ? "개념명, 설명, 태그로 검색…" : activeSection === "lecture" ? "특강 제목, 개념, 내용 검색…" : "문제, 답, 태그로 검색…"}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -963,7 +1046,7 @@ export default function App() {
             ) : filtered.length === 0 ? (
               <div className="list-empty">
                 {entries.filter(e => e.entryKind === activeSection).length === 0
-                  ? `아직 등록된 ${activeSection === "concept" ? "개념이" : activeSection === "problem_sheet" ? "시험지가" : "오답이"} 없습니다.\n하단의 버튼으로 추가해 보세요.`
+                  ? `아직 등록된 ${entryKindName(activeSection)}가 없습니다.\n하단의 버튼으로 추가해 보세요.`
                   : "검색 결과가 없습니다."}
               </div>
             ) : (
@@ -986,6 +1069,11 @@ export default function App() {
                     {e.entryKind === "concept" && (
                       <span className="entry-mini-badge entry-mini-badge--concept">
                         개념
+                      </span>
+                    )}
+                    {e.entryKind === "lecture" && (
+                      <span className="entry-mini-badge entry-mini-badge--lecture">
+                        특강
                       </span>
                     )}
                     {e.difficulty && e.difficulty !== "none" && (
@@ -1041,16 +1129,19 @@ export default function App() {
               onOpenPrint={() => openPrintableEntry(selected)}
               onReview={handleReview}
               onQuickMemo={handleQuickMemo}
+              onLearningBlocksChange={handleLearningBlocksChange}
+              onImportLecture={() => setShowLearningImportModal(true)}
+              onQuestionTextChange={(entry, text) => patchEntry(entry.id, { question: text })}
             />
           ) : (
             <div className="detail-panel empty-state">
               <span className="icon">
-                {activeSection === "concept" ? "💡" : activeSection === "problem_sheet" ? "📄" : "📓"}
+                {activeSection === "concept" ? "💡" : activeSection === "problem_sheet" ? "📄" : activeSection === "lecture" ? "🎓" : "📓"}
               </span>
               <p>
-                왼쪽 목록에서 {activeSection === "concept" ? "개념을" : activeSection === "problem_sheet" ? "시험지를" : "오답을"} 선택하거나
+                왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />
-                새 {activeSection === "concept" ? "개념을" : activeSection === "problem_sheet" ? "시험지를" : "오답을"} 추가하세요.
+                새 {entryKindName(activeSection)}를 추가하세요.
               </p>
             </div>
           )}
@@ -1135,6 +1226,13 @@ export default function App() {
             setImportMode("import");
             setShowForm(true);
           }}
+        />
+      )}
+      {showLearningImportModal && (
+        <LearningImportModal
+          onClose={() => setShowLearningImportModal(false)}
+          onApply={handleLearningImportApply}
+          mode={activeSection === "lecture" ? "lecture" : "append"}
         />
       )}
       {reviewMode && (

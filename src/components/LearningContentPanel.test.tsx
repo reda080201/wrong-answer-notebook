@@ -137,15 +137,27 @@ describe("LearningContentPanel", () => {
     expect(container.querySelector("script")).not.toBeInTheDocument();
   });
 
-  it("shows an empty state when there is no learning content", () => {
+  it("shows CTA actions when there is no learning content", () => {
+    const onGenerateLecture = vi.fn();
+    const onImportLecture = vi.fn();
+    const onAutoCreateLecture = vi.fn();
+    const onEditLecture = vi.fn();
     render(
       <LearningContentPanel
         entry={baseEntry}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
+        onGenerateLecture={onGenerateLecture}
+        onImportLecture={onImportLecture}
+        onAutoCreateLecture={onAutoCreateLecture}
+        onEditLecture={onEditLecture}
       />,
     );
 
     expect(screen.getByText("학습 내용이 아직 없습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "GPT로 특강 만들기" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "HTML/JSON 특강 가져오기" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "해설에서 자동 생성" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "직접 작성" })).toBeInTheDocument();
   });
 });

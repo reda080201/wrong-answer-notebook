@@ -19,6 +19,7 @@ import {
   type QuestionTextBlock,
 } from "../utils/textLayout";
 import { renderWikiLinksInNodes } from "../utils/wikiLinks";
+import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import MathText, { renderMathInNodes } from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
@@ -36,6 +37,8 @@ interface AnnotatableQuestionProps {
   sheetLayout?: "single" | "columns";
   searchQuery?: string;
   zoomableImages?: boolean;
+  suspiciousSegments?: SuspiciousTextSegment[];
+  onOpenQuestionTheater?: (questionIndex: number) => void;
 }
 
 interface FocusedQuestionViewProps {
@@ -50,6 +53,7 @@ interface FocusedQuestionViewProps {
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   showImages: boolean;
+  suspiciousSegments?: SuspiciousTextSegment[];
 }
 
 interface QuestionBodySegment {
@@ -169,6 +173,7 @@ function StructuredTextSegment({
   onWikiLinkClick,
   existingTargets,
   searchQuery,
+  suspiciousSegments = [],
 }: {
   text: string;
   start: number;
@@ -177,7 +182,10 @@ function StructuredTextSegment({
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   searchQuery?: string;
+  suspiciousSegments?: SuspiciousTextSegment[];
 }) {
+  const suspicious = suspiciousSegments.find((segment) => segment.end > start && segment.start < start + text.length);
+  const mergedClassName = [className, suspicious ? "suspicious-text-segment" : ""].filter(Boolean).join(" ");
   const nodes = annotations.length > 0
     ? renderAnnotatedText(text, annotations)
     : [text];
@@ -186,7 +194,7 @@ function StructuredTextSegment({
     const segments = splitMarkdownTableSegments(text);
     if (segments.some((segment) => typeof segment !== "string")) {
       return (
-        <div className={className} data-text-start={start}>
+        <div className={mergedClassName} data-text-start={start} title={suspicious?.reason}>
           {segments.map((segment, index) =>
             typeof segment === "string" ? (
               <span key={`text-${index}`}>
@@ -205,7 +213,7 @@ function StructuredTextSegment({
   }
 
   return (
-    <span className={className} data-text-start={start}>
+    <span className={mergedClassName} data-text-start={start} title={suspicious?.reason}>
       {renderMathInNodes(highlightSearchNodes(
         renderWikiLinksInNodes(nodes, onWikiLinkClick, existingTargets),
         searchQuery,
@@ -266,6 +274,9 @@ function StructuredQuestionBlock({
   onWikiLinkClick,
   existingTargets,
   searchQuery,
+  suspiciousSegments = [],
+  questionIndex,
+  onOpenQuestionTheater,
 }: {
   block: QuestionTextBlock;
   textAnnotations: TextRangeAnnotation[];
@@ -273,6 +284,9 @@ function StructuredQuestionBlock({
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   searchQuery?: string;
+  suspiciousSegments?: SuspiciousTextSegment[];
+  questionIndex?: number;
+  onOpenQuestionTheater?: (questionIndex: number) => void;
 }) {
   if (block.kind === "passage" || block.kind === "paragraph") {
     return (
@@ -284,6 +298,7 @@ function StructuredQuestionBlock({
           onWikiLinkClick={onWikiLinkClick}
           existingTargets={existingTargets}
           searchQuery={searchQuery}
+          suspiciousSegments={suspiciousSegments}
         />
       </section>
     );
@@ -309,6 +324,7 @@ function StructuredQuestionBlock({
         onWikiLinkClick={onWikiLinkClick}
         existingTargets={existingTargets}
         searchQuery={searchQuery}
+        suspiciousSegments={suspiciousSegments}
       />
       {block.choices.length > 0 && (
         <ol className="question-choices">
@@ -324,12 +340,23 @@ function StructuredQuestionBlock({
                 onWikiLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
                 searchQuery={searchQuery}
+                suspiciousSegments={suspiciousSegments}
               />
             </li>
           ))}
         </ol>
       )}
       {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
+      {onOpenQuestionTheater && typeof questionIndex === "number" && (
+        <button
+          type="button"
+          className="question-theater-open"
+          onClick={() => onOpenQuestionTheater(questionIndex)}
+          aria-label={`문제 ${block.displayNumber} 크게 보기`}
+        >
+          크게 보기
+        </button>
+      )}
     </section>
   );
 }
@@ -340,12 +367,14 @@ function QuestionBodySegments({
   onWikiLinkClick,
   existingTargets,
   searchQuery,
+  suspiciousSegments = [],
 }: {
   segments: QuestionBodySegment[];
   textAnnotations: TextRangeAnnotation[];
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   searchQuery?: string;
+  suspiciousSegments?: SuspiciousTextSegment[];
 }) {
   if (!segments.length) return null;
   return (
@@ -369,6 +398,7 @@ function QuestionBodySegments({
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
             searchQuery={searchQuery}
+            suspiciousSegments={suspiciousSegments}
           />
         </section>
       ))}
@@ -423,6 +453,7 @@ export function FocusedQuestionView({
   onWikiLinkClick,
   existingTargets,
   showImages,
+  suspiciousSegments = [],
 }: FocusedQuestionViewProps) {
   const questionAnns = filterQuestionAnnotations(annotations);
   const textAnns = questionAnns.filter(
@@ -446,6 +477,7 @@ export function FocusedQuestionView({
             annotations={clipTextAnnotations(textAnns, passage.start, passage.end)}
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
+            suspiciousSegments={suspiciousSegments}
           />
         </section>
       )}
@@ -469,6 +501,7 @@ export function FocusedQuestionView({
             textAnnotations={textAnns}
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
+            suspiciousSegments={suspiciousSegments}
           />
         </div>
 
@@ -485,6 +518,7 @@ export function FocusedQuestionView({
                   annotations={clipTextAnnotations(textAnns, choice.start, choice.end)}
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
+                  suspiciousSegments={suspiciousSegments}
                 />
               </li>
             ))}
@@ -524,6 +558,8 @@ function StructuredQuestionText({
   onWikiLinkClick,
   existingTargets,
   searchQuery,
+  suspiciousSegments = [],
+  onOpenQuestionTheater,
 }: {
   question: string;
   textAnnotations: TextRangeAnnotation[];
@@ -532,22 +568,38 @@ function StructuredQuestionText({
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   searchQuery?: string;
+  suspiciousSegments?: SuspiciousTextSegment[];
+  onOpenQuestionTheater?: (questionIndex: number) => void;
 }) {
   const blocks = useMemo(() => parseQuestionText(question), [question]);
+  const questionIndexes = useMemo(() => {
+    const indexes = new Map<number, number>();
+    let index = 0;
+    for (const block of blocks) {
+      if (block.kind === "question") {
+        indexes.set(block.start, index);
+        index += 1;
+      }
+    }
+    return indexes;
+  }, [blocks]);
   const className = `structured-question-text structured-question-text--${sheetLayout}`;
 
   return (
     <div className={className}>
       {blocks.map((block) => (
-        <StructuredQuestionBlock
-          key={`${block.kind}-${block.start}-${block.end}`}
-          block={block}
-          textAnnotations={textAnnotations}
-          figures={figures}
-          onWikiLinkClick={onWikiLinkClick}
-          existingTargets={existingTargets}
-          searchQuery={searchQuery}
-        />
+          <StructuredQuestionBlock
+            key={`${block.kind}-${block.start}-${block.end}`}
+            block={block}
+            questionIndex={block.kind === "question" ? questionIndexes.get(block.start) : undefined}
+            textAnnotations={textAnnotations}
+            figures={figures}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+            searchQuery={searchQuery}
+            suspiciousSegments={suspiciousSegments}
+            onOpenQuestionTheater={onOpenQuestionTheater}
+          />
       ))}
     </div>
   );
@@ -723,6 +775,8 @@ export default function AnnotatableQuestion({
   sheetLayout = "single",
   searchQuery,
   zoomableImages = false,
+  suspiciousSegments = [],
+  onOpenQuestionTheater,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -771,6 +825,8 @@ export default function AnnotatableQuestion({
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
             searchQuery={searchQuery}
+            suspiciousSegments={suspiciousSegments}
+            onOpenQuestionTheater={onOpenQuestionTheater}
           />
         </div>
       )}

@@ -47,6 +47,10 @@ const emptyForm: EntryFormData = {
   answerKey: [],
   figures: [],
   mistakeAnalysis: { causes: [] },
+  learningBlocks: [],
+  sourceType: undefined,
+  linkedEntryIds: [],
+  concepts: [],
   mastered: false,
 };
 
@@ -98,6 +102,10 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
     mastered: entry.mastered,
     review: entry.review,
     checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],
+    learningBlocks: entry.learningBlocks ? entry.learningBlocks.map((block) => ({ ...block })) : [],
+    sourceType: entry.sourceType,
+    linkedEntryIds: entry.linkedEntryIds ? [...entry.linkedEntryIds] : [],
+    concepts: entry.concepts ? [...entry.concepts] : [],
   };
 }
 
@@ -132,6 +140,10 @@ function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
       uncertainQuestionNumbers: [...data.importAudit.uncertainQuestionNumbers],
     } : undefined,
     rejectedNotes: data.rejectedNotes ? [...data.rejectedNotes] : [],
+    learningBlocks: data.learningBlocks ? data.learningBlocks.map((block) => ({ ...block })) : [],
+    sourceType: data.sourceType,
+    linkedEntryIds: data.linkedEntryIds ? [...data.linkedEntryIds] : [],
+    concepts: data.concepts ? [...data.concepts] : [],
     mistakeAnalysis: data.mistakeAnalysis
       ? {
           ...data.mistakeAnalysis,
@@ -459,6 +471,7 @@ export default function EntryForm({
                   <option value="wrong_answer">오답</option>
                   <option value="concept">개념</option>
                   <option value="problem_sheet">문제지 전체</option>
+                  <option value="lecture">특강자료</option>
                 </select>
               </div>
               <div className="form-field">

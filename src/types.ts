@@ -23,8 +23,9 @@ export interface ImageRectAnnotation {
 
 export type Annotation = TextRangeAnnotation | ImageRectAnnotation;
 
-/** 오답 한 건 vs 문제지(전체) 보관 vs 개념 */
-export type EntryKind = "wrong_answer" | "problem_sheet" | "concept";
+/** 오답 한 건 vs 문제지(전체) 보관 vs 개념 vs 특강자료 */
+export type EntryKind = "wrong_answer" | "problem_sheet" | "concept" | "lecture";
+export type LectureSourceType = "html" | "md" | "txt" | "json";
 
 export type Difficulty = "high" | "medium" | "low" | "none";
 
@@ -357,6 +358,9 @@ export interface WrongAnswerEntry {
   review?: ReviewState;
   checklist?: ChecklistItem[];
   learningBlocks?: LearningBlock[];
+  sourceType?: LectureSourceType;
+  linkedEntryIds?: string[];
+  concepts?: string[];
   /** @deprecated 마이그레이션용 — explanationParts로 이전됨 */
   explanation?: string;
   /** @deprecated */

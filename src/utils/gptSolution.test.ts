@@ -41,6 +41,8 @@ describe("gptSolution", () => {
     expect(prompt).toContain("coordinate-graph");
     expect(prompt).toContain("sequence-flow");
     expect(prompt).toContain('learningBlocks[].type을 "diagram"');
+    expect(prompt).toContain("한 문항당 최대 1개");
+    expect(prompt).toContain("전체 entry learningBlocks diagram은 최대 3개");
     expect(prompt).toContain("raw HTML, raw SVG, base64 이미지");
     expect(prompt).toContain("pointLabel");
     expect(prompt).toContain("slopeLabel");

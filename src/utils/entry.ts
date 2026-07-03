@@ -8,6 +8,7 @@ import type {
   LearningBlock,
   LearningBlockType,
   LearningDiagramType,
+  LectureSourceType,
   MistakeCauseType,
   ReviewEvent,
   ReviewResult,
@@ -20,7 +21,11 @@ import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 
 function isEntryKind(v: unknown): v is EntryKind {
-  return v === "wrong_answer" || v === "problem_sheet" || v === "concept";
+  return v === "wrong_answer" || v === "problem_sheet" || v === "concept" || v === "lecture";
+}
+
+function isLectureSourceType(v: unknown): v is LectureSourceType {
+  return v === "html" || v === "md" || v === "txt" || v === "json";
 }
 
 function isDifficulty(v: unknown): v is Difficulty {
@@ -473,7 +478,12 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     rejectedNotes: normalizeRejectedNotes(rest.rejectedNotes),
     mistakeAnalysis: normalizeMistakeAnalysis(rest.mistakeAnalysis),
     review: normalizeReview(rest.review),
-    checklist: entryKind === "concept" ? normalizeChecklist(rest.checklist) : rest.checklist ?? [],
+    checklist: entryKind === "concept" || entryKind === "lecture" ? normalizeChecklist(rest.checklist) : rest.checklist ?? [],
+    sourceType: isLectureSourceType(rest.sourceType) ? rest.sourceType : undefined,
+    linkedEntryIds: Array.isArray(rest.linkedEntryIds)
+      ? rest.linkedEntryIds.map((id) => `${id}`.trim()).filter(Boolean)
+      : [],
+    concepts: normalizeImportantPoints(rest.concepts),
   };
 }
 

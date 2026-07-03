@@ -55,6 +55,9 @@ export const builtInPromptTemplates: PromptTemplate[] = [
 - 문제 번호가 불확실한 도표는 questionNumber를 빈 문자열로 두고 needsReview를 true로 표시해줘.
 - 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey에 넣지 말고 rejectedNotes에만 기록해줘.
 - audit에는 예상/감지/누락/불확실 문제 번호, 손글씨 제외 여부, 검토 필요 개수를 반드시 기록해줘.
+- 해설에서 특강 카드로 쓸 수 있는 answerKey[].strategy, steps, wrongPoint, reviewPoint, concepts를 가능한 한 구체적으로 채워줘.
+- 시각화가 실제 이해에 도움이 되는 경우에만 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec을 넣어줘. 단순 계산 문제에는 만들지 말고, 한 문항당 최대 1개, 전체 learningBlocks diagram은 최대 3개까지만 허용해.
+- raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - tags 필드와 최상위 difficulty 필드는 만들지 마.
 
 import.json 형식:
@@ -78,6 +81,10 @@ import.json 형식:
       "questionNumber": "1",
       "answer": "③",
       "explanation": "풀이",
+      "strategy": "조건을 식으로 바꾸고 그래프를 확인",
+      "steps": ["조건 정리", "식 세우기", "정답 검산"],
+      "wrongPoint": "교점과 절편을 혼동하기 쉬움",
+      "reviewPoint": "다음 복습 때 그래프 표시부터 확인",
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["주의할 점"],
       "concepts": ["함수"],
@@ -95,7 +102,8 @@ import.json 형식:
       "needsReview": false
     }
   ],
-  "concepts": ["함수", "그래프"]
+  "concepts": ["함수", "그래프"],
+  "learningBlocks": []
 }`,
   },
   {
@@ -115,6 +123,9 @@ import.json 형식:
 - 시험지 전체에 해당하는 학습 포인트만 importantNotes에 넣어줘.
 - 특정 문제에만 해당하는 메모는 importantNotes나 memo에 넣지 말고 반드시 answerKey[].notes에 넣어줘.
 - 답안지는 answerKey 배열로 문제 번호, 정답, 풀이, 문제별 메모, 중요 포인트, 개념을 연결해줘.
+- 해설에서 특강 카드로 쓸 수 있는 answerKey[].strategy, steps, wrongPoint, reviewPoint, concepts를 가능한 한 구체적으로 채워줘.
+- 시각화가 실제 이해에 도움이 되는 경우에만 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec을 넣어줘. 단순 계산 문제에는 만들지 말고, 한 문항당 최대 1개, 전체 learningBlocks diagram은 최대 3개까지만 허용해.
+- raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - 왜 틀리기 쉬운지 판단 가능한 경우 mistakeAnalysis.causes에 오답 원인을 넣어줘. 허용 type은 calculation, condition_misread, concept_gap, strategy_gap, time_pressure, choice_trap, careless, unknown 이야.
 - 오답 원인은 추측이 약하면 unknown만 쓰거나 causes를 비워둬.
 - 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.
@@ -154,6 +165,10 @@ import.json 형식:
       "questionNumber": "1",
       "answer": "③",
       "explanation": "풀이",
+      "strategy": "조건을 식으로 바꾸고 그래프를 확인",
+      "steps": ["조건 정리", "식 세우기", "정답 검산"],
+      "wrongPoint": "교점과 절편을 혼동하기 쉬움",
+      "reviewPoint": "다음 복습 때 그래프 표시부터 확인",
       "notes": "이 문항에서만 다시 볼 메모",
       "importantPoints": ["주의할 점"],
       "concepts": ["함수"],
@@ -161,7 +176,8 @@ import.json 형식:
       "sourceNote": "답안지 1번과 연결"
     }
   ],
-  "concepts": ["함수", "그래프"]
+  "concepts": ["함수", "그래프"],
+  "learningBlocks": []
 }`,
   },
   {

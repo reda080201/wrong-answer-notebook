@@ -9,6 +9,11 @@ interface LearningContentPanelProps {
   entry: WrongAnswerEntry;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  variant?: "sidebar" | "main";
+  onGenerateLecture?: () => void;
+  onImportLecture?: () => void;
+  onAutoCreateLecture?: () => void;
+  onEditLecture?: () => void;
 }
 
 function unique(values: Array<string | undefined>): string[] {
@@ -260,6 +265,11 @@ export default function LearningContentPanel({
   entry,
   onWikiLinkClick,
   existingTargets,
+  variant = "sidebar",
+  onGenerateLecture,
+  onImportLecture,
+  onAutoCreateLecture,
+  onEditLecture,
 }: LearningContentPanelProps) {
   const answerItems = (entry.answerKey ?? []).filter(
     (item) =>
@@ -287,10 +297,10 @@ export default function LearningContentPanel({
     Boolean(entry.review?.dueAt || entry.mastered);
 
   return (
-    <aside className="learning-content-panel" aria-label="학습 내용">
+    <aside className={`learning-content-panel learning-content-panel--${variant}`} aria-label="학습 내용">
       <header className="learning-content-head">
         <span>학습 내용</span>
-        <h3>개념·루틴·주의점</h3>
+        <h3>{variant === "main" ? "특강 노트" : "개념·루틴·주의점"}</h3>
       </header>
       {hasAnyContent ? (
         <div className="learning-content-grid">
@@ -316,7 +326,24 @@ export default function LearningContentPanel({
           />
         </div>
       ) : (
-        <div className="learning-content-empty">학습 내용이 아직 없습니다.</div>
+        <div className="learning-content-empty">
+          <strong>학습 내용이 아직 없습니다.</strong>
+          <p>해설과 개념을 바탕으로 특강 카드를 만들면 복습 흐름이 훨씬 부드러워집니다.</p>
+          <div className="learning-content-cta">
+            <button type="button" onClick={onGenerateLecture} disabled={!onGenerateLecture}>
+              GPT로 특강 만들기
+            </button>
+            <button type="button" onClick={onImportLecture} disabled={!onImportLecture}>
+              HTML/JSON 특강 가져오기
+            </button>
+            <button type="button" onClick={onAutoCreateLecture} disabled={!onAutoCreateLecture}>
+              해설에서 자동 생성
+            </button>
+            <button type="button" onClick={onEditLecture} disabled={!onEditLecture}>
+              직접 작성
+            </button>
+          </div>
+        </div>
       )}
     </aside>
   );

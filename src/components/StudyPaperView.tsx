@@ -1,5 +1,6 @@
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
 import { parseQuestionText } from "../utils/textLayout";
+import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
@@ -13,6 +14,8 @@ interface StudyPaperViewProps {
   existingTargets: Set<string>;
   sheetLayout: "single" | "columns";
   searchQuery?: string;
+  suspiciousSegments?: SuspiciousTextSegment[];
+  onOpenQuestionTheater?: (questionIndex: number) => void;
 }
 
 export default function StudyPaperView({
@@ -24,6 +27,8 @@ export default function StudyPaperView({
   existingTargets,
   sheetLayout,
   searchQuery,
+  suspiciousSegments = [],
+  onOpenQuestionTheater,
 }: StudyPaperViewProps) {
   const blocks = parseQuestionText(entry.question);
   const questionCount = blocks.filter((block) => block.kind === "question").length;
@@ -79,6 +84,8 @@ export default function StudyPaperView({
           existingTargets={existingTargets}
           sheetLayout={sheetLayout}
           searchQuery={searchQuery}
+          suspiciousSegments={suspiciousSegments}
+          onOpenQuestionTheater={onOpenQuestionTheater}
           zoomableImages
         />
 

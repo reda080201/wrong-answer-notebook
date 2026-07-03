@@ -4,13 +4,16 @@ import type { Annotation, AnnotationTool, ChecklistItem, ReviewResult, SheetAnsw
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
+import { buildLearningBlocksFromEntry } from "../utils/learningContent";
 import {
   PRACTICE_MODE_LABELS,
   mistakeCauseLabel,
   recommendedStrategyForAnalysis,
   summarizeMistakeAnalysis,
 } from "../utils/mistakeAnalysis";
+import { getNextStudyAction, type NextStudyActionId } from "../utils/nextStudyAction";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
+import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
@@ -22,6 +25,11 @@ import SolutionBookView from "./SolutionBookView";
 import StudyAnalysisView from "./StudyAnalysisView";
 import StudyControlBar from "./StudyControlBar";
 import StudyPaperView from "./StudyPaperView";
+import StudyFlowStrip from "./StudyFlowStrip";
+import StudyZoomViewport, { getQuestionZoomStorageKey } from "./StudyZoomViewport";
+import TextReviewPanel from "./TextReviewPanel";
+import QuestionTheaterView from "./QuestionTheaterView";
+import LectureReaderView from "./LectureReaderView";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -40,11 +48,14 @@ interface EntryDetailProps {
   onOpenPrint?: () => void;
   onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
   onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
+  onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
+  onImportLecture?: () => void;
+  onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
 }
 
 type SheetLayout = "single" | "columns";
 type AnswerViewMode = "card" | "table";
-type DetailViewMode = "paper" | "solution" | "analysis";
+type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
 type FocusMode = "closed" | "expanded" | "mini";
 type FocusTextSize = "normal" | "large" | "xlarge";
 type StudyPanel = "question" | "answer" | "explanation" | "notes" | "images";
@@ -132,6 +143,9 @@ export default function EntryDetail({
   onOpenPrint,
   onReview,
   onQuickMemo,
+  onLearningBlocksChange,
+  onImportLecture,
+  onQuestionTextChange,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
@@ -148,6 +162,8 @@ export default function EntryDetail({
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
   const [quickMemoText, setQuickMemoText] = useState("");
   const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
+  const [showTextReview, setShowTextReview] = useState(false);
+  const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
@@ -166,8 +182,9 @@ export default function EntryDetail({
   const annCount = entry.annotations?.length ?? 0;
   const isSheet = entry.entryKind === "problem_sheet";
   const isConcept = entry.entryKind === "concept";
+  const isLecture = entry.entryKind === "lecture";
   const isWrongAnswer = entry.entryKind === "wrong_answer";
-  const isFocusable = !isConcept;
+  const isFocusable = !isConcept && !isLecture;
   const isFocusExpanded = isFocusable && focusMode === "expanded";
   const isFocusMini = isFocusable && focusMode === "mini";
   const sheetAnswerKey = (entry.answerKey ?? []).filter(
@@ -219,6 +236,12 @@ export default function EntryDetail({
     (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
     Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
   const showPaperSupplementSections = !isFocusExpanded && detailViewMode === "paper";
+  const hasNextQuestion = isSheet && focusedQuestionIndex < questionAnchors.length - 1;
+  const suspiciousSegments = useMemo(
+    () => (isFocusable ? detectSuspiciousTextSegments(entry.question) : []),
+    [entry.question, isFocusable],
+  );
+  const hasSuspiciousText = suspiciousSegments.length > 0;
 
   useEffect(() => {
     localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
@@ -251,6 +274,8 @@ export default function EntryDetail({
   useEffect(() => {
     setFocusedQuestionIndex(0);
     setFocusMode("closed");
+    setTheaterQuestionIndex(null);
+    setShowTextReview(false);
   }, [entry.id]);
 
   useEffect(() => {
@@ -333,8 +358,33 @@ export default function EntryDetail({
 
   const handleStudyModeChange = useCallback((mode: DetailViewMode) => {
     setDetailViewMode(mode);
-    pushToast(mode === "paper" ? "문제지 모드" : mode === "solution" ? "해설지 모드" : "분석 모드", "info");
+    pushToast(
+      mode === "paper"
+        ? "문제지 모드"
+        : mode === "solution"
+          ? "해설지 모드"
+          : mode === "learning"
+            ? "특강 모드"
+            : "분석 모드",
+      "info",
+    );
   }, [pushToast]);
+
+  const handleAutoCreateLecture = useCallback(async () => {
+    if (!onLearningBlocksChange) return;
+    const generated = buildLearningBlocksFromEntry(entry);
+    if (!generated.length) {
+      pushToast("해설이나 메모가 부족해 자동 생성할 특강이 없습니다.", "info");
+      return;
+    }
+    try {
+      await onLearningBlocksChange(entry, generated);
+      setDetailViewMode("learning");
+      pushToast("해설에서 특강 카드를 만들었습니다.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "특강 생성에 실패했습니다.", "error");
+    }
+  }, [entry, onLearningBlocksChange, pushToast]);
 
   const handleToggleDifficultWithToast = () => {
     onToggleDifficult();
@@ -349,9 +399,56 @@ export default function EntryDetail({
     });
   };
 
-  const openFocusMode = () => {
+  const openFocusMode = useCallback(() => {
     if (isFocusable) setFocusMode("expanded");
-  };
+  }, [isFocusable]);
+
+  const openTheaterMode = useCallback((index = focusedQuestionIndex) => {
+    if (!isSheet || !questionAnchors.length) return;
+    setFocusedQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
+    setTheaterQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
+  }, [focusedQuestionIndex, isSheet, questionAnchors.length]);
+
+  const closeTheaterMode = useCallback(() => {
+    const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
+    setTheaterQuestionIndex(null);
+    if (target?.kind === "question") {
+      window.setTimeout(() => scrollToQuestion(target.start), 0);
+    }
+  }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+
+  const executeStudyAction = useCallback((id: NextStudyActionId) => {
+    if (id === "review-text") {
+      setShowTextReview(true);
+      return;
+    }
+    if (id === "review-missing" || id === "review-rejected-notes") {
+      handleStudyModeChange("analysis");
+      return;
+    }
+    if (id === "generate-solution") {
+      onQuickGptSolution?.();
+      return;
+    }
+    if (id === "generate-learning" || id === "make-visualization") {
+      void handleAutoCreateLecture();
+      return;
+    }
+    if (id === "start-focus") {
+      if (isSheet) openTheaterMode(focusedQuestionIndex);
+      else openFocusMode();
+      return;
+    }
+    if (id === "show-answer") {
+      setHideAnswers(false);
+      return;
+    }
+    if (id === "next-question") {
+      moveFocusedQuestion(1);
+      return;
+    }
+    void handleReviewResult("good");
+  }, [focusedQuestionIndex, handleAutoCreateLecture, handleReviewResult, handleStudyModeChange, isSheet, moveFocusedQuestion, onQuickGptSolution, openFocusMode, openTheaterMode]);
 
   const findQuestionTarget = (questionNumber: string) => {
     const normalized = normalizeQuestionNumber(questionNumber);
@@ -373,6 +470,22 @@ export default function EntryDetail({
 
   const focusedAnswer = focusedQuestion
     ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, focusedQuestion))
+    : undefined;
+  const theaterQuestion = theaterQuestionIndex !== null
+    ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
+    : undefined;
+  const theaterPassage = (() => {
+    if (!theaterQuestion) return undefined;
+    const currentIndex = questionBlocks.findIndex((block) => block === theaterQuestion);
+    for (let index = currentIndex - 1; index >= 0; index -= 1) {
+      const block = questionBlocks[index];
+      if (block.kind === "passage" || block.kind === "paragraph") return block;
+      if (block.kind === "question") break;
+    }
+    return undefined;
+  })();
+  const theaterAnswer = theaterQuestion
+    ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, theaterQuestion))
     : undefined;
   const isFocusedQuestionShort = focusedQuestion
     ? `${focusedQuestion.body} ${focusedQuestion.choices.map((choice) => choice.text).join(" ")}`.trim().length < 360
@@ -430,6 +543,19 @@ export default function EntryDetail({
     : isSheet && focusedQuestionIndex < questionAnchors.length - 1
       ? "다음 문제로 넘어갈 차례입니다."
       : "이 문제를 맞음으로 기록할 수 있습니다.";
+
+  const nextStudyAction = isFocusable
+    ? getNextStudyAction(entry, {
+      isSheet,
+      hasNextQuestion,
+      hideAnswers,
+      focusModeClosed: focusMode === "closed",
+      theaterModeClosed: theaterQuestionIndex === null,
+      canGenerateSolution: Boolean(onQuickGptSolution),
+      canGenerateLearning: Boolean(onLearningBlocksChange),
+      hasSuspiciousText,
+    })
+    : undefined;
 
   useEffect(() => {
     if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
@@ -492,6 +618,12 @@ export default function EntryDetail({
       if (key === "s") {
         event.preventDefault();
         handleStudyModeChange("solution");
+        return;
+      }
+
+      if (key === "l") {
+        event.preventDefault();
+        handleStudyModeChange("learning");
         return;
       }
 
@@ -758,8 +890,19 @@ export default function EntryDetail({
             <span className="kind-badge kind-badge--sheet">문제지</span>
           ) : isConcept ? (
             <span className="kind-badge kind-badge--concept">개념</span>
+          ) : isLecture ? (
+            <span className="kind-badge kind-badge--lecture">특강자료</span>
           ) : (
             <span className="kind-badge kind-badge--wrong">오답</span>
+          )}
+          {hasSuspiciousText && (
+            <button
+              type="button"
+              className="text-review-badge"
+              onClick={() => setShowTextReview(true)}
+            >
+              텍스트 검수 필요 {suspiciousSegments.length}
+            </button>
           )}
           {entry.difficulty && entry.difficulty !== "none" && (
             <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
@@ -771,7 +914,7 @@ export default function EntryDetail({
               #{t}
             </span>
           ))}
-          {!isConcept && (
+          {!isConcept && !isLecture && (
             <div className="study-mode-tabs" aria-label="학습 보기 모드">
               <button
                 type="button"
@@ -786,6 +929,13 @@ export default function EntryDetail({
                 onClick={() => handleStudyModeChange("solution")}
               >
                 해설지
+              </button>
+              <button
+                type="button"
+                className={detailViewMode === "learning" ? "active" : ""}
+                onClick={() => handleStudyModeChange("learning")}
+              >
+                특강
               </button>
               <button
                 type="button"
@@ -953,13 +1103,25 @@ export default function EntryDetail({
         </header>
 
         <section className="detail-question-section">
+          {!isConcept && !isFocusExpanded && (
+            <StudyFlowStrip
+              entry={entry}
+              focusAvailable={isFocusable}
+              onModeChange={handleStudyModeChange}
+              onStartFocus={openFocusMode}
+            />
+          )}
           <h3 className="section-heading">
             {isFocusExpanded
               ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
               : isConcept
                 ? "개념 설명"
+                : isLecture
+                  ? "특강자료"
                 : detailViewMode === "solution"
                   ? "교재형 해설지"
+                  : detailViewMode === "learning"
+                    ? "특강 노트"
                   : detailViewMode === "analysis"
                     ? "학습 분석"
                     : isSheet ? "교재형 문제지" : "문제지"}
@@ -1001,7 +1163,14 @@ export default function EntryDetail({
               </div>
             </div>
           )}
-          {!isFocusExpanded && !isConcept ? (
+          {isLecture ? (
+            <LectureReaderView
+              entry={entry}
+              onWikiLinkClick={onWikiLinkClick}
+              existingTargets={existingTargets}
+              onOpenLinkedEntry={onOpenEntry}
+            />
+          ) : !isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
               <div className="solution-learning-layout">
                 <div className="solution-learning-main">
@@ -1017,27 +1186,50 @@ export default function EntryDetail({
                   entry={entry}
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
+                  onGenerateLecture={onQuickGptSolution}
+                  onImportLecture={onImportLecture}
+                  onAutoCreateLecture={handleAutoCreateLecture}
+                  onEditLecture={onEdit}
                 />
               </div>
             ) : detailViewMode === "analysis" ? (
               <StudyAnalysisView entry={entry} />
+            ) : detailViewMode === "learning" ? (
+              <LearningContentPanel
+                entry={entry}
+                variant="main"
+                onWikiLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+                onGenerateLecture={onQuickGptSolution}
+                onImportLecture={onImportLecture}
+                onAutoCreateLecture={handleAutoCreateLecture}
+                onEditLecture={onEdit}
+              />
             ) : (
               <>
-                <StudyPaperView
-                  entry={entry}
-                  memoMode={memoMode}
-                  activeTool={activeTool}
-                  onAnnotationsChange={onAnnotationsChange}
-                  onWikiLinkClick={onWikiLinkClick}
-                  existingTargets={existingTargets}
-                  sheetLayout={isSheet ? sheetLayout : "single"}
-                  searchQuery={isSheet ? sheetSearch : ""}
-                />
+                <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
+                  <StudyPaperView
+                    entry={entry}
+                    memoMode={memoMode}
+                    activeTool={activeTool}
+                    onAnnotationsChange={onAnnotationsChange}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                    sheetLayout={isSheet ? sheetLayout : "single"}
+                    searchQuery={isSheet ? sheetSearch : ""}
+                    suspiciousSegments={suspiciousSegments}
+                    onOpenQuestionTheater={isSheet ? openTheaterMode : undefined}
+                  />
+                </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
                     entry={entry}
                     onWikiLinkClick={onWikiLinkClick}
                     existingTargets={existingTargets}
+                    onGenerateLecture={onQuickGptSolution}
+                    onImportLecture={onImportLecture}
+                    onAutoCreateLecture={handleAutoCreateLecture}
+                    onEditLecture={onEdit}
                   />
                 </CollapsibleSection>
               </>
@@ -1045,19 +1237,22 @@ export default function EntryDetail({
           ) : isSheet && isFocusExpanded ? (
             focusedQuestion ? (
               <>
-                <FocusedQuestionView
-                  passage={focusedPassage}
-                  questionBlock={focusedQuestion}
-                  questionImages={entry.questionImages}
-                  figures={entry.figures ?? []}
-                  annotations={entry.annotations ?? []}
-                  memoMode={memoMode}
-                  activeTool={activeTool}
-                  onAnnotationsChange={onAnnotationsChange}
-                  onWikiLinkClick={onWikiLinkClick}
-                  existingTargets={existingTargets}
-                  showImages={activeStudyPanel === "images"}
-                />
+                <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
+                  <FocusedQuestionView
+                    passage={focusedPassage}
+                    questionBlock={focusedQuestion}
+                    questionImages={entry.questionImages}
+                    figures={entry.figures ?? []}
+                    annotations={entry.annotations ?? []}
+                    memoMode={memoMode}
+                    activeTool={activeTool}
+                    onAnnotationsChange={onAnnotationsChange}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                    showImages={activeStudyPanel === "images"}
+                    suspiciousSegments={suspiciousSegments}
+                  />
+                </StudyZoomViewport>
                 {renderFocusStudyHints()}
                 <div className="focus-panel-tabs" aria-label="집중 보기 패널">
                   <button
@@ -1101,19 +1296,22 @@ export default function EntryDetail({
           ) : isWrongAnswer && isFocusExpanded ? (
             <>
               <div className="wrong-focus-question">
-                <AnnotatableQuestion
-                  question={entry.question}
-                  questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
-                  annotations={entry.annotations ?? []}
-                  memoMode={memoMode}
-                  activeTool={activeTool}
-                  onAnnotationsChange={onAnnotationsChange}
-                  onWikiLinkClick={onWikiLinkClick}
-                  existingTargets={existingTargets}
-                  sheetLayout="single"
-                  searchQuery=""
-                  zoomableImages={activeStudyPanel === "images"}
-                />
+                <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
+                  <AnnotatableQuestion
+                    question={entry.question}
+                    questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
+                    annotations={entry.annotations ?? []}
+                    memoMode={memoMode}
+                    activeTool={activeTool}
+                    onAnnotationsChange={onAnnotationsChange}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                    sheetLayout="single"
+                    searchQuery=""
+                    zoomableImages={activeStudyPanel === "images"}
+                    suspiciousSegments={suspiciousSegments}
+                  />
+                </StudyZoomViewport>
               </div>
               {renderFocusStudyHints()}
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
@@ -1171,6 +1369,7 @@ export default function EntryDetail({
               existingTargets={existingTargets}
               sheetLayout={isSheet ? sheetLayout : "single"}
               searchQuery={isSheet ? sheetSearch : ""}
+              suspiciousSegments={suspiciousSegments}
             />
           )}
         </section>
@@ -1512,6 +1711,50 @@ export default function EntryDetail({
           </CollapsibleSection>
         )}
       </div>
+      {showTextReview && (
+        <TextReviewPanel
+          entry={entry}
+          segments={suspiciousSegments}
+          onClose={() => setShowTextReview(false)}
+          onSave={async (text) => {
+            if (!onQuestionTextChange) return;
+            await onQuestionTextChange(entry, text);
+            pushToast("검수한 문제 텍스트를 저장했습니다.", "success");
+          }}
+        />
+      )}
+      {theaterQuestion && theaterQuestionIndex !== null && (
+        <QuestionTheaterView
+          passage={theaterPassage}
+          questionBlock={theaterQuestion}
+          questionIndex={theaterQuestionIndex}
+          questionCount={questionAnchors.length}
+          answer={theaterAnswer}
+          questionImages={entry.questionImages}
+          figures={entry.figures ?? []}
+          annotations={entry.annotations ?? []}
+          memoMode={memoMode}
+          activeTool={activeTool}
+          hideAnswers={hideAnswers}
+          memo={entry.memo}
+          onAnnotationsChange={onAnnotationsChange}
+          onWikiLinkClick={onWikiLinkClick}
+          existingTargets={existingTargets}
+          onPrevious={() => {
+            const next = Math.max(0, theaterQuestionIndex - 1);
+            setTheaterQuestionIndex(next);
+            setFocusedQuestionIndex(next);
+          }}
+          onNext={() => {
+            const next = Math.min(questionAnchors.length - 1, theaterQuestionIndex + 1);
+            setTheaterQuestionIndex(next);
+            setFocusedQuestionIndex(next);
+          }}
+          onToggleAnswers={() => setHideAnswers((value) => !value)}
+          onReview={(result) => void handleReviewResult(result)}
+          onClose={closeTheaterMode}
+        />
+      )}
       {isFocusable && (
         <StudyControlBar
           isSheet={isSheet}
@@ -1522,6 +1765,14 @@ export default function EntryDetail({
           detailViewMode={detailViewMode}
           difficult={entry.difficult}
           reviewSaving={reviewSaving}
+          nextStudyAction={
+            nextStudyAction
+              ? {
+                label: nextStudyAction.label,
+                onExecute: () => executeStudyAction(nextStudyAction.id),
+              }
+              : undefined
+          }
           compact={studyControlCompact}
           showModeControls={focusMode !== "closed"}
           quickMemoOpen={quickMemoOpen}

@@ -1,12 +1,19 @@
 import { useState } from "react";
 import type { ReviewResult } from "../types";
 
-type DetailViewMode = "paper" | "solution" | "analysis";
+type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
+
+export interface StudyNextAction {
+  label: string;
+  disabled?: boolean;
+  onExecute: () => void;
+}
 
 interface NextActionButtonProps {
   hideAnswers: boolean;
   canGoNext: boolean;
   reviewSaving: ReviewResult | null;
+  nextStudyAction?: StudyNextAction;
   onToggleAnswers: () => void;
   onNext: () => void;
   onReviewGood: () => void;
@@ -21,6 +28,7 @@ interface StudyControlBarProps {
   detailViewMode: DetailViewMode;
   difficult: boolean;
   reviewSaving: ReviewResult | null;
+  nextStudyAction?: StudyNextAction;
   compact: boolean;
   showModeControls: boolean;
   quickMemoOpen: boolean;
@@ -41,6 +49,7 @@ function NextActionButton({
   hideAnswers,
   canGoNext,
   reviewSaving,
+  nextStudyAction,
   onToggleAnswers,
   onNext,
   onReviewGood,
@@ -49,6 +58,20 @@ function NextActionButton({
     return (
       <button type="button" className="study-next-action" aria-label="하단 다음 행동" disabled>
         저장 중...
+      </button>
+    );
+  }
+
+  if (nextStudyAction) {
+    return (
+      <button
+        type="button"
+        className="study-next-action"
+        aria-label="하단 다음 행동"
+        onClick={nextStudyAction.onExecute}
+        disabled={nextStudyAction.disabled}
+      >
+        {nextStudyAction.label}
       </button>
     );
   }
@@ -90,6 +113,7 @@ export default function StudyControlBar({
   detailViewMode,
   difficult,
   reviewSaving,
+  nextStudyAction,
   compact,
   showModeControls,
   quickMemoOpen,
@@ -109,7 +133,7 @@ export default function StudyControlBar({
   const canGoPrevious = canMove && questionIndex > 0;
   const canGoNext = canMove && questionIndex < questionCount - 1;
   const showSecondaryGood = !isConcept && (hideAnswers || canGoNext);
-  const [compactToolsOpen, setCompactToolsOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const renderQuickMemo = () =>
     quickMemoOpen ? (
@@ -146,6 +170,7 @@ export default function StudyControlBar({
               hideAnswers={hideAnswers}
               canGoNext={canGoNext}
               reviewSaving={reviewSaving}
+              nextStudyAction={nextStudyAction}
               onToggleAnswers={onToggleAnswers}
               onNext={onNext}
               onReviewGood={() => onReview("good")}
@@ -168,17 +193,15 @@ export default function StudyControlBar({
           </button>
         )}
 
-        {compact && (
-          <button
-            type="button"
-            className={`study-control-tools-button ${compactToolsOpen ? "active" : ""}`}
-            aria-label="하단 도구 펼치기"
-            aria-expanded={compactToolsOpen}
-            onClick={() => setCompactToolsOpen((open) => !open)}
-          >
-            도구
-          </button>
-        )}
+        <button
+          type="button"
+          className={`study-control-tools-button ${toolsOpen ? "active" : ""}`}
+          aria-label="하단 도구 펼치기"
+          aria-expanded={toolsOpen}
+          onClick={() => setToolsOpen((open) => !open)}
+        >
+          도구 열기
+        </button>
       </div>
   );
 
@@ -234,6 +257,15 @@ export default function StudyControlBar({
             </button>
             <button
               type="button"
+              className={detailViewMode === "learning" ? "active" : ""}
+              aria-label="하단 특강 모드"
+              onClick={() => onModeChange("learning")}
+              disabled={isConcept}
+            >
+              특강
+            </button>
+            <button
+              type="button"
               className={detailViewMode === "analysis" ? "active" : ""}
               aria-label="하단 분석 모드"
               onClick={() => onModeChange("analysis")}
@@ -259,7 +291,7 @@ export default function StudyControlBar({
           onClick={() => {
             const nextCompact = !compact;
             onCompactChange(nextCompact);
-            if (!nextCompact) setCompactToolsOpen(false);
+            setToolsOpen(false);
           }}
         >
           {compact ? "펼침" : "컴팩트"}
@@ -271,7 +303,7 @@ export default function StudyControlBar({
     <div className={`study-control-bar ${compact ? "study-control-bar--compact" : ""}`} aria-label="학습 빠른 조작">
       {renderQuickMemo()}
       {renderPrimaryRow()}
-      {compact ? compactToolsOpen && renderSecondaryRow(true) : renderSecondaryRow()}
+      {toolsOpen && renderSecondaryRow(compact)}
     </div>
   );
 }

@@ -1,12 +1,21 @@
 :root,
 [data-theme="dark"] {
+  --app-bg: #0f1419;
+  --panel-bg: #121820;
   --bg: #0f1419;
   --surface: #1a2332;
+  --surface-soft: #202b3d;
   --surface-hover: #243044;
+  --surface-muted: #182131;
+  --paper-bg: #172033;
+  --paper-border: #314058;
+  --control-bg: rgba(17, 24, 39, 0.94);
+  --control-border: #334155;
   --border: #2d3a4f;
   --text: #e8edf4;
   --text-muted: #8b9cb3;
   --accent: #4f8cff;
+  --accent-soft: rgba(79, 140, 255, 0.18);
   --accent-hover: #6ba0ff;
   --success: #3dd68c;
   --warning: #f5a623;
@@ -19,13 +28,22 @@
 }
 
 [data-theme="light"] {
+  --app-bg: #eef1f6;
+  --panel-bg: #f8fafc;
   --bg: #eef1f6;
   --surface: #ffffff;
+  --surface-soft: #f8fafc;
   --surface-hover: #f0f4fa;
+  --surface-muted: #eef4fb;
+  --paper-bg: #ffffff;
+  --paper-border: #dbe4f0;
+  --control-bg: rgba(248, 250, 252, 0.96);
+  --control-border: #cbd5e1;
   --border: #d4dce8;
   --text: #1a2332;
   --text-muted: #5c6b82;
   --accent: #3b6fd9;
+  --accent-soft: #dbeafe;
   --accent-hover: #2d5fc4;
   --success: #1a9d5c;
   --warning: #c47d0e;
