@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChecklistItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
@@ -14,6 +14,11 @@ import {
 import { getNextStudyAction, type NextStudyActionId } from "../utils/nextStudyAction";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
+import {
+  getQuestionMetaForBlock,
+  normalizeQuestionNumber,
+  toggleQuestionImportant,
+} from "../utils/questionMeta";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
@@ -51,6 +56,9 @@ interface EntryDetailProps {
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
   onImportLecture?: () => void;
   onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
+  onTitleChange?: (entry: WrongAnswerEntry, title: string) => Promise<void>;
+  onQuestionMetaChange?: (entry: WrongAnswerEntry, questionMeta: QuestionMeta[]) => Promise<void>;
+  initialQuestionTarget?: { questionNumber: string; requestId: number } | null;
 }
 
 type SheetLayout = "single" | "columns";
@@ -107,10 +115,6 @@ function loadStudyControlCompact(): boolean {
   return typeof window !== "undefined" && window.matchMedia?.("(max-height: 760px)").matches;
 }
 
-function normalizeQuestionNumber(value: string): string {
-  return value.trim().replace(/^#/, "").replace(/[.)번]\s*$/, "").replace(/^0+/, "") || value.trim();
-}
-
 function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
   if (event.ctrlKey || event.metaKey || event.altKey) return true;
   const target = event.target as HTMLElement | null;
@@ -146,6 +150,9 @@ export default function EntryDetail({
   onLearningBlocksChange,
   onImportLecture,
   onQuestionTextChange,
+  onTitleChange,
+  onQuestionMetaChange,
+  initialQuestionTarget,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
@@ -164,6 +171,8 @@ export default function EntryDetail({
   const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
   const [showTextReview, setShowTextReview] = useState(false);
   const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
+  const [titleEditing, setTitleEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(entry.title);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
@@ -276,7 +285,13 @@ export default function EntryDetail({
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
-  }, [entry.id]);
+    setTitleEditing(false);
+    setTitleDraft(entry.title);
+  }, [entry.id, entry.title]);
+
+  useEffect(() => {
+    setTitleDraft(entry.title);
+  }, [entry.title]);
 
   useEffect(() => {
     if (focusedQuestionIndex >= questionAnchors.length) {
@@ -391,6 +406,44 @@ export default function EntryDetail({
     pushToast(entry.difficult ? "북마크를 해제했습니다." : "북마크했습니다.", "success");
   };
 
+  const handleTitleSave = async () => {
+    const title = titleDraft.trim();
+    if (!title) {
+      pushToast("빈 제목은 사용할 수 없습니다.", "error");
+      return;
+    }
+    if (!onTitleChange || title === entry.title.trim()) {
+      setTitleEditing(false);
+      return;
+    }
+    try {
+      await onTitleChange(entry, title);
+      setTitleEditing(false);
+      pushToast("시험지 이름을 변경했습니다.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "시험지 이름 변경에 실패했습니다.", "error");
+    }
+  };
+
+  const handleToggleQuestionImportant = async (questionNumber: string) => {
+    if (!onQuestionMetaChange) return;
+    const next = toggleQuestionImportant(entry.questionMeta, questionNumber);
+    const changed = next.find(
+      (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber),
+    );
+    try {
+      await onQuestionMetaChange(entry, next);
+      pushToast(
+        changed?.important
+          ? `${normalizeQuestionNumber(questionNumber)}번 문제를 중요 표시했습니다.`
+          : `${normalizeQuestionNumber(questionNumber)}번 문제 중요 표시를 해제했습니다.`,
+        "success",
+      );
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "중요 표시 저장에 실패했습니다.", "error");
+    }
+  };
+
   const cycleFocusTextSize = (delta: number) => {
     const sizes: FocusTextSize[] = ["normal", "large", "xlarge"];
     setFocusTextSize((current) => {
@@ -408,6 +461,17 @@ export default function EntryDetail({
     setFocusedQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
     setTheaterQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
   }, [focusedQuestionIndex, isSheet, questionAnchors.length]);
+
+  useEffect(() => {
+    if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
+    const normalized = normalizeQuestionNumber(initialQuestionTarget.questionNumber);
+    const index = questionAnchors.findIndex(
+      (block) =>
+        normalizeQuestionNumber(block.displayNumber) === normalized ||
+        normalizeQuestionNumber(block.numberLabel) === normalized,
+    );
+    if (index >= 0) openTheaterMode(index);
+  }, [initialQuestionTarget, isSheet, openTheaterMode, questionAnchors]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
@@ -486,6 +550,9 @@ export default function EntryDetail({
   })();
   const theaterAnswer = theaterQuestion
     ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, theaterQuestion))
+    : undefined;
+  const theaterQuestionMeta = theaterQuestion
+    ? getQuestionMetaForBlock(entry, theaterQuestion)
     : undefined;
   const isFocusedQuestionShort = focusedQuestion
     ? `${focusedQuestion.body} ${focusedQuestion.choices.map((choice) => choice.text).join(" ")}`.trim().length < 360
@@ -1098,7 +1165,49 @@ export default function EntryDetail({
 
       <div className="detail-scroll">
         <header className="detail-title-block">
-          <h2 className="detail-title">{entry.title.trim() || "(제목 없음)"}</h2>
+          {titleEditing ? (
+            <div className="detail-title-edit">
+              <input
+                value={titleDraft}
+                onChange={(event) => setTitleDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") void handleTitleSave();
+                  if (event.key === "Escape") {
+                    setTitleDraft(entry.title);
+                    setTitleEditing(false);
+                  }
+                }}
+                aria-label="시험지 이름"
+                autoFocus
+              />
+              <button type="button" className="btn-secondary" onClick={() => void handleTitleSave()}>
+                저장
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setTitleDraft(entry.title);
+                  setTitleEditing(false);
+                }}
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <div className="detail-title-row">
+              <h2 className="detail-title">{entry.title.trim() || "(제목 없음)"}</h2>
+              {isSheet && onTitleChange && (
+                <button
+                  type="button"
+                  className="btn-secondary btn-rename-sheet"
+                  onClick={() => setTitleEditing(true)}
+                >
+                  이름 변경
+                </button>
+              )}
+            </div>
+          )}
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
@@ -1219,6 +1328,7 @@ export default function EntryDetail({
                     searchQuery={isSheet ? sheetSearch : ""}
                     suspiciousSegments={suspiciousSegments}
                     onOpenQuestionTheater={isSheet ? openTheaterMode : undefined}
+                    onToggleQuestionImportant={isSheet ? handleToggleQuestionImportant : undefined}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
@@ -1730,6 +1840,7 @@ export default function EntryDetail({
           questionIndex={theaterQuestionIndex}
           questionCount={questionAnchors.length}
           answer={theaterAnswer}
+          questionMeta={theaterQuestionMeta}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}
@@ -1751,6 +1862,7 @@ export default function EntryDetail({
             setFocusedQuestionIndex(next);
           }}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
+          onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
           onReview={(result) => void handleReviewResult(result)}
           onClose={closeTheaterMode}
         />

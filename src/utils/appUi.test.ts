@@ -1,0 +1,93 @@
+import { describe, expect, it } from "vitest";
+import type { WrongAnswerEntry } from "../types";
+import {
+  entryKindName,
+  getEntryCardPreview,
+  imageCount,
+  isDifficultyFilter,
+  sortEntries,
+} from "./appUi";
+
+const baseEntry: WrongAnswerEntry = {
+  id: "1",
+  subject: "수학",
+  title: "가 항목",
+  question: "첫 줄\n둘째 줄",
+  questionImages: [],
+  entryKind: "wrong_answer",
+  difficult: false,
+  difficulty: "none",
+  myAnswer: "",
+  correctAnswer: "",
+  explanationParts: [],
+  memo: "",
+  annotations: [],
+  tags: [],
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  mastered: false,
+};
+
+describe("appUi utilities", () => {
+  it("sorts entries by title and updated date", () => {
+    const older = { ...baseEntry, id: "older", title: "나", updatedAt: "2026-01-01T00:00:00.000Z" };
+    const newer = { ...baseEntry, id: "newer", title: "가", updatedAt: "2026-02-01T00:00:00.000Z" };
+
+    expect(sortEntries([older, newer], "date-desc").map((entry) => entry.id)).toEqual(["newer", "older"]);
+    expect(sortEntries([older, newer], "title-asc").map((entry) => entry.id)).toEqual(["newer", "older"]);
+  });
+
+  it("sorts sheets by question, bookmark, and review need counts", () => {
+    const small = {
+      ...baseEntry,
+      id: "small",
+      entryKind: "problem_sheet" as const,
+      question: "1. 하나",
+      questionMeta: [{ questionNumber: "1", important: true, updatedAt: "2026-01-01T00:00:00.000Z" }],
+    };
+    const large = {
+      ...baseEntry,
+      id: "large",
+      entryKind: "problem_sheet" as const,
+      question: "1. 하나\n\n2. 둘\n\n3. 셋",
+      questionMeta: [
+        { questionNumber: "1", important: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+        { questionNumber: "2", important: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+      ],
+      answerKey: [{ id: "a", questionNumber: "1", answer: "", explanation: "", importantPoints: [], needsReview: true }],
+    };
+
+    expect(sortEntries([small, large], "question-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
+    expect(sortEntries([small, large], "bookmark-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
+    expect(sortEntries([small, large], "review-need-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
+  });
+
+  it("builds previews for concept and lecture entries", () => {
+    expect(getEntryCardPreview({
+      ...baseEntry,
+      entryKind: "concept",
+      question: "  핵심 개념입니다  ",
+    })).toBe("핵심 개념입니다");
+
+    expect(getEntryCardPreview({
+      ...baseEntry,
+      entryKind: "lecture",
+      learningBlocks: [{ id: "b", type: "concept", title: "미분", content: "접선 기울기" }],
+    })).toContain("미분 접선 기울기");
+  });
+
+  it("maps entry labels and filters difficulty values", () => {
+    expect(entryKindName("wrong_answer")).toBe("오답");
+    expect(entryKindName("lecture")).toBe("특강자료");
+    expect(isDifficultyFilter("high")).toBe(true);
+    expect(isDifficultyFilter("urgent")).toBe(false);
+  });
+
+  it("counts question and explanation images", () => {
+    expect(imageCount({
+      ...baseEntry,
+      questionImages: ["q.png"],
+      explanationParts: [{ id: "p", text: "", images: ["a.png", "b.png"] }],
+    })).toBe(3);
+  });
+});

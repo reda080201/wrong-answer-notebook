@@ -189,6 +189,14 @@ export interface SheetFigureItem {
   needsReview?: boolean;
 }
 
+export interface QuestionMeta {
+  questionNumber: string;
+  important: boolean;
+  bookmarkLabel?: string;
+  note?: string;
+  updatedAt: string;
+}
+
 export interface ImportAudit {
   expectedQuestionNumbers: string[];
   detectedQuestionNumbers: string[];
@@ -352,6 +360,7 @@ export interface WrongAnswerEntry {
   tags: string[];
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
+  questionMeta?: QuestionMeta[];
   importAudit?: ImportAudit;
   rejectedNotes?: string[];
   mistakeAnalysis?: MistakeAnalysis;
@@ -389,7 +398,14 @@ export const SUBJECTS = [
 
 export type Subject = (typeof SUBJECTS)[number];
 
-export type SortKey = "date-desc" | "date-asc" | "title-asc" | "title-desc";
+export type SortKey =
+  | "date-desc"
+  | "date-asc"
+  | "title-asc"
+  | "title-desc"
+  | "question-count-desc"
+  | "bookmark-count-desc"
+  | "review-need-count-desc";
 
 export type ThemeMode = "light" | "dark" | "system";
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getImageUrl } from "../api";
-import type { Annotation, AnnotationTool, SheetFigureItem, TextRangeAnnotation } from "../types";
+import type { Annotation, AnnotationTool, QuestionMeta, SheetFigureItem, TextRangeAnnotation } from "../types";
 import {
   createImageAnnotation,
   createTextAnnotation,
@@ -39,6 +39,8 @@ interface AnnotatableQuestionProps {
   zoomableImages?: boolean;
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
+  questionMeta?: QuestionMeta[];
+  onToggleQuestionImportant?: (questionNumber: string) => void;
 }
 
 interface FocusedQuestionViewProps {
@@ -277,6 +279,8 @@ function StructuredQuestionBlock({
   suspiciousSegments = [],
   questionIndex,
   onOpenQuestionTheater,
+  questionMeta = [],
+  onToggleQuestionImportant,
 }: {
   block: QuestionTextBlock;
   textAnnotations: TextRangeAnnotation[];
@@ -287,6 +291,8 @@ function StructuredQuestionBlock({
   suspiciousSegments?: SuspiciousTextSegment[];
   questionIndex?: number;
   onOpenQuestionTheater?: (questionIndex: number) => void;
+  questionMeta?: QuestionMeta[];
+  onToggleQuestionImportant?: (questionNumber: string) => void;
 }) {
   if (block.kind === "passage" || block.kind === "paragraph") {
     return (
@@ -306,6 +312,11 @@ function StructuredQuestionBlock({
 
   const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, block));
   const bodySegments = questionBodySegmentsForBlock(block);
+  const meta = questionMeta.find((item) => {
+    const normalized = normalizeNumberLabel(item.questionNumber);
+    return normalized === String(block.displayNumber) || normalized === normalizeNumberLabel(block.numberLabel);
+  });
+  const isImportant = Boolean(meta?.important);
 
   return (
     <section
@@ -318,6 +329,16 @@ function StructuredQuestionBlock({
           <small>원문 {block.numberLabel}</small>
         )}
       </div>
+      {onToggleQuestionImportant && (
+        <button
+          type="button"
+          className={`question-important-btn ${isImportant ? "active" : ""}`}
+          aria-pressed={isImportant}
+          onClick={() => onToggleQuestionImportant(String(block.displayNumber))}
+        >
+          {isImportant ? "★ 중요" : "☆ 중요"}
+        </button>
+      )}
       <QuestionBodySegments
         segments={bodySegments}
         textAnnotations={textAnnotations}
@@ -560,6 +581,8 @@ function StructuredQuestionText({
   searchQuery,
   suspiciousSegments = [],
   onOpenQuestionTheater,
+  questionMeta = [],
+  onToggleQuestionImportant,
 }: {
   question: string;
   textAnnotations: TextRangeAnnotation[];
@@ -570,6 +593,8 @@ function StructuredQuestionText({
   searchQuery?: string;
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
+  questionMeta?: QuestionMeta[];
+  onToggleQuestionImportant?: (questionNumber: string) => void;
 }) {
   const blocks = useMemo(() => parseQuestionText(question), [question]);
   const questionIndexes = useMemo(() => {
@@ -599,6 +624,8 @@ function StructuredQuestionText({
             searchQuery={searchQuery}
             suspiciousSegments={suspiciousSegments}
             onOpenQuestionTheater={onOpenQuestionTheater}
+            questionMeta={questionMeta}
+            onToggleQuestionImportant={onToggleQuestionImportant}
           />
       ))}
     </div>
@@ -777,6 +804,8 @@ export default function AnnotatableQuestion({
   zoomableImages = false,
   suspiciousSegments = [],
   onOpenQuestionTheater,
+  questionMeta,
+  onToggleQuestionImportant,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -827,6 +856,8 @@ export default function AnnotatableQuestion({
             searchQuery={searchQuery}
             suspiciousSegments={suspiciousSegments}
             onOpenQuestionTheater={onOpenQuestionTheater}
+            questionMeta={questionMeta}
+            onToggleQuestionImportant={onToggleQuestionImportant}
           />
         </div>
       )}

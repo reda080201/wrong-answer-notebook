@@ -1,0 +1,90 @@
+import { useEffect, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import {
+  clearAiProviderKey,
+  getAiProviderStatus,
+  saveAiProviderConfig,
+  saveAiProviderKey,
+} from "../api";
+import type { AiProviderSettings, AiProviderStatus } from "../types";
+
+interface UseAiProviderSettingsOptions {
+  aiProvider: AiProviderSettings;
+  refreshSettings: () => Promise<void>;
+  setSettingsMessage: (message: string | null) => void;
+}
+
+export function useAiProviderSettings({
+  aiProvider,
+  refreshSettings,
+  setSettingsMessage,
+}: UseAiProviderSettingsOptions) {
+  const [aiProviderStatus, setAiProviderStatus] =
+    useState<AiProviderStatus | null>(null);
+  const [aiProviderKeyInput, setAiProviderKeyInput] = useState("");
+
+  useEffect(() => {
+    void getAiProviderStatus().then(setAiProviderStatus);
+  }, [aiProvider]);
+
+  const updateAiProviderConfig = async (patch: Partial<AiProviderSettings>) => {
+    const next: AiProviderSettings = {
+      ...aiProvider,
+      ...patch,
+    };
+    if (next.type === "manual") next.enabled = false;
+    try {
+      const status = await saveAiProviderConfig(next);
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("AI Provider 설정을 저장했습니다.");
+    } catch (configError) {
+      setSettingsMessage(
+        configError instanceof Error
+          ? configError.message
+          : "AI Provider 설정 저장에 실패했습니다.",
+      );
+    }
+  };
+
+  const storeAiProviderKey = async () => {
+    if (!aiProviderKeyInput.trim()) {
+      setSettingsMessage("저장할 API key를 입력하세요.");
+      return;
+    }
+    try {
+      const status = await saveAiProviderKey(aiProviderKeyInput.trim());
+      setAiProviderKeyInput("");
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("AI Provider key를 저장했습니다.");
+    } catch (keyError) {
+      setSettingsMessage(
+        keyError instanceof Error ? keyError.message : "API key 저장에 실패했습니다.",
+      );
+    }
+  };
+
+  const removeAiProviderKey = async () => {
+    try {
+      const status = await clearAiProviderKey();
+      setAiProviderStatus(status);
+      await refreshSettings();
+      setSettingsMessage("저장된 AI Provider key를 삭제했습니다.");
+    } catch (keyError) {
+      setSettingsMessage(
+        keyError instanceof Error ? keyError.message : "API key 삭제에 실패했습니다.",
+      );
+    }
+  };
+
+  return {
+    aiProviderStatus,
+    aiProviderKeyInput,
+    setAiProviderKeyInput,
+    updateAiProviderConfig,
+    storeAiProviderKey,
+    removeAiProviderKey,
+    isAiProviderDesktopAvailable: isTauri(),
+  };
+}

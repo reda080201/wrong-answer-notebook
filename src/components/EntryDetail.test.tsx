@@ -99,6 +99,63 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".question-search-mark")).toHaveTextContent("둘째");
   });
 
+  it("renames a problem sheet title inline", async () => {
+    const onTitleChange = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onTitleChange={onTitleChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이름 변경" }));
+    fireEvent.change(screen.getByLabelText("시험지 이름"), {
+      target: { value: "기말고사" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => {
+      expect(onTitleChange).toHaveBeenCalledWith(sheetEntry, "기말고사");
+    });
+    expect(screen.getByText("시험지 이름을 변경했습니다.")).toBeInTheDocument();
+  });
+
+  it("toggles per-question importance from the paper view", async () => {
+    const onQuestionMetaChange = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onQuestionMetaChange={onQuestionMetaChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "☆ 중요" }));
+
+    await waitFor(() => {
+      expect(onQuestionMetaChange).toHaveBeenCalledWith(
+        sheetEntry,
+        expect.arrayContaining([
+          expect.objectContaining({ questionNumber: "1", important: true }),
+        ]),
+      );
+    });
+    expect(screen.getByText("1번 문제를 중요 표시했습니다.")).toBeInTheDocument();
+  });
+
   it("switches between textbook paper, solution, and analysis modes", () => {
     render(
       <EntryDetail

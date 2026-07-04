@@ -19,6 +19,7 @@ import type {
 } from "../types";
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
+import { normalizeQuestionMeta } from "./questionMeta";
 
 function isEntryKind(v: unknown): v is EntryKind {
   return v === "wrong_answer" || v === "problem_sheet" || v === "concept" || v === "lecture";
@@ -471,6 +472,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     tags: Array.isArray(rest.tags) ? rest.tags : [],
     answerKey,
     figures,
+    questionMeta: normalizeQuestionMeta(rest.questionMeta),
     learningBlocks,
     importAudit: rest.importAudit
       ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures })
