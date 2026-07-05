@@ -2,6 +2,8 @@ import { v4 as uuidv4 } from "uuid";
 import type {
   ChecklistItem,
   DiagramSpec,
+  DiagramSpecParamValue,
+  DiagramSpecParams,
   Difficulty,
   EntryKind,
   ExplanationPart,
@@ -20,6 +22,7 @@ import type {
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionMeta } from "./questionMeta";
+import { normalizeSheetGroup } from "./sheetGroup";
 
 function isEntryKind(v: unknown): v is EntryKind {
   return v === "wrong_answer" || v === "problem_sheet" || v === "concept" || v === "lecture";
@@ -37,19 +40,32 @@ function normalizeAnswerDifficulty(v: unknown): Exclude<Difficulty, "none"> | un
   return v === "high" || v === "medium" || v === "low" ? v : undefined;
 }
 
-function isLearningDiagramType(v: unknown): v is LearningDiagramType {
-  return (
-    v === "derivative-tangent" ||
-    v === "absolute-value-corner" ||
-    v === "piecewise-differentiability" ||
-    v === "coordinate-graph" ||
-    v === "normal-distribution" ||
-    v === "probability-tree" ||
-    v === "venn-diagram" ||
-    v === "geometry-helper" ||
-    v === "trig-unit-circle" ||
-    v === "sequence-flow"
-  );
+const LEARNING_DIAGRAM_TYPE_ALIASES: Record<string, LearningDiagramType> = {
+  "derivative-tangent": "derivative-tangent",
+  derivative_tangent: "derivative-tangent",
+  "absolute-value-corner": "absolute-value-corner",
+  absolute_value_corner: "absolute-value-corner",
+  "piecewise-differentiability": "piecewise-differentiability",
+  piecewise_differentiability: "piecewise-differentiability",
+  "coordinate-graph": "coordinate-graph",
+  coordinate_graph: "coordinate-graph",
+  "normal-distribution": "normal-distribution",
+  normal_distribution: "normal-distribution",
+  "probability-tree": "probability-tree",
+  probability_tree: "probability-tree",
+  "venn-diagram": "venn-diagram",
+  venn_diagram: "venn-diagram",
+  "geometry-helper": "geometry-helper",
+  geometry_helper: "geometry-helper",
+  "trig-unit-circle": "trig-unit-circle",
+  trig_unit_circle: "trig-unit-circle",
+  "sequence-flow": "sequence-flow",
+  sequence_flow: "sequence-flow",
+};
+
+export function normalizeLearningDiagramType(value: unknown): LearningDiagramType | undefined {
+  if (typeof value !== "string") return undefined;
+  return LEARNING_DIAGRAM_TYPE_ALIASES[value.trim().toLowerCase()];
 }
 
 const DIAGRAM_SPEC_LABEL_LIMIT = 80;
@@ -73,20 +89,60 @@ function safeDiagramLabelList(value: unknown): string[] | undefined {
   return items.length ? items : undefined;
 }
 
+function safeDiagramParamValue(value: unknown, depth = 0): DiagramSpecParamValue | undefined {
+  if (depth > 5) return undefined;
+  if (value === null) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed.length > 180) return undefined;
+    if (/<\/?(script|svg|iframe|object|embed|img|html|body|canvas)\b/i.test(trimmed)) return undefined;
+    if (/data:image\/|base64,/i.test(trimmed)) return undefined;
+    return trimmed;
+  }
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => safeDiagramParamValue(item, depth + 1))
+      .filter((item): item is DiagramSpecParamValue => item !== undefined)
+      .slice(0, 16);
+    return items.length ? items : undefined;
+  }
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .slice(0, 24)
+      .map(([key, item]) => {
+        const safeKey = key.trim().replace(/[^0-9A-Za-z가-힣_-]/g, "").slice(0, 48);
+        const safeValue = safeDiagramParamValue(item, depth + 1);
+        return safeKey && safeValue !== undefined ? [safeKey, safeValue] as const : undefined;
+      })
+      .filter((item): item is readonly [string, DiagramSpecParamValue] => Boolean(item));
+    return entries.length ? Object.fromEntries(entries) as DiagramSpecParams : undefined;
+  }
+  return undefined;
+}
+
+function safeDiagramParams(value: unknown): DiagramSpecParams | undefined {
+  const params = safeDiagramParamValue(value);
+  return params && typeof params === "object" && !Array.isArray(params) ? params as DiagramSpecParams : undefined;
+}
+
 export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Record<string, unknown>;
-  if (!isLearningDiagramType(value.type)) return undefined;
+  const type = normalizeLearningDiagramType(value.type) ?? normalizeLearningDiagramType(value.diagramType);
+  if (!type) return undefined;
 
   const base = {
-    type: value.type,
+    type,
     title: safeDiagramLabel(value.title),
     xLabel: safeDiagramLabel(value.xLabel),
     yLabel: safeDiagramLabel(value.yLabel),
     highlights: safeDiagramLabelList(value.highlights),
+    params: safeDiagramParams(value.params),
   };
 
-  if (value.type === "derivative-tangent") {
+  if (type === "derivative-tangent") {
     return {
       ...base,
       type: "derivative-tangent",
@@ -97,7 +153,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "absolute-value-corner") {
+  if (type === "absolute-value-corner") {
     return {
       ...base,
       type: "absolute-value-corner",
@@ -107,7 +163,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "piecewise-differentiability") {
+  if (type === "piecewise-differentiability") {
     return {
       ...base,
       type: "piecewise-differentiability",
@@ -118,7 +174,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "coordinate-graph") {
+  if (type === "coordinate-graph") {
     return {
       ...base,
       type: "coordinate-graph",
@@ -128,7 +184,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "normal-distribution") {
+  if (type === "normal-distribution") {
     return {
       ...base,
       type: "normal-distribution",
@@ -138,7 +194,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "probability-tree") {
+  if (type === "probability-tree") {
     return {
       ...base,
       type: "probability-tree",
@@ -148,7 +204,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "venn-diagram") {
+  if (type === "venn-diagram") {
     return {
       ...base,
       type: "venn-diagram",
@@ -158,7 +214,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "geometry-helper") {
+  if (type === "geometry-helper") {
     return {
       ...base,
       type: "geometry-helper",
@@ -168,7 +224,7 @@ export function normalizeDiagramSpec(raw: unknown): DiagramSpec | undefined {
     };
   }
 
-  if (value.type === "trig-unit-circle") {
+  if (type === "trig-unit-circle") {
     return {
       ...base,
       type: "trig-unit-circle",
@@ -201,7 +257,7 @@ function isLearningBlockType(v: unknown): v is LearningBlockType {
 }
 
 function isFigureSource(v: unknown): v is SheetFigureItem["source"] {
-  return v === "original" || v === "gpt_cleaned";
+  return v === "original" || v === "gpt_cleaned" || v === "described_only";
 }
 
 function isReviewResult(v: unknown): v is ReviewResult {
@@ -337,7 +393,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       importantPoints: normalizeImportantPoints(item.importantPoints),
       difficulty: normalizeAnswerDifficulty(item.difficulty),
       concepts: normalizeImportantPoints(item.concepts),
-      diagramType: isLearningDiagramType(item.diagramType) ? item.diagramType : undefined,
+      diagramType: normalizeLearningDiagramType(item.diagramType),
       diagramSpec: normalizeDiagramSpec(item.diagramSpec),
       needsReview: Boolean(item.needsReview),
       sourceNote: `${item.sourceNote ?? ""}`.trim(),
@@ -363,18 +419,36 @@ export function normalizeLearningBlocks(raw: unknown): LearningBlock[] {
   if (!Array.isArray(raw)) return [];
   return raw
     .filter((item) => Boolean(item && typeof item === "object"))
-    .map((item) => item as Partial<LearningBlock>)
-    .map((item) => ({
-      id: item.id || uuidv4(),
-      type: isLearningBlockType(item.type) ? item.type : "concept",
-      title: `${item.title ?? ""}`.trim(),
-      content: `${item.content ?? ""}`.trim(),
-      sourceQuestionNumber: item.sourceQuestionNumber
-        ? `${item.sourceQuestionNumber}`.trim()
-        : undefined,
-      diagramType: isLearningDiagramType(item.diagramType) ? item.diagramType : undefined,
-      diagramSpec: normalizeDiagramSpec(item.diagramSpec),
-    }))
+    .map((item) => item as Partial<LearningBlock> & Record<string, unknown>)
+    .map((item) => {
+      const items = Array.isArray(item.items)
+        ? item.items
+            .map((value) => `${value ?? ""}`.trim())
+            .filter(Boolean)
+            .map((value) => `- ${value}`)
+            .join("\n")
+        : "";
+      const content = [
+        item.content,
+        item.body,
+        item.formula,
+        items,
+        item.description,
+      ]
+        .map((value) => `${value ?? ""}`.trim())
+        .find(Boolean) ?? "";
+      return {
+        id: item.id || uuidv4(),
+        type: isLearningBlockType(item.type) ? item.type : "concept",
+        title: `${item.title ?? ""}`.trim(),
+        content,
+        sourceQuestionNumber: item.sourceQuestionNumber
+          ? `${item.sourceQuestionNumber}`.trim()
+          : undefined,
+        diagramType: normalizeLearningDiagramType(item.diagramType),
+        diagramSpec: normalizeDiagramSpec(item.diagramSpec),
+      };
+    })
     .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec);
 }
 
@@ -473,6 +547,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     answerKey,
     figures,
     questionMeta: normalizeQuestionMeta(rest.questionMeta),
+    sheetGroup: entryKind === "problem_sheet" ? normalizeSheetGroup(rest.sheetGroup) : undefined,
     learningBlocks,
     importAudit: rest.importAudit
       ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures })

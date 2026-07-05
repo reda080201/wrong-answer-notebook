@@ -1,0 +1,105 @@
+{
+  "title": "Nswer N제 수학 II 1단원 함수의 극한과 연속",
+  "subject": "수학",
+  "question": "01. 함수의 극한값을 구하시오.\n① 0 ② 1 ③ 2\n\n02. 연속 조건을 확인하시오.\n① ㄱ ② ㄴ ③ ㄷ\n\n03. 좌극한과 우극한을 비교하시오.\n\n04. 그래프에서 극한을 판단하시오.\n\n05. 함수의 연속성을 판별하시오.\n\n06. 그림을 보고 극한값을 구하시오.\n\n07. 도표를 이용하여 연속 조건을 확인하시오.\n\n08. 그래프의 불연속점을 찾으시오.\n\n09. 다음 함수의 극한을 구하시오.\n\n10. 다음 함수 f(x)에 대하여 x가 1에 한없이 가까워질 때의 극한값을 구하시오.\n① 1 ② 2 ③ 3 ④ 4 ⑤ 5\n\n11. 함수 g(x)가 x=2에서 연속이 되도록 하는 상수 a의 값을 구하시오.\n① -1 ② 0 ③ 1 ④ 2 ⑤ 3\n\n12. [문제 12] 두 함수의 합성함수의 극한을 구하시오.\n① 0 ② 1 ③ 2 ④ 3 ⑤ 4\n\n13. 13번 문제. 함수 h(x)의 좌극한과 우극한이 같도록 하는 조건을 고르시오.\n① ㄱ ② ㄴ ③ ㄱ, ㄴ\n\n14. 문제 14 다음 중 연속함수의 성질로 옳은 것을 고르시오.\n① 참 ② 거짓\n\n15. #15 함수의 그래프가 주어질 때 불연속점의 개수를 구하시오.\n① 1 ② 2 ③ 3 ④ 4 ⑤ 5\n\n16. 사잇값 정리를 적용할 수 있는지 판단하시오.\n\n17. 최대최소 정리를 이용하여 값을 구하시오.\n\n18. 함수의 극한과 연속에 대한 설명으로 옳은 것을 고르시오.",
+  "audit": {
+    "expectedQuestionNumbers": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18"],
+    "detectedQuestionNumbers": ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "handwritingExcluded": true,
+    "needsReviewCount": 0
+  },
+  "answerKey": [
+    { "questionNumber": "01", "answer": "②", "explanation": "극한의 정의에 따라 대입한다.", "importantPoints": [] },
+    { "questionNumber": "02", "answer": "①", "explanation": "좌극한과 우극한을 비교한다.", "importantPoints": [] },
+    { "questionNumber": "03", "answer": "③", "explanation": "양쪽 극한이 같은지 본다.", "importantPoints": [] },
+    { "questionNumber": "04", "answer": "④", "explanation": "그래프의 접근값을 읽는다.", "importantPoints": [] },
+    { "questionNumber": "05", "answer": "⑤", "explanation": "함숫값과 극한값을 비교한다.", "importantPoints": [] },
+    { "questionNumber": "06", "answer": "①", "explanation": "그림의 좌우 접근을 확인한다.", "importantPoints": [] },
+    { "questionNumber": "07", "answer": "②", "explanation": "도표 값을 비교한다.", "importantPoints": [] },
+    { "questionNumber": "08", "answer": "③", "explanation": "불연속 지점을 센다.", "importantPoints": [] },
+    { "questionNumber": "09", "answer": "④", "explanation": "극한 계산을 정리한다.", "importantPoints": [] },
+    { "questionNumber": "10", "answer": "⑤", "explanation": "x가 1에 접근할 때의 값을 구한다.", "importantPoints": [] },
+    { "questionNumber": "11", "answer": "④", "explanation": "x=2에서 연속 조건을 만족시킨다.", "importantPoints": [] },
+    { "questionNumber": "12", "answer": "③", "explanation": "합성함수의 내부 극한을 먼저 구한다.", "importantPoints": [] },
+    { "questionNumber": "13", "answer": "②", "explanation": "좌극한과 우극한이 같아야 한다.", "importantPoints": [] },
+    { "questionNumber": "14", "answer": "①", "explanation": "연속함수의 기본 성질을 적용한다.", "importantPoints": [] },
+    { "questionNumber": "15", "answer": "②", "explanation": "그래프에서 끊기는 지점을 확인한다.", "importantPoints": [] },
+    { "questionNumber": "16", "answer": "③", "explanation": "폐구간 연속 조건을 확인한다.", "importantPoints": [] },
+    { "questionNumber": "17", "answer": "④", "explanation": "닫힌구간에서 최대최소 정리를 사용한다.", "importantPoints": [] },
+    { "questionNumber": "18", "answer": "⑤", "explanation": "극한과 연속의 정의를 비교한다.", "importantPoints": [] }
+  ],
+  "figures": [
+    { "questionNumber": "06", "title": "6번 그래프", "caption": "좌우 극한을 비교하는 그래프", "image": "", "source": "original" },
+    { "questionNumber": "07", "title": "7번 도표", "caption": "x값과 f(x) 값의 대응표", "image": "", "source": "original" },
+    { "questionNumber": "08", "title": "8번 그래프", "caption": "불연속점을 확인하는 그래프", "image": "", "source": "original" },
+    { "questionNumber": "10", "title": "10번 그래프", "caption": "x=1 근처의 함수 그래프", "image": "", "source": "original" },
+    { "questionNumber": "11", "title": "11번 도표", "caption": "연속 조건을 확인하는 표", "image": "", "source": "original" },
+    { "questionNumber": "12", "title": "12번 그림", "caption": "합성함수 구조 그림", "image": "", "source": "original" }
+  ],
+  "rejectedNotes": [
+    "학생이 연필로 표시한 별표",
+    "여백에 적힌 풀이 흔적"
+  ],
+  "learningBlocks": [
+    {
+      "type": "concept",
+      "title": "함수의 극한",
+      "body": "좌극한과 우극한이 같을 때 극한이 존재한다."
+    },
+    {
+      "type": "formula",
+      "title": "연속 조건",
+      "formula": "lim_{x\\to a} f(x)=f(a)"
+    },
+    {
+      "type": "routine",
+      "title": "풀이 루틴",
+      "items": ["좌극한 확인", "우극한 확인", "함숫값 비교"]
+    },
+    {
+      "type": "diagram",
+      "title": "07번 도표 시각화",
+      "body": "도표의 좌우 접근값을 비교한다.",
+      "sourceQuestionNumber": "07",
+      "diagramType": "coordinate_graph",
+      "diagramSpec": {
+        "diagramType": "coordinate_graph",
+        "title": "좌우 접근값 도표",
+        "params": {
+          "objects": [
+            { "type": "axis", "label": "x" },
+            { "type": "table", "label": "f(x) 대응표" }
+          ],
+          "highlight": ["좌극한", "우극한"],
+          "coreIdea": "도표의 양쪽 접근값이 같은지 비교한다."
+        }
+      }
+    },
+    {
+      "type": "diagram",
+      "title": "08번 그래프 시각화",
+      "description": "그래프의 끊기는 지점을 표시한다.",
+      "sourceQuestionNumber": "08",
+      "diagramType": "geometry_helper",
+      "diagramSpec": {
+        "diagramType": "geometry_helper",
+        "title": "불연속점 표시",
+        "params": {
+          "coordinatePlane": true,
+          "points": [
+            { "id": "A", "role": "jump discontinuity" }
+          ],
+          "highlight": ["A"],
+          "coreIdea": "함숫값과 극한값이 다른 지점을 찾는다."
+        }
+      }
+    },
+    {
+      "type": "warning",
+      "title": "주의",
+      "description": "함숫값만 보고 연속이라고 판단하지 않는다."
+    }
+  ]
+}

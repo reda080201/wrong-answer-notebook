@@ -630,6 +630,24 @@ export default function ImportFromGptModal({
     }));
   };
 
+  const updateFigure = (id: string, patch: Partial<SheetFigureItem>) => {
+    setDraft((current) => ({
+      ...current,
+      figures: (current?.figures ?? []).map((figure) =>
+        figure.id === id ? { ...figure, ...patch } : figure,
+      ),
+    }));
+    setConfirmedValidationErrors(false);
+  };
+
+  const removeFigure = (id: string) => {
+    setDraft((current) => ({
+      ...current,
+      figures: (current?.figures ?? []).filter((figure) => figure.id !== id),
+    }));
+    setConfirmedValidationErrors(false);
+  };
+
   const apply = () => {
     if (!draft || !canApply) return;
     const rejectedNotes = normalizeRejectedNotes(draft.rejectedNotes);
@@ -845,7 +863,7 @@ export default function ImportFromGptModal({
               <div className="import-json-example">
                 <span>권장 JSON 예시</span>
                 <p className="form-hint">
-                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다. diagramSpec은 허용 타입과 짧은 라벨만 사용하고 raw SVG/HTML/base64는 넣지 마세요.
+                  answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다. 도표 문항은 figures 설명만 쓰지 말고 가능한 경우 learningBlocks[].type을 "diagram"으로 만들며, raw SVG/HTML/Canvas/base64는 넣지 마세요.
                 </p>
                 <pre>{`{
   "title": "2026 중간고사 오답",
@@ -878,13 +896,25 @@ export default function ImportFromGptModal({
       "importantPoints": ["보기 ②와 ③의 차이 확인"],
       "concepts": ["함수"],
       "diagramSpec": {
-        "type": "derivative-tangent",
-        "title": "접선과 미분계수",
-        "pointLabel": "x=a",
-        "functionLabel": "y=f(x)",
-        "tangentLabel": "접선",
-        "slopeLabel": "기울기 f'(a)",
-        "highlights": ["순간변화율과 접선 기울기 연결"]
+        "diagramType": "geometry-helper",
+        "title": "원과 직선 시각화",
+        "params": {
+          "coordinatePlane": true,
+          "objects": [
+            { "type": "circle", "center": [0, 0], "radius": 2, "label": "x^2+y^2=4" },
+            { "type": "line", "equation": "y=tx+t", "label": "y=tx+t" }
+          ],
+          "points": [
+            { "id": "P", "role": "upper intersection" },
+            { "id": "Q", "role": "lower intersection" }
+          ],
+          "segments": [
+            { "from": "P", "to": "R", "style": "horizontal", "label": "PR" },
+            { "from": "Q", "to": "S", "style": "horizontal", "label": "QS" }
+          ],
+          "highlight": ["PR", "QS"],
+          "coreIdea": "수평현 길이 차를 교점의 x좌표 차로 바꾸어 극한을 계산한다."
+        }
       },
       "needsReview": false,
       "sourceNote": "답안지 1번과 연결"
@@ -896,12 +926,18 @@ export default function ImportFromGptModal({
       "title": "좌표 그래프 시각화",
       "content": "그래프의 교점과 절편을 구분한다.",
       "sourceQuestionNumber": "1",
+      "diagramType": "geometry-helper",
       "diagramSpec": {
-        "type": "coordinate-graph",
-        "title": "교점과 절편",
-        "curveLabel": "y=f(x)",
-        "pointLabels": ["교점", "절편"],
-        "interceptLabel": "x절편"
+        "diagramType": "geometry-helper",
+        "title": "원과 직선 시각화",
+        "params": {
+          "objects": [
+            { "type": "circle", "center": [0, 0], "radius": 2, "label": "x^2+y^2=4" },
+            { "type": "line", "equation": "y=tx+t", "label": "y=tx+t" }
+          ],
+          "highlight": ["PR", "QS"],
+          "coreIdea": "교점과 수평현 길이를 연결한다."
+        }
       }
     }
   ],
@@ -910,8 +946,8 @@ export default function ImportFromGptModal({
       "questionNumber": "1",
       "title": "1번 그래프",
       "caption": "x축과 y축의 교점이 표시된 그래프",
-      "image": "graph_1.png",
-      "source": "gpt_cleaned",
+      "image": "",
+      "source": "described_only",
       "needsReview": false
     }
   ],
@@ -1253,9 +1289,51 @@ export default function ImportFromGptModal({
                           <div key={figure.id} className="import-figure-row">
                             <strong>{figure.questionNumber || "?"}번</strong>
                             <span>{figure.title || "제목 없음"}</span>
-                            <small>{figure.image ? `연결됨: ${figure.image}` : "이미지 연결 실패"}</small>
+                            <small>
+                              {figure.image
+                                ? `연결됨: ${figure.image}`
+                                : figure.source === "described_only"
+                                  ? "설명 도표"
+                                  : "이미지 나중에 연결"}
+                            </small>
                             {figure.needsReview && <small className="answer-review-badge">검토 필요</small>}
                             {figure.caption && <p>{figure.caption}</p>}
+                            {!figure.image && (
+                              <div className="import-figure-actions">
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-sm"
+                                  onClick={() =>
+                                    updateFigure(figure.id, {
+                                      source: "described_only",
+                                      image: undefined,
+                                      needsReview: false,
+                                    })
+                                  }
+                                >
+                                  설명 도표로 유지
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-sm"
+                                  onClick={() =>
+                                    updateFigure(figure.id, {
+                                      image: undefined,
+                                      needsReview: true,
+                                    })
+                                  }
+                                >
+                                  이미지 나중에 연결
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn-secondary btn-sm danger"
+                                  onClick={() => removeFigure(figure.id)}
+                                >
+                                  도표 항목 제외
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

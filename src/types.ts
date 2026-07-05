@@ -47,12 +47,23 @@ export type LearningDiagramType =
   | "trig-unit-circle"
   | "sequence-flow";
 
+export type DiagramSpecParamValue =
+  | string
+  | number
+  | boolean
+  | null
+  | DiagramSpecParamValue[]
+  | { [key: string]: DiagramSpecParamValue };
+
+export type DiagramSpecParams = Record<string, DiagramSpecParamValue>;
+
 export interface DiagramSpecBase {
   type: LearningDiagramType;
   title?: string;
   xLabel?: string;
   yLabel?: string;
   highlights?: string[];
+  params?: DiagramSpecParams;
 }
 
 export interface DerivativeTangentSpec extends DiagramSpecBase {
@@ -185,7 +196,7 @@ export interface SheetFigureItem {
   title: string;
   caption: string;
   image?: string;
-  source: "original" | "gpt_cleaned";
+  source: "original" | "gpt_cleaned" | "described_only";
   needsReview?: boolean;
 }
 
@@ -195,6 +206,14 @@ export interface QuestionMeta {
   bookmarkLabel?: string;
   note?: string;
   updatedAt: string;
+}
+
+export interface SheetGroup {
+  groupId: string;
+  groupTitle: string;
+  partTitle: string;
+  partOrder: number;
+  questionRange?: string;
 }
 
 export interface ImportAudit {
@@ -361,6 +380,7 @@ export interface WrongAnswerEntry {
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
   questionMeta?: QuestionMeta[];
+  sheetGroup?: SheetGroup;
   importAudit?: ImportAudit;
   rejectedNotes?: string[];
   mistakeAnalysis?: MistakeAnalysis;
@@ -405,7 +425,9 @@ export type SortKey =
   | "title-desc"
   | "question-count-desc"
   | "bookmark-count-desc"
-  | "review-need-count-desc";
+  | "review-need-count-desc"
+  | "group-title-asc"
+  | "part-order-asc";
 
 export type ThemeMode = "light" | "dark" | "system";
 

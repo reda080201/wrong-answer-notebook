@@ -5,6 +5,7 @@ import {
   getQuestionCount,
   getReviewNeedCount,
 } from "./questionMeta";
+import { normalizeQuestionNumber } from "./questionMeta";
 
 export type DifficultyFilter = "all" | Difficulty;
 
@@ -19,6 +20,24 @@ export function sortEntries(list: WrongAnswerEntry[], sortKey: SortKey) {
       );
     case "review-need-count-desc":
       return copy.sort((a, b) => getReviewNeedCount(b) - getReviewNeedCount(a));
+    case "group-title-asc":
+      return copy.sort((a, b) =>
+        `${a.sheetGroup?.groupTitle ?? getEntryTitle(a)}`.localeCompare(
+          `${b.sheetGroup?.groupTitle ?? getEntryTitle(b)}`,
+          "ko",
+        ),
+      );
+    case "part-order-asc":
+      return copy.sort(
+        (a, b) =>
+          (a.sheetGroup?.partOrder ?? Number.MAX_SAFE_INTEGER) -
+            (b.sheetGroup?.partOrder ?? Number.MAX_SAFE_INTEGER) ||
+          normalizeQuestionNumber(a.sheetGroup?.questionRange).localeCompare(
+            normalizeQuestionNumber(b.sheetGroup?.questionRange),
+            "ko",
+          ) ||
+          getEntryTitle(a).localeCompare(getEntryTitle(b), "ko"),
+      );
     case "title-asc":
       return copy.sort((a, b) =>
         getEntryTitle(a).localeCompare(getEntryTitle(b), "ko"),

@@ -1,16 +1,10 @@
 import type { EntryFormData, ImportAudit, SheetAnswerItem, SheetFigureItem } from "../types";
 import { parseQuestionText } from "./textLayout";
+import { normalizeQuestionNumber } from "./questionMeta";
 
 export function normalizeImportQuestionNumber(value: unknown): string {
   if (typeof value !== "string" && typeof value !== "number") return "";
-  const raw = String(value).trim();
-  const normalized = raw
-    .replace(/^#/, "")
-    .replace(/^(?:문제|문항)\s*/, "")
-    .replace(/[.)번]\s*$/, "")
-    .replace(/\s+/g, "")
-    .trim();
-  return /^\d+$/.test(normalized) ? normalized.replace(/^0+(?=\d)/, "") : normalized;
+  return normalizeQuestionNumber(String(value));
 }
 
 export interface ExpectedQuestionNumberParseResult {
@@ -111,11 +105,23 @@ function containsIdentifier(text: string, identifier: string): boolean {
   return new RegExp(`(^|[^0-9A-Za-z가-힣])${escaped}([^0-9A-Za-z가-힣]|$)`, "i").test(text.replace(/[ \t]+/g, ""));
 }
 
-function detectedNumbers(question: string, expected: string[] = []): string[] {
+function regexDetectedNumbers(question: string): string[] {
+  const numbers: string[] = [];
+  const pattern = /(?:^|[\n\r])\s*(?:\[\s*)?(?:문제\s*)?#?(\d{1,3})(?:\s*\])?\s*(?:[.)]|번)/g;
+  for (const match of question.matchAll(pattern)) {
+    const normalized = normalizeImportQuestionNumber(match[1]);
+    if (normalized) numbers.push(normalized);
+  }
+  return numbers;
+}
+
+function detectedNumbers(question: string, expected: string[] = [], rawDetected: unknown = []): string[] {
   const detected = parseQuestionText(question)
     .filter((block) => block.kind === "question")
-    .map((block) => normalizeImportQuestionNumber(block.numberLabel) || String(block.displayNumber))
+    .map((block) => normalizeImportQuestionNumber(block.numberLabel))
     .filter(Boolean);
+  detected.push(...normalizeNumberList(rawDetected));
+  detected.push(...regexDetectedNumbers(question));
   for (const number of expected) {
     if (!/^\d+$/.test(number) && containsIdentifier(question, number)) {
       detected.push(number);
@@ -143,10 +149,12 @@ export function normalizeImportAudit(
 ): ImportAudit {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Partial<ImportAudit> : {};
   const expected = normalizeNumberList(source.expectedQuestionNumbers);
-  const detected = detectedNumbers(data.question ?? "", expected);
+  const detected = detectedNumbers(data.question ?? "", expected, source.detectedQuestionNumbers);
   const uncertain = normalizeNumberList(source.uncertainQuestionNumbers);
   const detectedSet = new Set(detected);
-  const missing = expected.filter((number) => !detectedSet.has(number));
+  const explicitMissing = normalizeNumberList(source.missingQuestionNumbers);
+  const missingSource = explicitMissing.length ? explicitMissing : expected;
+  const missing = missingSource.filter((number) => expected.includes(number) && !detectedSet.has(number));
   const answers = data.answerKey ?? [];
   const figures = data.figures ?? [];
   return {

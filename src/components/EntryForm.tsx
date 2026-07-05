@@ -51,6 +51,7 @@ const emptyForm: EntryFormData = {
   sourceType: undefined,
   linkedEntryIds: [],
   concepts: [],
+  sheetGroup: undefined,
   mastered: false,
 };
 
@@ -106,6 +107,7 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
     sourceType: entry.sourceType,
     linkedEntryIds: entry.linkedEntryIds ? [...entry.linkedEntryIds] : [],
     concepts: entry.concepts ? [...entry.concepts] : [],
+    sheetGroup: entry.sheetGroup ? { ...entry.sheetGroup } : undefined,
   };
 }
 
@@ -144,6 +146,7 @@ function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
     sourceType: data.sourceType,
     linkedEntryIds: data.linkedEntryIds ? [...data.linkedEntryIds] : [],
     concepts: data.concepts ? [...data.concepts] : [],
+    sheetGroup: data.sheetGroup ? { ...data.sheetGroup } : undefined,
     mistakeAnalysis: data.mistakeAnalysis
       ? {
           ...data.mistakeAnalysis,
@@ -405,6 +408,7 @@ export default function EntryForm({
         tags: form.tags,
         answerKey: form.answerKey,
         figures: form.figures,
+        sheetGroup: form.sheetGroup,
         mistakeAnalysis: form.mistakeAnalysis,
         questionImages: [],
         annotations: [],
@@ -706,6 +710,101 @@ export default function EntryForm({
                 placeholder="목록에 표시될 제목"
               />
             </div>
+
+            {form.entryKind === "problem_sheet" && (
+              <div className="sheet-group-editor">
+                <label className="settings-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.sheetGroup)}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        sheetGroup: event.target.checked
+                          ? current.sheetGroup ?? {
+                              groupId: "",
+                              groupTitle: current.title.trim(),
+                              partTitle: "",
+                              partOrder: 1,
+                              questionRange: "",
+                            }
+                          : undefined,
+                      }))
+                    }
+                  />
+                  시험지 묶음 사용
+                </label>
+                {form.sheetGroup && (
+                  <div className="form-row form-row--4">
+                    <div className="form-field">
+                      <label htmlFor="sheet-group-title">묶음 이름</label>
+                      <input
+                        id="sheet-group-title"
+                        value={form.sheetGroup.groupTitle}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            sheetGroup: current.sheetGroup
+                              ? { ...current.sheetGroup, groupTitle: event.target.value }
+                              : undefined,
+                          }))
+                        }
+                        placeholder="예: ALPHA 모의고사 6회"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label htmlFor="sheet-part-title">파트 이름</label>
+                      <input
+                        id="sheet-part-title"
+                        value={form.sheetGroup.partTitle}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            sheetGroup: current.sheetGroup
+                              ? { ...current.sheetGroup, partTitle: event.target.value }
+                              : undefined,
+                          }))
+                        }
+                        placeholder="예: 1~20"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label htmlFor="sheet-question-range">문항 범위</label>
+                      <input
+                        id="sheet-question-range"
+                        value={form.sheetGroup.questionRange ?? ""}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            sheetGroup: current.sheetGroup
+                              ? { ...current.sheetGroup, questionRange: event.target.value }
+                              : undefined,
+                          }))
+                        }
+                        placeholder="예: 1-20"
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label htmlFor="sheet-part-order">파트 순서</label>
+                      <input
+                        id="sheet-part-order"
+                        type="number"
+                        min={1}
+                        value={form.sheetGroup.partOrder}
+                        onChange={(event) =>
+                          setForm((current) => ({
+                            ...current,
+                            sheetGroup: current.sheetGroup
+                              ? { ...current.sheetGroup, partOrder: Number(event.target.value) || 1 }
+                              : undefined,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <div className="form-field full">
               <label htmlFor="question">

@@ -112,6 +112,37 @@ describe("parseQuestionText", () => {
     });
   });
 
+  it("detects two digit and bracketed problem labels without confusing choices", () => {
+    const text = [
+      "10. 열 번째 문제",
+      "① 첫 번째 선택지",
+      "② 두 번째 선택지",
+      "",
+      "10번 다른 원문 형식 문제",
+      "① 선택지",
+      "",
+      "[문제 12] 대괄호 문제",
+      "① 선택지",
+      "",
+      "문제 14 연속성 문제",
+      "① 선택지",
+    ].join("\n");
+
+    const questions = parseQuestionText(text).filter((block) => block.kind === "question");
+
+    expect(questions).toHaveLength(4);
+    expect(questions).toMatchObject([
+      { numberLabel: "10", body: "열 번째 문제" },
+      { numberLabel: "10", body: "다른 원문 형식 문제" },
+      { numberLabel: "12", body: "대괄호 문제" },
+      { numberLabel: "14", body: "연속성 문제" },
+    ]);
+    expect(questions[0].choices).toMatchObject([
+      { marker: "①", text: "첫 번째 선택지" },
+      { marker: "②", text: "두 번째 선택지" },
+    ]);
+  });
+
   it("splits Korean condition labels into condition body segments", () => {
     const [block] = parseQuestionText("1. 다음 조건을 만족한다.\n(가) $x>0$\n(나) y는 정수\n① 참\n② 거짓");
 

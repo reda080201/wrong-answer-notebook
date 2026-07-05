@@ -118,13 +118,21 @@ describe("normalizeEntry", () => {
           sourceQuestionNumber: "1",
           diagramType: "coordinate-graph",
           diagramSpec: {
-            type: "coordinate-graph",
+            diagramType: "coordinate_graph",
             title: "좌표 그래프",
             curveLabel: "y=f(x)",
             pointLabels: ["A", "<svg>제거</svg>", "data:image/png;base64,AAAA"],
             interceptLabel: "x절편",
             highlights: ["순간변화율", "<svg>제거</svg>", "data:image/png;base64,AAAA"],
-          },
+            params: {
+              coreIdea: "교점을 좌표로 읽는다",
+              raw: "<svg>bad</svg>",
+              objects: [
+                { type: "line", equation: "y=x", label: "직선" },
+                { type: "image", label: "data:image/png;base64,AAAA" },
+              ],
+            },
+          } as never,
         },
         {
           id: "block-2",
@@ -141,7 +149,7 @@ describe("normalizeEntry", () => {
           answer: "②",
           explanation: "",
           importantPoints: [],
-          diagramType: "absolute-value-corner",
+          diagramType: "absolute_value_corner" as never,
           diagramSpec: {
             type: "absolute-value-corner",
             title: "절댓값 코너",
@@ -173,6 +181,13 @@ describe("normalizeEntry", () => {
             pointLabels: ["A"],
             interceptLabel: "x절편",
             highlights: ["순간변화율"],
+            params: expect.objectContaining({
+              coreIdea: "교점을 좌표로 읽는다",
+              objects: [
+                expect.objectContaining({ type: "line", equation: "y=x", label: "직선" }),
+                expect.objectContaining({ type: "image" }),
+              ],
+            }),
           }),
         }),
       expect.objectContaining({
@@ -190,6 +205,30 @@ describe("normalizeEntry", () => {
   });
 
   it("normalizes diagram specs without accepting raw markup or unsupported types", () => {
+    expect(normalizeDiagramSpec({
+      diagramType: "geometry_helper",
+      title: "기하 구조",
+      params: {
+        coreIdea: "원과 직선의 교점",
+        unsafe: "<iframe></iframe>",
+        objects: [
+          { type: "circle", radius: 2, label: "x^2+y^2=4" },
+          { type: "line", equation: "y=tx+t", label: "직선" },
+        ],
+        highlight: ["PR", "QS", "data:image/png;base64,AAAA"],
+      },
+    })).toEqual(expect.objectContaining({
+      type: "geometry-helper",
+      title: "기하 구조",
+      params: expect.objectContaining({
+        coreIdea: "원과 직선의 교점",
+        objects: [
+          expect.objectContaining({ type: "circle", radius: 2, label: "x^2+y^2=4" }),
+          expect.objectContaining({ type: "line", equation: "y=tx+t", label: "직선" }),
+        ],
+        highlight: ["PR", "QS"],
+      }),
+    }));
     expect(normalizeDiagramSpec({
       type: "piecewise-differentiability",
       title: "구간별 확인",

@@ -1,6 +1,7 @@
 import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
+import { normalizeQuestionNumber } from "./questionMeta";
 
 export type ImportValidationSeverity = "info" | "warning" | "error";
 
@@ -8,6 +9,7 @@ export interface ImportValidationIssue {
   id: string;
   severity: ImportValidationSeverity;
   message: string;
+  autoFixAvailable?: "describe-only" | "remove-figure" | "connect-later";
 }
 
 export interface ImportValidationReport {
@@ -55,10 +57,6 @@ function duplicates(values: string[]): string[] {
   return [...duplicate];
 }
 
-function normalizeNumber(value: string): string {
-  return value.trim().replace(/^#/, "").replace(/[.)번]\s*$/, "").replace(/^0+/, "") || value.trim();
-}
-
 function questionLabel(value: string): string {
   return /^\d+$/.test(value) ? `${value}번` : value;
 }
@@ -101,25 +99,38 @@ function hasRejectedNoteLeak(note: string, fields: string[]): boolean {
   return false;
 }
 
+function hasDiagramForQuestion(data: Partial<EntryFormData>, questionNumber: string): boolean {
+  const normalized = normalizeQuestionNumber(questionNumber);
+  if (!normalized) return false;
+  return Boolean(
+    (data.answerKey ?? []).some((item) =>
+      normalizeQuestionNumber(item.questionNumber) === normalized && Boolean(item.diagramSpec || item.diagramType),
+    ) ||
+      (data.learningBlocks ?? []).some((block) =>
+        normalizeQuestionNumber(block.sourceQuestionNumber) === normalized && Boolean(block.diagramSpec || block.diagramType),
+      ),
+  );
+}
+
 export function getQuestionNumbers(question: string): string[] {
   return parseQuestionText(question)
     .filter((block) => block.kind === "question")
-    .map((block) => String(block.displayNumber))
+    .map((block) => normalizeQuestionNumber(block.displayNumber))
     .filter(Boolean);
 }
 
 export function validateImportedStudyData(data: Partial<EntryFormData>): ImportValidationReport {
   const questionBlocks = parseQuestionText(data.question ?? "").filter((block) => block.kind === "question");
-  const questionNumbers = questionBlocks.map((block) => String(block.displayNumber));
+  const questionNumbers = questionBlocks.map((block) => normalizeQuestionNumber(block.displayNumber));
   const connectableQuestionNumbers = questionBlocks.flatMap((block) => [
-    String(block.displayNumber),
-    normalizeNumber(block.numberLabel),
+    normalizeQuestionNumber(block.displayNumber),
+    normalizeQuestionNumber(block.numberLabel),
   ]);
   const answerNumbers = (data.answerKey ?? [])
-    .map((item) => item.questionNumber.trim())
+    .map((item) => normalizeQuestionNumber(item.questionNumber))
     .filter(Boolean);
-  const questionNumberSet = new Set(connectableQuestionNumbers.map(normalizeNumber));
-  const answerNumberSet = new Set(answerNumbers.map(normalizeNumber));
+  const questionNumberSet = new Set(connectableQuestionNumbers);
+  const answerNumberSet = new Set(answerNumbers);
   const issues: ImportValidationIssue[] = [];
   const audit = data.importAudit
     ? normalizeImportAudit(data.importAudit, data)
@@ -187,10 +198,21 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   }
   for (const [index, figure] of (data.figures ?? []).entries()) {
     if (!figure.image) {
+      const hasDescription = Boolean(figure.caption.trim());
+      const hasDiagramSpec = hasDiagramForQuestion(data, figure.questionNumber);
+      if (figure.source === "described_only" && (hasDescription || hasDiagramSpec)) {
+        issues.push({
+          id: `described-figure-${figure.id || index}`,
+          severity: hasDiagramSpec ? "info" : "warning",
+          message: `${figure.questionNumber || "번호 미상"} 도표/그림은 이미지 없이 설명 도표로 저장됩니다.`,
+        });
+        continue;
+      }
       issues.push({
         id: `unlinked-figure-${figure.id || index}`,
-        severity: "error",
-        message: `${figure.questionNumber || "번호 미상"} 도표/그림에 연결된 이미지가 없습니다.`,
+        severity: "warning",
+        message: `${figure.questionNumber || "번호 미상"} 도표/그림에 연결된 이미지가 없습니다. 설명 도표로 유지하거나, 도표 항목 제외 또는 나중에 이미지 연결을 선택할 수 있습니다.`,
+        autoFixAvailable: "describe-only",
       });
     }
   }
@@ -212,8 +234,8 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   }
 
   for (const block of questionBlocks) {
-    const displayNumber = String(block.displayNumber);
-    if (!answerNumberSet.has(normalizeNumber(displayNumber)) && !answerNumberSet.has(normalizeNumber(block.numberLabel))) {
+    const displayNumber = normalizeQuestionNumber(block.displayNumber);
+    if (!answerNumberSet.has(displayNumber) && !answerNumberSet.has(normalizeQuestionNumber(block.numberLabel))) {
       issues.push({
         id: `missing-answer-${displayNumber}`,
         severity: "warning",
@@ -223,7 +245,7 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   }
 
   for (const number of answerNumbers) {
-    if (!questionNumberSet.has(normalizeNumber(number))) {
+    if (!questionNumberSet.has(normalizeQuestionNumber(number))) {
       issues.push({
         id: `extra-answer-${number}`,
         severity: "warning",

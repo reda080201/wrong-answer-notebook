@@ -17,6 +17,9 @@ interface StudyPaperViewProps {
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  selectionMode?: boolean;
+  selectedQuestionNumbers?: string[];
+  onToggleQuestionSelected?: (questionNumber: string) => void;
 }
 
 export default function StudyPaperView({
@@ -31,6 +34,9 @@ export default function StudyPaperView({
   suspiciousSegments = [],
   onOpenQuestionTheater,
   onToggleQuestionImportant,
+  selectionMode = false,
+  selectedQuestionNumbers = [],
+  onToggleQuestionSelected,
 }: StudyPaperViewProps) {
   const blocks = parseQuestionText(entry.question);
   const questionCount = blocks.filter((block) => block.kind === "question").length;
@@ -90,6 +96,9 @@ export default function StudyPaperView({
           onOpenQuestionTheater={onOpenQuestionTheater}
           questionMeta={entry.questionMeta ?? []}
           onToggleQuestionImportant={onToggleQuestionImportant}
+          selectionMode={selectionMode}
+          selectedQuestionNumbers={selectedQuestionNumbers}
+          onToggleQuestionSelected={onToggleQuestionSelected}
           zoomableImages
         />
 

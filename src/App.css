@@ -927,14 +927,20 @@ button.formula-chip:hover {
   text-align: center;
 }
 
-.learning-diagram-highlights {
+.learning-diagram-highlights,
+.learning-diagram-params {
   display: grid;
   gap: 0.25rem;
   margin: 0.55rem 0 0;
   padding-left: 1.1rem;
-  color: #334155;
+  color: var(--text-muted);
   font-size: 0.78rem;
   line-height: 1.55;
+}
+
+.learning-diagram-params {
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--paper-border);
 }
 
 .learning-routine-list section {
@@ -5361,6 +5367,13 @@ button.formula-chip:hover {
   line-height: 1.55;
 }
 
+.import-figure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
 .sheet-figure-card {
   display: grid;
   gap: 0.65rem;
@@ -5784,5 +5797,292 @@ button.formula-chip:hover {
 
   .important-question-card {
     grid-template-columns: 1fr;
+  }
+}
+.toolbar-settings-button {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.7rem 0.9rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settings-modal {
+  width: min(920px, calc(100vw - 2rem));
+  max-height: min(820px, calc(100vh - 2rem));
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-modal-body {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  min-height: 520px;
+  overflow: hidden;
+}
+
+.settings-modal-tabs {
+  padding: 1rem;
+  border-right: 1px solid var(--paper-border);
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.settings-modal-tabs button {
+  text-align: left;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 0.7rem 0.8rem;
+  font-weight: 700;
+}
+
+.settings-modal-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.settings-modal-panel {
+  padding: 1.1rem;
+  overflow: auto;
+}
+
+.provider-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.advanced-settings-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.text-review-panel--drawer {
+  width: min(1120px, calc(100vw - 2rem));
+  max-height: min(820px, calc(100vh - 2rem));
+  margin-left: auto;
+  border-radius: 16px 0 0 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.text-review-head-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.text-review-grid {
+  grid-template-columns: minmax(360px, 1fr) minmax(280px, 0.75fr);
+  grid-auto-rows: minmax(0, auto);
+  overflow: auto;
+}
+
+.text-review-editor textarea {
+  min-height: 460px;
+  max-height: 60vh;
+  resize: vertical;
+}
+
+.text-review-segments {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.text-review-segments ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.text-review-segments li {
+  border: 1px solid var(--paper-border);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.55rem;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.text-review-segments li.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.text-review-segments li > span {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.text-review-segments li button {
+  text-align: left;
+}
+
+.text-review-ignore {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.text-review-segment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sheet-group-editor {
+  border: 1px solid var(--paper-border);
+  background: var(--surface-soft);
+  border-radius: 10px;
+  padding: 0.85rem;
+}
+
+.sheet-group-card {
+  border: 1px solid var(--paper-border);
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+}
+
+.sheet-group-card-head {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 0.35rem 0.6rem;
+  text-align: left;
+}
+
+.sheet-group-card-head small {
+  grid-column: 2;
+  color: var(--text-muted);
+}
+
+.sheet-group-part-chips {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.sheet-group-part-chips button {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.35rem 0.65rem;
+}
+
+.sheet-group-parts {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.sheet-group-title-hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.sheet-selection-tools {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.question-select-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin-right: 0.35rem;
+}
+
+.gpt-export-modal {
+  width: min(1040px, calc(100vw - 2rem));
+  max-height: min(840px, calc(100vh - 2rem));
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  box-shadow: 0 24px 80px rgba(15, 23, 42, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.gpt-export-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 1rem;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.gpt-export-options,
+.gpt-export-preview {
+  min-height: 0;
+}
+
+.gpt-export-checks {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.8rem;
+}
+
+.gpt-export-preview textarea {
+  width: 100%;
+  min-height: 520px;
+  height: 100%;
+  resize: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.55;
+}
+
+.question-theater-solution-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.8rem;
+}
+
+@media (max-width: 820px) {
+  .settings-modal-body,
+  .gpt-export-grid,
+  .text-review-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-modal-tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--paper-border);
+  }
+
+  .text-review-panel--drawer {
+    border-radius: 14px;
   }
 }

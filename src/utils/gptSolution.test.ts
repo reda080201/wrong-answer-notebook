@@ -43,9 +43,13 @@ describe("gptSolution", () => {
     expect(prompt).toContain('learningBlocks[].type을 "diagram"');
     expect(prompt).toContain("한 문항당 최대 1개");
     expect(prompt).toContain("전체 entry learningBlocks diagram은 최대 3개");
-    expect(prompt).toContain("raw HTML, raw SVG, base64 이미지");
-    expect(prompt).toContain("pointLabel");
-    expect(prompt).toContain("slopeLabel");
+    expect(prompt).toContain("figures[].source는 \"described_only\"");
+    expect(prompt).toContain("Canvas 코드");
+    expect(prompt).toContain("raw HTML, raw SVG");
+    expect(prompt).toContain("diagramSpec.params");
+    expect(prompt).toContain("geometry-helper");
+    expect(prompt).toContain("coreIdea");
+    expect(prompt).toContain("x^2+y^2=4");
     expect(prompt).toContain("첨부 이미지 1개");
     expect(prompt).toContain("tags 필드는 만들지 마");
     expect(prompt).not.toContain('"tags"');

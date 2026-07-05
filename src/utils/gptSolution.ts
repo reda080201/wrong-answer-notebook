@@ -117,11 +117,13 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - answerKey[].concepts, strategy, steps, choiceJudgements, wrongPoint, reviewPoint는 앱의 "학습 내용" 카드에 직접 표시되므로 가능한 한 비우지 말고 문항별로 구체적으로 채워줘.
 - concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
-- 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입과 짧은 라벨만 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability", "coordinate-graph", "normal-distribution", "probability-tree", "venn-diagram", "geometry-helper", "trig-unit-circle", "sequence-flow"뿐이야.
+- 도표/그래프/기하 그림이 있는 문항은 figures 설명만으로 끝내지 말고, 가능하면 learningBlocks[].type을 "diagram"으로 만들고 diagramSpec을 함께 채워줘.
+- 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입, 라벨, params를 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability", "coordinate-graph", "normal-distribution", "probability-tree", "venn-diagram", "geometry-helper", "trig-unit-circle", "sequence-flow"뿐이야.
+- diagramSpec.params에는 점, 선, 원, 축, 함수식, 강조 대상, 라벨, 핵심 관계를 넣어줘. 설명만 하지 말고 앱이 React SVG로 그릴 수 있을 정도로 구조화해줘.
 - diagramSpec은 실제 이해에 도움이 되는 경우에만 만들고, 단순 계산 문제에는 만들지 마. 한 문항당 최대 1개, 전체 entry learningBlocks diagram은 최대 3개까지만 허용해.
-- 그림 중심 학습 카드는 learningBlocks[].type을 "diagram"으로 쓰고 diagramSpec을 함께 채워줘.
+- 실제 이미지 파일명이 없으면 figures[].source는 "described_only"로 둬. figures[].source가 "original"이면 반드시 image 파일명을 함께 넣어줘.
 - diagramType은 구버전 호환용으로만 써도 되고, 가능하면 diagramSpec을 우선 사용해줘.
-- raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
+- raw HTML, raw SVG, Canvas 코드, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - 전체 메모는 memo나 importantNotes에 넣고, 특정 문항에만 해당하는 메모는 반드시 answerKey[].notes에 넣어줘.
 - 핵심 개념, 자주 하는 실수, 검산 포인트는 문항별이면 answerKey[].importantPoints에 넣어줘.
 - ${imageGuide}
@@ -162,13 +164,25 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
       "importantPoints": ["핵심 개념", "자주 하는 실수"],
       "concepts": ["일차함수", "조건 해석"],
       "diagramSpec": {
-        "type": "derivative-tangent",
-        "title": "접선과 미분계수",
-        "pointLabel": "x=a",
-        "functionLabel": "y=f(x)",
-        "tangentLabel": "접선",
-        "slopeLabel": "기울기 f'(a)",
-        "highlights": ["접선 기울기와 순간변화율을 연결"]
+        "diagramType": "geometry-helper",
+        "title": "원과 직선 시각화",
+        "params": {
+          "coordinatePlane": true,
+          "objects": [
+            { "type": "circle", "center": [0, 0], "radius": 2, "label": "x^2+y^2=4" },
+            { "type": "line", "equation": "y=tx+t", "label": "y=tx+t" }
+          ],
+          "points": [
+            { "id": "P", "role": "upper intersection" },
+            { "id": "Q", "role": "lower intersection" }
+          ],
+          "segments": [
+            { "from": "P", "to": "R", "style": "horizontal", "label": "PR" },
+            { "from": "Q", "to": "S", "style": "horizontal", "label": "QS" }
+          ],
+          "highlight": ["PR", "QS"],
+          "coreIdea": "수평현 길이 차를 교점의 x좌표 차로 바꾸어 극한을 계산한다."
+        }
       },
       "needsReview": false
     }
@@ -179,12 +193,29 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
       "title": "접선과 미분계수 시각화",
       "content": "$f'(a)$는 x=a에서의 접선 기울기이다.",
       "sourceQuestionNumber": "1",
+      "diagramType": "geometry-helper",
       "diagramSpec": {
-        "type": "derivative-tangent",
-        "title": "접선과 미분계수",
-        "pointLabel": "x=a",
-        "slopeLabel": "기울기 f'(a)"
+        "diagramType": "geometry-helper",
+        "title": "원과 직선 시각화",
+        "params": {
+          "objects": [
+            { "type": "circle", "center": [0, 0], "radius": 2, "label": "x^2+y^2=4" },
+            { "type": "line", "equation": "y=tx+t", "label": "y=tx+t" }
+          ],
+          "highlight": ["PR", "QS"],
+          "coreIdea": "교점의 위치와 수평현 길이를 연결한다."
+        }
       }
+    }
+  ],
+  "figures": [
+    {
+      "questionNumber": "1",
+      "title": "1번 원과 직선",
+      "caption": "원과 직선의 교점 및 수평현 PR, QS를 비교한다.",
+      "image": "",
+      "source": "described_only",
+      "needsReview": false
     }
   ]
 } 

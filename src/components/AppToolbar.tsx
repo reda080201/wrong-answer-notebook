@@ -16,6 +16,7 @@ interface AppToolbarProps {
   setListFilter: (value: ListFilter) => void;
   todayReviewCount: number;
   startReview: (mode: "today" | "random" | "difficult") => void;
+  onOpenSettings: () => void;
 }
 
 export default function AppToolbar({
@@ -30,6 +31,7 @@ export default function AppToolbar({
   setListFilter,
   todayReviewCount,
   startReview,
+  onOpenSettings,
 }: AppToolbarProps) {
   const placeholder =
     activeSection === "concept"
@@ -60,6 +62,8 @@ export default function AppToolbar({
         <option value="question-count-desc">문항 수 많은 순</option>
         <option value="bookmark-count-desc">북마크 문제 많은 순</option>
         <option value="review-need-count-desc">복습 필요 많은 순</option>
+        <option value="group-title-asc">묶음 이름순</option>
+        <option value="part-order-asc">파트 순서순</option>
       </select>
       <div className="difficulty-filter-wrap">
         <select
@@ -122,6 +126,9 @@ export default function AppToolbar({
           어려움 집중
         </button>
       </div>
+      <button type="button" className="toolbar-settings-button" onClick={onOpenSettings}>
+        ⚙ 설정
+      </button>
     </div>
   );
 }

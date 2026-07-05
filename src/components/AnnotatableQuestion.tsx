@@ -41,6 +41,9 @@ interface AnnotatableQuestionProps {
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  selectionMode?: boolean;
+  selectedQuestionNumbers?: string[];
+  onToggleQuestionSelected?: (questionNumber: string) => void;
 }
 
 interface FocusedQuestionViewProps {
@@ -281,6 +284,9 @@ function StructuredQuestionBlock({
   onOpenQuestionTheater,
   questionMeta = [],
   onToggleQuestionImportant,
+  selectionMode = false,
+  selectedQuestionNumbers = [],
+  onToggleQuestionSelected,
 }: {
   block: QuestionTextBlock;
   textAnnotations: TextRangeAnnotation[];
@@ -293,6 +299,9 @@ function StructuredQuestionBlock({
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  selectionMode?: boolean;
+  selectedQuestionNumbers?: string[];
+  onToggleQuestionSelected?: (questionNumber: string) => void;
 }) {
   if (block.kind === "passage" || block.kind === "paragraph") {
     return (
@@ -317,6 +326,8 @@ function StructuredQuestionBlock({
     return normalized === String(block.displayNumber) || normalized === normalizeNumberLabel(block.numberLabel);
   });
   const isImportant = Boolean(meta?.important);
+  const questionNumber = String(block.displayNumber);
+  const isSelected = selectedQuestionNumbers.includes(questionNumber);
 
   return (
     <section
@@ -324,6 +335,16 @@ function StructuredQuestionBlock({
       className="question-text-block question-text-block--question"
     >
       <div className="question-number">
+        {selectionMode && (
+          <label className="question-select-check">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              onChange={() => onToggleQuestionSelected?.(questionNumber)}
+            />
+            선택
+          </label>
+        )}
         <span className="question-number-main" data-number={block.displayNumber}>{block.displayNumber}</span>
         {normalizeNumberLabel(block.numberLabel) !== String(block.displayNumber) && (
           <small>원문 {block.numberLabel}</small>
@@ -334,7 +355,7 @@ function StructuredQuestionBlock({
           type="button"
           className={`question-important-btn ${isImportant ? "active" : ""}`}
           aria-pressed={isImportant}
-          onClick={() => onToggleQuestionImportant(String(block.displayNumber))}
+          onClick={() => onToggleQuestionImportant(questionNumber)}
         >
           {isImportant ? "★ 중요" : "☆ 중요"}
         </button>
@@ -583,6 +604,9 @@ function StructuredQuestionText({
   onOpenQuestionTheater,
   questionMeta = [],
   onToggleQuestionImportant,
+  selectionMode = false,
+  selectedQuestionNumbers = [],
+  onToggleQuestionSelected,
 }: {
   question: string;
   textAnnotations: TextRangeAnnotation[];
@@ -595,6 +619,9 @@ function StructuredQuestionText({
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  selectionMode?: boolean;
+  selectedQuestionNumbers?: string[];
+  onToggleQuestionSelected?: (questionNumber: string) => void;
 }) {
   const blocks = useMemo(() => parseQuestionText(question), [question]);
   const questionIndexes = useMemo(() => {
@@ -626,6 +653,9 @@ function StructuredQuestionText({
             onOpenQuestionTheater={onOpenQuestionTheater}
             questionMeta={questionMeta}
             onToggleQuestionImportant={onToggleQuestionImportant}
+            selectionMode={selectionMode}
+            selectedQuestionNumbers={selectedQuestionNumbers}
+            onToggleQuestionSelected={onToggleQuestionSelected}
           />
       ))}
     </div>
@@ -806,6 +836,9 @@ export default function AnnotatableQuestion({
   onOpenQuestionTheater,
   questionMeta,
   onToggleQuestionImportant,
+  selectionMode,
+  selectedQuestionNumbers,
+  onToggleQuestionSelected,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -858,6 +891,9 @@ export default function AnnotatableQuestion({
             onOpenQuestionTheater={onOpenQuestionTheater}
             questionMeta={questionMeta}
             onToggleQuestionImportant={onToggleQuestionImportant}
+            selectionMode={selectionMode}
+            selectedQuestionNumbers={selectedQuestionNumbers}
+            onToggleQuestionSelected={onToggleQuestionSelected}
           />
         </div>
       )}

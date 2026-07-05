@@ -3,9 +3,15 @@ import { normalizeQuestionNumber, toggleQuestionImportant } from "./questionMeta
 
 describe("questionMeta utilities", () => {
   it("normalizes display, source, and answer key question numbers", () => {
+    expect(normalizeQuestionNumber("01")).toBe("1");
+    expect(normalizeQuestionNumber("1")).toBe("1");
+    expect(normalizeQuestionNumber("1.")).toBe("1");
     expect(normalizeQuestionNumber("01번")).toBe("1");
     expect(normalizeQuestionNumber("#12")).toBe("12");
     expect(normalizeQuestionNumber("문제 3")).toBe("3");
+    expect(normalizeQuestionNumber("[문제 10]")).toBe("10");
+    expect(normalizeQuestionNumber("10.")).toBe("10");
+    expect(normalizeQuestionNumber("10번")).toBe("10");
   });
 
   it("toggles important state while preserving existing metadata", () => {

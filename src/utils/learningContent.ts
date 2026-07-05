@@ -1,5 +1,5 @@
 import type { LearningBlock, LearningBlockType, LectureSourceType, SheetAnswerItem, WrongAnswerEntry } from "../types";
-import { normalizeDiagramSpec } from "./entry";
+import { normalizeDiagramSpec, normalizeLearningDiagramType } from "./entry";
 
 const SAFE_BLOCK_TYPES = new Set<LearningBlockType>([
   "concept",
@@ -81,7 +81,18 @@ export function normalizeImportedLearningBlocks(raw: unknown): LearningBlock[] {
         ? record.type as LearningBlockType
         : "checklist";
       const title = typeof record.title === "string" ? record.title : "학습 내용";
-      const content = typeof record.content === "string" ? record.content : "";
+      const itemList = Array.isArray(record.items)
+        ? record.items.map((item) => `${item ?? ""}`.trim()).filter(Boolean).map((item) => `- ${item}`).join("\n")
+        : "";
+      const content = [
+        record.content,
+        record.body,
+        record.formula,
+        itemList,
+        record.description,
+      ]
+        .map((value) => `${value ?? ""}`.trim())
+        .find(Boolean) ?? "";
       if (!title.trim() && !content.trim()) return null;
       return {
         id: typeof record.id === "string" && record.id.trim() ? record.id.trim() : blockId("imported-learning", index),
@@ -89,7 +100,7 @@ export function normalizeImportedLearningBlocks(raw: unknown): LearningBlock[] {
         title: title.trim() || "학습 내용",
         content: cleanText(content),
         sourceQuestionNumber: typeof record.sourceQuestionNumber === "string" ? record.sourceQuestionNumber.trim() : undefined,
-        diagramType: typeof record.diagramType === "string" ? record.diagramType as LearningBlock["diagramType"] : undefined,
+        diagramType: normalizeLearningDiagramType(record.diagramType),
         diagramSpec: normalizeDiagramSpec(record.diagramSpec),
       };
     })

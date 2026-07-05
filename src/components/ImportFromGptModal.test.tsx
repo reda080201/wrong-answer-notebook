@@ -382,6 +382,108 @@ describe("ImportFromGptModal", () => {
     );
   });
 
+  it("allows described-only figures without blocking confirmation", () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: {
+        value: JSON.stringify({
+          question: "1. 문제",
+          audit: {
+            expectedQuestionNumbers: ["1"],
+            detectedQuestionNumbers: ["1"],
+            missingQuestionNumbers: [],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 0,
+          },
+          figures: [
+            {
+              questionNumber: "1",
+              title: "설명 그래프",
+              caption: "이미지 없이 설명 도표로 유지",
+              image: "",
+              source: "described_only",
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(screen.getByText("설명 도표")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+
+    expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        figures: [
+          expect.objectContaining({
+            source: "described_only",
+            image: undefined,
+          }),
+        ],
+      }),
+      undefined,
+    );
+  });
+
+  it("offers figure actions for original figures without linked images", () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: {
+        value: JSON.stringify({
+          question: "1. 문제",
+          audit: {
+            expectedQuestionNumbers: ["1"],
+            detectedQuestionNumbers: ["1"],
+            missingQuestionNumbers: [],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 0,
+          },
+          figures: [
+            {
+              questionNumber: "1",
+              title: "원본 필요 도표",
+              image: "",
+              source: "original",
+            },
+          ],
+        }),
+      },
+    });
+
+    expect(screen.getAllByText("이미지 나중에 연결").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "설명 도표로 유지" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "도표 항목 제외" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "도표 항목 제외" }));
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+
+    expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        figures: [],
+      }),
+      undefined,
+    );
+  });
+
   it("shows preview after paste and applies parsed data", () => {
     const onApply = vi.fn();
     render(

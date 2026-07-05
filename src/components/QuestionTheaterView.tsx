@@ -26,6 +26,7 @@ interface QuestionTheaterViewProps {
   onNext: () => void;
   onToggleAnswers: () => void;
   onToggleImportant?: () => void;
+  onOpenGptExport?: () => void;
   onReview: (result: ReviewResult) => void;
   onClose: () => void;
 }
@@ -58,6 +59,7 @@ export default function QuestionTheaterView({
   onNext,
   onToggleAnswers,
   onToggleImportant,
+  onOpenGptExport,
   onReview,
   onClose,
 }: QuestionTheaterViewProps) {
@@ -154,9 +156,16 @@ export default function QuestionTheaterView({
                 onPointerDown={startDividerDrag}
               />
               <aside className="question-theater-solution-pane" aria-label="현재 문제 해설">
-                <button type="button" className="btn-secondary" onClick={onToggleAnswers}>
-                  {hideAnswers ? "정답 보기" : "정답 가리기"}
-                </button>
+                <div className="question-theater-solution-actions">
+                  <button type="button" className="btn-secondary" onClick={onToggleAnswers}>
+                    {hideAnswers ? "정답 보기" : "정답 가리기"}
+                  </button>
+                  {onOpenGptExport && (
+                    <button type="button" className="btn-secondary" onClick={onOpenGptExport}>
+                      GPT에게 이 문제 보내기
+                    </button>
+                  )}
+                </div>
                 {answer ? (
                   <div className={hideAnswers ? "answer-hidden" : ""}>
                     {hideAnswers ? (
@@ -178,7 +187,7 @@ export default function QuestionTheaterView({
           )}
         </main>
 
-        <section className="question-theater-panels">
+        {!solutionSplitOpen && <section className="question-theater-panels">
           <article>
             <button type="button" className="btn-secondary" onClick={onToggleAnswers}>
               {hideAnswers ? "정답 보기" : "정답 가리기"}
@@ -221,7 +230,7 @@ export default function QuestionTheaterView({
               맞음으로 기록
             </button>
           </article>
-        </section>
+        </section>}
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-import type { DiagramSpec, LearningDiagramType } from "../types";
+import type { DiagramSpec, DiagramSpecParamValue, LearningDiagramType } from "../types";
 import AbsoluteValueCornerDiagram from "./diagrams/AbsoluteValueCornerDiagram";
 import CoordinateGraphDiagram from "./diagrams/CoordinateGraphDiagram";
 import DerivativeTangentDiagram from "./diagrams/DerivativeTangentDiagram";
@@ -42,6 +42,30 @@ function isDiagramSpec(value: unknown): value is DiagramSpec {
   return Boolean(value && typeof value === "object" && isLearningDiagramType((value as DiagramSpec).type));
 }
 
+function paramValueToLines(value: DiagramSpecParamValue | undefined, preferredKeys = false): string[] {
+  if (value === undefined || value === null || typeof value === "boolean") return [];
+  if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+  if (typeof value === "number") return [String(value)];
+  if (Array.isArray(value)) return value.flatMap((item) => paramValueToLines(item)).slice(0, 8);
+  const entries = Object.entries(value);
+  const useful = entries.filter(([key]) =>
+    preferredKeys
+      ? /^(coreIdea|highlight|highlights|label|equation|role|objects|points|segments)$/i.test(key)
+      : /^(label|equation|role|coreIdea)$/i.test(key),
+  );
+  return (useful.length ? useful : entries)
+    .flatMap(([key, item]) =>
+      paramValueToLines(item).map((line) =>
+        /^(coreIdea|highlight|highlights)$/i.test(key) ? line : `${key}: ${line}`,
+      ),
+    )
+    .slice(0, 8);
+}
+
+function diagramParamLines(spec: DiagramSpec): string[] {
+  return [...new Set(paramValueToLines(spec.params, true))].slice(0, 6);
+}
+
 export default function DiagramCard({
   diagramType,
   diagramSpec,
@@ -53,6 +77,7 @@ export default function DiagramCard({
   const type = spec?.type ?? diagramType;
   if (!isLearningDiagramType(type)) return null;
   const title = spec?.title?.trim() || DIAGRAM_LABELS[type];
+  const paramLines = spec ? diagramParamLines(spec) : [];
 
   return (
     <figure className="learning-diagram-card" aria-label={`${title} 다이어그램`}>
@@ -91,6 +116,13 @@ export default function DiagramCard({
         <ul className="learning-diagram-highlights">
           {spec.highlights.map((highlight) => (
             <li key={highlight}>{highlight}</li>
+          ))}
+        </ul>
+      ) : null}
+      {paramLines.length ? (
+        <ul className="learning-diagram-params">
+          {paramLines.map((line) => (
+            <li key={line}>{line}</li>
           ))}
         </ul>
       ) : null}

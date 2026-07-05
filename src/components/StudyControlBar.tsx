@@ -43,6 +43,7 @@ interface StudyControlBarProps {
   onQuickMemoOpenChange: (open: boolean) => void;
   onQuickMemoTextChange: (text: string) => void;
   onQuickMemoSubmit: () => void;
+  onOpenGptExport?: () => void;
 }
 
 function NextActionButton({
@@ -128,6 +129,7 @@ export default function StudyControlBar({
   onQuickMemoOpenChange,
   onQuickMemoTextChange,
   onQuickMemoSubmit,
+  onOpenGptExport,
 }: StudyControlBarProps) {
   const canMove = isSheet && questionCount > 1;
   const canGoPrevious = canMove && questionIndex > 0;
@@ -284,6 +286,11 @@ export default function StudyControlBar({
         >
           메모
         </button>
+        {onOpenGptExport && !isConcept && (
+          <button type="button" className="study-memo-toggle" onClick={onOpenGptExport}>
+            GPT에게 보내기
+          </button>
+        )}
         <button
           type="button"
           className="study-compact-toggle"

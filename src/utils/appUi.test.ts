@@ -62,6 +62,36 @@ describe("appUi utilities", () => {
     expect(sortEntries([small, large], "review-need-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
   });
 
+  it("sorts sheets by group title and part order", () => {
+    const part2 = {
+      ...baseEntry,
+      id: "part2",
+      entryKind: "problem_sheet" as const,
+      title: "파트 2",
+      sheetGroup: {
+        groupId: "g",
+        groupTitle: "ALPHA",
+        partTitle: "21~40",
+        partOrder: 2,
+      },
+    };
+    const part1 = {
+      ...baseEntry,
+      id: "part1",
+      entryKind: "problem_sheet" as const,
+      title: "파트 1",
+      sheetGroup: {
+        groupId: "g",
+        groupTitle: "ALPHA",
+        partTitle: "1~20",
+        partOrder: 1,
+      },
+    };
+
+    expect(sortEntries([part2, part1], "part-order-asc").map((entry) => entry.id)).toEqual(["part1", "part2"]);
+    expect(sortEntries([part2, part1], "group-title-asc").map((entry) => entry.id)).toEqual(["part2", "part1"]);
+  });
+
   it("builds previews for concept and lecture entries", () => {
     expect(getEntryCardPreview({
       ...baseEntry,

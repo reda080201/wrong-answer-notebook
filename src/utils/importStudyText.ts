@@ -1,6 +1,6 @@
 import type { ChecklistItem, Difficulty, EntryFormData, ExplanationPart, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
-import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks } from "./entry";
+import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType } from "./entry";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import {
   normalizeImportAudit,
@@ -10,6 +10,7 @@ import {
 } from "./importAudit";
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
+import { normalizeQuestionNumber } from "./questionMeta";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -109,8 +110,8 @@ export function parseImportedStudyText(
       ), rejectedNotes);
       const concepts = normalizeTextList(parsed.concepts);
       const questionWithConceptLinks = suggestConceptLinks(cleanQuestionText(question), concepts);
-      const figures = normalizeImportFigures(parsed.figures);
       const learningBlocks = normalizeLearningBlocks(parsed.learningBlocks);
+      const figures = normalizeImportFigures(parsed.figures, answerKey, learningBlocks);
       const memo = removeRejectedNotes(mergeMemoAndImportantNotes(getString(parsed.memo), [
         ...importantNotes.globalNotes,
         ...concepts.map((concept) => `연결 개념: [[${concept}]]`),
@@ -284,12 +285,34 @@ function normalizeExplanationParts(value: unknown): ExplanationPart[] {
     .filter((item) => item.text || item.images.length);
 }
 
-function normalizeImportFigures(value: unknown): SheetFigureItem[] {
+function hasDiagramForQuestion(
+  questionNumber: string,
+  answerKey: SheetAnswerItem[],
+  learningBlocks: NonNullable<EntryFormData["learningBlocks"]>,
+): boolean {
+  const normalized = normalizeQuestionNumber(questionNumber);
+  return Boolean(normalized) && (
+    answerKey.some((item) =>
+      normalizeQuestionNumber(item.questionNumber) === normalized && Boolean(item.diagramSpec || item.diagramType),
+    ) ||
+    learningBlocks.some((block) =>
+      normalizeQuestionNumber(block.sourceQuestionNumber) === normalized && Boolean(block.diagramSpec || block.diagramType),
+    )
+  );
+}
+
+function normalizeImportFigures(
+  value: unknown,
+  answerKey: SheetAnswerItem[] = [],
+  learningBlocks: NonNullable<EntryFormData["learningBlocks"]> = [],
+): SheetFigureItem[] {
   return normalizeFigures(value).map((figure) => {
     const image = figure.image && isSafeImportImageFilename(figure.image) ? figure.image : undefined;
+    const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
     return {
       ...figure,
       image,
+      source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || Boolean(figure.image && !image),
     };
   });
@@ -327,21 +350,6 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
   return undefined;
 }
 
-function normalizeDiagramType(value: unknown): SheetAnswerItem["diagramType"] {
-  return value === "derivative-tangent" ||
-    value === "absolute-value-corner" ||
-    value === "piecewise-differentiability" ||
-    value === "coordinate-graph" ||
-    value === "normal-distribution" ||
-    value === "probability-tree" ||
-    value === "venn-diagram" ||
-    value === "geometry-helper" ||
-    value === "trig-unit-circle" ||
-    value === "sequence-flow"
-    ? value
-    : undefined;
-}
-
 interface QuestionMetadata {
   difficulty?: Difficulty;
   concepts?: string[];
@@ -356,17 +364,13 @@ interface QuestionMetadata {
   reviewPoint?: string;
 }
 
-function normalizeNumber(value: string): string {
-  return value.trim().replace(/^#/, "").replace(/^(문제|문항)\s*/, "").replace(/[.)번]\s*$/, "").replace(/^0+/, "") || value.trim();
-}
-
 function questionAliasMap(question: string): Map<string, string> {
   const aliases = new Map<string, string>();
   for (const block of parseQuestionText(question)) {
     if (block.kind !== "question") continue;
     const display = String(block.displayNumber);
-    const original = normalizeNumber(block.numberLabel);
-    aliases.set(normalizeNumber(display), original || display);
+    const original = normalizeQuestionNumber(block.numberLabel);
+    aliases.set(normalizeQuestionNumber(display), original || display);
     if (original) aliases.set(original, display);
   }
   return aliases;
@@ -376,7 +380,7 @@ function metadataFromObject(value: Record<string, unknown>): QuestionMetadata {
   return {
     difficulty: normalizeDifficulty(value.difficulty),
     concepts: normalizeTextList(value.concepts),
-    diagramType: normalizeDiagramType(value.diagramType),
+    diagramType: normalizeLearningDiagramType(value.diagramType),
     diagramSpec: normalizeDiagramSpec(value.diagramSpec),
     notes: getString(value.notes) || getString(value.memo) || getString(value.note),
     importantPoints: normalizeTextList(value.importantPoints),
@@ -398,23 +402,23 @@ function applyQuestionMetadata(answerKey: SheetAnswerItem[], raw: unknown, quest
       const value = item as { questionNumber?: unknown; number?: unknown; difficulty?: unknown; concepts?: unknown };
       const questionNumber = `${value.questionNumber ?? value.number ?? ""}`.trim();
       if (!questionNumber) continue;
-      byNumber.set(normalizeNumber(questionNumber), metadataFromObject(value as Record<string, unknown>));
+      byNumber.set(normalizeQuestionNumber(questionNumber), metadataFromObject(value as Record<string, unknown>));
     }
   } else {
     for (const [questionNumber, value] of Object.entries(raw)) {
       if (typeof value === "string") {
-        byNumber.set(normalizeNumber(questionNumber), { difficulty: normalizeDifficulty(value) });
+        byNumber.set(normalizeQuestionNumber(questionNumber), { difficulty: normalizeDifficulty(value) });
       } else if (value && typeof value === "object") {
-        byNumber.set(normalizeNumber(questionNumber), metadataFromObject(value as Record<string, unknown>));
+        byNumber.set(normalizeQuestionNumber(questionNumber), metadataFromObject(value as Record<string, unknown>));
       }
     }
   }
 
   const aliases = questionAliasMap(question);
   return answerKey.map((item) => {
-    const normalized = normalizeNumber(item.questionNumber);
+    const normalized = normalizeQuestionNumber(item.questionNumber);
     const alias = aliases.get(normalized);
-    const meta = byNumber.get(normalized) ?? (alias ? byNumber.get(normalizeNumber(alias)) : undefined);
+    const meta = byNumber.get(normalized) ?? (alias ? byNumber.get(normalizeQuestionNumber(alias)) : undefined);
     return {
       ...item,
       difficulty:
@@ -471,8 +475,8 @@ function attachQuestionNotes(
   if (!notes.length) return answerKey;
   const next = answerKey.map((item) => ({ ...item }));
   for (const note of notes) {
-    const normalized = normalizeNumber(note.questionNumber);
-    const index = next.findIndex((item) => normalizeNumber(item.questionNumber) === normalized);
+    const normalized = normalizeQuestionNumber(note.questionNumber);
+    const index = next.findIndex((item) => normalizeQuestionNumber(item.questionNumber) === normalized);
     if (index >= 0) {
       const current = next[index];
       next[index] = {

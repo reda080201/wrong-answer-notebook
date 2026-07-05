@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { AppSettings, EntryFormData, WrongAnswerEntry } from "../types";
+import nswerFixture from "../test/fixtures/nswer_nje_s2_limit_continuity_import.json";
 import { buildConceptGraph, extractConceptLinks, getRelatedEntries } from "./concepts";
 import { duplicateScore, findDuplicateEntry, findDuplicateEntries, similarity } from "./duplicates";
 import { entryToMarkdown } from "./exportEntry";
 import { parseExpectedQuestionNumbers } from "./importAudit";
+import { parseImportedStudyText } from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import { runClientIntegrityCheck } from "./integrity";
 import { cleanQuestionText } from "./textCleanup";
@@ -117,7 +119,7 @@ describe("import validation and export", () => {
     expect(report.issues.map((issue) => issue.id)).not.toContain("audit-missing-question-A-2");
   });
 
-  it("strongly reports audit gaps, excluded handwriting, and unlinked figures", () => {
+  it("reports audit gaps, excluded handwriting, and unlinked figures", () => {
     const report = validateImportedStudyData({
       ...form,
       entryKind: "problem_sheet",
@@ -138,7 +140,7 @@ describe("import validation and export", () => {
       expect.objectContaining({ id: "audit-missing-question-2", severity: "error" }),
       expect.objectContaining({ id: "audit-handwriting-not-excluded", severity: "error" }),
       expect.objectContaining({ id: "audit-rejected-notes" }),
-      expect.objectContaining({ id: "unlinked-figure-f1", severity: "error" }),
+      expect.objectContaining({ id: "unlinked-figure-f1", severity: "warning" }),
     ]));
   });
 
@@ -190,6 +192,55 @@ describe("import validation and export", () => {
         "unlinked-figure-f1",
       ]),
     );
+  });
+
+  it("keeps described-only figures non-blocking while original missing images remain confirmable", () => {
+    const report = validateImportedStudyData({
+      ...form,
+      entryKind: "problem_sheet",
+      question: "1. 첫 문제\n\n2. 둘째 문제",
+      figures: [
+        {
+          id: "described",
+          questionNumber: "1",
+          title: "설명 도표",
+          caption: "그림 없이 설명으로 유지",
+          source: "described_only",
+        },
+        {
+          id: "original",
+          questionNumber: "2",
+          title: "원본 도표",
+          caption: "",
+          source: "original",
+        },
+      ],
+      learningBlocks: [
+        {
+          id: "diagram-1",
+          type: "diagram",
+          title: "1번 도식",
+          content: "설명 도표",
+          sourceQuestionNumber: "1",
+          diagramSpec: {
+            type: "coordinate-graph",
+            params: { coreIdea: "그래프 접근" },
+          },
+        },
+      ],
+    });
+    const classified = classifyImportValidationIssues(report);
+
+    expect(classified.blocking).toHaveLength(0);
+    expect(classified.confirmable).toEqual([
+      expect.objectContaining({
+        id: "unlinked-figure-original",
+        autoFixAvailable: "describe-only",
+      }),
+    ]);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "described-figure-described", severity: "info" }),
+    ]));
   });
 
   it("leaves warning and info validation issues as non-blocking other issues", () => {
@@ -282,6 +333,58 @@ describe("import validation and export", () => {
 
     expect(report.issues.map((issue) => issue.id)).not.toContain("extra-answer-01");
     expect(report.issues.map((issue) => issue.id)).not.toContain("extra-answer-2번");
+  });
+
+  it("does not block imported Nswer fixture when audit and body contain questions 10 through 15", () => {
+    const result = parseImportedStudyText(
+      JSON.stringify(nswerFixture),
+      "nswer_nje_s2_limit_continuity_import.json",
+      "수학",
+    );
+    const report = validateImportedStudyData(result.data);
+    const classified = classifyImportValidationIssues(report);
+    const issueIds = report.issues.map((issue) => issue.id);
+
+    expect(result.data.title).toBe("Nswer N제 수학 II 1단원 함수의 극한과 연속");
+    expect(report.audit?.missingQuestionNumbers).toEqual([]);
+    for (const number of ["10", "11", "12", "13", "14", "15"]) {
+      expect(issueIds).not.toContain(`audit-missing-question-${number}`);
+    }
+    expect(issueIds).not.toContain("extra-answer-18");
+    expect(classified.blocking).toHaveLength(0);
+
+    const figureIssues = report.issues.filter((issue) => issue.id.startsWith("unlinked-figure-"));
+    expect(figureIssues).toHaveLength(0);
+    expect(figureIssues.every((issue) => issue.severity === "warning")).toBe(true);
+    expect(result.data.figures?.every((figure) => !figure.image && figure.source === "described_only")).toBe(true);
+    expect(report.issues.filter((issue) => issue.id.startsWith("described-figure-")).length).toBe(6);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "audit-rejected-notes", severity: "warning" }),
+    ]));
+    expect(result.data.learningBlocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: "함수의 극한", content: "좌극한과 우극한이 같을 때 극한이 존재한다." }),
+      expect.objectContaining({ title: "연속 조건", content: "lim_{x\\to a} f(x)=f(a)" }),
+      expect.objectContaining({ title: "풀이 루틴", content: "- 좌극한 확인\n- 우극한 확인\n- 함숫값 비교" }),
+      expect.objectContaining({
+        title: "07번 도표 시각화",
+        content: "도표의 좌우 접근값을 비교한다.",
+        diagramType: "coordinate-graph",
+        diagramSpec: expect.objectContaining({
+          type: "coordinate-graph",
+          params: expect.objectContaining({
+            coreIdea: "도표의 양쪽 접근값이 같은지 비교한다.",
+          }),
+        }),
+      }),
+      expect.objectContaining({
+        title: "08번 그래프 시각화",
+        diagramType: "geometry-helper",
+        diagramSpec: expect.objectContaining({
+          type: "geometry-helper",
+        }),
+      }),
+      expect.objectContaining({ title: "주의", content: "함숫값만 보고 연속이라고 판단하지 않는다." }),
+    ]));
   });
 
   it("warns when GPT appears to assign the same difficulty to every answer", () => {

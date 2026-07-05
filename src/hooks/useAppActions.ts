@@ -28,6 +28,7 @@ import {
   mergeGptSolutionIntoEntry,
   type GptSolutionApplyMode,
 } from "../utils/gptSolution";
+import { resolveSheetGroupId } from "../utils/sheetGroup";
 import { runClientIntegrityCheck } from "../utils/integrity";
 import {
   applyReviewResult,
@@ -113,7 +114,27 @@ export function useAppActions({
     data: EntryFormData,
     removedImages: string[],
   ) => {
-    const duplicates = findDuplicateEntries(entries, data, editingEntry?.id, 3);
+    const preparedData: EntryFormData = {
+      ...data,
+      sheetGroup:
+        data.entryKind === "problem_sheet" &&
+        data.sheetGroup?.groupTitle.trim() &&
+        data.sheetGroup?.partTitle.trim()
+          ? {
+              ...data.sheetGroup,
+              groupId:
+                data.sheetGroup.groupId ||
+                resolveSheetGroupId(data.sheetGroup.groupTitle, entries),
+              groupTitle: data.sheetGroup.groupTitle.trim(),
+              partTitle: data.sheetGroup.partTitle.trim(),
+              questionRange: data.sheetGroup.questionRange?.trim() || undefined,
+              partOrder: Number.isFinite(Number(data.sheetGroup.partOrder))
+                ? Number(data.sheetGroup.partOrder)
+                : 1,
+            }
+          : undefined,
+    };
+    const duplicates = findDuplicateEntries(entries, preparedData, editingEntry?.id, 3);
     if (
       duplicates.length &&
       !confirm(
@@ -130,10 +151,10 @@ export function useAppActions({
     }
 
     if (editingEntry) {
-      await updateEntry(editingEntry.id, data, removedImages);
+      await updateEntry(editingEntry.id, preparedData, removedImages);
       setSelectedId(editingEntry.id);
     } else {
-      const id = await addEntry(data);
+      const id = await addEntry(preparedData);
       setSelectedId(id);
     }
   };

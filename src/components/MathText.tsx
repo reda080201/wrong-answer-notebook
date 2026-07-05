@@ -1,4 +1,10 @@
-import { cloneElement, isValidElement, type ReactNode } from "react";
+import {
+  cloneElement,
+  isValidElement,
+  useLayoutEffect,
+  useRef,
+  type ReactNode,
+} from "react";
 import katex from "katex";
 
 interface MathToken {
@@ -30,23 +36,35 @@ export function splitMathText(text: string): Array<string | MathToken> {
 }
 
 function MathFragment({ token }: { token: MathToken }) {
-  let html: string;
-  try {
-    html = katex.renderToString(token.expression, {
-      displayMode: token.displayMode,
-      throwOnError: true,
-      trust: false,
-      strict: "warn",
-      output: "htmlAndMathml",
-    });
-  } catch {
-    html = "";
-  }
-  if (!html) return <span className="math-fragment--invalid">{token.raw}</span>;
+  const containerRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.textContent = "";
+    container.className = token.displayMode
+      ? "math-fragment math-fragment--display"
+      : "math-fragment";
+
+    try {
+      katex.render(token.expression, container, {
+        displayMode: token.displayMode,
+        throwOnError: true,
+        trust: false,
+        strict: "warn",
+        output: "htmlAndMathml",
+      });
+    } catch {
+      container.className = "math-fragment--invalid";
+      container.textContent = token.raw;
+    }
+  }, [token.displayMode, token.expression, token.raw]);
+
   return (
     <span
+      ref={containerRef}
       className={token.displayMode ? "math-fragment math-fragment--display" : "math-fragment"}
-      dangerouslySetInnerHTML={{ __html: html }}
     />
   );
 }

@@ -35,6 +35,7 @@ import StudyZoomViewport, { getQuestionZoomStorageKey } from "./StudyZoomViewpor
 import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
+import GptExportModal from "./GptExportModal";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -170,6 +171,9 @@ export default function EntryDetail({
   const [quickMemoText, setQuickMemoText] = useState("");
   const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
   const [showTextReview, setShowTextReview] = useState(false);
+  const [showGptExport, setShowGptExport] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
   const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(entry.title);
@@ -439,6 +443,34 @@ export default function EntryDetail({
           : `${normalizeQuestionNumber(questionNumber)}번 문제 중요 표시를 해제했습니다.`,
         "success",
       );
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "중요 표시 저장에 실패했습니다.", "error");
+    }
+  };
+
+  const toggleQuestionSelected = (questionNumber: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    setSelectedQuestionNumbers((current) =>
+      current.includes(normalized)
+        ? current.filter((item) => item !== normalized)
+        : [...current, normalized],
+    );
+  };
+
+  const markSelectedImportant = async () => {
+    if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
+    let next = entry.questionMeta ?? [];
+    for (const questionNumber of selectedQuestionNumbers) {
+      const currentImportant = next.some(
+        (meta) =>
+          normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber) &&
+          meta.important,
+      );
+      if (!currentImportant) next = toggleQuestionImportant(next, questionNumber);
+    }
+    try {
+      await onQuestionMetaChange(entry, next);
+      pushToast("선택한 문제를 중요 표시했습니다.", "success");
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "중요 표시 저장에 실패했습니다.", "error");
     }
@@ -1063,6 +1095,16 @@ export default function EntryDetail({
               >
                 어려움 표시
               </button>
+              {isSheet && (
+                <button type="button" className="btn-icon" onClick={() => setShowGptExport(true)}>
+                  GPT에게 보내기
+                </button>
+              )}
+              {isSheet && onTitleChange && (
+                <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>
+                  이름 변경
+                </button>
+              )}
               <button
                 type="button"
                 className={`btn-icon btn-memo ${memoMode ? "active" : ""}`}
@@ -1198,13 +1240,7 @@ export default function EntryDetail({
             <div className="detail-title-row">
               <h2 className="detail-title">{entry.title.trim() || "(제목 없음)"}</h2>
               {isSheet && onTitleChange && (
-                <button
-                  type="button"
-                  className="btn-secondary btn-rename-sheet"
-                  onClick={() => setTitleEditing(true)}
-                >
-                  이름 변경
-                </button>
+                <span className="sheet-group-title-hint">{entry.sheetGroup ? `${entry.sheetGroup.groupTitle} · ${entry.sheetGroup.partTitle}` : ""}</span>
               )}
             </div>
           )}
@@ -1237,6 +1273,31 @@ export default function EntryDetail({
           </h3>
           {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
             <div className="sheet-reading-tools">
+              <div className="sheet-selection-tools">
+                <button
+                  type="button"
+                  className={`btn-secondary btn-sm ${selectionMode ? "active" : ""}`}
+                  onClick={() => setSelectionMode((value) => !value)}
+                >
+                  문제 선택
+                </button>
+                {selectionMode && (
+                  <>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => setShowGptExport(true)} disabled={selectedQuestionNumbers.length === 0}>
+                      GPT에게 보내기
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={markSelectedImportant} disabled={selectedQuestionNumbers.length === 0}>
+                      중요 표시
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => pushToast("선택한 문제 복습 큐는 극장 모드 순회로 준비됩니다.", "info")} disabled={selectedQuestionNumbers.length === 0}>
+                      복습 큐 만들기
+                    </button>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => setSelectedQuestionNumbers([])}>
+                      선택 해제
+                    </button>
+                  </>
+                )}
+              </div>
               {questionAnchors.length > 0 && (
                 <nav className="sheet-toc" aria-label="문제 번호 목차">
                   {questionAnchors.map((block, index) => (
@@ -1329,6 +1390,9 @@ export default function EntryDetail({
                     suspiciousSegments={suspiciousSegments}
                     onOpenQuestionTheater={isSheet ? openTheaterMode : undefined}
                     onToggleQuestionImportant={isSheet ? handleToggleQuestionImportant : undefined}
+                    selectionMode={selectionMode}
+                    selectedQuestionNumbers={selectedQuestionNumbers}
+                    onToggleQuestionSelected={toggleQuestionSelected}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
@@ -1863,6 +1927,10 @@ export default function EntryDetail({
           }}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
           onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
+          onOpenGptExport={() => {
+            setSelectedQuestionNumbers([String(theaterQuestion.displayNumber)]);
+            setShowGptExport(true);
+          }}
           onReview={(result) => void handleReviewResult(result)}
           onClose={closeTheaterMode}
         />
@@ -1899,6 +1967,26 @@ export default function EntryDetail({
           onQuickMemoOpenChange={setQuickMemoOpen}
           onQuickMemoTextChange={setQuickMemoText}
           onQuickMemoSubmit={() => void handleQuickMemoSubmit()}
+          onOpenGptExport={isSheet ? () => setShowGptExport(true) : undefined}
+        />
+      )}
+      {showGptExport && (
+        <GptExportModal
+          entry={entry}
+          allEntries={allEntries}
+          currentQuestionNumber={
+            theaterQuestion
+              ? String(theaterQuestion.displayNumber)
+              : focusedQuestion
+                ? String(focusedQuestion.displayNumber)
+                : "1"
+          }
+          selectedQuestionNumbers={selectedQuestionNumbers}
+          onClose={() => setShowGptExport(false)}
+          onCopied={() => {
+            setShowGptExport(false);
+            pushToast("GPT에 붙여넣을 문제를 복사했습니다.", "success");
+          }}
         />
       )}
       {toasts.length > 0 && (

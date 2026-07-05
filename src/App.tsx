@@ -6,6 +6,7 @@ import AppSidebar from "./components/AppSidebar";
 import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
+import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup } from "./api";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
 import { useAppActions } from "./hooks/useAppActions";
@@ -195,31 +196,6 @@ export default function App() {
         subjectCounts={subjectCounts}
         sectionEntryCount={sectionEntryCount}
         moveSubject={moveSubject}
-        settings={settings}
-        settingsError={settingsError}
-        settingsMessage={actions.settingsMessage}
-        clearSettingsError={clearSettingsError}
-        setSettingsMessage={actions.setSettingsMessage}
-        setSettings={setSettings}
-        showSettings={showSettings}
-        setShowSettings={setShowSettings}
-        theme={theme}
-        setTheme={setTheme}
-        aiProviderStatus={aiProviderStatus}
-        aiProviderKeyInput={aiProviderKeyInput}
-        setAiProviderKeyInput={setAiProviderKeyInput}
-        updateAiProviderConfig={updateAiProviderConfig}
-        storeAiProviderKey={storeAiProviderKey}
-        removeAiProviderKey={removeAiProviderKey}
-        integrityReport={actions.integrityReport}
-        deleteTemplate={actions.deleteTemplate}
-        deletePromptTemplate={actions.deletePromptTemplate}
-        deleteMemoTemplate={actions.deleteMemoTemplate}
-        addMemoTemplate={actions.addMemoTemplate}
-        handleBackup={actions.handleBackup}
-        handleRestore={actions.handleRestore}
-        runIntegrity={actions.runIntegrity}
-        handleCleanupOrphans={actions.handleCleanupOrphans}
         openNew={actions.openNew}
         openImport={actions.openImport}
         openLearningImport={() => actions.setShowLearningImportModal(true)}
@@ -252,6 +228,7 @@ export default function App() {
           setListFilter={setListFilter}
           todayReviewCount={todayReviewCount}
           startReview={actions.startReview}
+          onOpenSettings={() => setShowSettings(true)}
         />
 
         <div className="content">
@@ -351,6 +328,34 @@ export default function App() {
         handleWikiLinkClick={handleWikiLinkClick}
         existingTargets={linkableTargets}
       />
+      {showSettings && (
+        <SettingsModal
+          settings={settings}
+          settingsError={settingsError}
+          settingsMessage={actions.settingsMessage}
+          clearSettingsError={clearSettingsError}
+          setSettingsMessage={actions.setSettingsMessage}
+          setSettings={setSettings}
+          theme={theme}
+          setTheme={setTheme}
+          aiProviderStatus={aiProviderStatus}
+          aiProviderKeyInput={aiProviderKeyInput}
+          setAiProviderKeyInput={setAiProviderKeyInput}
+          updateAiProviderConfig={updateAiProviderConfig}
+          storeAiProviderKey={storeAiProviderKey}
+          removeAiProviderKey={removeAiProviderKey}
+          integrityReport={actions.integrityReport}
+          deleteTemplate={actions.deleteTemplate}
+          deletePromptTemplate={actions.deletePromptTemplate}
+          deleteMemoTemplate={actions.deleteMemoTemplate}
+          addMemoTemplate={actions.addMemoTemplate}
+          handleBackup={actions.handleBackup}
+          handleRestore={actions.handleRestore}
+          runIntegrity={actions.runIntegrity}
+          handleCleanupOrphans={actions.handleCleanupOrphans}
+          onClose={() => setShowSettings(false)}
+        />
+      )}
     </div>
   );
 }

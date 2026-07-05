@@ -142,7 +142,7 @@ describe("importStudyText", () => {
     expect(result.data.rejectedNotes).toEqual(["학생풀이 x=3"]);
     expect(result.data.importAudit).toEqual(expect.objectContaining({
       expectedQuestionNumbers: ["1", "2"],
-      detectedQuestionNumbers: ["1"],
+      detectedQuestionNumbers: ["1", "99"],
       missingQuestionNumbers: ["2"],
       uncertainQuestionNumbers: ["2"],
       handwritingExcluded: true,
@@ -256,15 +256,19 @@ describe("importStudyText", () => {
           {
             type: "diagram",
             title: "좌표 그래프",
-            content: "교점과 절편을 비교",
+            body: "교점과 절편을 비교",
             sourceQuestionNumber: "1",
-            diagramType: "coordinate-graph",
+            diagramType: "coordinate_graph",
             diagramSpec: {
-              type: "coordinate-graph",
+              diagramType: "coordinate_graph",
               title: "교점 시각화",
               curveLabel: "y=f(x)",
               pointLabels: ["교점", "절편"],
               interceptLabel: "x절편",
+              params: {
+                coreIdea: "교점과 절편을 구분한다",
+                highlight: ["교점", "<svg>bad</svg>"],
+              },
             },
           },
           {
@@ -325,6 +329,10 @@ describe("importStudyText", () => {
           title: "교점 시각화",
           curveLabel: "y=f(x)",
           pointLabels: ["교점", "절편"],
+          params: expect.objectContaining({
+            coreIdea: "교점과 절편을 구분한다",
+            highlight: ["교점"],
+          }),
         }),
       }),
       expect.objectContaining({

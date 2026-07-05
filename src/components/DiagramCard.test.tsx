@@ -86,4 +86,28 @@ describe("DiagramCard", () => {
     expect(screen.getByText("x절편")).toBeInTheDocument();
     expect(screen.getByText("좌표축과 교점 확인")).toBeInTheDocument();
   });
+
+  it("renders safe diagramSpec params as supporting text", () => {
+    render(
+      <DiagramCard
+        diagramSpec={{
+          type: "geometry-helper",
+          title: "원과 직선",
+          params: {
+            coreIdea: "수평현 길이를 x좌표 차로 바꾼다",
+            objects: [
+              { type: "circle", equation: "x^2+y^2=4", label: "원" },
+              { type: "line", equation: "y=tx+t", label: "직선" },
+            ],
+            highlight: ["PR", "QS"],
+          },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("figure", { name: "원과 직선 다이어그램" })).toBeInTheDocument();
+    expect(screen.getByText("수평현 길이를 x좌표 차로 바꾼다")).toBeInTheDocument();
+    expect(screen.getByText(/label: 원/)).toBeInTheDocument();
+    expect(screen.getByText("PR")).toBeInTheDocument();
+  });
 });

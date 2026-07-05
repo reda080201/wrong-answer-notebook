@@ -115,4 +115,44 @@ describe("EntryListPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "바로 보기" }));
     expect(onOpenImportantQuestion).toHaveBeenCalledWith("sheet", "2");
   });
+
+  it("groups sheet parts into a folder card", () => {
+    const setSelectedId = vi.fn();
+    const part1 = entry("p1", "problem_sheet", "1~20", {
+      question: "1. 하나\n\n2. 둘",
+      sheetGroup: {
+        groupId: "alpha",
+        groupTitle: "ALPHA 모의고사 6회",
+        partTitle: "1~20",
+        partOrder: 1,
+      },
+    });
+    const part2 = entry("p2", "problem_sheet", "21~40", {
+      question: "1. 셋",
+      sheetGroup: {
+        groupId: "alpha",
+        groupTitle: "ALPHA 모의고사 6회",
+        partTitle: "21~40",
+        partOrder: 2,
+      },
+    });
+
+    render(
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={[part1, part2]}
+        filtered={[part1, part2]}
+        selectedId={null}
+        setSelectedId={setSelectedId}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("ALPHA 모의고사 6회")).toBeInTheDocument();
+    expect(screen.getByText(/2개 파트/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "1~20" }));
+    expect(setSelectedId).toHaveBeenCalledWith("p1");
+  });
 });
