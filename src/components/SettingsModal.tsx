@@ -4,6 +4,8 @@ import type {
   AiProviderStatus,
   AiProviderType,
   AppSettings,
+  EntryKind,
+  EntryTemplate,
   IntegrityReport,
   ThemeMode,
 } from "../types";
@@ -26,10 +28,11 @@ interface SettingsModalProps {
   storeAiProviderKey: () => Promise<void>;
   removeAiProviderKey: () => Promise<void>;
   integrityReport: IntegrityReport | null;
+  saveTemplate: (template: EntryTemplate) => Promise<void>;
   deleteTemplate: (templateId: string) => Promise<void>;
+  savePromptTemplate: (template: { id: string; name: string; content: string }) => Promise<void>;
   deletePromptTemplate: (templateId: string) => Promise<void>;
   deleteMemoTemplate: (templateId: string) => Promise<void>;
-  addMemoTemplate: () => Promise<void>;
   handleBackup: () => Promise<void>;
   handleRestore: () => Promise<void>;
   runIntegrity: () => Promise<void>;
@@ -53,10 +56,11 @@ export default function SettingsModal({
   storeAiProviderKey,
   removeAiProviderKey,
   integrityReport,
+  saveTemplate,
   deleteTemplate,
+  savePromptTemplate,
   deletePromptTemplate,
   deleteMemoTemplate,
-  addMemoTemplate,
   handleBackup,
   handleRestore,
   runIntegrity,
@@ -64,13 +68,14 @@ export default function SettingsModal({
   onClose,
 }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
+  const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
   return (
     <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="설정">
       <div className="settings-modal">
         <header className="modal-head">
           <div>
-            <span className="modal-eyebrow">Settings</span>
+            <span className="modal-eyebrow">설정</span>
             <h2>설정</h2>
           </div>
           <button type="button" className="btn-icon" onClick={onClose}>
@@ -98,7 +103,7 @@ export default function SettingsModal({
             {(
               [
                 ["theme", "테마"],
-                ["ai", "AI Provider"],
+                ["ai", "AI 설정"],
                 ["data", "데이터 관리"],
                 ["templates", "템플릿"],
                 ["advanced", "고급"],
@@ -143,7 +148,7 @@ export default function SettingsModal({
             {activeTab === "ai" && (
               <div className="ai-provider-settings">
                 <div className="form-field">
-                  <label htmlFor="ai-provider-type">Provider</label>
+                  <label htmlFor="ai-provider-type">AI 제공자</label>
                   <select
                     id="ai-provider-type"
                     value={settings.aiProvider.type}
@@ -154,9 +159,9 @@ export default function SettingsModal({
                       })
                     }
                   >
-                    <option value="manual">manual</option>
-                    <option value="gemini-flash-lite">gemini-flash-lite</option>
-                    <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                    <option value="manual">수동 입력</option>
+                    <option value="gemini-flash-lite">Gemini Flash Lite</option>
+                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
                   </select>
                   <p className="provider-hint">
                     flash-lite는 빠른 정리에, 3.5-flash는 이미지 인식과 복잡한 추론에 맞춰 사용합니다.
@@ -187,9 +192,9 @@ export default function SettingsModal({
                   ))}
                 </div>
                 <div className="ai-provider-status">
-                  <span>환경변수 key: {aiProviderStatus?.hasEnvKey ? "감지됨" : "없음"}</span>
-                  <span>저장 key: {aiProviderStatus?.hasStoredKey ? "저장됨" : "없음"}</span>
-                  <span>상태: {aiProviderStatus?.available ? "사용 가능" : "manual 대기"}</span>
+                  <span>환경변수 키: {aiProviderStatus?.hasEnvKey ? "감지됨" : "없음"}</span>
+                  <span>저장된 키: {aiProviderStatus?.hasStoredKey ? "저장됨" : "없음"}</span>
+                  <span>상태: {aiProviderStatus?.available ? "사용 가능" : "수동 모드 대기"}</span>
                 </div>
                 {settings.aiProvider.keySource === "tauri-settings" && (
                   <div className="ai-provider-key-row">
@@ -198,13 +203,13 @@ export default function SettingsModal({
                       value={aiProviderKeyInput}
                       disabled={!isTauri()}
                       onChange={(event) => setAiProviderKeyInput(event.target.value)}
-                      placeholder="Gemini API key"
+                      placeholder="Gemini API 키"
                     />
                     <button type="button" className="theme-btn" disabled={!isTauri()} onClick={storeAiProviderKey}>
-                      key 저장
+                      키 저장
                     </button>
                     <button type="button" className="theme-btn" disabled={!isTauri()} onClick={removeAiProviderKey}>
-                      key 삭제
+                      키 삭제
                     </button>
                   </div>
                 )}
@@ -262,6 +267,12 @@ export default function SettingsModal({
                     name: template.name,
                     builtIn: false,
                     onDelete: () => deleteTemplate(template.id),
+                    onEdit: () => setTemplateDraft({
+                      kind: "entry",
+                      id: template.id,
+                      name: template.name,
+                      content: JSON.stringify(template.data, null, 2),
+                    }),
                   }))}
                 />
                 <p className="settings-label">GPT 프롬프트 템플릿</p>
@@ -271,34 +282,79 @@ export default function SettingsModal({
                     name: template.name,
                     builtIn: template.builtIn,
                     onDelete: () => deletePromptTemplate(template.id),
+                    onEdit: () => setTemplateDraft({ kind: "prompt", id: template.id, name: template.name, content: template.content }),
+                    onCopy: () => setTemplateDraft({ kind: "prompt", name: `${template.name} 복사본`, content: template.content }),
                   }))}
                 />
                 <p className="settings-label">메모 템플릿</p>
-                <div className="settings-actions">
-                  <button type="button" className="theme-btn" onClick={addMemoTemplate}>
-                    메모 템플릿 추가
-                  </button>
-                </div>
+                <button type="button" className="theme-btn" onClick={() => setTemplateDraft({ kind: "memo", name: "", content: "" })}>
+                  메모 템플릿 추가
+                </button>
                 <TemplateList
                   items={settings.memoTemplates.map((template) => ({
                     id: template.id,
                     name: template.name,
                     builtIn: template.builtIn,
                     onDelete: () => deleteMemoTemplate(template.id),
+                    onEdit: () => setTemplateDraft({ kind: "memo", id: template.id, name: template.name, content: template.content }),
+                    onCopy: () => setTemplateDraft({ kind: "memo", name: `${template.name} 복사본`, content: template.content }),
                   }))}
                 />
+                {templateDraft && (
+                  <form
+                    className="template-edit-form"
+                    onSubmit={async (event) => {
+                      event.preventDefault();
+                      const name = templateDraft.name.trim();
+                      const content = templateDraft.content.trim();
+                      if (!name || !content) return;
+                      try {
+                        if (templateDraft.kind === "prompt") {
+                          await savePromptTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, content });
+                        } else if (templateDraft.kind === "entry") {
+                          const data = JSON.parse(content) as EntryTemplate["data"];
+                          const entryKind: EntryKind =
+                            data.entryKind === "concept" || data.entryKind === "problem_sheet" || data.entryKind === "lecture"
+                              ? data.entryKind
+                              : "wrong_answer";
+                          await saveTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, entryKind, data });
+                        } else {
+                          await setSettings({
+                            ...settings,
+                            memoTemplates: [
+                              ...settings.memoTemplates.filter((item) => item.id !== templateDraft.id),
+                              { id: templateDraft.id ?? crypto.randomUUID(), name, content },
+                            ],
+                          });
+                        }
+                      } catch (error) {
+                        setSettingsMessage(error instanceof Error ? error.message : "템플릿 저장에 실패했습니다.");
+                        return;
+                      }
+                      setTemplateDraft(null);
+                    }}
+                  >
+                    <label>
+                      이름
+                      <input value={templateDraft.name} onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} />
+                    </label>
+                    <label>
+                      내용
+                      <textarea value={templateDraft.content} onChange={(event) => setTemplateDraft({ ...templateDraft, content: event.target.value })} />
+                    </label>
+                    <div className="settings-actions">
+                      <button type="submit" className="theme-btn">저장</button>
+                      <button type="button" className="theme-btn" onClick={() => setTemplateDraft(null)}>취소</button>
+                    </div>
+                  </form>
+                )}
               </>
             )}
 
             {activeTab === "advanced" && (
               <div className="advanced-settings-panel">
-                <p>고급 설정은 데이터 보존과 진단 기능 중심으로 유지됩니다.</p>
-                <button type="button" className="theme-btn" onClick={runIntegrity}>
-                  무결성 검사 다시 실행
-                </button>
-                <button type="button" className="theme-btn" onClick={handleCleanupOrphans}>
-                  미사용 이미지 정리
-                </button>
+                <p>고급 설정은 진단 정보와 위험한 옵션을 분리해 두는 공간입니다.</p>
+                <p>백업, 복원, 무결성 검사, 이미지 정리는 데이터 관리 탭에서 실행하세요.</p>
               </div>
             )}
           </section>
@@ -312,7 +368,7 @@ function TemplateList({
   items,
   empty = "템플릿이 없습니다.",
 }: {
-  items: Array<{ id: string; name: string; builtIn?: boolean; onDelete: () => void }>;
+  items: Array<{ id: string; name: string; builtIn?: boolean; onDelete: () => void; onEdit?: () => void; onCopy?: () => void }>;
   empty?: string;
 }) {
   return (
@@ -327,8 +383,14 @@ function TemplateList({
               {item.builtIn ? " · 기본" : ""}
             </span>
             {!item.builtIn && (
-              <button type="button" onClick={item.onDelete}>
-                삭제
+              <>
+                {item.onEdit && <button type="button" onClick={item.onEdit}>편집</button>}
+                <button type="button" onClick={item.onDelete}>삭제</button>
+              </>
+            )}
+            {item.builtIn && item.onCopy && (
+              <button type="button" onClick={item.onCopy}>
+                복사해서 편집
               </button>
             )}
           </div>

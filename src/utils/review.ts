@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
-import type { ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
+import type { ReviewItem, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { resolveEntryDifficultyScore } from "./difficulty";
 import { recommendedStrategyForAnalysis } from "./mistakeAnalysis";
+import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
+import { parseQuestionText } from "./textLayout";
 
 export function addDays(date: Date, days: number): Date {
   const next = new Date(date);
@@ -76,8 +78,96 @@ export function applyReviewResult(
 export function isDueForReview(entry: WrongAnswerEntry, now = new Date()): boolean {
   if (entry.mastered) return false;
   if (entry.entryKind === "concept") return false;
+  if (entry.entryKind === "lecture") return false;
   if (!entry.review?.dueAt) return true;
   return startOfDay(new Date(entry.review.dueAt)).getTime() <= startOfDay(now).getTime();
+}
+
+function isQuestionDue(review: ReviewState | undefined, now = new Date()): boolean {
+  if (!review?.dueAt) return true;
+  return startOfDay(new Date(review.dueAt)).getTime() <= startOfDay(now).getTime();
+}
+
+export function getSheetQuestionReviewItems(
+  entry: WrongAnswerEntry,
+  mode: "today" | "important" | "difficult" | "all" = "today",
+  now = new Date(),
+): ReviewItem[] {
+  if (entry.entryKind !== "problem_sheet") return [];
+  const questions = parseQuestionText(entry.question).filter((block) => block.kind === "question");
+  const meta = normalizeQuestionMeta(entry.questionMeta);
+  const answers = entry.answerKey ?? [];
+  return questions
+    .filter((block) => {
+      const number = normalizeQuestionNumber(block.displayNumber);
+      const original = normalizeQuestionNumber(block.numberLabel);
+      const questionMeta = meta.find(
+        (item) =>
+          normalizeQuestionNumber(item.questionNumber) === number ||
+          normalizeQuestionNumber(item.questionNumber) === original,
+      );
+      const answer = answers.find(
+        (item) =>
+          normalizeQuestionNumber(item.questionNumber) === number ||
+          normalizeQuestionNumber(item.questionNumber) === original,
+      );
+      if (mode === "important") return Boolean(questionMeta?.important);
+      if (mode === "difficult") {
+        return Boolean(
+          (questionMeta?.difficultyScore ?? answer?.difficultyScore ?? 0) >= 61 ||
+            questionMeta?.important ||
+            answer?.needsReview,
+        );
+      }
+      if (mode === "all") return true;
+      return Boolean(answer?.needsReview || isQuestionDue(questionMeta?.review, now));
+    })
+    .map((block) => ({
+      kind: "sheet-question" as const,
+      entry,
+      questionNumber: normalizeQuestionNumber(block.displayNumber),
+    }));
+}
+
+export function getTodayReviewItems(
+  entries: WrongAnswerEntry[],
+  now = new Date(),
+): ReviewItem[] {
+  return entries
+    .flatMap((entry): ReviewItem[] => {
+      if (entry.entryKind === "problem_sheet") {
+        return getSheetQuestionReviewItems(entry, "today", now);
+      }
+      return isDueForReview(entry, now) ? [{ kind: "entry", entry }] : [];
+    })
+    .sort((a, b) => resolveEntryDifficultyScore(b.entry) - resolveEntryDifficultyScore(a.entry));
+}
+
+export function getDifficultReviewItems(entries: WrongAnswerEntry[]): ReviewItem[] {
+  return entries
+    .flatMap((entry): ReviewItem[] => {
+      if (entry.entryKind === "problem_sheet") return getSheetQuestionReviewItems(entry, "difficult");
+      return entry.entryKind !== "concept" &&
+        entry.entryKind !== "lecture" &&
+        !entry.mastered &&
+        (entry.difficult || entry.difficulty === "high" || entry.difficulty === "medium")
+        ? [{ kind: "entry", entry }]
+        : [];
+    })
+    .sort((a, b) => resolveEntryDifficultyScore(b.entry) - resolveEntryDifficultyScore(a.entry));
+}
+
+export function getRandomReviewItems(entries: WrongAnswerEntry[]): ReviewItem[] {
+  return entries.flatMap((entry): ReviewItem[] => {
+    if (entry.entryKind === "problem_sheet") return getSheetQuestionReviewItems(entry, "all");
+    return entry.entryKind !== "concept" && entry.entryKind !== "lecture" && !entry.mastered
+      ? [{ kind: "entry", entry }]
+      : [];
+  });
+}
+
+export function getImportantQuestionReviewItems(entries: WrongAnswerEntry[]): ReviewItem[] {
+  return entries.flatMap((entry) => getSheetQuestionReviewItems(entry, "important"));
 }
 
 export function getTodayReviewCandidates(

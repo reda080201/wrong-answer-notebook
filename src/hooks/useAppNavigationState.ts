@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type {
   EntryKind,
   ListFilter,
@@ -11,9 +11,14 @@ import {
   type DifficultyScoreFilter,
   entryMatchesDifficultyScoreFilter,
   entryMatchesSearch,
+  isDifficultyFilterVisibleForSection,
+  isDifficultyScoreFilterVisibleForSection,
+  isListFilterAllowedForSection,
+  isSortKeyAllowedForSection,
   sortEntries,
 } from "../utils/appUi";
-import { getTodayReviewCandidates } from "../utils/review";
+import { getImportantQuestionCount } from "../utils/questionMeta";
+import { getTodayReviewItems } from "../utils/review";
 
 interface UseAppNavigationStateOptions {
   entries: WrongAnswerEntry[];
@@ -36,20 +41,35 @@ export function useAppNavigationState({
   const [difficultyScoreFilter, setDifficultyScoreFilter] =
     useState<DifficultyScoreFilter>("all");
 
+  useEffect(() => {
+    if (!isSortKeyAllowedForSection(activeSection, sortKey)) setSortKey("date-desc");
+    if (!isListFilterAllowedForSection(activeSection, listFilter)) setListFilter("all");
+    if (!isDifficultyFilterVisibleForSection(activeSection) && difficultyFilter !== "all") {
+      setDifficultyFilter("all");
+    }
+    if (!isDifficultyScoreFilterVisibleForSection(activeSection) && difficultyScoreFilter !== "all") {
+      setDifficultyScoreFilter("all");
+    }
+  }, [activeSection, difficultyFilter, difficultyScoreFilter, listFilter, sortKey]);
+
   const filtered = useMemo(() => {
     const list = entries.filter((entry) => {
       if (entry.entryKind !== activeSection) return false;
       if (subjectFilter && entry.subject !== subjectFilter) return false;
       if (listFilter === "pending" && entry.mastered) return false;
       if (listFilter === "mastered" && !entry.mastered) return false;
-      if (listFilter === "difficult" && !entry.difficult) return false;
-      if (listFilter === "due" && !getTodayReviewCandidates([entry]).length) {
+      if (listFilter === "difficult") {
+        if (activeSection === "problem_sheet") {
+          if (getImportantQuestionCount(entry) === 0) return false;
+        } else if (!entry.difficult) return false;
+      }
+      if (listFilter === "due" && !getTodayReviewItems([entry]).length) {
         return false;
       }
-      if (difficultyFilter !== "all" && entry.difficulty !== difficultyFilter) {
+      if (isDifficultyFilterVisibleForSection(activeSection) && difficultyFilter !== "all" && entry.difficulty !== difficultyFilter) {
         return false;
       }
-      if (!entryMatchesDifficultyScoreFilter(entry, difficultyScoreFilter)) {
+      if (isDifficultyScoreFilterVisibleForSection(activeSection) && !entryMatchesDifficultyScoreFilter(entry, difficultyScoreFilter)) {
         return false;
       }
       return entryMatchesSearch(entry, search);
@@ -81,7 +101,7 @@ export function useAppNavigationState({
   }, [entries, activeSection]);
 
   const todayReviewCount = useMemo(
-    () => getTodayReviewCandidates(entries).length,
+    () => getTodayReviewItems(entries).length,
     [entries],
   );
 

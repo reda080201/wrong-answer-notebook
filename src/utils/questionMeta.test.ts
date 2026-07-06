@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeQuestionNumber, toggleQuestionImportant } from "./questionMeta";
+import { applyQuestionReviewResult, normalizeQuestionNumber, toggleQuestionImportant } from "./questionMeta";
 
 describe("questionMeta utilities", () => {
   it("normalizes display, source, and answer key question numbers", () => {
@@ -37,5 +37,20 @@ describe("questionMeta utilities", () => {
       questionNumber: "8",
       important: true,
     }));
+  });
+
+  it("stores question-level review state by normalized number", () => {
+    const next = applyQuestionReviewResult(
+      [{ questionNumber: "01", important: true, updatedAt: "2026-01-01T00:00:00.000Z" }],
+      "1번",
+      "good",
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
+
+    expect(next[0].questionNumber).toBe("1");
+    expect(next[0].important).toBe(true);
+    expect(next[0].review?.streak).toBe(1);
+    expect(next[0].review?.history[0].result).toBe("good");
+    expect(next[0].review?.dueAt).toBe("2026-01-09T00:00:00.000Z");
   });
 });

@@ -143,7 +143,7 @@ export default function StudyControlBar({
         <textarea
           value={quickMemoText}
           onChange={(event) => onQuickMemoTextChange(event.target.value)}
-          placeholder="빠른 메모를 한 줄로 남기기"
+          placeholder="빠른 메모를 남기기"
           aria-label="빠른 메모 입력"
         />
         <button type="button" onClick={onQuickMemoSubmit} disabled={!quickMemoText.trim()}>
@@ -198,11 +198,11 @@ export default function StudyControlBar({
         <button
           type="button"
           className={`study-control-tools-button ${toolsOpen ? "active" : ""}`}
-          aria-label="하단 도구 펼치기"
+          aria-label={toolsOpen ? "하단 도구 닫기" : "하단 도구 열기"}
           aria-expanded={toolsOpen}
           onClick={() => setToolsOpen((open) => !open)}
         >
-          도구 열기
+          {toolsOpen ? "도구 닫기" : "도구 열기"}
         </button>
       </div>
   );
@@ -230,10 +230,10 @@ export default function StudyControlBar({
               type="button"
               className={difficult ? "active" : ""}
               onClick={onToggleDifficult}
-              aria-label={difficult ? "하단 북마크 해제" : "하단 북마크"}
+              aria-label={difficult ? "하단 어려움 해제" : "하단 어려움 표시"}
             aria-pressed={difficult}
           >
-              {difficult ? "★ 북마크" : "☆ 북마크"}
+              {difficult ? "★ 어려움" : "☆ 어려움"}
             </button>
           </div>
         )}

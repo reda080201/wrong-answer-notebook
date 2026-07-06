@@ -1,4 +1,4 @@
-import type { Difficulty, EntryKind, SortKey, WrongAnswerEntry } from "../types";
+import type { Difficulty, EntryKind, ListFilter, SortKey, WrongAnswerEntry } from "../types";
 import { collectExplanationSearchText, getEntryTitle } from "./entry";
 import {
   getImportantQuestionCount,
@@ -10,6 +10,89 @@ import { difficultyScoreBand, resolveEntryDifficultyScore, type DifficultyScoreB
 
 export type DifficultyFilter = "all" | Difficulty;
 export type DifficultyScoreFilter = "all" | Exclude<DifficultyScoreBand, "none">;
+
+const BASE_SORT_KEYS: SortKey[] = ["date-desc", "date-asc", "title-asc", "title-desc"];
+const PROBLEM_SHEET_SORT_KEYS: SortKey[] = [
+  ...BASE_SORT_KEYS,
+  "question-count-desc",
+  "bookmark-count-desc",
+  "review-need-count-desc",
+  "difficulty-score-desc",
+  "difficulty-score-asc",
+  "group-title-asc",
+  "part-order-asc",
+];
+const WRONG_ANSWER_SORT_KEYS: SortKey[] = [
+  ...BASE_SORT_KEYS,
+  "difficulty-score-desc",
+  "difficulty-score-asc",
+];
+
+export function getSortOptionsForSection(section: EntryKind): Array<{ value: SortKey; label: string }> {
+  const labels: Record<SortKey, string> = {
+    "date-desc": "최신순",
+    "date-asc": "오래된순",
+    "title-asc": "제목 가나다순",
+    "title-desc": "제목 역순",
+    "question-count-desc": "문항 수 많은 순",
+    "bookmark-count-desc": "중요 문제 많은 순",
+    "review-need-count-desc": "복습 필요 많은 순",
+    "difficulty-score-desc": "난이도 높은 순",
+    "difficulty-score-asc": "난이도 낮은 순",
+    "group-title-asc": "묶음 이름순",
+    "part-order-asc": "파트 순서순",
+  };
+  const keys =
+    section === "problem_sheet"
+      ? PROBLEM_SHEET_SORT_KEYS
+      : section === "wrong_answer"
+        ? WRONG_ANSWER_SORT_KEYS
+        : BASE_SORT_KEYS;
+  return keys.map((value) => ({ value, label: labels[value] }));
+}
+
+export function isSortKeyAllowedForSection(section: EntryKind, sortKey: SortKey): boolean {
+  return getSortOptionsForSection(section).some((option) => option.value === sortKey);
+}
+
+export function isDifficultyFilterVisibleForSection(section: EntryKind): boolean {
+  return section === "wrong_answer";
+}
+
+export function isDifficultyScoreFilterVisibleForSection(section: EntryKind): boolean {
+  return section === "wrong_answer" || section === "problem_sheet";
+}
+
+export function getListFilterOptionsForSection(section: EntryKind): Array<{ value: ListFilter; label: string }> {
+  if (section === "lecture") return [{ value: "all", label: "전체" }];
+  if (section === "concept") {
+    return [
+      { value: "all", label: "전체" },
+      { value: "mastered", label: "완료" },
+      { value: "pending", label: "미완료" },
+    ];
+  }
+  if (section === "problem_sheet") {
+    return [
+      { value: "all", label: "전체" },
+      { value: "pending", label: "복습 필요" },
+      { value: "difficult", label: "중요 문제 있음" },
+      { value: "mastered", label: "완료" },
+      { value: "due", label: "오늘" },
+    ];
+  }
+  return [
+    { value: "all", label: "전체" },
+    { value: "pending", label: "복습 필요" },
+    { value: "mastered", label: "완료" },
+    { value: "difficult", label: "어려움" },
+    { value: "due", label: "오늘" },
+  ];
+}
+
+export function isListFilterAllowedForSection(section: EntryKind, filter: ListFilter): boolean {
+  return getListFilterOptionsForSection(section).some((option) => option.value === filter);
+}
 
 export function sortEntries(list: WrongAnswerEntry[], sortKey: SortKey) {
   const copy = [...list];

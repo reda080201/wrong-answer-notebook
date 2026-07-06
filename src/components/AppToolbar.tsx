@@ -2,7 +2,11 @@ import type { ListFilter, SortKey, EntryKind } from "../types";
 import {
   type DifficultyFilter,
   type DifficultyScoreFilter,
+  getListFilterOptionsForSection,
+  getSortOptionsForSection,
+  isDifficultyFilterVisibleForSection,
   isDifficultyFilter,
+  isDifficultyScoreFilterVisibleForSection,
   isDifficultyScoreFilter,
 } from "../utils/appUi";
 
@@ -19,7 +23,7 @@ interface AppToolbarProps {
   listFilter: ListFilter;
   setListFilter: (value: ListFilter) => void;
   todayReviewCount: number;
-  startReview: (mode: "today" | "random" | "difficult") => void;
+  startReview: (mode: "today" | "random" | "difficult" | "important") => void;
   onOpenSettings: () => void;
 }
 
@@ -39,6 +43,11 @@ export default function AppToolbar({
   startReview,
   onOpenSettings,
 }: AppToolbarProps) {
+  const sortOptions = getSortOptionsForSection(activeSection);
+  const listFilterOptions = getListFilterOptionsForSection(activeSection);
+  const showDifficultyFilter = isDifficultyFilterVisibleForSection(activeSection);
+  const showDifficultyScoreFilter = isDifficultyScoreFilterVisibleForSection(activeSection);
+  const showReviewLauncher = activeSection === "wrong_answer" || activeSection === "problem_sheet";
   const placeholder =
     activeSection === "concept"
       ? "개념명, 설명, 태그로 검색…"
@@ -61,19 +70,11 @@ export default function AppToolbar({
         onChange={(event) => setSortKey(event.target.value as SortKey)}
         aria-label="정렬"
       >
-        <option value="date-desc">최신순</option>
-        <option value="date-asc">오래된순</option>
-        <option value="title-asc">제목 가나다순</option>
-        <option value="title-desc">제목 역순</option>
-        <option value="question-count-desc">문항 수 많은 순</option>
-        <option value="bookmark-count-desc">북마크 문제 많은 순</option>
-        <option value="review-need-count-desc">복습 필요 많은 순</option>
-        <option value="difficulty-score-desc">난이도 높은 순</option>
-        <option value="difficulty-score-asc">난이도 낮은 순</option>
-        <option value="group-title-asc">묶음 이름순</option>
-        <option value="part-order-asc">파트 순서순</option>
+        {sortOptions.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
       </select>
-      <div className="difficulty-filter-wrap">
+      {showDifficultyFilter && <div className="difficulty-filter-wrap">
         <select
           className="difficulty-filter-select"
           value={difficultyFilter}
@@ -90,8 +91,8 @@ export default function AppToolbar({
           <option value="low">난이도: 하</option>
           <option value="none">난이도: 없음</option>
         </select>
-      </div>
-      <div className="difficulty-filter-wrap">
+      </div>}
+      {showDifficultyScoreFilter && <div className="difficulty-filter-wrap">
         <select
           className="difficulty-filter-select"
           value={difficultyScoreFilter}
@@ -108,28 +109,20 @@ export default function AppToolbar({
           <option value="hard">어려움 61~85</option>
           <option value="very-hard">매우 어려움 86~100</option>
         </select>
-      </div>
+      </div>}
       <div className="filter-toggle filter-toggle--wrap">
-        {(
-          [
-            ["all", "전체"],
-            ["pending", "복습 필요"],
-            ["mastered", "완료"],
-            ["difficult", "어려움"],
-            ["due", `오늘 ${todayReviewCount}`],
-          ] as const
-        ).map(([key, label]) => (
+        {listFilterOptions.map(({ value, label }) => (
           <button
-            key={key}
+            key={value}
             type="button"
-            className={listFilter === key ? "active" : ""}
-            onClick={() => setListFilter(key)}
+            className={listFilter === value ? "active" : ""}
+            onClick={() => setListFilter(value)}
           >
-            {label}
+            {value === "due" ? `${label} ${todayReviewCount}` : label}
           </button>
         ))}
       </div>
-      <div className="review-launcher">
+      {showReviewLauncher && <div className="review-launcher">
         <button
           type="button"
           className="btn-secondary"
@@ -140,18 +133,18 @@ export default function AppToolbar({
         <button
           type="button"
           className="btn-secondary"
-          onClick={() => startReview("random")}
+          onClick={() => startReview(activeSection === "problem_sheet" ? "important" : "random")}
         >
-          랜덤 복습
+          {activeSection === "problem_sheet" ? "중요 문제 복습" : "랜덤 복습"}
         </button>
         <button
           type="button"
           className="btn-secondary"
           onClick={() => startReview("difficult")}
         >
-          어려움 집중
+          {activeSection === "problem_sheet" ? "어려운 문항 복습" : "어려움 집중"}
         </button>
-      </div>
+      </div>}
       <button type="button" className="toolbar-settings-button" onClick={onOpenSettings}>
         ⚙ 설정
       </button>

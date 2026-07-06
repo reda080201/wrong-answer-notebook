@@ -18,6 +18,7 @@ import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
   normalizeQuestionNumber,
+  applyQuestionReviewResult,
   toggleQuestionImportant,
 } from "../utils/questionMeta";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
@@ -176,6 +177,12 @@ export default function EntryDetail({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
   const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
+  const [selectedReviewQueue, setSelectedReviewQueue] = useState<{
+    entryId: string;
+    questionNumbers: string[];
+    currentIndex: number;
+    mode: "selected" | "important" | "sheet";
+  } | null>(null);
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(entry.title);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
@@ -344,10 +351,25 @@ export default function EntryDetail({
   }, [focusMode, isSheet, questionAnchors, scrollToQuestion]);
 
   const handleReviewResult = useCallback(async (result: ReviewResult) => {
-    if (!onReview || reviewSaving) return;
+    if (reviewSaving) return;
     setReviewSaving(result);
     try {
-      await onReview(entry, result);
+      const currentTheaterQuestion =
+        theaterQuestionIndex !== null
+          ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
+          : undefined;
+      if (isSheet && currentTheaterQuestion && onQuestionMetaChange) {
+        const next = applyQuestionReviewResult(
+          entry.questionMeta,
+          currentTheaterQuestion.displayNumber,
+          result,
+        );
+        await onQuestionMetaChange(entry, next);
+      } else if (onReview) {
+        await onReview(entry, result);
+      } else {
+        return;
+      }
       pushToast(
         result === "again"
           ? "다시 볼 문제로 기록했습니다."
@@ -356,12 +378,29 @@ export default function EntryDetail({
             : "맞음으로 기록했습니다.",
         "success",
       );
+      if (selectedReviewQueue?.entryId === entry.id) {
+        const nextQueueIndex = Math.min(
+          selectedReviewQueue.questionNumbers.length - 1,
+          selectedReviewQueue.currentIndex + 1,
+        );
+        if (nextQueueIndex !== selectedReviewQueue.currentIndex) {
+          const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
+          const nextQuestionIndex = questionAnchors.findIndex(
+            (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+          );
+          if (nextQuestionIndex >= 0) {
+            setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
+            setTheaterQuestionIndex(nextQuestionIndex);
+            setFocusedQuestionIndex(nextQuestionIndex);
+          }
+        }
+      }
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "복습 결과 저장에 실패했습니다.", "error");
     } finally {
       setReviewSaving(null);
     }
-  }, [entry, onReview, pushToast, reviewSaving]);
+  }, [entry, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
 
   const handleQuickMemoSubmit = async () => {
     const text = quickMemoText.trim();
@@ -408,7 +447,7 @@ export default function EntryDetail({
 
   const handleToggleDifficultWithToast = () => {
     onToggleDifficult();
-    pushToast(entry.difficult ? "북마크를 해제했습니다." : "북마크했습니다.", "success");
+    pushToast(entry.difficult ? "어려움 표시를 해제했습니다." : "어려움으로 표시했습니다.", "success");
   };
 
   const handleTitleSave = async () => {
@@ -527,14 +566,40 @@ export default function EntryDetail({
   };
 
   const openFocusMode = useCallback(() => {
-    if (isFocusable) setFocusMode("expanded");
+    if (isFocusable) {
+      setTheaterQuestionIndex(null);
+      setSelectedReviewQueue(null);
+      setFocusMode("expanded");
+    }
   }, [isFocusable]);
 
   const openTheaterMode = useCallback((index = focusedQuestionIndex) => {
     if (!isSheet || !questionAnchors.length) return;
+    setFocusMode("closed");
     setFocusedQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
     setTheaterQuestionIndex(Math.max(0, Math.min(questionAnchors.length - 1, index)));
   }, [focusedQuestionIndex, isSheet, questionAnchors.length]);
+
+  const startSelectedReviewQueue = useCallback(() => {
+    if (!isSheet || selectedQuestionNumbers.length === 0 || questionAnchors.length === 0) return;
+    const selected = new Set(selectedQuestionNumbers.map(normalizeQuestionNumber));
+    const ordered = questionAnchors
+      .filter((block) => selected.has(normalizeQuestionNumber(block.displayNumber)))
+      .map((block) => normalizeQuestionNumber(block.displayNumber));
+    if (!ordered.length) return;
+    const firstIndex = questionAnchors.findIndex(
+      (block) => normalizeQuestionNumber(block.displayNumber) === ordered[0],
+    );
+    setSelectedReviewQueue({
+      entryId: entry.id,
+      questionNumbers: ordered,
+      currentIndex: 0,
+      mode: "selected",
+    });
+    setSelectionMode(false);
+    openTheaterMode(firstIndex >= 0 ? firstIndex : 0);
+    pushToast("선택한 문제 복습 큐를 시작합니다.", "success");
+  }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, selectedQuestionNumbers]);
 
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
@@ -550,10 +615,36 @@ export default function EntryDetail({
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
     setTheaterQuestionIndex(null);
+    setSelectedReviewQueue(null);
     if (target?.kind === "question") {
       window.setTimeout(() => scrollToQuestion(target.start), 0);
     }
   }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+
+  const moveTheaterQuestion = useCallback((delta: number) => {
+    if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
+      const nextQueueIndex = Math.max(
+        0,
+        Math.min(selectedReviewQueue.questionNumbers.length - 1, selectedReviewQueue.currentIndex + delta),
+      );
+      const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
+      const nextQuestionIndex = questionAnchors.findIndex(
+        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+      );
+      if (nextQuestionIndex >= 0) {
+        setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
+        setTheaterQuestionIndex(nextQuestionIndex);
+        setFocusedQuestionIndex(nextQuestionIndex);
+      }
+      return;
+    }
+    setTheaterQuestionIndex((current) => {
+      const currentIndex = current ?? 0;
+      const next = Math.max(0, Math.min(questionAnchors.length - 1, currentIndex + delta));
+      setFocusedQuestionIndex(next);
+      return next;
+    });
+  }, [entry.id, questionAnchors, selectedReviewQueue]);
 
   const executeStudyAction = useCallback((id: NextStudyActionId) => {
     if (id === "review-text") {
@@ -1331,7 +1422,7 @@ export default function EntryDetail({
                     <button type="button" className="btn-secondary btn-sm" onClick={markSelectedImportant} disabled={selectedQuestionNumbers.length === 0}>
                       중요 표시
                     </button>
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => pushToast("선택한 문제 복습 큐는 극장 모드 순회로 준비됩니다.", "info")} disabled={selectedQuestionNumbers.length === 0}>
+                    <button type="button" className="btn-secondary btn-sm" onClick={startSelectedReviewQueue} disabled={selectedQuestionNumbers.length === 0}>
                       복습 큐 만들기
                     </button>
                     <button type="button" className="btn-secondary btn-sm" onClick={() => setSelectedQuestionNumbers([])}>
@@ -1946,8 +2037,16 @@ export default function EntryDetail({
         <QuestionTheaterView
           passage={theaterPassage}
           questionBlock={theaterQuestion}
-          questionIndex={theaterQuestionIndex}
-          questionCount={questionAnchors.length}
+          questionIndex={
+            selectedReviewQueue?.entryId === entry.id
+              ? selectedReviewQueue.currentIndex
+              : theaterQuestionIndex
+          }
+          questionCount={
+            selectedReviewQueue?.entryId === entry.id
+              ? selectedReviewQueue.questionNumbers.length
+              : questionAnchors.length
+          }
           answer={theaterAnswer}
           questionMeta={theaterQuestionMeta}
           questionImages={entry.questionImages}
@@ -1960,16 +2059,8 @@ export default function EntryDetail({
           onAnnotationsChange={onAnnotationsChange}
           onWikiLinkClick={onWikiLinkClick}
           existingTargets={existingTargets}
-          onPrevious={() => {
-            const next = Math.max(0, theaterQuestionIndex - 1);
-            setTheaterQuestionIndex(next);
-            setFocusedQuestionIndex(next);
-          }}
-          onNext={() => {
-            const next = Math.min(questionAnchors.length - 1, theaterQuestionIndex + 1);
-            setTheaterQuestionIndex(next);
-            setFocusedQuestionIndex(next);
-          }}
+          onPrevious={() => moveTheaterQuestion(-1)}
+          onNext={() => moveTheaterQuestion(1)}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
           onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
           onDifficultyScoreChange={(score) =>

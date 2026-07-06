@@ -189,6 +189,7 @@ export default function App() {
     <div className="app">
       <AppSidebar
         activeSection={activeSection}
+        entries={entries}
         setActiveSection={setActiveSection}
         setSelectedId={setSelectedId}
         stats={stats}
@@ -246,6 +247,7 @@ export default function App() {
             quickConceptSubject={actions.quickConceptSubject}
             onQuickConceptCreate={actions.handleQuickConceptCreate}
             onOpenImportantQuestion={openImportantQuestion}
+            onStartImportantReview={() => actions.startReview("important")}
           />
 
           {selected ? (
@@ -350,10 +352,11 @@ export default function App() {
           storeAiProviderKey={storeAiProviderKey}
           removeAiProviderKey={removeAiProviderKey}
           integrityReport={actions.integrityReport}
+          saveTemplate={actions.saveTemplate}
           deleteTemplate={actions.deleteTemplate}
+          savePromptTemplate={actions.savePromptTemplate}
           deletePromptTemplate={actions.deletePromptTemplate}
           deleteMemoTemplate={actions.deleteMemoTemplate}
-          addMemoTemplate={actions.addMemoTemplate}
           handleBackup={actions.handleBackup}
           handleRestore={actions.handleRestore}
           runIntegrity={actions.runIntegrity}

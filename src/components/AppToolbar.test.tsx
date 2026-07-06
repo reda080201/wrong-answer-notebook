@@ -37,22 +37,20 @@ describe("AppToolbar", () => {
     fireEvent.change(screen.getByLabelText("정렬"), {
       target: { value: "title-asc" },
     });
-    fireEvent.change(screen.getByLabelText("난이도 필터"), {
-      target: { value: "high" },
-    });
+    expect(screen.queryByLabelText("난이도 필터")).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("난이도 점수 필터"), {
       target: { value: "very-hard" },
     });
     fireEvent.click(screen.getByRole("button", { name: "복습 필요" }));
-    fireEvent.click(screen.getByRole("button", { name: "랜덤 복습" }));
+    fireEvent.click(screen.getByRole("button", { name: "중요 문제 복습" }));
     fireEvent.click(screen.getByRole("button", { name: /설정/ }));
 
     expect(setSearch).toHaveBeenCalledWith("함수");
     expect(setSortKey).toHaveBeenCalledWith("title-asc");
-    expect(setDifficultyFilter).toHaveBeenCalledWith("high");
+    expect(setDifficultyFilter).not.toHaveBeenCalled();
     expect(setDifficultyScoreFilter).toHaveBeenCalledWith("very-hard");
     expect(setListFilter).toHaveBeenCalledWith("pending");
-    expect(startReview).toHaveBeenCalledWith("random");
+    expect(startReview).toHaveBeenCalledWith("important");
     expect(onOpenSettings).toHaveBeenCalled();
   });
 });

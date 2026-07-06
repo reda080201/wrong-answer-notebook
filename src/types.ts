@@ -207,6 +207,7 @@ export interface QuestionMeta {
   difficultyScore?: number;
   bookmarkLabel?: string;
   note?: string;
+  review?: ReviewState;
   updatedAt: string;
 }
 
@@ -438,3 +439,7 @@ export type SortKey =
 export type ThemeMode = "light" | "dark" | "system";
 
 export type ListFilter = "all" | "pending" | "mastered" | "difficult" | "due";
+
+export type ReviewItem =
+  | { kind: "entry"; entry: WrongAnswerEntry }
+  | { kind: "sheet-question"; entry: WrongAnswerEntry; questionNumber: string };

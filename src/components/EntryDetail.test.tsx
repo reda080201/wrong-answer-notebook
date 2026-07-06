@@ -333,7 +333,7 @@ describe("EntryDetail sheet layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "문제 1 크게 보기" }));
     expect(screen.getByRole("dialog", { name: "문제 크게 보기" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "작게 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "문제 크게 보기 닫기" }));
     expect(screen.queryByRole("dialog", { name: "문제 크게 보기" })).not.toBeInTheDocument();
   });
 
@@ -719,10 +719,10 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("크게 보기");
     expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 다시" })).not.toBeInTheDocument();
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     expect(within(bar).getByRole("button", { name: "하단 다시" })).toHaveTextContent("↺ 다시");
     expect(within(bar).getByRole("button", { name: "하단 어려움" })).toHaveTextContent("★ 어려움");
-    expect(within(bar).getByRole("button", { name: "하단 북마크" })).toHaveTextContent("☆ 북마크");
+    expect(within(bar).getByRole("button", { name: "하단 어려움 표시" })).toHaveTextContent("☆ 어려움");
     expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "해설지" })).toBeInTheDocument();
@@ -763,14 +763,14 @@ describe("EntryDetail sheet layout", () => {
     );
 
     const bar = screen.getByLabelText("학습 빠른 조작");
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     fireEvent.click(within(bar).getByRole("button", { name: "하단바 컴팩트 모드" }));
 
     expect(localStorage.getItem("wrong-answer-study-control-compact")).toBe("true");
-    expect(within(bar).getByRole("button", { name: "하단 도구 펼치기" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 도구 열기" })).toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 빠른 메모" })).not.toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "하단바 펼침 모드" }));
     expect(localStorage.getItem("wrong-answer-study-control-compact")).toBe("false");
@@ -800,6 +800,50 @@ describe("EntryDetail sheet layout", () => {
 
     expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toBeInTheDocument();
     expect(onReview).not.toHaveBeenCalled();
+  });
+
+  it("starts a selected question review queue and saves question-level review", async () => {
+    const onQuestionMetaChange = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          question: "1. 첫 문제\n① 첫 보기\n\n2. 둘째 문제\n① 둘째 보기\n\n3. 셋째 문제\n① 셋째 보기",
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onQuestionMetaChange={onQuestionMetaChange}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "문제 선택" }));
+    const checks = screen.getAllByLabelText("선택");
+    fireEvent.click(checks[0]);
+    fireEvent.click(checks[2]);
+    fireEvent.click(screen.getByRole("button", { name: "복습 큐 만들기" }));
+
+    expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 1");
+    fireEvent.click(screen.getByRole("button", { name: "어려움" }));
+
+    await waitFor(() => {
+      expect(onQuestionMetaChange).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "sheet-1" }),
+        expect.arrayContaining([
+          expect.objectContaining({
+            questionNumber: "1",
+            review: expect.objectContaining({
+              history: expect.arrayContaining([expect.objectContaining({ result: "hard" })]),
+            }),
+          }),
+        ]),
+      );
+    });
+    expect(screen.getByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 3");
   });
 
   it("shows study hints below short focused sheet questions", () => {
@@ -894,7 +938,7 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByLabelText("학습 빠른 조작")).toHaveTextContent("1 / 2");
 
     const bar = screen.getByLabelText("학습 빠른 조작");
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     fireEvent.keyDown(window, { key: "1" });
     await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "again"));
     await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 어려움" })).not.toBeDisabled());
@@ -933,7 +977,7 @@ describe("EntryDetail sheet layout", () => {
     );
 
     const bar = screen.getByLabelText("학습 빠른 조작");
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     fireEvent.click(within(bar).getByRole("button", { name: "하단 빠른 메모" }));
     const textarea = screen.getByLabelText("빠른 메모 입력");
 
@@ -944,7 +988,7 @@ describe("EntryDetail sheet layout", () => {
     expect(localStorage.getItem("wrong-answer-answer-hidden")).toBe("false");
   });
 
-  it("saves quick memo and toggles bookmark from the study control bar", async () => {
+  it("saves quick memo and toggles difficult marker from the study control bar", async () => {
     const onQuickMemo = vi.fn().mockResolvedValue(undefined);
     const onToggleDifficult = vi.fn();
     render(
@@ -962,7 +1006,7 @@ describe("EntryDetail sheet layout", () => {
     );
 
     const bar = screen.getByLabelText("학습 빠른 조작");
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 펼치기" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     fireEvent.click(within(bar).getByRole("button", { name: "하단 빠른 메모" }));
     fireEvent.change(screen.getByLabelText("빠른 메모 입력"), {
       target: { value: "조건을 다시 확인" },
@@ -972,7 +1016,7 @@ describe("EntryDetail sheet layout", () => {
     await waitFor(() => expect(onQuickMemo).toHaveBeenCalledWith(sheetEntry, "조건을 다시 확인"));
     expect(await screen.findByText("빠른 메모를 추가했습니다.")).toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 북마크" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 어려움 표시" }));
     expect(onToggleDifficult).toHaveBeenCalledTimes(1);
   });
 

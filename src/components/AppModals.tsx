@@ -14,6 +14,7 @@ import type {
   LectureSourceType,
   PromptTemplate,
   ReviewResult,
+  ReviewItem,
   Subject,
   WrongAnswerEntry,
 } from "../types";
@@ -50,11 +51,11 @@ interface AppModalsProps {
   handleConceptKnowledgeEntriesApply: (
     entries: Partial<EntryFormData>[],
   ) => Promise<void>;
-  reviewMode: "today" | "random" | "difficult" | null;
-  reviewSeed: WrongAnswerEntry[];
-  setReviewMode: (mode: "today" | "random" | "difficult" | null) => void;
+  reviewMode: "today" | "random" | "difficult" | "important" | null;
+  reviewSeed: ReviewItem[];
+  setReviewMode: (mode: "today" | "random" | "difficult" | "important" | null) => void;
   handleReview: (
-    entry: WrongAnswerEntry,
+    item: ReviewItem | WrongAnswerEntry,
     result: ReviewResult,
   ) => Promise<void>;
   setActiveSection: (section: EntryKind) => void;
@@ -158,11 +159,13 @@ export default function AppModals({
           title={
             reviewMode === "today"
               ? "오늘 복습"
+              : reviewMode === "important"
+                ? "중요 문제 복습"
               : reviewMode === "difficult"
                 ? "어려움 집중"
                 : "랜덤 복습"
           }
-          entries={reviewSeed}
+          items={reviewSeed}
           onClose={() => setReviewMode(null)}
           onReview={handleReview}
           onOpenEntry={(entry) => {

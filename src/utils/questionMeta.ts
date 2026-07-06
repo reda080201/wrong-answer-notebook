@@ -1,7 +1,9 @@
+import { v4 as uuidv4 } from "uuid";
 import type { QuestionBlock } from "./textLayout";
 import { parseQuestionText } from "./textLayout";
-import type { QuestionMeta, WrongAnswerEntry } from "../types";
+import type { QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
+import { calculateNextReview } from "./review";
 
 export function normalizeQuestionNumber(value: string | number | undefined | null): string {
   const raw = `${value ?? ""}`.trim();
@@ -16,6 +18,40 @@ export function normalizeQuestionNumber(value: string | number | undefined | nul
   return normalized || raw;
 }
 
+function isReviewResult(value: unknown): value is ReviewResult {
+  return value === "again" || value === "hard" || value === "good";
+}
+
+function isValidIsoDate(value: unknown): value is string {
+  return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
+}
+
+export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Partial<ReviewState>;
+  const historySource = Array.isArray(value.history) ? value.history : [];
+  const history: ReviewEvent[] = historySource
+    .filter((event) => Boolean(event && typeof event === "object"))
+    .map((event) => event as Partial<ReviewEvent>)
+    .map((event) => ({
+      id: event.id || uuidv4(),
+      reviewedAt: isValidIsoDate(event.reviewedAt) ? event.reviewedAt : new Date().toISOString(),
+      result: isReviewResult(event.result) ? event.result : "again",
+      nextDueAt: event.nextDueAt === null || isValidIsoDate(event.nextDueAt) ? event.nextDueAt : null,
+      intervalDays: typeof event.intervalDays === "number" && event.intervalDays >= 0 ? event.intervalDays : 1,
+      causeSnapshot: undefined,
+      strategy: undefined,
+    }));
+
+  return {
+    dueAt: value.dueAt === null || isValidIsoDate(value.dueAt) ? value.dueAt : null,
+    lastReviewedAt: isValidIsoDate(value.lastReviewedAt) ? value.lastReviewedAt : undefined,
+    intervalDays: typeof value.intervalDays === "number" && value.intervalDays >= 0 ? value.intervalDays : 0,
+    streak: typeof value.streak === "number" && value.streak >= 0 ? Math.floor(value.streak) : 0,
+    history,
+  };
+}
+
 export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -27,6 +63,7 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
       difficultyScore: normalizeDifficultyScore(item.difficultyScore),
       bookmarkLabel: item.bookmarkLabel ? `${item.bookmarkLabel}`.trim() : undefined,
       note: item.note ? `${item.note}`.trim() : undefined,
+      review: normalizeQuestionReview(item.review),
       updatedAt:
         item.updatedAt && !Number.isNaN(new Date(item.updatedAt).getTime())
           ? item.updatedAt
@@ -48,7 +85,10 @@ export function getReviewNeedCount(entry: WrongAnswerEntry): number {
   const answerNeedsReview = (entry.answerKey ?? []).filter((item) => item.needsReview).length;
   const missing = entry.importAudit?.missingQuestionNumbers.length ?? 0;
   const due = entry.review?.dueAt && new Date(entry.review.dueAt).getTime() <= Date.now() ? 1 : 0;
-  return answerNeedsReview + missing + due;
+  const questionDue = normalizeQuestionMeta(entry.questionMeta).filter(
+    (meta) => meta.review?.dueAt && new Date(meta.review.dueAt).getTime() <= Date.now(),
+  ).length;
+  return answerNeedsReview + missing + due + questionDue;
 }
 
 export function getQuestionMetaForBlock(
@@ -97,4 +137,43 @@ export function toggleQuestionImportant(
       updatedAt: now,
     },
   ];
+}
+
+export function applyQuestionReviewResult(
+  current: QuestionMeta[] | undefined,
+  questionNumber: string | number,
+  result: ReviewResult,
+  reviewedAt = new Date(),
+): QuestionMeta[] {
+  const normalized = normalizeQuestionNumber(questionNumber);
+  const items = normalizeQuestionMeta(current);
+  const index = items.findIndex(
+    (item) => normalizeQuestionNumber(item.questionNumber) === normalized,
+  );
+  const previous = index >= 0 ? items[index].review : undefined;
+  const next = calculateNextReview(previous, result, reviewedAt);
+  const event: ReviewEvent = {
+    id: uuidv4(),
+    reviewedAt: reviewedAt.toISOString(),
+    result,
+    nextDueAt: next.nextDueAt,
+    intervalDays: next.intervalDays,
+  };
+  const review: ReviewState = {
+    dueAt: next.nextDueAt,
+    lastReviewedAt: event.reviewedAt,
+    intervalDays: next.intervalDays,
+    streak: next.streak,
+    history: [...(previous?.history ?? []), event],
+  };
+  const nextMeta: QuestionMeta = {
+    ...(index >= 0 ? items[index] : { important: false }),
+    questionNumber: normalized,
+    review,
+    updatedAt: reviewedAt.toISOString(),
+  };
+  if (index >= 0) {
+    return items.map((item, itemIndex) => (itemIndex === index ? nextMeta : item));
+  }
+  return [...items, nextMeta];
 }

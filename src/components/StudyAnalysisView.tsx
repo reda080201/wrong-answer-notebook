@@ -128,7 +128,7 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
               {reviewHistory.slice(-5).reverse().map((event) => (
                 <li key={event.id}>
                   <span>{formatMaybeDate(event.reviewedAt)}</span>
-                  <strong>{event.result === "again" ? "틀림" : event.result === "hard" ? "애매함" : "맞힘"}</strong>
+                  <strong>{event.result === "again" ? "다시" : event.result === "hard" ? "어려움" : "맞음"}</strong>
                   <small>{event.intervalDays}일 후</small>
                 </li>
               ))}

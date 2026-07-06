@@ -18,6 +18,7 @@ import type {
   MemoTemplate,
   PromptTemplate,
   ReviewResult,
+  ReviewItem,
   Subject,
   WrongAnswerEntry,
 } from "../types";
@@ -32,14 +33,24 @@ import { resolveSheetGroupId } from "../utils/sheetGroup";
 import { runClientIntegrityCheck } from "../utils/integrity";
 import {
   applyReviewResult,
-  getDifficultReviewCandidates,
-  getRandomReviewCandidates,
-  getTodayReviewCandidates,
-  shuffleEntries,
+  getDifficultReviewItems,
+  getImportantQuestionReviewItems,
+  getRandomReviewItems,
+  getTodayReviewItems,
 } from "../utils/review";
+import { applyQuestionReviewResult } from "../utils/questionMeta";
 
-type ReviewMode = "today" | "random" | "difficult";
+type ReviewMode = "today" | "random" | "difficult" | "important";
 type ImportMode = "import" | "solution";
+
+function shuffleReviewItems(items: ReviewItem[]): ReviewItem[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
 
 interface UseAppActionsOptions {
   entries: WrongAnswerEntry[];
@@ -95,7 +106,7 @@ export function useAppActions({
   const [editingEntry, setEditingEntry] =
     useState<WrongAnswerEntry | undefined>();
   const [reviewMode, setReviewMode] = useState<ReviewMode | null>(null);
-  const [reviewSeed, setReviewSeed] = useState<WrongAnswerEntry[]>([]);
+  const [reviewSeed, setReviewSeed] = useState<ReviewItem[]>([]);
   const [integrityReport, setIntegrityReport] =
     useState<IntegrityReport | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
@@ -250,18 +261,34 @@ export function useAppActions({
   const startReview = (mode: ReviewMode) => {
     const candidates =
       mode === "today"
-        ? getTodayReviewCandidates(entries)
+        ? getTodayReviewItems(entries)
+        : mode === "important"
+          ? getImportantQuestionReviewItems(entries)
         : mode === "difficult"
-          ? getDifficultReviewCandidates(entries)
-          : shuffleEntries(getRandomReviewCandidates(entries));
+          ? getDifficultReviewItems(entries)
+          : shuffleReviewItems(getRandomReviewItems(entries));
     setReviewSeed(candidates);
     setReviewMode(mode);
   };
 
   const handleReview = async (
-    entry: WrongAnswerEntry,
+    itemOrEntry: ReviewItem | WrongAnswerEntry,
     result: ReviewResult,
   ) => {
+    const item: ReviewItem =
+      "kind" in itemOrEntry
+        ? itemOrEntry
+        : { kind: "entry", entry: itemOrEntry };
+    if (item.kind === "sheet-question") {
+      const nextMeta = applyQuestionReviewResult(
+        item.entry.questionMeta,
+        item.questionNumber,
+        result,
+      );
+      await patchEntry(item.entry.id, { questionMeta: nextMeta });
+      return;
+    }
+    const entry = item.entry;
     const next = applyReviewResult(entry, result);
     await patchEntry(entry.id, {
       review: next.review,

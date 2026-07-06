@@ -1,28 +1,34 @@
 import { useMemo, useState } from "react";
-import type { ReviewResult, WrongAnswerEntry } from "../types";
+import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
+import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
+import { getQuestionMetaForBlock, normalizeQuestionNumber } from "../utils/questionMeta";
+import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/difficulty";
+import MathText from "./MathText";
 
 interface ReviewPanelProps {
   title: string;
-  entries: WrongAnswerEntry[];
+  entries?: WrongAnswerEntry[];
+  items?: ReviewItem[];
   onClose: () => void;
-  onReview: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
+  onReview: (item: ReviewItem, result: ReviewResult) => Promise<void>;
   onOpenEntry: (entry: WrongAnswerEntry) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }
 
 const resultLabels: Record<ReviewResult, string> = {
-  again: "틀림",
-  hard: "애매함",
-  good: "맞힘",
+  again: "다시",
+  hard: "어려움",
+  good: "맞음",
 };
 
 export default function ReviewPanel({
   title,
   entries,
+  items,
   onClose,
   onReview,
   onOpenEntry,
@@ -32,10 +38,14 @@ export default function ReviewPanel({
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const current = entries[index] ?? null;
+  const reviewItems = useMemo<ReviewItem[]>(
+    () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
+    [entries, items],
+  );
+  const current = reviewItems[index] ?? null;
   const progress = useMemo(
-    () => (entries.length > 0 ? `${Math.min(index + 1, entries.length)} / ${entries.length}` : "0 / 0"),
-    [entries.length, index],
+    () => (reviewItems.length > 0 ? `${Math.min(index + 1, reviewItems.length)} / ${reviewItems.length}` : "0 / 0"),
+    [reviewItems.length, index],
   );
 
   const handleReview = async (result: ReviewResult) => {
@@ -44,11 +54,17 @@ export default function ReviewPanel({
     try {
       await onReview(current, result);
       setRevealed(false);
-      setIndex((value) => Math.min(value + 1, entries.length));
+      setIndex((value) => Math.min(value + 1, reviewItems.length));
     } finally {
       setSaving(false);
     }
   };
+
+  const currentEntry = current?.entry;
+  const sheetQuestion =
+    current?.kind === "sheet-question"
+      ? resolveSheetQuestion(current.entry, current.questionNumber)
+      : null;
 
   return (
     <div className="review-panel">
@@ -62,24 +78,35 @@ export default function ReviewPanel({
         </button>
       </div>
 
-      {!current ? (
+      {!current || !currentEntry ? (
         <div className="review-empty">복습할 항목이 없습니다.</div>
       ) : (
         <div className="review-card">
           <div className="review-card-top">
-            <span className="subject-badge">{current.subject}</span>
-            <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenEntry(current)}>
+            <span className="subject-badge">{currentEntry.subject}</span>
+            {current.kind === "sheet-question" && <span className="entry-mini-badge">문제 {current.questionNumber}</span>}
+            <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenEntry(currentEntry)}>
               원문 열기
             </button>
           </div>
-          <h3>{getEntryTitle(current)}</h3>
-          <div className="review-question">
-            <LinkifiedText
-              text={current.question}
-              onLinkClick={onWikiLinkClick}
+          <h3>{current.kind === "sheet-question" ? `${getEntryTitle(currentEntry)} · 문제 ${current.questionNumber}` : getEntryTitle(currentEntry)}</h3>
+          {current.kind === "sheet-question" && sheetQuestion ? (
+            <SheetQuestionReviewCard
+              block={sheetQuestion.block}
+              answer={sheetQuestion.answer}
+              entry={currentEntry}
+              onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
             />
-          </div>
+          ) : (
+            <div className="review-question">
+              <LinkifiedText
+                text={currentEntry.question}
+                onLinkClick={onWikiLinkClick}
+                existingTargets={existingTargets}
+              />
+            </div>
+          )}
 
           {!revealed ? (
             <button type="button" className="btn-primary review-reveal" onClick={() => setRevealed(true)}>
@@ -87,22 +114,29 @@ export default function ReviewPanel({
             </button>
           ) : (
             <div className="review-answer">
-              {current.correctAnswer.trim() && (
+              {current.kind === "sheet-question" && sheetQuestion ? (
+                <SheetQuestionAnswer
+                  answer={sheetQuestion.answer}
+                  entry={currentEntry}
+                  onWikiLinkClick={onWikiLinkClick}
+                  existingTargets={existingTargets}
+                />
+              ) : currentEntry.correctAnswer.trim() && (
                 <div>
                   <label>정답</label>
                   <p>
                     <LinkifiedText
-                      text={current.correctAnswer}
+                      text={currentEntry.correctAnswer}
                       onLinkClick={onWikiLinkClick}
                       existingTargets={existingTargets}
                     />
                   </p>
                 </div>
               )}
-              {hasExplanationContent(current) && (
+              {current.kind === "entry" && hasExplanationContent(currentEntry) && (
                 <div>
                   <label>해설</label>
-                  {current.explanationParts.map((part) => (
+                  {currentEntry.explanationParts.map((part) => (
                     <ContentBlock
                       key={part.id}
                       text={part.text}
@@ -132,5 +166,89 @@ export default function ReviewPanel({
         </div>
       )}
     </div>
+  );
+}
+
+function resolveSheetQuestion(entry: WrongAnswerEntry, questionNumber: string) {
+  const normalized = normalizeQuestionNumber(questionNumber);
+  const block = parseQuestionText(entry.question)
+    .filter((item): item is QuestionBlock => item.kind === "question")
+    .find(
+      (item) =>
+        normalizeQuestionNumber(item.displayNumber) === normalized ||
+        normalizeQuestionNumber(item.numberLabel) === normalized,
+    );
+  if (!block) return null;
+  const answer = (entry.answerKey ?? []).find(
+    (item) =>
+      normalizeQuestionNumber(item.questionNumber) === normalized ||
+      normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(block.numberLabel),
+  );
+  return { block, answer };
+}
+
+function SheetQuestionReviewCard({
+  block,
+  answer,
+  entry,
+  onWikiLinkClick,
+  existingTargets,
+}: {
+  block: QuestionBlock;
+  answer?: SheetAnswerItem;
+  entry: WrongAnswerEntry;
+  onWikiLinkClick: (target: string) => void;
+  existingTargets: Set<string>;
+}) {
+  const score = resolveQuestionDifficultyScore(entry.questionMeta, entry.answerKey, block);
+  const meta = getQuestionMetaForBlock(entry, block);
+  return (
+    <div className="review-question">
+      <div className="review-card-top">
+        {score ? <span className="difficulty-score-pill">{difficultyScoreLabel(score)}</span> : null}
+        {meta?.important ? <span className="entry-mini-badge entry-mini-badge--difficulty-high">중요</span> : null}
+      </div>
+      <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+      {block.choices.length > 0 && (
+        <ol className="review-choice-list">
+          {block.choices.map((choice) => (
+            <li key={`${choice.marker}-${choice.text}`}>
+              <strong>{choice.marker}</strong> <MathText text={choice.text} />
+            </li>
+          ))}
+        </ol>
+      )}
+      {answer?.needsReview && <small className="answer-review-badge">답안 연결 검토 필요</small>}
+    </div>
+  );
+}
+
+function SheetQuestionAnswer({
+  answer,
+  entry,
+  onWikiLinkClick,
+  existingTargets,
+}: {
+  answer?: SheetAnswerItem;
+  entry: WrongAnswerEntry;
+  onWikiLinkClick: (target: string) => void;
+  existingTargets: Set<string>;
+}) {
+  if (!answer) return <p>연결된 답안지가 없습니다.</p>;
+  return (
+    <>
+      <div>
+        <label>정답</label>
+        <p><MathText text={answer.answer || "정답 없음"} /></p>
+      </div>
+      {[answer.strategy, answer.explanation, answer.wrongPoint, answer.reviewPoint, answer.notes, entry.memo]
+        .filter((text): text is string => Boolean(text?.trim()))
+        .map((text, index) => (
+          <div key={`${index}-${text.slice(0, 12)}`}>
+            <label>{index === 0 && answer.strategy ? "풀이 전략" : "해설/메모"}</label>
+            <LinkifiedText text={text} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          </div>
+        ))}
+    </>
   );
 }

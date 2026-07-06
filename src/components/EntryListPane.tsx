@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import QuickConceptPanel from "./QuickConceptPanel";
 import type { EntryFormData, EntryKind, Subject, WrongAnswerEntry } from "../types";
 import {
@@ -21,6 +21,18 @@ interface EntryListPaneProps {
   quickConceptSubject: Subject;
   onQuickConceptCreate: (data: EntryFormData) => Promise<void>;
   onOpenImportantQuestion?: (entryId: string, questionNumber: string) => void;
+  onStartImportantReview?: () => void;
+}
+
+const EXPANDED_GROUPS_KEY = "wrong-answer-expanded-sheet-groups";
+
+function loadExpandedGroups(): Set<string> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(EXPANDED_GROUPS_KEY) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed.map(String) : []);
+  } catch {
+    return new Set();
+  }
 }
 
 export default function EntryListPane({
@@ -33,8 +45,10 @@ export default function EntryListPane({
   quickConceptSubject,
   onQuickConceptCreate,
   onOpenImportantQuestion,
+  onStartImportantReview,
 }: EntryListPaneProps) {
-  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(() => new Set());
+  const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
+  const [showAllImportant, setShowAllImportant] = useState(false);
   const importantQuestions = entries
     .filter((entry) => entry.entryKind === "problem_sheet")
     .flatMap((entry) =>
@@ -46,6 +60,24 @@ export default function EntryListPane({
     () => (activeSection === "problem_sheet" ? buildSheetGroups(filtered) : []),
     [activeSection, filtered],
   );
+
+  useEffect(() => {
+    if (activeSection !== "problem_sheet") return;
+    const existing = new Set(groupedSheets.filter((item) => item.kind === "group").map((item) => item.groupId));
+    setExpandedGroupIds((current) => {
+      const next = new Set([...current].filter((id) => existing.has(id)));
+      localStorage.setItem(EXPANDED_GROUPS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  }, [activeSection, groupedSheets]);
+
+  const updateExpandedGroups = (updater: (current: Set<string>) => Set<string>) => {
+    setExpandedGroupIds((current) => {
+      const next = updater(current);
+      localStorage.setItem(EXPANDED_GROUPS_KEY, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   const renderEntryCard = (entry: WrongAnswerEntry) => (
     <div
@@ -130,22 +162,28 @@ export default function EntryListPane({
             <button
               type="button"
               className="btn-secondary"
-              onClick={() =>
-                onOpenImportantQuestion?.(
-                  importantQuestions[0].entry.id,
-                  importantQuestions[0].meta.questionNumber,
-                )
-              }
+              onClick={onStartImportantReview}
             >
               중요 문제만 복습 시작
             </button>
+            {importantQuestions.length > 8 && (
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setShowAllImportant((value) => !value)}
+              >
+                {showAllImportant ? "미리보기" : "전체 보기"}
+              </button>
+            )}
           </header>
           <div className="important-question-list">
-            {importantQuestions.slice(0, 8).map(({ entry, meta }) => (
+            {(showAllImportant ? importantQuestions : importantQuestions.slice(0, 8)).map(({ entry, meta }) => (
               <article key={`${entry.id}-${meta.questionNumber}`} className="important-question-card">
                 <span className="subject-badge">{entry.subject}</span>
+                {entry.sheetGroup && <small>{entry.sheetGroup.groupTitle} / {entry.sheetGroup.partTitle}</small>}
                 <strong>{getEntryTitle(entry)}</strong>
                 <p>문제 {meta.questionNumber}</p>
+                {meta.difficultyScore && <small>{difficultyScoreLabel(meta.difficultyScore)}</small>}
                 {meta.note && <small>{meta.note}</small>}
                 <button
                   type="button"
@@ -168,7 +206,30 @@ export default function EntryListPane({
             : "검색 결과가 없습니다."}
         </div>
       ) : activeSection === "problem_sheet" ? (
-        groupedSheets.map((item) =>
+        <>
+          {groupedSheets.some((item) => item.kind === "group") && (
+            <div className="sheet-group-bulk-actions">
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() =>
+                  updateExpandedGroups(() =>
+                    new Set(groupedSheets.filter((item) => item.kind === "group").map((item) => item.groupId)),
+                  )
+                }
+              >
+                모두 펼치기
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => updateExpandedGroups(() => new Set())}
+              >
+                모두 접기
+              </button>
+            </div>
+          )}
+          {groupedSheets.map((item) =>
           item.kind === "single" ? (
             renderEntryCard(item.entry)
           ) : (
@@ -177,7 +238,7 @@ export default function EntryListPane({
                 type="button"
                 className="sheet-group-card-head"
                 onClick={() =>
-                  setExpandedGroupIds((current) => {
+                  updateExpandedGroups((current) => {
                     const next = new Set(current);
                     if (next.has(item.groupId)) next.delete(item.groupId);
                     else next.add(item.groupId);
@@ -203,7 +264,8 @@ export default function EntryListPane({
               )}
             </section>
           ),
-        )
+        )}
+        </>
       ) : (
         filtered.map((entry) => renderEntryCard(entry))
       )}

@@ -142,10 +142,7 @@ export default function QuestionTheaterView({
           <button type="button" className="btn-secondary" onClick={() => setSolutionSplitOpen((value) => !value)}>
             {solutionSplitOpen ? "문제만 보기" : "해설 보기"}
           </button>
-          <button type="button" onClick={onClose}>
-            작게 보기
-          </button>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="극장 모드 나가기">
+          <button type="button" className="btn-icon" onClick={onClose} aria-label="문제 크게 보기 닫기">
             나가기
           </button>
         </header>
@@ -295,9 +292,17 @@ export default function QuestionTheaterView({
             ) : (
               <p>현재 문제에 표시할 메모가 없습니다.</p>
             )}
-            <button type="button" className="btn-primary" onClick={() => onReview("good")}>
-              맞음으로 기록
-            </button>
+            <div className="review-actions">
+              <button type="button" className="review-result review-result--again" onClick={() => onReview("again")}>
+                다시
+              </button>
+              <button type="button" className="review-result review-result--hard" onClick={() => onReview("hard")}>
+                어려움
+              </button>
+              <button type="button" className="review-result review-result--good" onClick={() => onReview("good")}>
+                맞음
+              </button>
+            </div>
           </article>
         </section>}
       </div>
