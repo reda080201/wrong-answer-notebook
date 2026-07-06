@@ -17,6 +17,7 @@ interface StudyPaperViewProps {
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  onQuestionDifficultyScoreChange?: (questionNumber: string, score: number | undefined) => void;
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
@@ -34,6 +35,7 @@ export default function StudyPaperView({
   suspiciousSegments = [],
   onOpenQuestionTheater,
   onToggleQuestionImportant,
+  onQuestionDifficultyScoreChange,
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
@@ -95,7 +97,9 @@ export default function StudyPaperView({
           suspiciousSegments={suspiciousSegments}
           onOpenQuestionTheater={onOpenQuestionTheater}
           questionMeta={entry.questionMeta ?? []}
+          answerKey={entry.answerKey ?? []}
           onToggleQuestionImportant={onToggleQuestionImportant}
+          onQuestionDifficultyScoreChange={onQuestionDifficultyScoreChange}
           selectionMode={selectionMode}
           selectedQuestionNumbers={selectedQuestionNumbers}
           onToggleQuestionSelected={onToggleQuestionSelected}

@@ -9,6 +9,7 @@ import {
 import { getEntryTitle } from "../utils/entry";
 import { normalizeQuestionMeta } from "../utils/questionMeta";
 import { buildSheetGroups } from "../utils/sheetGroup";
+import { difficultyScoreBand, difficultyScoreLabel, resolveEntryDifficultyScore } from "../utils/difficulty";
 
 interface EntryListPaneProps {
   activeSection: EntryKind;
@@ -86,6 +87,13 @@ export default function EntryListPane({
               : entry.difficulty === "medium"
                 ? "중"
                 : "하"}
+          </span>
+        )}
+        {resolveEntryDifficultyScore(entry) > 0 && (
+          <span
+            className={`entry-mini-badge difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(resolveEntryDifficultyScore(entry))}`}
+          >
+            {difficultyScoreLabel(resolveEntryDifficultyScore(entry))}
           </span>
         )}
         {entry.mastered && <span className="mastered-badge">✓ 완료</span>}

@@ -22,6 +22,7 @@ import type {
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionMeta } from "./questionMeta";
+import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
 
 function isEntryKind(v: unknown): v is EntryKind {
@@ -392,6 +393,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       notes: `${item.notes ?? ""}`.trim(),
       importantPoints: normalizeImportantPoints(item.importantPoints),
       difficulty: normalizeAnswerDifficulty(item.difficulty),
+      difficultyScore: normalizeDifficultyScore(item.difficultyScore),
       concepts: normalizeImportantPoints(item.concepts),
       diagramType: normalizeLearningDiagramType(item.diagramType),
       diagramSpec: normalizeDiagramSpec(item.diagramSpec),
@@ -527,6 +529,9 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
   }
 
   const answerKey = normalizeAnswerKey(rest.answerKey);
+  const difficultyScore =
+    normalizeDifficultyScore(rest.difficultyScore) ??
+    (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
 
@@ -537,6 +542,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     entryKind,
     difficult: Boolean(rest.difficult),
     difficulty,
+    difficultyScore,
     questionImages: rest.questionImages?.length
       ? rest.questionImages
       : legacy,

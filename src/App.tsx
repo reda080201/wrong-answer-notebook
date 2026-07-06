@@ -66,6 +66,8 @@ export default function App() {
     setSortKey,
     difficultyFilter,
     setDifficultyFilter,
+    difficultyScoreFilter,
+    setDifficultyScoreFilter,
     filtered,
     selected,
     stats,
@@ -224,6 +226,8 @@ export default function App() {
           setSortKey={setSortKey}
           difficultyFilter={difficultyFilter}
           setDifficultyFilter={setDifficultyFilter}
+          difficultyScoreFilter={difficultyScoreFilter}
+          setDifficultyScoreFilter={setDifficultyScoreFilter}
           listFilter={listFilter}
           setListFilter={setListFilter}
           todayReviewCount={todayReviewCount}
@@ -319,6 +323,7 @@ export default function App() {
         showLearningImportModal={actions.showLearningImportModal}
         setShowLearningImportModal={actions.setShowLearningImportModal}
         handleLearningImportApply={actions.handleLearningImportApply}
+        handleConceptKnowledgeEntriesApply={actions.handleConceptKnowledgeEntriesApply}
         reviewMode={actions.reviewMode}
         reviewSeed={actions.reviewSeed}
         setReviewMode={actions.setReviewMode}

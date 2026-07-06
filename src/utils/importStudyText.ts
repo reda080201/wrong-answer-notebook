@@ -11,6 +11,7 @@ import {
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionNumber } from "./questionMeta";
+import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -36,6 +37,7 @@ interface ImportJsonShape {
   learningBlocks?: unknown;
   concepts?: unknown;
   difficulty?: unknown;
+  difficultyScore?: unknown;
   difficultyByQuestion?: unknown;
   mistakeAnalysis?: unknown;
   audit?: unknown;
@@ -109,6 +111,9 @@ export function parseImportedStudyText(
         question,
       ), rejectedNotes);
       const concepts = normalizeTextList(parsed.concepts);
+      const difficultyScore =
+        normalizeDifficultyScore(parsed.difficultyScore) ??
+        maxAnswerDifficultyScore(answerKey);
       const questionWithConceptLinks = suggestConceptLinks(cleanQuestionText(question), concepts);
       const learningBlocks = normalizeLearningBlocks(parsed.learningBlocks);
       const figures = normalizeImportFigures(parsed.figures, answerKey, learningBlocks);
@@ -140,6 +145,7 @@ export function parseImportedStudyText(
           questionImages: [],
           difficult: false,
           difficulty: "none",
+          difficultyScore,
           myAnswer: "",
           explanationParts: normalizeExplanationParts(parsed.explanationParts),
           annotations: [],
@@ -352,6 +358,7 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
 
 interface QuestionMetadata {
   difficulty?: Difficulty;
+  difficultyScore?: number;
   concepts?: string[];
   diagramType?: SheetAnswerItem["diagramType"];
   diagramSpec?: SheetAnswerItem["diagramSpec"];
@@ -379,6 +386,7 @@ function questionAliasMap(question: string): Map<string, string> {
 function metadataFromObject(value: Record<string, unknown>): QuestionMetadata {
   return {
     difficulty: normalizeDifficulty(value.difficulty),
+    difficultyScore: normalizeDifficultyScore(value.difficultyScore),
     concepts: normalizeTextList(value.concepts),
     diagramType: normalizeLearningDiagramType(value.diagramType),
     diagramSpec: normalizeDiagramSpec(value.diagramSpec),
@@ -425,6 +433,7 @@ function applyQuestionMetadata(answerKey: SheetAnswerItem[], raw: unknown, quest
         meta?.difficulty && meta.difficulty !== "none"
           ? meta.difficulty
           : item.difficulty,
+      difficultyScore: meta?.difficultyScore ?? item.difficultyScore,
       concepts: meta?.concepts?.length ? meta.concepts : item.concepts,
       diagramType: item.diagramType ?? meta?.diagramType,
       diagramSpec: item.diagramSpec ?? meta?.diagramSpec,

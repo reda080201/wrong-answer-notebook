@@ -1,7 +1,9 @@
 import type { ListFilter, SortKey, EntryKind } from "../types";
 import {
   type DifficultyFilter,
+  type DifficultyScoreFilter,
   isDifficultyFilter,
+  isDifficultyScoreFilter,
 } from "../utils/appUi";
 
 interface AppToolbarProps {
@@ -12,6 +14,8 @@ interface AppToolbarProps {
   setSortKey: (value: SortKey) => void;
   difficultyFilter: DifficultyFilter;
   setDifficultyFilter: (value: DifficultyFilter) => void;
+  difficultyScoreFilter: DifficultyScoreFilter;
+  setDifficultyScoreFilter: (value: DifficultyScoreFilter) => void;
   listFilter: ListFilter;
   setListFilter: (value: ListFilter) => void;
   todayReviewCount: number;
@@ -27,6 +31,8 @@ export default function AppToolbar({
   setSortKey,
   difficultyFilter,
   setDifficultyFilter,
+  difficultyScoreFilter,
+  setDifficultyScoreFilter,
   listFilter,
   setListFilter,
   todayReviewCount,
@@ -62,6 +68,8 @@ export default function AppToolbar({
         <option value="question-count-desc">문항 수 많은 순</option>
         <option value="bookmark-count-desc">북마크 문제 많은 순</option>
         <option value="review-need-count-desc">복습 필요 많은 순</option>
+        <option value="difficulty-score-desc">난이도 높은 순</option>
+        <option value="difficulty-score-asc">난이도 낮은 순</option>
         <option value="group-title-asc">묶음 이름순</option>
         <option value="part-order-asc">파트 순서순</option>
       </select>
@@ -81,6 +89,24 @@ export default function AppToolbar({
           <option value="medium">난이도: 중</option>
           <option value="low">난이도: 하</option>
           <option value="none">난이도: 없음</option>
+        </select>
+      </div>
+      <div className="difficulty-filter-wrap">
+        <select
+          className="difficulty-filter-select"
+          value={difficultyScoreFilter}
+          onChange={(event) => {
+            if (isDifficultyScoreFilter(event.target.value)) {
+              setDifficultyScoreFilter(event.target.value);
+            }
+          }}
+          aria-label="난이도 점수 필터"
+        >
+          <option value="all">모든 점수</option>
+          <option value="easy">쉬움 1~30</option>
+          <option value="normal">보통 31~60</option>
+          <option value="hard">어려움 61~85</option>
+          <option value="very-hard">매우 어려움 86~100</option>
         </select>
       </div>
       <div className="filter-toggle filter-toggle--wrap">

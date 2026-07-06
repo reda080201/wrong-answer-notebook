@@ -90,6 +90,7 @@ function mergeAnswerKey(
       diagramType: current.diagramType ?? incoming.diagramType,
       diagramSpec: current.diagramSpec ?? incoming.diagramSpec,
       difficulty: current.difficulty ?? incoming.difficulty,
+      difficultyScore: current.difficultyScore ?? incoming.difficultyScore,
       needsReview: current.needsReview || incoming.needsReview,
       sourceNote: current.sourceNote?.trim() ? current.sourceNote : incoming.sourceNote,
     };
@@ -114,6 +115,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - audit에 expectedQuestionNumbers, detectedQuestionNumbers, missingQuestionNumbers, uncertainQuestionNumbers, handwritingExcluded, needsReviewCount를 기록해줘.
 - 수식은 가능한 한 LaTeX 문자열로 깔끔하게 적어줘.
 - answerKey[].explanation에는 원문 해설 전체를 보관하고, 풀이 구조는 strategy, steps, choiceJudgements, wrongPoint, reviewPoint로 나눠줘.
+- 각 문항마다 answerKey[].difficultyScore를 1~100 정수로 추정해줘. 1~30은 쉬운 기본 개념, 31~60은 보통, 61~85는 어려운 응용/킬러급 접근, 86~100은 매우 어려운 고난도/복합 사고 문제야.
+- difficultyScore는 계산량만 보지 말고 개념 복합도, 조건 해석 난이도, 발상 필요성, 실수 유발성, 수능/내신 기준 체감 난이도를 함께 고려해줘.
 - answerKey[].concepts, strategy, steps, choiceJudgements, wrongPoint, reviewPoint는 앱의 "학습 내용" 카드에 직접 표시되므로 가능한 한 비우지 말고 문항별로 구체적으로 채워줘.
 - concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
@@ -152,6 +155,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
     {
       "questionNumber": "${isSheet ? "1" : "1"}",
       "answer": "정답",
+      "difficulty": "high",
+      "difficultyScore": 87,
       "explanation": "원문 해설 전체",
       "strategy": "핵심 조건을 식으로 바꾼 뒤 대입한다",
       "steps": ["조건을 정리한다", "식을 세운다", "정답을 검산한다"],
@@ -255,6 +260,10 @@ export function mergeGptSolutionIntoEntry(
         ? incomingExplanationParts
         : base.explanationParts,
     memo: shouldOverwrite || !hasText(base.memo) ? imported.memo ?? base.memo : base.memo,
+    difficultyScore:
+      shouldOverwrite || base.difficultyScore === undefined
+        ? imported.difficultyScore ?? base.difficultyScore
+        : base.difficultyScore,
     answerKey: mergeAnswerKey(base.answerKey, imported.answerKey, mode),
     learningBlocks:
       shouldOverwrite || !(base.learningBlocks?.length)
@@ -277,6 +286,7 @@ export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
     entryKind: entry.entryKind,
     difficult: entry.difficult,
     difficulty: entry.difficulty ?? "none",
+    difficultyScore: entry.difficultyScore,
     myAnswer: entry.myAnswer,
     correctAnswer: entry.correctAnswer,
     explanationParts: hasExplanationContent(entry)

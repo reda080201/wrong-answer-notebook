@@ -8,6 +8,8 @@ import type {
 import { buildLearningDashboardStats } from "../utils/conceptAnalytics";
 import {
   type DifficultyFilter,
+  type DifficultyScoreFilter,
+  entryMatchesDifficultyScoreFilter,
   entryMatchesSearch,
   sortEntries,
 } from "../utils/appUi";
@@ -31,6 +33,8 @@ export function useAppNavigationState({
   const [sortKey, setSortKey] = useState<SortKey>("date-desc");
   const [difficultyFilter, setDifficultyFilter] =
     useState<DifficultyFilter>("all");
+  const [difficultyScoreFilter, setDifficultyScoreFilter] =
+    useState<DifficultyScoreFilter>("all");
 
   const filtered = useMemo(() => {
     const list = entries.filter((entry) => {
@@ -45,6 +49,9 @@ export function useAppNavigationState({
       if (difficultyFilter !== "all" && entry.difficulty !== difficultyFilter) {
         return false;
       }
+      if (!entryMatchesDifficultyScoreFilter(entry, difficultyScoreFilter)) {
+        return false;
+      }
       return entryMatchesSearch(entry, search);
     });
     return sortEntries(list, sortKey);
@@ -54,6 +61,7 @@ export function useAppNavigationState({
     subjectFilter,
     listFilter,
     difficultyFilter,
+    difficultyScoreFilter,
     search,
     sortKey,
   ]);
@@ -125,6 +133,8 @@ export function useAppNavigationState({
     setSortKey,
     difficultyFilter,
     setDifficultyFilter,
+    difficultyScoreFilter,
+    setDifficultyScoreFilter,
     filtered,
     selected,
     stats,

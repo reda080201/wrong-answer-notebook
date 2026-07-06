@@ -325,6 +325,52 @@ export function useAppActions({
     setSelectedId(id);
   };
 
+  const handleConceptKnowledgeEntriesApply = async (
+    importedEntries: Partial<EntryFormData>[],
+  ) => {
+    if (!importedEntries.length) return;
+    let firstId: string | null = null;
+    let firstKind: EntryKind = "concept";
+    for (const imported of importedEntries) {
+      const entryKind: EntryKind =
+        imported.entryKind === "lecture" ? "lecture" : "concept";
+      const subject: Subject =
+        imported.subject && SUBJECTS.includes(imported.subject as Subject)
+          ? (imported.subject as Subject)
+          : "기타";
+      const id = await addEntry({
+        subject,
+        title: imported.title?.trim() || (entryKind === "lecture" ? "특강자료" : "개념"),
+        question: imported.question ?? "",
+        questionImages: [],
+        entryKind,
+        difficult: false,
+        difficulty: "none",
+        annotations: [],
+        myAnswer: "",
+        correctAnswer: "",
+        explanationParts: [],
+        memo: imported.memo ?? "",
+        tags: imported.tags ?? [],
+        answerKey: [],
+        figures: [],
+        mistakeAnalysis: imported.mistakeAnalysis ?? { causes: [] },
+        mastered: false,
+        learningBlocks: imported.learningBlocks ?? [],
+        sourceType: imported.sourceType,
+        linkedEntryIds: imported.linkedEntryIds ?? [],
+        concepts: imported.concepts ?? [],
+        checklist: imported.checklist ?? [],
+      });
+      if (!firstId) {
+        firstId = id;
+        firstKind = entryKind;
+      }
+    }
+    setActiveSection(firstKind);
+    setSelectedId(firstId);
+  };
+
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
     meta: { title: string; sourceType: LectureSourceType },
@@ -509,6 +555,7 @@ export function useAppActions({
     handleQuickMemo,
     handleLearningBlocksChange,
     handleLearningImportApply,
+    handleConceptKnowledgeEntriesApply,
     runIntegrity,
     handleBackup,
     handleRestore,

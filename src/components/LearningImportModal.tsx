@@ -1,20 +1,29 @@
 import { useState } from "react";
 import type { LearningBlock, LectureSourceType } from "../types";
+import type { EntryFormData } from "../types";
 import {
   parseLectureImportText,
   readLectureImportFile,
 } from "../utils/learningContent";
+import {
+  isAppCompatibleEntriesJson,
+  isConceptKnowledgeJson,
+  tryParseConceptKnowledgeText,
+} from "../utils/conceptKnowledgeImport";
 import MathText from "./MathText";
+import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 
 interface LearningImportModalProps {
   onClose: () => void;
   onApply: (blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType }) => Promise<void> | void;
+  onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   mode?: "append" | "lecture";
 }
 
-export default function LearningImportModal({ onClose, onApply, mode = "append" }: LearningImportModalProps) {
+export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append" }: LearningImportModalProps) {
   const [rawText, setRawText] = useState("");
   const [blocks, setBlocks] = useState<LearningBlock[]>([]);
+  const [conceptImportValue, setConceptImportValue] = useState<unknown | null>(null);
   const [meta, setMeta] = useState<{ title: string; sourceType: LectureSourceType }>({
     title: "가져온 특강자료",
     sourceType: "txt",
@@ -24,6 +33,14 @@ export default function LearningImportModal({ onClose, onApply, mode = "append" 
 
   const parseText = (text: string, filename?: string) => {
     try {
+      const conceptValue = tryParseConceptKnowledgeText(text);
+      if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
+        setConceptImportValue(conceptValue);
+        setBlocks([]);
+        setError(null);
+        return;
+      }
+      setConceptImportValue(null);
       const parsed = parseLectureImportText(text, filename);
       setBlocks(parsed.blocks);
       setMeta({ title: parsed.title, sourceType: parsed.sourceType });
@@ -38,7 +55,16 @@ export default function LearningImportModal({ onClose, onApply, mode = "append" 
     if (!file) return;
     try {
       const parsed = await readLectureImportFile(file);
-      setRawText(await file.text());
+      const text = await file.text();
+      const conceptValue = tryParseConceptKnowledgeText(text);
+      setRawText(text);
+      if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
+        setConceptImportValue(conceptValue);
+        setBlocks([]);
+        setError(null);
+        return;
+      }
+      setConceptImportValue(null);
       setBlocks(parsed.blocks);
       setMeta({ title: parsed.title, sourceType: parsed.sourceType });
       setError(parsed.blocks.length ? null : "가져올 학습 블록을 찾지 못했습니다.");
@@ -133,6 +159,17 @@ export default function LearningImportModal({ onClose, onApply, mode = "append" 
           </button>
         </footer>
       </div>
+      {Boolean(conceptImportValue) && onApplyEntries && (
+        <ConceptImportPreviewModal
+          value={conceptImportValue}
+          fallbackSubject="기타"
+          onClose={() => setConceptImportValue(null)}
+          onApplyEntries={async (entries) => {
+            await onApplyEntries(entries);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

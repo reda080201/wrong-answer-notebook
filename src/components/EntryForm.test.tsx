@@ -90,6 +90,29 @@ describe("EntryForm", () => {
     expect(screen.getByText("#GPT변환")).toBeInTheDocument();
   });
 
+  it("saves a manually edited difficulty score", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryForm
+        onSave={onSave}
+        onClose={vi.fn()}
+        defaultEntryKind="wrong_answer"
+        prefilledTitle="난이도 점수 테스트"
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("문제 · 지문 (텍스트)"), {
+      target: { value: "1. 점수 문제" },
+    });
+    fireEvent.change(screen.getByLabelText("난이도 점수 숫자 입력"), {
+      target: { value: "82" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+    expect(onSave.mock.calls[0][0].difficultyScore).toBe(82);
+  });
+
   it("fills and edits imported structured answer key values for problem sheets", async () => {
     const onSave = vi.fn().mockResolvedValue(undefined);
     render(

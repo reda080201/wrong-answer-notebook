@@ -183,6 +183,7 @@ export interface SheetAnswerItem {
   notes?: string;
   importantPoints: string[];
   difficulty?: Difficulty;
+  difficultyScore?: number;
   concepts?: string[];
   diagramType?: LearningDiagramType;
   diagramSpec?: DiagramSpec;
@@ -203,6 +204,7 @@ export interface SheetFigureItem {
 export interface QuestionMeta {
   questionNumber: string;
   important: boolean;
+  difficultyScore?: number;
   bookmarkLabel?: string;
   note?: string;
   updatedAt: string;
@@ -370,6 +372,8 @@ export interface WrongAnswerEntry {
   difficult: boolean;
   /** 난이도 레벨 */
   difficulty?: Difficulty;
+  /** 1~100 난이도 점수. 높을수록 어려움 */
+  difficultyScore?: number;
   myAnswer: string;
   correctAnswer: string;
   /** 여러 해설 블록 (해설 1, 해설 2 …) */
@@ -426,6 +430,8 @@ export type SortKey =
   | "question-count-desc"
   | "bookmark-count-desc"
   | "review-need-count-desc"
+  | "difficulty-score-desc"
+  | "difficulty-score-asc"
   | "group-title-asc"
   | "part-order-asc";
 

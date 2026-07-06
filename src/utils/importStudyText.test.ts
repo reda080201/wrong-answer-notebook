@@ -482,6 +482,43 @@ describe("importStudyText", () => {
     expect(result.data.answerKey?.[0].difficulty).toBeUndefined();
   });
 
+  it("normalizes imported difficulty scores and derives sheet score from answer key max", () => {
+    const result = parseImportedStudyText(
+      JSON.stringify({
+        question: "1. 문제\n\n2. 문제",
+        answerKey: [
+          {
+            questionNumber: "1",
+            answer: "①",
+            difficulty: "medium",
+            difficultyScore: 52.4,
+          },
+          {
+            questionNumber: "2",
+            answer: "②",
+            difficultyScore: 120,
+          },
+        ],
+      }),
+    );
+
+    expect(result.data.answerKey?.[0].difficultyScore).toBe(52);
+    expect(result.data.answerKey?.[1].difficultyScore).toBe(100);
+    expect(result.data.difficultyScore).toBe(100);
+  });
+
+  it("uses top-level imported difficulty score before answer key max", () => {
+    const result = parseImportedStudyText(
+      JSON.stringify({
+        question: "1. 문제",
+        difficultyScore: 77,
+        answerKey: [{ questionNumber: "1", answer: "①", difficultyScore: 99 }],
+      }),
+    );
+
+    expect(result.data.difficultyScore).toBe(77);
+  });
+
   it("detects import json shapes", () => {
     expect(isImportJson({ question: "문제" })).toBe(true);
     expect(isImportJson(["문제"])).toBe(false);

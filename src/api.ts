@@ -192,6 +192,62 @@ import.json 형식:
     builtIn: true,
     content: "인쇄된 문제와 답안지 해설에 등장하는 핵심 개념을 concepts 배열에 정리하고, question이나 memo 안에서 자연스럽게 연결할 수 있는 개념명은 [[개념명]] 형태로 표시해줘. 손글씨/밑줄/별표/여백 메모는 제외하고, 도표/그래프는 Markdown 표나 [도표/그래프 설명]으로 보존해줘. tags 필드 없이 순수 JSON 객체 1개만 출력해줘.",
   },
+  {
+    id: "builtin-concept-knowledge-json",
+    name: "개념자료 앱 호환 JSON",
+    builtIn: true,
+    content: `개념 정리 자료를 오답노트 앱에 바로 가져올 수 있는 순수 JSON 객체 1개로 만들어줘.
+
+우선 아래 둘 중 하나로 출력해줘.
+
+1. 개념노트 여러 개:
+{
+  "entries": [
+    {
+      "entryKind": "concept",
+      "title": "개념명",
+      "subject": "사회",
+      "question": "한 문단 정의",
+      "memo": "단원, 시험 포인트, 오답 함정",
+      "tags": ["사회", "단원명", "개념명"],
+      "concepts": ["개념명"],
+      "learningBlocks": [
+        { "type": "concept", "title": "개념명", "content": "정의" },
+        { "type": "checklist", "title": "시험 포인트", "content": "- 포인트" },
+        { "type": "warning", "title": "오답 함정", "content": "- 함정" }
+      ]
+    }
+  ]
+}
+
+2. 하나의 특강자료:
+{
+  "entryKind": "lecture",
+  "title": "자료명",
+  "subject": "사회",
+  "sourceType": "json",
+  "learningBlocks": [
+    { "type": "concept", "title": "핵심 개념", "content": "설명" },
+    { "type": "routine", "title": "판단 기준", "content": "- 키워드\\n- 시험 판단" }
+  ]
+}
+
+nested units 구조가 꼭 필요하면 다음 필드를 반드시 넣어줘.
+{
+  "schemaVersion": "concept-knowledge-v1",
+  "sourceType": "concept_knowledge_base",
+  "units": [],
+  "thinkerMatrix": [],
+  "examSolvingRules": [],
+  "minimalKeywordMap": {}
+}
+
+규칙:
+- raw HTML, raw SVG, script, iframe, base64는 절대 넣지 마.
+- learningBlocks type은 concept, formula, routine, warning, review, checklist, diagram 중 하나만 써줘.
+- 사상가 비교표는 thinkerMatrix 대신 가능하면 learningBlocks의 routine 카드로 정리해줘.
+- 설명문, Markdown, 코드블록 없이 첫 글자가 {이고 마지막 글자가 }인 JSON만 출력해줘.`,
+  },
 ];
 
 export const builtInMemoTemplates: MemoTemplate[] = [

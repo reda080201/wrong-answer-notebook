@@ -1,6 +1,7 @@
 import type { QuestionBlock } from "./textLayout";
 import { parseQuestionText } from "./textLayout";
 import type { QuestionMeta, WrongAnswerEntry } from "../types";
+import { normalizeDifficultyScore } from "./difficulty";
 
 export function normalizeQuestionNumber(value: string | number | undefined | null): string {
   const raw = `${value ?? ""}`.trim();
@@ -23,6 +24,7 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
     .map((item) => ({
       questionNumber: normalizeQuestionNumber(item.questionNumber),
       important: Boolean(item.important),
+      difficultyScore: normalizeDifficultyScore(item.difficultyScore),
       bookmarkLabel: item.bookmarkLabel ? `${item.bookmarkLabel}`.trim() : undefined,
       note: item.note ? `${item.note}`.trim() : undefined,
       updatedAt:

@@ -19,6 +19,11 @@ import {
   readImportFile,
   type ImportedStudyText,
 } from "../utils/importStudyText";
+import {
+  isAppCompatibleEntriesJson,
+  isConceptKnowledgeJson,
+  tryParseConceptKnowledgeText,
+} from "../utils/conceptKnowledgeImport";
 import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
 import {
   normalizeImportAudit,
@@ -31,10 +36,12 @@ import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../utils/gpt
 import { cleanQuestionText } from "../utils/textCleanup";
 import { parseQuestionText } from "../utils/textLayout";
 import ImageField from "./ImageField";
+import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode) => void;
+  onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
   aiProvider?: AiProviderSettings;
@@ -280,6 +287,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 export default function ImportFromGptModal({
   onClose,
   onApply,
+  onApplyEntries,
   fallbackSubject,
   promptTemplates = [],
   aiProvider,
@@ -323,11 +331,26 @@ export default function ImportFromGptModal({
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
   const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
+  const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
+  const conceptImportValue = useMemo(() => {
+    const parsedValue = tryParseConceptKnowledgeText(rawText);
+    if (!parsedValue) return null;
+    return isConceptKnowledgeJson(parsedValue) || isAppCompatibleEntriesJson(parsedValue)
+      ? parsedValue
+      : null;
+  }, [rawText]);
+  const conceptImportKey = conceptImportValue ? rawText : "";
+  const shouldShowConceptPreview = Boolean(
+    conceptImportValue &&
+    onApplyEntries &&
+    conceptImportKey !== dismissedConceptPreviewKey,
+  );
 
   const parsed: ImportedStudyText | null = useMemo(() => {
+    if (conceptImportValue) return null;
     if (!rawText.trim()) return null;
     return parseImportedStudyText(rawText, filename, fallbackSubject);
-  }, [fallbackSubject, filename, rawText]);
+  }, [conceptImportValue, fallbackSubject, filename, rawText]);
   const expectedQuestionParse = useMemo(
     () => parseExpectedQuestionNumbers(expectedQuestionInput),
     [expectedQuestionInput],
@@ -473,6 +496,15 @@ export default function ImportFromGptModal({
         throw new Error("Gemini Vision을 사용하려면 먼저 문제/답안지 이미지를 첨부해 주세요.");
       }
       const aiText = await onGenerateWithAi(activePromptContent, inputText, mode === "vision" ? aiImageFilenames : []);
+      const conceptValue = tryParseConceptKnowledgeText(aiText);
+      if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
+        setRawText(aiText);
+        setFilename("gemini.json");
+        setDraftOverride(null);
+        setDismissedConceptPreviewKey("");
+        setCopyMessage("AI provider 개념 자료 JSON을 가져왔습니다.");
+        return;
+      }
       const parsedText = parseImportedStudyText(aiText, "gemini.json", fallbackSubject);
       if (parsedText.detectedFormat !== "json") {
         throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
@@ -805,6 +837,11 @@ export default function ImportFromGptModal({
                   }}
                   placeholder={isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
                 />
+                {conceptImportValue && (
+                  <p className="form-hint import-concept-detected">
+                    개념 자료 JSON으로 감지되었습니다. 개념노트 또는 특강자료로 변환해 저장할 수 있습니다.
+                  </p>
+                )}
               </div>
 
               <div className="clipboard-actions">
@@ -864,8 +901,38 @@ export default function ImportFromGptModal({
                 <span>권장 JSON 예시</span>
                 <p className="form-hint">
                   answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다. 도표 문항은 figures 설명만 쓰지 말고 가능한 경우 learningBlocks[].type을 "diagram"으로 만들며, raw SVG/HTML/Canvas/base64는 넣지 마세요.
+                  개념 자료는 가능하면 entries 배열 또는 lecture JSON으로 출력하고, nested units 구조를 쓸 때는 schemaVersion: "concept-knowledge-v1", sourceType: "concept_knowledge_base"를 포함하세요.
                 </p>
                 <pre>{`{
+  "entries": [
+    {
+      "entryKind": "concept",
+      "title": "윤리학",
+      "subject": "사회",
+      "question": "인간 행위의 옳고 그름을 탐구하는 학문",
+      "memo": "시험 포인트와 오답 함정을 정리",
+      "tags": ["사회", "생활과 윤리", "윤리학"],
+      "learningBlocks": [
+        { "type": "concept", "title": "윤리학", "content": "인간 행위의 옳고 그름을 탐구한다." }
+      ]
+    }
+  ]
+}
+
+또는
+
+{
+  "entryKind": "lecture",
+  "title": "생활과 윤리 1단원 특강",
+  "subject": "사회",
+  "sourceType": "json",
+  "learningBlocks": [
+    { "type": "concept", "title": "핵심 개념", "content": "..." }
+  ]
+}
+
+시험지 예시:
+{
   "title": "2026 중간고사 오답",
   "subject": "수학",
   "question": "1. ...\\n① ...",
@@ -1354,6 +1421,17 @@ export default function ImportFromGptModal({
           </button>
         </div>
       </div>
+      {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
+        <ConceptImportPreviewModal
+          value={conceptImportValue}
+          fallbackSubject={fallbackSubject}
+          onClose={() => setDismissedConceptPreviewKey(conceptImportKey)}
+          onApplyEntries={async (entries) => {
+            await onApplyEntries(entries);
+            onClose();
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -4,6 +4,12 @@ import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textL
 import { LinkifiedText } from "../utils/wikiLinks";
 import MathText from "./MathText";
 import { FocusedQuestionView } from "./AnnotatableQuestion";
+import {
+  difficultyScoreBand,
+  difficultyScoreLabel,
+  normalizeDifficultyScore,
+  resolveAnswerDifficultyScore,
+} from "../utils/difficulty";
 
 interface QuestionTheaterViewProps {
   passage?: PassageBlock | ParagraphBlock;
@@ -26,6 +32,7 @@ interface QuestionTheaterViewProps {
   onNext: () => void;
   onToggleAnswers: () => void;
   onToggleImportant?: () => void;
+  onDifficultyScoreChange?: (score: number | undefined) => void;
   onOpenGptExport?: () => void;
   onReview: (result: ReviewResult) => void;
   onClose: () => void;
@@ -59,12 +66,16 @@ export default function QuestionTheaterView({
   onNext,
   onToggleAnswers,
   onToggleImportant,
+  onDifficultyScoreChange,
   onOpenGptExport,
   onReview,
   onClose,
 }: QuestionTheaterViewProps) {
   const [solutionSplitOpen, setSolutionSplitOpen] = useState(false);
   const [splitRatio, setSplitRatio] = useState(loadSplitRatio);
+  const [scoreEditorOpen, setScoreEditorOpen] = useState(false);
+  const difficultyScore = normalizeDifficultyScore(questionMeta?.difficultyScore) ?? resolveAnswerDifficultyScore(answer);
+  const [draftScore, setDraftScore] = useState(`${difficultyScore ?? ""}`);
 
   const updateSplitRatio = (clientX: number, container: HTMLElement) => {
     const rect = container.getBoundingClientRect();
@@ -111,6 +122,23 @@ export default function QuestionTheaterView({
               {questionMeta?.important ? "★ 중요" : "☆ 중요"}
             </button>
           )}
+          {difficultyScore && (
+            <span className={`difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(difficultyScore)}`}>
+              {difficultyScoreLabel(difficultyScore)}
+            </span>
+          )}
+          {onDifficultyScoreChange && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                setDraftScore(`${difficultyScore ?? ""}`);
+                setScoreEditorOpen((value) => !value);
+              }}
+            >
+              난이도 수정
+            </button>
+          )}
           <button type="button" className="btn-secondary" onClick={() => setSolutionSplitOpen((value) => !value)}>
             {solutionSplitOpen ? "문제만 보기" : "해설 보기"}
           </button>
@@ -121,6 +149,47 @@ export default function QuestionTheaterView({
             나가기
           </button>
         </header>
+        {scoreEditorOpen && onDifficultyScoreChange && (
+          <div className="question-theater-score-editor">
+            <input
+              type="range"
+              min={1}
+              max={100}
+              value={normalizeDifficultyScore(draftScore) ?? difficultyScore ?? 50}
+              onChange={(event) => setDraftScore(event.target.value)}
+              aria-label="현재 문제 난이도 점수"
+            />
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={draftScore}
+              onChange={(event) => setDraftScore(event.target.value)}
+              placeholder="1~100"
+            />
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                onDifficultyScoreChange(normalizeDifficultyScore(draftScore));
+                setScoreEditorOpen(false);
+              }}
+            >
+              저장
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => {
+                onDifficultyScoreChange(undefined);
+                setDraftScore("");
+                setScoreEditorOpen(false);
+              }}
+            >
+              자동
+            </button>
+          </div>
+        )}
 
         <main
           className={`question-theater-main ${solutionSplitOpen ? "question-theater-main--split" : ""}`}

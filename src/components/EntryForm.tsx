@@ -9,6 +9,7 @@ import {
   recommendedStrategyForCause,
 } from "../utils/mistakeAnalysis";
 import { cleanQuestionText } from "../utils/textCleanup";
+import { normalizeDifficultyScore } from "../utils/difficulty";
 import { SUBJECTS } from "../types";
 import ImageField from "./ImageField";
 
@@ -38,6 +39,7 @@ const emptyForm: EntryFormData = {
   entryKind: "wrong_answer",
   difficult: false,
   difficulty: "none",
+  difficultyScore: undefined,
   annotations: [],
   myAnswer: "",
   correctAnswer: "",
@@ -64,6 +66,7 @@ function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
     entryKind: entry.entryKind,
     difficult: entry.difficult,
     difficulty: entry.difficulty ?? "none",
+    difficultyScore: entry.difficultyScore,
     annotations: [...(entry.annotations ?? [])],
     myAnswer: entry.myAnswer,
     correctAnswer: entry.correctAnswer,
@@ -169,6 +172,13 @@ function entryHadExplanationImage(e: WrongAnswerEntry | undefined, f: string) {
   );
 }
 
+function suggestedDifficultyScore(difficulty: EntryFormData["difficulty"]): number | undefined {
+  if (difficulty === "high") return 80;
+  if (difficulty === "medium") return 55;
+  if (difficulty === "low") return 25;
+  return undefined;
+}
+
 export default function EntryForm({
   entry,
   onSave,
@@ -185,10 +195,12 @@ export default function EntryForm({
   const [removedImages, setRemovedImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(false);
 
   useEffect(() => {
     if (entry) {
       setForm(cloneFormFromEntry(entry));
+      setDifficultyScoreTouched(entry.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
     } else {
@@ -197,8 +209,10 @@ export default function EntryForm({
         entryKind: initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer",
         title: initialData?.title ?? prefilledTitle ?? "",
         difficulty: initialData?.difficulty ?? "none",
+        difficultyScore: initialData?.difficultyScore,
         explanationParts: initialData?.explanationParts ?? [emptyPart()],
       }));
+      setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
     }
@@ -401,6 +415,7 @@ export default function EntryForm({
         entryKind: form.entryKind,
         difficult: form.difficult,
         difficulty: form.difficulty,
+        difficultyScore: form.difficultyScore,
         myAnswer: form.myAnswer,
         correctAnswer: form.correctAnswer,
         explanationParts: form.explanationParts,
@@ -516,6 +531,9 @@ export default function EntryForm({
                           ...f,
                           difficulty: value,
                           difficult: value === "high" || value === "medium",
+                          difficultyScore: difficultyScoreTouched
+                            ? f.difficultyScore
+                            : suggestedDifficultyScore(value),
                         }))
                       }
                     >
@@ -523,6 +541,51 @@ export default function EntryForm({
                     </button>
                   ))}
                 </div>
+              </div>
+              <div className="form-field">
+                <label htmlFor="difficulty-score">난이도 점수</label>
+                <div className="difficulty-score-input">
+                  <input
+                    id="difficulty-score"
+                    type="range"
+                    min={1}
+                    max={100}
+                    value={form.difficultyScore ?? suggestedDifficultyScore(form.difficulty) ?? 1}
+                    onChange={(event) => {
+                      setDifficultyScoreTouched(true);
+                      setForm((f) => ({
+                        ...f,
+                        difficultyScore: normalizeDifficultyScore(event.target.value),
+                      }));
+                    }}
+                  />
+                  <input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={form.difficultyScore ?? ""}
+                    placeholder={`${suggestedDifficultyScore(form.difficulty) ?? ""}`}
+                    onChange={(event) => {
+                      setDifficultyScoreTouched(true);
+                      setForm((f) => ({
+                        ...f,
+                        difficultyScore: normalizeDifficultyScore(event.target.value),
+                      }));
+                    }}
+                    aria-label="난이도 점수 숫자 입력"
+                  />
+                  <button
+                    type="button"
+                    className="btn-secondary btn-sm"
+                    onClick={() => {
+                      setDifficultyScoreTouched(false);
+                      setForm((f) => ({ ...f, difficultyScore: undefined }));
+                    }}
+                  >
+                    자동
+                  </button>
+                </div>
+                <p className="form-hint">높을수록 어려움. 직접 입력하면 상/중/하 제안값보다 우선합니다.</p>
               </div>
             </div>
 
@@ -961,6 +1024,24 @@ export default function EntryForm({
                             <option value="high">상</option>
                           </select>
                         </div>
+                        <div className="form-field">
+                          <label htmlFor={`answer-difficulty-score-${item.id}`}>문항 난이도 점수</label>
+                          <input
+                            id={`answer-difficulty-score-${item.id}`}
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={item.difficultyScore ?? ""}
+                            placeholder="1~100"
+                            onChange={(event) =>
+                              updateAnswerKeyItem(item.id, {
+                                difficultyScore: normalizeDifficultyScore(event.target.value),
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="form-row form-row--2">
                         <div className="form-field">
                           <label htmlFor={`answer-concepts-${item.id}`}>연결 개념</label>
                           <input

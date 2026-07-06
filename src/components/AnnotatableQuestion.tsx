@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getImageUrl } from "../api";
-import type { Annotation, AnnotationTool, QuestionMeta, SheetFigureItem, TextRangeAnnotation } from "../types";
+import type { Annotation, AnnotationTool, QuestionMeta, SheetAnswerItem, SheetFigureItem, TextRangeAnnotation } from "../types";
 import {
   createImageAnnotation,
   createTextAnnotation,
@@ -19,6 +19,12 @@ import {
   type QuestionTextBlock,
 } from "../utils/textLayout";
 import { renderWikiLinksInNodes } from "../utils/wikiLinks";
+import {
+  difficultyScoreBand,
+  difficultyScoreLabel,
+  normalizeDifficultyScore,
+  resolveQuestionDifficultyScore,
+} from "../utils/difficulty";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import MathText, { renderMathInNodes } from "./MathText";
@@ -40,7 +46,9 @@ interface AnnotatableQuestionProps {
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
+  answerKey?: SheetAnswerItem[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  onQuestionDifficultyScoreChange?: (questionNumber: string, score: number | undefined) => void;
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
@@ -283,7 +291,9 @@ function StructuredQuestionBlock({
   questionIndex,
   onOpenQuestionTheater,
   questionMeta = [],
+  answerKey = [],
   onToggleQuestionImportant,
+  onQuestionDifficultyScoreChange,
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
@@ -298,7 +308,9 @@ function StructuredQuestionBlock({
   questionIndex?: number;
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
+  answerKey?: SheetAnswerItem[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  onQuestionDifficultyScoreChange?: (questionNumber: string, score: number | undefined) => void;
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
@@ -328,6 +340,7 @@ function StructuredQuestionBlock({
   const isImportant = Boolean(meta?.important);
   const questionNumber = String(block.displayNumber);
   const isSelected = selectedQuestionNumbers.includes(questionNumber);
+  const difficultyScore = resolveQuestionDifficultyScore(questionMeta, answerKey, block);
 
   return (
     <section
@@ -360,6 +373,11 @@ function StructuredQuestionBlock({
           {isImportant ? "★ 중요" : "☆ 중요"}
         </button>
       )}
+      <QuestionDifficultyEditor
+        questionNumber={questionNumber}
+        difficultyScore={difficultyScore}
+        onChange={onQuestionDifficultyScoreChange}
+      />
       <QuestionBodySegments
         segments={bodySegments}
         textAnnotations={textAnnotations}
@@ -445,6 +463,86 @@ function QuestionBodySegments({
         </section>
       ))}
     </div>
+  );
+}
+
+function QuestionDifficultyEditor({
+  questionNumber,
+  difficultyScore,
+  onChange,
+}: {
+  questionNumber: string;
+  difficultyScore?: number;
+  onChange?: (questionNumber: string, score: number | undefined) => void;
+}) {
+  const [editingScore, setEditingScore] = useState(false);
+  const [draftScore, setDraftScore] = useState(`${difficultyScore ?? ""}`);
+
+  return (
+    <>
+      <div className="question-difficulty-tools">
+        {difficultyScore && (
+          <span
+            className={`difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(difficultyScore)}`}
+          >
+            {difficultyScoreLabel(difficultyScore)}
+          </span>
+        )}
+        {onChange && (
+          <button
+            type="button"
+            className="question-score-edit-btn"
+            onClick={() => {
+              setDraftScore(`${difficultyScore ?? ""}`);
+              setEditingScore((value) => !value);
+            }}
+          >
+            난이도 수정
+          </button>
+        )}
+      </div>
+      {editingScore && onChange && (
+        <div className="question-score-editor">
+          <input
+            type="range"
+            min={1}
+            max={100}
+            value={normalizeDifficultyScore(draftScore) ?? difficultyScore ?? 50}
+            onChange={(event) => setDraftScore(event.target.value)}
+            aria-label={`${questionNumber}번 난이도 점수`}
+          />
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={draftScore}
+            onChange={(event) => setDraftScore(event.target.value)}
+            placeholder="1~100"
+          />
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => {
+              onChange(questionNumber, normalizeDifficultyScore(draftScore));
+              setEditingScore(false);
+            }}
+          >
+            저장
+          </button>
+          <button
+            type="button"
+            className="btn-secondary btn-sm"
+            onClick={() => {
+              onChange(questionNumber, undefined);
+              setDraftScore("");
+              setEditingScore(false);
+            }}
+          >
+            자동
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -603,7 +701,9 @@ function StructuredQuestionText({
   suspiciousSegments = [],
   onOpenQuestionTheater,
   questionMeta = [],
+  answerKey = [],
   onToggleQuestionImportant,
+  onQuestionDifficultyScoreChange,
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
@@ -618,7 +718,9 @@ function StructuredQuestionText({
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
   questionMeta?: QuestionMeta[];
+  answerKey?: SheetAnswerItem[];
   onToggleQuestionImportant?: (questionNumber: string) => void;
+  onQuestionDifficultyScoreChange?: (questionNumber: string, score: number | undefined) => void;
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
@@ -652,7 +754,9 @@ function StructuredQuestionText({
             suspiciousSegments={suspiciousSegments}
             onOpenQuestionTheater={onOpenQuestionTheater}
             questionMeta={questionMeta}
+            answerKey={answerKey}
             onToggleQuestionImportant={onToggleQuestionImportant}
+            onQuestionDifficultyScoreChange={onQuestionDifficultyScoreChange}
             selectionMode={selectionMode}
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}
@@ -835,7 +939,9 @@ export default function AnnotatableQuestion({
   suspiciousSegments = [],
   onOpenQuestionTheater,
   questionMeta,
+  answerKey,
   onToggleQuestionImportant,
+  onQuestionDifficultyScoreChange,
   selectionMode,
   selectedQuestionNumbers,
   onToggleQuestionSelected,
@@ -890,7 +996,9 @@ export default function AnnotatableQuestion({
             suspiciousSegments={suspiciousSegments}
             onOpenQuestionTheater={onOpenQuestionTheater}
             questionMeta={questionMeta}
+            answerKey={answerKey}
             onToggleQuestionImportant={onToggleQuestionImportant}
+            onQuestionDifficultyScoreChange={onQuestionDifficultyScoreChange}
             selectionMode={selectionMode}
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}

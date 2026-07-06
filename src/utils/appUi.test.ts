@@ -92,6 +92,38 @@ describe("appUi utilities", () => {
     expect(sortEntries([part2, part1], "group-title-asc").map((entry) => entry.id)).toEqual(["part2", "part1"]);
   });
 
+  it("sorts entries by resolved difficulty score", () => {
+    const explicit = {
+      ...baseEntry,
+      id: "explicit",
+      difficultyScore: 91,
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const estimated = {
+      ...baseEntry,
+      id: "estimated",
+      difficulty: "high" as const,
+      updatedAt: "2026-02-01T00:00:00.000Z",
+    };
+    const easy = {
+      ...baseEntry,
+      id: "easy",
+      difficultyScore: 20,
+      updatedAt: "2026-03-01T00:00:00.000Z",
+    };
+
+    expect(sortEntries([easy, estimated, explicit], "difficulty-score-desc").map((entry) => entry.id)).toEqual([
+      "explicit",
+      "estimated",
+      "easy",
+    ]);
+    expect(sortEntries([easy, estimated, explicit], "difficulty-score-asc").map((entry) => entry.id)).toEqual([
+      "easy",
+      "estimated",
+      "explicit",
+    ]);
+  });
+
   it("builds previews for concept and lecture entries", () => {
     expect(getEntryCardPreview({
       ...baseEntry,

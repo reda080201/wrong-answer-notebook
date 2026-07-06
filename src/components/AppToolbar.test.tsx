@@ -7,6 +7,7 @@ describe("AppToolbar", () => {
     const setSearch = vi.fn();
     const setSortKey = vi.fn();
     const setDifficultyFilter = vi.fn();
+    const setDifficultyScoreFilter = vi.fn();
     const setListFilter = vi.fn();
     const startReview = vi.fn();
     const onOpenSettings = vi.fn();
@@ -20,6 +21,8 @@ describe("AppToolbar", () => {
         setSortKey={setSortKey}
         difficultyFilter="all"
         setDifficultyFilter={setDifficultyFilter}
+        difficultyScoreFilter="all"
+        setDifficultyScoreFilter={setDifficultyScoreFilter}
         listFilter="all"
         setListFilter={setListFilter}
         todayReviewCount={2}
@@ -37,6 +40,9 @@ describe("AppToolbar", () => {
     fireEvent.change(screen.getByLabelText("난이도 필터"), {
       target: { value: "high" },
     });
+    fireEvent.change(screen.getByLabelText("난이도 점수 필터"), {
+      target: { value: "very-hard" },
+    });
     fireEvent.click(screen.getByRole("button", { name: "복습 필요" }));
     fireEvent.click(screen.getByRole("button", { name: "랜덤 복습" }));
     fireEvent.click(screen.getByRole("button", { name: /설정/ }));
@@ -44,6 +50,7 @@ describe("AppToolbar", () => {
     expect(setSearch).toHaveBeenCalledWith("함수");
     expect(setSortKey).toHaveBeenCalledWith("title-asc");
     expect(setDifficultyFilter).toHaveBeenCalledWith("high");
+    expect(setDifficultyScoreFilter).toHaveBeenCalledWith("very-hard");
     expect(setListFilter).toHaveBeenCalledWith("pending");
     expect(startReview).toHaveBeenCalledWith("random");
     expect(onOpenSettings).toHaveBeenCalled();

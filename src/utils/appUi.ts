@@ -6,12 +6,26 @@ import {
   getReviewNeedCount,
 } from "./questionMeta";
 import { normalizeQuestionNumber } from "./questionMeta";
+import { difficultyScoreBand, resolveEntryDifficultyScore, type DifficultyScoreBand } from "./difficulty";
 
 export type DifficultyFilter = "all" | Difficulty;
+export type DifficultyScoreFilter = "all" | Exclude<DifficultyScoreBand, "none">;
 
 export function sortEntries(list: WrongAnswerEntry[], sortKey: SortKey) {
   const copy = [...list];
   switch (sortKey) {
+    case "difficulty-score-desc":
+      return copy.sort(
+        (a, b) =>
+          resolveEntryDifficultyScore(b) - resolveEntryDifficultyScore(a) ||
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
+    case "difficulty-score-asc":
+      return copy.sort(
+        (a, b) =>
+          resolveEntryDifficultyScore(a) - resolveEntryDifficultyScore(b) ||
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
     case "question-count-desc":
       return copy.sort((a, b) => getQuestionCount(b) - getQuestionCount(a));
     case "bookmark-count-desc":
@@ -101,6 +115,24 @@ export function isDifficultyFilter(value: string): value is DifficultyFilter {
     value === "low" ||
     value === "none"
   );
+}
+
+export function isDifficultyScoreFilter(value: string): value is DifficultyScoreFilter {
+  return (
+    value === "all" ||
+    value === "easy" ||
+    value === "normal" ||
+    value === "hard" ||
+    value === "very-hard"
+  );
+}
+
+export function entryMatchesDifficultyScoreFilter(
+  entry: WrongAnswerEntry,
+  filter: DifficultyScoreFilter,
+): boolean {
+  if (filter === "all") return true;
+  return difficultyScoreBand(resolveEntryDifficultyScore(entry)) === filter;
 }
 
 export function imageCount(entry: WrongAnswerEntry) {

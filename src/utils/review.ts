@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
+import { resolveEntryDifficultyScore } from "./difficulty";
 import { recommendedStrategyForAnalysis } from "./mistakeAnalysis";
 
 export function addDays(date: Date, days: number): Date {
@@ -83,16 +84,20 @@ export function getTodayReviewCandidates(
   entries: WrongAnswerEntry[],
   now = new Date(),
 ): WrongAnswerEntry[] {
-  return entries.filter((entry) => isDueForReview(entry, now));
+  return entries
+    .filter((entry) => isDueForReview(entry, now))
+    .sort((a, b) => resolveEntryDifficultyScore(b) - resolveEntryDifficultyScore(a));
 }
 
 export function getDifficultReviewCandidates(entries: WrongAnswerEntry[]): WrongAnswerEntry[] {
-  return entries.filter(
-    (entry) =>
-      entry.entryKind !== "concept" &&
-      !entry.mastered &&
-      (entry.difficult || entry.difficulty === "high" || entry.difficulty === "medium"),
-  );
+  return entries
+    .filter(
+      (entry) =>
+        entry.entryKind !== "concept" &&
+        !entry.mastered &&
+        (entry.difficult || entry.difficulty === "high" || entry.difficulty === "medium"),
+    )
+    .sort((a, b) => resolveEntryDifficultyScore(b) - resolveEntryDifficultyScore(a));
 }
 
 export function getRandomReviewCandidates(entries: WrongAnswerEntry[]): WrongAnswerEntry[] {

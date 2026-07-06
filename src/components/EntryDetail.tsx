@@ -12,6 +12,7 @@ import {
   summarizeMistakeAnalysis,
 } from "../utils/mistakeAnalysis";
 import { getNextStudyAction, type NextStudyActionId } from "../utils/nextStudyAction";
+import { normalizeDifficultyScore } from "../utils/difficulty";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
 import {
@@ -445,6 +446,47 @@ export default function EntryDetail({
       );
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "중요 표시 저장에 실패했습니다.", "error");
+    }
+  };
+
+  const handleQuestionDifficultyScoreChange = async (
+    questionNumber: string,
+    score: number | undefined,
+  ) => {
+    if (!onQuestionMetaChange) return;
+    const normalized = normalizeQuestionNumber(questionNumber);
+    const normalizedScore = normalizeDifficultyScore(score);
+    const current = entry.questionMeta ?? [];
+    const now = new Date().toISOString();
+    const index = current.findIndex(
+      (meta) => normalizeQuestionNumber(meta.questionNumber) === normalized,
+    );
+    const next =
+      index >= 0
+        ? current.map((meta, metaIndex) =>
+            metaIndex === index
+              ? { ...meta, difficultyScore: normalizedScore, updatedAt: now }
+              : meta,
+          )
+        : [
+            ...current,
+            {
+              questionNumber: normalized,
+              important: false,
+              difficultyScore: normalizedScore,
+              updatedAt: now,
+            },
+          ];
+    try {
+      await onQuestionMetaChange(entry, next);
+      pushToast(
+        normalizedScore
+          ? `${normalized}번 난이도를 ${normalizedScore}점으로 저장했습니다.`
+          : `${normalized}번 난이도 점수를 자동 추정으로 되돌렸습니다.`,
+        "success",
+      );
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "난이도 점수 저장에 실패했습니다.", "error");
     }
   };
 
@@ -1390,6 +1432,9 @@ export default function EntryDetail({
                     suspiciousSegments={suspiciousSegments}
                     onOpenQuestionTheater={isSheet ? openTheaterMode : undefined}
                     onToggleQuestionImportant={isSheet ? handleToggleQuestionImportant : undefined}
+                    onQuestionDifficultyScoreChange={
+                      isSheet ? handleQuestionDifficultyScoreChange : undefined
+                    }
                     selectionMode={selectionMode}
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
@@ -1927,6 +1972,9 @@ export default function EntryDetail({
           }}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
           onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
+          onDifficultyScoreChange={(score) =>
+            void handleQuestionDifficultyScoreChange(String(theaterQuestion.displayNumber), score)
+          }
           onOpenGptExport={() => {
             setSelectedQuestionNumbers([String(theaterQuestion.displayNumber)]);
             setShowGptExport(true);

@@ -47,6 +47,9 @@ interface AppModalsProps {
     blocks: LearningBlock[],
     meta: { title: string; sourceType: LectureSourceType },
   ) => Promise<void>;
+  handleConceptKnowledgeEntriesApply: (
+    entries: Partial<EntryFormData>[],
+  ) => Promise<void>;
   reviewMode: "today" | "random" | "difficult" | null;
   reviewSeed: WrongAnswerEntry[];
   setReviewMode: (mode: "today" | "random" | "difficult" | null) => void;
@@ -82,6 +85,7 @@ export default function AppModals({
   showLearningImportModal,
   setShowLearningImportModal,
   handleLearningImportApply,
+  handleConceptKnowledgeEntriesApply,
   reviewMode,
   reviewSeed,
   setReviewMode,
@@ -138,12 +142,14 @@ export default function AppModals({
           mode={importMode}
           onClose={closeImportModal}
           onApply={handleImportApply}
+          onApplyEntries={handleConceptKnowledgeEntriesApply}
         />
       )}
       {showLearningImportModal && (
         <LearningImportModal
           onClose={() => setShowLearningImportModal(false)}
           onApply={handleLearningImportApply}
+          onApplyEntries={handleConceptKnowledgeEntriesApply}
           mode={activeSection === "lecture" ? "lecture" : "append"}
         />
       )}
