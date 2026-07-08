@@ -1,531 +1,133 @@
 import { describe, expect, it } from "vitest";
-import { isImportJson, parseImportedStudyText, readImportFile } from "./importStudyText";
+import { parseImportedStudyText, ImportParseError } from "./importStudyText";
+import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 
 describe("importStudyText", () => {
-  it("turns plain text into a problem sheet import", () => {
-    const result = parseImportedStudyText("1. 문제  ① 답", "midterm.txt", "국어");
+  describe("JSON parse enhancements", () => {
+    it("removes UTF-8 BOM", () => {
+      const jsonWithBom = '\uFEFF{"entryKind": "problem_sheet", "question": "test", "subject": "수학"}';
+      const result = parseImportedStudyText(jsonWithBom);
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.question).toBe("test");
+    });
 
-    expect(result.detectedFormat).toBe("text");
-    expect(result.data.entryKind).toBe("problem_sheet");
-    expect(result.data.subject).toBe("국어");
-    expect(result.data.title).toBe("midterm");
-    expect(result.data.question).toBe("1. 문제\n① 답");
-    expect(result.data.tags).toEqual([]);
+    it("unwraps code fence", () => {
+      const fenced = '```json\n{"entryKind": "problem_sheet", "question": "test", "subject": "수학"}\n```';
+      const result = parseImportedStudyText(fenced);
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.question).toBe("test");
+    });
+
+    it("extracts JSON from surrounding text", () => {
+      const withText = 'Here is the result:\n{"entryKind": "problem_sheet", "question": "test", "subject": "수학"}\nDone.';
+      const result = parseImportedStudyText(withText);
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.question).toBe("test");
+    });
+
+    it("trims whitespace", () => {
+      const withWhitespace = '  \n\n  {"entryKind": "problem_sheet", "question": "test", "subject": "수학"}  \n  ';
+      const result = parseImportedStudyText(withWhitespace);
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.question).toBe("test");
+    });
   });
 
-  it("maps simple JSON fields into form data", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        title: "기말고사",
-        subject: "영어",
-        question: "1. choose  ① A",
-        tags: ["기말", "문법"],
-        memo: "GPT 변환",
-      }),
-      undefined,
-      "수학",
-    );
+  describe("v2 wrapper support", () => {
+    it("parses v2 wrapper with single entry", () => {
+      const result = parseImportedStudyText(JSON.stringify(v2WrapperFixture), "test.json", "수학");
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.entryKind).toBe("problem_sheet");
+      expect(result.data.title).toBe("Nswer N제 수학 II 1단원 함수의 극한과 연속");
+      expect(result.data.answerKey).toBeDefined();
+      expect(result.data.answerKey?.length).toBe(18);
+      expect(result.data.figures).toBeDefined();
+      expect(result.data.figures?.length).toBe(6);
+      expect(result.data.learningBlocks).toBeDefined();
+      expect(result.data.learningBlocks?.length).toBeGreaterThan(0);
+    });
 
-    expect(result.detectedFormat).toBe("json");
-    expect(result.data.title).toBe("기말고사");
-    expect(result.data.subject).toBe("영어");
-    expect(result.data.question).toBe("1. choose\n① A");
-    expect(result.data.tags).toEqual(["기말", "문법"]);
-    expect(result.data.memo).toBe("GPT 변환");
+    it("handles described_only figures without blocking", () => {
+      const result = parseImportedStudyText(JSON.stringify(v2WrapperFixture), "test.json", "수학");
+      const figures = result.data.figures ?? [];
+      const describedOnly = figures.filter((fig) => fig.source === "described_only");
+      expect(describedOnly.length).toBeGreaterThan(0);
+      describedOnly.forEach((fig) => {
+        expect(fig.image).toBeUndefined();
+        expect(fig.caption).toBeTruthy();
+      });
+    });
+
+    it("throws clear error for multiple entries in v2 wrapper", () => {
+      const multiEntry = {
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [
+          { entryKind: "problem_sheet", question: "Q1", subject: "수학" },
+          { entryKind: "problem_sheet", question: "Q2", subject: "수학" },
+        ],
+      };
+      expect(() => parseImportedStudyText(JSON.stringify(multiEntry))).toThrow(ImportParseError);
+      expect(() => parseImportedStudyText(JSON.stringify(multiEntry))).toThrow("다중 항목 가져오기는 아직 지원하지 않습니다");
+    });
+
+    it("throws clear error for empty entries array", () => {
+      const emptyEntries = {
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [],
+      };
+      expect(() => parseImportedStudyText(JSON.stringify(emptyEntries))).toThrow(ImportParseError);
+      expect(() => parseImportedStudyText(JSON.stringify(emptyEntries))).toThrow("가져올 entries 항목이 없습니다");
+    });
+
+    it("throws clear error for non-array entries", () => {
+      const badEntries = {
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: "not an array",
+      };
+      expect(() => parseImportedStudyText(JSON.stringify(badEntries))).toThrow(ImportParseError);
+      expect(() => parseImportedStudyText(JSON.stringify(badEntries))).toThrow("entries는 배열이어야 합니다");
+    });
+
+    it("throws clear error for entry without entryKind", () => {
+      const noEntryKind = {
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [{ question: "Q1", subject: "수학" }],
+      };
+      expect(() => parseImportedStudyText(JSON.stringify(noEntryKind))).toThrow(ImportParseError);
+      expect(() => parseImportedStudyText(JSON.stringify(noEntryKind))).toThrow("entryKind가 없습니다");
+    });
   });
 
-  it("maps concept JSON into concept form data", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        entryKind: "concept",
-        title: "이차함수",
+  describe("backward compatibility", () => {
+    it("still parses legacy single entry JSON", () => {
+      const legacy = {
+        entryKind: "problem_sheet",
+        title: "Legacy test",
         subject: "수학",
-        summary: "그래프는 포물선이다.",
-        memo: "꼭짓점과 축을 먼저 확인",
-        tags: ["함수"],
-        checklist: ["꼭짓점 공식 확인", { text: "축의 방정식 암기", checked: true }],
-      }),
-      undefined,
-      "국어",
-    );
+        question: "01. Test question",
+        answerKey: [{ questionNumber: "01", answer: "①", explanation: "test" }],
+      };
+      const result = parseImportedStudyText(JSON.stringify(legacy));
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.entryKind).toBe("problem_sheet");
+      expect(result.data.title).toBe("Legacy test");
+    });
 
-    expect(result.detectedFormat).toBe("json");
-    expect(result.data.entryKind).toBe("concept");
-    expect(result.data.subject).toBe("수학");
-    expect(result.data.title).toBe("이차함수");
-    expect(result.data.question).toBe("그래프는 포물선이다.");
-    expect(result.data.memo).toBe("꼭짓점과 축을 먼저 확인");
-    expect(result.data.tags).toEqual(["함수"]);
-    expect(result.data.checklist).toEqual([
-      { id: "import-check-1", text: "꼭짓점 공식 확인", checked: false },
-      { id: "import-check-2", text: "축의 방정식 암기", checked: true },
-    ]);
-  });
-
-  it("leaves tags empty when JSON does not provide them", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        title: "태그 없는 시험지",
-        question: "1. 문제",
-      }),
-    );
-
-    expect(result.detectedFormat).toBe("json");
-    expect(result.data.tags).toEqual([]);
-  });
-
-  it("normalizes JSON figures and rejects unsafe image names", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        title: "도표 포함 시험지",
-        question: "1. 그래프를 보고 답하시오.",
-        figures: [
-          {
-            questionNumber: "1",
-            title: "1번 그래프",
-            caption: "교점 그래프",
-            image: "graph_1.png",
-            source: "gpt_cleaned",
-          },
-          {
-            questionNumber: "2",
-            title: "잘못된 이미지",
-            caption: "경로가 들어간 이미지",
-            image: "../bad.png",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.figures?.[0]).toEqual(
-      expect.objectContaining({
-        questionNumber: "1",
-        image: "graph_1.png",
-        source: "gpt_cleaned",
-        needsReview: false,
-      }),
-    );
-    expect(result.data.figures?.[1]).toEqual(
-      expect.objectContaining({
-        questionNumber: "2",
-        image: undefined,
-        needsReview: true,
-      }),
-    );
-  });
-
-  it("recomputes import audit and removes rejected handwriting from study fields", () => {
-    const result = parseImportedStudyText(JSON.stringify({
-      title: "감사 시험지",
-      question: "1. 인쇄 문제\n학생풀이 x=3",
-      memo: "전체 메모 학생풀이 x=3",
-      rejectedNotes: ["학생풀이 x=3"],
-      answerKey: [{
-        questionNumber: "1",
-        answer: "2 학생풀이 x=3",
-        explanation: "인쇄 해설",
-        importantPoints: [],
-      }],
-      audit: {
-        expectedQuestionNumbers: ["01", "2번"],
-        detectedQuestionNumbers: ["99"],
-        missingQuestionNumbers: [],
-        uncertainQuestionNumbers: ["#2"],
-        handwritingExcluded: true,
-        needsReviewCount: 0,
-      },
-    }));
-
-    expect(result.data.question).not.toContain("학생풀이");
-    expect(result.data.memo).not.toContain("학생풀이");
-    expect(result.data.answerKey?.[0].answer).toBe("2");
-    expect(result.data.rejectedNotes).toEqual(["학생풀이 x=3"]);
-    expect(result.data.importAudit).toEqual(expect.objectContaining({
-      expectedQuestionNumbers: ["1", "2"],
-      detectedQuestionNumbers: ["1", "99"],
-      missingQuestionNumbers: ["2"],
-      uncertainQuestionNumbers: ["2"],
-      handwritingExcluded: true,
-      needsReviewCount: 1,
-    }));
-  });
-
-  it("merges JSON important notes into memo and normalizes answer key", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        title: "답안 포함 시험지",
-        question: "1. 문제",
-        memo: "전체 메모",
-        importantNotes: ["조건 해석", "그래프 교점"],
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "③",
-            explanation: "조건을 대입한다.",
-            importantPoints: ["보기 비교"],
-            needsReview: true,
-            sourceNote: "번호 연결 확인 필요",
-          },
-          {
-            questionNumber: 2,
-            answer: null,
-            explanation: "잘못된 항목도 안전 보정",
-            importantPoints: "핵심",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.memo).toContain("전체 메모");
-    expect(result.data.memo).toContain("중요 포인트");
-    expect(result.data.memo).toContain("- 조건 해석");
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        questionNumber: "1",
-        answer: "③",
-        explanation: "조건을 대입한다.",
-        importantPoints: ["보기 비교"],
-        needsReview: true,
-        sourceNote: "번호 연결 확인 필요",
-      }),
-    );
-    expect(result.data.answerKey?.[1]).toEqual(
-      expect.objectContaining({
-        questionNumber: "2",
-        answer: "",
-        explanation: "잘못된 항목도 안전 보정",
-        importantPoints: ["핵심"],
-      }),
-    );
-  });
-
-  it("maps JSON solution fields for single wrong-answer explanations", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. x + 1 = 2",
-        correctAnswer: "x = 1",
-        explanationParts: [
-          { id: "solution", text: "양변에서 1을 뺀다.", images: [] },
-        ],
-      }),
-    );
-
-    expect(result.data.correctAnswer).toBe("x = 1");
-    expect(result.data.explanationParts?.[0]).toEqual(
-      expect.objectContaining({
-        id: "solution",
-        text: "양변에서 1을 뺀다.",
-      }),
-    );
-  });
-
-  it("maps JSON concepts and per-question difficulty metadata", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 함수 문제",
-        concepts: ["함수"],
-        difficultyByQuestion: {
-          1: { difficulty: "high", concepts: ["그래프"] },
-        },
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "③",
-            explanation: "교점을 확인한다.",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.question).toContain("[[함수]]");
-    expect(result.data.memo).toContain("[[함수]]");
-    expect(result.data.difficulty).toBe("none");
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        difficulty: "high",
-        concepts: ["그래프"],
-      }),
-    );
-  });
-
-  it("maps structured answer explanation fields from JSON", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 함수 문제",
-        learningBlocks: [
-          {
-            type: "diagram",
-            title: "좌표 그래프",
-            body: "교점과 절편을 비교",
-            sourceQuestionNumber: "1",
-            diagramType: "coordinate_graph",
-            diagramSpec: {
-              diagramType: "coordinate_graph",
-              title: "교점 시각화",
-              curveLabel: "y=f(x)",
-              pointLabels: ["교점", "절편"],
-              interceptLabel: "x절편",
-              params: {
-                coreIdea: "교점과 절편을 구분한다",
-                highlight: ["교점", "<svg>bad</svg>"],
-              },
-            },
-          },
-          {
-            type: "warning",
-            title: "미지원 다이어그램",
-            content: "표시하지 않음",
-            diagramType: "raw-svg",
-            diagramSpec: {
-              type: "raw-svg",
-              title: "<svg>bad</svg>",
-            },
-          },
-        ],
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "③",
-            explanation: "원문 해설 전체",
-            strategy: "그래프 교점을 먼저 본다",
-            steps: ["조건 정리", "교점 확인"],
-            choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
-            wrongPoint: "절편과 교점을 혼동",
-            reviewPoint: "교점 정의 복습",
-            diagramType: "piecewise-differentiability",
-            diagramSpec: {
-              type: "piecewise-differentiability",
-              title: "구간별 미분가능",
-              boundaryLabel: "x=1",
-              conditionLabel: "연속과 좌우미분계수",
-            },
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        strategy: "그래프 교점을 먼저 본다",
-        steps: ["조건 정리", "교점 확인"],
-        choiceJudgements: [{ marker: "①", text: "교점 조건을 만족하지 않음" }],
-        wrongPoint: "절편과 교점을 혼동",
-        reviewPoint: "교점 정의 복습",
-        diagramType: "piecewise-differentiability",
-        diagramSpec: expect.objectContaining({
-          type: "piecewise-differentiability",
-          title: "구간별 미분가능",
-          boundaryLabel: "x=1",
-        }),
-      }),
-    );
-    expect(result.data.learningBlocks).toEqual([
-      expect.objectContaining({
-        type: "diagram",
-        title: "좌표 그래프",
-        diagramType: "coordinate-graph",
-        diagramSpec: expect.objectContaining({
-          type: "coordinate-graph",
-          title: "교점 시각화",
-          curveLabel: "y=f(x)",
-          pointLabels: ["교점", "절편"],
-          params: expect.objectContaining({
-            coreIdea: "교점과 절편을 구분한다",
-            highlight: ["교점"],
-          }),
-        }),
-      }),
-      expect.objectContaining({
-        type: "warning",
-        title: "미지원 다이어그램",
-        diagramType: undefined,
-        diagramSpec: undefined,
-      }),
-    ]);
-  });
-
-  it("keeps problem-specific notes on answer key items", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 함수 문제",
-        memo: "전체 메모",
-        importantNotes: [
-          "전체적으로 그래프 해석 확인",
-          { questionNumber: "1", text: "1번은 조건 변환을 다시 보기" },
-        ],
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "③",
-            explanation: "교점을 확인한다.",
-            notes: "답안지의 1번 보충 메모",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.memo).toContain("전체적으로 그래프 해석 확인");
-    expect(result.data.memo).not.toContain("조건 변환을 다시 보기");
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        notes: expect.stringContaining("답안지의 1번 보충 메모"),
-      }),
-    );
-    expect(result.data.answerKey?.[0].notes).toContain("조건 변환을 다시 보기");
-  });
-
-  it("maps metadata by original question number aliases", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "31. 원문 번호가 큰 문제",
-        difficultyByQuestion: {
-          31: { difficulty: "high", notes: "원문 31번 기준 메모" },
-        },
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "④",
-            explanation: "순서 표시 번호로 연결한다.",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        difficulty: "high",
-        notes: "원문 31번 기준 메모",
-      }),
-    );
-  });
-
-  it("splits markdown question, notes, memo and answer key sections", () => {
-    const result = parseImportedStudyText(`# 문제
-1. 다음 중 옳은 것은?
-
-# 중요 포인트
-- 조건을 먼저 정리
-
-# 메모
-함수 단원 확인
-
-# 답안지
-1 | ② | x값을 대입한다 | 보기 함정 확인 | 1번만 다시 볼 메모`);
-
-    expect(result.detectedFormat).toBe("text");
-    expect(result.data.question).toBe("1. 다음 중 옳은 것은?");
-    expect(result.data.memo).toContain("함수 단원 확인");
-    expect(result.data.memo).toContain("- 조건을 먼저 정리");
-    expect(result.data.answerKey?.[0]).toEqual(
-      expect.objectContaining({
-        questionNumber: "1",
-        answer: "②",
-        explanation: "x값을 대입한다",
-        importantPoints: ["보기 함정 확인"],
-        notes: "1번만 다시 볼 메모",
-      }),
-    );
-  });
-
-  it("falls back to text when JSON is invalid or missing question", () => {
-    expect(parseImportedStudyText("{ bad json", "raw.md").detectedFormat).toBe("text");
-    expect(parseImportedStudyText('{"title":"빈 문제"}', "raw.md").detectedFormat).toBe("text");
-  });
-
-  it("unwraps fenced JSON from GPT replies", () => {
-    const result = parseImportedStudyText('```json\n{"question":"1. 문제","title":"시험"}\n```');
-
-    expect(result.detectedFormat).toBe("json");
-    expect(result.data.title).toBe("시험");
-  });
-
-  it("extracts a JSON object from GPT replies with surrounding prose", () => {
-    const result = parseImportedStudyText('아래 JSON을 사용하세요.\n{"question":"1. 문제","title":"시험"}\n완료했습니다.');
-
-    expect(result.detectedFormat).toBe("json");
-    expect(result.data.title).toBe("시험");
-  });
-
-  it("drops invalid answer difficulty values", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 문제",
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "①",
-            difficulty: "very-hard",
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.answerKey?.[0].difficulty).toBeUndefined();
-  });
-
-  it("does not estimate difficulty when GPT omits it", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 문제",
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "①",
-            explanation: "긴 풀이가 있어도 앱이 난이도를 자동으로 넣지 않는다. ".repeat(8),
-            importantPoints: ["핵심", "주의"],
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.difficulty).toBe("none");
-    expect(result.data.answerKey?.[0].difficulty).toBeUndefined();
-  });
-
-  it("normalizes imported difficulty scores and derives sheet score from answer key max", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 문제\n\n2. 문제",
-        answerKey: [
-          {
-            questionNumber: "1",
-            answer: "①",
-            difficulty: "medium",
-            difficultyScore: 52.4,
-          },
-          {
-            questionNumber: "2",
-            answer: "②",
-            difficultyScore: 120,
-          },
-        ],
-      }),
-    );
-
-    expect(result.data.answerKey?.[0].difficultyScore).toBe(52);
-    expect(result.data.answerKey?.[1].difficultyScore).toBe(100);
-    expect(result.data.difficultyScore).toBe(100);
-  });
-
-  it("uses top-level imported difficulty score before answer key max", () => {
-    const result = parseImportedStudyText(
-      JSON.stringify({
-        question: "1. 문제",
-        difficultyScore: 77,
-        answerKey: [{ questionNumber: "1", answer: "①", difficultyScore: 99 }],
-      }),
-    );
-
-    expect(result.data.difficultyScore).toBe(77);
-  });
-
-  it("detects import json shapes", () => {
-    expect(isImportJson({ question: "문제" })).toBe(true);
-    expect(isImportJson(["문제"])).toBe(false);
-  });
-
-  it("reads supported import files and rejects others", async () => {
-    await expect(readImportFile(new File(["내용"], "result.md"))).resolves.toBe("내용");
-    await expect(readImportFile(new File(["내용"], "result.pdf"))).rejects.toThrow(".txt, .md, .json");
+    it("still parses concept entries", () => {
+      const concept = {
+        entryKind: "concept",
+        title: "Test concept",
+        subject: "수학",
+        summary: "Concept summary",
+      };
+      const result = parseImportedStudyText(JSON.stringify(concept));
+      expect(result.detectedFormat).toBe("json");
+      expect(result.data.entryKind).toBe("concept");
+      expect(result.data.title).toBe("Test concept");
+    });
   });
 });

@@ -17,6 +17,7 @@ import {
   parseImportedStudyText,
   isSafeImportImageFilename,
   readImportFile,
+  ImportParseError,
   type ImportedStudyText,
 } from "../utils/importStudyText";
 import {
@@ -583,9 +584,17 @@ export default function ImportFromGptModal({
     jsonName: string,
     imageFiles: File[],
   ): Promise<Partial<EntryFormData>> => {
-    const imported = parseImportedStudyText(jsonText, jsonName, fallbackSubject);
+    let imported: ImportedStudyText;
+    try {
+      imported = parseImportedStudyText(jsonText, jsonName, fallbackSubject);
+    } catch (parseError) {
+      // ImportParseError는 그대로, 그 외는 일반 parse 실패 메시지
+      throw parseError instanceof Error
+        ? parseError
+        : new Error("JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.");
+    }
     if (imported.detectedFormat !== "json") {
-      throw new Error("올인원 가져오기는 순수 JSON 결과가 필요합니다.");
+      throw new Error("JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.");
     }
     const imageByName = new Map(imageFiles.map((file) => [imageFileKey(file.name), file]));
     const filesToSave: File[] = [];

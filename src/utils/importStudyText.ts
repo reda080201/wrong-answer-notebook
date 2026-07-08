@@ -44,10 +44,27 @@ interface ImportJsonShape {
   rejectedNotes?: unknown;
 }
 
+interface ImportV2Wrapper {
+  schemaVersion?: unknown;
+  importType?: unknown;
+  title?: unknown;
+  subject?: unknown;
+  entries?: unknown;
+}
+
 const DEFAULT_TAGS: string[] = [];
 
 export function isImportJson(value: unknown): value is ImportJsonShape {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isImportV2Wrapper(value: unknown): value is ImportV2Wrapper {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    !Array.isArray(value) &&
+    (value as ImportV2Wrapper).schemaVersion === "wrong-answer-notebook-import-v2"
+  );
 }
 
 export async function readImportFile(file: File): Promise<string> {
@@ -63,9 +80,46 @@ export function parseImportedStudyText(
   filename?: string,
   fallbackSubject: Subject = "수학",
 ): ImportedStudyText {
-  const trimmed = input.trim();
+  const trimmed = stripBom(input).trim();
   const jsonText = extractJsonObjectText(unwrapFencedJson(trimmed));
   const parsed = tryParseJson(jsonText);
+
+  // v2 wrapper 처리: schemaVersion이 있는 경우
+  if (isImportV2Wrapper(parsed)) {
+    const wrapper = parsed as ImportV2Wrapper;
+    const entries = wrapper.entries;
+    if (!Array.isArray(entries)) {
+      throw new ImportParseError("entries는 배열이어야 합니다.");
+    }
+    if (entries.length === 0) {
+      throw new ImportParseError("JSON은 읽었지만 가져올 entries 항목이 없습니다.");
+    }
+    if (entries.length === 1) {
+      // 단일 entry → 기존 단일 entry 흐름으로 delegate
+      const inner = entries[0];
+      if (!isImportJson(inner)) {
+        throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
+      }
+      const innerShape = inner as ImportJsonShape;
+      if (!getString(innerShape.entryKind)) {
+        throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
+      }
+      // subject fallback: wrapper의 subject를 사용
+      const innerSubject = normalizeSubject(
+        innerShape.subject ?? wrapper.subject,
+        fallbackSubject,
+      );
+      return parseImportedStudyText(
+        JSON.stringify({ ...inner, subject: innerShape.subject ?? wrapper.subject }),
+        filename,
+        innerSubject,
+      );
+    }
+    // entries.length > 1: 이번 핫픽스 범위 밖 → 명확한 오류
+    throw new ImportParseError(
+      `v2 wrapper에 entries가 ${entries.length}개 있습니다. 다중 항목 가져오기는 아직 지원하지 않습니다.`,
+    );
+  }
 
   if (isImportJson(parsed)) {
     const entryKind = getString(parsed.entryKind);
@@ -203,9 +257,23 @@ function tryParseJson(input: string): unknown {
   }
 }
 
+function stripBom(input: string): string {
+  return input.startsWith("\uFEFF") ? input.slice(1) : input;
+}
+
+/** JSON parse 실패 또는 v2 wrapper 구조 오류를 나타내는 전용 에러 */
+export class ImportParseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ImportParseError";
+  }
+}
+
 function unwrapFencedJson(input: string): string {
-  const match = input.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
-  return match ? match[1].trim() : input;
+  const trimmed = input.trim();
+  // ```json ... ``` 코드펜스 제거
+  const match = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  return match ? match[1].trim() : trimmed;
 }
 
 function extractJsonObjectText(input: string): string {
