@@ -21,7 +21,7 @@ import type {
 } from "../types";
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
-import { normalizeQuestionMeta } from "./questionMeta";
+import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
 
@@ -347,12 +347,20 @@ function normalizeReview(raw: unknown, mastered = false): ReviewState | undefine
       typeof value.lapseCount === "number" && value.lapseCount >= 0
         ? Math.floor(value.lapseCount)
         : history.filter((event) => event.result === "again").length,
+    preLapseStabilityDays:
+      typeof value.preLapseStabilityDays === "number" && value.preLapseStabilityDays > 0
+        ? value.preLapseStabilityDays
+        : undefined,
+    relearningStep:
+      value.relearningStep === 0 || value.relearningStep === 1
+        ? value.relearningStep
+        : undefined,
     repetitionCount:
       typeof value.repetitionCount === "number" && value.repetitionCount >= 0
         ? Math.floor(value.repetitionCount)
         : history.length,
     phase:
-      value.phase === "learning" || value.phase === "long_term" || value.phase === "archived"
+      value.phase === "learning" || value.phase === "relearning" || value.phase === "long_term" || value.phase === "archived"
         ? value.phase
         : mastered
           ? value.dueAt
@@ -510,6 +518,40 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
     .filter((item) => item.questionNumber || item.title || item.caption || item.image);
 }
 
+function canonicalizeQuestionMistakeAnalysis(
+  answerKey: SheetAnswerItem[],
+  questionMeta: NonNullable<WrongAnswerEntry["questionMeta"]>,
+) {
+  const nextMeta = [...questionMeta];
+  const nextAnswers = answerKey.map((answer) => {
+    const next = { ...answer };
+    delete next.mistakeAnalysis;
+    return next;
+  });
+
+  for (const answer of answerKey) {
+    if (!answer.mistakeAnalysis?.causes.length) continue;
+    const number = normalizeQuestionNumber(answer.questionNumber);
+    const index = nextMeta.findIndex(
+      (meta) => normalizeQuestionNumber(meta.questionNumber) === number,
+    );
+    if (index >= 0) {
+      if (!nextMeta[index].mistakeAnalysis?.causes.length) {
+        nextMeta[index] = { ...nextMeta[index], mistakeAnalysis: answer.mistakeAnalysis };
+      }
+    } else {
+      nextMeta.push({
+        questionNumber: number,
+        important: false,
+        mistakeAnalysis: answer.mistakeAnalysis,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  }
+
+  return { answerKey: nextAnswers, questionMeta: nextMeta };
+}
+
 export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
   const {
     explanation: _legacyExp,
@@ -573,6 +615,10 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
+  const canonical = canonicalizeQuestionMistakeAnalysis(
+    answerKey,
+    normalizeQuestionMeta(rest.questionMeta),
+  );
 
   return {
     ...rest,
@@ -589,9 +635,9 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     memo: rest.memo ?? "",
     annotations: rest.annotations ?? [],
     tags: Array.isArray(rest.tags) ? rest.tags : [],
-    answerKey,
+    answerKey: canonical.answerKey,
     figures,
-    questionMeta: normalizeQuestionMeta(rest.questionMeta),
+    questionMeta: canonical.questionMeta,
     sheetGroup: entryKind === "problem_sheet" ? normalizeSheetGroup(rest.sheetGroup) : undefined,
     learningBlocks,
     importAudit: rest.importAudit

@@ -17,6 +17,23 @@ const imageUrlCache = new Map<string, string>();
 const ENTRIES_STORAGE_KEY = "wrong-answer-entries";
 const SETTINGS_STORAGE_KEY = "wrong-answer-settings";
 const MAX_BROWSER_IMAGE_BYTES = 10 * 1024 * 1024;
+const ENTRIES_SCHEMA_VERSION = 2;
+
+interface StoredEntriesDocument {
+  schemaVersion: number;
+  entries: unknown[];
+}
+
+function parseStoredEntries(raw: string): WrongAnswerEntry[] {
+  const parsed = JSON.parse(raw) as unknown;
+  const entries = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === "object" && "entries" in parsed && Array.isArray(parsed.entries)
+      ? (parsed as StoredEntriesDocument).entries
+      : null;
+  if (!entries) throw new Error("저장 데이터 형식이 올바르지 않습니다.");
+  return entries.map((entry) => normalizeEntry(entry as WrongAnswerEntry));
+}
 
 export const defaultSettings: AppSettings = {
   templates: [],
@@ -283,7 +300,7 @@ export async function loadEntries(): Promise<WrongAnswerEntry[]> {
       data = await invoke<WrongAnswerEntry[]>("load_entries");
     } else {
       const raw = localStorage.getItem(ENTRIES_STORAGE_KEY);
-      data = raw ? JSON.parse(raw) : [];
+      data = raw ? parseStoredEntries(raw) : [];
     }
     return data.map(normalizeEntry);
   } catch (error) {
@@ -299,7 +316,11 @@ export async function saveEntries(entries: WrongAnswerEntry[]): Promise<void> {
       await invoke("save_entries", { entries });
       return;
     }
-    localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(entries));
+    const document: StoredEntriesDocument = {
+      schemaVersion: ENTRIES_SCHEMA_VERSION,
+      entries,
+    };
+    localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(document));
   } catch (error) {
     throw new Error(errorMessage(error, "노트를 저장하지 못했습니다."), {
       cause: error,

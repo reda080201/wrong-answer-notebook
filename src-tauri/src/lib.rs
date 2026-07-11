@@ -18,6 +18,7 @@ const MAX_BACKUP_TOTAL_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_BACKUP_ENTRY_COUNT: usize = 100;
 const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
 const AI_KEYRING_USER: &str = "gemini-api-key";
+const ENTRIES_SCHEMA_VERSION: u32 = 2;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -83,6 +84,15 @@ pub struct WrongAnswerEntry {
     pub created_at: String,
     pub updated_at: String,
     pub mastered: bool,
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredEntriesDocument {
+    schema_version: u32,
+    entries: Vec<WrongAnswerEntry>,
 }
 
 fn default_entry_kind() -> String {
@@ -326,7 +336,11 @@ fn write_entries_json_atomic(path: &Path, entries: &[WrongAnswerEntry]) -> Resul
         .parent()
         .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_string())?;
     fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(entries).map_err(|e| e.to_string())?;
+    let document = StoredEntriesDocument {
+        schema_version: ENTRIES_SCHEMA_VERSION,
+        entries: entries.to_vec(),
+    };
+    let json = serde_json::to_string_pretty(&document).map_err(|e| e.to_string())?;
     let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
     tmp.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
     tmp.flush().map_err(|e| e.to_string())?;
@@ -568,7 +582,26 @@ fn load_entries(app: tauri::AppHandle) -> Result<Vec<WrongAnswerEntry>, String> 
     if content.trim().is_empty() {
         return Ok(vec![]);
     }
-    serde_json::from_str(&content).map_err(|e| e.to_string())
+    let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+    parse_entries_value(value)
+}
+
+fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>, String> {
+    if value.is_array() {
+        return serde_json::from_value(value).map_err(|e| e.to_string());
+    }
+    let version = value
+        .get("schemaVersion")
+        .and_then(|value| value.as_u64())
+        .ok_or_else(|| "저장 데이터 schemaVersion을 확인할 수 없습니다.".to_string())?;
+    if version != ENTRIES_SCHEMA_VERSION as u64 {
+        return Err(format!("지원하지 않는 저장 데이터 schemaVersion입니다: {version}"));
+    }
+    let entries = value
+        .get("entries")
+        .cloned()
+        .ok_or_else(|| "저장 데이터에 entries가 없습니다.".to_string())?;
+    serde_json::from_value(entries).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -823,8 +856,11 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
             file.read_to_string(&mut content).map_err(|e| e.to_string())?;
             let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
             if name == "entries.json" {
-                let _: Vec<WrongAnswerEntry> = serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
-                entries_json = Some(value);
+                let entries = parse_entries_value(value)?;
+                entries_json = Some(serde_json::json!({
+                    "schemaVersion": ENTRIES_SCHEMA_VERSION,
+                    "entries": entries,
+                }));
             } else {
                 settings_json = Some(value);
             }
@@ -964,6 +1000,7 @@ mod tests {
             created_at: "2026-01-01T00:00:00.000Z".into(),
             updated_at: "2026-01-01T00:00:00.000Z".into(),
             mastered: false,
+            extra: serde_json::Map::new(),
         }
     }
 

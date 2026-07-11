@@ -26,6 +26,7 @@ export function calculateNextReview(
   const repetitionCount = (previous?.repetitionCount ?? previous?.history.length ?? 0) + 1;
   const lapseCount = (previous?.lapseCount ?? previous?.history.filter((event) => event.result === "again").length ?? 0) + (result === "again" ? 1 : 0);
   const previousStability = Math.max(0.5, (previous?.stabilityDays ?? currentInterval) || 1);
+  const preLapseStability = Math.max(1, previous?.preLapseStabilityDays ?? previousStability);
   const previousDifficulty = Math.min(10, Math.max(1, previous?.memoryDifficulty ?? 5));
   const elapsedDays = previous?.lastReviewedAt
     ? Math.max(0, (reviewedAt.getTime() - new Date(previous.lastReviewedAt).getTime()) / 86_400_000)
@@ -40,39 +41,71 @@ export function calculateNextReview(
       : cause === "calculation" || cause === "careless"
         ? 0.95
         : 1;
+  const difficultyMultiplier = Math.min(1.2, Math.max(0.7, 1 - (previousDifficulty - 5) * 0.06));
+  const lapseMultiplier = Math.min(1, Math.max(0.58, 1 - Math.min(7, lapseCount) * 0.06));
 
-  let stabilityDays = result === "again"
-    ? previousStability * 0.45
-    : result === "hard"
-      ? previousStability * (1.05 + (1 - retrievability) * 0.15)
-      : previousStability * (1.7 + (1 - retrievability) * 0.5);
+  let stabilityDays = previousStability * (result === "hard"
+    ? 1.05 + (1 - retrievability) * 0.15
+    : 1.7 + (1 - retrievability) * 0.5);
   let memoryDifficulty = previousDifficulty;
   let streak: number;
   let phase: ReviewState["phase"] = "learning";
+  let relearningStep: 0 | 1 | undefined;
+  let nextPreLapseStability: number | undefined = previous?.preLapseStabilityDays;
 
   if (!previous) {
     stabilityDays = result === "again" ? 1 : result === "hard" ? 3 : 7;
     memoryDifficulty = result === "again" ? 7.5 : result === "hard" ? 6 : 5;
     streak = result === "good" ? 1 : 0;
+    if (result === "again") {
+      phase = "relearning";
+      relearningStep = 0;
+    }
   } else if (result === "again") {
     memoryDifficulty += 0.8;
     streak = 0;
+    phase = "relearning";
+    relearningStep = 0;
+    nextPreLapseStability = preLapseStability;
   } else if (result === "hard") {
     memoryDifficulty += 0.25;
     streak = Math.max(0, currentStreak - 1);
+    if (previous.phase === "relearning") {
+      phase = "relearning";
+      relearningStep = previous.relearningStep ?? 0;
+    }
   } else {
     memoryDifficulty -= 0.2;
     streak = currentStreak + 1;
+    if (previous.phase === "relearning") {
+      if ((previous.relearningStep ?? 0) === 0) {
+        stabilityDays = 3;
+        phase = "relearning";
+        relearningStep = 1;
+      } else {
+        stabilityDays = Math.max(3, preLapseStability * 0.35 * 1.4);
+        phase = "learning";
+        relearningStep = undefined;
+      }
+    }
   }
 
-  stabilityDays = Math.max(0.5, stabilityDays * causeMultiplier);
+  if (result !== "again" && !(phase === "relearning" && relearningStep === 0)) {
+    stabilityDays = Math.max(0.5, stabilityDays * causeMultiplier * difficultyMultiplier * lapseMultiplier);
+  }
   memoryDifficulty = Math.min(10, Math.max(1, memoryDifficulty));
 
   let intervalDays = Math.max(1, Math.round(stabilityDays));
   if (result === "again") {
-    intervalDays = Math.min(14, intervalDays);
+    intervalDays = 1;
+    stabilityDays = 1;
+  } else if (phase === "relearning" && relearningStep === 1 && result === "good") {
+    intervalDays = 3;
+    stabilityDays = 3;
   } else if (result === "hard") {
-    intervalDays = Math.max(3, Math.min(30, Math.round(stabilityDays * 0.8)));
+    intervalDays = phase === "relearning"
+      ? 2
+      : Math.max(3, Math.min(30, Math.round(stabilityDays * 0.8)));
   } else {
     if (currentInterval >= 60) intervalDays = Math.max(120, intervalDays);
     else if (currentInterval >= 30) intervalDays = Math.max(60, intervalDays);
@@ -81,6 +114,10 @@ export function calculateNextReview(
     else intervalDays = Math.max(7, intervalDays);
     intervalDays = Math.min(120, intervalDays);
     if (intervalDays >= 30) phase = "long_term";
+  }
+
+  if (lapseCount >= 6 && result !== "again" && phase !== "long_term") {
+    intervalDays = Math.min(intervalDays, 30);
   }
 
   const nextDueAt = addDays(reviewedAt, intervalDays).toISOString();
@@ -93,6 +130,8 @@ export function calculateNextReview(
     lapseCount,
     repetitionCount,
     phase,
+    preLapseStabilityDays: nextPreLapseStability,
+    relearningStep,
   };
 }
 
@@ -127,6 +166,8 @@ export function applyReviewResult(
     lapseCount: next.lapseCount,
     repetitionCount: next.repetitionCount,
     phase: next.phase,
+    preLapseStabilityDays: next.preLapseStabilityDays,
+    relearningStep: next.relearningStep,
   };
 
   return {

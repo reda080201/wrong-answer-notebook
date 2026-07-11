@@ -106,6 +106,31 @@ describe("normalizeEntry", () => {
     expect(entry.rejectedNotes).toEqual(["학생 계산"]);
   });
 
+  it("uses questionMeta mistake analysis as the canonical question state", () => {
+    const entry = normalizeEntry(rawEntry({
+      entryKind: "problem_sheet",
+      answerKey: [{
+        id: "answer-1",
+        questionNumber: "01",
+        answer: "1",
+        explanation: "풀이",
+        importantPoints: [],
+        mistakeAnalysis: {
+          causes: [{ type: "concept_gap", severity: "high" }],
+        },
+      }],
+      questionMeta: [{
+        questionNumber: "1",
+        important: true,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }],
+    }));
+
+    expect(entry.answerKey?.[0].mistakeAnalysis).toBeUndefined();
+    expect(entry.questionMeta?.[0].mistakeAnalysis?.primaryCause).toBe("concept_gap");
+    expect(entry.questionMeta?.[0].important).toBe(true);
+  });
+
   it("normalizes learning blocks and diagram types safely", () => {
     const entry = normalizeEntry(rawEntry({
       entryKind: "problem_sheet",

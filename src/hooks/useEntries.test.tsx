@@ -96,6 +96,18 @@ describe("useEntries", () => {
     expect(deleteImage).toHaveBeenCalledWith("exp.png");
   });
 
+  it("does not delete an image still referenced by another entry", async () => {
+    const shared = { ...entry, id: "entry-2", title: "공유 이미지" };
+    vi.mocked(loadEntries).mockResolvedValue([entry, shared]);
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(() => result.current.deleteEntry(entry.id));
+
+    expect(deleteImage).not.toHaveBeenCalledWith("question.png");
+    expect(deleteImage).not.toHaveBeenCalledWith("exp.png");
+  });
+
   it("adds multiple entries with one atomic persist", async () => {
     const { result } = renderHook(() => useEntries());
     await waitFor(() => expect(result.current.loading).toBe(false));

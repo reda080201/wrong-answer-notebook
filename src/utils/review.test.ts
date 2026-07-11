@@ -103,6 +103,57 @@ describe("review utilities", () => {
     expect(next.mastered).toBe(false);
   });
 
+  it("uses a one-day relearning step after a lapse even for long-term items", () => {
+    const next = applyReviewResult(
+      {
+        ...baseEntry,
+        mastered: true,
+        review: {
+          dueAt: "2026-05-29T00:00:00.000Z",
+          intervalDays: 120,
+          streak: 8,
+          stabilityDays: 120,
+          memoryDifficulty: 4,
+          lapseCount: 0,
+          repetitionCount: 9,
+          phase: "long_term",
+          history: [],
+        },
+      },
+      "again",
+      new Date("2026-05-29T00:00:00.000Z"),
+    );
+
+    expect(next.review?.intervalDays).toBe(1);
+    expect(next.review?.phase).toBe("relearning");
+    expect(next.review?.relearningStep).toBe(0);
+    expect(next.mastered).toBe(false);
+  });
+
+  it("moves relearning from one day to three days before recovery", () => {
+    const previous = {
+      ...baseEntry,
+      review: {
+        dueAt: "2026-05-30T00:00:00.000Z",
+        intervalDays: 1,
+        streak: 0,
+        stabilityDays: 1,
+        preLapseStabilityDays: 120,
+        memoryDifficulty: 7,
+        lapseCount: 1,
+        repetitionCount: 10,
+        phase: "relearning" as const,
+        relearningStep: 0 as const,
+        history: [],
+      },
+    };
+    const next = applyReviewResult(previous, "good", new Date("2026-05-30T00:00:00.000Z"));
+
+    expect(next.review?.intervalDays).toBe(3);
+    expect(next.review?.phase).toBe("relearning");
+    expect(next.review?.relearningStep).toBe(1);
+  });
+
   it("filters due and difficult candidates", () => {
     const now = new Date("2026-05-29T12:00:00.000Z");
     const future = {

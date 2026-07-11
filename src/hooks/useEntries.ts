@@ -7,6 +7,11 @@ import { getAllImageFilenames } from "../utils/entry";
 type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T };
 export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 
+function getUnreferencedImages(candidates: string[], entries: WrongAnswerEntry[]): string[] {
+  const referenced = new Set(entries.flatMap(getAllImageFilenames));
+  return [...new Set(candidates)].filter((image) => !referenced.has(image));
+}
+
 export function useEntries() {
   const [entries, setEntries] = useState<WrongAnswerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -139,13 +144,16 @@ export function useEntries() {
       try {
         setError(null);
         const now = new Date().toISOString();
-        await enqueueMutation((current) => ({
-          next: current.map((entry) =>
+        const unreferenced = await enqueueMutation((current) => {
+          const next = current.map((entry) =>
             entry.id === id ? { ...entry, ...form, updatedAt: now } : entry,
-          ),
-          value: undefined,
-        }));
-        await deleteImagesBestEffort(removedImages);
+          );
+          return {
+            next,
+            value: getUnreferencedImages(removedImages, next),
+          };
+        });
+        await deleteImagesBestEffort(unreferenced);
       } catch (err) {
         const message = errorMessage(err, "항목을 수정하지 못했습니다.");
         setError(message);
@@ -183,9 +191,10 @@ export function useEntries() {
       try {
         const images = await enqueueMutation((current) => {
           const entry = current.find((item) => item.id === id);
+          const next = current.filter((item) => item.id !== id);
           return {
-            next: current.filter((item) => item.id !== id),
-            value: entry ? getAllImageFilenames(entry) : [],
+            next,
+            value: entry ? getUnreferencedImages(getAllImageFilenames(entry), next) : [],
           };
         });
         await deleteImagesBestEffort(images);

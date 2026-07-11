@@ -269,7 +269,7 @@ export interface MistakeAnalysis {
 
 export type ReviewResult = "again" | "hard" | "good";
 
-export type ReviewPhase = "learning" | "long_term" | "archived";
+export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
 
 export interface ReviewEvent {
   id: string;
@@ -293,6 +293,8 @@ export interface ReviewState {
   stabilityDays?: number;
   memoryDifficulty?: number;
   lapseCount?: number;
+  preLapseStabilityDays?: number;
+  relearningStep?: 0 | 1;
   repetitionCount?: number;
   phase?: ReviewPhase;
 }

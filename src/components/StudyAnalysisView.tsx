@@ -128,7 +128,7 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
             </div>
             <div>
               <dt>복습 단계</dt>
-              <dd>{entry.review?.phase === "archived" ? "보관" : entry.review?.phase === "long_term" ? "장기 점검" : "학습 중"}</dd>
+              <dd>{entry.review?.phase === "archived" ? "보관" : entry.review?.phase === "long_term" ? "장기 점검" : entry.review?.phase === "relearning" ? "재학습" : "학습 중"}</dd>
             </div>
             <div>
               <dt>완료</dt>

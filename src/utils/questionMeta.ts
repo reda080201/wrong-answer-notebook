@@ -76,12 +76,20 @@ export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
       typeof value.lapseCount === "number" && value.lapseCount >= 0
         ? Math.floor(value.lapseCount)
         : history.filter((event) => event.result === "again").length,
+    preLapseStabilityDays:
+      typeof value.preLapseStabilityDays === "number" && value.preLapseStabilityDays > 0
+        ? value.preLapseStabilityDays
+        : undefined,
+    relearningStep:
+      value.relearningStep === 0 || value.relearningStep === 1
+        ? value.relearningStep
+        : undefined,
     repetitionCount:
       typeof value.repetitionCount === "number" && value.repetitionCount >= 0
         ? Math.floor(value.repetitionCount)
         : history.length,
     phase:
-      value.phase === "learning" || value.phase === "long_term" || value.phase === "archived"
+      value.phase === "learning" || value.phase === "relearning" || value.phase === "long_term" || value.phase === "archived"
         ? value.phase
         : "learning",
   };
@@ -214,6 +222,8 @@ export function applyQuestionReviewResult(
     lapseCount: next.lapseCount,
     repetitionCount: next.repetitionCount,
     phase: next.phase,
+    preLapseStabilityDays: next.preLapseStabilityDays,
+    relearningStep: next.relearningStep,
   };
   const nextMeta: QuestionMeta = {
     ...(index >= 0 ? items[index] : { important: false }),
