@@ -269,7 +269,7 @@ function isValidIsoDate(v: unknown): v is string {
   return typeof v === "string" && !Number.isNaN(new Date(v).getTime());
 }
 
-function normalizeReview(raw: unknown): ReviewState | undefined {
+function normalizeReview(raw: unknown, mastered = false): ReviewState | undefined {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Partial<ReviewState>;
   const historySource = Array.isArray(value.history) ? value.history : [];
@@ -306,6 +306,18 @@ function normalizeReview(raw: unknown): ReviewState | undefined {
             )
           : undefined,
         strategy: isReviewStrategy(event.strategy) ? event.strategy : undefined,
+        stabilityDays:
+          typeof event.stabilityDays === "number" && event.stabilityDays > 0
+            ? event.stabilityDays
+            : undefined,
+        memoryDifficulty:
+          typeof event.memoryDifficulty === "number" && event.memoryDifficulty >= 1
+            ? Math.min(10, event.memoryDifficulty)
+            : undefined,
+        lapseCount:
+          typeof event.lapseCount === "number" && event.lapseCount >= 0
+            ? Math.floor(event.lapseCount)
+            : undefined,
       };
     });
 
@@ -323,6 +335,30 @@ function normalizeReview(raw: unknown): ReviewState | undefined {
         ? Math.floor(value.streak)
         : 0,
     history,
+    stabilityDays:
+      typeof value.stabilityDays === "number" && value.stabilityDays > 0
+        ? value.stabilityDays
+        : Math.max(0.5, typeof value.intervalDays === "number" ? value.intervalDays : 0),
+    memoryDifficulty:
+      typeof value.memoryDifficulty === "number" && value.memoryDifficulty >= 1
+        ? Math.min(10, value.memoryDifficulty)
+        : 5,
+    lapseCount:
+      typeof value.lapseCount === "number" && value.lapseCount >= 0
+        ? Math.floor(value.lapseCount)
+        : history.filter((event) => event.result === "again").length,
+    repetitionCount:
+      typeof value.repetitionCount === "number" && value.repetitionCount >= 0
+        ? Math.floor(value.repetitionCount)
+        : history.length,
+    phase:
+      value.phase === "learning" || value.phase === "long_term" || value.phase === "archived"
+        ? value.phase
+        : mastered
+          ? value.dueAt
+            ? "long_term"
+            : "archived"
+          : "learning",
   };
 }
 
@@ -391,6 +427,9 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       wrongPoint: `${item.wrongPoint ?? ""}`.trim(),
       reviewPoint: `${item.reviewPoint ?? ""}`.trim(),
       notes: `${item.notes ?? ""}`.trim(),
+      mistakeAnalysis: item.mistakeAnalysis
+        ? normalizeMistakeAnalysis(item.mistakeAnalysis)
+        : undefined,
       importantPoints: normalizeImportantPoints(item.importantPoints),
       difficulty: normalizeAnswerDifficulty(item.difficulty),
       difficultyScore: normalizeDifficultyScore(item.difficultyScore),
@@ -560,7 +599,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       : undefined,
     rejectedNotes: normalizeRejectedNotes(rest.rejectedNotes),
     mistakeAnalysis: normalizeMistakeAnalysis(rest.mistakeAnalysis),
-    review: normalizeReview(rest.review),
+    review: normalizeReview(rest.review, Boolean(rest.mastered)),
     checklist: entryKind === "concept" || entryKind === "lecture" ? normalizeChecklist(rest.checklist) : rest.checklist ?? [],
     sourceType: isLectureSourceType(rest.sourceType) ? rest.sourceType : undefined,
     linkedEntryIds: Array.isArray(rest.linkedEntryIds)

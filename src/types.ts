@@ -181,6 +181,7 @@ export interface SheetAnswerItem {
   wrongPoint?: string;
   reviewPoint?: string;
   notes?: string;
+  mistakeAnalysis?: MistakeAnalysis;
   importantPoints: string[];
   difficulty?: Difficulty;
   difficultyScore?: number;
@@ -207,6 +208,7 @@ export interface QuestionMeta {
   difficultyScore?: number;
   bookmarkLabel?: string;
   note?: string;
+  mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
   updatedAt: string;
 }
@@ -267,6 +269,8 @@ export interface MistakeAnalysis {
 
 export type ReviewResult = "again" | "hard" | "good";
 
+export type ReviewPhase = "learning" | "long_term" | "archived";
+
 export interface ReviewEvent {
   id: string;
   reviewedAt: string;
@@ -275,6 +279,9 @@ export interface ReviewEvent {
   intervalDays: number;
   causeSnapshot?: MistakeCauseType[];
   strategy?: ReviewStrategy;
+  stabilityDays?: number;
+  memoryDifficulty?: number;
+  lapseCount?: number;
 }
 
 export interface ReviewState {
@@ -283,6 +290,11 @@ export interface ReviewState {
   intervalDays: number;
   streak: number;
   history: ReviewEvent[];
+  stabilityDays?: number;
+  memoryDifficulty?: number;
+  lapseCount?: number;
+  repetitionCount?: number;
+  phase?: ReviewPhase;
 }
 
 export interface ChecklistItem {

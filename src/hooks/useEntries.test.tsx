@@ -113,4 +113,29 @@ describe("useEntries", () => {
     const saved = vi.mocked(saveEntries).mock.calls[0][0];
     expect(saved.map((item) => item.title)).toEqual(["첫 번째", "두 번째", "제목"]);
   });
+
+  it("serializes rapid patches against the latest saved state", async () => {
+    const resolvers: Array<() => void> = [];
+    vi.mocked(saveEntries).mockImplementation(
+      () => new Promise<void>((resolve) => resolvers.push(resolve)),
+    );
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const first = result.current.patchEntry(entry.id, { memo: "빠른 메모" });
+    await waitFor(() => expect(saveEntries).toHaveBeenCalledTimes(1));
+    const second = result.current.patchEntry(entry.id, { difficult: true });
+    resolvers[0]();
+    await waitFor(() => expect(saveEntries).toHaveBeenCalledTimes(2));
+    resolvers[1]();
+    await act(async () => {
+      await Promise.all([first, second]);
+    });
+
+    expect(vi.mocked(saveEntries).mock.calls[1][0]).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: entry.id, memo: "빠른 메모", difficult: true }),
+      ]),
+    );
+  });
 });

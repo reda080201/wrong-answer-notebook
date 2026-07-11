@@ -1,6 +1,7 @@
 import type { MistakeCauseType, WrongAnswerEntry } from "../types";
 import { getEntryConceptLinks } from "./concepts";
-import { isDueForReview } from "./review";
+import { getSheetQuestionReviewItems, isDueForReview } from "./review";
+import { normalizeQuestionMeta } from "./questionMeta";
 
 export interface ConceptAnalyticsItem {
   concept: string;
@@ -37,11 +38,21 @@ function collectConceptLabels(entries: WrongAnswerEntry[]): Map<string, string> 
 }
 
 function reviewSuccessRate(entry: WrongAnswerEntry): { good: number; total: number } {
-  const history = entry.review?.history ?? [];
+  const history = [
+    ...(entry.review?.history ?? []),
+    ...normalizeQuestionMeta(entry.questionMeta).flatMap((meta) => meta.review?.history ?? []),
+  ];
   return {
     good: history.filter((event) => event.result === "good").length,
     total: history.length,
   };
+}
+
+function mistakeCauses(entry: WrongAnswerEntry) {
+  return [
+    ...(entry.mistakeAnalysis?.causes ?? []),
+    ...normalizeQuestionMeta(entry.questionMeta).flatMap((meta) => meta.mistakeAnalysis?.causes ?? []),
+  ];
 }
 
 export function buildConceptAnalytics(entries: WrongAnswerEntry[], now = new Date()): ConceptAnalyticsItem[] {
@@ -56,7 +67,7 @@ export function buildConceptAnalytics(entries: WrongAnswerEntry[], now = new Dat
     let good = 0;
     let total = 0;
     for (const entry of related) {
-      for (const cause of entry.mistakeAnalysis?.causes ?? []) {
+      for (const cause of mistakeCauses(entry)) {
         causeCounts.set(cause.type, (causeCounts.get(cause.type) ?? 0) + 1);
       }
       const rate = reviewSuccessRate(entry);
@@ -68,7 +79,12 @@ export function buildConceptAnalytics(entries: WrongAnswerEntry[], now = new Dat
       concept: label,
       relatedEntries: related,
       failureCount,
-      dueCount: related.filter((entry) => isDueForReview(entry, now)).length,
+      dueCount: related.reduce(
+        (count, entry) => count + (entry.entryKind === "problem_sheet"
+          ? getSheetQuestionReviewItems(entry, "today", now).length
+          : isDueForReview(entry, now) ? 1 : 0),
+        0,
+      ),
       reviewSuccessRate: total > 0 ? good / total : null,
       primaryCauses: [...causeCounts.entries()]
         .map(([type, count]) => ({ type, count }))
@@ -82,7 +98,7 @@ export function buildConceptAnalytics(entries: WrongAnswerEntry[], now = new Dat
 export function buildLearningDashboardStats(entries: WrongAnswerEntry[], now = new Date()): LearningDashboardStats {
   const causeCounts = new Map<MistakeCauseType, number>();
   for (const entry of entries) {
-    for (const cause of entry.mistakeAnalysis?.causes ?? []) {
+    for (const cause of mistakeCauses(entry)) {
       causeCounts.set(cause.type, (causeCounts.get(cause.type) ?? 0) + 1);
     }
   }
@@ -96,11 +112,17 @@ export function buildLearningDashboardStats(entries: WrongAnswerEntry[], now = n
     recentReviewCount: entries.reduce(
       (count, entry) =>
         count +
-        (entry.review?.history ?? []).filter((event) => new Date(event.reviewedAt).getTime() >= weekStart.getTime()).length,
+        [
+          ...(entry.review?.history ?? []),
+          ...normalizeQuestionMeta(entry.questionMeta).flatMap((meta) => meta.review?.history ?? []),
+        ].filter((event) => new Date(event.reviewedAt).getTime() >= weekStart.getTime()).length,
       0,
     ),
     repeatedFailures: entries
-      .filter((entry) => (entry.review?.history ?? []).filter((event) => event.result === "again").length >= 2)
+      .filter((entry) => [
+        ...(entry.review?.history ?? []),
+        ...normalizeQuestionMeta(entry.questionMeta).flatMap((meta) => meta.review?.history ?? []),
+      ].filter((event) => event.result === "again").length >= 2)
       .slice(0, 5),
   };
 }

@@ -1,21 +1,40 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { deleteImage, errorMessage, loadEntries, saveEntries } from "../api";
 import type { EntryFormData, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
 
+type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T };
+export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
+
 export function useEntries() {
   const [entries, setEntries] = useState<WrongAnswerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const entriesRef = useRef<WrongAnswerEntry[]>([]);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   const clearError = useCallback(() => setError(null), []);
+
+  const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
+    const task = saveQueueRef.current.then(async () => {
+      const { next, value } = mutation(entriesRef.current);
+      await saveEntries(next);
+      entriesRef.current = next;
+      setEntries(next);
+      return value;
+    });
+    saveQueueRef.current = task.then(() => undefined, () => undefined);
+    return task;
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      await saveQueueRef.current;
       const data = await loadEntries();
+      entriesRef.current = data;
       setEntries(data);
     } catch (err) {
       setError(errorMessage(err, "노트를 불러오지 못했습니다."));
@@ -25,13 +44,15 @@ export function useEntries() {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
-  const persist = useCallback(async (next: WrongAnswerEntry[]) => {
-    await saveEntries(next);
-    setEntries(next);
-  }, []);
+  const persist = useCallback(
+    async (nextEntries: WrongAnswerEntry[]) => {
+      await enqueueMutation(() => ({ next: nextEntries, value: undefined }));
+    },
+    [enqueueMutation],
+  );
 
   const replaceEntries = useCallback(
     async (nextEntries: WrongAnswerEntry[]) => {
@@ -77,8 +98,7 @@ export function useEntries() {
           createdAt: now,
           updatedAt: now,
         };
-        const next = [entry, ...entries];
-        await persist(next);
+        await enqueueMutation((current) => ({ next: [entry, ...current], value: entry.id }));
         return entry.id;
       } catch (err) {
         const message = errorMessage(err, "항목을 추가하지 못했습니다.");
@@ -86,7 +106,7 @@ export function useEntries() {
         throw new Error(message, { cause: err });
       }
     },
-    [entries, persist],
+    [enqueueMutation],
   );
 
   const addEntries = useCallback(
@@ -101,15 +121,17 @@ export function useEntries() {
           createdAt: now,
           updatedAt: now,
         } satisfies WrongAnswerEntry));
-        await persist([...added, ...entries]);
-        return added.map((entry) => entry.id);
+        return await enqueueMutation((current) => ({
+          next: [...added, ...current],
+          value: added.map((entry) => entry.id),
+        }));
       } catch (err) {
         const message = errorMessage(err, "여러 항목을 추가하지 못했습니다.");
         setError(message);
         throw new Error(message, { cause: err });
       }
     },
-    [entries, persist],
+    [enqueueMutation],
   );
 
   const updateEntry = useCallback(
@@ -117,10 +139,12 @@ export function useEntries() {
       try {
         setError(null);
         const now = new Date().toISOString();
-        const next = entries.map((e) =>
-          e.id === id ? { ...e, ...form, updatedAt: now } : e,
-        );
-        await persist(next);
+        await enqueueMutation((current) => ({
+          next: current.map((entry) =>
+            entry.id === id ? { ...entry, ...form, updatedAt: now } : entry,
+          ),
+          value: undefined,
+        }));
         await deleteImagesBestEffort(removedImages);
       } catch (err) {
         const message = errorMessage(err, "항목을 수정하지 못했습니다.");
@@ -128,35 +152,42 @@ export function useEntries() {
         throw new Error(message, { cause: err });
       }
     },
-    [deleteImagesBestEffort, entries, persist],
+    [deleteImagesBestEffort, enqueueMutation],
   );
 
   const patchEntry = useCallback(
-    async (id: string, partial: Partial<WrongAnswerEntry>) => {
+    async (id: string, partial: EntryPatch) => {
       try {
         setError(null);
         const now = new Date().toISOString();
-        const next = entries.map((e) =>
-          e.id === id ? { ...e, ...partial, updatedAt: now } : e,
-        );
-        await persist(next);
+        await enqueueMutation((current) => ({
+          next: current.map((entry) => {
+            if (entry.id !== id) return entry;
+            const patch = typeof partial === "function" ? partial(entry) : partial;
+            return { ...entry, ...patch, updatedAt: now };
+          }),
+          value: undefined,
+        }));
       } catch (err) {
         const message = errorMessage(err, "항목을 저장하지 못했습니다.");
         setError(message);
         throw new Error(message, { cause: err });
       }
     },
-    [entries, persist],
+    [enqueueMutation],
   );
 
   const deleteEntry = useCallback(
     async (id: string) => {
       setError(null);
-      const entry = entries.find((e) => e.id === id);
-      const images = entry ? getAllImageFilenames(entry) : [];
-
       try {
-        await persist(entries.filter((e) => e.id !== id));
+        const images = await enqueueMutation((current) => {
+          const entry = current.find((item) => item.id === id);
+          return {
+            next: current.filter((item) => item.id !== id),
+            value: entry ? getAllImageFilenames(entry) : [],
+          };
+        });
         await deleteImagesBestEffort(images);
       } catch (err) {
         const message = errorMessage(err, "항목을 삭제하지 못했습니다.");
@@ -164,7 +195,7 @@ export function useEntries() {
         throw new Error(message, { cause: err });
       }
     },
-    [deleteImagesBestEffort, entries, persist],
+    [deleteImagesBestEffort, enqueueMutation],
   );
 
   const toggleMastered = useCallback(
@@ -172,18 +203,26 @@ export function useEntries() {
       try {
         setError(null);
         const now = new Date().toISOString();
-        const next = entries.map((e) =>
-          e.id === id
-            ? { ...e, mastered: !e.mastered, updatedAt: now }
-            : e,
-        );
-        await persist(next);
+        await enqueueMutation((current) => ({
+          next: current.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  mastered: !entry.mastered,
+                  review: entry.mastered
+                    ? { ...(entry.review ?? { dueAt: now, intervalDays: 0, streak: 0, history: [] }), phase: "learning", dueAt: now }
+                    : { ...(entry.review ?? { dueAt: null, intervalDays: 0, streak: 0, history: [] }), phase: "archived", dueAt: null },
+                  updatedAt: now,
+                }
+              : entry,
+          ),
+          value: undefined,
+        }));
       } catch (err) {
-        const message = errorMessage(err, "복습 상태를 저장하지 못했습니다.");
-        setError(message);
+        setError(errorMessage(err, "복습 상태를 저장하지 못했습니다."));
       }
     },
-    [entries, persist],
+    [enqueueMutation],
   );
 
   const toggleDifficult = useCallback(
@@ -191,23 +230,24 @@ export function useEntries() {
       try {
         setError(null);
         const now = new Date().toISOString();
-        const next = entries.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                difficult: !e.difficult,
-                difficulty: e.difficult ? "none" as const : "high" as const,
-                updatedAt: now,
-              }
-            : e,
-        );
-        await persist(next);
+        await enqueueMutation((current) => ({
+          next: current.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  difficult: !entry.difficult,
+                  difficulty: entry.difficult ? "none" as const : "high" as const,
+                  updatedAt: now,
+                }
+              : entry,
+          ),
+          value: undefined,
+        }));
       } catch (err) {
-        const message = errorMessage(err, "난이도 상태를 저장하지 못했습니다.");
-        setError(message);
+        setError(errorMessage(err, "난이도 상태를 저장하지 못했습니다."));
       }
     },
-    [entries, persist],
+    [enqueueMutation],
   );
 
   return {

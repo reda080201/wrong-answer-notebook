@@ -286,8 +286,12 @@ export default function App() {
               onTitleChange={(entry, title) =>
                 patchEntry(entry.id, { title })
               }
-              onQuestionMetaChange={(entry, questionMeta) =>
-                patchEntry(entry.id, { questionMeta })
+              onQuestionMetaChange={(entry, nextQuestionMeta) =>
+                patchEntry(entry.id, (current) => ({
+                  questionMeta: typeof nextQuestionMeta === "function"
+                    ? nextQuestionMeta(current.questionMeta ?? [])
+                    : nextQuestionMeta,
+                }))
               }
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null

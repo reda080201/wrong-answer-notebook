@@ -46,3 +46,34 @@ jobs:
       - name: Cargo check
         working-directory: src-tauri
         run: cargo check
+
+      - name: Cargo fmt
+        working-directory: src-tauri
+        run: cargo fmt --check
+
+      - name: Cargo test
+        working-directory: src-tauri
+        run: cargo test
+
+  tauri-build:
+    name: Tauri compile smoke
+    needs: frontend
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tauri compile smoke
+        run: npm run tauri -- build --no-bundle

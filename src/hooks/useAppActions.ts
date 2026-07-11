@@ -38,7 +38,8 @@ import {
   getRandomReviewItems,
   getTodayReviewItems,
 } from "../utils/review";
-import { applyQuestionReviewResult } from "../utils/questionMeta";
+import { applyQuestionReviewResult, normalizeQuestionMeta, normalizeQuestionNumber } from "../utils/questionMeta";
+import type { EntryPatch } from "./useEntries";
 
 type ReviewMode = "today" | "random" | "difficult" | "important";
 type ImportMode = "import" | "solution";
@@ -69,7 +70,7 @@ interface UseAppActionsOptions {
   deleteEntry: (id: string) => Promise<void>;
   patchEntry: (
     id: string,
-    partial: Partial<WrongAnswerEntry>,
+    partial: EntryPatch,
   ) => Promise<void>;
   refresh: () => Promise<void>;
   setSettings: (settings: AppSettings) => Promise<void>;
@@ -282,28 +283,35 @@ export function useAppActions({
         ? itemOrEntry
         : { kind: "entry", entry: itemOrEntry };
     if (item.kind === "sheet-question") {
-      const nextMeta = applyQuestionReviewResult(
-        item.entry.questionMeta,
-        item.questionNumber,
-        result,
-      );
-      await patchEntry(item.entry.id, { questionMeta: nextMeta });
+      await patchEntry(item.entry.id, (current) => {
+        const questionMeta = normalizeQuestionMeta(current.questionMeta).find(
+          (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(item.questionNumber),
+        );
+        return {
+          questionMeta: applyQuestionReviewResult(
+            current.questionMeta,
+            item.questionNumber,
+            result,
+            new Date(),
+            questionMeta?.mistakeAnalysis?.primaryCause,
+          ),
+        };
+      });
       return;
     }
     const entry = item.entry;
-    const next = applyReviewResult(entry, result);
-    await patchEntry(entry.id, {
-      review: next.review,
-      mastered: next.mastered,
+    await patchEntry(entry.id, (current) => {
+      const next = applyReviewResult(current, result);
+      return { review: next.review, mastered: next.mastered };
     });
   };
 
   const handleQuickMemo = async (entry: WrongAnswerEntry, text: string) => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    await patchEntry(entry.id, {
-      memo: [entry.memo.trim(), trimmed].filter(Boolean).join("\n"),
-    });
+    await patchEntry(entry.id, (current) => ({
+      memo: [current.memo.trim(), trimmed].filter(Boolean).join("\n"),
+    }));
   };
 
   const handleLearningBlocksChange = async (

@@ -5,6 +5,7 @@ import {
   calculateNextReview,
   getDifficultReviewCandidates,
   getTodayReviewCandidates,
+  isDueForReview,
 } from "./review";
 
 const baseEntry: WrongAnswerEntry = {
@@ -54,6 +55,52 @@ describe("review utilities", () => {
     expect(reviewed.review?.intervalDays).toBe(30);
     expect(reviewed.mastered).toBe(true);
     expect(reviewed.review?.history).toHaveLength(1);
+  });
+
+  it("keeps mastered entries in long-term review checkpoints", () => {
+    const longTerm = {
+      ...baseEntry,
+      mastered: true,
+      review: {
+        dueAt: "2026-05-29T00:00:00.000Z",
+        intervalDays: 30,
+        streak: 3,
+        stabilityDays: 30,
+        memoryDifficulty: 4,
+        lapseCount: 0,
+        repetitionCount: 4,
+        phase: "long_term" as const,
+        history: [],
+      },
+    };
+    const next = applyReviewResult(longTerm, "good", new Date("2026-05-29T00:00:00.000Z"));
+    expect(next.review?.intervalDays).toBe(60);
+    expect(next.review?.phase).toBe("long_term");
+    expect(isDueForReview(next, new Date("2026-07-28T00:00:00.000Z"))).toBe(true);
+  });
+
+  it("tracks lapses and adapts review difficulty", () => {
+    const next = applyReviewResult(
+      {
+        ...baseEntry,
+        review: {
+          dueAt: "2026-05-29T00:00:00.000Z",
+          intervalDays: 14,
+          streak: 2,
+          stabilityDays: 14,
+          memoryDifficulty: 5,
+          lapseCount: 0,
+          repetitionCount: 2,
+          history: [],
+        },
+      },
+      "again",
+      new Date("2026-05-29T00:00:00.000Z"),
+    );
+    expect(next.review?.lapseCount).toBe(1);
+    expect(next.review?.memoryDifficulty).toBeGreaterThan(5);
+    expect(next.review?.intervalDays).toBeLessThan(14);
+    expect(next.mastered).toBe(false);
   });
 
   it("filters due and difficult candidates", () => {

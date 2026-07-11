@@ -214,7 +214,7 @@ export function parseImportedStudyText(
           answerKey,
           figures,
           learningBlocks,
-          questionMeta: normalizeQuestionMeta(parsed.questionMeta),
+          questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
@@ -569,6 +569,32 @@ function normalizeImportFigures(
       needsReview: figure.needsReview || Boolean(figure.image && !image),
     };
   });
+}
+
+function mergeQuestionMetaWithAnswerAnalysis(
+  raw: unknown,
+  answerKey: SheetAnswerItem[],
+): NonNullable<EntryFormData["questionMeta"]> {
+  const metas = normalizeQuestionMeta(raw);
+  const next = [...metas];
+  for (const answer of answerKey) {
+    if (!answer.mistakeAnalysis?.causes.length) continue;
+    const normalized = normalizeQuestionNumber(answer.questionNumber);
+    const index = next.findIndex((meta) => normalizeQuestionNumber(meta.questionNumber) === normalized);
+    if (index >= 0) {
+      if (!next[index].mistakeAnalysis?.causes.length) {
+        next[index] = { ...next[index], mistakeAnalysis: answer.mistakeAnalysis };
+      }
+      continue;
+    }
+    next.push({
+      questionNumber: normalized,
+      important: false,
+      mistakeAnalysis: answer.mistakeAnalysis,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+  return next;
 }
 
 function normalizeChecklist(value: unknown): ChecklistItem[] {

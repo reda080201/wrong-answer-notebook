@@ -6,6 +6,7 @@ import { LinkifiedText } from "../utils/wikiLinks";
 import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import { getQuestionMetaForBlock, normalizeQuestionNumber } from "../utils/questionMeta";
 import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/difficulty";
+import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
 
 interface ReviewPanelProps {
@@ -207,7 +208,15 @@ function SheetQuestionReviewCard({
       <div className="review-card-top">
         {score ? <span className="difficulty-score-pill">{difficultyScoreLabel(score)}</span> : null}
         {meta?.important ? <span className="entry-mini-badge entry-mini-badge--difficulty-high">중요</span> : null}
+        {meta?.review?.stabilityDays ? (
+          <span className="entry-mini-badge">안정도 {Math.round(meta.review.stabilityDays)}일</span>
+        ) : null}
       </div>
+      {meta?.mistakeAnalysis?.causes.length ? (
+        <p className="review-question-meta">
+          오답 원인: {meta.mistakeAnalysis.causes.map((cause) => mistakeCauseLabel(cause.type)).join(", ")}
+        </p>
+      ) : null}
       <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
       {block.choices.length > 0 && (
         <ol className="review-choice-list">

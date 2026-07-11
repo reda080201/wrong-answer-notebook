@@ -146,12 +146,11 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.click(screen.getByRole("button", { name: "☆ 중요" }));
 
     await waitFor(() => {
-      expect(onQuestionMetaChange).toHaveBeenCalledWith(
-        sheetEntry,
-        expect.arrayContaining([
-          expect.objectContaining({ questionNumber: "1", important: true }),
-        ]),
-      );
+      expect(onQuestionMetaChange).toHaveBeenCalledWith(sheetEntry, expect.any(Function));
+      const updater = onQuestionMetaChange.mock.calls[0][1] as (current: typeof sheetEntry.questionMeta) => NonNullable<typeof sheetEntry.questionMeta>;
+      expect(updater(sheetEntry.questionMeta ?? [])).toEqual(expect.arrayContaining([
+        expect.objectContaining({ questionNumber: "1", important: true }),
+      ]));
     });
     expect(screen.getByText("1번 문제를 중요 표시했습니다.")).toBeInTheDocument();
   });
@@ -831,17 +830,16 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));
 
     await waitFor(() => {
-      expect(onQuestionMetaChange).toHaveBeenCalledWith(
-        expect.objectContaining({ id: "sheet-1" }),
-        expect.arrayContaining([
-          expect.objectContaining({
-            questionNumber: "1",
-            review: expect.objectContaining({
-              history: expect.arrayContaining([expect.objectContaining({ result: "hard" })]),
-            }),
+      expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function));
+      const [calledEntry, updater] = onQuestionMetaChange.mock.calls[0] as [typeof sheetEntry, (current: typeof sheetEntry.questionMeta) => NonNullable<typeof sheetEntry.questionMeta>];
+      expect(updater(calledEntry.questionMeta ?? [])).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          questionNumber: "1",
+          review: expect.objectContaining({
+            history: expect.arrayContaining([expect.objectContaining({ result: "hard" })]),
           }),
-        ]),
-      );
+        }),
+      ]));
     });
     expect(screen.getByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 3");
   });

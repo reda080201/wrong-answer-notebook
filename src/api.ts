@@ -56,6 +56,7 @@ export const builtInPromptTemplates: PromptTemplate[] = [
 - 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey에 넣지 말고 rejectedNotes에만 기록해줘.
 - audit에는 예상/감지/누락/불확실 문제 번호, 손글씨 제외 여부, 검토 필요 개수를 반드시 기록해줘.
 - 해설에서 특강 카드로 쓸 수 있는 answerKey[].strategy, steps, wrongPoint, reviewPoint, concepts를 가능한 한 구체적으로 채워줘.
+- 문항별 오답 원인을 판단할 수 있으면 answerKey[].mistakeAnalysis에 causes, primaryCause, preventionNote, practiceMode를 넣어 문항별 분석에 연결해줘. 전체 원인과 특정 문항 원인을 섞지 마.
 - 시각화가 실제 이해에 도움이 되는 경우에만 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec을 넣어줘. 단순 계산 문제에는 만들지 말고, 한 문항당 최대 1개, 전체 learningBlocks diagram은 최대 3개까지만 허용해.
 - raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
 - tags 필드와 최상위 difficulty 필드는 만들지 마.

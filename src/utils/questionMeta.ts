@@ -1,9 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
 import type { QuestionBlock } from "./textLayout";
 import { parseQuestionText } from "./textLayout";
-import type { QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
+import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
 import { calculateNextReview } from "./review";
+import { isMistakeCauseType, isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 
 export function normalizeQuestionNumber(value: string | number | undefined | null): string {
   const raw = `${value ?? ""}`.trim();
@@ -39,8 +40,22 @@ export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
       result: isReviewResult(event.result) ? event.result : "again",
       nextDueAt: event.nextDueAt === null || isValidIsoDate(event.nextDueAt) ? event.nextDueAt : null,
       intervalDays: typeof event.intervalDays === "number" && event.intervalDays >= 0 ? event.intervalDays : 1,
-      causeSnapshot: undefined,
-      strategy: undefined,
+      causeSnapshot: Array.isArray(event.causeSnapshot)
+        ? event.causeSnapshot.filter(isMistakeCauseType)
+        : undefined,
+      strategy: isReviewStrategy(event.strategy) ? event.strategy : undefined,
+      stabilityDays:
+        typeof event.stabilityDays === "number" && event.stabilityDays > 0
+          ? event.stabilityDays
+          : undefined,
+      memoryDifficulty:
+        typeof event.memoryDifficulty === "number" && event.memoryDifficulty >= 1
+          ? Math.min(10, event.memoryDifficulty)
+          : undefined,
+      lapseCount:
+        typeof event.lapseCount === "number" && event.lapseCount >= 0
+          ? Math.floor(event.lapseCount)
+          : undefined,
     }));
 
   return {
@@ -49,6 +64,26 @@ export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
     intervalDays: typeof value.intervalDays === "number" && value.intervalDays >= 0 ? value.intervalDays : 0,
     streak: typeof value.streak === "number" && value.streak >= 0 ? Math.floor(value.streak) : 0,
     history,
+    stabilityDays:
+      typeof value.stabilityDays === "number" && value.stabilityDays > 0
+        ? value.stabilityDays
+        : Math.max(0.5, typeof value.intervalDays === "number" ? value.intervalDays : 0),
+    memoryDifficulty:
+      typeof value.memoryDifficulty === "number" && value.memoryDifficulty >= 1
+        ? Math.min(10, value.memoryDifficulty)
+        : 5,
+    lapseCount:
+      typeof value.lapseCount === "number" && value.lapseCount >= 0
+        ? Math.floor(value.lapseCount)
+        : history.filter((event) => event.result === "again").length,
+    repetitionCount:
+      typeof value.repetitionCount === "number" && value.repetitionCount >= 0
+        ? Math.floor(value.repetitionCount)
+        : history.length,
+    phase:
+      value.phase === "learning" || value.phase === "long_term" || value.phase === "archived"
+        ? value.phase
+        : "learning",
   };
 }
 
@@ -63,6 +98,9 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
       difficultyScore: normalizeDifficultyScore(item.difficultyScore),
       bookmarkLabel: item.bookmarkLabel ? `${item.bookmarkLabel}`.trim() : undefined,
       note: item.note ? `${item.note}`.trim() : undefined,
+      mistakeAnalysis: item.mistakeAnalysis
+        ? normalizeMistakeAnalysis(item.mistakeAnalysis)
+        : undefined,
       review: normalizeQuestionReview(item.review),
       updatedAt:
         item.updatedAt && !Number.isNaN(new Date(item.updatedAt).getTime())
@@ -144,6 +182,7 @@ export function applyQuestionReviewResult(
   questionNumber: string | number,
   result: ReviewResult,
   reviewedAt = new Date(),
+  cause?: MistakeCauseType,
 ): QuestionMeta[] {
   const normalized = normalizeQuestionNumber(questionNumber);
   const items = normalizeQuestionMeta(current);
@@ -151,13 +190,18 @@ export function applyQuestionReviewResult(
     (item) => normalizeQuestionNumber(item.questionNumber) === normalized,
   );
   const previous = index >= 0 ? items[index].review : undefined;
-  const next = calculateNextReview(previous, result, reviewedAt);
+  const currentCause = cause ?? items[index ?? -1]?.mistakeAnalysis?.primaryCause;
+  const next = calculateNextReview(previous, result, reviewedAt, currentCause);
   const event: ReviewEvent = {
     id: uuidv4(),
     reviewedAt: reviewedAt.toISOString(),
     result,
     nextDueAt: next.nextDueAt,
     intervalDays: next.intervalDays,
+    causeSnapshot: currentCause ? [currentCause] : undefined,
+    stabilityDays: next.stabilityDays,
+    memoryDifficulty: next.memoryDifficulty,
+    lapseCount: next.lapseCount,
   };
   const review: ReviewState = {
     dueAt: next.nextDueAt,
@@ -165,6 +209,11 @@ export function applyQuestionReviewResult(
     intervalDays: next.intervalDays,
     streak: next.streak,
     history: [...(previous?.history ?? []), event],
+    stabilityDays: next.stabilityDays,
+    memoryDifficulty: next.memoryDifficulty,
+    lapseCount: next.lapseCount,
+    repetitionCount: next.repetitionCount,
+    phase: next.phase,
   };
   const nextMeta: QuestionMeta = {
     ...(index >= 0 ? items[index] : { important: false }),

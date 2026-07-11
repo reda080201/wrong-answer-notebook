@@ -17,6 +17,7 @@ import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
 import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
+  normalizeQuestionMeta,
   normalizeQuestionNumber,
   applyQuestionReviewResult,
   toggleQuestionImportant,
@@ -60,7 +61,10 @@ interface EntryDetailProps {
   onImportLecture?: () => void;
   onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onTitleChange?: (entry: WrongAnswerEntry, title: string) => Promise<void>;
-  onQuestionMetaChange?: (entry: WrongAnswerEntry, questionMeta: QuestionMeta[]) => Promise<void>;
+  onQuestionMetaChange?: (
+    entry: WrongAnswerEntry,
+    questionMeta: QuestionMeta[] | ((current: QuestionMeta[]) => QuestionMeta[]),
+  ) => Promise<void>;
   initialQuestionTarget?: { questionNumber: string; requestId: number } | null;
 }
 
@@ -359,12 +363,18 @@ export default function EntryDetail({
           ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
           : undefined;
       if (isSheet && currentTheaterQuestion && onQuestionMetaChange) {
-        const next = applyQuestionReviewResult(
-          entry.questionMeta,
-          currentTheaterQuestion.displayNumber,
-          result,
-        );
-        await onQuestionMetaChange(entry, next);
+        await onQuestionMetaChange(entry, (current) => {
+          const questionMeta = normalizeQuestionMeta(current).find(
+            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentTheaterQuestion.displayNumber),
+          );
+          return applyQuestionReviewResult(
+            current,
+            currentTheaterQuestion.displayNumber,
+            result,
+            new Date(),
+            questionMeta?.mistakeAnalysis?.primaryCause,
+          );
+        });
       } else if (onReview) {
         await onReview(entry, result);
       } else {
@@ -471,14 +481,13 @@ export default function EntryDetail({
 
   const handleToggleQuestionImportant = async (questionNumber: string) => {
     if (!onQuestionMetaChange) return;
-    const next = toggleQuestionImportant(entry.questionMeta, questionNumber);
-    const changed = next.find(
+    const changed = normalizeQuestionMeta(entry.questionMeta).find(
       (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber),
     );
     try {
-      await onQuestionMetaChange(entry, next);
+      await onQuestionMetaChange(entry, (current) => toggleQuestionImportant(current, questionNumber));
       pushToast(
-        changed?.important
+        !(changed?.important ?? false)
           ? `${normalizeQuestionNumber(questionNumber)}번 문제를 중요 표시했습니다.`
           : `${normalizeQuestionNumber(questionNumber)}번 문제 중요 표시를 해제했습니다.`,
         "success",
@@ -495,29 +504,29 @@ export default function EntryDetail({
     if (!onQuestionMetaChange) return;
     const normalized = normalizeQuestionNumber(questionNumber);
     const normalizedScore = normalizeDifficultyScore(score);
-    const current = entry.questionMeta ?? [];
-    const now = new Date().toISOString();
-    const index = current.findIndex(
-      (meta) => normalizeQuestionNumber(meta.questionNumber) === normalized,
-    );
-    const next =
-      index >= 0
-        ? current.map((meta, metaIndex) =>
-            metaIndex === index
-              ? { ...meta, difficultyScore: normalizedScore, updatedAt: now }
-              : meta,
-          )
-        : [
-            ...current,
-            {
-              questionNumber: normalized,
-              important: false,
-              difficultyScore: normalizedScore,
-              updatedAt: now,
-            },
-          ];
     try {
-      await onQuestionMetaChange(entry, next);
+      await onQuestionMetaChange(entry, (current) => {
+        const now = new Date().toISOString();
+        const normalizedCurrent = normalizeQuestionMeta(current);
+        const index = normalizedCurrent.findIndex(
+          (meta) => normalizeQuestionNumber(meta.questionNumber) === normalized,
+        );
+        return index >= 0
+          ? normalizedCurrent.map((meta, metaIndex) =>
+              metaIndex === index
+                ? { ...meta, difficultyScore: normalizedScore, updatedAt: now }
+                : meta,
+            )
+          : [
+              ...normalizedCurrent,
+              {
+                questionNumber: normalized,
+                important: false,
+                difficultyScore: normalizedScore,
+                updatedAt: now,
+              },
+            ];
+      });
       pushToast(
         normalizedScore
           ? `${normalized}번 난이도를 ${normalizedScore}점으로 저장했습니다.`
@@ -540,17 +549,19 @@ export default function EntryDetail({
 
   const markSelectedImportant = async () => {
     if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
-    let next = entry.questionMeta ?? [];
-    for (const questionNumber of selectedQuestionNumbers) {
-      const currentImportant = next.some(
-        (meta) =>
-          normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber) &&
-          meta.important,
-      );
-      if (!currentImportant) next = toggleQuestionImportant(next, questionNumber);
-    }
     try {
-      await onQuestionMetaChange(entry, next);
+      await onQuestionMetaChange(entry, (current) => {
+        let next = current;
+        for (const questionNumber of selectedQuestionNumbers) {
+          const currentImportant = next.some(
+            (meta) =>
+              normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber) &&
+              meta.important,
+          );
+          if (!currentImportant) next = toggleQuestionImportant(next, questionNumber);
+        }
+        return next;
+      });
       pushToast("선택한 문제를 중요 표시했습니다.", "success");
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "중요 표시 저장에 실패했습니다.", "error");

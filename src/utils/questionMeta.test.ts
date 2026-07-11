@@ -53,4 +53,24 @@ describe("questionMeta utilities", () => {
     expect(next[0].review?.history[0].result).toBe("good");
     expect(next[0].review?.dueAt).toBe("2026-01-09T00:00:00.000Z");
   });
+
+  it("uses question-level mistake analysis when scheduling review", () => {
+    const next = applyQuestionReviewResult(
+      [{
+        questionNumber: "7",
+        important: false,
+        mistakeAnalysis: {
+          causes: [{ type: "concept_gap", severity: "high" }],
+          primaryCause: "concept_gap",
+        },
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      }],
+      "7",
+      "good",
+      new Date("2026-01-02T00:00:00.000Z"),
+    );
+
+    expect(next[0].review?.history[0].causeSnapshot).toEqual(["concept_gap"]);
+    expect(next[0].review?.stabilityDays).toBeLessThan(7);
+  });
 });

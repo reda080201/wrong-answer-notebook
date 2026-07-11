@@ -119,6 +119,18 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
               <dd>{entry.review?.streak ?? 0}</dd>
             </div>
             <div>
+              <dt>기억 안정도</dt>
+              <dd>{entry.review?.stabilityDays ? `${Math.round(entry.review.stabilityDays)}일` : "-"}</dd>
+            </div>
+            <div>
+              <dt>반복 실패</dt>
+              <dd>{entry.review?.lapseCount ?? 0}회</dd>
+            </div>
+            <div>
+              <dt>복습 단계</dt>
+              <dd>{entry.review?.phase === "archived" ? "보관" : entry.review?.phase === "long_term" ? "장기 점검" : "학습 중"}</dd>
+            </div>
+            <div>
               <dt>완료</dt>
               <dd>{entry.mastered ? "완료" : "진행 중"}</dd>
             </div>
