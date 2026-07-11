@@ -27,6 +27,7 @@ export default function App() {
     clearError,
     refresh,
     addEntry,
+    addEntries,
     updateEntry,
     replaceEntries,
     deleteEntry,
@@ -85,6 +86,7 @@ export default function App() {
     activeSection,
     subjectFilter,
     addEntry,
+    addEntries,
     updateEntry,
     replaceEntries,
     deleteEntry,
@@ -325,7 +327,7 @@ export default function App() {
         showLearningImportModal={actions.showLearningImportModal}
         setShowLearningImportModal={actions.setShowLearningImportModal}
         handleLearningImportApply={actions.handleLearningImportApply}
-        handleConceptKnowledgeEntriesApply={actions.handleConceptKnowledgeEntriesApply}
+        handleImportedEntriesApply={actions.handleImportedEntriesApply}
         reviewMode={actions.reviewMode}
         reviewSeed={actions.reviewSeed}
         setReviewMode={actions.setReviewMode}

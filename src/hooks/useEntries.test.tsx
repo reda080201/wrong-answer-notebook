@@ -95,4 +95,22 @@ describe("useEntries", () => {
     expect(deleteImage).toHaveBeenCalledWith("question.png");
     expect(deleteImage).toHaveBeenCalledWith("exp.png");
   });
+
+  it("adds multiple entries with one atomic persist", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let ids: string[] = [];
+    await act(async () => {
+      ids = await result.current.addEntries([
+        { ...form, title: "첫 번째", entryKind: "concept" },
+        { ...form, title: "두 번째", entryKind: "lecture" },
+      ]);
+    });
+
+    expect(ids).toHaveLength(2);
+    expect(saveEntries).toHaveBeenCalledTimes(1);
+    const saved = vi.mocked(saveEntries).mock.calls[0][0];
+    expect(saved.map((item) => item.title)).toEqual(["첫 번째", "두 번째", "제목"]);
+  });
 });

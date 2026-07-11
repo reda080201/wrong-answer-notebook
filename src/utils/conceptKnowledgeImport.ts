@@ -80,7 +80,12 @@ export function isConceptKnowledgeJson(value: unknown): boolean {
 }
 
 export function isAppCompatibleEntriesJson(value: unknown): value is { entries: unknown[] } {
-  return isRecord(value) && Array.isArray(value.entries);
+  if (!isRecord(value) || "schemaVersion" in value || !Array.isArray(value.entries)) return false;
+  return value.entries.length > 0 && value.entries.every((entry) => {
+    if (!isRecord(entry)) return false;
+    const entryKind = text(entry.entryKind);
+    return entryKind === "concept" || entryKind === "lecture";
+  });
 }
 
 function conceptsFromChapter(chapter: Record<string, unknown>): Record<string, unknown>[] {

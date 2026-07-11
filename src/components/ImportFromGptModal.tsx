@@ -14,10 +14,11 @@ import type {
 } from "../types";
 import { SUBJECTS } from "../types";
 import {
+  parseAllInOneImport,
   parseImportedStudyText,
   isSafeImportImageFilename,
   readImportFile,
-  ImportParseError,
+  type ImportedStudyDocument,
   type ImportedStudyText,
 } from "../utils/importStudyText";
 import {
@@ -38,6 +39,7 @@ import { cleanQuestionText } from "../utils/textCleanup";
 import { parseQuestionText } from "../utils/textLayout";
 import ImageField from "./ImageField";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
+import ImportEntriesPreviewModal from "./ImportEntriesPreviewModal";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -74,6 +76,14 @@ function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
         }))
       : [],
     figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
+    questionMeta: data.questionMeta
+      ? data.questionMeta.map((meta) => ({
+          ...meta,
+          review: meta.review
+            ? { ...meta.review, history: meta.review.history.map((event) => ({ ...event })) }
+            : undefined,
+        }))
+      : [],
     learningBlocks: data.learningBlocks
       ? data.learningBlocks.map((block) => ({
           ...block,
@@ -330,16 +340,18 @@ export default function ImportFromGptModal({
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
+  const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
   const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const conceptImportValue = useMemo(() => {
+    if (batchImport) return null;
     const parsedValue = tryParseConceptKnowledgeText(rawText);
     if (!parsedValue) return null;
     return isConceptKnowledgeJson(parsedValue) || isAppCompatibleEntriesJson(parsedValue)
       ? parsedValue
       : null;
-  }, [rawText]);
+  }, [batchImport, rawText]);
   const conceptImportKey = conceptImportValue ? rawText : "";
   const shouldShowConceptPreview = Boolean(
     conceptImportValue &&
@@ -348,10 +360,10 @@ export default function ImportFromGptModal({
   );
 
   const parsed: ImportedStudyText | null = useMemo(() => {
-    if (conceptImportValue) return null;
+    if (conceptImportValue || batchImport) return null;
     if (!rawText.trim()) return null;
     return parseImportedStudyText(rawText, filename, fallbackSubject);
-  }, [conceptImportValue, fallbackSubject, filename, rawText]);
+  }, [batchImport, conceptImportValue, fallbackSubject, filename, rawText]);
   const expectedQuestionParse = useMemo(
     () => parseExpectedQuestionNumbers(expectedQuestionInput),
     [expectedQuestionInput],
@@ -382,6 +394,7 @@ export default function ImportFromGptModal({
         setRawText(text);
         setFilename(undefined);
         setDraftOverride(null);
+        setBatchImport(null);
         setError(null);
         setCopyMessage("클립보드에서 GPT 답변을 가져왔습니다.");
       } catch {
@@ -417,7 +430,12 @@ export default function ImportFromGptModal({
   );
   const hasBlockingValidationIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableValidationIssues = validationPolicy.confirmable.length > 0;
-  const canApply = Boolean(draft?.question?.trim()) &&
+  const hasDraftContent = draft?.entryKind === "lecture"
+    ? Boolean(draft.title?.trim() || draft.learningBlocks?.length)
+    : draft?.entryKind === "concept"
+      ? Boolean(draft.title?.trim() || draft.question?.trim())
+      : Boolean(draft?.question?.trim());
+  const canApply = hasDraftContent &&
     !hasBlockingValidationIssues &&
     (!hasConfirmableValidationIssues || confirmedValidationErrors);
   const aiImageFilenames = isSolutionMode && sourceEntry ? sourceEntry.questionImages : images;
@@ -443,6 +461,7 @@ export default function ImportFromGptModal({
       setRawText(await readImportFile(file));
       setFilename(file.name);
       setDraftOverride(null);
+      setBatchImport(null);
     } catch (fileError) {
       setError(
         fileError instanceof Error && fileError.message
@@ -472,6 +491,7 @@ export default function ImportFromGptModal({
       setRawText(text);
       setFilename(undefined);
       setDraftOverride(null);
+      setBatchImport(null);
       setError(null);
       setCopyMessage("클립보드에서 가져왔습니다.");
     } catch {
@@ -502,6 +522,7 @@ export default function ImportFromGptModal({
         setRawText(aiText);
         setFilename("gemini.json");
         setDraftOverride(null);
+        setBatchImport(null);
         setDismissedConceptPreviewKey("");
         setCopyMessage("AI provider 개념 자료 JSON을 가져왔습니다.");
         return;
@@ -514,6 +535,7 @@ export default function ImportFromGptModal({
       setRawText(aiText);
       setFilename("gemini.json");
       setDraftOverride(null);
+      setBatchImport(null);
       setCopyMessage("AI provider 결과를 가져왔습니다.");
     } catch (aiError) {
       setError(
@@ -579,51 +601,45 @@ export default function ImportFromGptModal({
     };
   };
 
-  const buildAllInOneDraft = async (
+  const buildAllInOneDocument = async (
     jsonText: string,
     jsonName: string,
     imageFiles: File[],
-  ): Promise<Partial<EntryFormData>> => {
-    let imported: ImportedStudyText;
-    try {
-      imported = parseImportedStudyText(jsonText, jsonName, fallbackSubject);
-    } catch (parseError) {
-      // ImportParseError는 그대로, 그 외는 일반 parse 실패 메시지
-      throw parseError instanceof Error
-        ? parseError
-        : new Error("JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.");
-    }
-    if (imported.detectedFormat !== "json") {
-      throw new Error("JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.");
-    }
+  ): Promise<ImportedStudyDocument> => {
+    const imported = parseAllInOneImport(jsonText, jsonName, fallbackSubject);
     const imageByName = new Map(imageFiles.map((file) => [imageFileKey(file.name), file]));
     const filesToSave: File[] = [];
     const fileIndexByKey = new Map<string, number>();
 
-    for (const figure of imported.data.figures ?? []) {
-      if (!figure.image || !isSafeImportImageFilename(figure.image)) continue;
-      const key = imageFileKey(figure.image);
-      const file = imageByName.get(key);
-      if (!file || fileIndexByKey.has(key)) continue;
-      fileIndexByKey.set(key, filesToSave.length);
-      filesToSave.push(file);
+    for (const entry of imported.entries) {
+      for (const figure of entry.figures ?? []) {
+        if (!figure.image || !isSafeImportImageFilename(figure.image)) continue;
+        const key = imageFileKey(figure.image);
+        const file = imageByName.get(key);
+        if (!file || fileIndexByKey.has(key)) continue;
+        fileIndexByKey.set(key, filesToSave.length);
+        filesToSave.push(file);
+      }
     }
 
     const savedFilenames = filesToSave.length ? await saveImageFiles(filesToSave) : [];
-    const linkedFigures: SheetFigureItem[] = (imported.data.figures ?? []).map((figure) => {
-      if (!figure.image || !isSafeImportImageFilename(figure.image)) {
-        return { ...figure, image: undefined, needsReview: true };
-      }
-      const index = fileIndexByKey.get(imageFileKey(figure.image));
-      const saved = index === undefined ? undefined : savedFilenames[index];
-      return saved
-        ? { ...figure, image: saved, needsReview: figure.needsReview ?? false }
-        : { ...figure, image: undefined, needsReview: true };
-    });
-
     return {
-      ...imported.data,
-      figures: linkedFigures,
+      ...imported,
+      entries: imported.entries.map((entry) => ({
+        ...entry,
+        figures: (entry.figures ?? []).map((figure): SheetFigureItem => {
+          if (!figure.image || !isSafeImportImageFilename(figure.image)) {
+            return figure.source === "described_only"
+              ? { ...figure, image: undefined }
+              : { ...figure, image: undefined, needsReview: true };
+          }
+          const index = fileIndexByKey.get(imageFileKey(figure.image));
+          const saved = index === undefined ? undefined : savedFilenames[index];
+          return saved
+            ? { ...figure, image: saved, needsReview: figure.needsReview ?? false }
+            : { ...figure, image: undefined, needsReview: true };
+        }),
+      })),
     };
   };
 
@@ -633,11 +649,22 @@ export default function ImportFromGptModal({
     setError(null);
     try {
       const { jsonText, jsonName, imageFiles } = await collectAllInOneFiles(files);
-      const linkedDraft = await buildAllInOneDraft(jsonText, jsonName, imageFiles);
+      const linkedDocument = await buildAllInOneDocument(jsonText, jsonName, imageFiles);
       setRawText(jsonText);
       setFilename(jsonName);
-      setDraftOverride(linkedDraft);
-      setCopyMessage(`올인원 가져오기 완료: 도표/그림 ${linkedDraft.figures?.length ?? 0}개 감지`);
+      if (linkedDocument.entries.length === 1) {
+        setBatchImport(null);
+        setDraftOverride(linkedDocument.entries[0]);
+      } else {
+        if (!onApplyEntries) throw new Error("이 화면에서는 여러 항목 저장을 지원하지 않습니다.");
+        setDraftOverride(null);
+        setBatchImport(linkedDocument);
+      }
+      const figureCount = linkedDocument.entries.reduce(
+        (sum, entry) => sum + (entry.figures?.length ?? 0),
+        0,
+      );
+      setCopyMessage(`올인원 가져오기 완료: ${linkedDocument.entries.length}개 항목 · 도표/그림 ${figureCount}개 감지`);
     } catch (allInOneError) {
       setError(allInOneError instanceof Error ? allInOneError.message : "올인원 파일을 가져오지 못했습니다.");
     }
@@ -842,6 +869,7 @@ export default function ImportFromGptModal({
                     setRawText(event.target.value);
                     setFilename(undefined);
                     setDraftOverride(null);
+                    setBatchImport(null);
                     setError(null);
                   }}
                   placeholder={isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
@@ -1439,6 +1467,13 @@ export default function ImportFromGptModal({
             await onApplyEntries(entries);
             onClose();
           }}
+        />
+      )}
+      {batchImport && onApplyEntries && (
+        <ImportEntriesPreviewModal
+          document={batchImport}
+          onClose={onClose}
+          onApplyEntries={onApplyEntries}
         />
       )}
     </div>

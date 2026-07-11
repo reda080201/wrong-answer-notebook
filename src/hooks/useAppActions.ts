@@ -59,6 +59,7 @@ interface UseAppActionsOptions {
   activeSection: EntryKind;
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
+  addEntries: (forms: EntryFormData[]) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -84,6 +85,7 @@ export function useAppActions({
   activeSection,
   subjectFilter,
   addEntry,
+  addEntries,
   updateEntry,
   replaceEntries,
   deleteEntry,
@@ -352,50 +354,62 @@ export function useAppActions({
     setSelectedId(id);
   };
 
-  const handleConceptKnowledgeEntriesApply = async (
+  const handleImportedEntriesApply = async (
     importedEntries: Partial<EntryFormData>[],
   ) => {
     if (!importedEntries.length) return;
-    let firstId: string | null = null;
-    let firstKind: EntryKind = "concept";
-    for (const imported of importedEntries) {
+    const forms = importedEntries.map((imported): EntryFormData => {
       const entryKind: EntryKind =
-        imported.entryKind === "lecture" ? "lecture" : "concept";
+        imported.entryKind === "wrong_answer" ||
+        imported.entryKind === "problem_sheet" ||
+        imported.entryKind === "concept" ||
+        imported.entryKind === "lecture"
+          ? imported.entryKind
+          : "concept";
       const subject: Subject =
         imported.subject && SUBJECTS.includes(imported.subject as Subject)
           ? (imported.subject as Subject)
           : "기타";
-      const id = await addEntry({
+      return {
         subject,
-        title: imported.title?.trim() || (entryKind === "lecture" ? "특강자료" : "개념"),
+        title: imported.title?.trim() || (
+          entryKind === "lecture"
+            ? "특강자료"
+            : entryKind === "concept"
+              ? "개념"
+              : "가져온 문제"
+        ),
         question: imported.question ?? "",
-        questionImages: [],
+        questionImages: imported.questionImages ?? [],
         entryKind,
-        difficult: false,
-        difficulty: "none",
-        annotations: [],
-        myAnswer: "",
-        correctAnswer: "",
-        explanationParts: [],
+        difficult: imported.difficult ?? false,
+        difficulty: imported.difficulty ?? "none",
+        difficultyScore: imported.difficultyScore,
+        annotations: imported.annotations ?? [],
+        myAnswer: imported.myAnswer ?? "",
+        correctAnswer: imported.correctAnswer ?? "",
+        explanationParts: imported.explanationParts ?? [],
         memo: imported.memo ?? "",
         tags: imported.tags ?? [],
-        answerKey: [],
-        figures: [],
+        answerKey: imported.answerKey ?? [],
+        figures: imported.figures ?? [],
+        questionMeta: imported.questionMeta ?? [],
+        sheetGroup: imported.sheetGroup,
+        importAudit: imported.importAudit,
+        rejectedNotes: imported.rejectedNotes ?? [],
         mistakeAnalysis: imported.mistakeAnalysis ?? { causes: [] },
-        mastered: false,
+        review: imported.review,
+        mastered: imported.mastered ?? false,
         learningBlocks: imported.learningBlocks ?? [],
         sourceType: imported.sourceType,
         linkedEntryIds: imported.linkedEntryIds ?? [],
         concepts: imported.concepts ?? [],
         checklist: imported.checklist ?? [],
-      });
-      if (!firstId) {
-        firstId = id;
-        firstKind = entryKind;
-      }
-    }
-    setActiveSection(firstKind);
-    setSelectedId(firstId);
+      };
+    });
+    const ids = await addEntries(forms);
+    setActiveSection(forms[0].entryKind);
+    setSelectedId(ids[0] ?? null);
   };
 
   const handleLearningImportApply = async (
@@ -582,7 +596,7 @@ export function useAppActions({
     handleQuickMemo,
     handleLearningBlocksChange,
     handleLearningImportApply,
-    handleConceptKnowledgeEntriesApply,
+    handleImportedEntriesApply,
     runIntegrity,
     handleBackup,
     handleRestore,
