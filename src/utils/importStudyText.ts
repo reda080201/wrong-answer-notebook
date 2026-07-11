@@ -1,4 +1,4 @@
-import type { ChecklistItem, Difficulty, EntryFormData, ExplanationPart, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
+import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType } from "./entry";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
@@ -10,7 +10,7 @@ import {
 } from "./importAudit";
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
-import { normalizeQuestionNumber } from "./questionMeta";
+import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 
 export type ImportDetectedFormat = "json" | "text";
@@ -18,6 +18,16 @@ export type ImportDetectedFormat = "json" | "text";
 export interface ImportedStudyText {
   detectedFormat: ImportDetectedFormat;
   data: Partial<EntryFormData>;
+}
+
+export type ImportV2Type = "problem_sheet" | "concept_entries" | "lecture" | "mixed";
+
+export interface ImportedStudyDocument {
+  schemaVersion?: "wrong-answer-notebook-import-v2";
+  importType: ImportV2Type | "single";
+  title?: string;
+  subject?: Subject;
+  entries: Partial<EntryFormData>[];
 }
 
 interface ImportJsonShape {
@@ -42,6 +52,10 @@ interface ImportJsonShape {
   mistakeAnalysis?: unknown;
   audit?: unknown;
   rejectedNotes?: unknown;
+  questionMeta?: unknown;
+  sourceType?: unknown;
+  linkedEntryIds?: unknown;
+  mastered?: unknown;
 }
 
 interface ImportV2Wrapper {
@@ -58,7 +72,7 @@ export function isImportJson(value: unknown): value is ImportJsonShape {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
-function isImportV2Wrapper(value: unknown): value is ImportV2Wrapper {
+export function isImportV2Wrapper(value: unknown): value is ImportV2Wrapper {
   return Boolean(
     value &&
     typeof value === "object" &&
@@ -81,43 +95,15 @@ export function parseImportedStudyText(
   fallbackSubject: Subject = "수학",
 ): ImportedStudyText {
   const trimmed = stripBom(input).trim();
-  const jsonText = extractJsonObjectText(unwrapFencedJson(trimmed));
-  const parsed = tryParseJson(jsonText);
+  const parsed = tryParseImportJson(input);
 
-  // v2 wrapper 처리: schemaVersion이 있는 경우
   if (isImportV2Wrapper(parsed)) {
-    const wrapper = parsed as ImportV2Wrapper;
-    const entries = wrapper.entries;
-    if (!Array.isArray(entries)) {
-      throw new ImportParseError("entries는 배열이어야 합니다.");
+    const document = parseAllInOneImport(input, filename, fallbackSubject);
+    if (document.entries.length === 1) {
+      return { detectedFormat: "json", data: document.entries[0] };
     }
-    if (entries.length === 0) {
-      throw new ImportParseError("JSON은 읽었지만 가져올 entries 항목이 없습니다.");
-    }
-    if (entries.length === 1) {
-      // 단일 entry → 기존 단일 entry 흐름으로 delegate
-      const inner = entries[0];
-      if (!isImportJson(inner)) {
-        throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
-      }
-      const innerShape = inner as ImportJsonShape;
-      if (!getString(innerShape.entryKind)) {
-        throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
-      }
-      // subject fallback: wrapper의 subject를 사용
-      const innerSubject = normalizeSubject(
-        innerShape.subject ?? wrapper.subject,
-        fallbackSubject,
-      );
-      return parseImportedStudyText(
-        JSON.stringify({ ...inner, subject: innerShape.subject ?? wrapper.subject }),
-        filename,
-        innerSubject,
-      );
-    }
-    // entries.length > 1: 이번 핫픽스 범위 밖 → 명확한 오류
     throw new ImportParseError(
-      `v2 wrapper에 entries가 ${entries.length}개 있습니다. 다중 항목 가져오기는 아직 지원하지 않습니다.`,
+      `v2 wrapper에 entries가 ${document.entries.length}개 있습니다. 다중 항목 preview를 사용해 주세요.`,
     );
   }
 
@@ -154,6 +140,41 @@ export function parseImportedStudyText(
       }
     }
 
+    if (entryKind === "lecture") {
+      const title = getString(parsed.title) || titleFromFilename(filename) || "특강자료";
+      const question = getString(parsed.question) || getString(parsed.summary);
+      const learningBlocks = normalizeLearningBlocks(parsed.learningBlocks);
+      if (title.trim() || question.trim() || learningBlocks.length) {
+        return {
+          detectedFormat: "json",
+          data: {
+            entryKind: "lecture",
+            subject: normalizeSubject(parsed.subject, fallbackSubject),
+            title,
+            question,
+            memo: getString(parsed.memo),
+            tags: normalizeTags(parsed.tags),
+            concepts: normalizeTextList(parsed.concepts),
+            checklist: normalizeChecklist(parsed.checklist),
+            questionImages: [],
+            difficult: false,
+            difficulty: "none",
+            myAnswer: "",
+            correctAnswer: "",
+            explanationParts: [],
+            answerKey: [],
+            figures: [],
+            learningBlocks,
+            sourceType: normalizeLectureSourceType(parsed.sourceType),
+            linkedEntryIds: normalizeTextList(parsed.linkedEntryIds),
+            mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
+            annotations: [],
+            mastered: parsed.mastered === true,
+          },
+        };
+      }
+    }
+
     const rawQuestion = getString(parsed.question);
     if (rawQuestion.trim()) {
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
@@ -183,7 +204,7 @@ export function parseImportedStudyText(
       return {
         detectedFormat: "json",
         data: {
-          entryKind: "problem_sheet",
+          entryKind: entryKind === "wrong_answer" ? "wrong_answer" : "problem_sheet",
           subject: normalizeSubject(parsed.subject, fallbackSubject),
           title: getString(parsed.title) || titleFromFilename(filename) || titleFromText(question),
           question: questionWithConceptLinks,
@@ -193,6 +214,7 @@ export function parseImportedStudyText(
           answerKey,
           figures,
           learningBlocks,
+          questionMeta: normalizeQuestionMeta(parsed.questionMeta),
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
@@ -237,6 +259,94 @@ export function parseImportedStudyText(
   };
 }
 
+const SUPPORTED_V2_IMPORT_TYPES = new Set<ImportV2Type>([
+  "problem_sheet",
+  "concept_entries",
+  "lecture",
+  "mixed",
+]);
+
+const SUPPORTED_ENTRY_KINDS = new Set<EntryKind>([
+  "wrong_answer",
+  "problem_sheet",
+  "concept",
+  "lecture",
+]);
+
+export function parseAllInOneImport(
+  input: string,
+  filename?: string,
+  fallbackSubject: Subject = "수학",
+): ImportedStudyDocument {
+  const parsed = parseImportJson(input);
+  if (!isImportJson(parsed)) {
+    throw new ImportParseError("가져오기 JSON의 최상위 값은 객체여야 합니다.");
+  }
+
+  const schemaVersion = getString((parsed as ImportV2Wrapper).schemaVersion);
+  if (schemaVersion && schemaVersion !== "wrong-answer-notebook-import-v2") {
+    throw new ImportParseError("지원하지 않는 import schemaVersion입니다.");
+  }
+
+  const isWrapper = schemaVersion === "wrong-answer-notebook-import-v2" || "entries" in parsed;
+  if (!isWrapper) {
+    assertEntryKind(parsed);
+    return {
+      importType: "single",
+      title: getString(parsed.title) || undefined,
+      subject: normalizeSubject(parsed.subject, fallbackSubject),
+      entries: [normalizeAllInOneEntry(parsed, filename, fallbackSubject)],
+    };
+  }
+
+  const rawEntries = (parsed as ImportV2Wrapper).entries;
+  if (!Array.isArray(rawEntries)) {
+    if (rawEntries === undefined) {
+      throw new ImportParseError("JSON은 읽었지만 가져올 entries 항목이 없습니다.");
+    }
+    throw new ImportParseError("entries는 배열이어야 합니다.");
+  }
+  if (!rawEntries.length) {
+    throw new ImportParseError("JSON은 읽었지만 가져올 entries 항목이 없습니다.");
+  }
+
+  const rawImportType = getString((parsed as ImportV2Wrapper).importType);
+  const inferredType = inferImportType(rawEntries);
+  const importType = schemaVersion
+    ? rawImportType as ImportV2Type
+    : inferredType;
+  if (!SUPPORTED_V2_IMPORT_TYPES.has(importType)) {
+    throw new ImportParseError("지원하지 않는 importType입니다.");
+  }
+
+  const wrapperSubject = normalizeSubject((parsed as ImportV2Wrapper).subject, fallbackSubject);
+  const wrapperTitle = getString((parsed as ImportV2Wrapper).title);
+  const entries = rawEntries.map((rawEntry) => {
+    if (!isImportJson(rawEntry)) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
+    const entryKind = assertEntryKind(rawEntry);
+    assertImportTypeMatches(importType, entryKind);
+    const entrySubject = normalizeSubject(rawEntry.subject, wrapperSubject);
+    const withWrapperDefaults: ImportJsonShape = {
+      ...rawEntry,
+      subject: rawEntry.subject ?? wrapperSubject,
+      title: rawEntry.title ?? (rawEntries.length === 1 ? wrapperTitle : undefined),
+    };
+    return normalizeAllInOneEntry(
+      withWrapperDefaults,
+      rawEntries.length === 1 ? filename : undefined,
+      entrySubject,
+    );
+  });
+
+  return {
+    schemaVersion: schemaVersion ? "wrong-answer-notebook-import-v2" : undefined,
+    importType,
+    title: wrapperTitle || undefined,
+    subject: wrapperSubject,
+    entries,
+  };
+}
+
 export function isSafeImportImageFilename(value: string): boolean {
   const trimmed = value.trim();
   return (
@@ -249,9 +359,29 @@ export function isSafeImportImageFilename(value: string): boolean {
   );
 }
 
-function tryParseJson(input: string): unknown {
+function importJsonCandidates(input: string): string[] {
+  const trimmed = stripBom(input.trim()).trim();
+  const unwrapped = unwrapFencedJson(trimmed);
+  const extracted = extractJsonObjectText(unwrapped);
+  return [...new Set([trimmed, unwrapped, extracted].filter(Boolean))];
+}
+
+function parseImportJson(input: string): unknown {
+  for (const candidate of importJsonCandidates(input)) {
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Try the next safe representation.
+    }
+  }
+  throw new ImportParseError(
+    "JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.",
+  );
+}
+
+function tryParseImportJson(input: string): unknown | null {
   try {
-    return JSON.parse(input);
+    return parseImportJson(input);
   } catch {
     return null;
   }
@@ -288,6 +418,55 @@ function extractJsonObjectText(input: string): string {
 
 function getString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeLectureSourceType(value: unknown): LectureSourceType {
+  return value === "html" || value === "md" || value === "txt" || value === "json"
+    ? value
+    : "json";
+}
+
+function assertEntryKind(value: ImportJsonShape): EntryKind {
+  const entryKind = getString(value.entryKind) as EntryKind;
+  if (!entryKind) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
+  if (!SUPPORTED_ENTRY_KINDS.has(entryKind)) {
+    throw new ImportParseError("지원하지 않는 entryKind입니다.");
+  }
+  return entryKind;
+}
+
+function inferImportType(entries: unknown[]): ImportV2Type {
+  const kinds = entries.map((entry) => {
+    if (!isImportJson(entry)) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
+    return assertEntryKind(entry);
+  });
+  if (kinds.every((kind) => kind === "problem_sheet")) return "problem_sheet";
+  if (kinds.every((kind) => kind === "concept")) return "concept_entries";
+  if (kinds.every((kind) => kind === "lecture")) return "lecture";
+  return "mixed";
+}
+
+function assertImportTypeMatches(importType: ImportV2Type, entryKind: EntryKind) {
+  const matches =
+    importType === "mixed" ||
+    (importType === "problem_sheet" && entryKind === "problem_sheet") ||
+    (importType === "concept_entries" && entryKind === "concept") ||
+    (importType === "lecture" && entryKind === "lecture");
+  if (!matches) {
+    throw new ImportParseError("importType과 entries의 entryKind가 일치하지 않습니다.");
+  }
+}
+
+function normalizeAllInOneEntry(
+  value: ImportJsonShape,
+  filename: string | undefined,
+  fallbackSubject: Subject,
+): Partial<EntryFormData> {
+  const result = parseImportedStudyText(JSON.stringify(value), filename, fallbackSubject);
+  if (result.detectedFormat !== "json") {
+    throw new ImportParseError("가져올 항목을 앱 데이터로 변환하지 못했습니다.");
+  }
+  return result.data;
 }
 
 function normalizeSubject(value: unknown, fallback: Subject): Subject {

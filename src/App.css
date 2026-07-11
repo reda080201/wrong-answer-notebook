@@ -1196,6 +1196,36 @@ button.formula-chip:hover {
   gap: 0.85rem;
 }
 
+.import-entries-preview {
+  align-content: start;
+  max-height: min(62vh, 640px);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.import-entry-preview-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.import-entry-preview-head,
+.import-entry-preview-counts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.import-entry-preview-counts span {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+}
+
 .concept-import-block-preview {
   border-top: 1px solid var(--border);
   margin-top: 0.65rem;

@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../types";
+import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import ImportFromGptModal from "./ImportFromGptModal";
 
 vi.mock("../api", () => ({
@@ -822,6 +823,98 @@ describe("ImportFromGptModal", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("ZIP 파일이 너무 큽니다");
     });
+  });
+
+  it("opens a single v2 wrapper as an editable problem sheet preview", async () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+        onApplyEntries={vi.fn()}
+      />,
+    );
+    const file = new File(
+      [JSON.stringify(v2WrapperFixture)],
+      "import.json",
+      { type: "application/json" },
+    );
+
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByDisplayValue("Nswer N제 수학 II 1단원 함수의 극한과 연속")).toBeInTheDocument();
+    expect(screen.queryByText(/순수 JSON 결과가 필요합니다/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("dialog", { name: "개념 자료 JSON 변환" })).not.toBeInTheDocument();
+    confirmDangerousImportIfShown();
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        entryKind: "problem_sheet",
+        answerKey: expect.arrayContaining([expect.objectContaining({ questionNumber: "18" })]),
+        figures: expect.arrayContaining([expect.objectContaining({ source: "described_only", image: undefined })]),
+        questionMeta: expect.arrayContaining([expect.objectContaining({ questionNumber: "7", important: true })]),
+        learningBlocks: expect.any(Array),
+      }),
+      undefined,
+    );
+  }, 30000);
+
+  it("opens a batch preview for a multi-entry v2 wrapper", async () => {
+    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        onApplyEntries={onApplyEntries}
+      />,
+    );
+    const wrapper = {
+      schemaVersion: "wrong-answer-notebook-import-v2",
+      importType: "mixed",
+      title: "혼합 자료",
+      subject: "수학",
+      entries: [
+        { entryKind: "problem_sheet", title: "시험지 A", subject: "수학", question: "1. 문제" },
+        { entryKind: "lecture", title: "특강 A", subject: "수학", learningBlocks: [{ type: "concept", title: "개념", content: "설명" }] },
+      ],
+    };
+    const file = new File([JSON.stringify(wrapper)], "import.json", { type: "application/json" });
+
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [file] },
+    });
+
+    expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
+    expect(screen.getByText("시험지 A")).toBeInTheDocument();
+    expect(screen.getByText("특강 A")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2개 항목 저장" }));
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ entryKind: "problem_sheet", title: "시험지 A" }),
+        expect.objectContaining({ entryKind: "lecture", title: "특강 A" }),
+      ]),
+    ));
+  }, 30000);
+
+  it("shows the strict JSON error only when an all-in-one file cannot be parsed", async () => {
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    );
+    const file = new File(["JSON 아님"], "import.json", { type: "application/json" });
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [file] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "JSON 형식으로 읽지 못했습니다. 코드블록이나 설명 문장이 섞였는지 확인하세요.",
+    );
   });
 
   it("keeps apply disabled for empty input", () => {

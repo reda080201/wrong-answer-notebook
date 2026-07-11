@@ -37,6 +37,10 @@
         { "questionNumber": "17", "answer": "④", "explanation": "닫힌구간에서 최대최소 정리를 사용한다.", "importantPoints": [] },
         { "questionNumber": "18", "answer": "⑤", "explanation": "극한과 연속의 정의를 비교한다.", "importantPoints": [] }
       ],
+      "questionMeta": [
+        { "questionNumber": "07", "important": true, "bookmarkLabel": "도표 재확인", "difficultyScore": 72, "updatedAt": "2026-07-10T00:00:00.000Z" },
+        { "questionNumber": "18", "important": false, "note": "마지막 문항", "updatedAt": "2026-07-10T00:00:00.000Z" }
+      ],
       "figures": [
         { "questionNumber": "06", "title": "6번 그래프", "caption": "좌우 극한을 비교하는 그래프", "image": "", "source": "described_only" },
         { "questionNumber": "07", "title": "7번 도표", "caption": "x값과 f(x) 값의 대응표", "image": "", "source": "described_only" },

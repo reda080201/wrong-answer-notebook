@@ -89,6 +89,29 @@ export function useEntries() {
     [entries, persist],
   );
 
+  const addEntries = useCallback(
+    async (forms: EntryFormData[]) => {
+      if (!forms.length) return [];
+      try {
+        setError(null);
+        const now = new Date().toISOString();
+        const added = forms.map((form) => ({
+          id: uuidv4(),
+          ...form,
+          createdAt: now,
+          updatedAt: now,
+        } satisfies WrongAnswerEntry));
+        await persist([...added, ...entries]);
+        return added.map((entry) => entry.id);
+      } catch (err) {
+        const message = errorMessage(err, "여러 항목을 추가하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
+      }
+    },
+    [entries, persist],
+  );
+
   const updateEntry = useCallback(
     async (id: string, form: EntryFormData, removedImages: string[]) => {
       try {
@@ -193,6 +216,7 @@ export function useEntries() {
     error,
     clearError,
     addEntry,
+    addEntries,
     updateEntry,
     replaceEntries,
     patchEntry,
