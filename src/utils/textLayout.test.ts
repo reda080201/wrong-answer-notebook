@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { parseQuestionText, splitMarkdownTableSegments } from "./textLayout";
+import { normalizeQuestionNumber } from "./questionMeta";
+import parserParityCases from "../fixtures/question-parser-parity.json";
 
 describe("parseQuestionText", () => {
+  it("matches the Rust MCP parser fixture after shared number normalization", () => {
+    for (const testCase of parserParityCases) {
+      const questions = parseQuestionText(testCase.source).filter(
+        (block) => block.kind === "question",
+      );
+      expect(questions.map((block) => normalizeQuestionNumber(block.numberLabel))).toEqual(testCase.numbers);
+      expect(questions.map((block) => block.body)).toEqual(testCase.bodies);
+    }
+  });
+
   it("detects numbered questions with dot and parenthesis forms", () => {
     const blocks = parseQuestionText("1. 첫 문제\n\n2) 둘째 문제");
 

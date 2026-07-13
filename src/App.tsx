@@ -383,6 +383,11 @@ export default function App() {
           updateMcpBridgeConfig={mcpBridge.updateMcpBridgeConfig}
           applyMcpBridgePort={mcpBridge.applyMcpBridgePort}
           testMcpBridgeConnection={mcpBridge.testMcpBridgeConnection}
+          createMcpBridgePairing={mcpBridge.createPairing}
+          rotateMcpBridgeCredential={mcpBridge.rotateCredential}
+          disconnectMcpBridgeClients={mcpBridge.disconnectClients}
+          mcpBridgePairingSession={mcpBridge.pairingSession}
+          isMcpBridgePairingPending={mcpBridge.isMcpBridgePairingPending}
           isMcpBridgeConnectionTesting={mcpBridge.isMcpBridgeConnectionTesting}
           isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
           onClose={() => setShowSettings(false)}

@@ -90,4 +90,23 @@ describe("SettingsModal MCP bridge tab", () => {
     expect(screen.getByText(/연결된 클라이언트:/)).toHaveTextContent("1");
     expect(screen.getByText(/안내:/)).toHaveTextContent("브릿지가 포트를 열었습니다.");
   });
+
+  it("shows one-time pairing controls without a persistent token field", () => {
+    const createMcpBridgePairing = vi.fn().mockResolvedValue(undefined);
+    renderSettingsModal({
+      mcpBridgeSettings: { enabled: true, port: 43129 },
+      isMcpBridgeBrowserBlocked: false,
+      createMcpBridgePairing,
+      mcpBridgePairingSession: {
+        code: "PAIR-1234",
+        expiresAt: "2026-07-13T12:00:00.000Z",
+        bridgeUrl: "http://127.0.0.1:43129/mcp",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "고급" }));
+    expect(screen.getByRole("button", { name: "연결 코드 만들기" })).toBeEnabled();
+    expect(screen.getByText("PAIR-1234")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/bearer|토큰/i)).not.toBeInTheDocument();
+  });
 });

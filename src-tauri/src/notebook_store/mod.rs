@@ -71,7 +71,7 @@ impl NotebookStore {
         Ok(self.load_entries()?.into_iter().filter(|entry| {
             let matches_subject = subject.as_ref().map_or(true, |value| entry.subject.to_lowercase() == *value);
             let matches_kind = entry_kind.map_or(true, |value| entry.entry_kind == value);
-            let haystack = format!("{}\n{}\n{}\n{}", entry.title, entry.question, entry.memo, entry.tags.join(" ")).to_lowercase();
+            let haystack = entry_search_text(entry).to_lowercase();
             matches_subject && matches_kind && (needle.is_empty() || haystack.contains(&needle))
         }).take(limit).collect())
     }
@@ -120,6 +120,53 @@ impl NotebookStore {
     }
 }
 
+/// Searchable text intentionally includes concepts stored at both entry and
+/// answer-key/question level without changing the persisted model.
+pub fn entry_search_text(entry: &WrongAnswerEntry) -> String {
+    let mut parts = vec![
+        entry.title.clone(),
+        entry.question.clone(),
+        entry.memo.clone(),
+        entry.tags.join(" "),
+    ];
+    append_json_search_text(entry.extra.get("concepts"), &mut parts);
+    for answer in &entry.answer_key {
+        append_json_search_text(answer.get("concepts"), &mut parts);
+        append_json_search_text(answer.get("strategy"), &mut parts);
+        append_json_search_text(answer.get("importantPoints"), &mut parts);
+    }
+    parts.retain(|value| !value.trim().is_empty());
+    parts.join("\n")
+}
+
+fn append_json_search_text(value: Option<&Value>, parts: &mut Vec<String>) {
+    match value {
+        Some(Value::String(text)) => parts.push(text.clone()),
+        Some(Value::Array(values)) => values.iter().for_each(|item| append_json_search_text(Some(item), parts)),
+        _ => {}
+    }
+}
+
+/// Returns a bounded excerpt centred on an actual match instead of blindly
+/// returning the beginning of a long question sheet.
+pub fn matched_snippet(entry: &WrongAnswerEntry, query: &str, max_chars: usize) -> String {
+    let text = entry_search_text(entry);
+    let needle = query.trim();
+    if needle.is_empty() { return text.chars().take(max_chars).collect(); }
+    let lowered = text.to_lowercase();
+    let lowered_needle = needle.to_lowercase();
+    let Some(byte_index) = lowered.find(&lowered_needle) else {
+        return text.chars().take(max_chars).collect();
+    };
+    let start_chars = text[..byte_index].chars().count().saturating_sub(max_chars / 3);
+    let all_chars: Vec<char> = text.chars().collect();
+    let end_chars = (start_chars + max_chars).min(all_chars.len());
+    let mut snippet: String = all_chars[start_chars..end_chars].iter().collect();
+    if start_chars > 0 { snippet.insert_str(0, "..."); }
+    if end_chars < all_chars.len() { snippet.push_str("..."); }
+    snippet
+}
+
 pub fn parse_entries_value(value: Value) -> Result<Vec<WrongAnswerEntry>, String> {
     let entries = match value {
         Value::Array(entries) => entries,
@@ -141,42 +188,176 @@ pub fn normalize_question_number(value: &str) -> String {
     } else { value.to_owned() }
 }
 
-/// Conservative line parser used by the bridge only. It never rewrites saved question text.
+/// Line parser kept deliberately in parity with the frontend `parseQuestionText`:
+/// it identifies the same question headers and never treats choice markers as
+/// question headers after body text has started.
 pub fn parse_question_blocks(text: &str) -> Vec<(String, String, Vec<String>)> {
-    let mut blocks: Vec<(String, Vec<String>)> = Vec::new();
-    for line in text.lines() {
-        let trimmed = line.trim();
-        let number = parse_number_prefix(trimmed);
-        if let Some(number) = number {
-            blocks.push((number, vec![line.to_owned()]));
-        } else if let Some((_, lines)) = blocks.last_mut() { lines.push(line.to_owned()); }
-    }
-    blocks.into_iter().map(|(number, lines)| {
-        let choices = lines.iter().filter(|line| {
-            matches!(line.trim_start().chars().next(), Some('①' | '②' | '③' | '④' | '⑤'))
-        }).cloned().collect();
-        (number, lines.join("\n").trim().to_owned(), choices)
+    let lines: Vec<&str> = text.lines().collect();
+    let starts: Vec<usize> = lines.iter().enumerate().filter_map(|(index, line)| {
+        let previous = index.checked_sub(1).and_then(|value| lines.get(value)).copied();
+        is_question_start(line, previous).then_some(index)
+    }).collect();
+
+    starts.iter().enumerate().filter_map(|(position, &start)| {
+        let end = starts.get(position + 1).copied().unwrap_or(lines.len());
+        let first = *lines.get(start)?;
+        let (number, prefix_len) = parse_number_prefix(first.trim_start())?;
+        let mut body = Vec::new();
+        let mut choices = Vec::new();
+        let mut inside_view = false;
+        for (line_index, line) in lines[start..end].iter().enumerate() {
+            if line_index == 0 {
+                let leading = line.len() - line.trim_start().len();
+                let content = &line[(leading + prefix_len).min(line.len())..];
+                if !content.trim().is_empty() { body.push(content.trim().to_owned()); }
+                continue;
+            }
+            let trimmed = line.trim();
+            if is_view_marker(trimmed) { inside_view = true; body.push(trimmed.to_owned()); continue; }
+            if inside_view && is_view_item(trimmed) { body.push(trimmed.to_owned()); continue; }
+            if is_choice_prefix(trimmed) { inside_view = false; choices.push(trimmed.to_owned()); }
+            else if !trimmed.is_empty() { body.push(trimmed.to_owned()); }
+        }
+        Some((number, body.join("\n"), choices))
     }).collect()
 }
 
-fn parse_number_prefix(value: &str) -> Option<String> {
-    let value = value.strip_prefix("[문제 ").and_then(|rest| rest.strip_suffix(']')).unwrap_or(value);
-    let value = value.strip_prefix("문제 ").unwrap_or(value).trim_start_matches('#');
+fn is_question_start(value: &str, previous: Option<&str>) -> bool {
+    let value = value.trim_start();
+    let Some(_) = parse_number_prefix(value) else { return false; };
+    !(has_numeric_close_marker(value) && previous.is_some_and(|line| !line.trim().is_empty()))
+}
+
+fn has_numeric_close_marker(value: &str) -> bool {
+    let digits: String = value.chars().take_while(|character| character.is_ascii_digit()).collect();
+    !digits.is_empty() && value[digits.len()..].starts_with(')')
+}
+
+fn parse_number_prefix(value: &str) -> Option<(String, usize)> {
+    let value = value.trim_start();
+    if let Some(rest) = value.strip_prefix("[문제 ") {
+        let digits: String = rest.chars().take_while(|character| character.is_ascii_digit()).collect();
+        let consumed = "[문제 ".len() + digits.len();
+        if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
+            return Some((normalize_question_number(&digits), consumed + 1));
+        }
+    }
+    for prefix in ["문제 ", "#"] {
+        if let Some(rest) = value.strip_prefix(prefix) {
+            let digits: String = rest.chars().take_while(|character| character.is_ascii_digit()).collect();
+            if !digits.is_empty() {
+                return Some((normalize_question_number(&digits), prefix.len() + digits.len()));
+            }
+        }
+    }
     let digits: String = value.chars().take_while(|character| character.is_ascii_digit()).collect();
     if digits.is_empty() { return None; }
     let suffix = &value[digits.len()..];
-    if suffix.starts_with('.') || suffix.starts_with("번") || suffix.starts_with(")") || suffix.starts_with(" ") {
-        Some(normalize_question_number(&digits))
+    if suffix.starts_with('.') || suffix.starts_with(')') || suffix.starts_with("번") {
+        Some((normalize_question_number(&digits), digits.len() + if suffix.starts_with("번") { "번".len() } else { 1 }))
     } else { None }
+}
+
+fn is_choice_prefix(value: &str) -> bool {
+    let first = value.chars().next();
+    if matches!(first, Some('①' | '②' | '③' | '④' | '⑤' | '⑥' | '⑦' | '⑧' | '⑨' | '⑩')) { return true; }
+    let bytes = value.as_bytes();
+    if value.starts_with('(') && bytes.get(1).is_some_and(|byte| byte.is_ascii_digit()) { return true; }
+    if value.chars().next().is_some_and(|character| character.is_ascii_digit()) && value.chars().skip_while(|character| character.is_ascii_digit()).next() == Some(')') { return true; }
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else { return false; };
+    matches!(first, 'ㄱ'..='ㅎ' | 'A'..='E' | 'a'..='e') && matches!(chars.next(), Some('.' | ')'))
+}
+
+fn is_view_marker(value: &str) -> bool { matches!(value, "보기" | "<보기>") }
+fn is_view_item(value: &str) -> bool {
+    let mut chars = value.chars();
+    matches!((chars.next(), chars.next()), (Some('ㄱ'..='ㅎ'), Some('.' | ')')))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::normalize_question_number;
+    use super::{entry_search_text, matched_snippet, normalize_question_number, parse_question_blocks, parse_entries_value, NotebookStore};
+    use crate::SheetFigureItem;
+    use serde_json::json;
     #[test]
     fn normalizes_import_number_forms() {
         for value in ["01", "1", "1.", "1번", "문제 1", "#1", "10.", "문제 10"] {
             assert_eq!(normalize_question_number(value), if value.contains("10") { "10" } else { "1" });
         }
+    }
+
+    #[test]
+    fn parses_frontend_question_forms_without_promoting_choices() {
+        let text = "[문제 1] 첫 문제\n조건: x > 0\n① 선택지\n(1) 보기\n1) 보기\nㄱ. 보기\nA. 보기\n문제 10 둘째 문제\n<보기>\nㄱ. 참\n① ㄱ";
+        let blocks = parse_question_blocks(text);
+        assert_eq!(blocks.iter().map(|(number, _, _)| number.as_str()).collect::<Vec<_>>(), ["1", "10"]);
+        assert!(blocks[0].1.contains("조건"));
+        assert!(!blocks[0].1.contains("① 선택지"));
+        assert_eq!(blocks[0].2.len(), 5);
+        assert!(blocks[1].1.contains("ㄱ. 참"));
+    }
+
+    #[test]
+    fn satisfies_shared_question_parser_fixture() {
+        let fixture: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../src/fixtures/question-parser-parity.json"
+        )).expect("shared fixture must be valid JSON");
+        for case in fixture {
+            let source = case["source"].as_str().expect("source");
+            let expected_numbers: Vec<&str> = case["numbers"].as_array().expect("numbers")
+                .iter().map(|value| value.as_str().expect("number")).collect();
+            let expected_bodies: Vec<&str> = case["bodies"].as_array().expect("bodies")
+                .iter().map(|value| value.as_str().expect("body")).collect();
+            let parsed = parse_question_blocks(source);
+            assert_eq!(parsed.iter().map(|(number, _, _)| number.as_str()).collect::<Vec<_>>(), expected_numbers);
+            assert_eq!(parsed.iter().map(|(_, body, _)| body.as_str()).collect::<Vec<_>>(), expected_bodies);
+        }
+    }
+
+    #[test]
+    fn searches_entry_and_question_concepts_and_centres_snippet() {
+        let entry = serde_json::from_value(json!({
+            "id":"e1", "subject":"윤리", "question":"긴 본문", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
+            "concepts":["칸트 의무론"],
+            "answerKey":[{"questionNumber":"1","concepts":["정언명령"]}]
+        })).unwrap();
+        assert!(entry_search_text(&entry).contains("정언명령"));
+        assert!(matched_snippet(&entry, "정언명령", 30).contains("정언명령"));
+    }
+
+    #[test]
+    fn figure_round_trip_preserves_current_and_unknown_fields() {
+        let entries = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
+            "figures":[{"id":"f1","questionNumber":"1","title":"그래프","caption":"설명","image":"f.png","source":"described_only","needsReview":true,"future":{"nested":true}}]
+        }])).unwrap();
+        let figure: &SheetFigureItem = &entries[0].figures[0];
+        assert_eq!(figure.question_number, "1");
+        assert_eq!(figure.source, "described_only");
+        assert_eq!(figure.extra["future"]["nested"], true);
+        let written = serde_json::to_value(&entries).unwrap();
+        assert_eq!(written[0]["figures"][0]["future"]["nested"], true);
+    }
+
+    #[test]
+    fn store_round_trip_keeps_figure_fields_and_unknown_nested_data() {
+        let entries = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
+            "figures":[{"id":"f1","questionNumber":"1","title":"그래프","caption":"설명","image":"f.png","source":"gpt_cleaned","needsReview":false,"future":{"nested":{"kept":true}}}]
+        }])).unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let store = NotebookStore::new(directory.path().join("entries.json"), directory.path().join("images"));
+        store.save_entries(&entries).unwrap();
+        let restored = store.load_entries().unwrap();
+        let figure = &restored[0].figures[0];
+        assert_eq!(figure.id, "f1");
+        assert_eq!(figure.question_number, "1");
+        assert_eq!(figure.title, "그래프");
+        assert_eq!(figure.caption, "설명");
+        assert_eq!(figure.image.as_deref(), Some("f.png"));
+        assert_eq!(figure.source, "gpt_cleaned");
+        assert_eq!(figure.needs_review, Some(false));
+        assert_eq!(figure.extra["future"]["nested"]["kept"], true);
     }
 }

@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   getMcpBridgeStatus,
+  createMcpBridgePairing,
+  disconnectMcpBridgeClients,
+  rotateMcpBridgeCredential,
   setMcpBridgeEnabled,
   testMcpBridgeConnection as testMcpBridgeConnectionApi,
 } from "../api";
-import type { McpBridgeSettings, McpBridgeStatus } from "../types";
+import type { McpBridgePairingSession, McpBridgeSettings, McpBridgeStatus } from "../types";
 
 export { type McpBridgeSettings } from "../types";
 
@@ -50,6 +53,8 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   const [runtimeStatus, setRuntimeStatus] = useState<McpBridgeRuntimeStatus | null>(null);
   const [portInput, setPortInput] = useState(String(config.port));
   const [connectionTesting, setConnectionTesting] = useState(false);
+  const [pairingSession, setPairingSession] = useState<McpBridgePairingSession | null>(null);
+  const [pairingPending, setPairingPending] = useState(false);
 
   useEffect(() => { setConfig(suppliedConfig); }, [suppliedConfig]);
 
@@ -72,7 +77,9 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     const port = patch.port === undefined ? config.port : Math.min(65535, Math.max(1024, Math.round(patch.port)));
     const next = { ...config, ...patch, port };
     try {
-      const status = patch.enabled === undefined ? null : await setMcpBridgeEnabled(Boolean(patch.enabled), port);
+      // A live port edit is a server restart operation, not merely a setting write.
+      const shouldApplyRuntime = patch.enabled !== undefined || (patch.port !== undefined && config.enabled);
+      const status = shouldApplyRuntime ? await setMcpBridgeEnabled(Boolean(next.enabled), port) : null;
       await persistMcpBridge?.(next);
       setConfig(next);
       setPortInput(String(port));
@@ -94,5 +101,41 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     finally { setConnectionTesting(false); }
   }, [setSettingsMessage]);
 
-  return { mcpBridgeSettings: config, mcpBridgeStatus: runtimeStatus, mcpBridgePortInput: portInput, setMcpBridgePortInput: setPortInput, updateMcpBridgeConfig, applyMcpBridgePort, testMcpBridgeConnection, isMcpBridgeConnectionTesting: connectionTesting, isMcpBridgeBrowserBlocked: !isTauri(), isMcpBridgeDesktopAvailable: isTauri(), refreshMcpBridgeStatus };
+  const createPairing = useCallback(async () => {
+    if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    setPairingPending(true);
+    try {
+      const session = await createMcpBridgePairing();
+      setPairingSession(session);
+      setSettingsMessage("일회성 연결 코드를 만들었습니다. 만료 전 tunnel-client에만 입력하세요.");
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 코드를 만들지 못했습니다.");
+    } finally { setPairingPending(false); }
+  }, [setSettingsMessage]);
+
+  const rotateCredential = useCallback(async () => {
+    if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    try {
+      const status = await rotateMcpBridgeCredential();
+      setPairingSession(null);
+      setRuntimeStatus(toRuntimeStatus(status));
+      setSettingsMessage("MCP 연결 자격 증명을 회전했습니다. 기존 클라이언트는 다시 연결해야 합니다.");
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 자격 증명을 회전하지 못했습니다.");
+    }
+  }, [setSettingsMessage]);
+
+  const disconnectClients = useCallback(async () => {
+    if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    try {
+      const status = await disconnectMcpBridgeClients();
+      setPairingSession(null);
+      setRuntimeStatus(toRuntimeStatus(status));
+      setSettingsMessage("연결된 MCP 클라이언트를 해제했습니다.");
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : "MCP 클라이언트를 해제하지 못했습니다.");
+    }
+  }, [setSettingsMessage]);
+
+  return { mcpBridgeSettings: config, mcpBridgeStatus: runtimeStatus, mcpBridgePortInput: portInput, setMcpBridgePortInput: setPortInput, updateMcpBridgeConfig, applyMcpBridgePort, testMcpBridgeConnection, createPairing, rotateCredential, disconnectClients, pairingSession, isMcpBridgePairingPending: pairingPending, isMcpBridgeConnectionTesting: connectionTesting, isMcpBridgeBrowserBlocked: !isTauri(), isMcpBridgeDesktopAvailable: isTauri(), refreshMcpBridgeStatus };
 }

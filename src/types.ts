@@ -365,6 +365,13 @@ export interface McpBridgeStatus {
   hasAuthToken: boolean;
 }
 
+/** 일회성 MCP 연결 코드의 공개 정보입니다. bearer token은 절대 프론트에 전달하지 않습니다. */
+export interface McpBridgePairingSession {
+  code: string;
+  expiresAt: string;
+  bridgeUrl: string;
+}
+
 export interface McpActiveContext {
   entryId: string | null;
   questionNumber: string | null;
