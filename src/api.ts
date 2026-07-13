@@ -7,6 +7,9 @@ import type {
   AiProviderType,
   AppSettings,
   IntegrityReport,
+  McpActiveContext,
+  McpBridgeSettings,
+  McpBridgeStatus,
   MemoTemplate,
   PromptTemplate,
   WrongAnswerEntry,
@@ -52,6 +55,10 @@ export const defaultSettings: AppSettings = {
   },
   autoBackup: {
     enabled: false,
+  },
+  mcpBridge: {
+    enabled: false,
+    port: 43129,
   },
 };
 
@@ -461,7 +468,62 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
       enabled: Boolean(raw?.autoBackup?.enabled),
       lastBackupAt: raw?.autoBackup?.lastBackupAt,
     },
+    mcpBridge: normalizeMcpBridgeSettings(raw?.mcpBridge),
   };
+}
+
+function normalizeMcpBridgeSettings(raw: unknown): McpBridgeSettings {
+  const value = raw && typeof raw === "object" ? raw as Partial<McpBridgeSettings> : {};
+  const requestedPort = Number(value.port);
+  const port = Number.isInteger(requestedPort) && requestedPort >= 1024 && requestedPort <= 65535
+    ? requestedPort
+    : 43129;
+  return {
+    // The browser preview never exposes a local bridge.
+    enabled: isTauri() && Boolean(value.enabled),
+    port,
+  };
+}
+
+const browserMcpBridgeStatus: McpBridgeStatus = {
+  enabled: false,
+  state: "stopped",
+  host: "127.0.0.1",
+  port: 43129,
+  readOnly: true,
+  bridgeVersion: "local-bridge-v1",
+  hasAuthToken: false,
+  lastError: "브라우저 모드에서는 로컬 MCP 브리지를 사용할 수 없습니다.",
+};
+
+export async function getMcpBridgeStatus(): Promise<McpBridgeStatus> {
+  if (!isTauri()) return browserMcpBridgeStatus;
+  try {
+    return await invoke<McpBridgeStatus>("get_mcp_bridge_status");
+  } catch (error) {
+    return {
+      ...browserMcpBridgeStatus,
+      lastError: errorMessage(error, "MCP 브리지 상태를 확인하지 못했습니다."),
+    };
+  }
+}
+
+export async function setMcpBridgeEnabled(enabled: boolean, port = 43129): Promise<McpBridgeStatus> {
+  if (!isTauri()) return browserMcpBridgeStatus;
+  return invoke<McpBridgeStatus>("set_mcp_bridge_enabled", { enabled, port });
+}
+
+export async function testMcpBridgeConnection(): Promise<McpBridgeStatus> {
+  if (!isTauri()) return browserMcpBridgeStatus;
+  return invoke<McpBridgeStatus>("test_mcp_bridge");
+}
+
+export async function syncMcpBridgeActiveContext(context: McpActiveContext): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("sync_active_context", {
+    entryId: context.entryId,
+    questionNumber: context.questionNumber,
+  });
 }
 
 export async function getAiProviderStatus(): Promise<AiProviderStatus> {

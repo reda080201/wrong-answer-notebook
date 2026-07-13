@@ -41,7 +41,8 @@ const settings: AppSettings = {
   aiProvider: { type: "manual", enabled: false, keySource: "env", hasStoredKey: false },
   importPreferences: {},
   answerViewPreferences: { viewMode: "card", hideAnswers: false },
-  autoBackup: { enabled: false },
+    autoBackup: { enabled: false },
+    mcpBridge: { enabled: false, port: 43129 },
 };
 
 describe("text cleanup", () => {

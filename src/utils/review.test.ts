@@ -6,6 +6,7 @@ import {
   getDifficultReviewCandidates,
   getTodayReviewCandidates,
   isDueForReview,
+  getSheetQuestionReviewItems,
 } from "./review";
 
 const baseEntry: WrongAnswerEntry = {
@@ -37,7 +38,7 @@ describe("review utilities", () => {
     expect(calculateNextReview(undefined, "good", now).intervalDays).toBe(7);
   });
 
-  it("promotes good streaks and marks long interval as mastered", () => {
+  it("promotes good streaks into long-term review without archiving", () => {
     const reviewed = applyReviewResult(
       {
         ...baseEntry,
@@ -53,7 +54,8 @@ describe("review utilities", () => {
     );
 
     expect(reviewed.review?.intervalDays).toBe(30);
-    expect(reviewed.mastered).toBe(true);
+    expect(reviewed.mastered).toBe(false);
+    expect(reviewed.review?.phase).toBe("long_term");
     expect(reviewed.review?.history).toHaveLength(1);
   });
 
@@ -170,5 +172,25 @@ describe("review utilities", () => {
 
     expect(getTodayReviewCandidates([baseEntry, future], now).map((entry) => entry.id)).toEqual(["1"]);
     expect(getDifficultReviewCandidates([baseEntry, difficult]).map((entry) => entry.id)).toEqual(["hard"]);
+  });
+
+  it("does not put every newly imported sheet question into today's queue", () => {
+    const sheet: WrongAnswerEntry = {
+      ...baseEntry,
+      id: "sheet",
+      entryKind: "problem_sheet",
+      question: "1. 첫 문제\n2. 둘째 문제\n3. 셋째 문제",
+      answerKey: [
+        { id: "a1", questionNumber: "1", answer: "1", explanation: "", importantPoints: [] },
+        { id: "a2", questionNumber: "2", answer: "2", explanation: "", importantPoints: [] },
+        { id: "a3", questionNumber: "3", answer: "3", explanation: "", importantPoints: [] },
+      ],
+    };
+
+    expect(getSheetQuestionReviewItems(sheet, "today")).toEqual([]);
+    expect(getSheetQuestionReviewItems({
+      ...sheet,
+      questionMeta: [{ questionNumber: "2", important: false, needsReview: true, updatedAt: "2026-01-01T00:00:00.000Z" }],
+    }, "today").map((item) => item.kind === "sheet-question" ? item.questionNumber : "")).toEqual(["2"]);
   });
 });

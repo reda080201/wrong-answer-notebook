@@ -65,6 +65,11 @@ interface EntryDetailProps {
     entry: WrongAnswerEntry,
     questionMeta: QuestionMeta[] | ((current: QuestionMeta[]) => QuestionMeta[]),
   ) => Promise<void>;
+  onActiveContextChange?: (context: {
+    entryId: string;
+    questionNumber: string | null;
+    source: "detail" | "focused" | "theater";
+  }) => void;
   initialQuestionTarget?: { questionNumber: string; requestId: number } | null;
 }
 
@@ -159,6 +164,7 @@ export default function EntryDetail({
   onQuestionTextChange,
   onTitleChange,
   onQuestionMetaChange,
+  onActiveContextChange,
   initialQuestionTarget,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
@@ -225,6 +231,15 @@ export default function EntryDetail({
     [questionBlocks],
   );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
+  useEffect(() => {
+    const theaterQuestion = theaterQuestionIndex === null ? undefined : questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined;
+    const focused = focusMode === "closed" ? undefined : focusedQuestion;
+    onActiveContextChange?.({
+      entryId: entry.id,
+      questionNumber: theaterQuestion?.displayNumber ? String(theaterQuestion.displayNumber) : focused?.displayNumber ? String(focused.displayNumber) : null,
+      source: theaterQuestion ? "theater" : focused ? "focused" : "detail",
+    });
+  }, [entry.id, focusMode, focusedQuestion, onActiveContextChange, questionAnchors, theaterQuestionIndex]);
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);

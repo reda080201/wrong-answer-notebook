@@ -8,6 +8,8 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup } from "./api";
+import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
+import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
@@ -111,6 +113,12 @@ export default function App() {
     setSettingsMessage: actions.setSettingsMessage,
   });
   const setSettingsMessage = actions.setSettingsMessage;
+  const mcpBridge = useMcpBridgeSettings({
+    mcpBridge: settings.mcpBridge,
+    persistMcpBridge: async (next) => setSettings({ ...settings, mcpBridge: next }),
+    setSettingsMessage,
+  });
+  const { syncActiveContext } = useBridgeActiveSync(settings.mcpBridge.enabled);
 
   useEffect(() => {
     if (!isTauri() || !settings.autoBackup.enabled) return;
@@ -296,6 +304,7 @@ export default function App() {
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
+              onActiveContextChange={(context) => syncActiveContext(context)}
             />
           ) : (
             <div className="detail-panel empty-state">
@@ -367,6 +376,15 @@ export default function App() {
           handleRestore={actions.handleRestore}
           runIntegrity={actions.runIntegrity}
           handleCleanupOrphans={actions.handleCleanupOrphans}
+          mcpBridgeSettings={mcpBridge.mcpBridgeSettings}
+          mcpBridgeStatus={mcpBridge.mcpBridgeStatus}
+          mcpBridgePortInput={mcpBridge.mcpBridgePortInput}
+          setMcpBridgePortInput={mcpBridge.setMcpBridgePortInput}
+          updateMcpBridgeConfig={mcpBridge.updateMcpBridgeConfig}
+          applyMcpBridgePort={mcpBridge.applyMcpBridgePort}
+          testMcpBridgeConnection={mcpBridge.testMcpBridgeConnection}
+          isMcpBridgeConnectionTesting={mcpBridge.isMcpBridgeConnectionTesting}
+          isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
           onClose={() => setShowSettings(false)}
         />
       )}

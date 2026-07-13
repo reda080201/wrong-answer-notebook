@@ -103,6 +103,7 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
     .map((item) => ({
       questionNumber: normalizeQuestionNumber(item.questionNumber),
       important: Boolean(item.important),
+      needsReview: Boolean(item.needsReview),
       difficultyScore: normalizeDifficultyScore(item.difficultyScore),
       bookmarkLabel: item.bookmarkLabel ? `${item.bookmarkLabel}`.trim() : undefined,
       note: item.note ? `${item.note}`.trim() : undefined,
@@ -128,7 +129,7 @@ export function getImportantQuestionCount(entry: WrongAnswerEntry): number {
 }
 
 export function getReviewNeedCount(entry: WrongAnswerEntry): number {
-  const answerNeedsReview = (entry.answerKey ?? []).filter((item) => item.needsReview).length;
+  const answerNeedsReview = normalizeQuestionMeta(entry.questionMeta).filter((item) => item.needsReview).length;
   const missing = entry.importAudit?.missingQuestionNumbers.length ?? 0;
   const due = entry.review?.dueAt && new Date(entry.review.dueAt).getTime() <= Date.now() ? 1 : 0;
   const questionDue = normalizeQuestionMeta(entry.questionMeta).filter(
@@ -228,6 +229,7 @@ export function applyQuestionReviewResult(
   const nextMeta: QuestionMeta = {
     ...(index >= 0 ? items[index] : { important: false }),
     questionNumber: normalized,
+    needsReview: false,
     review,
     updatedAt: reviewedAt.toISOString(),
   };

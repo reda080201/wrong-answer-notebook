@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
@@ -295,6 +296,19 @@ export function useAppActions({
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
           ),
+          reviewAttempts: [
+            ...(current.reviewAttempts ?? []),
+            {
+              id: uuidv4(),
+              entryId: current.id,
+              questionNumber: normalizeQuestionNumber(item.questionNumber),
+              reviewedAt: new Date().toISOString(),
+              correct: result !== "again",
+              confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+              result,
+              mistakeCause: questionMeta?.mistakeAnalysis?.primaryCause,
+            },
+          ],
         };
       });
       return;
@@ -302,7 +316,22 @@ export function useAppActions({
     const entry = item.entry;
     await patchEntry(entry.id, (current) => {
       const next = applyReviewResult(current, result);
-      return { review: next.review, mastered: next.mastered };
+      return {
+        review: next.review,
+        mastered: next.mastered,
+        reviewAttempts: [
+          ...(current.reviewAttempts ?? []),
+          {
+            id: uuidv4(),
+            entryId: current.id,
+            reviewedAt: new Date().toISOString(),
+            correct: result !== "again",
+            confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+            result,
+            mistakeCause: current.mistakeAnalysis?.primaryCause,
+          },
+        ],
+      };
     });
   };
 

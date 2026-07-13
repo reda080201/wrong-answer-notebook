@@ -13,6 +13,7 @@ import type {
   LectureSourceType,
   MistakeCauseType,
   ReviewEvent,
+  ReviewAttempt,
   ReviewResult,
   ReviewState,
   SheetFigureItem,
@@ -518,6 +519,38 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
     .filter((item) => item.questionNumber || item.title || item.caption || item.image);
 }
 
+function normalizeReviewAttempts(raw: unknown, entryId: string): ReviewAttempt[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Partial<ReviewAttempt> => Boolean(item && typeof item === "object"))
+    .filter((item) => item.result === "again" || item.result === "hard" || item.result === "good")
+    .map((item) => {
+      const result = item.result as ReviewResult;
+      return {
+      id: item.id || uuidv4(),
+      entryId: item.entryId || entryId,
+      questionNumber: item.questionNumber ? normalizeQuestionNumber(item.questionNumber) : undefined,
+      reviewedAt: isValidIsoDate(item.reviewedAt) ? item.reviewedAt : new Date().toISOString(),
+      answerText: typeof item.answerText === "string" ? item.answerText.trim() : undefined,
+      correct: Boolean(item.correct),
+      durationSeconds: typeof item.durationSeconds === "number" && item.durationSeconds >= 0
+        ? Math.floor(item.durationSeconds)
+        : undefined,
+      confidence: item.confidence === "low" || item.confidence === "medium" || item.confidence === "high"
+        ? item.confidence
+        : undefined,
+      hintUsed: Boolean(item.hintUsed),
+      blockedStage: item.blockedStage === "concept" || item.blockedStage === "interpretation" || item.blockedStage === "strategy" || item.blockedStage === "calculation" || item.blockedStage === "verification"
+        ? item.blockedStage
+        : undefined,
+      mistakeCause: item.mistakeCause === "calculation" || item.mistakeCause === "condition_misread" || item.mistakeCause === "concept_gap" || item.mistakeCause === "strategy_gap" || item.mistakeCause === "time_pressure" || item.mistakeCause === "choice_trap" || item.mistakeCause === "careless" || item.mistakeCause === "unknown"
+        ? item.mistakeCause
+        : undefined,
+      result,
+      };
+    });
+}
+
 function canonicalizeQuestionMistakeAnalysis(
   answerKey: SheetAnswerItem[],
   questionMeta: NonNullable<WrongAnswerEntry["questionMeta"]>,
@@ -526,24 +559,30 @@ function canonicalizeQuestionMistakeAnalysis(
   const nextAnswers = answerKey.map((answer) => {
     const next = { ...answer };
     delete next.mistakeAnalysis;
+    delete next.needsReview;
     return next;
   });
 
   for (const answer of answerKey) {
-    if (!answer.mistakeAnalysis?.causes.length) continue;
+    if (!answer.mistakeAnalysis?.causes.length && !answer.needsReview) continue;
     const number = normalizeQuestionNumber(answer.questionNumber);
     const index = nextMeta.findIndex(
       (meta) => normalizeQuestionNumber(meta.questionNumber) === number,
     );
     if (index >= 0) {
-      if (!nextMeta[index].mistakeAnalysis?.causes.length) {
-        nextMeta[index] = { ...nextMeta[index], mistakeAnalysis: answer.mistakeAnalysis };
-      }
+      nextMeta[index] = {
+        ...nextMeta[index],
+        mistakeAnalysis: nextMeta[index].mistakeAnalysis?.causes.length
+          ? nextMeta[index].mistakeAnalysis
+          : answer.mistakeAnalysis,
+        needsReview: nextMeta[index].needsReview || Boolean(answer.needsReview),
+      };
     } else {
       nextMeta.push({
         questionNumber: number,
         important: false,
-        mistakeAnalysis: answer.mistakeAnalysis,
+        mistakeAnalysis: answer.mistakeAnalysis?.causes.length ? answer.mistakeAnalysis : undefined,
+        needsReview: Boolean(answer.needsReview),
         updatedAt: new Date().toISOString(),
       });
     }
@@ -619,6 +658,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     answerKey,
     normalizeQuestionMeta(rest.questionMeta),
   );
+  const review = normalizeReview(rest.review, Boolean(rest.mastered));
 
   return {
     ...rest,
@@ -645,13 +685,15 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       : undefined,
     rejectedNotes: normalizeRejectedNotes(rest.rejectedNotes),
     mistakeAnalysis: normalizeMistakeAnalysis(rest.mistakeAnalysis),
-    review: normalizeReview(rest.review, Boolean(rest.mastered)),
+    review,
     checklist: entryKind === "concept" || entryKind === "lecture" ? normalizeChecklist(rest.checklist) : rest.checklist ?? [],
     sourceType: isLectureSourceType(rest.sourceType) ? rest.sourceType : undefined,
     linkedEntryIds: Array.isArray(rest.linkedEntryIds)
       ? rest.linkedEntryIds.map((id) => `${id}`.trim()).filter(Boolean)
       : [],
     concepts: normalizeImportantPoints(rest.concepts),
+    reviewAttempts: normalizeReviewAttempts(rest.reviewAttempts, rest.id),
+    mastered: review?.phase === "archived",
   };
 }
 

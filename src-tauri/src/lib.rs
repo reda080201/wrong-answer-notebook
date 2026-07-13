@@ -1,9 +1,14 @@
+mod mcp_bridge;
+mod notebook_store;
+
 use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 use tauri::Manager;
 use uuid::Uuid;
 use zip::write::FileOptions;
@@ -11,11 +16,10 @@ use zip::write::FileOptions;
 const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_AI_IMAGE_COUNT: usize = 20;
 const MAX_AI_IMAGE_TOTAL_BYTES: u64 = 14 * 1024 * 1024;
-const MAX_BACKUP_ZIP_BYTES: u64 = 50 * 1024 * 1024;
-const MAX_BACKUP_JSON_BYTES: u64 = 5 * 1024 * 1024;
-const MAX_BACKUP_IMAGE_COUNT: usize = 20;
-const MAX_BACKUP_TOTAL_IMAGE_BYTES: u64 = 100 * 1024 * 1024;
-const MAX_BACKUP_ENTRY_COUNT: usize = 100;
+const MAX_BACKUP_ZIP_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_BACKUP_JSON_BYTES: u64 = 100 * 1024 * 1024;
+const MAX_BACKUP_TOTAL_IMAGE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_BACKUP_ENTRY_COUNT: usize = 10_000;
 const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
 const AI_KEYRING_USER: &str = "gemini-api-key";
 const ENTRIES_SCHEMA_VERSION: u32 = 2;
@@ -573,17 +577,8 @@ fn unix_time_string() -> String {
 }
 
 #[tauri::command]
-fn load_entries(app: tauri::AppHandle) -> Result<Vec<WrongAnswerEntry>, String> {
-    let path = data_file(&app)?;
-    if !path.exists() {
-        return Ok(vec![]);
-    }
-    let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-    if content.trim().is_empty() {
-        return Ok(vec![]);
-    }
-    let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-    parse_entries_value(value)
+fn load_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>) -> Result<Vec<WrongAnswerEntry>, String> {
+    store.load_entries()
 }
 
 fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>, String> {
@@ -605,9 +600,49 @@ fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>
 }
 
 #[tauri::command]
-fn save_entries(app: tauri::AppHandle, entries: Vec<WrongAnswerEntry>) -> Result<(), String> {
-    let path = data_file(&app)?;
-    write_entries_json_atomic(&path, &entries)
+fn save_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>, entries: Vec<WrongAnswerEntry>) -> Result<(), String> {
+    store.save_entries(&entries)
+}
+
+#[tauri::command]
+fn get_mcp_bridge_status(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> mcp_bridge::McpBridgeStatus {
+    bridge.status()
+}
+
+#[tauri::command]
+async fn set_mcp_bridge_enabled(
+    app: tauri::AppHandle,
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+    enabled: bool,
+    port: Option<u16>,
+) -> Result<mcp_bridge::McpBridgeStatus, String> {
+    let requested_port = port.unwrap_or(mcp_bridge::DEFAULT_MCP_PORT);
+    if requested_port < 1024 { return Err("MCP 포트는 1024 이상이어야 합니다.".into()); }
+    let status = bridge.set_enabled(enabled, requested_port).await?;
+    let mut settings: serde_json::Value = serde_json::from_str(&load_settings_raw(&app)?)
+        .unwrap_or_else(|_| serde_json::json!({}));
+    let root = settings.as_object_mut().ok_or_else(|| "설정 형식이 올바르지 않습니다.".to_string())?;
+    root.insert("mcpBridge".into(), serde_json::json!({ "enabled": enabled, "port": requested_port }));
+    write_json_atomic(&settings_file(&app)?, &settings)?;
+    Ok(status)
+}
+
+#[tauri::command]
+async fn test_mcp_bridge(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> Result<mcp_bridge::McpBridgeStatus, String> {
+    bridge.test().await
+}
+
+#[tauri::command]
+fn sync_active_context(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+    entry_id: Option<String>,
+    question_number: Option<String>,
+) {
+    bridge.sync_active_context(entry_id, question_number);
 }
 
 #[tauri::command]
@@ -695,7 +730,11 @@ fn generate_import_with_ai(
             "responseMimeType": "application/json"
         }
     });
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|e| format!("Gemini HTTP client를 만들지 못했습니다: {e}"))?;
     let response = client
         .post(url)
         .header("x-goog-api-key", key)
@@ -744,7 +783,14 @@ fn get_image_file_path(app: tauri::AppHandle, filename: String) -> Result<String
 }
 
 #[tauri::command]
-fn delete_image(app: tauri::AppHandle, filename: String) -> Result<(), String> {
+fn delete_image(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    filename: String,
+) -> Result<(), String> {
+    if store.is_referenced_image(&filename)? {
+        return Err("다른 학습 항목에서 참조 중인 이미지는 삭제할 수 없습니다.".into());
+    }
     let path = image_path(&app, &filename)?;
     if path.exists() {
         fs::remove_file(path).map_err(|e| e.to_string())?;
@@ -758,16 +804,58 @@ fn create_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), S
 }
 
 fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<(), String> {
+    let entries = load_entries_raw(app)?;
+    let settings = load_settings_raw(app)?;
+    if entries.len() as u64 > MAX_BACKUP_JSON_BYTES || settings.len() as u64 > MAX_BACKUP_JSON_BYTES {
+        return Err("백업 데이터 JSON이 허용 용량을 초과했습니다.".into());
+    }
+    let image_dir = images_dir(app)?;
+    let mut images: Vec<(String, PathBuf, u64)> = Vec::new();
+    let mut total_image_bytes = 0u64;
+    if image_dir.exists() {
+        for item in fs::read_dir(&image_dir).map_err(|e| e.to_string())? {
+            let path = item.map_err(|e| e.to_string())?.path();
+            if !path.is_file() {
+                continue;
+            }
+            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if validate_image_filename(filename).is_err() {
+                continue;
+            }
+            let ext = path
+                .extension()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| format!("{filename} 이미지 확장자를 확인할 수 없습니다."))?;
+            validate_image_magic(&path, ext)?;
+            let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+            if size > MAX_IMAGE_BYTES {
+                return Err(format!("{filename} 이미지가 10MB 제한을 초과했습니다."));
+            }
+            total_image_bytes = total_image_bytes
+                .checked_add(size)
+                .ok_or_else(|| "백업 이미지 용량을 계산하지 못했습니다.".to_string())?;
+            if total_image_bytes > MAX_BACKUP_TOTAL_IMAGE_BYTES {
+                return Err("백업 이미지 전체 용량이 1GB 제한을 초과했습니다.".into());
+            }
+            images.push((filename.to_string(), path, size));
+        }
+    }
+    if images.len() + 3 > MAX_BACKUP_ENTRY_COUNT {
+        return Err("백업에 포함할 파일이 너무 많습니다.".into());
+    }
+
     let file = fs::File::create(backup_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     zip.start_file("entries.json", options).map_err(|e| e.to_string())?;
-    zip.write_all(load_entries_raw(&app)?.as_bytes())
+    zip.write_all(entries.as_bytes())
         .map_err(|e| e.to_string())?;
 
     zip.start_file("settings.json", options).map_err(|e| e.to_string())?;
-    zip.write_all(load_settings_raw(&app)?.as_bytes())
+    zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
     let meta = serde_json::json!({
@@ -780,27 +868,18 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     zip.write_all(serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    let image_dir = images_dir(&app)?;
-    if image_dir.exists() {
-        for item in fs::read_dir(image_dir).map_err(|e| e.to_string())? {
-            let path = item.map_err(|e| e.to_string())?.path();
-            if !path.is_file() {
-                continue;
-            }
-            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
-                continue;
-            };
-            if validate_image_filename(filename).is_err() {
-                continue;
-            }
-            zip.start_file(format!("images/{filename}"), options)
-                .map_err(|e| e.to_string())?;
-            let mut image = fs::File::open(&path).map_err(|e| e.to_string())?;
-            std::io::copy(&mut image, &mut zip).map_err(|e| e.to_string())?;
-        }
+    for (filename, path, _) in images {
+        zip.start_file(format!("images/{filename}"), options)
+            .map_err(|e| e.to_string())?;
+        let mut image = fs::File::open(&path).map_err(|e| e.to_string())?;
+        std::io::copy(&mut image, &mut zip).map_err(|e| e.to_string())?;
     }
 
     zip.finish().map_err(|e| e.to_string())?;
+    if fs::metadata(backup_path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_ZIP_BYTES {
+        let _ = fs::remove_file(backup_path);
+        return Err("완성된 백업 ZIP이 1GB 제한을 초과했습니다.".into());
+    }
     Ok(())
 }
 
@@ -828,7 +907,11 @@ fn create_auto_backup(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), String> {
+fn restore_backup_zip(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    backup_path: String,
+) -> Result<(), String> {
     let backup_metadata = fs::metadata(&backup_path).map_err(|e| e.to_string())?;
     if backup_metadata.len() > MAX_BACKUP_ZIP_BYTES {
         return Err("백업 ZIP 파일이 너무 큽니다. 50MB 이하만 복원할 수 있습니다.".into());
@@ -840,7 +923,7 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
     }
     let app_dir = app_dir(&app)?;
     let image_dir = images_dir(&app)?;
-    let mut entries_json: Option<serde_json::Value> = None;
+    let mut restored_entries: Option<Vec<WrongAnswerEntry>> = None;
     let mut settings_json: Option<serde_json::Value> = None;
     let mut images: Vec<(String, Vec<u8>)> = Vec::new();
     let mut total_image_bytes = 0u64;
@@ -856,11 +939,7 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
             file.read_to_string(&mut content).map_err(|e| e.to_string())?;
             let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
             if name == "entries.json" {
-                let entries = parse_entries_value(value)?;
-                entries_json = Some(serde_json::json!({
-                    "schemaVersion": ENTRIES_SCHEMA_VERSION,
-                    "entries": entries,
-                }));
+                restored_entries = Some(parse_entries_value(value)?);
             } else {
                 settings_json = Some(value);
             }
@@ -869,9 +948,6 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
                 continue;
             }
             validate_image_filename(filename)?;
-            if images.len() >= MAX_BACKUP_IMAGE_COUNT {
-                return Err("백업 ZIP 안의 이미지가 너무 많습니다.".into());
-            }
             if file.size() > MAX_IMAGE_BYTES {
                 return Err(format!("{filename} 이미지가 너무 큽니다."));
             }
@@ -892,11 +968,11 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
         }
     }
 
-    let entries_json = entries_json.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
+    let restored_entries = restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
     for (filename, bytes) in images {
         write_bytes_atomic(&image_dir.join(filename), &bytes)?;
     }
-    write_json_atomic(&app_dir.join("entries.json"), &entries_json)?;
+    store.save_entries(&restored_entries)?;
     if let Some(settings_json) = settings_json {
         write_json_atomic(&app_dir.join("settings.json"), &settings_json)?;
     }
@@ -905,8 +981,11 @@ fn restore_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), 
 }
 
 #[tauri::command]
-fn run_integrity_check(app: tauri::AppHandle) -> Result<IntegrityReport, String> {
-    let entries = load_entries(app.clone())?;
+fn run_integrity_check(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+) -> Result<IntegrityReport, String> {
+    let entries = store.load_entries()?;
     let image_dir = images_dir(&app)?;
     let referenced: HashSet<String> = entries
         .iter()
@@ -1066,6 +1145,35 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let store = Arc::new(notebook_store::NotebookStore::new(
+                data_file(&handle).map_err(std::io::Error::other)?,
+                images_dir(&handle).map_err(std::io::Error::other)?,
+            ));
+            let bridge = Arc::new(mcp_bridge::McpBridgeManager::new(
+                Arc::clone(&store),
+                app_dir(&handle).map_err(std::io::Error::other)?,
+            ));
+            // A saved enabled flag is honored only in the desktop process. The
+            // bridge still binds exclusively to 127.0.0.1 and requires keyring auth.
+            let should_start = load_settings_raw(&handle)
+                .ok()
+                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+                .and_then(|settings| settings.get("mcpBridge").and_then(|value| value.get("enabled")).and_then(|value| value.as_bool()))
+                .unwrap_or(false);
+            if should_start {
+                let bridge_to_start = Arc::clone(&bridge);
+                let saved_port = load_settings_raw(&handle).ok()
+                    .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+                    .and_then(|settings| settings.get("mcpBridge").and_then(|value| value.get("port")).and_then(|value| value.as_u64()))
+                    .and_then(|value| u16::try_from(value).ok()).unwrap_or(mcp_bridge::DEFAULT_MCP_PORT);
+                tauri::async_runtime::spawn(async move { let _ = bridge_to_start.set_enabled(true, saved_port).await; });
+            }
+            app.manage(store);
+            app.manage(bridge);
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             load_entries,
             save_entries,
@@ -1084,6 +1192,10 @@ pub fn run() {
             restore_backup_zip,
             run_integrity_check,
             cleanup_orphan_images,
+            get_mcp_bridge_status,
+            set_mcp_bridge_enabled,
+            test_mcp_bridge,
+            sync_active_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

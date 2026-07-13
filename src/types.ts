@@ -205,6 +205,7 @@ export interface SheetFigureItem {
 export interface QuestionMeta {
   questionNumber: string;
   important: boolean;
+  needsReview?: boolean;
   difficultyScore?: number;
   bookmarkLabel?: string;
   note?: string;
@@ -343,6 +344,32 @@ export interface AiProviderStatus extends AiProviderSettings {
   message?: string;
 }
 
+/** 로컬 읽기 전용 MCP 브리지의 공개 설정입니다. 인증 토큰은 절대 포함하지 않습니다. */
+export interface McpBridgeSettings {
+  enabled: boolean;
+  port: number;
+}
+
+export type McpBridgeState = "stopped" | "starting" | "running" | "error";
+
+/** 설정 화면과 앱 내부 동기화에만 쓰는 공개 상태입니다. */
+export interface McpBridgeStatus {
+  enabled: boolean;
+  state: McpBridgeState;
+  host: "127.0.0.1";
+  port: number;
+  readOnly: true;
+  bridgeVersion: string;
+  lastConnectedAt?: string;
+  lastError?: string;
+  hasAuthToken: boolean;
+}
+
+export interface McpActiveContext {
+  entryId: string | null;
+  questionNumber: string | null;
+}
+
 export interface AppSettings {
   templates: EntryTemplate[];
   promptTemplates: PromptTemplate[];
@@ -359,6 +386,7 @@ export interface AppSettings {
     enabled: boolean;
     lastBackupAt?: string;
   };
+  mcpBridge: McpBridgeSettings;
 }
 
 export type IntegritySeverity = "info" | "warning" | "error";
@@ -404,6 +432,7 @@ export interface WrongAnswerEntry {
   rejectedNotes?: string[];
   mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
+  reviewAttempts?: ReviewAttempt[];
   checklist?: ChecklistItem[];
   learningBlocks?: LearningBlock[];
   sourceType?: LectureSourceType;
@@ -418,6 +447,21 @@ export interface WrongAnswerEntry {
   createdAt: string;
   updatedAt: string;
   mastered: boolean;
+}
+
+export interface ReviewAttempt {
+  id: string;
+  entryId: string;
+  questionNumber?: string;
+  reviewedAt: string;
+  answerText?: string;
+  correct: boolean;
+  durationSeconds?: number;
+  confidence?: "low" | "medium" | "high";
+  hintUsed?: boolean;
+  blockedStage?: "concept" | "interpretation" | "strategy" | "calculation" | "verification";
+  mistakeCause?: MistakeCauseType;
+  result: ReviewResult;
 }
 
 export type EntryFormData = Omit<

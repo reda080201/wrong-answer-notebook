@@ -1,5 +1,11 @@
 import { useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import {
+  DEFAULT_MCP_BRIDGE_SETTINGS,
+  MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
+  type McpBridgeRuntimeStatus,
+  type McpBridgeSettings,
+} from "../hooks/useMcpBridgeSettings";
 import type {
   AiProviderStatus,
   AiProviderType,
@@ -38,6 +44,15 @@ interface SettingsModalProps {
   runIntegrity: () => Promise<void>;
   handleCleanupOrphans: () => Promise<void>;
   onClose: () => void;
+  mcpBridgeSettings?: McpBridgeSettings;
+  mcpBridgeStatus?: McpBridgeRuntimeStatus | null;
+  mcpBridgePortInput?: string;
+  setMcpBridgePortInput?: (value: string) => void;
+  updateMcpBridgeConfig?: (patch: Partial<McpBridgeSettings>) => Promise<void>;
+  applyMcpBridgePort?: () => Promise<void>;
+  testMcpBridgeConnection?: () => Promise<void>;
+  isMcpBridgeConnectionTesting?: boolean;
+  isMcpBridgeBrowserBlocked?: boolean;
 }
 
 export default function SettingsModal({
@@ -66,7 +81,18 @@ export default function SettingsModal({
   runIntegrity,
   handleCleanupOrphans,
   onClose,
+  mcpBridgeSettings = DEFAULT_MCP_BRIDGE_SETTINGS,
+  mcpBridgeStatus = null,
+  mcpBridgePortInput,
+  setMcpBridgePortInput,
+  updateMcpBridgeConfig,
+  applyMcpBridgePort,
+  testMcpBridgeConnection,
+  isMcpBridgeConnectionTesting = false,
+  isMcpBridgeBrowserBlocked = !isTauri(),
 }: SettingsModalProps) {
+  const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
+  const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
   const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
   const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
@@ -355,6 +381,17 @@ export default function SettingsModal({
               <div className="advanced-settings-panel">
                 <p>고급 설정은 진단 정보와 위험한 옵션을 분리해 두는 공간입니다.</p>
                 <p>백업, 복원, 무결성 검사, 이미지 정리는 데이터 관리 탭에서 실행하세요.</p>
+                <McpBridgeSettingsPanel
+                  settings={mcpBridgeSettings}
+                  status={mcpBridgeStatus}
+                  portInput={bridgePortValue}
+                  controlsDisabled={bridgeControlsDisabled}
+                  connectionTesting={isMcpBridgeConnectionTesting}
+                  onPortInputChange={setMcpBridgePortInput}
+                  onApplyPort={applyMcpBridgePort}
+                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
+                  onTestConnection={testMcpBridgeConnection}
+                />
               </div>
             )}
           </section>
@@ -396,6 +433,141 @@ function TemplateList({
           </div>
         ))
       )}
+    </div>
+  );
+}
+
+
+function mcpBridgeStatusLabel(status: McpBridgeRuntimeStatus["status"]): string {
+  switch (status) {
+    case "disabled":
+      return "꺼짐";
+    case "idle":
+      return "대기";
+    case "starting":
+      return "시작 중";
+    case "listening":
+      return "수신 중";
+    case "connected":
+      return "연결됨";
+    case "error":
+      return "오류";
+    default:
+      return status;
+  }
+}
+
+function McpBridgeSettingsPanel({
+  settings,
+  status,
+  portInput,
+  controlsDisabled,
+  connectionTesting,
+  onPortInputChange,
+  onApplyPort,
+  onToggleEnabled,
+  onTestConnection,
+}: {
+  settings: McpBridgeSettings;
+  status: McpBridgeRuntimeStatus | null;
+  portInput: string;
+  controlsDisabled: boolean;
+  connectionTesting: boolean;
+  onPortInputChange?: (value: string) => void;
+  onApplyPort?: () => Promise<void>;
+  onToggleEnabled: (enabled: boolean) => void;
+  onTestConnection?: () => Promise<void>;
+}) {
+  const activePort = status?.port ?? (settings.enabled ? settings.port : null);
+  const connectionTestLabel =
+    status?.lastConnectionTestOk === true
+      ? "성공"
+      : status?.lastConnectionTestOk === false
+        ? "실패"
+        : "아직 실행하지 않음";
+
+  return (
+    <div className="ai-provider-settings mcp-bridge-settings">
+      <p className="settings-label">MCP 브릿지</p>
+      <p className="provider-hint">
+        외부 AI 도구가 오답노트 데이터에 접근할 수 있도록 로컬 브릿지를 켭니다. 기본값은 꺼짐이며, 브라우저 모드에서는 사용할 수 없습니다.
+      </p>
+
+      {controlsDisabled && (
+        <p className="integrity-issue integrity-issue--warning" role="status">
+          {MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE}
+        </p>
+      )}
+
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.enabled}
+          disabled={controlsDisabled}
+          onChange={(event) => onToggleEnabled(event.target.checked)}
+        />
+        MCP 브릿지 사용 {controlsDisabled ? "(데스크톱 앱에서 사용 가능)" : "(기본: 꺼짐)"}
+      </label>
+
+      <div className="form-field">
+        <label htmlFor="mcp-bridge-port">포트</label>
+        <div className="ai-provider-key-row">
+          <input
+            id="mcp-bridge-port"
+            type="number"
+            min={1024}
+            max={65535}
+            value={portInput}
+            disabled={controlsDisabled || !settings.enabled}
+            onChange={(event) => onPortInputChange?.(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void onApplyPort?.();
+              }
+            }}
+          />
+
+          <button
+            type="button"
+            className="theme-btn"
+            disabled={controlsDisabled || !settings.enabled || !onApplyPort}
+            onClick={() => void onApplyPort?.()}
+          >
+            포트 적용
+          </button>
+          <button
+            type="button"
+            className="theme-btn"
+            disabled={controlsDisabled || !settings.enabled || connectionTesting || !onTestConnection}
+            onClick={() => void onTestConnection?.()}
+          >
+            {connectionTesting ? "연결 테스트 중…" : "연결 테스트"}
+          </button>
+        </div>
+        <p className="provider-hint">로컬 MCP 클라이언트가 접속할 TCP 포트입니다. (1024~65535)</p>
+      </div>
+
+      <p className="provider-hint">읽기 전용으로 고정됩니다. 외부 도구는 노트·이미지·설정을 수정할 수 없습니다.</p>
+
+      <div className="ai-provider-status mcp-bridge-status" aria-live="polite">
+        <span>상태: {mcpBridgeStatusLabel(status?.status ?? "disabled")}</span>
+        <span>포트: {activePort ?? "—"}</span>
+        <span>읽기 전용: 예</span>
+        <span>
+          연결 테스트: {connectionTestLabel}
+          {status?.lastConnectionTestAt
+            ? ` · ${new Date(status.lastConnectionTestAt).toLocaleString("ko-KR")}`
+            : ""}
+        </span>
+        {typeof status?.clientCount === "number" && (
+          <span>연결된 클라이언트: {status.clientCount}</span>
+        )}
+        {status?.message && <span>안내: {status.message}</span>}
+        {status?.error && (
+          <span className="integrity-issue integrity-issue--error">오류: {status.error}</span>
+        )}
+      </div>
     </div>
   );
 }

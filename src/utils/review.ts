@@ -173,11 +173,7 @@ export function applyReviewResult(
   return {
     ...entry,
     review,
-    mastered: next.phase === "long_term"
-      ? true
-      : result === "good"
-        ? entry.mastered
-        : false,
+    mastered: false,
   };
 }
 
@@ -192,7 +188,7 @@ export function isDueForReview(entry: WrongAnswerEntry, now = new Date()): boole
 
 function isQuestionDue(review: ReviewState | undefined, now = new Date()): boolean {
   if (review?.phase === "archived") return false;
-  if (!review?.dueAt) return true;
+  if (!review?.dueAt) return false;
   return startOfDay(new Date(review.dueAt)).getTime() <= startOfDay(now).getTime();
 }
 
@@ -228,7 +224,11 @@ export function getSheetQuestionReviewItems(
         );
       }
       if (mode === "all") return true;
-      return Boolean(answer?.needsReview || isQuestionDue(questionMeta?.review, now));
+      return Boolean(
+        questionMeta?.needsReview ||
+        questionMeta?.important ||
+        isQuestionDue(questionMeta?.review, now),
+      );
     })
     .map((block) => ({
       kind: "sheet-question" as const,
