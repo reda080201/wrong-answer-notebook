@@ -61,7 +61,8 @@ describe("SettingsModal MCP bridge tab", () => {
     expect(screen.getByLabelText("포트")).toBeDisabled();
     expect(screen.getByText(/상태:/)).toHaveTextContent("꺼짐");
     expect(screen.getByText(/읽기 전용:/)).toHaveTextContent("예");
-    expect(screen.getByText(/연결 테스트:/)).toHaveTextContent("아직 실행하지 않음");
+    expect(screen.getByText(/마지막 연결 테스트:/)).toHaveTextContent("아직 실행하지 않음");
+    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).toHaveTextContent("아직 없음");
   });
 
   it("renders runtime status, port, and connection test result", () => {
@@ -74,8 +75,9 @@ describe("SettingsModal MCP bridge tab", () => {
         error: null,
         message: "브릿지가 포트를 열었습니다.",
         clientCount: 1,
-        lastConnectionTestAt: "2026-07-12T12:00:00.000Z",
-        lastConnectionTestOk: true,
+        lastTestAt: "2026-07-12T12:00:00.000Z",
+        lastTestOk: true,
+        lastClientConnectedAt: "2026-07-12T13:00:00.000Z",
       },
       mcpBridgePortInput: "4100",
       isMcpBridgeBrowserBlocked: false,
@@ -86,9 +88,30 @@ describe("SettingsModal MCP bridge tab", () => {
     expect(screen.getByText(/상태:/)).toHaveTextContent("수신 중");
     expect(screen.getByText(/포트:/)).toHaveTextContent("4100");
     expect(screen.getByText(/읽기 전용:/)).toHaveTextContent("예");
-    expect(screen.getByText(/연결 테스트:/)).toHaveTextContent("성공");
+    expect(screen.getByText(/마지막 연결 테스트:/)).toHaveTextContent("성공");
+    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).not.toHaveTextContent("아직 없음");
     expect(screen.getByText(/연결된 클라이언트:/)).toHaveTextContent("1");
     expect(screen.getByText(/안내:/)).toHaveTextContent("브릿지가 포트를 열었습니다.");
+  });
+
+  it("formats Rust epoch-second timestamps for MCP status", () => {
+    renderSettingsModal({
+      mcpBridgeSettings: { enabled: true, port: 43129 },
+      mcpBridgeStatus: {
+        status: "listening",
+        port: 43129,
+        readOnly: true,
+        error: null,
+        lastTestAt: "1784019600",
+        lastTestOk: true,
+        lastClientConnectedAt: "1784019660",
+      },
+      isMcpBridgeBrowserBlocked: false,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "고급" }));
+    expect(screen.getByText(/마지막 연결 테스트:/)).not.toHaveTextContent("1784019600");
+    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).not.toHaveTextContent("1784019660");
   });
 
   it("shows one-time pairing controls without a persistent token field", () => {

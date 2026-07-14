@@ -360,7 +360,12 @@ export interface McpBridgeStatus {
   port: number;
   readOnly: true;
   bridgeVersion: string;
-  lastConnectedAt?: string;
+  /** 마지막으로 앱이 실제 MCP 왕복 검증을 마친 시각입니다. */
+  lastTestAt?: string;
+  /** 마지막 실제 MCP 왕복 검증 결과입니다. 서버 listening 상태와 별개입니다. */
+  lastTestOk?: boolean;
+  /** 마지막으로 인증된 외부 MCP 클라이언트가 접속한 시각입니다. */
+  lastClientConnectedAt?: string;
   lastError?: string;
   hasAuthToken: boolean;
 }

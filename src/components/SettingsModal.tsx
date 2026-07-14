@@ -473,6 +473,15 @@ function mcpBridgeStatusLabel(status: McpBridgeRuntimeStatus["status"]): string 
   }
 }
 
+function formatMcpStatusTime(value: string): string {
+  // Rust stores bridge timestamps as epoch seconds while fixtures and older
+  // bridge builds may return ISO strings. Keep this presentation boundary
+  // tolerant without changing the public status contract.
+  const epochSeconds = /^\d+(?:\.\d+)?$/.test(value) ? Number(value) : null;
+  const date = epochSeconds === null ? new Date(value) : new Date(epochSeconds * 1000);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString("ko-KR");
+}
+
 function McpBridgeSettingsPanel({
   settings,
   status,
@@ -506,9 +515,9 @@ function McpBridgeSettingsPanel({
 }) {
   const activePort = status?.port ?? (settings.enabled ? settings.port : null);
   const connectionTestLabel =
-    status?.lastConnectionTestOk === true
+    status?.lastTestOk === true
       ? "성공"
-      : status?.lastConnectionTestOk === false
+      : status?.lastTestOk === false
         ? "실패"
         : "아직 실행하지 않음";
 
@@ -579,7 +588,7 @@ function McpBridgeSettingsPanel({
       <section className="mcp-pairing-controls" aria-label="MCP 연결 관리">
         <p className="settings-label">안전한 연결</p>
         <p className="provider-hint">
-          영구 인증 토큰은 표시하거나 복사할 수 없습니다. 연결할 tunnel-client에만 일회성 코드를 입력하세요.
+          영구 인증 토큰은 표시하거나 복사할 수 없습니다. 이 코드는 앱의 페어링 규칙을 지원하는 로컬 MCP 클라이언트에만 입력하세요.
         </p>
         <div className="settings-actions">
           <button type="button" className="theme-btn" disabled={controlsDisabled || !settings.enabled || pairingPending || !onCreatePairing} onClick={() => void onCreatePairing?.()}>
@@ -607,10 +616,16 @@ function McpBridgeSettingsPanel({
         <span>포트: {activePort ?? "—"}</span>
         <span>읽기 전용: 예</span>
         <span>
-          연결 테스트: {connectionTestLabel}
-          {status?.lastConnectionTestAt
-            ? ` · ${new Date(status.lastConnectionTestAt).toLocaleString("ko-KR")}`
+          마지막 연결 테스트: {connectionTestLabel}
+          {status?.lastTestAt
+            ? ` · ${formatMcpStatusTime(status.lastTestAt)}`
             : ""}
+        </span>
+        <span>
+          마지막 외부 클라이언트 접속:
+          {status?.lastClientConnectedAt
+            ? ` ${formatMcpStatusTime(status.lastClientConnectedAt)}`
+            : " 아직 없음"}
         </span>
         {typeof status?.clientCount === "number" && (
           <span>연결된 클라이언트: {status.clientCount}</span>

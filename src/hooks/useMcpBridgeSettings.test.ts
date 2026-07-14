@@ -37,6 +37,8 @@ vi.mock("../api", () => ({
     readOnly: true,
     bridgeVersion: "local-bridge-v1",
     hasAuthToken: true,
+    lastTestAt: "2026-07-14T09:00:00.000Z",
+    lastTestOk: true,
   })),
   createMcpBridgePairing: vi.fn(async () => ({
     code: "PAIR-1234",
@@ -149,10 +151,25 @@ describe("useMcpBridgeSettings", () => {
       await result.current.testMcpBridgeConnection();
     });
 
-    expect(result.current.mcpBridgeStatus?.lastConnectionTestOk).toBe(true);
+    expect(result.current.mcpBridgeStatus?.lastTestOk).toBe(true);
+    expect(result.current.mcpBridgeStatus?.status).toBe("listening");
     expect(setSettingsMessage).toHaveBeenCalledWith(
       expect.stringContaining("연결 테스트 성공"),
     );
+  });
+
+  it("does not treat a listening server as a successful MCP connection test", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    const { result } = renderHook(() => useMcpBridgeSettings({ setSettingsMessage: vi.fn() }));
+
+    await waitFor(() => {
+      expect(result.current.mcpBridgeStatus?.status).toBe("disabled");
+    });
+
+    await act(async () => { await result.current.updateMcpBridgeConfig({ enabled: true }); });
+
+    expect(result.current.mcpBridgeStatus?.status).toBe("listening");
+    expect(result.current.mcpBridgeStatus?.lastTestOk).toBeNull();
   });
 
   it("shows only a short-lived pairing code and clears it after credential rotation", async () => {

@@ -21,8 +21,9 @@ export interface McpBridgeRuntimeStatus {
   readOnly: true;
   error: string | null;
   message?: string;
-  lastConnectionTestAt: string | null;
-  lastConnectionTestOk: boolean | null;
+  lastTestAt: string | null;
+  lastTestOk: boolean | null;
+  lastClientConnectedAt: string | null;
   clientCount?: number;
 }
 
@@ -33,8 +34,11 @@ function toRuntimeStatus(status: McpBridgeStatus): McpBridgeRuntimeStatus {
     readOnly: true,
     error: status.lastError ?? null,
     message: status.state === "running" ? "127.0.0.1에서 읽기 전용으로 실행 중입니다." : undefined,
-    lastConnectionTestAt: status.lastConnectedAt ?? null,
-    lastConnectionTestOk: status.state === "running" ? true : null,
+    // Listening only proves that the local socket opened. It is not an MCP
+    // handshake result and must never be presented as one.
+    lastTestAt: status.lastTestAt ?? null,
+    lastTestOk: status.lastTestOk ?? null,
+    lastClientConnectedAt: status.lastClientConnectedAt ?? null,
   };
 }
 
@@ -60,7 +64,15 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
 
   const refreshMcpBridgeStatus = useCallback(async () => {
     if (!isTauri()) {
-      const status: McpBridgeRuntimeStatus = { status: "disabled", port: null, readOnly: true, error: MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE, lastConnectionTestAt: null, lastConnectionTestOk: null };
+      const status: McpBridgeRuntimeStatus = {
+        status: "disabled",
+        port: null,
+        readOnly: true,
+        error: MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
+        lastTestAt: null,
+        lastTestOk: null,
+        lastClientConnectedAt: null,
+      };
       setRuntimeStatus(status);
       return status;
     }

@@ -129,13 +129,25 @@ export function getImportantQuestionCount(entry: WrongAnswerEntry): number {
 }
 
 export function getReviewNeedCount(entry: WrongAnswerEntry): number {
-  const answerNeedsReview = normalizeQuestionMeta(entry.questionMeta).filter((item) => item.needsReview).length;
-  const missing = entry.importAudit?.missingQuestionNumbers.length ?? 0;
-  const due = entry.review?.dueAt && new Date(entry.review.dueAt).getTime() <= Date.now() ? 1 : 0;
-  const questionDue = normalizeQuestionMeta(entry.questionMeta).filter(
-    (meta) => meta.review?.dueAt && new Date(meta.review.dueAt).getTime() <= Date.now(),
-  ).length;
-  return answerNeedsReview + missing + due + questionDue;
+  const reviewQuestionNumbers = new Set<string>();
+  const addQuestion = (questionNumber: string | number | undefined, fallbackKey?: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    reviewQuestionNumbers.add(normalized || fallbackKey || "");
+  };
+
+  normalizeQuestionMeta(entry.questionMeta).forEach((meta) => {
+    const isDue = meta.review?.dueAt && new Date(meta.review.dueAt).getTime() <= Date.now();
+    if (meta.needsReview || isDue) addQuestion(meta.questionNumber);
+  });
+  (entry.answerKey ?? []).forEach((answer, index) => {
+    if (answer.needsReview) addQuestion(answer.questionNumber, `answer-${index}`);
+  });
+  (entry.importAudit?.missingQuestionNumbers ?? []).forEach((questionNumber, index) => {
+    addQuestion(questionNumber, `missing-${index}`);
+  });
+
+  const entryDue = entry.review?.dueAt && new Date(entry.review.dueAt).getTime() <= Date.now() ? 1 : 0;
+  return reviewQuestionNumbers.size + entryDue;
 }
 
 export function getQuestionMetaForBlock(

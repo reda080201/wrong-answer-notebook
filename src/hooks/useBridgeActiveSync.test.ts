@@ -8,8 +8,9 @@ const liveStatus: McpBridgeRuntimeStatus = {
   port: 3847,
   readOnly: true,
   error: null,
-  lastConnectionTestAt: null,
-  lastConnectionTestOk: null,
+  lastTestAt: null,
+  lastTestOk: null,
+  lastClientConnectedAt: null,
 };
 
 describe("useBridgeActiveSync", () => {
