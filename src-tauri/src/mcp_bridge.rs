@@ -36,6 +36,8 @@ const MAX_ACTIVE_PAIRING_CODES: usize = 3;
 const PAIRING_WINDOW: Duration = Duration::from_secs(60);
 const MAX_PAIRING_ATTEMPTS_PER_WINDOW: u32 = 5;
 const PAIRING_LOCKOUT: Duration = Duration::from_secs(60);
+const SESSION_TTL: Duration = Duration::from_secs(15 * 60);
+const MAX_ACTIVE_SESSIONS: usize = 5;
 const MAX_RESOURCE_IMAGES: usize = 8;
 const MAX_RESOURCE_BYTES: u64 = 10 * 1024 * 1024;
 
@@ -68,7 +70,7 @@ struct PairingAttempt {
 pub struct McpBridgeManager {
     store: Arc<NotebookStore>, data_dir: PathBuf,
     active_context: Arc<Mutex<ActiveContext>>, status: Arc<Mutex<McpBridgeStatus>>,
-    auth_token: Arc<Mutex<String>>, pairing_codes: Arc<Mutex<HashMap<String, Instant>>>,
+    auth_token: Arc<Mutex<String>>, pairing_codes: Arc<Mutex<HashMap<String, Instant>>>, sessions: Arc<Mutex<HashMap<String, Instant>>>,
     pairing_attempts: Arc<Mutex<HashMap<IpAddr, PairingAttempt>>>,
     task: Mutex<Option<JoinHandle<()>>>,
 }
@@ -78,11 +80,12 @@ impl McpBridgeManager {
         Self { store, data_dir, active_context: Arc::new(Mutex::new(ActiveContext::default())),
             status: Arc::new(Mutex::new(stopped_status())), auth_token: Arc::new(Mutex::new(String::new())),
             pairing_codes: Arc::new(Mutex::new(HashMap::new())),
+            sessions: Arc::new(Mutex::new(HashMap::new())),
             pairing_attempts: Arc::new(Mutex::new(HashMap::new())), task: Mutex::new(None) }
     }
     pub fn status(&self) -> McpBridgeStatus { self.status.lock().map(|value| value.clone()).unwrap_or_else(|_| stopped_status()) }
     pub fn sync_active_context(&self, entry_id: Option<String>, question_number: Option<String>) {
-        if let Ok(mut context) = self.active_context.lock() { context.entry_id = entry_id; context.question_number = question_number.map(|value| normalize_question_number(&value)); }
+        if let Ok(mut context) = self.active_context.lock() { context.entry_id = entry_id; context.question_number = question_number; }
     }
     pub async fn set_enabled(&self, enabled: bool, port: u16) -> Result<McpBridgeStatus, String> { if enabled { self.start(port).await?; } else { self.stop(); } Ok(self.status()) }
     pub fn create_pairing_code(&self) -> Result<String, String> {
@@ -98,6 +101,7 @@ impl McpBridgeManager {
         let token = new_token(); store_token(&token)?;
         *self.auth_token.lock().map_err(|_| "MCP 인증 상태를 잠글 수 없습니다.".to_owned())? = token;
         self.pairing_codes.lock().map_err(|_| "페어링 상태를 잠글 수 없습니다.".to_owned())?.clear();
+        self.sessions.lock().map_err(|_| "MCP 세션 상태를 잠글 수 없습니다.".to_owned())?.clear();
         self.pairing_attempts.lock().map_err(|_| "페어링 상태를 잠글 수 없습니다.".to_owned())?.clear(); Ok(())
     }
     pub fn disconnect(&self) -> Result<(), String> { self.rotate_token() }
@@ -126,7 +130,7 @@ impl McpBridgeManager {
         let token = self.auth_token.lock().map_err(|_| "MCP 인증 상태를 잠글 수 없습니다.".to_owned())?.clone();
         let token = if token.trim().is_empty() { load_or_create_token()? } else { token };
         *self.auth_token.lock().map_err(|_| "MCP 인증 상태를 잠글 수 없습니다.".to_owned())? = token;
-        let state = BridgeHttpState { store: Arc::clone(&self.store), images_path: self.store.images_path().to_path_buf(), auth_token: Arc::clone(&self.auth_token), pairing_codes: Arc::clone(&self.pairing_codes), pairing_attempts: Arc::clone(&self.pairing_attempts), active_context: Arc::clone(&self.active_context), status: Arc::clone(&self.status), audit_path: self.data_dir.join("mcp-audit.jsonl") };
+        let state = BridgeHttpState { store: Arc::clone(&self.store), images_path: self.store.images_path().to_path_buf(), auth_token: Arc::clone(&self.auth_token), pairing_codes: Arc::clone(&self.pairing_codes), sessions: Arc::clone(&self.sessions), pairing_attempts: Arc::clone(&self.pairing_attempts), active_context: Arc::clone(&self.active_context), status: Arc::clone(&self.status), audit_path: self.data_dir.join("mcp-audit.jsonl") };
         let app = router(state);
         let new_task = tauri::async_runtime::spawn(async move { if let Err(error) = axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await { eprintln!("local MCP bridge stopped: {error}"); } });
         if let Ok(mut task) = self.task.lock() { if let Some(old) = task.replace(new_task) { old.abort(); } }
@@ -151,7 +155,7 @@ fn store_token(token: &str) -> Result<(), String> { keyring_entry()?.set_passwor
 fn load_or_create_token() -> Result<String, String> { let entry=keyring_entry()?; if let Ok(token)=entry.get_password() { if !token.trim().is_empty() { return Ok(token); } } let token=new_token(); entry.set_password(&token).map_err(|e| format!("MCP 인증 토큰을 저장하지 못했습니다: {e}"))?; Ok(token) }
 
 #[derive(Clone)]
-struct BridgeHttpState { store: Arc<NotebookStore>, images_path: PathBuf, auth_token: Arc<Mutex<String>>, pairing_codes: Arc<Mutex<HashMap<String, Instant>>>, pairing_attempts: Arc<Mutex<HashMap<IpAddr, PairingAttempt>>>, active_context: Arc<Mutex<ActiveContext>>, status: Arc<Mutex<McpBridgeStatus>>, audit_path: PathBuf }
+struct BridgeHttpState { store: Arc<NotebookStore>, images_path: PathBuf, auth_token: Arc<Mutex<String>>, pairing_codes: Arc<Mutex<HashMap<String, Instant>>>, sessions: Arc<Mutex<HashMap<String, Instant>>>, pairing_attempts: Arc<Mutex<HashMap<IpAddr, PairingAttempt>>>, active_context: Arc<Mutex<ActiveContext>>, status: Arc<Mutex<McpBridgeStatus>>, audit_path: PathBuf }
 fn router(state: BridgeHttpState) -> Router { Router::new().route("/mcp", post(mcp_post).get(mcp_get)).route("/pair", post(redeem_pairing)).layer(axum::extract::DefaultBodyLimit::max(1024 * 1024)).with_state(state) }
 
 async fn redeem_pairing(State(state): State<BridgeHttpState>, ConnectInfo(peer): ConnectInfo<SocketAddr>, headers: HeaderMap, Json(body): Json<Value>) -> Response {
@@ -173,7 +177,17 @@ async fn redeem_pairing(State(state): State<BridgeHttpState>, ConnectInfo(peer):
         return (StatusCode::UNAUTHORIZED,"유효하지 않거나 만료된 페어링 코드입니다.").into_response();
     }
     if let Ok(mut attempts) = state.pairing_attempts.lock() { attempts.remove(&peer.ip()); }
-    let token=state.auth_token.lock().map(|value| value.clone()).unwrap_or_default();
+    let token = new_token();
+    let mut sessions = match state.sessions.lock() {
+        Ok(value) => value,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "MCP 세션 상태를 잠글 수 없습니다.").into_response(),
+    };
+    sessions.retain(|_, expires| *expires > now);
+    if sessions.len() >= MAX_ACTIVE_SESSIONS {
+        audit(&state, "pairing/redeem", Duration::ZERO, false, 0, Some(429));
+        return (StatusCode::TOO_MANY_REQUESTS, "활성 MCP 세션이 너무 많습니다.").into_response();
+    }
+    sessions.insert(token.clone(), now + SESSION_TTL);
     audit(&state, "pairing/redeem", Duration::ZERO, true, 1, None);
     Json(json!({"accessToken":token,"tokenType":"Bearer"})).into_response()
 }
@@ -195,7 +209,20 @@ async fn mcp_post(State(state): State<BridgeHttpState>, request: Request<Body>) 
 }
 fn authorize(state:&BridgeHttpState, headers:&HeaderMap)->Result<(),Response> {
     if !origin_allowed(headers) { return Err((StatusCode::FORBIDDEN,"허용되지 않은 Origin입니다.").into_response()); }
-    let token=state.auth_token.lock().map(|value|value.clone()).unwrap_or_default(); match headers.get(header::AUTHORIZATION).and_then(|value|value.to_str().ok()) { Some(value) if value==format!("Bearer {token}")=>{ if headers.get("x-wan-self-test").and_then(|value| value.to_str().ok()) != Some("1") { if let Ok(mut status)=state.status.lock(){status.last_client_connected_at=Some(now_string());} } Ok(()) }, _=>Err((StatusCode::UNAUTHORIZED,"인증이 필요합니다.").into_response()) }
+    let Some(value) = headers.get(header::AUTHORIZATION).and_then(|value| value.to_str().ok()) else { return Err((StatusCode::UNAUTHORIZED,"인증이 필요합니다.").into_response()); };
+    let Some(token) = value.strip_prefix("Bearer ") else { return Err((StatusCode::UNAUTHORIZED,"인증이 필요합니다.").into_response()); };
+    let self_test = headers.get("x-wan-self-test").and_then(|value| value.to_str().ok()) == Some("1");
+    let authorized = if self_test {
+        state.auth_token.lock().map(|value| value == token).unwrap_or(false)
+    } else {
+        state.sessions.lock().map(|mut sessions| {
+            sessions.retain(|_, expires| *expires > Instant::now());
+            sessions.contains_key(token)
+        }).unwrap_or(false)
+    };
+    if !authorized { return Err((StatusCode::UNAUTHORIZED,"인증이 필요합니다.").into_response()); }
+    if !self_test { if let Ok(mut status)=state.status.lock(){status.last_client_connected_at=Some(now_string());} }
+    Ok(())
 }
 fn origin_allowed(headers: &HeaderMap) -> bool {
     let Some(origin) = headers.get(header::ORIGIN).and_then(|value| value.to_str().ok()) else { return true; };
@@ -219,9 +246,10 @@ fn call_tool(state:&BridgeHttpState,params:&Value)->Result<(Value,usize),(i32,St
 fn valid_entry_kind(value:&str)->bool{matches!(value,"wrong_answer"|"problem_sheet"|"concept"|"lecture")}
 fn search_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let query=args.get("query").and_then(Value::as_str).unwrap_or("");let subject=args.get("subject").and_then(Value::as_str);let entry_kind=args.get("entryKind").and_then(Value::as_str);if entry_kind.is_some_and(|value|!valid_entry_kind(value)){return Err((-32602,"entryKind 값이 올바르지 않습니다.".into()));}let limit=args.get("limit").and_then(Value::as_u64).unwrap_or(20);if !(1..=50).contains(&limit){return Err((-32602,"limit은 1~50이어야 합니다.".into()));}let entries=state.store.search(SearchQuery{query,subject,entry_kind,limit:limit as usize}).map_err(store_error)?;Ok(json!({"items":entries.into_iter().map(|entry|json!({"entryId":entry.id,"title":entry.title,"subject":entry.subject,"entryKind":entry.entry_kind,"updatedAt":entry.updated_at,"questionCount":crate::notebook_store::parse_question_blocks(&entry.question).len(),"matchedSnippet":matched_snippet(&entry,query,220)})).collect::<Vec<_>>() }))}
 fn entry_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let entry_id=args.get("entryId").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"entryId가 필요합니다.".to_owned()))?;let entry=state.store.get_entry(entry_id).map_err(store_error)?.ok_or((-32004,"항목을 찾지 못했습니다.".to_owned()))?;let answers=args.get("includeAnswers").and_then(Value::as_bool).unwrap_or(false);let explanations=args.get("includeExplanations").and_then(Value::as_bool).unwrap_or(false);let review=args.get("includeReview").and_then(Value::as_bool).unwrap_or(false);let mut item=json!({"entryId":entry.id,"title":entry.title,"subject":entry.subject,"entryKind":entry.entry_kind,"question":entry.question,"tags":entry.tags,"updatedAt":entry.updated_at});if answers{item["correctAnswer"]=Value::String(entry.correct_answer);item["answerKey"]=Value::Array(entry.answer_key.clone());}if explanations{item["explanation"]=Value::String(entry.explanation);item["explanationParts"]=serde_json::to_value(entry.explanation_parts).unwrap_or(Value::Null);}if review{item["review"]=entry.review.unwrap_or(Value::Null);}Ok(item)}
-fn question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let entry_id=args.get("entryId").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"entryId가 필요합니다.".to_owned()))?;let number=args.get("questionNumber").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"questionNumber가 필요합니다.".to_owned()))?;let question=state.store.get_question(entry_id,number).map_err(store_error)?.ok_or((-32004,"문항을 찾지 못했습니다.".to_owned()))?;let answer=args.get("includeAnswer").and_then(Value::as_bool).unwrap_or(false);let explanation=args.get("includeExplanation").and_then(Value::as_bool).unwrap_or(false);let include_review=args.get("includeReview").and_then(Value::as_bool).unwrap_or(false);let include_images=args.get("includeImages").and_then(Value::as_bool).unwrap_or(false);let mut item=json!({"entryId":question.entry.id,"questionNumber":question.question_number,"question":question.body,"choices":question.choices});if let Some(answer_key)=question.answer_key{if answer{item["answer"]=answer_key.get("answer").cloned().unwrap_or(Value::Null);}if explanation{item["explanation"]=answer_key.get("explanation").cloned().unwrap_or(Value::Null);}}if include_review{item["review"]=question_review(&question.entry,&question.question_number);}if include_images{item["images"]=image_resources(state,&question.entry,&question.question_number);}Ok(item)}
+fn question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let entry_id=args.get("entryId").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"entryId가 필요합니다.".to_owned()))?;let number=args.get("questionNumber").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"questionNumber가 필요합니다.".to_owned()))?;let entry=state.store.get_entry(entry_id).map_err(store_error)?.ok_or((-32004,"문항을 찾지 못했습니다.".to_owned()))?;let answer=args.get("includeAnswer").and_then(Value::as_bool).unwrap_or(false);let explanation=args.get("includeExplanation").and_then(Value::as_bool).unwrap_or(false);let include_review=args.get("includeReview").and_then(Value::as_bool).unwrap_or(false);let include_images=args.get("includeImages").and_then(Value::as_bool).unwrap_or(false);if entry.entry_kind=="wrong_answer"{let mut item=json!({"entryId":entry.id,"questionNumber":number,"question":entry.question,"choices":[]});if answer{item["correctAnswer"]=Value::String(entry.correct_answer);}if explanation{item["explanation"]=Value::String(entry.explanation);item["explanationParts"]=serde_json::to_value(entry.explanation_parts).unwrap_or(Value::Null);}if include_review{item["review"]=entry.review.unwrap_or(Value::Null);}if include_images{item["questionImages"]=image_resources_for_entry(state,&entry,None);}return Ok(item);}let question=state.store.get_question(entry_id,number).map_err(store_error)?.ok_or((-32004,"문항을 찾지 못했습니다.".to_owned()))?;let mut item=json!({"entryId":question.entry.id,"questionNumber":question.question_number,"question":question.body,"choices":question.choices});if let Some(answer_key)=question.answer_key{if answer{item["answer"]=answer_key.get("answer").cloned().unwrap_or(Value::Null);}if explanation{item["explanation"]=answer_key.get("explanation").cloned().unwrap_or(Value::Null);}}if include_review{item["review"]=question_review(&question.entry,&question.question_number);}if include_images{item["images"]=image_resources(state,&question.entry,&question.question_number);}Ok(item)}
 fn question_review(entry:&crate::WrongAnswerEntry,question_number:&str)->Value{let wanted=normalize_question_number(question_number);entry.extra.get("questionMeta").and_then(Value::as_array).and_then(|items|items.iter().find(|item|item.get("questionNumber").and_then(Value::as_str).is_some_and(|number|normalize_question_number(number)==wanted))).and_then(|item|item.get("review")).cloned().unwrap_or(Value::Null)}
-fn active_question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let context=state.active_context.lock().map_err(|_|(-32603,"현재 문항 상태를 읽지 못했습니다.".to_owned()))?.clone();let Some(entry_id)=context.entry_id else{return Ok(json!({"active":false,"message":"앱에서 선택한 문항이 없습니다."}));};let number=context.question_number.unwrap_or_default();if number.is_empty(){return Ok(json!({"active":false,"entryId":entry_id,"message":"현재 항목에 선택된 문항이 없습니다."}));}let mut next=args.clone();next["entryId"]=Value::String(entry_id);next["questionNumber"]=Value::String(number);question_payload(state,&next)}
+fn image_resources_for_entry(state:&BridgeHttpState,entry:&crate::WrongAnswerEntry,question_number:Option<&str>)->Value{let mut names=entry.question_images.clone();if let Some(number)=question_number{let wanted=normalize_question_number(number);names.extend(entry.figures.iter().filter(|figure|normalize_question_number(&figure.question_number)==wanted).filter_map(|figure|figure.image.clone()));}names.sort();names.dedup();let mut total=0u64;Value::Array(names.into_iter().filter_map(|filename|{if namesafe_image(&state.images_path,&filename).ok()?{let size=fs::metadata(state.images_path.join(&filename)).ok()?.len();if total.checked_add(size)? > MAX_RESOURCE_BYTES{return None;}total+=size;Some(json!({"uri":resource_uri(&entry.id,&filename),"name":filename,"mimeType":mime_for(&filename).ok()?}))}else{None}}).take(MAX_RESOURCE_IMAGES).collect())}
+fn active_question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let context=state.active_context.lock().map_err(|_|(-32603,"현재 문항 상태를 읽지 못했습니다.".to_owned()))?.clone();let Some(entry_id)=context.entry_id else{return Ok(json!({"active":false,"message":"앱에서 선택한 문항이 없습니다."}));};let entry=state.store.get_entry(&entry_id).map_err(store_error)?.ok_or((-32004,"항목을 찾지 못했습니다.".to_owned()))?;let number=context.question_number.unwrap_or_default();if number.is_empty()&&entry.entry_kind!="wrong_answer"{return Ok(json!({"active":false,"entryId":entry_id,"message":"현재 항목에 선택된 문항이 없습니다."}));}let mut next=args.clone();next["entryId"]=Value::String(entry_id);if !number.is_empty(){next["questionNumber"]=Value::String(number);}else{next["questionNumber"]=Value::String("active".into());}question_payload(state,&next)}
 fn image_resources(state:&BridgeHttpState,entry:&crate::WrongAnswerEntry,question_number:&str)->Value{let normalized=normalize_question_number(question_number);let mut names=entry.figures.iter().filter(|figure|normalize_question_number(&figure.question_number)==normalized).filter_map(|figure|figure.image.clone()).collect::<Vec<_>>();names.sort();names.dedup();let mut total=0u64;let items=names.into_iter().filter_map(|filename|{if namesafe_image(&state.images_path,&filename).ok()? {let size=fs::metadata(state.images_path.join(&filename)).ok()?.len();if total.checked_add(size)? > MAX_RESOURCE_BYTES{return None;}total+=size;Some(json!({"uri":resource_uri(&entry.id,&filename),"name":filename,"mimeType":mime_for(&filename).ok()?}))}else{None}}).take(MAX_RESOURCE_IMAGES).collect::<Vec<_>>();Value::Array(items)}
 fn resources_list(state:&BridgeHttpState,args:&Value)->Result<(Value,usize),(i32,String)>{let entry_id=args.get("entryId").and_then(Value::as_str);let question=args.get("questionNumber").and_then(Value::as_str);let mut resources=Vec::new();if let(Some(entry_id),Some(question))=(entry_id,question){let entry=state.store.get_entry(entry_id).map_err(store_error)?.ok_or((-32004,"항목을 찾지 못했습니다.".to_owned()))?;resources=image_resources(state,&entry,question).as_array().cloned().unwrap_or_default();}let count=resources.len();Ok((json!({"resources":resources}),count))}
 fn resource_read(state:&BridgeHttpState,args:&Value)->Result<(Value,usize),(i32,String)>{let uri=args.get("uri").and_then(Value::as_str).ok_or((-32602,"uri가 필요합니다.".to_owned()))?;let Some((entry_id,filename))=parse_resource_uri(uri)else{return Err((-32602,"지원하지 않는 이미지 URI입니다.".into()));};let entry=state.store.get_entry(entry_id).map_err(store_error)?.ok_or((-32004,"항목을 찾지 못했습니다.".to_owned()))?;let listed=entry.question_images.iter().any(|item|item==filename)||entry.figures.iter().any(|figure|figure.image.as_deref()==Some(filename));if !listed{return Err((-32004,"이미지 리소스를 찾지 못했습니다.".into()));}if !namesafe_image(&state.images_path,filename).map_err(store_error)?{return Err((-32004,"이미지 리소스를 찾지 못했습니다.".into()));}let path=state.images_path.join(filename);let bytes=fs::read(path).map_err(|error| store_error(error.to_string()))?;let mime=mime_for(filename).map_err(store_error)?;Ok((json!({"contents":[{"uri":uri,"mimeType":mime,"blob":BASE64_STANDARD.encode(bytes)}]}),1))}
