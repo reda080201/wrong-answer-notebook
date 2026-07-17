@@ -6043,6 +6043,31 @@ button.formula-chip:hover {
   line-height: 1.5;
 }
 
+.mcp-pairing-controls {
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--control-border);
+}
+
+.mcp-pairing-code {
+  display: grid;
+  gap: 0.3rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.mcp-pairing-code code {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 .advanced-settings-panel {
   display: flex;
   flex-direction: column;
@@ -6265,3 +6290,49 @@ button.formula-chip:hover {
     border-radius: 14px;
   }
 }
+.exam-start-button,
+.exam-session-overlay {
+  position: relative;
+  z-index: 2;
+}
+
+.exam-start-button {
+  margin: 0.5rem 0.75rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.5rem;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+.exam-session-overlay {
+  position: absolute;
+  inset: 0.75rem;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.exam-session-header,
+.exam-question-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.exam-question-paper {
+  max-width: 52rem;
+  margin: 1rem auto;
+  padding: 1.5rem;
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-border);
+  border-radius: 0.75rem;
+}
+
+.exam-question-paper label { display: grid; gap: 0.35rem; margin-top: 1rem; }
+.exam-question-paper input:not([type="checkbox"]), .exam-question-paper textarea { width: 100%; padding: 0.55rem; color: var(--text); background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 0.4rem; }
+.exam-gpt-actions { margin-top: 1rem; }

@@ -228,7 +228,8 @@ export async function readLearningImportFile(file: File): Promise<LearningBlock[
   if (!/\.(html|txt|md|json)$/.test(name)) {
     throw new Error(".html, .txt, .md, .json 파일만 가져올 수 있습니다.");
   }
-  return parseLearningImportText(await file.text(), file.name);
+  const { decodeTextFile } = await import("../features/import/services/decodeTextFile");
+  return parseLearningImportText((await decodeTextFile(file)).text, file.name);
 }
 
 export async function readLectureImportFile(file: File): Promise<LectureImportResult> {
@@ -236,5 +237,6 @@ export async function readLectureImportFile(file: File): Promise<LectureImportRe
   if (!/\.(html|txt|md|json)$/.test(name)) {
     throw new Error(".html, .txt, .md, .json 파일만 가져올 수 있습니다.");
   }
-  return parseLectureImportText(await file.text(), file.name);
+  const { decodeTextFile } = await import("../features/import/services/decodeTextFile");
+  return parseLectureImportText((await decodeTextFile(file)).text, file.name);
 }

@@ -40,6 +40,7 @@ import { parseQuestionText } from "../utils/textLayout";
 import ImageField from "./ImageField";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 import ImportEntriesPreviewModal from "./ImportEntriesPreviewModal";
+import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entryDraft";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -58,49 +59,7 @@ interface ImportFromGptModalProps {
 }
 
 function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
-  return {
-    ...data,
-    tags: data.tags ? [...data.tags] : [],
-    questionImages: data.questionImages ? [...data.questionImages] : [],
-    answerKey: data.answerKey
-      ? data.answerKey.map((item) => ({
-          ...item,
-          importantPoints: [...item.importantPoints],
-          concepts: item.concepts ? [...item.concepts] : [],
-          diagramType: item.diagramType,
-          diagramSpec: item.diagramSpec
-            ? { ...item.diagramSpec, highlights: item.diagramSpec.highlights ? [...item.diagramSpec.highlights] : undefined }
-            : undefined,
-          steps: item.steps ? [...item.steps] : [],
-          choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
-        }))
-      : [],
-    figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
-    questionMeta: data.questionMeta
-      ? data.questionMeta.map((meta) => ({
-          ...meta,
-          review: meta.review
-            ? { ...meta.review, history: meta.review.history.map((event) => ({ ...event })) }
-            : undefined,
-        }))
-      : [],
-    learningBlocks: data.learningBlocks
-      ? data.learningBlocks.map((block) => ({
-          ...block,
-          diagramSpec: block.diagramSpec
-            ? { ...block.diagramSpec, highlights: block.diagramSpec.highlights ? [...block.diagramSpec.highlights] : undefined }
-            : undefined,
-        }))
-      : [],
-    importAudit: data.importAudit ? {
-      ...data.importAudit,
-      expectedQuestionNumbers: [...data.importAudit.expectedQuestionNumbers],
-      detectedQuestionNumbers: [...data.importAudit.detectedQuestionNumbers],
-      missingQuestionNumbers: [...data.importAudit.missingQuestionNumbers],
-      uncertainQuestionNumbers: [...data.importAudit.uncertainQuestionNumbers],
-    } : undefined,
-    rejectedNotes: data.rejectedNotes ? [...data.rejectedNotes] : [],
-  };
+  return cloneEntryDraft(mergeEntryDraft(data));
 }
 
 function answerDifficultyLabel(value: SheetAnswerItem["difficulty"]) {

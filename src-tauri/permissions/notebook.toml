@@ -22,5 +22,8 @@ commands.allow = [
   "get_mcp_bridge_status",
   "set_mcp_bridge_enabled",
   "test_mcp_bridge",
+  "create_mcp_bridge_pairing",
+  "rotate_mcp_bridge_credential",
+  "disconnect_mcp_bridge_clients",
   "sync_active_context",
 ]

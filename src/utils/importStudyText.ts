@@ -12,6 +12,7 @@ import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
+import { decodeTextFile } from "../features/import/services/decodeTextFile";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -86,7 +87,7 @@ export async function readImportFile(file: File): Promise<string> {
   if (!name.endsWith(".txt") && !name.endsWith(".md") && !name.endsWith(".json")) {
     throw new Error(".txt, .md, .json 파일만 가져올 수 있습니다.");
   }
-  return file.text();
+  return (await decodeTextFile(file)).text;
 }
 
 export function parseImportedStudyText(

@@ -7,6 +7,7 @@ import {
   isDifficultyFilter,
   sortEntries,
 } from "./appUi";
+import { getReviewNeedCount } from "./questionMeta";
 
 const baseEntry: WrongAnswerEntry = {
   id: "1",
@@ -60,6 +61,38 @@ describe("appUi utilities", () => {
     expect(sortEntries([small, large], "question-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
     expect(sortEntries([small, large], "bookmark-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
     expect(sortEntries([small, large], "review-need-count-desc").map((entry) => entry.id)).toEqual(["large", "small"]);
+  });
+
+  it("counts answer-key review needs without duplicating normalized question numbers", () => {
+    const sheet = {
+      ...baseEntry,
+      entryKind: "problem_sheet" as const,
+      questionMeta: [
+        {
+          questionNumber: "01",
+          important: false,
+          needsReview: true,
+          review: { dueAt: "2020-01-01T00:00:00.000Z", intervalDays: 1, streak: 0, history: [] },
+          updatedAt: "2026-01-01T00:00:00.000Z",
+        },
+        { questionNumber: "2번", important: false, updatedAt: "2026-01-01T00:00:00.000Z" },
+      ],
+      answerKey: [
+        { id: "a1", questionNumber: "1.", answer: "", explanation: "", importantPoints: [], needsReview: true },
+        { id: "a2", questionNumber: "02", answer: "", explanation: "", importantPoints: [], needsReview: true },
+        { id: "a3", questionNumber: "3", answer: "", explanation: "", importantPoints: [], needsReview: true },
+      ],
+      importAudit: {
+        expectedQuestionNumbers: ["1", "2", "3", "4"],
+        detectedQuestionNumbers: ["1", "2", "3"],
+        missingQuestionNumbers: ["#1", "2", "4"],
+        uncertainQuestionNumbers: [],
+        handwritingExcluded: true,
+        needsReviewCount: 0,
+      },
+    };
+
+    expect(getReviewNeedCount(sheet)).toBe(4);
   });
 
   it("sorts sheets by group title and part order", () => {

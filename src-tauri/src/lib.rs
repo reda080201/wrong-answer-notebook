@@ -38,7 +38,26 @@ pub struct ExplanationPart {
 #[serde(rename_all = "camelCase")]
 pub struct SheetFigureItem {
     #[serde(default)]
+    pub id: String,
+    #[serde(default)]
+    pub question_number: String,
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub caption: String,
+    #[serde(default)]
     pub image: Option<String>,
+    #[serde(default = "default_figure_source")]
+    pub source: String,
+    #[serde(default)]
+    pub needs_review: Option<bool>,
+    /// Preserve forward-compatible figure metadata written by the frontend.
+    #[serde(flatten)]
+    pub extra: serde_json::Map<String, serde_json::Value>,
+}
+
+fn default_figure_source() -> String {
+    "original".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -605,6 +624,19 @@ fn save_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>, ent
 }
 
 #[tauri::command]
+fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("exam-sessions.json");
+    if !path.exists() { return Ok(serde_json::json!([])); }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&raw).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
+    write_json_atomic(&app_dir(&app)?.join("exam-sessions.json"), &sessions)
+}
+
+#[tauri::command]
 fn get_mcp_bridge_status(
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
 ) -> mcp_bridge::McpBridgeStatus {
@@ -636,6 +668,42 @@ async fn test_mcp_bridge(
     bridge.test().await
 }
 
+/// Returns only a short-lived one-time code; the bearer credential never
+/// crosses the Tauri command boundary or appears in settings.json.
+#[tauri::command]
+fn create_mcp_bridge_pairing(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> Result<serde_json::Value, String> {
+    let code = bridge.create_pairing_code()?;
+    let expires_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|value| value.as_millis() + 300_000)
+        .unwrap_or(0)
+        .to_string();
+    let status = bridge.status();
+    Ok(serde_json::json!({
+        "code": code,
+        "expiresAt": expires_at,
+        "bridgeUrl": format!("http://127.0.0.1:{}/mcp", status.port),
+    }))
+}
+
+#[tauri::command]
+fn rotate_mcp_bridge_credential(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> Result<mcp_bridge::McpBridgeStatus, String> {
+    bridge.rotate_token()?;
+    Ok(bridge.status())
+}
+
+#[tauri::command]
+fn disconnect_mcp_bridge_clients(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> Result<mcp_bridge::McpBridgeStatus, String> {
+    bridge.disconnect()?;
+    Ok(bridge.status())
+}
+
 #[tauri::command]
 fn sync_active_context(
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
@@ -643,6 +711,14 @@ fn sync_active_context(
     question_number: Option<String>,
 ) {
     bridge.sync_active_context(entry_id, question_number);
+}
+
+#[tauri::command]
+fn sync_active_exam_context(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+    context: serde_json::Value,
+) -> Result<(), String> {
+    bridge.sync_active_exam_context(context)
 }
 
 #[tauri::command]
@@ -1120,7 +1196,14 @@ mod tests {
     fn collects_figure_images() {
         let mut entry = sample_entry();
         entry.figures = vec![SheetFigureItem {
+            id: "figure-1".into(),
+            question_number: "1".into(),
+            title: "그림".into(),
+            caption: "검사용 그림".into(),
             image: Some("figure.png".into()),
+            source: "original".into(),
+            needs_review: None,
+            extra: serde_json::Map::new(),
         }];
 
         assert!(collect_entry_images(&entry).contains(&"figure.png".to_string()));
@@ -1177,6 +1260,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_entries,
             save_entries,
+            load_exam_sessions,
+            save_exam_sessions,
             load_settings,
             save_settings,
             get_ai_provider_status,
@@ -1195,7 +1280,11 @@ pub fn run() {
             get_mcp_bridge_status,
             set_mcp_bridge_enabled,
             test_mcp_bridge,
+            create_mcp_bridge_pairing,
+            rotate_mcp_bridge_credential,
+            disconnect_mcp_bridge_clients,
             sync_active_context,
+            sync_active_exam_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

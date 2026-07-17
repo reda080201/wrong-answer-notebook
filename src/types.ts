@@ -270,6 +270,71 @@ export interface MistakeAnalysis {
 
 export type ReviewResult = "again" | "hard" | "good";
 
+export type ExamSessionStatus = "in_progress" | "submitted";
+
+export interface ExamQuestionSnapshot {
+  id: string;
+  questionNumber: string;
+  passage?: string;
+  question: string;
+  choices: string[];
+  questionImages: string[];
+  figures: SheetFigureItem[];
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface ExamResponse {
+  questionNumber: string;
+  response: string;
+  scratchNote: string;
+  markedForReview: boolean;
+  updatedAt: string;
+}
+
+export interface ExamQuestionResult {
+  questionNumber: string;
+  correct: boolean;
+  hasResponse: boolean;
+  markedForReview: boolean;
+}
+
+export interface ExamSessionScore {
+  totalQuestions: number;
+  answeredCount: number;
+  correctCount: number;
+  markedForReviewCount: number;
+  percentCorrect: number;
+  questionResults: ExamQuestionResult[];
+  scoredAt: string;
+}
+
+export interface ExamSession {
+  id: string;
+  entryId: string;
+  title: string;
+  subject: string;
+  status: ExamSessionStatus;
+  questions: ExamQuestionSnapshot[];
+  responses: ExamResponse[];
+  currentQuestionIndex: number;
+  startedAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  score?: ExamSessionScore;
+}
+
+export interface ActiveExamContext {
+  sessionId: string | null;
+  questionId: string | null;
+  questionIndex: number | null;
+  userResponse: string;
+  scratchNote: string;
+  markedForReview: boolean;
+  submitted: boolean;
+  updatedAt: string;
+}
+
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
 
 export interface ReviewEvent {
@@ -360,9 +425,21 @@ export interface McpBridgeStatus {
   port: number;
   readOnly: true;
   bridgeVersion: string;
-  lastConnectedAt?: string;
+  /** 마지막으로 앱이 실제 MCP 왕복 검증을 마친 시각입니다. */
+  lastTestAt?: string;
+  /** 마지막 실제 MCP 왕복 검증 결과입니다. 서버 listening 상태와 별개입니다. */
+  lastTestOk?: boolean;
+  /** 마지막으로 인증된 외부 MCP 클라이언트가 접속한 시각입니다. */
+  lastClientConnectedAt?: string;
   lastError?: string;
   hasAuthToken: boolean;
+}
+
+/** 일회성 MCP 연결 코드의 공개 정보입니다. bearer token은 절대 프론트에 전달하지 않습니다. */
+export interface McpBridgePairingSession {
+  code: string;
+  expiresAt: string;
+  bridgeUrl: string;
 }
 
 export interface McpActiveContext {

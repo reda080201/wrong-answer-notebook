@@ -37,6 +37,31 @@ vi.mock("../api", () => ({
     readOnly: true,
     bridgeVersion: "local-bridge-v1",
     hasAuthToken: true,
+    lastTestAt: "2026-07-14T09:00:00.000Z",
+    lastTestOk: true,
+  })),
+  createMcpBridgePairing: vi.fn(async () => ({
+    code: "PAIR-1234",
+    expiresAt: "2026-07-13T12:00:00.000Z",
+    bridgeUrl: "http://127.0.0.1:43129/mcp",
+  })),
+  rotateMcpBridgeCredential: vi.fn(async () => ({
+    enabled: true,
+    state: "running",
+    host: "127.0.0.1",
+    port: 43129,
+    readOnly: true,
+    bridgeVersion: "local-bridge-v1",
+    hasAuthToken: true,
+  })),
+  disconnectMcpBridgeClients: vi.fn(async () => ({
+    enabled: true,
+    state: "running",
+    host: "127.0.0.1",
+    port: 43129,
+    readOnly: true,
+    bridgeVersion: "local-bridge-v1",
+    hasAuthToken: true,
   })),
 }));
 
@@ -126,9 +151,35 @@ describe("useMcpBridgeSettings", () => {
       await result.current.testMcpBridgeConnection();
     });
 
-    expect(result.current.mcpBridgeStatus?.lastConnectionTestOk).toBe(true);
+    expect(result.current.mcpBridgeStatus?.lastTestOk).toBe(true);
+    expect(result.current.mcpBridgeStatus?.status).toBe("listening");
     expect(setSettingsMessage).toHaveBeenCalledWith(
       expect.stringContaining("연결 테스트 성공"),
     );
+  });
+
+  it("does not treat a listening server as a successful MCP connection test", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    const { result } = renderHook(() => useMcpBridgeSettings({ setSettingsMessage: vi.fn() }));
+
+    await waitFor(() => {
+      expect(result.current.mcpBridgeStatus?.status).toBe("disabled");
+    });
+
+    await act(async () => { await result.current.updateMcpBridgeConfig({ enabled: true }); });
+
+    expect(result.current.mcpBridgeStatus?.status).toBe("listening");
+    expect(result.current.mcpBridgeStatus?.lastTestOk).toBeNull();
+  });
+
+  it("shows only a short-lived pairing code and clears it after credential rotation", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    const { result } = renderHook(() => useMcpBridgeSettings({ setSettingsMessage: vi.fn() }));
+
+    await act(async () => { await result.current.createPairing(); });
+    expect(result.current.pairingSession?.code).toBe("PAIR-1234");
+
+    await act(async () => { await result.current.rotateCredential(); });
+    expect(result.current.pairingSession).toBeNull();
   });
 });
