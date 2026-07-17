@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -8,6 +8,7 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup } from "./api";
+import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveExamContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
@@ -20,6 +21,10 @@ import { useTheme } from "./hooks/useTheme";
 import type { EntryKind } from "./types";
 import { downloadMarkdown, openPrintableEntry } from "./utils/exportEntry";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
+import ExamSessionView from "./features/exam/components/ExamSessionView";
+import { createExamSession } from "./features/exam/services/examSession";
+import { scoreExamSession } from "./features/exam/services/examScoring";
+import type { ExamSession } from "./types";
 
 export default function App() {
   const {
@@ -41,6 +46,7 @@ export default function App() {
     settings,
     settingsError,
     setSettings,
+    patchSettings,
     refreshSettings,
     clearSettingsError,
   } = useSettings();
@@ -52,6 +58,46 @@ export default function App() {
     questionNumber: string;
     requestId: number;
   } | null>(null);
+  const [examSession, setExamSession] = useState<ExamSession | null>(null);
+  const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
+  const savedExamSessionsRef = useRef<ExamSession[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadExamSessions().then((sessions) => {
+      if (!cancelled) {
+        const normalized = Array.isArray(sessions) ? sessions : [];
+        savedExamSessionsRef.current = normalized;
+        setSavedExamSessions(normalized);
+      }
+    }).catch(() => {
+      if (!cancelled) setSavedExamSessions([]);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!examSession) {
+      void syncMcpBridgeActiveExamContext({ sessionId: null, questionId: null, questionIndex: null, userResponse: "", scratchNote: "", markedForReview: false, submitted: false, updatedAt: new Date().toISOString() });
+      return;
+    }
+    const current = examSession.questions[examSession.currentQuestionIndex];
+    const response = current ? examSession.responses.find((item) => item.questionNumber === current.questionNumber) : undefined;
+    const context = { sessionId: examSession.id, questionId: current?.id ?? null, questionIndex: examSession.currentQuestionIndex, userResponse: response?.response ?? "", scratchNote: response?.scratchNote ?? "", markedForReview: response?.markedForReview ?? false, submitted: examSession.status === "submitted", updatedAt: examSession.updatedAt };
+    const timer = window.setTimeout(() => { void syncMcpBridgeActiveExamContext(context); }, 350);
+    return () => window.clearTimeout(timer);
+  }, [examSession]);
+
+  useEffect(() => {
+    if (!examSession) return;
+    const timer = window.setTimeout(() => {
+      const nextSessions = [...savedExamSessionsRef.current.filter((item) => item.id !== examSession.id), examSession];
+      savedExamSessionsRef.current = nextSessions;
+      setSavedExamSessions(nextSessions);
+      void saveExamSessions(nextSessions);
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [examSession]);
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -115,7 +161,7 @@ export default function App() {
   const setSettingsMessage = actions.setSettingsMessage;
   const mcpBridge = useMcpBridgeSettings({
     mcpBridge: settings.mcpBridge,
-    persistMcpBridge: async (next) => setSettings({ ...settings, mcpBridge: next }),
+    persistMcpBridge: async (next) => patchSettings({ mcpBridge: next }),
     setSettingsMessage,
   });
   const { syncActiveContext } = useBridgeActiveSync(settings.mcpBridge.enabled);
@@ -132,13 +178,7 @@ export default function App() {
     createAutoBackup()
       .then(async () => {
         if (cancelled) return;
-        await setSettings({
-          ...settings,
-          autoBackup: {
-            ...settings.autoBackup,
-            lastBackupAt: new Date().toISOString(),
-          },
-        });
+        await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
       })
       .catch(() => {
         if (!cancelled) {
@@ -150,7 +190,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [settings, setSettings, setSettingsMessage]);
+  }, [settings, patchSettings, setSettingsMessage]);
 
   const selectEntry = (entryId: string, section?: EntryKind) => {
     if (section) setActiveSection(section);
@@ -261,7 +301,27 @@ export default function App() {
           />
 
           {selected ? (
-            <EntryDetail
+            <>
+              {selected.entryKind === "problem_sheet" && !examSession && (() => {
+                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
+                return <button
+                  type="button"
+                  className="exam-start-button"
+                  onClick={() => setExamSession(resumable ?? createExamSession(selected))}
+                >
+                  {resumable ? "모의고사 이어서 보기" : "모의고사 시작"}
+                </button>;
+              })()}
+              {examSession ? (
+                <div className="exam-session-overlay">
+                  <button type="button" onClick={() => setExamSession(null)}>시험 닫기</button>
+                  <ExamSessionView
+                    session={examSession}
+                    onChange={setExamSession}
+                    onSubmit={(session) => setExamSession({ ...session, status: "submitted", submittedAt: new Date().toISOString(), score: scoreExamSession(session) })}
+                  />
+                </div>
+              ) : <EntryDetail
               entry={selected}
               onEdit={actions.openEdit}
               onQuickGptSolution={
@@ -305,7 +365,8 @@ export default function App() {
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
               onActiveContextChange={(context) => syncActiveContext(context)}
-            />
+            />}
+            </>
           ) : (
             <div className="detail-panel empty-state">
               <span className="icon">{entryKindIcon(activeSection)}</span>

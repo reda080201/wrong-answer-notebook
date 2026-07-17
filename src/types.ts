@@ -270,6 +270,71 @@ export interface MistakeAnalysis {
 
 export type ReviewResult = "again" | "hard" | "good";
 
+export type ExamSessionStatus = "in_progress" | "submitted";
+
+export interface ExamQuestionSnapshot {
+  id: string;
+  questionNumber: string;
+  passage?: string;
+  question: string;
+  choices: string[];
+  questionImages: string[];
+  figures: SheetFigureItem[];
+  correctAnswer?: string;
+  explanation?: string;
+}
+
+export interface ExamResponse {
+  questionNumber: string;
+  response: string;
+  scratchNote: string;
+  markedForReview: boolean;
+  updatedAt: string;
+}
+
+export interface ExamQuestionResult {
+  questionNumber: string;
+  correct: boolean;
+  hasResponse: boolean;
+  markedForReview: boolean;
+}
+
+export interface ExamSessionScore {
+  totalQuestions: number;
+  answeredCount: number;
+  correctCount: number;
+  markedForReviewCount: number;
+  percentCorrect: number;
+  questionResults: ExamQuestionResult[];
+  scoredAt: string;
+}
+
+export interface ExamSession {
+  id: string;
+  entryId: string;
+  title: string;
+  subject: string;
+  status: ExamSessionStatus;
+  questions: ExamQuestionSnapshot[];
+  responses: ExamResponse[];
+  currentQuestionIndex: number;
+  startedAt: string;
+  updatedAt: string;
+  submittedAt?: string;
+  score?: ExamSessionScore;
+}
+
+export interface ActiveExamContext {
+  sessionId: string | null;
+  questionId: string | null;
+  questionIndex: number | null;
+  userResponse: string;
+  scratchNote: string;
+  markedForReview: boolean;
+  submitted: boolean;
+  updatedAt: string;
+}
+
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
 
 export interface ReviewEvent {

@@ -624,6 +624,19 @@ fn save_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>, ent
 }
 
 #[tauri::command]
+fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("exam-sessions.json");
+    if !path.exists() { return Ok(serde_json::json!([])); }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&raw).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
+    write_json_atomic(&app_dir(&app)?.join("exam-sessions.json"), &sessions)
+}
+
+#[tauri::command]
 fn get_mcp_bridge_status(
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
 ) -> mcp_bridge::McpBridgeStatus {
@@ -698,6 +711,14 @@ fn sync_active_context(
     question_number: Option<String>,
 ) {
     bridge.sync_active_context(entry_id, question_number);
+}
+
+#[tauri::command]
+fn sync_active_exam_context(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+    context: serde_json::Value,
+) -> Result<(), String> {
+    bridge.sync_active_exam_context(context)
 }
 
 #[tauri::command]
@@ -1239,6 +1260,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             load_entries,
             save_entries,
+            load_exam_sessions,
+            save_exam_sessions,
             load_settings,
             save_settings,
             get_ai_provider_status,
@@ -1261,6 +1284,7 @@ pub fn run() {
             rotate_mcp_bridge_credential,
             disconnect_mcp_bridge_clients,
             sync_active_context,
+            sync_active_exam_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

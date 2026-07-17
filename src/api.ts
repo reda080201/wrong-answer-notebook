@@ -8,6 +8,8 @@ import type {
   AppSettings,
   IntegrityReport,
   McpActiveContext,
+  ActiveExamContext,
+  ExamSession,
   McpBridgeSettings,
   McpBridgeStatus,
   McpBridgePairingSession,
@@ -554,6 +556,21 @@ export async function syncMcpBridgeActiveContext(context: McpActiveContext): Pro
     entryId: context.entryId,
     questionNumber: context.questionNumber,
   });
+}
+
+export async function syncMcpBridgeActiveExamContext(context: ActiveExamContext): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("sync_active_exam_context", { context });
+}
+
+export async function loadExamSessions(): Promise<ExamSession[]> {
+  if (!isTauri()) return [];
+  return invoke<ExamSession[]>("load_exam_sessions");
+}
+
+export async function saveExamSessions(sessions: ExamSession[]): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("save_exam_sessions", { sessions });
 }
 
 export async function getAiProviderStatus(): Promise<AiProviderStatus> {

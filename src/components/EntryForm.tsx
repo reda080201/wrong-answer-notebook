@@ -12,6 +12,11 @@ import { cleanQuestionText } from "../utils/textCleanup";
 import { normalizeDifficultyScore } from "../utils/difficulty";
 import { SUBJECTS } from "../types";
 import ImageField from "./ImageField";
+import {
+  createEntryDraftFromEntry,
+  createEmptyEntryDraft,
+  mergeEntryDraft,
+} from "../features/entries/model/entryDraft";
 
 interface EntryFormProps {
   entry?: WrongAnswerEntry;
@@ -57,109 +62,6 @@ const emptyForm: EntryFormData = {
   mastered: false,
 };
 
-function cloneFormFromEntry(entry: WrongAnswerEntry): EntryFormData {
-  return {
-    subject: entry.subject,
-    title: entry.title,
-    question: entry.question,
-    questionImages: [...entry.questionImages],
-    entryKind: entry.entryKind,
-    difficult: entry.difficult,
-    difficulty: entry.difficulty ?? "none",
-    difficultyScore: entry.difficultyScore,
-    annotations: [...(entry.annotations ?? [])],
-    myAnswer: entry.myAnswer,
-    correctAnswer: entry.correctAnswer,
-    explanationParts:
-      entry.explanationParts.length > 0
-        ? entry.explanationParts.map((p) => ({
-            id: p.id,
-            text: p.text,
-            images: [...p.images],
-          }))
-        : [emptyPart()],
-    memo: entry.memo,
-    tags: entry.tags,
-    answerKey: (entry.answerKey ?? []).map((item) => ({
-      ...item,
-      importantPoints: [...item.importantPoints],
-      concepts: item.concepts ? [...item.concepts] : [],
-      steps: item.steps ? [...item.steps] : [],
-      choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
-    })),
-    figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
-    importAudit: entry.importAudit ? {
-      ...entry.importAudit,
-      expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],
-      detectedQuestionNumbers: [...entry.importAudit.detectedQuestionNumbers],
-      missingQuestionNumbers: [...entry.importAudit.missingQuestionNumbers],
-      uncertainQuestionNumbers: [...entry.importAudit.uncertainQuestionNumbers],
-    } : undefined,
-    rejectedNotes: [...(entry.rejectedNotes ?? [])],
-    mistakeAnalysis: {
-      causes: entry.mistakeAnalysis?.causes.map((cause) => ({ ...cause })) ?? [],
-      primaryCause: entry.mistakeAnalysis?.primaryCause,
-      confidence: entry.mistakeAnalysis?.confidence,
-      preventionNote: entry.mistakeAnalysis?.preventionNote ?? "",
-      practiceMode: entry.mistakeAnalysis?.practiceMode,
-    },
-    mastered: entry.mastered,
-    review: entry.review,
-    checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],
-    learningBlocks: entry.learningBlocks ? entry.learningBlocks.map((block) => ({ ...block })) : [],
-    sourceType: entry.sourceType,
-    linkedEntryIds: entry.linkedEntryIds ? [...entry.linkedEntryIds] : [],
-    concepts: entry.concepts ? [...entry.concepts] : [],
-    sheetGroup: entry.sheetGroup ? { ...entry.sheetGroup } : undefined,
-  };
-}
-
-function cloneInitialForm(data: Partial<EntryFormData>): EntryFormData {
-  return {
-    ...emptyForm,
-    ...data,
-    questionImages: data.questionImages ? [...data.questionImages] : [],
-    explanationParts: data.explanationParts
-      ? data.explanationParts.map((part) => ({
-          ...part,
-          images: [...part.images],
-        }))
-      : [emptyPart()],
-    annotations: data.annotations ? [...data.annotations] : [],
-    tags: data.tags ? [...data.tags] : [],
-    answerKey: data.answerKey
-      ? data.answerKey.map((item) => ({
-          ...item,
-          importantPoints: [...item.importantPoints],
-          concepts: item.concepts ? [...item.concepts] : [],
-          steps: item.steps ? [...item.steps] : [],
-          choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : [],
-        }))
-      : [],
-    figures: data.figures ? data.figures.map((figure) => ({ ...figure })) : [],
-    importAudit: data.importAudit ? {
-      ...data.importAudit,
-      expectedQuestionNumbers: [...data.importAudit.expectedQuestionNumbers],
-      detectedQuestionNumbers: [...data.importAudit.detectedQuestionNumbers],
-      missingQuestionNumbers: [...data.importAudit.missingQuestionNumbers],
-      uncertainQuestionNumbers: [...data.importAudit.uncertainQuestionNumbers],
-    } : undefined,
-    rejectedNotes: data.rejectedNotes ? [...data.rejectedNotes] : [],
-    learningBlocks: data.learningBlocks ? data.learningBlocks.map((block) => ({ ...block })) : [],
-    sourceType: data.sourceType,
-    linkedEntryIds: data.linkedEntryIds ? [...data.linkedEntryIds] : [],
-    concepts: data.concepts ? [...data.concepts] : [],
-    sheetGroup: data.sheetGroup ? { ...data.sheetGroup } : undefined,
-    mistakeAnalysis: data.mistakeAnalysis
-      ? {
-          ...data.mistakeAnalysis,
-          causes: data.mistakeAnalysis.causes.map((cause) => ({ ...cause })),
-        }
-      : { causes: [] },
-    checklist: data.checklist ? data.checklist.map((item) => ({ ...item })) : [],
-  };
-}
-
 function entryHadQuestionImage(e: WrongAnswerEntry | undefined, f: string) {
   return e?.questionImages.includes(f) ?? false;
 }
@@ -199,19 +101,19 @@ export default function EntryForm({
 
   useEffect(() => {
     if (entry) {
-      setForm(cloneFormFromEntry(entry));
+      setForm(createEntryDraftFromEntry(entry));
       setDifficultyScoreTouched(entry.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
     } else {
-      setForm(cloneInitialForm({
+      setForm(mergeEntryDraft({
         ...initialData,
         entryKind: initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer",
         title: initialData?.title ?? prefilledTitle ?? "",
         difficulty: initialData?.difficulty ?? "none",
         difficultyScore: initialData?.difficultyScore,
         explanationParts: initialData?.explanationParts ?? [emptyPart()],
-      }));
+      }, createEmptyEntryDraft(initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer")));
       setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
