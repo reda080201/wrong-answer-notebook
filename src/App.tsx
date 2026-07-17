@@ -24,6 +24,7 @@ import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamSessionView from "./features/exam/components/ExamSessionView";
 import { createExamSession } from "./features/exam/services/examSession";
 import { scoreExamSession } from "./features/exam/services/examScoring";
+import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "./features/entries/model/entryDraft";
 import type { ExamSession } from "./types";
 
 export default function App() {
@@ -235,6 +236,49 @@ export default function App() {
     if (found) selectEntry(entryId, found.entryKind);
   };
 
+  const handleExamSubmit = async (session: ExamSession) => {
+    const score = scoreExamSession(session);
+    const submitted = {
+      ...session,
+      status: "submitted" as const,
+      submittedAt: new Date().toISOString(),
+      score,
+    };
+    setExamSession(submitted);
+
+    const wrongQuestions = submitted.questions.filter((question) => {
+      const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber);
+      return result?.hasResponse && !result.correct;
+    });
+    for (const question of wrongQuestions) {
+      const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
+      const draft = createEmptyEntryDraft("wrong_answer");
+      await addEntry(normalizeEntryDraftForSave({
+        ...draft,
+        subject: submitted.subject,
+        title: `${submitted.title} · ${question.questionNumber}번 오답`,
+        question: [question.question, ...question.choices].filter(Boolean).join("\n"),
+        questionImages: question.questionImages,
+        figures: question.figures,
+        correctAnswer: question.correctAnswer ?? "",
+        memo: [
+          `모의고사: ${submitted.title}`,
+          response?.scratchNote?.trim(),
+        ].filter(Boolean).join("\n"),
+        explanationParts: question.explanation
+          ? [{ id: crypto.randomUUID(), text: question.explanation, images: [] }]
+          : draft.explanationParts,
+        tags: [submitted.subject, "모의고사", "채점 오답"],
+      }));
+    }
+  };
+
+  const selectedExamHistory = selected
+    ? savedExamSessions
+      .filter((item) => item.entryId === selected.id && item.status === "submitted")
+      .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
+    : [];
+
   return (
     <div className="app">
       <AppSidebar
@@ -312,13 +356,27 @@ export default function App() {
                   {resumable ? "모의고사 이어서 보기" : "모의고사 시작"}
                 </button>;
               })()}
+              {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && (
+                <section className="exam-session-history" aria-label="모의고사 결과 이력">
+                  <header><strong>모의고사 결과 이력</strong><span>{selectedExamHistory.length}회</span></header>
+                  <div className="exam-session-history-list">
+                    {selectedExamHistory.slice(0, 5).map((item) => (
+                      <button type="button" key={item.id} onClick={() => setExamSession(item)}>
+                        <span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span>
+                        <strong>{item.score?.percentCorrect ?? 0}%</strong>
+                        <small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
               {examSession ? (
                 <div className="exam-session-overlay">
                   <button type="button" onClick={() => setExamSession(null)}>시험 닫기</button>
                   <ExamSessionView
                     session={examSession}
                     onChange={setExamSession}
-                    onSubmit={(session) => setExamSession({ ...session, status: "submitted", submittedAt: new Date().toISOString(), score: scoreExamSession(session) })}
+                    onSubmit={handleExamSubmit}
                   />
                 </div>
               ) : <EntryDetail

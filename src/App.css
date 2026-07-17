@@ -2065,6 +2065,138 @@ button.formula-chip:hover {
   text-align: center;
   color: var(--text-muted);
   font-size: 0.9rem;
+  white-space: pre-line;
+}
+
+.exam-session-history {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 0.75rem;
+  background: var(--surface-soft);
+}
+
+.exam-session-history header,
+.exam-session-history-list,
+.review-complete-stats,
+.study-question-attempt-list {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.exam-session-history header {
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.exam-session-history header span,
+.exam-session-history-list small {
+  color: var(--text-muted);
+}
+
+.exam-session-history-list {
+  overflow-x: auto;
+}
+
+.exam-session-history-list button {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 7rem;
+  padding: 0.55rem;
+  border: 1px solid var(--control-border);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.review-complete {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+  text-align: center;
+}
+
+.review-complete h3,
+.review-complete p {
+  margin: 0;
+}
+
+.review-complete-stats {
+  justify-content: center;
+}
+
+.review-complete-stats div {
+  min-width: 5rem;
+  padding: 0.65rem;
+  border-radius: 0.6rem;
+  background: var(--surface-soft);
+}
+
+.review-complete-stats dt {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.review-complete-stats dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.study-analysis-confidence {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.study-question-attempt-list {
+  flex-wrap: wrap;
+}
+
+.study-question-attempt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.study-question-attempt span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar .search-input {
+    flex: 1 1 100%;
+  }
+
+  .entry-card-header {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .important-question-panel header {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .question-theater-toolbar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
 }
 
 .quick-concept-panel {

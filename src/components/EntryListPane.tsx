@@ -184,6 +184,7 @@ export default function EntryListPane({
                 <strong>{getEntryTitle(entry)}</strong>
                 <p>문제 {meta.questionNumber}</p>
                 {meta.difficultyScore && <small>{difficultyScoreLabel(meta.difficultyScore)}</small>}
+                {meta.bookmarkLabel && <small>라벨: {meta.bookmarkLabel}</small>}
                 {meta.note && <small>{meta.note}</small>}
                 <button
                   type="button"

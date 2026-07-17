@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
@@ -39,10 +39,16 @@ export default function ReviewPanel({
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
   );
+  useEffect(() => {
+    setIndex(0);
+    setRevealed(false);
+    setReviewStats({ again: 0, hard: 0, good: 0 });
+  }, [reviewItems]);
   const current = reviewItems[index] ?? null;
   const progress = useMemo(
     () => (reviewItems.length > 0 ? `${Math.min(index + 1, reviewItems.length)} / ${reviewItems.length}` : "0 / 0"),
@@ -54,6 +60,7 @@ export default function ReviewPanel({
     setSaving(true);
     try {
       await onReview(current, result);
+      setReviewStats((stats) => ({ ...stats, [result]: stats[result] + 1 }));
       setRevealed(false);
       setIndex((value) => Math.min(value + 1, reviewItems.length));
     } finally {
@@ -80,7 +87,20 @@ export default function ReviewPanel({
       </div>
 
       {!current || !currentEntry ? (
-        <div className="review-empty">복습할 항목이 없습니다.</div>
+        reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
+          <section className="review-complete" aria-label="복습 완료 요약">
+            <h3>복습을 마쳤습니다</h3>
+            <p>이번 복습 결과를 확인하세요.</p>
+            <dl className="review-complete-stats">
+              <div><dt>다시</dt><dd>{reviewStats.again}</dd></div>
+              <div><dt>어려움</dt><dd>{reviewStats.hard}</dd></div>
+              <div><dt>맞음</dt><dd>{reviewStats.good}</dd></div>
+            </dl>
+            <button type="button" className="btn-primary" onClick={onClose}>복습 닫기</button>
+          </section>
+        ) : (
+          <div className="review-empty">복습할 항목이 없습니다.</div>
+        )
       ) : (
         <div className="review-card">
           <div className="review-card-top">

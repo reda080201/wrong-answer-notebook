@@ -194,10 +194,11 @@ export default function QuestionTheaterView({
         >
           <section className="question-theater-question-pane">
             {questionMeta?.important && (
-              <div className="question-theater-bookmark-note">
-                <strong>중요 표시된 문제</strong>
-                {questionMeta.note && <span>{questionMeta.note}</span>}
-              </div>
+            <div className="question-theater-bookmark-note">
+              <strong>중요 표시된 문제</strong>
+              {questionMeta.bookmarkLabel && <span>{questionMeta.bookmarkLabel}</span>}
+              {questionMeta.note && <span>{questionMeta.note}</span>}
+            </div>
             )}
             <FocusedQuestionView
               passage={passage}

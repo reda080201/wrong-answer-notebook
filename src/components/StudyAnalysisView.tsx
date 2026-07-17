@@ -20,6 +20,8 @@ function formatMaybeDate(value?: string | null) {
 export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }) {
   const strategy = recommendedStrategyForAnalysis(entry.mistakeAnalysis);
   const reviewHistory = entry.review?.history ?? [];
+  const questionAttempts = (entry.reviewAttempts ?? []).filter((attempt) => attempt.questionNumber);
+  const confidenceLabel = (value?: string) => value === "high" ? "높음" : value === "medium" ? "보통" : value === "low" ? "낮음" : "-";
 
   return (
     <section className="study-analysis">
@@ -100,8 +102,31 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
               <p>{entry.mistakeAnalysis.preventionNote}</p>
             </div>
           )}
+          {entry.mistakeAnalysis?.confidence && (
+            <p className="study-analysis-confidence">분석 신뢰도: {confidenceLabel(entry.mistakeAnalysis.confidence)}</p>
+          )}
           {strategy && <p className="study-analysis-strategy">추천 복습: {PRACTICE_MODE_LABELS[strategy]}</p>}
         </article>
+
+        {entry.entryKind === "problem_sheet" && questionAttempts.length > 0 && (
+          <article className="study-analysis-card study-analysis-card--wide">
+            <h4>문항별 복습 기록</h4>
+            <div className="study-question-attempt-list">
+              {Array.from(new Set(questionAttempts.map((attempt) => attempt.questionNumber))).map((questionNumber) => {
+                const attempts = questionAttempts.filter((attempt) => attempt.questionNumber === questionNumber);
+                const latest = attempts[attempts.length - 1];
+                return (
+                  <div key={questionNumber} className="study-question-attempt">
+                    <strong>문제 {questionNumber}</strong>
+                    <span>{attempts.length}회 복습</span>
+                    <span>최근: {latest.result === "again" ? "다시" : latest.result === "hard" ? "어려움" : "맞음"}</span>
+                    <span>신뢰도: {confidenceLabel(latest.confidence)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        )}
 
         <article className="study-analysis-card study-analysis-card--wide">
           <h4>복습 상태</h4>

@@ -6,7 +6,7 @@ import { updateExamResponse } from "../services/examSession";
 interface ExamSessionViewProps {
   session: ExamSession;
   onChange: (session: ExamSession) => void;
-  onSubmit: (session: ExamSession) => void;
+  onSubmit: (session: ExamSession) => void | Promise<void>;
   onAskGpt?: (payload: { question: string; response: string; scratchNote: string }) => void;
 }
 
@@ -30,7 +30,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onAskGpt 
   return <section className="exam-session-view" aria-label="모의고사 응시">
     <header className="exam-session-header">
       <div><h2>{session.title}</h2><p>{session.currentQuestionIndex + 1} / {session.questions.length}</p></div>
-      <button type="button" onClick={() => onSubmit(session)} disabled={session.status === "submitted"}>제출</button>
+      <button type="button" onClick={() => void onSubmit(session)} disabled={session.status === "submitted"}>제출</button>
     </header>
     <article className="exam-question-paper">
       <h3>문제 {question.questionNumber}</h3>
