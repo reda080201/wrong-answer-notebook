@@ -5,6 +5,7 @@ import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date()): ExamSession {
   const blocks = parseQuestionText(entry.question);
+  const commonPassage = blocks.find((block) => block.kind === "passage")?.text;
   const questions: ExamQuestionSnapshot[] = blocks.filter((block) => block.kind === "question").map((block, index) => {
     if (block.kind !== "question") throw new Error("question block expected");
     const number = String(block.numberLabel ?? block.displayNumber ?? index + 1);
@@ -13,7 +14,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
     return {
       id: `${entry.id}-${number}`,
       questionNumber: number,
-      passage: undefined,
+      passage: commonPassage,
       question: block.body,
       choices: (block.choices ?? []).map((choice) => `${choice.marker} ${choice.text}`),
       questionImages: entry.questionImages ?? [],
@@ -57,6 +58,6 @@ export function publicExamQuestion(session: ExamSession, index = session.current
     scratchNote: response?.scratchNote ?? "",
     markedForReview: response?.markedForReview ?? false,
     submitted: session.status === "submitted",
-    answerAvailable: session.status === "submitted",
+    answerAvailable: false,
   };
 }

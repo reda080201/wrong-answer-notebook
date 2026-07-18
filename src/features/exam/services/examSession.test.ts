@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
 import { createExamSession, publicExamQuestion, updateExamResponse } from "./examSession";
-import { scoreExamSession } from "./examScoring";
+import { normalizeExamAnswer, scoreExamSession } from "./examScoring";
 
 const entry = {
   id: "sheet-1", subject: "수학", title: "모의고사", question: "1. 함수의 값은?\n① 1\n② 2", questionImages: [], entryKind: "problem_sheet", difficult: false, myAnswer: "", correctAnswer: "", explanationParts: [], memo: "", annotations: [], tags: [], answerKey: [{ id: "a1", questionNumber: "1", answer: "②", explanation: "해설", importantPoints: [] }], figures: [], mastered: false, createdAt: "", updatedAt: "",
@@ -13,6 +13,7 @@ describe("exam session foundation", () => {
     const payload = publicExamQuestion(session);
     expect(payload?.question.correctAnswer).toBeUndefined();
     expect(payload?.question.explanation).toBeUndefined();
+    expect(payload?.answerAvailable).toBe(false);
   });
 
   it("scores submitted responses", () => {
@@ -33,5 +34,24 @@ describe("exam session foundation", () => {
     expect(session.questions[0]?.correctAnswer).toBe("②");
     expect(session.questions[0]?.figures).toHaveLength(1);
     expect(session.questions[0]?.questionImages).toEqual(["problem.png"]);
+  });
+
+  it("normalizes common objective and numeric answer forms before scoring", () => {
+    expect(normalizeExamAnswer("③")).toBe("3");
+    expect(normalizeExamAnswer("3번")).toBe("3");
+    expect(normalizeExamAnswer("024")).toBe("24");
+    expect(normalizeExamAnswer("1, 3")).toBe("1,3");
+    expect(normalizeExamAnswer("3,1")).toBe("1,3");
+  });
+
+  it("keeps a shared passage in every question snapshot", () => {
+    const withPassage = {
+      ...entry,
+      question: "[자료]\n함수 f(x)의 성질을 이용한다.\n\n1. 첫 문제\n① 1\n② 2\n\n2. 둘째 문제\n① 3\n② 4",
+    } as WrongAnswerEntry;
+    const session = createExamSession(withPassage);
+    expect(session.questions).toHaveLength(2);
+    expect(session.questions[0]?.passage).toContain("함수 f(x)");
+    expect(session.questions[1]?.passage).toContain("함수 f(x)");
   });
 });

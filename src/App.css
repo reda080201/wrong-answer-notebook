@@ -2111,6 +2111,39 @@ button.formula-chip:hover {
   text-align: left;
 }
 
+.exam-question-paper .exam-question-text > p,
+.exam-passage > p {
+  white-space: pre-wrap;
+  line-height: 1.75;
+}
+
+.exam-passage {
+  margin: 0.85rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 0.65rem;
+  background: var(--surface-soft);
+}
+
+.exam-markdown-table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.exam-markdown-table-wrap table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.exam-markdown-table-wrap td {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--paper-border);
+}
+
+.exam-question-images {
+  margin: 1rem 0;
+}
+
 .review-complete {
   display: grid;
   gap: 0.8rem;

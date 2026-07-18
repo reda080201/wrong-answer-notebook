@@ -524,30 +524,19 @@ export async function testMcpBridgeConnection(): Promise<McpBridgeStatus> {
 /** Rust command returns a short-lived pairing code only, never the bridge bearer token. */
 export async function createMcpBridgePairing(): Promise<McpBridgePairingSession> {
   if (!isTauri()) throw new Error("브라우저 모드에서는 MCP 페어링을 사용할 수 없습니다.");
-  const [code, status] = await Promise.all([
-    invoke<string>("create_mcp_bridge_pairing_code"),
-    getMcpBridgeStatus(),
-  ]);
-  return {
-    code,
-    // The bridge currently fixes pairing-code TTL at five minutes. No credential is returned here.
-    expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
-    bridgeUrl: `http://127.0.0.1:${status.port}/pair`,
-  };
+  return invoke<McpBridgePairingSession>("create_mcp_bridge_pairing");
 }
 
 /** Invalidates the current bridge credential without exposing its value to the UI. */
 export async function rotateMcpBridgeCredential(): Promise<McpBridgeStatus> {
   if (!isTauri()) return browserMcpBridgeStatus;
-  await invoke("rotate_mcp_bridge_token");
-  return getMcpBridgeStatus();
+  return invoke<McpBridgeStatus>("rotate_mcp_bridge_credential");
 }
 
 /** Closes authenticated clients and invalidates their server-side session. */
 export async function disconnectMcpBridgeClients(): Promise<McpBridgeStatus> {
   if (!isTauri()) return browserMcpBridgeStatus;
-  await invoke("disconnect_mcp_bridge");
-  return getMcpBridgeStatus();
+  return invoke<McpBridgeStatus>("disconnect_mcp_bridge_clients");
 }
 
 export async function syncMcpBridgeActiveContext(context: McpActiveContext): Promise<void> {
