@@ -114,7 +114,7 @@ Tauri 앱은 OS 앱 데이터 폴더에 다음 데이터를 저장합니다.
 
 ### 로컬 pairing 범위
 
-이 브리지는 표준 OAuth 서버나 공개 원격 MCP endpoint가 아닙니다. 앱에서 만든 **15분짜리 일회성 pairing 코드**를 앱 전용 로컬 클라이언트가 `/pair` endpoint에 교환하면, 브리지는 임시 session credential을 반환하고 현재 실행 중인 로컬 브리지 세션에만 접속시킵니다.
+이 브리지는 표준 OAuth 서버나 공개 원격 MCP endpoint가 아닙니다. 앱에서 만든 **5분짜리 일회성 pairing 코드**를 앱 전용 로컬 클라이언트가 `/pair` endpoint에 교환하면, 브리지는 **15분짜리 임시 session credential**을 반환하고 현재 실행 중인 로컬 브리지 세션에만 접속시킵니다.
 
 - keyring secret은 앱 내부에만 보관하며 화면, `settings.json`, 감사 로그, `/pair` 응답에 노출하지 않습니다.
 - `/pair`가 반환하는 임시 session credential은 해당 연결 세션에서만 사용합니다. 화면, 문서, 터미널 기록, 스크린샷, 환경 변수 파일에 저장하지 마세요.
@@ -133,8 +133,8 @@ ChatGPT 또는 Secure MCP Tunnel 연결은 별도 tunnel client와 표준 인증
 Inspector는 앱 전용 `/pair` 교환을 자동으로 수행하지 않습니다. 아래 절차는 **개발자가 로컬에서만** protocol 응답을 확인할 때 사용합니다.
 
 1. 앱 설정에서 로컬 MCP 브리지를 켜고 `연결 테스트`가 성공하는지 확인합니다.
-2. `연결 코드 만들기`로 일회성 코드를 발급합니다. pairing-aware 로컬 helper가 그 코드를 `POST /pair`에 교환하도록 합니다. 이 helper는 반환 credential을 화면이나 파일에 출력하지 않고 Inspector 실행 프로세스에만 전달해야 합니다.
-3. Inspector의 Streamable HTTP 서버 주소를 `http://127.0.0.1:<앱에 표시된 포트>/mcp`로 설정하고, helper가 전달한 임시 `Authorization: Bearer ...` 헤더만 현재 실행 세션에 적용합니다.
+2. `연결 코드 만들기`로 일회성 코드를 발급합니다. 설정 화면의 `코드 교환` URL(`/pair`)에 pairing-aware 로컬 helper가 코드를 교환하도록 합니다. 이 helper는 반환 credential을 화면이나 파일에 출력하지 않고 Inspector 실행 프로세스에만 전달해야 합니다.
+3. 설정 화면의 `MCP` URL(`/mcp`)을 Inspector의 Streamable HTTP 서버 주소로 설정하고, helper가 전달한 임시 `Authorization: Bearer ...` 헤더만 현재 실행 세션에 적용합니다.
 4. `initialize`를 호출해 negotiated `protocolVersion`과 `tools`, `resources` capability를 확인합니다.
 5. `notifications/initialized`를 보내고 응답이 `202 Accepted`이며 body가 비어 있는지 확인합니다.
 6. `tools/list`에서 다섯 읽기 전용 도구와 각 `inputSchema`, `annotations.readOnlyHint: true`를 확인합니다.

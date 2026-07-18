@@ -64,6 +64,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onAskGpt 
       <div className="exam-question-text"><ExamText text={question.question} /></div>
       <ol>{question.choices.map((choice) => <li key={choice}><MathText text={choice} /></li>)}</ol>
       {imageFilenames.length > 0 && <section className="exam-question-images" aria-label="문제 이미지"><ZoomableImageViewer filenames={imageFilenames} /></section>}
+      {(question.sourcePageImages?.length ?? 0) > 0 && <details className="exam-source-pages"><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
       <label>내 답<input value={response?.response ?? ""} onChange={(event) => update({ response: event.target.value })} disabled={session.status === "submitted"} /></label>
       <label>풀이 메모<textarea value={response?.scratchNote ?? ""} onChange={(event) => update({ scratchNote: event.target.value })} disabled={session.status === "submitted"} /></label>
       <label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={session.status === "submitted"} /> 검토 표시</label>

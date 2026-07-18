@@ -276,9 +276,12 @@ export interface ExamQuestionSnapshot {
   id: string;
   questionNumber: string;
   passage?: string;
+  stimulusGroupId?: string;
   question: string;
   choices: string[];
   questionImages: string[];
+  /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
+  sourcePageImages?: string[];
   figures: SheetFigureItem[];
   correctAnswer?: string;
   explanation?: string;
@@ -439,6 +442,9 @@ export interface McpBridgeStatus {
 export interface McpBridgePairingSession {
   code: string;
   expiresAt: string;
+  pairingUrl?: string;
+  mcpUrl?: string;
+  /** @deprecated mcpUrl을 사용하세요. */
   bridgeUrl: string;
 }
 

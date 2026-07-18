@@ -684,6 +684,8 @@ fn create_mcp_bridge_pairing(
     Ok(serde_json::json!({
         "code": code,
         "expiresAt": expires_at,
+        "pairingUrl": format!("http://127.0.0.1:{}/pair", status.port),
+        "mcpUrl": format!("http://127.0.0.1:{}/mcp", status.port),
         "bridgeUrl": format!("http://127.0.0.1:{}/mcp", status.port),
     }))
 }

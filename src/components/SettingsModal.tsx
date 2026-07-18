@@ -606,7 +606,8 @@ function McpBridgeSettingsPanel({
             <span>일회성 연결 코드</span>
             <code>{pairingSession.code}</code>
             <span>만료: {new Date(Number(pairingSession.expiresAt)).toLocaleString("ko-KR")}</span>
-            <span>{pairingSession.bridgeUrl}</span>
+            {pairingSession.pairingUrl && <span>코드 교환: {pairingSession.pairingUrl}</span>}
+            <span>MCP: {pairingSession.mcpUrl ?? pairingSession.bridgeUrl}</span>
           </div>
         )}
       </section>

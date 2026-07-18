@@ -33,7 +33,8 @@ describe("exam session foundation", () => {
     const session = createExamSession(normalizedEntry);
     expect(session.questions[0]?.correctAnswer).toBe("②");
     expect(session.questions[0]?.figures).toHaveLength(1);
-    expect(session.questions[0]?.questionImages).toEqual(["problem.png"]);
+    expect(session.questions[0]?.questionImages).toEqual([]);
+    expect(session.questions[0]?.sourcePageImages).toEqual(["problem.png"]);
   });
 
   it("normalizes common objective and numeric answer forms before scoring", () => {
@@ -53,5 +54,20 @@ describe("exam session foundation", () => {
     expect(session.questions).toHaveLength(2);
     expect(session.questions[0]?.passage).toContain("함수 f(x)");
     expect(session.questions[1]?.passage).toContain("함수 f(x)");
+  });
+
+  it("assigns the latest stimulus to each question group", () => {
+    const withMultipleStimuli = {
+      ...entry,
+      question: "[자료 A]\nA 자료\n\n1. 첫 문제\n① 1\n② 2\n\n2. 둘째 문제\n① 3\n② 4\n\n[자료 B]\nB 자료\n\n3. 셋째 문제\n① 5\n② 6\n\n4. 넷째 문제\n① 7\n② 8",
+    } as WrongAnswerEntry;
+    const session = createExamSession(withMultipleStimuli);
+    expect(session.questions.map((item) => item.passage)).toEqual([
+      "[자료 A]\nA 자료",
+      "[자료 A]\nA 자료",
+      "[자료 B]\nB 자료",
+      "[자료 B]\nB 자료",
+    ]);
+    expect(session.questions[1]?.question).not.toContain("자료 B");
   });
 });

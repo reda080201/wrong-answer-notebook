@@ -524,7 +524,8 @@ export async function testMcpBridgeConnection(): Promise<McpBridgeStatus> {
 /** Rust command returns a short-lived pairing code only, never the bridge bearer token. */
 export async function createMcpBridgePairing(): Promise<McpBridgePairingSession> {
   if (!isTauri()) throw new Error("브라우저 모드에서는 MCP 페어링을 사용할 수 없습니다.");
-  return invoke<McpBridgePairingSession>("create_mcp_bridge_pairing");
+  const session = await invoke<Omit<McpBridgePairingSession, "bridgeUrl"> & { bridgeUrl?: string }>("create_mcp_bridge_pairing");
+  return { ...session, mcpUrl: session.mcpUrl ?? session.bridgeUrl, bridgeUrl: session.bridgeUrl ?? session.mcpUrl ?? "" };
 }
 
 /** Invalidates the current bridge credential without exposing its value to the UI. */
