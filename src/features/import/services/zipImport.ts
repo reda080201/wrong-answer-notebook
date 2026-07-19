@@ -14,16 +14,21 @@ function uncompressedSize(entry: JSZip.JSZipObject): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
-async function extractImages(entries: JSZip.JSZipObject[], signal?: AbortSignal, onProgress?: (progress: ZipImportProgress) => void) {
+async function extractImages(entries: JSZip.JSZipObject[], initialBytes: number, signal?: AbortSignal, onProgress?: (progress: ZipImportProgress) => void) {
   const output: File[] = new Array(entries.length);
   let next = 0;
   let completed = 0;
+  let extractedBytes = initialBytes;
   const worker = async () => {
     while (next < entries.length) {
       if (signal?.aborted) throw new DOMException("가져오기를 취소했습니다.", "AbortError");
       const index = next++;
       const entry = entries[index];
-      output[index] = new File([await entry.async("blob")], basename(entry.name), { type: imageType(entry.name) });
+      const blob = await entry.async("blob");
+      extractedBytes += blob.size;
+      if (extractedBytes > IMPORT_LIMITS.MAX_UNCOMPRESSED_BYTES) throw new Error("ZIP의 실제 압축 해제 크기가 1GB를 초과합니다.");
+      if (blob.size > IMPORT_LIMITS.MAX_IMAGE_BYTES) throw new Error(`\`${basename(entry.name)}\`의 크기가 이미지 한 장 제한인 ${IMPORT_LIMITS.MAX_IMAGE_BYTES / 1024 / 1024}MB를 초과합니다.`);
+      output[index] = new File([blob], basename(entry.name), { type: imageType(entry.name) });
       completed++;
       onProgress?.({ phase: "extract", completed, total: entries.length });
     }
@@ -48,6 +53,8 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   if (images.length > IMPORT_LIMITS.MAX_IMAGE_COUNT) throw new Error(`ZIP에 이미지가 ${images.length}개 있습니다. 현재 한 번에 최대 ${IMPORT_LIMITS.MAX_IMAGE_COUNT}개까지 가져올 수 있습니다.`);
   const oversized = images.find((entry) => uncompressedSize(entry) > IMPORT_LIMITS.MAX_IMAGE_BYTES);
   if (oversized) throw new Error(`\`${basename(oversized.name)}\`의 크기가 이미지 한 장 제한인 ${IMPORT_LIMITS.MAX_IMAGE_BYTES / 1024 / 1024}MB를 초과합니다.`);
-  const [jsonText, imageFiles] = await Promise.all([json.async("text"), extractImages(images, options.signal, options.onProgress)]);
+  const jsonBlob = await json.async("blob");
+  if (jsonBlob.size > IMPORT_LIMITS.MAX_JSON_BYTES) throw new Error(`JSON 파일이 ${IMPORT_LIMITS.MAX_JSON_BYTES / 1024 / 1024}MB를 초과합니다.`);
+  const [jsonText, imageFiles] = await Promise.all([jsonBlob.text(), extractImages(images, jsonBlob.size, options.signal, options.onProgress)]);
   return { jsonText, jsonName: basename(json.name), imageFiles };
 }

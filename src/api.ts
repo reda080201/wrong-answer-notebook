@@ -658,6 +658,22 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
     if (file.size > MAX_IMPORT_IMAGE_BYTES) {
       throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
     }
+    if (isTauri()) {
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        const filename = await invoke<string>("save_import_image_bytes", {
+          bytes,
+          filename: file.name,
+          mime: file.type || undefined,
+        });
+        names.push(filename);
+      } catch (error) {
+        throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), {
+          cause: error,
+        });
+      }
+      continue;
+    }
     const dataUrl = await fileToDataUrl(file);
     const key = createBrowserImageKey(file.name);
     localStorage.setItem(key, dataUrl);

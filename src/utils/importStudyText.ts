@@ -36,6 +36,8 @@ interface ImportJsonShape {
   title?: unknown;
   subject?: unknown;
   question?: unknown;
+  questionImages?: unknown;
+  sourcePageImages?: unknown;
   summary?: unknown;
   tags?: unknown;
   memo?: unknown;
@@ -224,7 +226,7 @@ export function parseImportedStudyText(
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
-          questionImages: [],
+          questionImages: normalizeTextList(parsed.questionImages ?? parsed.sourcePageImages),
           difficult: false,
           difficulty: "none",
           difficultyScore,

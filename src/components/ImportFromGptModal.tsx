@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { saveImageFiles } from "../api";
 import type {
@@ -296,6 +296,8 @@ export default function ImportFromGptModal({
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
+  const zipAbortRef = useRef<AbortController | null>(null);
   const conceptImportValue = useMemo(() => {
     if (batchImport) return null;
     const parsedValue = tryParseConceptKnowledgeText(rawText);
@@ -505,7 +507,9 @@ export default function ImportFromGptModal({
   const collectAllInOneFiles = async (files: File[]) => {
     const zipFile = files.find((file) => file.name.toLowerCase().endsWith(".zip"));
     if (zipFile) {
-      const result = await readZipImport(zipFile);
+      const controller = new AbortController();
+      zipAbortRef.current = controller;
+      const result = await readZipImport(zipFile, { signal: controller.signal, onProgress: setZipProgress });
       assertImportImages(result.imageFiles);
       assertImportJsonSize(result.jsonName, new Blob([result.jsonText]).size);
       return result;
@@ -534,11 +538,16 @@ export default function ImportFromGptModal({
     const fileIndexByKey = new Map<string, number>();
 
     for (const entry of imported.entries) {
-      for (const figure of entry.figures ?? []) {
-        if (!figure.image || !isSafeImportImageFilename(figure.image)) continue;
-        const key = imageFileKey(figure.image);
+      const referenced = [
+        ...(entry.questionImages ?? []),
+        ...(entry.figures ?? []).flatMap((figure) => figure.image ? [figure.image] : []),
+        ...(entry.explanationParts ?? []).flatMap((part) => part.images ?? []),
+      ].filter(isSafeImportImageFilename);
+      for (const image of referenced) {
+        const key = imageFileKey(image);
         const file = imageByName.get(key);
-        if (!file || fileIndexByKey.has(key)) continue;
+        if (!file) throw new Error(`JSON에서 참조한 이미지 \`${image}\`를 찾을 수 없습니다.`);
+        if (fileIndexByKey.has(key)) continue;
         fileIndexByKey.set(key, filesToSave.length);
         filesToSave.push(file);
       }
@@ -549,6 +558,17 @@ export default function ImportFromGptModal({
       ...imported,
       entries: imported.entries.map((entry) => ({
         ...entry,
+        questionImages: (entry.questionImages ?? []).map((image) => {
+          const index = fileIndexByKey.get(imageFileKey(image));
+          return index === undefined ? image : savedFilenames[index] ?? image;
+        }),
+        explanationParts: (entry.explanationParts ?? []).map((part) => ({
+          ...part,
+          images: (part.images ?? []).map((image) => {
+            const index = fileIndexByKey.get(imageFileKey(image));
+            return index === undefined ? image : savedFilenames[index] ?? image;
+          }),
+        })),
         figures: (entry.figures ?? []).map((figure): SheetFigureItem => {
           if (!figure.image || !isSafeImportImageFilename(figure.image)) {
             return figure.source === "described_only"
@@ -569,6 +589,7 @@ export default function ImportFromGptModal({
     const files = Array.from(fileList ?? []);
     if (!files.length) return;
     setError(null);
+    setZipProgress({ phase: "inspect", completed: 0, total: 0 });
     try {
       const { jsonText, jsonName, imageFiles } = await collectAllInOneFiles(files);
       const linkedDocument = await buildAllInOneDocument(jsonText, jsonName, imageFiles);
@@ -588,7 +609,10 @@ export default function ImportFromGptModal({
       );
       setCopyMessage(`올인원 가져오기 완료: ${linkedDocument.entries.length}개 항목 · 도표/그림 ${figureCount}개 감지`);
     } catch (allInOneError) {
-      setError(allInOneError instanceof Error ? allInOneError.message : "올인원 파일을 가져오지 못했습니다.");
+      setError(allInOneError instanceof DOMException && allInOneError.name === "AbortError" ? "가져오기를 취소했습니다." : allInOneError instanceof Error ? allInOneError.message : "올인원 파일을 가져오지 못했습니다.");
+    } finally {
+      zipAbortRef.current = null;
+      setZipProgress(null);
     }
   };
 
@@ -864,6 +888,12 @@ export default function ImportFromGptModal({
                   <p className="form-hint">
                     ZIP 하나 또는 import.json과 PNG/JPG/WebP 파일들을 함께 선택하세요. JSON의 figures[].image 파일명과 실제 이미지 파일명이 연결됩니다.
                   </p>
+                  {zipProgress && (
+                    <div className="import-zip-progress" role="status" aria-live="polite">
+                      <span>{zipProgress.phase === "inspect" ? "ZIP 검사 중…" : `이미지 확인 중 ${zipProgress.completed} / ${zipProgress.total}`}</span>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => zipAbortRef.current?.abort()}>취소</button>
+                    </div>
+                  )}
                 </div>
               )}
 
