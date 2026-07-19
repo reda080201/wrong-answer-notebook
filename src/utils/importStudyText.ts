@@ -1,6 +1,6 @@
-import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
+import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
-import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType } from "./entry";
+import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments } from "./entry";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import {
   normalizeImportAudit,
@@ -54,6 +54,8 @@ interface ImportJsonShape {
   audit?: unknown;
   rejectedNotes?: unknown;
   questionMeta?: unknown;
+  questionContentSegments?: unknown;
+  contentSegments?: unknown;
   sourceType?: unknown;
   linkedEntryIds?: unknown;
   mastered?: unknown;
@@ -179,7 +181,9 @@ export function parseImportedStudyText(
     const rawQuestion = getString(parsed.question);
     if (rawQuestion.trim()) {
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
-      const question = removeRejectedNotes(rawQuestion, rejectedNotes);
+      const question = removeFigureTokens(removeRejectedNotes(rawQuestion, rejectedNotes));
+      const questionContentSegments = normalizeQuestionContentSegments(parsed.questionContentSegments ?? parsed.contentSegments)
+        ?? contentSegmentsFromQuestionTokens(rawQuestion);
       const importantNotes = splitImportantNotes(parsed.importantNotes);
       const answerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
         attachQuestionNotes(normalizeAnswerKey(parsed.answerKey), importantNotes.questionNotes),
@@ -216,6 +220,7 @@ export function parseImportedStudyText(
           figures,
           learningBlocks,
           questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
+          questionContentSegments,
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
@@ -628,6 +633,27 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
   if (value === "low" || value === "하" || value === "쉬움") return "low";
   if (value === "none" || value === "없음") return "none";
   return undefined;
+}
+
+function contentSegmentsFromQuestionTokens(question: string): Record<string, QuestionContentSegment[]> | undefined {
+  const entries = parseQuestionText(question)
+    .filter((block) => block.kind === "question")
+    .flatMap((block) => {
+      const segments = block.bodySegments.flatMap((body, index): QuestionContentSegment[] => {
+        const id = `import-${normalizeQuestionNumber(block.numberLabel) || block.displayNumber}-${index + 1}`;
+        const figure = body.text.trim().match(/^\[FIGURE:([^\]]+)\]$/i);
+        if (figure?.[1]) return [{ id, type: "figure", figureId: figure[1].trim() }];
+        return [body.kind === "condition"
+          ? { id, type: "condition", label: body.label, text: body.text }
+          : { id, type: "text", text: body.text }];
+      });
+      return segments.length ? [[normalizeQuestionNumber(block.numberLabel) || String(block.displayNumber), segments] as const] : [];
+    });
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function removeFigureTokens(question: string): string {
+  return question.replace(/^\s*\[FIGURE:[^\]]+\]\s*(?:\r?\n)?/gim, "").trim();
 }
 
 interface QuestionMetadata {

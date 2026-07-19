@@ -17,12 +17,14 @@ import type {
   PromptTemplate,
   WrongAnswerEntry,
 } from "./types";
+import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 import { normalizeEntry } from "./utils/entry";
 
 const imageUrlCache = new Map<string, string>();
 const ENTRIES_STORAGE_KEY = "wrong-answer-entries";
 const SETTINGS_STORAGE_KEY = "wrong-answer-settings";
-const MAX_BROWSER_IMAGE_BYTES = 10 * 1024 * 1024;
+/** Per-file cap for browser/Tauri image import (aligned with `IMPORT_LIMITS.MAX_IMAGE_BYTES`). */
+export const MAX_IMPORT_IMAGE_BYTES = IMPORT_LIMITS.MAX_IMAGE_BYTES;
 const ENTRIES_SCHEMA_VERSION = 2;
 
 interface StoredEntriesDocument {
@@ -653,8 +655,8 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
   const names: string[] = [];
   for (const file of Array.from(files)) {
     if (!file.type.startsWith("image/")) continue;
-    if (file.size > MAX_BROWSER_IMAGE_BYTES) {
-      throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 10MB 이하만 저장할 수 있습니다.`);
+    if (file.size > MAX_IMPORT_IMAGE_BYTES) {
+      throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
     }
     const dataUrl = await fileToDataUrl(file);
     const key = createBrowserImageKey(file.name);

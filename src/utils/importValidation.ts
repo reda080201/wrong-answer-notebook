@@ -305,5 +305,38 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     });
   }
 
+  for (const block of questionBlocks) {
+    const number = normalizeQuestionNumber(block.numberLabel) || String(block.displayNumber);
+    if (/^\s*(?:정답|답|해설)\s*[:：]/m.test(block.body)) {
+      issues.push({ id: `answer-leak-question-${number}`, severity: "warning", message: `${number}번 문제 본문에 정답 또는 해설로 의심되는 문장이 포함되어 있습니다.` });
+    }
+    if (block.choices.some((choice) => /(?:정답|해설|따라서|그러므로)\s*[:：]/.test(choice.text))) {
+      issues.push({ id: `answer-leak-choice-${number}`, severity: "warning", message: `${number}번 선택지에 해설 문장으로 의심되는 내용이 포함되어 있습니다.` });
+    }
+  }
+
+  for (const figure of data.figures ?? []) {
+    if (figure.source === "described_only" && figure.image) {
+      issues.push({ id: `described-image-${figure.id}`, severity: "warning", message: `${figure.questionNumber || "번호 미상"}번 설명 도표에 실제 이미지 파일이 연결되어 있습니다.` });
+    }
+    if (/(?:정답|답)\s*[:：]/.test(figure.caption)) {
+      issues.push({ id: `answer-leak-figure-${figure.id}`, severity: "warning", message: `${figure.questionNumber || "번호 미상"}번 그림 설명에 정답으로 의심되는 문장이 포함되어 있습니다.` });
+    }
+    const placement = figure.placement;
+    if (placement && normalizeQuestionNumber(placement.questionNumber) !== normalizeQuestionNumber(figure.questionNumber)) {
+      issues.push({ id: `figure-placement-${figure.id}`, severity: "warning", message: `${figure.questionNumber || "번호 미상"}번 그림의 위치 정보가 문항 번호와 일치하지 않습니다.` });
+    }
+  }
+
+  const segments = data.questionContentSegments ?? {};
+  for (const [number, items] of Object.entries(segments)) {
+    const figures = new Set((data.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(number)).map((figure) => figure.id));
+    for (const segment of items) {
+      if (segment.type === "figure" && !figures.has(segment.figureId)) {
+        issues.push({ id: `segment-figure-${number}-${segment.id}`, severity: "warning", message: `${number}번 그림 위치가 실제 그림 항목과 연결되지 않았습니다.` });
+      }
+    }
+  }
+
   return { questionNumbers, answerNumbers, issues, audit };
 }

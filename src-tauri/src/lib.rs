@@ -13,7 +13,8 @@ use tauri::Manager;
 use uuid::Uuid;
 use zip::write::FileOptions;
 
-const MAX_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
+const MAX_IMPORT_IMAGE_BYTES: u64 = 25 * 1024 * 1024;
+const MAX_AI_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 const MAX_AI_IMAGE_COUNT: usize = 20;
 const MAX_AI_IMAGE_TOTAL_BYTES: u64 = 14 * 1024 * 1024;
 const MAX_BACKUP_ZIP_BYTES: u64 = 1024 * 1024 * 1024;
@@ -271,10 +272,11 @@ fn validate_image_header_bytes(bytes: &[u8], ext: &str) -> Result<(), String> {
     }
 }
 
-fn validate_image_magic(path: &Path, ext: &str) -> Result<(), String> {
+fn validate_image_magic(path: &Path, ext: &str, max_bytes: u64) -> Result<(), String> {
     let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
-    if metadata.len() > MAX_IMAGE_BYTES {
-        return Err("이미지 파일이 너무 큽니다. 10MB 이하만 저장할 수 있습니다.".into());
+    if metadata.len() > max_bytes {
+        let max_mb = max_bytes / 1024 / 1024;
+        return Err(format!("이미지 파일이 너무 큽니다. {max_mb}MB 이하만 저장할 수 있습니다."));
     }
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut header = [0u8; 12];
@@ -322,6 +324,12 @@ fn build_gemini_parts(
             return Err(format!("AI 분석 이미지가 없습니다: {filename}"));
         }
         let metadata = fs::metadata(&path).map_err(|e| e.to_string())?;
+        if metadata.len() > MAX_AI_IMAGE_BYTES {
+            return Err(format!(
+                "AI 분석 이미지는 파일당 {}MB 이하만 사용할 수 있습니다.",
+                MAX_AI_IMAGE_BYTES / 1024 / 1024
+            ));
+        }
         total_bytes = total_bytes
             .checked_add(metadata.len())
             .ok_or_else(|| "AI 분석 이미지 용량을 계산하지 못했습니다.".to_string())?;
@@ -332,7 +340,7 @@ fn build_gemini_parts(
             .extension()
             .and_then(|value| value.to_str())
             .unwrap_or_default();
-        validate_image_magic(&path, ext)?;
+        validate_image_magic(&path, ext, MAX_AI_IMAGE_BYTES)?;
         let bytes = fs::read(&path).map_err(|e| format!("AI 분석 이미지를 읽지 못했습니다: {e}"))?;
         parts.push(gemini_inline_data_part(mime_type, &bytes));
     }
@@ -384,7 +392,7 @@ fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), Strin
     Ok(())
 }
 
-fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+pub(crate) fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let dir = path
         .parent()
         .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_string())?;
@@ -844,7 +852,7 @@ fn save_image(app: tauri::AppHandle, source_path: String) -> Result<String, Stri
     if !is_allowed_image_extension(&ext) {
         return Err("지원하지 않는 이미지 형식입니다.".into());
     }
-    validate_image_magic(Path::new(&source_path), &ext)?;
+    validate_image_magic(Path::new(&source_path), &ext, MAX_IMPORT_IMAGE_BYTES)?;
     let filename = format!("{}.{}", Uuid::new_v4(), ext);
     let dest = image_path(&app, &filename)?;
     fs::copy(&source_path, &dest).map_err(|e| e.to_string())?;
@@ -906,10 +914,13 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
                 .extension()
                 .and_then(|value| value.to_str())
                 .ok_or_else(|| format!("{filename} 이미지 확장자를 확인할 수 없습니다."))?;
-            validate_image_magic(&path, ext)?;
+            validate_image_magic(&path, ext, MAX_IMPORT_IMAGE_BYTES)?;
             let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
-            if size > MAX_IMAGE_BYTES {
-                return Err(format!("{filename} 이미지가 10MB 제한을 초과했습니다."));
+            if size > MAX_IMPORT_IMAGE_BYTES {
+                return Err(format!(
+                    "{filename} 이미지가 {}MB 제한을 초과했습니다.",
+                    MAX_IMPORT_IMAGE_BYTES / 1024 / 1024
+                ));
             }
             total_image_bytes = total_image_bytes
                 .checked_add(size)
@@ -1026,8 +1037,11 @@ fn restore_backup_zip(
                 continue;
             }
             validate_image_filename(filename)?;
-            if file.size() > MAX_IMAGE_BYTES {
-                return Err(format!("{filename} 이미지가 너무 큽니다."));
+            if file.size() > MAX_IMPORT_IMAGE_BYTES {
+                return Err(format!(
+                    "{filename} 이미지가 {}MB 제한을 초과했습니다.",
+                    MAX_IMPORT_IMAGE_BYTES / 1024 / 1024
+                ));
             }
             total_image_bytes = total_image_bytes
                 .checked_add(file.size())
@@ -1159,6 +1173,18 @@ mod tests {
             mastered: false,
             extra: serde_json::Map::new(),
         }
+    }
+
+    #[test]
+    fn import_image_byte_limit_is_25mb() {
+        assert_eq!(MAX_IMPORT_IMAGE_BYTES, 25 * 1024 * 1024);
+    }
+
+    #[test]
+    fn ai_image_limits_remain_unchanged() {
+        assert_eq!(MAX_AI_IMAGE_BYTES, 10 * 1024 * 1024);
+        assert_eq!(MAX_AI_IMAGE_COUNT, 20);
+        assert_eq!(MAX_AI_IMAGE_TOTAL_BYTES, 14 * 1024 * 1024);
     }
 
     #[test]

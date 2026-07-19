@@ -3,8 +3,10 @@ import {
   builtInPromptTemplates,
   generateImportWithAi,
   getAiProviderStatus,
+  MAX_IMPORT_IMAGE_BYTES,
   saveImageFiles,
 } from "./api";
+import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 
 describe("builtInPromptTemplates", () => {
   it("keeps the sheet JSON prompt strict about raw JSON, printed content, and excluded handwriting", () => {
@@ -34,12 +36,17 @@ describe("builtInPromptTemplates", () => {
 });
 
 describe("image file security limits", () => {
+  it("exposes the shared 25MB import image cap", () => {
+    expect(MAX_IMPORT_IMAGE_BYTES).toBe(IMPORT_LIMITS.MAX_IMAGE_BYTES);
+    expect(MAX_IMPORT_IMAGE_BYTES).toBe(25 * 1024 * 1024);
+  });
+
   it("rejects oversized browser image files", async () => {
-    const largeImage = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "large.png", {
+    const largeImage = new File([new Uint8Array(MAX_IMPORT_IMAGE_BYTES + 1)], "large.png", {
       type: "image/png",
     });
 
-    await expect(saveImageFiles([largeImage])).rejects.toThrow("10MB 이하");
+    await expect(saveImageFiles([largeImage])).rejects.toThrow("25MB 이하");
   });
 });
 

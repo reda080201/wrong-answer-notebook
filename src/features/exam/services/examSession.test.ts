@@ -71,3 +71,61 @@ describe("exam session foundation", () => {
     expect(session.questions[1]?.question).not.toContain("자료 B");
   });
 });
+
+describe("exam snapshot stimulus handling", () => {
+  it("ignores inline 자료:, 그림:, and 표: lines inside a question body", () => {
+    const withInlineMarkers = {
+      ...entry,
+      question: "[자료 A]\n공통 지문\n\n1. 첫 문제\n자료: 위 지문을 참고하라.\n그림: 아래 그림을 보라.\n표: 다음 표를 보라.\n① 1\n② 2\n\n2. 둘째 문제\n① 3\n② 4",
+    } as WrongAnswerEntry;
+    const session = createExamSession(withInlineMarkers);
+    expect(session.questions).toHaveLength(2);
+    expect(session.questions[0]?.passage).toBe("[자료 A]\n공통 지문");
+    expect(session.questions[1]?.passage).toBe("[자료 A]\n공통 지문");
+    expect(session.questions[0]?.question).toContain("자료: 위 지문을 참고하라.");
+    expect(session.questions[0]?.question).toContain("그림: 아래 그림을 보라.");
+    expect(session.questions[0]?.question).toContain("표: 다음 표를 보라.");
+  });
+
+  it("treats explicit table markers between questions as the next group passage", () => {
+    const withTableMarkers = {
+      ...entry,
+      question: "[자료 A]\nA 자료\n\n1. 첫 문제\n① 1\n② 2\n\n[표]\n표 내용\n\n2. 둘째 문제\n① 3\n② 4\n\n표:\n다른 표\n\n3. 셋째 문제\n① 5\n② 6\n\n표 1\n번호 표\n\n4. 넷째 문제\n① 7\n② 8",
+    } as WrongAnswerEntry;
+    const session = createExamSession(withTableMarkers);
+    expect(session.questions.map((item) => item.passage)).toEqual([
+      "[자료 A]\nA 자료",
+      "[표]\n표 내용",
+      "표:\n다른 표",
+      "표 1\n번호 표",
+    ]);
+    expect(session.questions[0]?.question).not.toContain("[표]");
+    expect(session.questions[1]?.question).not.toContain("표:");
+  });
+
+  it("does not promote a marker that appears before the next question choices end", () => {
+    const withPrematureMarker = {
+      ...entry,
+      question: "1. 첫 문제\n① 1\n② 2\n[자료 B]\nB 자료\n\n2. 둘째 문제\n① 3\n② 4",
+    } as WrongAnswerEntry;
+    const session = createExamSession(withPrematureMarker);
+    expect(session.questions).toHaveLength(2);
+    expect(session.questions[0]?.passage).toBeUndefined();
+    expect(session.questions[1]?.passage).toBeUndefined();
+    expect(session.questions[0]?.question).toContain("[자료 B]");
+  });
+
+  it("accepts a between-question marker after choices when no choices exist", () => {
+    const subjectiveEntry = {
+      ...entry,
+      question: "1. 서술형 문제\n답을 쓰시오.\n\n[자료 B]\nB 자료\n\n2. 다음 문제\n답을 쓰시오.",
+      answerKey: [
+        { id: "a1", questionNumber: "1", answer: "①", explanation: "", importantPoints: [] },
+        { id: "a2", questionNumber: "2", answer: "②", explanation: "", importantPoints: [] },
+      ],
+    } as WrongAnswerEntry;
+    const session = createExamSession(subjectiveEntry);
+    expect(session.questions[0]?.passage).toBeUndefined();
+    expect(session.questions[1]?.passage).toBe("[자료 B]\nB 자료");
+  });
+});

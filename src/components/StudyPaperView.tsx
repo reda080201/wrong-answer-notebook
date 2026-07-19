@@ -107,21 +107,21 @@ export default function StudyPaperView({
         />
 
         {diagramItems.length > 0 && (
-          <section className="study-paper-diagrams" aria-label="문제 시각화">
-            <div className="study-paper-section-title">
+          <details className="study-paper-diagrams" aria-label="학습 시각화">
+            <summary className="study-paper-section-title">
               <span />
-              <strong>시각화</strong>
+              <strong>GPT 학습용 시각화</strong>
               <span />
-            </div>
+            </summary>
             <div className="study-paper-diagram-grid">
-              {diagramItems.map((item) => (
+              {diagramItems.slice(0, 1).map((item) => (
                 <div key={item.id} className="study-paper-diagram-item">
                   <span className="formula-chip">{item.label}</span>
                   <DiagramCard diagramType={item.diagramType} diagramSpec={item.diagramSpec} />
                 </div>
               ))}
             </div>
-          </section>
+          </details>
         )}
 
         {figureImages.length > 0 && (

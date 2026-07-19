@@ -137,9 +137,11 @@ Inspector는 앱 전용 `/pair` 교환을 자동으로 수행하지 않습니다
 3. 설정 화면의 `MCP` URL(`/mcp`)을 Inspector의 Streamable HTTP 서버 주소로 설정하고, helper가 전달한 임시 `Authorization: Bearer ...` 헤더만 현재 실행 세션에 적용합니다.
 4. `initialize`를 호출해 negotiated `protocolVersion`과 `tools`, `resources` capability를 확인합니다.
 5. `notifications/initialized`를 보내고 응답이 `202 Accepted`이며 body가 비어 있는지 확인합니다.
-6. `tools/list`에서 다섯 읽기 전용 도구와 각 `inputSchema`, `annotations.readOnlyHint: true`를 확인합니다.
+6. `tools/list`에서 여덟 개 읽기 전용 도구와 각 `inputSchema`, `annotations.readOnlyHint: true`를 확인합니다.
 7. `tools/call`의 `health_check`를 호출하고, 이어서 `search_notebook` 또는 `get_question`을 최소 한 번 호출합니다. 이미지가 포함된 문항은 `resources/read`로 `notebook-image://...` resource를 읽어 MIME과 blob 응답을 확인합니다.
 8. Inspector를 닫은 뒤 앱에서 `모든 연결 해제` 또는 credential 회전을 실행해 임시 접속 credential을 폐기합니다.
+
+`get_active_exam_question`은 기본적으로 문항에 직접 연결된 이미지와 도표만 반환합니다. 원본 페이지에는 다른 문항이나 필기가 포함될 수 있으므로, 이를 MCP에 포함하려면 `includeSourcePageImages: true`를 명시해야 합니다.
 
 `GET /mcp`는 SSE를 제공하지 않는 현재 구현에서 `405 Method Not Allowed`를 반환하는 것이 정상입니다. 브리지 상태가 `running`인 것만으로는 실제 MCP 연결 성공을 뜻하지 않으며, 위 요청들이 모두 성공해야 연결 점검이 완료됩니다.
 

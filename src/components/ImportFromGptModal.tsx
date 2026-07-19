@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import JSZip from "jszip";
 import { v4 as uuidv4 } from "uuid";
 import { saveImageFiles } from "../api";
 import type {
@@ -41,6 +40,8 @@ import ImageField from "./ImageField";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 import ImportEntriesPreviewModal from "./ImportEntriesPreviewModal";
 import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entryDraft";
+import { IMPORT_LIMITS } from "../features/import/services/importLimits";
+import { readZipImport } from "../features/import/services/zipImport";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -81,19 +82,10 @@ function isSupportedImageFile(name: string): boolean {
   return /\.(png|jpe?g|webp)$/i.test(name);
 }
 
-function imageMimeType(name: string): string {
-  const lower = name.toLowerCase();
-  if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-  if (lower.endsWith(".webp")) return "image/webp";
-  return "image/png";
-}
-
-const MAX_ALL_IN_ONE_ZIP_BYTES = 50 * 1024 * 1024;
-const MAX_IMPORT_JSON_BYTES = 5 * 1024 * 1024;
-const MAX_IMPORT_ZIP_ENTRIES = 100;
-const MAX_IMPORT_IMAGE_COUNT = 20;
-const MAX_IMPORT_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_IMPORT_TOTAL_IMAGE_BYTES = 100 * 1024 * 1024;
+const MAX_IMPORT_JSON_BYTES = IMPORT_LIMITS.MAX_JSON_BYTES;
+const MAX_IMPORT_IMAGE_COUNT = IMPORT_LIMITS.MAX_IMAGE_COUNT;
+const MAX_IMPORT_IMAGE_BYTES = IMPORT_LIMITS.MAX_IMAGE_BYTES;
+const MAX_IMPORT_TOTAL_IMAGE_BYTES = IMPORT_LIMITS.MAX_UNCOMPRESSED_BYTES;
 
 function withExpectedQuestionNumbers(
   data: Partial<EntryFormData>,
@@ -303,6 +295,7 @@ export default function ImportFromGptModal({
   const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
+  const [helpOpen, setHelpOpen] = useState(false);
   const conceptImportValue = useMemo(() => {
     if (batchImport) return null;
     const parsedValue = tryParseConceptKnowledgeText(rawText);
@@ -512,40 +505,10 @@ export default function ImportFromGptModal({
   const collectAllInOneFiles = async (files: File[]) => {
     const zipFile = files.find((file) => file.name.toLowerCase().endsWith(".zip"));
     if (zipFile) {
-      if (zipFile.size > MAX_ALL_IN_ONE_ZIP_BYTES) {
-        throw new Error("ZIP 파일이 너무 큽니다. 50MB 이하 파일만 가져올 수 있습니다.");
-      }
-      const zip = await JSZip.loadAsync(zipFile);
-      const entries = Object.values(zip.files).filter((entry) => !entry.dir);
-      if (entries.length > MAX_IMPORT_ZIP_ENTRIES) {
-        throw new Error(`ZIP 안의 파일이 너무 많습니다. ${MAX_IMPORT_ZIP_ENTRIES}개 이하만 가져올 수 있습니다.`);
-      }
-      const jsonEntries = entries.filter((entry) => entry.name.toLowerCase().endsWith(".json"));
-      const importJson = jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "import.json");
-      if (!importJson && jsonEntries.length !== 1) {
-        throw new Error("ZIP 안에는 import.json 또는 JSON 파일 1개만 있어야 합니다.");
-      }
-      const jsonEntry = importJson ?? jsonEntries[0];
-      if (!jsonEntry) throw new Error("ZIP 안에서 import.json을 찾지 못했습니다.");
-      const imageEntries = entries.filter((entry) => isSupportedImageFile(entry.name));
-      if (imageEntries.length > MAX_IMPORT_IMAGE_COUNT) {
-        throw new Error(`ZIP 안의 이미지가 너무 많습니다. ${MAX_IMPORT_IMAGE_COUNT}개 이하만 가져올 수 있습니다.`);
-      }
-      const imageFiles = await Promise.all(
-        imageEntries.map(async (entry) => {
-          const blob = await entry.async("blob");
-          const name = basename(entry.name);
-          return new File([blob], name, { type: imageMimeType(name) });
-        }),
-      );
-      assertImportImages(imageFiles);
-      const jsonText = await jsonEntry.async("text");
-      assertImportJsonSize(basename(jsonEntry.name), new Blob([jsonText]).size);
-      return {
-        jsonText,
-        jsonName: basename(jsonEntry.name),
-        imageFiles,
-      };
+      const result = await readZipImport(zipFile);
+      assertImportImages(result.imageFiles);
+      assertImportJsonSize(result.jsonName, new Blob([result.jsonText]).size);
+      return result;
     }
 
     const jsonFiles = files.filter((file) => file.name.toLowerCase().endsWith(".json"));
@@ -707,12 +670,23 @@ export default function ImportFromGptModal({
 
   return (
     <div className="form-overlay" onClick={onClose}>
-      <div className="form-modal form-modal--wide import-modal" onClick={(event) => event.stopPropagation()}>
-        <div className="form-header">
-          <h2>{isSolutionMode ? "GPT 해설 빠른 가져오기" : "GPT 결과 가져오기"}</h2>
-          <button type="button" className="btn-icon" onClick={onClose}>
-            닫기
-          </button>
+      <div
+        className="form-modal form-modal--wide import-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-modal-title"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="form-header import-modal-header">
+          <h2 id="import-modal-title">{isSolutionMode ? "GPT 해설 빠른 가져오기" : "GPT 결과 가져오기"}</h2>
+          <div className="import-modal-header-actions">
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setHelpOpen(true)}>
+              가져오기 도움말
+            </button>
+            <button type="button" className="btn-icon" onClick={onClose} aria-label="닫기">
+              닫기
+            </button>
+          </div>
         </div>
 
         <div className="form-body import-modal-body">
@@ -1278,6 +1252,8 @@ export default function ImportFromGptModal({
                               value={item.explanation}
                               onChange={(event) => updateAnswer(item.id, { explanation: event.target.value })}
                             />
+                            <details className="import-answer-details">
+                              <summary>상세 편집</summary>
                             <textarea
                               aria-label={`${item.questionNumber || "답안"} 풀이 전략`}
                               value={item.strategy ?? ""}
@@ -1335,6 +1311,7 @@ export default function ImportFromGptModal({
                               onChange={(event) => updateAnswer(item.id, { notes: event.target.value })}
                               placeholder="문제별 메모"
                             />
+                            </details>
                             <button type="button" className="btn-icon danger btn-sm-text" onClick={() => removeAnswer(item.id)}>
                               삭제
                             </button>
@@ -1416,6 +1393,20 @@ export default function ImportFromGptModal({
             {isSolutionMode ? "해설 적용하기" : "폼으로 보내기"}
           </button>
         </div>
+        {helpOpen && (
+          <div className="import-help-backdrop" role="presentation">
+            <section className="import-help-dialog" role="dialog" aria-modal="true" aria-labelledby="import-help-title">
+              <header><h3 id="import-help-title">가져오기 도움말</h3><button type="button" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>
+              <ul>
+                <li>프롬프트를 복사해 GPT 결과를 JSON으로 받은 뒤 붙여넣습니다.</li>
+                <li>텍스트 파일, JSON, ZIP과 이미지 묶음도 가져올 수 있습니다.</li>
+                <li>AI 판독 감사와 needsReview는 저장 전에 직접 확인해야 하는 항목입니다.</li>
+                <li>손글씨 제외 여부와 원본/정리된 그림 연결 상태를 확인하세요.</li>
+                <li>저장 전 미리보기에서 문제·정답·해설이 섞이지 않았는지 검토하세요.</li>
+              </ul>
+            </section>
+          </div>
+        )}
       </div>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal

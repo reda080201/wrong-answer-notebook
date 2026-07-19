@@ -200,7 +200,20 @@ export interface SheetFigureItem {
   image?: string;
   source: "original" | "gpt_cleaned" | "described_only";
   needsReview?: boolean;
+  placement?: {
+    questionNumber: string;
+    afterSegmentId?: string;
+    beforeChoiceIndex?: number;
+    order?: number;
+  };
 }
+
+export type QuestionContentSegment =
+  | { id: string; type: "text"; text: string }
+  | { id: string; type: "condition"; label?: string; text: string }
+  | { id: string; type: "equation"; latex: string; display: boolean }
+  | { id: string; type: "table"; rows: string[][] }
+  | { id: string; type: "figure"; figureId: string };
 
 export interface QuestionMeta {
   questionNumber: string;
@@ -283,6 +296,7 @@ export interface ExamQuestionSnapshot {
   /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
   sourcePageImages?: string[];
   figures: SheetFigureItem[];
+  contentSegments?: QuestionContentSegment[];
   correctAnswer?: string;
   explanation?: string;
 }
@@ -510,6 +524,8 @@ export interface WrongAnswerEntry {
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
   questionMeta?: QuestionMeta[];
+  /** 문항 번호별 표시 순서. 기존 question 문자열 데이터와 함께 유지됩니다. */
+  questionContentSegments?: Record<string, QuestionContentSegment[]>;
   sheetGroup?: SheetGroup;
   importAudit?: ImportAudit;
   rejectedNotes?: string[];

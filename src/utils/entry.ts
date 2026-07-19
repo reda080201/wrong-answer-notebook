@@ -16,6 +16,7 @@ import type {
   ReviewAttempt,
   ReviewResult,
   ReviewState,
+  QuestionContentSegment,
   SheetFigureItem,
   SheetAnswerItem,
   WrongAnswerEntry,
@@ -515,8 +516,50 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
       image: item.image ? `${item.image}`.trim() : undefined,
       source: isFigureSource(item.source) ? item.source : "gpt_cleaned",
       needsReview: Boolean(item.needsReview),
+      placement: normalizeFigurePlacement(item.placement),
     }))
     .filter((item) => item.questionNumber || item.title || item.caption || item.image);
+}
+
+function normalizeFigurePlacement(raw: unknown): SheetFigureItem["placement"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  const questionNumber = `${value.questionNumber ?? ""}`.trim();
+  if (!questionNumber) return undefined;
+  const order = typeof value.order === "number" && Number.isFinite(value.order)
+    ? Math.max(0, Math.floor(value.order))
+    : undefined;
+  const beforeChoiceIndex = typeof value.beforeChoiceIndex === "number" && Number.isFinite(value.beforeChoiceIndex)
+    ? Math.max(0, Math.floor(value.beforeChoiceIndex))
+    : undefined;
+  return {
+    questionNumber,
+    afterSegmentId: typeof value.afterSegmentId === "string" && value.afterSegmentId.trim()
+      ? value.afterSegmentId.trim()
+      : undefined,
+    beforeChoiceIndex,
+    order,
+  };
+}
+
+export function normalizeQuestionContentSegments(raw: unknown): WrongAnswerEntry["questionContentSegments"] {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const normalized = Object.entries(raw as Record<string, unknown>).flatMap(([questionNumber, segments]) => {
+    if (!Array.isArray(segments)) return [];
+    const items = segments.flatMap((segment, index): QuestionContentSegment[] => {
+      if (!segment || typeof segment !== "object") return [];
+      const value = segment as Record<string, unknown>;
+      const id = typeof value.id === "string" && value.id.trim() ? value.id.trim() : `segment-${index + 1}`;
+      if (value.type === "text" && typeof value.text === "string") return [{ id, type: "text", text: value.text }];
+      if (value.type === "condition" && typeof value.text === "string") return [{ id, type: "condition", text: value.text, label: typeof value.label === "string" ? value.label : undefined }];
+      if (value.type === "equation" && typeof value.latex === "string") return [{ id, type: "equation", latex: value.latex, display: Boolean(value.display) }];
+      if (value.type === "table" && Array.isArray(value.rows) && value.rows.every((row) => Array.isArray(row))) return [{ id, type: "table", rows: value.rows.map((row) => (row as unknown[]).map((cell) => `${cell ?? ""}`)) }];
+      if (value.type === "figure" && typeof value.figureId === "string" && value.figureId.trim()) return [{ id, type: "figure", figureId: value.figureId.trim() }];
+      return [];
+    });
+    return items.length ? [[normalizeQuestionNumber(questionNumber) || questionNumber, items] as const] : [];
+  });
+  return normalized.length ? Object.fromEntries(normalized) : undefined;
 }
 
 function normalizeReviewAttempts(raw: unknown, entryId: string): ReviewAttempt[] {
@@ -678,6 +721,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     answerKey: canonical.answerKey,
     figures,
     questionMeta: canonical.questionMeta,
+    questionContentSegments: normalizeQuestionContentSegments(rest.questionContentSegments),
     sheetGroup: entryKind === "problem_sheet" ? normalizeSheetGroup(rest.sheetGroup) : undefined,
     learningBlocks,
     importAudit: rest.importAudit
