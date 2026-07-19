@@ -1,4 +1,4 @@
-import { useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Annotation, AnnotationTool, QuestionMeta, ReviewResult, SheetAnswerItem, SheetFigureItem } from "../types";
 import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textLayout";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -71,6 +71,8 @@ export default function QuestionTheaterView({
   onReview,
   onClose,
 }: QuestionTheaterViewProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const dragCleanupRef = useRef<(() => void) | null>(null);
   const [solutionSplitOpen, setSolutionSplitOpen] = useState(false);
   const [splitRatio, setSplitRatio] = useState(loadSplitRatio);
   const [scoreEditorOpen, setScoreEditorOpen] = useState(false);
@@ -88,18 +90,63 @@ export default function QuestionTheaterView({
   const startDividerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
     const container = event.currentTarget.closest(".question-theater-main");
     if (!(container instanceof HTMLElement)) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    const divider = event.currentTarget;
+    divider.setPointerCapture(event.pointerId);
     const handleMove = (moveEvent: PointerEvent) => updateSplitRatio(moveEvent.clientX, container);
+    dragCleanupRef.current?.();
     const handleUp = () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
+      window.removeEventListener("pointercancel", handleUp);
+      if (divider.hasPointerCapture(event.pointerId)) {
+        divider.releasePointerCapture(event.pointerId);
+      }
+      dragCleanupRef.current = null;
     };
+    dragCleanupRef.current = handleUp;
     window.addEventListener("pointermove", handleMove);
     window.addEventListener("pointerup", handleUp, { once: true });
+    window.addEventListener("pointercancel", handleUp, { once: true });
   };
 
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = () => Array.from(
+      dialogRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      dragCleanupRef.current?.();
+      previousFocus?.focus();
+    };
+  }, [onClose]);
+
   return (
-    <div className="question-theater" role="dialog" aria-modal="true" aria-label="문제 크게 보기">
+    <div ref={dialogRef} className="question-theater" role="dialog" aria-modal="true" aria-label="문제 크게 보기" tabIndex={-1}>
       <div className="question-theater-shell">
         <header className="question-theater-toolbar">
           <button type="button" onClick={onPrevious} disabled={questionIndex <= 0}>

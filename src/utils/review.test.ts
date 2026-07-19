@@ -174,6 +174,37 @@ describe("review utilities", () => {
     expect(getDifficultReviewCandidates([baseEntry, difficult]).map((entry) => entry.id)).toEqual(["hard"]);
   });
 
+  it("keeps entries with a corrupted due date visible for review", () => {
+    const corrupted = {
+      ...baseEntry,
+      review: {
+        dueAt: "not-a-date",
+        intervalDays: 7,
+        streak: 1,
+        history: [],
+      },
+    };
+
+    expect(isDueForReview(corrupted, new Date("2026-05-29T00:00:00.000Z"))).toBe(true);
+  });
+
+  it("does not propagate an invalid previous review date", () => {
+    const next = calculateNextReview(
+      {
+        dueAt: "2026-05-29T00:00:00.000Z",
+        lastReviewedAt: "not-a-date",
+        intervalDays: 7,
+        streak: 1,
+        history: [],
+      },
+      "good",
+      new Date("2026-05-29T00:00:00.000Z"),
+    );
+
+    expect(Number.isFinite(next.stabilityDays)).toBe(true);
+    expect(new Date(next.nextDueAt).toString()).not.toBe("Invalid Date");
+  });
+
   it("does not put every newly imported sheet question into today's queue", () => {
     const sheet: WrongAnswerEntry = {
       ...baseEntry,

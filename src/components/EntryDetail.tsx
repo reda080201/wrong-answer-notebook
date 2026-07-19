@@ -39,6 +39,7 @@ import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
 import GptExportModal from "./GptExportModal";
+import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1204,24 +1205,14 @@ export default function EntryDetail({
               </button>
             </div>
           )}
-          {isSheet && (
-            <div className="sheet-layout-toggle" aria-label="시험지 보기 방식">
-              <button
-                type="button"
-                className={sheetLayout === "single" ? "active" : ""}
-                onClick={() => setSheetLayout("single")}
-              >
-                단일 열
-              </button>
-              <button
-                type="button"
-                className={sheetLayout === "columns" ? "active" : ""}
-                onClick={() => setSheetLayout("columns")}
-              >
-                2단
-              </button>
-            </div>
-          )}
+          <QuickViewSettingsMenu
+            layout={isSheet ? sheetLayout : undefined}
+            onLayoutChange={isSheet ? setSheetLayout : undefined}
+            fontSize={focusTextSize}
+            onFontSizeChange={setFocusTextSize}
+            hideAnswers={hideAnswers}
+            onHideAnswersChange={setHideAnswers}
+          />
         </div>
         <div className="detail-actions">
           <div className="detail-actions-primary">

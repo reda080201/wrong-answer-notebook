@@ -49,13 +49,17 @@ export default function EntryListPane({
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
-  const importantQuestions = entries
-    .filter((entry) => entry.entryKind === "problem_sheet")
-    .flatMap((entry) =>
-      normalizeQuestionMeta(entry.questionMeta)
-        .filter((meta) => meta.important)
-        .map((meta) => ({ entry, meta })),
-    );
+  const importantQuestions = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.entryKind === "problem_sheet")
+        .flatMap((entry) =>
+          normalizeQuestionMeta(entry.questionMeta)
+            .filter((meta) => meta.important)
+            .map((meta) => ({ entry, meta })),
+        ),
+    [entries],
+  );
   const groupedSheets = useMemo(
     () => (activeSection === "problem_sheet" ? buildSheetGroups(filtered) : []),
     [activeSection, filtered],

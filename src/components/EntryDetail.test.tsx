@@ -47,6 +47,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
 
     expect(localStorage.getItem("wrong-answer-sheet-layout")).toBe("columns");
@@ -216,7 +217,6 @@ describe("EntryDetail sheet layout", () => {
 
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지" })).toHaveClass("active");
-    expect(screen.getByText("시각화")).toBeInTheDocument();
     expect(screen.getByText("접선 시각화")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /학습 내용/ }));
     expect(screen.getByText("개념·루틴·주의점")).toBeInTheDocument();

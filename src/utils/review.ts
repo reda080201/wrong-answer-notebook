@@ -15,6 +15,12 @@ export function startOfDay(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
 }
 
+function validDate(value: string | Date | null | undefined): Date | null {
+  if (value == null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
 export function calculateNextReview(
   previous: ReviewState | undefined,
   result: ReviewResult,
@@ -28,10 +34,12 @@ export function calculateNextReview(
   const previousStability = Math.max(0.5, (previous?.stabilityDays ?? currentInterval) || 1);
   const preLapseStability = Math.max(1, previous?.preLapseStabilityDays ?? previousStability);
   const previousDifficulty = Math.min(10, Math.max(1, previous?.memoryDifficulty ?? 5));
-  const elapsedDays = previous?.lastReviewedAt
-    ? Math.max(0, (reviewedAt.getTime() - new Date(previous.lastReviewedAt).getTime()) / 86_400_000)
+  const previousReviewedAt = validDate(previous?.lastReviewedAt);
+  const safeReviewedAt = validDate(reviewedAt) ?? new Date();
+  const elapsedDays = previousReviewedAt
+    ? Math.max(0, (safeReviewedAt.getTime() - previousReviewedAt.getTime()) / 86_400_000)
     : 0;
-  const retrievability = previous?.lastReviewedAt
+  const retrievability = previousReviewedAt
     ? Math.exp(-elapsedDays / previousStability)
     : 1;
   const causeMultiplier = cause === "concept_gap" || cause === "strategy_gap"
@@ -120,7 +128,7 @@ export function calculateNextReview(
     intervalDays = Math.min(intervalDays, 30);
   }
 
-  const nextDueAt = addDays(reviewedAt, intervalDays).toISOString();
+  const nextDueAt = addDays(safeReviewedAt, intervalDays).toISOString();
   return {
     intervalDays,
     streak,
@@ -183,13 +191,19 @@ export function isDueForReview(entry: WrongAnswerEntry, now = new Date()): boole
   if (entry.review?.phase === "archived") return false;
   if (entry.mastered && !entry.review?.dueAt && !entry.review?.phase) return false;
   if (!entry.review?.dueAt) return true;
-  return startOfDay(new Date(entry.review.dueAt)).getTime() <= startOfDay(now).getTime();
+  const dueAt = validDate(entry.review.dueAt);
+  const today = validDate(now);
+  if (!dueAt || !today) return true;
+  return startOfDay(dueAt).getTime() <= startOfDay(today).getTime();
 }
 
 function isQuestionDue(review: ReviewState | undefined, now = new Date()): boolean {
   if (review?.phase === "archived") return false;
   if (!review?.dueAt) return false;
-  return startOfDay(new Date(review.dueAt)).getTime() <= startOfDay(now).getTime();
+  const dueAt = validDate(review.dueAt);
+  const today = validDate(now);
+  if (!dueAt || !today) return true;
+  return startOfDay(dueAt).getTime() <= startOfDay(today).getTime();
 }
 
 export function getSheetQuestionReviewItems(

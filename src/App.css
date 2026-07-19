@@ -6535,3 +6535,46 @@ button.formula-chip:hover {
 .exam-question-paper label { display: grid; gap: 0.35rem; margin-top: 1rem; }
 .exam-question-paper input:not([type="checkbox"]), .exam-question-paper textarea { width: 100%; padding: 0.55rem; color: var(--text); background: var(--control-bg); border: 1px solid var(--control-border); border-radius: 0.4rem; }
 .exam-gpt-actions { margin-top: 1rem; }
+
+/* Compact two-level view controls shared by study details and modal-sized screens. */
+.quick-view-settings { position: relative; flex: 0 0 auto; }
+.quick-view-settings__trigger { white-space: nowrap; }
+.quick-view-settings__menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + .45rem);
+  right: 0;
+  width: min(20rem, calc(100vw - 1.5rem));
+  padding: .75rem;
+  border: 1px solid var(--control-border, #cbd5e1);
+  border-radius: .5rem;
+  background: var(--panel-bg, #fff);
+  box-shadow: 0 .8rem 2rem rgba(15, 23, 42, .18);
+  color: var(--text, #172033);
+}
+.quick-view-settings__section { display: grid; gap: .45rem; }
+.quick-view-settings__choices { display: flex; flex-wrap: wrap; gap: .35rem; }
+.quick-view-settings__choices button,
+.quick-view-settings__advanced,
+.quick-view-settings__advanced-panel button {
+  border: 1px solid var(--control-border, #cbd5e1);
+  border-radius: .35rem;
+  background: var(--control-bg, #f8fafc);
+  color: inherit;
+  padding: .34rem .55rem;
+}
+.quick-view-settings__choices button.active { border-color: var(--accent, #2563eb); background: var(--accent-soft, #dbeafe); }
+.quick-view-settings__toggle { display: flex; gap: .45rem; align-items: center; margin: .75rem 0; font-size: .9rem; }
+.quick-view-settings__advanced { width: 100%; text-align: left; }
+.quick-view-settings__advanced-panel { display: grid; gap: .4rem; margin-top: .45rem; font-size: .86rem; }
+@media (max-width: 680px) {
+  .quick-view-settings__menu { position: fixed; top: auto; bottom: 1rem; right: .75rem; }
+}
+
+/* Keyboard accessibility: visible focus for tab navigation only */
+:is(button, a, input, select, textarea, summary, [role="button"]):focus-visible,
+.form-field :is(input, select, textarea):focus-visible,
+.quick-concept-fields input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

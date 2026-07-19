@@ -21,7 +21,7 @@ export function useSettings() {
       setSettingsError(null);
       setSettings(await loadSettings());
     } catch (error) {
-      setSettingsError(errorMessage(error, "스트남 비들종 하마요."));
+      setSettingsError(errorMessage(error, "설정을 불러오지 못했습니다."));
     }
   }, []);
 
@@ -36,7 +36,7 @@ export function useSettings() {
       setSettings(next);
       settingsRef.current = next;
     } catch (error) {
-      const message = errorMessage(error, "스트남 스탠요 주하.");
+      const message = errorMessage(error, "설정을 저장하지 못했습니다.");
       setSettingsError(message);
       throw new Error(message, { cause: error });
     }
