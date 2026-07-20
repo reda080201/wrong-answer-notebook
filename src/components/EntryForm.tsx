@@ -336,7 +336,11 @@ export default function EntryForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!hasEntryContent(form)) return;
+    if (saving) return;
+    if (!hasEntryContent(form)) {
+      setSaveError("제목, 문제, 이미지 또는 학습 내용 중 하나를 입력해 주세요.");
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     try {
@@ -358,19 +362,27 @@ export default function EntryForm({
       ? "문제지 수정"
       : entry.entryKind === "concept"
         ? "개념 수정"
+        : entry.entryKind === "lecture"
+          ? "특강 수정"
         : "오답 수정"
     : form.entryKind === "problem_sheet"
       ? "문제지 추가"
       : form.entryKind === "concept"
         ? "개념 추가"
+        : form.entryKind === "lecture"
+          ? "특강 추가"
         : "오답 추가";
 
+  const handleClose = () => {
+    if (!saving) onClose();
+  };
+
   return (
-    <div className="form-overlay" onClick={onClose}>
+    <div className="form-overlay" onClick={handleClose}>
       <div className="form-modal form-modal--wide" onClick={(e) => e.stopPropagation()}>
         <div className="form-header">
           <h2>{formTitle}</h2>
-          <button type="button" className="btn-icon" onClick={onClose}>
+          <button type="button" className="btn-icon" onClick={handleClose} disabled={saving}>
             ✕
           </button>
         </div>
@@ -1239,7 +1251,7 @@ export default function EntryForm({
                 {saveError}
               </p>
             )}
-            <button type="button" className="btn-secondary" onClick={onClose}>
+            <button type="button" className="btn-secondary" onClick={handleClose} disabled={saving}>
               취소
             </button>
             <button type="submit" className="btn-primary" disabled={saving}>

@@ -197,4 +197,63 @@ describe("gptSolution", () => {
       }),
     );
   });
+
+const richEntry: WrongAnswerEntry = {
+  ...entry,
+  id: 'entry-rich',
+  entryKind: 'problem_sheet',
+  questionMeta: [{ questionNumber: '1', important: true, bookmarkLabel: 'kill', updatedAt: '2026-01-02T00:00:00.000Z', mistakeAnalysis: { causes: [{ type: 'calculation', severity: 'medium' }], primaryCause: 'calculation' } }],
+  questionContentSegments: { '1': [{ id: 'seg-1', type: 'text', text: 'condition' }] },
+  sheetGroup: { groupId: 'group-1', groupTitle: 'mock', partTitle: 'math', partOrder: 1, questionRange: '1-3' },
+  mistakeAnalysis: { causes: [{ type: 'concept_gap', severity: 'high', note: 'formula' }], primaryCause: 'concept_gap', preventionNote: 'review', practiceMode: 'concept_review' },
+  concepts: ['quadratic', 'factor'],
+  linkedEntryIds: ['linked-1', 'linked-2'],
+  reviewAttempts: [{ id: 'attempt-1', entryId: 'entry-rich', reviewedAt: '2026-01-03T00:00:00.000Z', correct: false, result: 'again' }],
+  review: { dueAt: '2026-02-01T00:00:00.000Z', intervalDays: 3, streak: 0, history: [] },
+  checklist: [{ id: 'chk-1', text: 'check', checked: false }],
+  answerKey: [{ id: 'a1', questionNumber: '1', answer: 'x=1', explanation: 'solve', importantPoints: ['core'], concepts: ['factor'], mistakeAnalysis: { causes: [{ type: 'careless', severity: 'low' }] } }],
+  figures: [{ id: 'fig-1', questionNumber: '1', title: 'graph', caption: 'parabola', source: 'described_only' }],
+  learningBlocks: [{ id: 'lb-1', type: 'concept', title: 'concept', content: 'summary' }],
+  sourceType: 'json',
+};
+
+  it('entryToFormData preserves all EntryFormData domain fields', () => {
+    const form = entryToFormData(richEntry);
+    expect(form.questionMeta).toEqual(richEntry.questionMeta);
+    expect(form.questionContentSegments).toEqual(richEntry.questionContentSegments);
+    expect(form.sheetGroup).toEqual(richEntry.sheetGroup);
+    expect(form.mistakeAnalysis).toEqual(richEntry.mistakeAnalysis);
+    expect(form.concepts).toEqual(richEntry.concepts);
+    expect(form.linkedEntryIds).toEqual(richEntry.linkedEntryIds);
+    expect(form.reviewAttempts).toEqual(richEntry.reviewAttempts);
+    expect(form.review).toEqual(richEntry.review);
+    expect(form.checklist).toEqual(richEntry.checklist);
+    expect(form.answerKey?.[0].mistakeAnalysis).toEqual(richEntry.answerKey?.[0].mistakeAnalysis);
+    expect(form.figures).toEqual(richEntry.figures);
+    expect(form.learningBlocks).toEqual(richEntry.learningBlocks);
+    expect(form.sourceType).toBe('json');
+    expect(form).not.toHaveProperty('id');
+    expect(form).not.toHaveProperty('createdAt');
+  });
+
+  it('mergeGptSolutionIntoEntry keeps preserved domain fields through fill merge', () => {
+    const base = entryToFormData(richEntry);
+    const merged = mergeGptSolutionIntoEntry(base, { correctAnswer: 'x = +/-1', explanationParts: [{ id: 'solution', text: 'gpt solve', images: [] }], memo: 'gpt memo', answerKey: [{ id: 'incoming', questionNumber: '1', answer: '2', explanation: 'gpt item', importantPoints: ['gpt point'] }] }, 'fill');
+    expect(merged.correctAnswer).toBe('x = +/-1');
+    expect(merged.explanationParts[0].text).toBe('gpt solve');
+    expect(merged.memo).toBe('gpt memo');
+    expect(merged.questionMeta).toEqual(base.questionMeta);
+    expect(merged.questionContentSegments).toEqual(base.questionContentSegments);
+    expect(merged.sheetGroup).toEqual(base.sheetGroup);
+    expect(merged.mistakeAnalysis).toEqual(base.mistakeAnalysis);
+    expect(merged.concepts).toEqual(base.concepts);
+    expect(merged.linkedEntryIds).toEqual(base.linkedEntryIds);
+    expect(merged.reviewAttempts).toEqual(base.reviewAttempts);
+    expect(merged.review).toEqual(base.review);
+    expect(merged.checklist).toEqual(base.checklist);
+    expect(merged.sourceType).toBe(base.sourceType);
+    expect(merged.questionImages).toEqual(base.questionImages);
+    expect(merged.tags).toEqual(base.tags);
+  });
+
 });

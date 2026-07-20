@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../types";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
+import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 import ImportFromGptModal from "./ImportFromGptModal";
 
 vi.mock("../api", () => ({
@@ -814,14 +815,16 @@ describe("ImportFromGptModal", () => {
       />,
     );
     const largeZip = new File([""], "large.zip", { type: "application/zip" });
-    Object.defineProperty(largeZip, "size", { value: 50 * 1024 * 1024 + 1 });
+    Object.defineProperty(largeZip, "size", { value: IMPORT_LIMITS.MAX_ARCHIVE_BYTES + 1 });
 
     fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
       target: { files: [largeZip] },
     });
 
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent("ZIP 파일이 너무 큽니다");
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        `ZIP 파일이 ${IMPORT_LIMITS.MAX_ARCHIVE_BYTES / 1024 / 1024}MB를 초과합니다.`,
+      );
     });
   });
 

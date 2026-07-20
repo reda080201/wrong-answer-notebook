@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { EntryFormData, ExplanationPart, SheetAnswerItem, WrongAnswerEntry } from "../types";
-import { hasExplanationContent } from "./entry";
+import { createEntryDraftFromEntry } from "../features/entries/model/entryDraft";
 
 export type GptSolutionApplyMode = "fill" | "overwrite";
 
@@ -13,9 +13,6 @@ function hasText(value: string | undefined): boolean {
   return Boolean(value?.trim());
 }
 
-function cloneDiagramSpec<T extends SheetAnswerItem["diagramSpec"]>(spec: T): T {
-  return spec ? ({ ...spec, highlights: spec.highlights ? [...spec.highlights] : undefined } as T) : spec;
-}
 
 function firstAnswer(imported: Partial<EntryFormData>): SheetAnswerItem | undefined {
   return imported.answerKey?.find(
@@ -275,51 +272,25 @@ export function mergeGptSolutionIntoEntry(
     questionImages: base.questionImages,
     entryKind: base.entryKind,
     tags: base.tags,
+    questionMeta: base.questionMeta,
+    questionContentSegments: base.questionContentSegments,
+    sheetGroup: base.sheetGroup,
+    mistakeAnalysis: base.mistakeAnalysis,
+    concepts: base.concepts,
+    linkedEntryIds: base.linkedEntryIds,
+    reviewAttempts: base.reviewAttempts,
+    review: base.review,
+    checklist: base.checklist,
+    annotations: base.annotations,
+    mastered: base.mastered,
+    difficult: base.difficult,
+    difficulty: base.difficulty,
+    myAnswer: base.myAnswer,
+    figures: base.figures,
+    sourceType: base.sourceType,
   };
 }
 
 export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
-  return {
-    subject: entry.subject,
-    title: entry.title,
-    question: entry.question,
-    questionImages: [...entry.questionImages],
-    entryKind: entry.entryKind,
-    difficult: entry.difficult,
-    difficulty: entry.difficulty ?? "none",
-    difficultyScore: entry.difficultyScore,
-    myAnswer: entry.myAnswer,
-    correctAnswer: entry.correctAnswer,
-    explanationParts: hasExplanationContent(entry)
-      ? entry.explanationParts.map((part) => ({ ...part, images: [...part.images] }))
-      : [{ id: uuidv4(), text: "", images: [] }],
-    memo: entry.memo,
-    annotations: [...(entry.annotations ?? [])],
-    tags: [...entry.tags],
-    answerKey: (entry.answerKey ?? []).map((item) => ({
-      ...item,
-      importantPoints: [...item.importantPoints],
-      concepts: item.concepts ? [...item.concepts] : [],
-      diagramType: item.diagramType,
-      diagramSpec: cloneDiagramSpec(item.diagramSpec),
-      steps: item.steps ? [...item.steps] : undefined,
-      choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : undefined,
-    })),
-    figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
-    learningBlocks: (entry.learningBlocks ?? []).map((block) => ({
-      ...block,
-      diagramSpec: cloneDiagramSpec(block.diagramSpec),
-    })),
-    importAudit: entry.importAudit ? {
-      ...entry.importAudit,
-      expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],
-      detectedQuestionNumbers: [...entry.importAudit.detectedQuestionNumbers],
-      missingQuestionNumbers: [...entry.importAudit.missingQuestionNumbers],
-      uncertainQuestionNumbers: [...entry.importAudit.uncertainQuestionNumbers],
-    } : undefined,
-    rejectedNotes: [...(entry.rejectedNotes ?? [])],
-    mastered: entry.mastered,
-    review: entry.review,
-    checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],
-  };
+  return createEntryDraftFromEntry(entry);
 }

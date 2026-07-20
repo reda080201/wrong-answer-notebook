@@ -3,7 +3,7 @@ import type { QuestionBlock } from "./textLayout";
 import { parseQuestionText } from "./textLayout";
 import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
-import { calculateNextReview } from "./review";
+import { calculateNextReview } from "./reviewSchedule";
 import { isMistakeCauseType, isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 
 export function normalizeQuestionNumber(value: string | number | undefined | null): string {

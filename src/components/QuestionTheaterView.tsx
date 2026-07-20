@@ -35,6 +35,7 @@ interface QuestionTheaterViewProps {
   onDifficultyScoreChange?: (score: number | undefined) => void;
   onOpenGptExport?: () => void;
   onReview: (result: ReviewResult) => void;
+  reviewSaving?: boolean;
   onClose: () => void;
 }
 
@@ -69,6 +70,7 @@ export default function QuestionTheaterView({
   onDifficultyScoreChange,
   onOpenGptExport,
   onReview,
+  reviewSaving = false,
   onClose,
 }: QuestionTheaterViewProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -341,13 +343,13 @@ export default function QuestionTheaterView({
               <p>현재 문제에 표시할 메모가 없습니다.</p>
             )}
             <div className="review-actions">
-              <button type="button" className="review-result review-result--again" onClick={() => onReview("again")}>
+              <button type="button" className="review-result review-result--again" disabled={reviewSaving} onClick={() => onReview("again")}>
                 다시
               </button>
-              <button type="button" className="review-result review-result--hard" onClick={() => onReview("hard")}>
+              <button type="button" className="review-result review-result--hard" disabled={reviewSaving} onClick={() => onReview("hard")}>
                 어려움
               </button>
-              <button type="button" className="review-result review-result--good" onClick={() => onReview("good")}>
+              <button type="button" className="review-result review-result--good" disabled={reviewSaving} onClick={() => onReview("good")}>
                 맞음
               </button>
             </div>

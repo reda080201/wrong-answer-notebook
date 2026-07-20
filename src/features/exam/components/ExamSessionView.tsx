@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ExamSession } from "../../../types";
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
@@ -9,6 +9,7 @@ interface ExamSessionViewProps {
   session: ExamSession;
   onChange: (session: ExamSession) => void;
   onSubmit: (session: ExamSession) => void | Promise<void>;
+  onSubmittingChange?: (submitting: boolean) => void;
   onAskGpt?: (payload: { question: string; response: string; scratchNote: string }) => void;
 }
 
@@ -21,11 +22,12 @@ function ExamHelpDialog({ onClose }: { onClose: () => void }) {
   return <div className="exam-dialog-backdrop" role="presentation"><section className="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-help-title"><header><h3 id="exam-help-title">시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></section></div>;
 }
 
-export default function ExamSessionView({ session, onChange, onSubmit, onAskGpt }: ExamSessionViewProps) {
+export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt }: ExamSessionViewProps) {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const question = session.questions[session.currentQuestionIndex];
   const response = session.responses.find((item) => item.questionNumber === question?.questionNumber);
@@ -35,7 +37,23 @@ export default function ExamSessionView({ session, onChange, onSubmit, onAskGpt 
   const unanswered = session.questions.filter((item) => !session.responses.find((responseItem) => responseItem.questionNumber === item.questionNumber)?.response.trim()).map((item) => item.questionNumber);
   const marked = session.responses.filter((item) => item.markedForReview).map((item) => item.questionNumber);
   const update = (patch: { response?: string; scratchNote?: string; markedForReview?: boolean }) => onChange(updateExamResponse(session, { questionNumber: question.questionNumber, response: patch.response ?? response?.response ?? "", scratchNote: patch.scratchNote ?? response?.scratchNote ?? "", markedForReview: patch.markedForReview ?? response?.markedForReview ?? false, updatedAt: new Date().toISOString() }));
-  const submit = async () => { setSubmitting(true); setSubmitError(null); try { await onSubmit(session); setSubmitOpen(false); } catch (error) { setSubmitError(error instanceof Error ? error.message : "시험을 저장하지 못했습니다. 다시 시도해 주세요."); } finally { setSubmitting(false); } };
+  const submit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    onSubmittingChange?.(true);
+    setSubmitError(null);
+    try {
+      await onSubmit(session);
+      setSubmitOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "시험을 저장하지 못했습니다. 다시 시도해 주세요.");
+    } finally {
+      submittingRef.current = false;
+      setSubmitting(false);
+      onSubmittingChange?.(false);
+    }
+  };
   const isMultipleChoice = question.choices.length > 0 && question.choices.every((choice) => Boolean(parseChoice(choice).marker));
 
   return <section className="exam-session-view" aria-label="모의고사 응시">

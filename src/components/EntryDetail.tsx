@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { Annotation, AnnotationTool, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { hasExplanationContent } from "../utils/entry";
@@ -72,6 +72,10 @@ interface EntryDetailProps {
     source: "detail" | "focused" | "theater";
   }) => void;
   initialQuestionTarget?: { questionNumber: string; requestId: number } | null;
+  onInitialQuestionTargetConsumed?: (
+    requestId: number,
+    result: "opened" | "not-found",
+  ) => void;
 }
 
 type SheetLayout = "single" | "columns";
@@ -167,6 +171,7 @@ export default function EntryDetail({
   onQuestionMetaChange,
   onActiveContextChange,
   initialQuestionTarget,
+  onInitialQuestionTargetConsumed,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
@@ -201,6 +206,7 @@ export default function EntryDetail({
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
+  const consumedInitialTargetRef = useRef<number | null>(null);
 
   const filledParts = entry.explanationParts
     .map((p, i) => ({ part: p, index: i }))
@@ -370,22 +376,30 @@ export default function EntryDetail({
     });
   }, [focusMode, isSheet, questionAnchors, scrollToQuestion]);
 
-  const handleReviewResult = useCallback(async (result: ReviewResult) => {
+  const handleReviewResult = useCallback(async (
+    result: ReviewResult,
+    explicitQuestion?: QuestionBlock,
+  ) => {
     if (reviewSaving) return;
+    if (isSheet && !explicitQuestion && theaterQuestionIndex === null && focusMode === "closed") {
+      pushToast("문제를 크게 보거나 집중 보기에서 복습 결과를 기록하세요.", "info");
+      return;
+    }
     setReviewSaving(result);
     try {
-      const currentTheaterQuestion =
-        theaterQuestionIndex !== null
+      const currentSheetQuestion =
+        explicitQuestion ??
+        (theaterQuestionIndex !== null
           ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
-          : undefined;
-      if (isSheet && currentTheaterQuestion && onQuestionMetaChange) {
+          : focusedQuestion);
+      if (isSheet && currentSheetQuestion && onQuestionMetaChange) {
         await onQuestionMetaChange(entry, (current) => {
           const questionMeta = normalizeQuestionMeta(current).find(
-            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentTheaterQuestion.displayNumber),
+            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentSheetQuestion.displayNumber),
           );
           return applyQuestionReviewResult(
             current,
-            currentTheaterQuestion.displayNumber,
+            currentSheetQuestion.displayNumber,
             result,
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
@@ -426,7 +440,7 @@ export default function EntryDetail({
     } finally {
       setReviewSaving(null);
     }
-  }, [entry, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
+  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
 
   const handleQuickMemoSubmit = async () => {
     const text = quickMemoText.trim();
@@ -630,17 +644,25 @@ export default function EntryDetail({
 
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
+    if (consumedInitialTargetRef.current === initialQuestionTarget.requestId) return;
     const normalized = normalizeQuestionNumber(initialQuestionTarget.questionNumber);
     const index = questionAnchors.findIndex(
       (block) =>
         normalizeQuestionNumber(block.displayNumber) === normalized ||
         normalizeQuestionNumber(block.numberLabel) === normalized,
     );
-    if (index >= 0) openTheaterMode(index);
-  }, [initialQuestionTarget, isSheet, openTheaterMode, questionAnchors]);
+    consumedInitialTargetRef.current = initialQuestionTarget.requestId;
+    if (index >= 0) {
+      openTheaterMode(index);
+      onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "opened");
+    } else {
+      onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "not-found");
+    }
+  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
+    if (theaterQuestionIndex !== null) setFocusedQuestionIndex(theaterQuestionIndex);
     setTheaterQuestionIndex(null);
     setSelectedReviewQueue(null);
     if (target?.kind === "question") {
@@ -2087,7 +2109,8 @@ export default function EntryDetail({
             setSelectedQuestionNumbers([String(theaterQuestion.displayNumber)]);
             setShowGptExport(true);
           }}
-          onReview={(result) => void handleReviewResult(result)}
+          onReview={(result) => void handleReviewResult(result, theaterQuestion)}
+          reviewSaving={reviewSaving !== null}
           onClose={closeTheaterMode}
         />
       )}
@@ -2116,7 +2139,10 @@ export default function EntryDetail({
           onPrevious={() => moveFocusedQuestion(-1)}
           onNext={() => moveFocusedQuestion(1)}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
-          onReview={(result) => void handleReviewResult(result)}
+          onReview={(result) => void handleReviewResult(
+            result,
+            isSheet && focusMode !== "closed" ? focusedQuestion : undefined,
+          )}
           onToggleDifficult={handleToggleDifficultWithToast}
           onModeChange={handleStudyModeChange}
           onCompactChange={setStudyControlCompact}

@@ -103,4 +103,72 @@ describe("ReviewPanel", () => {
       expect(onReview).toHaveBeenCalledWith({ kind: "sheet-question", entry: sheet, questionNumber: "1" }, "hard");
     });
   }, 30000);
+
+  it("moves focus into the dialog and closes with Escape", async () => {
+    const onClose = vi.fn();
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry]}
+        onClose={onClose}
+        onReview={vi.fn().mockResolvedValue(undefined)}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "닫기" })).toHaveFocus());
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows a recoverable error when saving a review result fails", async () => {
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry]}
+        onClose={vi.fn()}
+        onReview={vi.fn().mockRejectedValue(new Error("디스크 오류"))}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("디스크 오류");
+  });
+
+  it("does not close while a review result is saving", async () => {
+    let resolveReview: (() => void) | undefined;
+    const onReview = vi.fn(() => new Promise<void>((resolve) => { resolveReview = resolve; }));
+    const onClose = vi.fn();
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry]}
+        onClose={onClose}
+        onReview={onReview}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    await waitFor(() => expect(onReview).toHaveBeenCalled());
+
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "닫기" })).toBeDisabled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).not.toHaveBeenCalled();
+
+    resolveReview?.();
+    await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"));
+    fireEvent.click(screen.getByRole("button", { name: "닫기" }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

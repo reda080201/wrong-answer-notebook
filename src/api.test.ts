@@ -11,9 +11,13 @@ import {
   builtInPromptTemplates,
   generateImportWithAi,
   getAiProviderStatus,
+  loadExamSessions,
   MAX_IMPORT_IMAGE_BYTES,
+  saveExamSessions,
   saveImageFiles,
 } from "./api";
+import { EXAM_SESSIONS_STORAGE_KEY } from "./features/exam/storage/examSessionStorage";
+import type { ExamSession } from "./types";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 
 const mockedInvoke = vi.mocked(invoke);
@@ -119,5 +123,52 @@ describe("browser ai provider fallback", () => {
       available: false,
     }));
     await expect(generateImportWithAi("prompt", "", [])).rejects.toThrow("데스크톱 앱");
+  });
+});
+
+
+describe("exam session persistence", () => {
+  const sampleSession = (): ExamSession => ({
+    id: "session-1",
+    entryId: "entry-1",
+    title: "모의고사",
+    subject: "수학",
+    status: "in_progress",
+    questions: [],
+    responses: [],
+    currentQuestionIndex: 0,
+    startedAt: "2026-01-01T00:00:00.000Z",
+    updatedAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    mockedIsTauri.mockReturnValue(false);
+    localStorage.clear();
+  });
+
+  it("loads and saves exam sessions from localStorage in browser mode", async () => {
+    const sessions = [sampleSession()];
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+
+    await expect(loadExamSessions()).resolves.toEqual(sessions);
+
+    const updated = [{ ...sampleSession(), currentQuestionIndex: 2 }];
+    await saveExamSessions(updated);
+
+    expect(JSON.parse(localStorage.getItem(EXAM_SESSIONS_STORAGE_KEY) ?? "[]")).toEqual(updated);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("uses Tauri invoke for exam session persistence in desktop mode", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    const sessions = [sampleSession()];
+    mockedInvoke.mockResolvedValueOnce(sessions).mockResolvedValueOnce(undefined);
+
+    await expect(loadExamSessions()).resolves.toEqual(sessions);
+    await saveExamSessions(sessions);
+
+    expect(mockedInvoke).toHaveBeenNthCalledWith(1, "load_exam_sessions");
+    expect(mockedInvoke).toHaveBeenNthCalledWith(2, "save_exam_sessions", { sessions });
   });
 });

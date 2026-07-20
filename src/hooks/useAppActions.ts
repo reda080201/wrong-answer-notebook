@@ -457,9 +457,9 @@ export function useAppActions({
       await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
       return;
     }
-    await patchEntry(selected.id, {
-      learningBlocks: [...(selected.learningBlocks ?? []), ...blocks],
-    });
+    await patchEntry(selected.id, (current) => ({
+      learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+    }));
   };
 
   const runIntegrity = async () => {

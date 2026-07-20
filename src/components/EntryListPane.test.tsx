@@ -85,9 +85,10 @@ describe("EntryListPane", () => {
     const card = screen.getByRole("button", { name: /오답/ });
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: "Enter" });
+    fireEvent.keyDown(card, { key: " " });
 
     expect(setSelectedId).toHaveBeenCalledWith("wrong");
-    expect(setSelectedId).toHaveBeenCalledTimes(2);
+    expect(setSelectedId).toHaveBeenCalledTimes(3);
   });
 
   it("shows only important sheet questions and opens the selected question", () => {

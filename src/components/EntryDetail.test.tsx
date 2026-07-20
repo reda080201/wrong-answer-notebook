@@ -909,6 +909,7 @@ describe("EntryDetail sheet layout", () => {
 
   it("handles keyboard shortcuts for answers, navigation, review, and modes", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
+    const onQuestionMetaChange = vi.fn().mockResolvedValue(undefined);
     render(
       <EntryDetail
         entry={{
@@ -921,6 +922,7 @@ describe("EntryDetail sheet layout", () => {
         onToggleDifficult={vi.fn()}
         onAnnotationsChange={vi.fn()}
         onReview={onReview}
+        onQuestionMetaChange={onQuestionMetaChange}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
       />,
@@ -937,16 +939,20 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
+    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
     fireEvent.keyDown(window, { key: "1" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "again"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function)));
+    expect(onReview).not.toHaveBeenCalled();
     await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 어려움" })).not.toBeDisabled());
 
     fireEvent.keyDown(window, { key: "2" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "hard"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 맞음" })).not.toBeDisabled());
 
     fireEvent.keyDown(window, { key: "3" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "good"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(within(screen.getByLabelText("집중 보기 빠른 조작")).getByRole("button", { name: "나가기" }));
 
     fireEvent.keyDown(window, { key: "s" });
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();

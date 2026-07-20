@@ -13,6 +13,7 @@ interface AppSidebarProps {
   entries: WrongAnswerEntry[];
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
+  onSectionSelect?: (section: EntryKind) => void;
   stats: {
     total: number;
     pending: number;
@@ -44,6 +45,7 @@ export default function AppSidebar({
   entries,
   setActiveSection,
   setSelectedId,
+  onSectionSelect,
   stats,
   learningStats,
   subjectOrder,
@@ -102,8 +104,12 @@ export default function AppSidebar({
             type="button"
             className={`section-tab-btn ${activeSection === key ? "active" : ""}`}
             onClick={() => {
-              setActiveSection(key);
-              setSelectedId(null);
+              if (onSectionSelect) {
+                onSectionSelect(key);
+              } else {
+                setActiveSection(key);
+                setSelectedId(null);
+              }
             }}
           >
             {label}

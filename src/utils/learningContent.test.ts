@@ -76,4 +76,13 @@ describe("learning content utilities", () => {
       expect.objectContaining({ type: "routine", title: "루틴", content: "1. 조건 정리" }),
     ]);
   });
+
+  it("uses the canonical concept type when an imported block omits type", () => {
+    const blocks = parseLearningImportText(
+      JSON.stringify({ learningBlocks: [{ title: "핵심", content: "정의" }] }),
+      "lecture.json",
+    );
+
+    expect(blocks[0]).toEqual(expect.objectContaining({ type: "concept", title: "핵심" }));
+  });
 });

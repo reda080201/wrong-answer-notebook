@@ -35,12 +35,11 @@ describe("useSettings", () => {
   });
 
   it("surfaces Korean save fallback with the original error detail", async () => {
-    mockedSaveSettings.mockRejectedValueOnce(new Error("disk full"));
-
     const { result } = renderHook(() => useSettings());
     await waitFor(() => {
-      expect(result.current.settings).toEqual(defaultSettings);
+      expect(mockedLoadSettings).toHaveBeenCalled();
     });
+    mockedSaveSettings.mockRejectedValueOnce(new Error("disk full"));
 
     let saveError: unknown;
     await act(async () => {
@@ -69,12 +68,11 @@ describe("useSettings", () => {
   });
 
   it("uses Korean save fallback when the error has no message", async () => {
-    mockedSaveSettings.mockRejectedValueOnce(null);
-
     const { result } = renderHook(() => useSettings());
     await waitFor(() => {
-      expect(result.current.settings).toEqual(defaultSettings);
+      expect(mockedLoadSettings).toHaveBeenCalled();
     });
+    mockedSaveSettings.mockRejectedValueOnce(null);
 
     let saveError: unknown;
     await act(async () => {

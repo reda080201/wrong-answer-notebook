@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -18,14 +18,17 @@ import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
-import type { EntryKind } from "./types";
+import type { EntryKind, ExamSession, WrongAnswerEntry } from "./types";
 import { downloadMarkdown, openPrintableEntry } from "./utils/exportEntry";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamSessionView from "./features/exam/components/ExamSessionView";
 import { createExamSession } from "./features/exam/services/examSession";
+import {
+  EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS,
+  mergeExamSession,
+} from "./features/exam/storage/examSessionStorage";
 import { scoreExamSession } from "./features/exam/services/examScoring";
 import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "./features/entries/model/entryDraft";
-import type { ExamSession } from "./types";
 
 export default function App() {
   const {
@@ -60,8 +63,16 @@ export default function App() {
     requestId: number;
   } | null>(null);
   const [examSession, setExamSession] = useState<ExamSession | null>(null);
+  const [examSubmitting, setExamSubmitting] = useState(false);
+  const [examStartError, setExamStartError] = useState<{ entryId: string; message: string } | null>(null);
+  const [examSaveError, setExamSaveError] = useState<string | null>(null);
+  const [examSaving, setExamSaving] = useState(false);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
+  const examSessionRef = useRef<ExamSession | null>(null);
+  const examSaveTimerRef = useRef<number | null>(null);
+  const examSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const examSaveSequenceRef = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -89,16 +100,68 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [examSession]);
 
-  useEffect(() => {
-    if (!examSession) return;
-    const timer = window.setTimeout(() => {
-      const nextSessions = [...savedExamSessionsRef.current.filter((item) => item.id !== examSession.id), examSession];
-      savedExamSessionsRef.current = nextSessions;
-      setSavedExamSessions(nextSessions);
-      void saveExamSessions(nextSessions);
-    }, 350);
-    return () => window.clearTimeout(timer);
-  }, [examSession]);
+  const flushExamSessionSave = useCallback(async (session: ExamSession, updateUi = true): Promise<boolean> => {
+    const sequence = ++examSaveSequenceRef.current;
+    const nextSessions = mergeExamSession(savedExamSessionsRef.current, session);
+    savedExamSessionsRef.current = nextSessions;
+    if (updateUi) setSavedExamSessions(nextSessions);
+    setExamSaving(true);
+    const saveTask = examSaveQueueRef.current
+      .then(async () => {
+        await saveExamSessions(nextSessions);
+        return true;
+      })
+      .catch((error) => {
+        if (sequence === examSaveSequenceRef.current) {
+          setExamSaveError(error instanceof Error && error.message ? error.message : "모의고사 진행 상태를 저장하지 못했습니다.");
+        }
+        return false;
+      });
+    examSaveQueueRef.current = saveTask.then(() => undefined);
+    const saved = await saveTask;
+    if (sequence === examSaveSequenceRef.current) {
+      if (saved) setExamSaveError(null);
+      setExamSaving(false);
+    }
+    return saved;
+  }, []);
+
+  const closeExamSession = useCallback(async (): Promise<boolean> => {
+    if (examSubmitting) {
+      setExamSaveError("시험 제출 중에는 이동하거나 닫을 수 없습니다.");
+      return false;
+    }
+    if (examSaveTimerRef.current !== null) {
+      window.clearTimeout(examSaveTimerRef.current);
+      examSaveTimerRef.current = null;
+    }
+    const current = examSessionRef.current;
+    if (current && !(await flushExamSessionSave(current))) return false;
+    examSessionRef.current = null;
+    setExamSession(null);
+    return true;
+  }, [examSubmitting, flushExamSessionSave]);
+
+  const openExamSession = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
+    setExamStartError(null);
+    if (resumable) {
+      setExamSession(resumable);
+      return;
+    }
+    const next = createExamSession(entry);
+    if (!next.questions.length) {
+      setExamStartError({ entryId: entry.id, message: "감지된 문항이 없어 모의고사를 시작할 수 없습니다. 문제 번호 형식을 확인해 주세요." });
+      return;
+    }
+    const missingAnswers = next.questions
+      .filter((question) => !question.correctAnswer?.trim())
+      .map((question) => question.questionNumber);
+    if (missingAnswers.length) {
+      setExamStartError({ entryId: entry.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.` });
+      return;
+    }
+    setExamSession(next);
+  }, []);
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -127,6 +190,81 @@ export default function App() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+
+  useEffect(() => {
+    setExamStartError((current) => current?.entryId === selectedId ? current : null);
+  }, [selectedId]);
+
+  const requestNavigation = useCallback(async (target: {
+    section?: EntryKind;
+    entryId?: string | null;
+    question?: { entryId: string; questionNumber: string };
+  }): Promise<boolean> => {
+    if (examSubmitting) {
+      setExamSaveError("시험 제출 중에는 이동할 수 없습니다.");
+      return false;
+    }
+    if (examSession) {
+      const isSameEntry = target.entryId === undefined || target.entryId === examSession.entryId;
+      const isSameSection = target.section === undefined || target.section === activeSection;
+      if (!isSameEntry || !isSameSection) {
+        const closed = await closeExamSession();
+        if (!closed) return false;
+      }
+    }
+    if (target.section) setActiveSection(target.section);
+    if (target.entryId !== undefined) setSelectedId(target.entryId);
+    if (target.question) {
+      setQuestionTarget({ ...target.question, requestId: Date.now() });
+    }
+    return true;
+  }, [activeSection, closeExamSession, examSession, examSubmitting, setActiveSection, setSelectedId]);
+
+  useEffect(() => {
+    examSessionRef.current = examSession;
+    if (examSaveTimerRef.current !== null) {
+      window.clearTimeout(examSaveTimerRef.current);
+      examSaveTimerRef.current = null;
+    }
+    if (examSession) {
+      examSaveTimerRef.current = window.setTimeout(() => {
+        const latest = examSessionRef.current;
+        if (latest) void flushExamSessionSave(latest);
+        examSaveTimerRef.current = null;
+      }, EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS);
+    }
+  }, [examSession, flushExamSessionSave]);
+
+  useEffect(() => {
+    return () => {
+      if (examSaveTimerRef.current !== null) {
+        window.clearTimeout(examSaveTimerRef.current);
+      }
+      const latest = examSessionRef.current;
+      if (latest) void flushExamSessionSave(latest, false);
+    };
+  }, [flushExamSessionSave]);
+
+  useEffect(() => {
+    if (!examSession) return;
+    const entry = entries.find((item) => item.id === examSession.entryId);
+    const overlayIsStale =
+      !selected ||
+      selected.id !== examSession.entryId ||
+      (entry ? activeSection !== entry.entryKind : false);
+    if (overlayIsStale) void closeExamSession();
+  }, [examSession, selected, activeSection, entries, closeExamSession]);
+
+  useEffect(() => {
+    if (!questionTarget) return;
+    if (selectedId !== questionTarget.entryId) {
+      setQuestionTarget(null);
+    }
+  }, [selectedId, questionTarget]);
+
+  const handleQuestionTargetConsumed = useCallback((requestId: number) => {
+    setQuestionTarget((current) => current?.requestId === requestId ? null : current);
+  }, []);
 
   const actions = useAppActions({
     entries,
@@ -194,19 +332,16 @@ export default function App() {
   }, [settings, patchSettings, setSettingsMessage]);
 
   const selectEntry = (entryId: string, section?: EntryKind) => {
-    if (section) setActiveSection(section);
-    setSelectedId(entryId);
+    void requestNavigation({ entryId, section });
   };
 
   const openImportantQuestion = (entryId: string, questionNumber: string) => {
     const found = entries.find((entry) => entry.id === entryId);
     if (!found) return;
-    setActiveSection(found.entryKind);
-    setSelectedId(entryId);
-    setQuestionTarget({
+    void requestNavigation({
+      section: found.entryKind,
       entryId,
-      questionNumber,
-      requestId: Date.now(),
+      question: { entryId, questionNumber },
     });
   };
 
@@ -286,6 +421,7 @@ export default function App() {
         entries={entries}
         setActiveSection={setActiveSection}
         setSelectedId={setSelectedId}
+        onSectionSelect={(section) => void requestNavigation({ section, entryId: null })}
         stats={stats}
         learningStats={learningStats}
         subjectOrder={subjectOrder}
@@ -338,6 +474,7 @@ export default function App() {
             filtered={filtered}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
+            onSelectEntry={(entryId) => void requestNavigation({ entryId })}
             quickConceptSubject={actions.quickConceptSubject}
             onQuickConceptCreate={actions.handleQuickConceptCreate}
             onOpenImportantQuestion={openImportantQuestion}
@@ -348,13 +485,18 @@ export default function App() {
             <>
               {selected.entryKind === "problem_sheet" && !examSession && (() => {
                 const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
-                return <button
-                  type="button"
-                  className="exam-start-button"
-                  onClick={() => setExamSession(resumable ?? createExamSession(selected))}
-                >
-                  {resumable ? "모의고사 이어서 보기" : "모의고사 시작"}
-                </button>;
+                return <>
+                  <button
+                    type="button"
+                    className="exam-start-button"
+                    onClick={() => openExamSession(selected, resumable)}
+                  >
+                    {resumable ? "모의고사 이어서 보기" : "모의고사 시작"}
+                  </button>
+                  {examStartError?.entryId === selected.id && (
+                    <p className="form-error" role="alert">{examStartError.message}</p>
+                  )}
+                </>;
               })()}
               {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && (
                 <section className="exam-session-history" aria-label="모의고사 결과 이력">
@@ -372,10 +514,26 @@ export default function App() {
               )}
               {examSession ? (
                 <div className="exam-session-overlay">
-                  <button type="button" onClick={() => setExamSession(null)}>시험 닫기</button>
+                  {examSaveError && (
+                    <div className="exam-session-save-error" role="alert">
+                      <span>진행 상태 저장 실패: {examSaveError}</span>
+                      <button
+                        type="button"
+                        disabled={examSaving}
+                        onClick={() => {
+                          const current = examSessionRef.current;
+                          if (current) void flushExamSessionSave(current);
+                        }}
+                      >
+                        다시 저장
+                      </button>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => void closeExamSession()} disabled={examSubmitting || examSaving}>시험 닫기</button>
                   <ExamSessionView
                     session={examSession}
                     onChange={setExamSession}
+                    onSubmittingChange={setExamSubmitting}
                     onSubmit={handleExamSubmit}
                   />
                 </div>
@@ -422,6 +580,7 @@ export default function App() {
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
+              onInitialQuestionTargetConsumed={handleQuestionTargetConsumed}
               onActiveContextChange={(context) => syncActiveContext(context)}
             />}
             </>

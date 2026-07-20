@@ -1860,6 +1860,18 @@ button.formula-chip:hover {
 }
 
 /* Form modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.6);
+}
+
 .form-overlay {
   position: fixed;
   inset: 0;
@@ -6513,6 +6525,23 @@ button.formula-chip:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+}
+
+.exam-session-save-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--danger, #c2413b);
+  border-radius: 0.5rem;
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.exam-session-save-error button {
+  flex: 0 0 auto;
 }
 
 .exam-session-header,

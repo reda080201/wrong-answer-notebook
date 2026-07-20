@@ -763,12 +763,14 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
 }
 
 export function hasEntryContent(
-  entry: Pick<WrongAnswerEntry, "title" | "question" | "questionImages">,
+  entry: Pick<WrongAnswerEntry, "title" | "question" | "questionImages"> &
+    Partial<Pick<WrongAnswerEntry, "learningBlocks">>,
 ): boolean {
   return (
     Boolean(entry.title.trim()) ||
     Boolean(entry.question.trim()) ||
-    entry.questionImages.length > 0
+    entry.questionImages.length > 0 ||
+    Boolean(entry.learningBlocks?.some((block) => block.title.trim() || block.content.trim() || block.diagramSpec))
   );
 }
 

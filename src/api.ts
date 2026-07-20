@@ -18,6 +18,10 @@ import type {
   WrongAnswerEntry,
 } from "./types";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
+import {
+  loadExamSessions as loadExamSessionsFromStorage,
+  saveExamSessions as saveExamSessionsToStorage,
+} from "./features/exam/storage/examSessionStorage";
 import { normalizeEntry } from "./utils/entry";
 
 const imageUrlCache = new Map<string, string>();
@@ -556,13 +560,30 @@ export async function syncMcpBridgeActiveExamContext(context: ActiveExamContext)
 }
 
 export async function loadExamSessions(): Promise<ExamSession[]> {
-  if (!isTauri()) return [];
-  return invoke<ExamSession[]>("load_exam_sessions");
+  try {
+    if (isTauri()) {
+      return await invoke<ExamSession[]>("load_exam_sessions");
+    }
+    return loadExamSessionsFromStorage();
+  } catch (error) {
+    throw new Error(errorMessage(error, "모의고사 세션을 불러오지 못했습니다."), {
+      cause: error,
+    });
+  }
 }
 
 export async function saveExamSessions(sessions: ExamSession[]): Promise<void> {
-  if (!isTauri()) return;
-  await invoke("save_exam_sessions", { sessions });
+  try {
+    if (isTauri()) {
+      await invoke("save_exam_sessions", { sessions });
+      return;
+    }
+    saveExamSessionsToStorage(sessions);
+  } catch (error) {
+    throw new Error(errorMessage(error, "모의고사 세션을 저장하지 못했습니다."), {
+      cause: error,
+    });
+  }
 }
 
 export async function getAiProviderStatus(): Promise<AiProviderStatus> {
