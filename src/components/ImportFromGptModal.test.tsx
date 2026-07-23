@@ -931,4 +931,68 @@ describe("ImportFromGptModal", () => {
 
     expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
   });
+
+  it("opens GPT MCP settings from the import modal", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "설정" }));
+    expect(onOpenSettings).toHaveBeenCalledWith("gpt-mcp");
+  });
+
+  it("applies gptMcpPreferences to review and detail expand defaults", () => {
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        gptMcpPreferences={{
+          mcpShareScope: "current-question",
+          importReviewExpanded: false,
+          importDetailCollapsedByDefault: false,
+        }}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: {
+        value: JSON.stringify({
+          question: "1. 문제",
+          answerKey: [
+            {
+              id: "a1",
+              questionNumber: "1",
+              answer: "①",
+              explanation: "풀이",
+              strategy: "전략",
+              steps: [],
+              choiceJudgements: [],
+              importantPoints: [],
+              concepts: [],
+            },
+          ],
+          audit: {
+            expectedQuestionNumbers: ["1", "2"],
+            detectedQuestionNumbers: ["1"],
+            missingQuestionNumbers: ["2"],
+            uncertainQuestionNumbers: [],
+            handwritingExcluded: true,
+            needsReviewCount: 0,
+          },
+        }),
+      },
+    });
+
+    const review = document.querySelector(".import-validation-report");
+    const detail = document.querySelector(".import-answer-details");
+    expect(review).not.toHaveAttribute("open");
+    expect(detail).toHaveAttribute("open");
+  });
+
 });

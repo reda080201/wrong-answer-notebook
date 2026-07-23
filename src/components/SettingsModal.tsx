@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   DEFAULT_MCP_BRIDGE_SETTINGS,
@@ -6,20 +6,50 @@ import {
   type McpBridgeRuntimeStatus,
   type McpBridgeSettings,
 } from "../hooks/useMcpBridgeSettings";
+import { normalizeRemoteMcpBaseUrl } from "../features/chatgpt/services/chatGptConnection";
 import type {
   AiProviderStatus,
   AiProviderType,
   AppSettings,
   EntryKind,
   EntryTemplate,
+  ExamPreferences,
+  GptMcpPreferences,
+  ChatGptMcpPreferences,
+  ImagePreferences,
   IntegrityReport,
   McpBridgePairingSession,
   ThemeMode,
+  ViewPreferences,
 } from "../types";
 
-type SettingsTab = "theme" | "ai" | "data" | "templates" | "advanced";
+export type SettingsTab =
+  | "theme"
+  | "ai"
+  | "view"
+  | "exam"
+  | "images"
+  | "gpt-mcp"
+  | "chatgpt"
+  | "data"
+  | "templates"
+  | "advanced";
+
+const SETTINGS_TABS: Array<[SettingsTab, string]> = [
+  ["theme", "테마"],
+  ["ai", "AI 설정"],
+  ["view", "보기"],
+  ["exam", "시험"],
+  ["images", "이미지"],
+  ["gpt-mcp", "GPT·MCP"],
+  ["chatgpt", "ChatGPT 연결"],
+  ["data", "데이터 관리"],
+  ["templates", "템플릿"],
+  ["advanced", "고급"],
+];
 
 interface SettingsModalProps {
+  initialTab?: SettingsTab;
   settings: AppSettings;
   settingsError: string | null;
   settingsMessage: string | null;
@@ -59,6 +89,7 @@ interface SettingsModalProps {
   isMcpBridgePairingPending?: boolean;
   isMcpBridgeConnectionTesting?: boolean;
   isMcpBridgeBrowserBlocked?: boolean;
+  onPatchChatGptMcpPreferences?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void>;
 }
 
 export default function SettingsModal({
@@ -87,6 +118,7 @@ export default function SettingsModal({
   runIntegrity,
   handleCleanupOrphans,
   onClose,
+  initialTab,
   mcpBridgeSettings = DEFAULT_MCP_BRIDGE_SETTINGS,
   mcpBridgeStatus = null,
   mcpBridgePortInput,
@@ -101,10 +133,49 @@ export default function SettingsModal({
   isMcpBridgePairingPending = false,
   isMcpBridgeConnectionTesting = false,
   isMcpBridgeBrowserBlocked = !isTauri(),
+  onPatchChatGptMcpPreferences,
 }: SettingsModalProps) {
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
-  const [activeTab, setActiveTab] = useState<SettingsTab>("theme");
+  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? "theme");
+  useEffect(() => {
+    if (initialTab) setActiveTab(initialTab);
+  }, [initialTab]);
+  const patchView = async (patch: Partial<ViewPreferences>) => {
+    const nextView = { ...settings.viewPreferences, ...patch };
+    await setSettings({
+      ...settings,
+      viewPreferences: nextView,
+      answerViewPreferences: { ...settings.answerViewPreferences, hideAnswers: nextView.hideAnswers },
+    });
+  };
+  const patchExam = async (patch: Partial<ExamPreferences>) => {
+    await setSettings({ ...settings, examPreferences: { ...settings.examPreferences, ...patch } });
+  };
+  const patchImages = async (patch: Partial<ImagePreferences>) => {
+    await setSettings({ ...settings, imagePreferences: { ...settings.imagePreferences, ...patch } });
+  };
+  const patchGptMcp = async (patch: Partial<GptMcpPreferences>) => {
+    await setSettings({ ...settings, gptMcpPreferences: { ...settings.gptMcpPreferences, ...patch } });
+  };
+  const patchChatGpt = async (patch: Partial<ChatGptMcpPreferences>) => {
+    if (onPatchChatGptMcpPreferences) {
+      await onPatchChatGptMcpPreferences(patch);
+      return;
+    }
+    await setSettings({
+      ...settings,
+      chatGptMcpPreferences: { ...settings.chatGptMcpPreferences, ...patch },
+    });
+  };
+  const saveRemoteBaseUrl = async (raw: string) => {
+    if (!raw.trim()) {
+      await patchChatGpt({ remoteBaseUrl: undefined });
+      return;
+    }
+    const normalized = normalizeRemoteMcpBaseUrl(raw);
+    await patchChatGpt({ remoteBaseUrl: normalized.baseUrl });
+  };
   const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
   return (
@@ -137,15 +208,7 @@ export default function SettingsModal({
 
         <div className="settings-modal-body">
           <nav className="settings-modal-tabs" aria-label="설정 탭">
-            {(
-              [
-                ["theme", "테마"],
-                ["ai", "AI 설정"],
-                ["data", "데이터 관리"],
-                ["templates", "템플릿"],
-                ["advanced", "고급"],
-              ] as const
-            ).map(([key, label]) => (
+            {SETTINGS_TABS.map(([key, label]) => (
               <button
                 key={key}
                 type="button"
@@ -250,6 +313,129 @@ export default function SettingsModal({
                     </button>
                   </div>
                 )}
+              </div>
+            )}
+
+            {activeTab === "view" && (
+              <div className="settings-pref-panel">
+                <p className="settings-label">보기</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.hideAnswers} onChange={(event) => void patchView({ hideAnswers: event.target.checked })} /> 정답 가리기</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showDifficulty} onChange={(event) => void patchView({ showDifficulty: event.target.checked })} /> 난이도 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showOriginalPages} onChange={(event) => void patchView({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showLearningVisuals} onChange={(event) => void patchView({ showLearningVisuals: event.target.checked })} /> 학습 시각화 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.compactToolbar} onChange={(event) => void patchView({ compactToolbar: event.target.checked })} /> 컴팩트 도구바</label>
+                <p className="settings-label">문제지 배치</p>
+                <div className="theme-options">
+                  {([["single", "한 단"], ["columns", "2단"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.sheetLayout === value ? "active" : ""}`} onClick={() => void patchView({ sheetLayout: value })}>{label}</button>
+                  ))}
+                </div>
+                <p className="settings-label">글자 크기</p>
+                <div className="theme-options">
+                  {([["normal", "기본"], ["large", "크게"], ["xlarge", "아주 크게"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.fontSize === value ? "active" : ""}`} onClick={() => void patchView({ fontSize: value })}>{label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "exam" && (
+              <div className="settings-pref-panel">
+                <p className="settings-label">시험</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showScratchNote} onChange={(event) => void patchExam({ showScratchNote: event.target.checked })} /> 풀이 메모 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showOriginalPages} onChange={(event) => void patchExam({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showNavigator} onChange={(event) => void patchExam({ showNavigator: event.target.checked })} /> 문항 navigator 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.autoAdvanceOnAnswer} onChange={(event) => void patchExam({ autoAdvanceOnAnswer: event.target.checked })} /> 답 선택 후 자동 이동</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.warnUnansweredOnSubmit} onChange={(event) => void patchExam({ warnUnansweredOnSubmit: event.target.checked })} /> 미응답 제출 경고</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showTimer} onChange={(event) => void patchExam({ showTimer: event.target.checked })} /> 타이머 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showMcpHelp} onChange={(event) => void patchExam({ showMcpHelp: event.target.checked })} /> MCP 도움 표시</label>
+              </div>
+            )}
+
+            {activeTab === "images" && (
+              <div className="settings-pref-panel">
+                <p className="settings-label">이미지</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.imagePreferences.preserveSourcePages} onChange={(event) => void patchImages({ preserveSourcePages: event.target.checked })} /> 원본 페이지 보존</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.imagePreferences.showUnlinkedImages} onChange={(event) => void patchImages({ showUnlinkedImages: event.target.checked })} /> 미연결 이미지 표시</label>
+                <p className="settings-label">썸네일 크기</p>
+                <div className="theme-options">
+                  {([["small", "작게"], ["medium", "보통"], ["large", "크게"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.imagePreferences.thumbnailSize === value ? "active" : ""}`} onClick={() => void patchImages({ thumbnailSize: value })}>{label}</button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {activeTab === "gpt-mcp" && (
+              <div className="settings-pref-panel">
+                <p className="settings-label">GPT·MCP</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.gptMcpPreferences.importReviewExpanded} onChange={(event) => void patchGptMcp({ importReviewExpanded: event.target.checked })} /> 가져오기 검토 기본 펼침</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.gptMcpPreferences.importDetailCollapsedByDefault} onChange={(event) => void patchGptMcp({ importDetailCollapsedByDefault: event.target.checked })} /> 문항 상세 기본 접기</label>
+                <p className="settings-label">MCP 공유 범위</p>
+                <div className="theme-options">
+                  {([["current-question", "현재 문항"], ["session-summary", "세션 요약"], ["submitted-result", "제출 결과"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.gptMcpPreferences.mcpShareScope === value ? "active" : ""}`} onClick={() => void patchGptMcp({ mcpShareScope: value })}>{label}</button>
+                  ))}
+                </div>
+                <McpBridgeSettingsPanel
+                  settings={mcpBridgeSettings}
+                  status={mcpBridgeStatus}
+                  portInput={bridgePortValue}
+                  controlsDisabled={bridgeControlsDisabled}
+                  connectionTesting={isMcpBridgeConnectionTesting}
+                  onPortInputChange={setMcpBridgePortInput}
+                  onApplyPort={applyMcpBridgePort}
+                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
+                  onTestConnection={testMcpBridgeConnection}
+                  onCreatePairing={createMcpBridgePairing}
+                  onRotateCredential={rotateMcpBridgeCredential}
+                  onDisconnectClients={disconnectMcpBridgeClients}
+                  pairingSession={mcpBridgePairingSession}
+                  pairingPending={isMcpBridgePairingPending}
+                />
+              </div>
+            )}
+
+            {activeTab === "chatgpt" && (
+              <div className="settings-pref-panel chatgpt-connection-center">
+                <h3>ChatGPT와 오답노트 연결</h3>
+                <p className="provider-hint">OpenAI API 키 없이 읽기 전용 MCP와 ChatGPT 앱 사용 흐름을 연결합니다.</p>
+                <div className="chatgpt-connection-status" aria-label="ChatGPT 연결 상태">
+                  <p><strong>로컬 MCP</strong> {mcpBridgeStatus?.status === "listening" || mcpBridgeStatus?.status === "connected" ? "준비됨" : "연결 대기"}</p>
+                  <p><strong>보안 터널</strong> {settings.chatGptMcpPreferences.remoteBaseUrl ? "외부 URL 등록됨" : "외부 URL 미등록"}</p>
+                  <p><strong>ChatGPT 연결</strong> {mcpBridgeStatus?.lastClientConnectedAt ? `최근 연결됨 (${new Date(mcpBridgeStatus.lastClientConnectedAt).toLocaleString("ko-KR")})` : "연결 확인되지 않음"}</p>
+                  <p><strong>현재 문항 공유</strong> 사용자 동의 후에만 동기화합니다.</p>
+                </div>
+                <label className="form-field">
+                  <span>표시 이름</span>
+                  <input value={settings.chatGptMcpPreferences.displayName} maxLength={40} onChange={(event) => void patchChatGpt({ displayName: event.target.value })} />
+                </label>
+                <label className="form-field">
+                  <span>외부 HTTPS MCP 기본 URL</span>
+                  <input defaultValue={settings.chatGptMcpPreferences.remoteBaseUrl ?? ""} placeholder="https://example-tunnel-domain" onBlur={(event) => void saveRemoteBaseUrl(event.target.value).catch((error) => setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."))} />
+                  <small>자동 tunnel helper가 없는 환경에서는 외부에서 만든 HTTPS 기본 URL을 등록하세요.</small>
+                </label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.chatGptMcpPreferences.shareUserResponse} onChange={(event) => void patchChatGpt({ shareUserResponse: event.target.checked })} /> 내 답 공유</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.chatGptMcpPreferences.shareScratchNote} onChange={(event) => void patchChatGpt({ shareScratchNote: event.target.checked })} /> 풀이 메모 공유</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.chatGptMcpPreferences.shareQuestionImages} onChange={(event) => void patchChatGpt({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지 공유</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.chatGptMcpPreferences.shareSourcePageImages} onChange={(event) => void patchChatGpt({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지 공유</label>
+                <p className="provider-hint">사용 가능한 MCP 기능은 ChatGPT 계정, 워크스페이스 및 단계적 출시 상태에 따라 다를 수 있습니다. ChatGPT 설정의 앱 메뉴에서 사용자 지정 MCP 연결 가능 여부를 확인하세요.</p>
+                <McpBridgeSettingsPanel
+                  settings={mcpBridgeSettings}
+                  status={mcpBridgeStatus}
+                  portInput={bridgePortValue}
+                  controlsDisabled={bridgeControlsDisabled}
+                  connectionTesting={isMcpBridgeConnectionTesting}
+                  onPortInputChange={setMcpBridgePortInput}
+                  onApplyPort={applyMcpBridgePort}
+                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
+                  onTestConnection={testMcpBridgeConnection}
+                  onCreatePairing={createMcpBridgePairing}
+                  onRotateCredential={rotateMcpBridgeCredential}
+                  onDisconnectClients={disconnectMcpBridgeClients}
+                  pairingSession={mcpBridgePairingSession}
+                  pairingPending={isMcpBridgePairingPending}
+                />
               </div>
             )}
 
@@ -392,22 +578,6 @@ export default function SettingsModal({
               <div className="advanced-settings-panel">
                 <p>고급 설정은 진단 정보와 위험한 옵션을 분리해 두는 공간입니다.</p>
                 <p>백업, 복원, 무결성 검사, 이미지 정리는 데이터 관리 탭에서 실행하세요.</p>
-                <McpBridgeSettingsPanel
-                  settings={mcpBridgeSettings}
-                  status={mcpBridgeStatus}
-                  portInput={bridgePortValue}
-                  controlsDisabled={bridgeControlsDisabled}
-                  connectionTesting={isMcpBridgeConnectionTesting}
-                  onPortInputChange={setMcpBridgePortInput}
-                  onApplyPort={applyMcpBridgePort}
-                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
-                  onTestConnection={testMcpBridgeConnection}
-                  onCreatePairing={createMcpBridgePairing}
-                  onRotateCredential={rotateMcpBridgeCredential}
-                  onDisconnectClients={disconnectMcpBridgeClients}
-                  pairingSession={mcpBridgePairingSession}
-                  pairingPending={isMcpBridgePairingPending}
-                />
               </div>
             )}
           </section>

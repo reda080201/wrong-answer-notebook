@@ -2,9 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { defaultSettings, errorMessage, loadSettings, saveSettings } from "../api";
 import type {
   AppSettings,
+  ChatGptMcpPreferences,
   EntryTemplate,
+  ExamPreferences,
+  GptMcpPreferences,
+  ImagePreferences,
   MemoTemplate,
   PromptTemplate,
+  ViewPreferences,
 } from "../types";
 
 export function useSettings() {
@@ -128,6 +133,66 @@ export function useSettings() {
     [updateSettings],
   );
 
+  const patchViewPreferences = useCallback(
+    async (patch: Partial<ViewPreferences>) => {
+      const current = settingsRef.current;
+      const nextView = { ...current.viewPreferences, ...patch };
+      await updateSettings({
+        ...current,
+        viewPreferences: nextView,
+        answerViewPreferences: {
+          ...current.answerViewPreferences,
+          hideAnswers: nextView.hideAnswers,
+        },
+      });
+    },
+    [updateSettings],
+  );
+
+  const patchExamPreferences = useCallback(
+    async (patch: Partial<ExamPreferences>) => {
+      const current = settingsRef.current;
+      await updateSettings({
+        ...current,
+        examPreferences: { ...current.examPreferences, ...patch },
+      });
+    },
+    [updateSettings],
+  );
+
+  const patchImagePreferences = useCallback(
+    async (patch: Partial<ImagePreferences>) => {
+      const current = settingsRef.current;
+      await updateSettings({
+        ...current,
+        imagePreferences: { ...current.imagePreferences, ...patch },
+      });
+    },
+    [updateSettings],
+  );
+
+  const patchGptMcpPreferences = useCallback(
+    async (patch: Partial<GptMcpPreferences>) => {
+      const current = settingsRef.current;
+      await updateSettings({
+        ...current,
+        gptMcpPreferences: { ...current.gptMcpPreferences, ...patch },
+      });
+    },
+    [updateSettings],
+  );
+
+  const patchChatGptMcpPreferences = useCallback(
+    async (patch: Partial<ChatGptMcpPreferences>) => {
+      const current = settingsRef.current;
+      await updateSettings({
+        ...current,
+        chatGptMcpPreferences: { ...current.chatGptMcpPreferences, ...patch },
+      });
+    },
+    [updateSettings],
+  );
+
   const setLastImportTemplate = useCallback(
     async (templateId: string) => {
       const current = settingsRef.current;
@@ -147,6 +212,11 @@ export function useSettings() {
     settingsError,
     setSettings: updateSettings,
     patchSettings,
+    patchViewPreferences,
+    patchExamPreferences,
+    patchImagePreferences,
+    patchGptMcpPreferences,
+    patchChatGptMcpPreferences,
     upsertTemplate,
     removeTemplate,
     upsertPromptTemplate,

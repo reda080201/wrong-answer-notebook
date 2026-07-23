@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../types";
+import type { SettingsTab } from "./SettingsModal";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
@@ -40,6 +41,7 @@ import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
 import GptExportModal from "./GptExportModal";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
+import ChatGptHelpLauncher from "../features/chatgpt/components/ChatGptHelpLauncher";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -76,6 +78,15 @@ interface EntryDetailProps {
     requestId: number,
     result: "opened" | "not-found",
   ) => void;
+  viewPreferences?: ViewPreferences;
+  onViewPreferencesChange?: (patch: Partial<ViewPreferences>) => void;
+  onOpenSettings?: (tab?: SettingsTab) => void;
+  chatGptPreferences?: ChatGptMcpPreferences;
+  onChatGptPreferencesChange?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void> | void;
+  onSyncChatGptContext?: (context: { entryId: string; questionNumber: string | null }) => Promise<void>;
+  onOpenChatGptSettings?: () => void;
+  onCheckLocalMcp?: () => Promise<void>;
+  remoteMcpConfigured?: boolean;
 }
 
 type SheetLayout = "single" | "columns";
@@ -172,24 +183,34 @@ export default function EntryDetail({
   onActiveContextChange,
   initialQuestionTarget,
   onInitialQuestionTargetConsumed,
+  viewPreferences,
+  onViewPreferencesChange,
+  onOpenSettings,
+  chatGptPreferences,
+  onChatGptPreferencesChange,
+  onSyncChatGptContext,
+  onOpenChatGptSettings,
+  onCheckLocalMcp,
+  remoteMcpConfigured,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
-  const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
+  const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
   const [activeStudyPanel, setActiveStudyPanel] = useState<StudyPanel>(loadFocusPanel);
   const [memoMode, setMemoMode] = useState(false);
-  const [sheetLayout, setSheetLayout] = useState<SheetLayout>(loadSheetLayout);
+  const [sheetLayout, setSheetLayout] = useState<SheetLayout>(viewPreferences?.sheetLayout ?? loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
   const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
-  const [hideAnswers, setHideAnswers] = useState(loadAnswerHidden);
+  const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
   const [quickMemoText, setQuickMemoText] = useState("");
-  const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
+  const [studyControlCompact, setStudyControlCompact] = useState(viewPreferences?.compactToolbar ?? loadStudyControlCompact);
   const [showTextReview, setShowTextReview] = useState(false);
   const [showGptExport, setShowGptExport] = useState(false);
+  const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
   const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
@@ -207,6 +228,22 @@ export default function EntryDetail({
     "highlight",
   );
   const consumedInitialTargetRef = useRef<number | null>(null);
+
+  const updateViewPreference = useCallback(<K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K]) => {
+    if (key === "sheetLayout") setSheetLayout(value as SheetLayout);
+    if (key === "fontSize") setFocusTextSize(value as FocusTextSize);
+    if (key === "hideAnswers") setHideAnswers(Boolean(value));
+    if (key === "compactToolbar") setStudyControlCompact(Boolean(value));
+    onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
+  }, [onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (!viewPreferences) return;
+    setSheetLayout(viewPreferences.sheetLayout);
+    setFocusTextSize(viewPreferences.fontSize);
+    setHideAnswers(viewPreferences.hideAnswers);
+    setStudyControlCompact(viewPreferences.compactToolbar);
+  }, [viewPreferences]);
 
   const filledParts = entry.explanationParts
     .map((p, i) => ({ part: p, index: i }))
@@ -291,28 +328,32 @@ export default function EntryDetail({
   const hasSuspiciousText = suspiciousSegments.length > 0;
 
   useEffect(() => {
-    localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
-  }, [sheetLayout]);
-
-  useEffect(() => {
     localStorage.setItem(ANSWER_VIEW_KEY, answerView);
   }, [answerView]);
-
-  useEffect(() => {
-    localStorage.setItem(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
-  }, [hideAnswers]);
-
-  useEffect(() => {
-    localStorage.setItem(FOCUS_TEXT_SIZE_KEY, focusTextSize);
-  }, [focusTextSize]);
 
   useEffect(() => {
     localStorage.setItem(FOCUS_PANEL_KEY, activeStudyPanel);
   }, [activeStudyPanel]);
 
   useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
+  }, [onViewPreferencesChange, sheetLayout]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
+  }, [hideAnswers, onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(FOCUS_TEXT_SIZE_KEY, focusTextSize);
+  }, [focusTextSize, onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
     localStorage.setItem(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
-  }, [studyControlCompact]);
+  }, [onViewPreferencesChange, studyControlCompact]);
 
   useEffect(() => {
     setActiveSearchIndex(0);
@@ -364,8 +405,38 @@ export default function EntryDetail({
     }, 2400);
   }, []);
 
+  const moveTheaterQuestion = useCallback((delta: number) => {
+    if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
+      const nextQueueIndex = Math.max(
+        0,
+        Math.min(selectedReviewQueue.questionNumbers.length - 1, selectedReviewQueue.currentIndex + delta),
+      );
+      const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
+      const nextQuestionIndex = questionAnchors.findIndex(
+        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+      );
+      if (nextQuestionIndex >= 0) {
+        setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
+        setTheaterQuestionIndex(nextQuestionIndex);
+        setFocusedQuestionIndex(nextQuestionIndex);
+      }
+      return;
+    }
+    setTheaterQuestionIndex((current) => {
+      const currentIndex = current ?? 0;
+      const next = Math.max(0, Math.min(questionAnchors.length - 1, currentIndex + delta));
+      setFocusedQuestionIndex(next);
+      return next;
+    });
+  }, [entry.id, questionAnchors, selectedReviewQueue]);
+
   const moveFocusedQuestion = useCallback((delta: number) => {
     if (!isSheet || questionAnchors.length === 0) return;
+    // Keep theater and focused indices in lockstep while the overlay is open.
+    if (theaterQuestionIndex !== null) {
+      moveTheaterQuestion(delta);
+      return;
+    }
     setFocusedQuestionIndex((index) => {
       const next = Math.max(0, Math.min(questionAnchors.length - 1, index + delta));
       const target = questionAnchors[next] as QuestionBlock | undefined;
@@ -374,7 +445,7 @@ export default function EntryDetail({
       }
       return next;
     });
-  }, [focusMode, isSheet, questionAnchors, scrollToQuestion]);
+  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, theaterQuestionIndex]);
 
   const handleReviewResult = useCallback(async (
     result: ReviewResult,
@@ -669,31 +740,6 @@ export default function EntryDetail({
       window.setTimeout(() => scrollToQuestion(target.start), 0);
     }
   }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
-
-  const moveTheaterQuestion = useCallback((delta: number) => {
-    if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
-      const nextQueueIndex = Math.max(
-        0,
-        Math.min(selectedReviewQueue.questionNumbers.length - 1, selectedReviewQueue.currentIndex + delta),
-      );
-      const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
-      const nextQuestionIndex = questionAnchors.findIndex(
-        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
-      );
-      if (nextQuestionIndex >= 0) {
-        setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
-        setTheaterQuestionIndex(nextQuestionIndex);
-        setFocusedQuestionIndex(nextQuestionIndex);
-      }
-      return;
-    }
-    setTheaterQuestionIndex((current) => {
-      const currentIndex = current ?? 0;
-      const next = Math.max(0, Math.min(questionAnchors.length - 1, currentIndex + delta));
-      setFocusedQuestionIndex(next);
-      return next;
-    });
-  }, [entry.id, questionAnchors, selectedReviewQueue]);
 
   const executeStudyAction = useCallback((id: NextStudyActionId) => {
     if (id === "review-text") {
@@ -1166,35 +1212,6 @@ export default function EntryDetail({
       {!isFocusExpanded && (
       <div className="detail-toolbar">
         <div className="detail-toolbar-left">
-          <span className="subject-badge">{entry.subject}</span>
-          {isSheet ? (
-            <span className="kind-badge kind-badge--sheet">문제지</span>
-          ) : isConcept ? (
-            <span className="kind-badge kind-badge--concept">개념</span>
-          ) : isLecture ? (
-            <span className="kind-badge kind-badge--lecture">특강자료</span>
-          ) : (
-            <span className="kind-badge kind-badge--wrong">오답</span>
-          )}
-          {hasSuspiciousText && (
-            <button
-              type="button"
-              className="text-review-badge"
-              onClick={() => setShowTextReview(true)}
-            >
-              텍스트 검수 필요 {suspiciousSegments.length}
-            </button>
-          )}
-          {entry.difficulty && entry.difficulty !== "none" && (
-            <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
-              난이도: {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
-            </span>
-          )}
-          {entry.tags.map((t) => (
-            <span key={t} className="tag">
-              #{t}
-            </span>
-          ))}
           {!isConcept && !isLecture && (
             <div className="study-mode-tabs" aria-label="학습 보기 모드">
               <button
@@ -1229,11 +1246,13 @@ export default function EntryDetail({
           )}
           <QuickViewSettingsMenu
             layout={isSheet ? sheetLayout : undefined}
-            onLayoutChange={isSheet ? setSheetLayout : undefined}
+            onLayoutChange={isSheet ? ((layout) => updateViewPreference("sheetLayout", layout)) : undefined}
             fontSize={focusTextSize}
-            onFontSizeChange={setFocusTextSize}
-            hideAnswers={hideAnswers}
-            onHideAnswersChange={setHideAnswers}
+            onFontSizeChange={(size) => updateViewPreference("fontSize", size)}
+            hideAnswers={(isSheet || entry.entryKind === "wrong_answer") ? hideAnswers : undefined}
+            onHideAnswersChange={(isSheet || entry.entryKind === "wrong_answer") ? ((hidden) => updateViewPreference("hideAnswers", hidden)) : undefined}
+            onOpenHelp={() => setViewHelpOpen(true)}
+            onOpenAllSettings={() => onOpenSettings?.("view")}
           />
         </div>
         <div className="detail-actions">
@@ -1248,18 +1267,23 @@ export default function EntryDetail({
                 집중 보기
               </button>
             )}
-            {onQuickGptSolution && (
-              <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
-                GPT 해설
+            {onOpenSettings && (
+              <button type="button" className="btn-icon" onClick={() => onOpenSettings("view")} aria-label="설정 열기">
+                설정
               </button>
             )}
-            <button type="button" className="btn-icon" onClick={onEdit}>
-              수정
-            </button>
           </div>
           <details className="detail-more-menu">
-            <summary className="btn-icon">더보기</summary>
+            <summary className="btn-icon">도구</summary>
             <div className="detail-more-menu-popover">
+              {onQuickGptSolution && (
+                <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
+                  GPT 해설
+                </button>
+              )}
+              <button type="button" className="btn-icon" onClick={onEdit}>
+                수정
+              </button>
               <button
                 type="button"
                 className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
@@ -1271,6 +1295,21 @@ export default function EntryDetail({
                 <button type="button" className="btn-icon" onClick={() => setShowGptExport(true)}>
                   GPT에게 보내기
                 </button>
+              )}
+              {chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
+                <ChatGptHelpLauncher
+                  mode="detail"
+                  preferences={chatGptPreferences}
+                  onPreferencesChange={onChatGptPreferencesChange}
+                  onSyncContext={() => onSyncChatGptContext({
+                    entryId: entry.id,
+                    questionNumber: theaterQuestion?.displayNumber ? String(theaterQuestion.displayNumber) : focusedQuestion?.displayNumber ? String(focusedQuestion.displayNumber) : null,
+                  })}
+                  onOpenSettings={onOpenChatGptSettings}
+                  onCheckLocalMcp={onCheckLocalMcp}
+                  remoteMcpConfigured={remoteMcpConfigured}
+                  label="ChatGPT에서 도움받기"
+                />
               )}
               {isSheet && onTitleChange && (
                 <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>
@@ -1416,6 +1455,37 @@ export default function EntryDetail({
               )}
             </div>
           )}
+          <div className="detail-meta-row">
+            <span className="subject-badge">{entry.subject}</span>
+            {isSheet ? (
+              <span className="kind-badge kind-badge--sheet">문제지</span>
+            ) : isConcept ? (
+              <span className="kind-badge kind-badge--concept">개념</span>
+            ) : isLecture ? (
+              <span className="kind-badge kind-badge--lecture">특강자료</span>
+            ) : (
+              <span className="kind-badge kind-badge--wrong">오답</span>
+            )}
+            {hasSuspiciousText && (
+              <button
+                type="button"
+                className="text-review-badge"
+                onClick={() => setShowTextReview(true)}
+              >
+                텍스트 검수 필요 {suspiciousSegments.length}
+              </button>
+            )}
+            {entry.difficulty && entry.difficulty !== "none" && (
+              <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
+                난이도: {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
+              </span>
+            )}
+            {entry.tags.map((t) => (
+              <span key={t} className="tag">
+                #{t}
+              </span>
+            ))}
+          </div>
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
@@ -2152,6 +2222,22 @@ export default function EntryDetail({
           onOpenGptExport={isSheet ? () => setShowGptExport(true) : undefined}
         />
       )}
+      {viewHelpOpen && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setViewHelpOpen(false)}>
+          <section className="exam-dialog" role="dialog" aria-modal="true" aria-label="보기 도움말" onClick={(event) => event.stopPropagation()}>
+            <header>
+              <h3>보기 도움말</h3>
+              <button type="button" className="btn-icon" onClick={() => setViewHelpOpen(false)}>닫기</button>
+            </header>
+            <ul>
+              <li>빠른 보기 설정은 현재 화면의 배치, 글자 크기, 정답 가리기를 바로 바꾼니다.</li>
+              <li>전체 설정에서는 보기, 시험, 이미지, GPT·MCP 기본값을 함께 관리합니다.</li>
+              <li>개념노트와 특강자료에는 정답 가리기가 표시되지 않습니다.</li>
+            </ul>
+          </section>
+        </div>
+      )}
+
       {showGptExport && (
         <GptExportModal
           entry={entry}

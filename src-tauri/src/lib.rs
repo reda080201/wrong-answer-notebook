@@ -206,6 +206,28 @@ fn default_ai_provider_config() -> AiProviderConfig {
     }
 }
 
+/// MCP active-exam sharing consent parsed from active-exam-context.json.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ActiveExamContext {
+    #[serde(default)]
+    pub share_user_response: bool,
+    #[serde(default)]
+    pub share_scratch_note: bool,
+    #[serde(default)]
+    pub share_question_images: bool,
+    #[serde(default)]
+    pub share_source_page_images: bool,
+    #[serde(default)]
+    pub context_updated_at: Option<String>,
+}
+
+impl ActiveExamContext {
+    pub fn from_value(value: &serde_json::Value) -> Self {
+        serde_json::from_value(value.clone()).unwrap_or_default()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrityIssue {
@@ -1437,6 +1459,33 @@ mod tests {
         }];
 
         assert!(collect_entry_images(&entry).contains(&"figure.png".to_string()));
+    }
+
+    #[test]
+    fn active_exam_context_defaults_share_flags_to_false() {
+        let ctx = ActiveExamContext::from_value(&serde_json::json!({}));
+        assert!(!ctx.share_user_response);
+        assert!(!ctx.share_scratch_note);
+        assert!(!ctx.share_question_images);
+        assert!(!ctx.share_source_page_images);
+        assert!(ctx.context_updated_at.is_none());
+    }
+
+    #[test]
+    fn active_exam_context_deserializes_share_fields_tolerantly() {
+        let value = serde_json::json!({
+            "sessionId": "s1",
+            "shareUserResponse": true,
+            "shareQuestionImages": true,
+            "unknownField": 123,
+            "contextUpdatedAt": "2026-01-01T00:00:00Z"
+        });
+        let ctx = ActiveExamContext::from_value(&value);
+        assert!(ctx.share_user_response);
+        assert!(!ctx.share_scratch_note);
+        assert!(ctx.share_question_images);
+        assert!(!ctx.share_source_page_images);
+        assert_eq!(ctx.context_updated_at.as_deref(), Some("2026-01-01T00:00:00Z"));
     }
 
     #[test]

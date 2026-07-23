@@ -19,6 +19,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
+import type { SettingsTab } from "./SettingsModal";
 
 interface AppModalsProps {
   showForm: boolean;
@@ -62,6 +63,7 @@ interface AppModalsProps {
   setSelectedId: (id: string | null) => void;
   handleWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  onOpenSettings?: (tab?: SettingsTab) => void;
 }
 
 export default function AppModals({
@@ -95,6 +97,7 @@ export default function AppModals({
   setSelectedId,
   handleWikiLinkClick,
   existingTargets,
+  onOpenSettings,
 }: AppModalsProps) {
   return (
     <>
@@ -144,6 +147,8 @@ export default function AppModals({
           onClose={closeImportModal}
           onApply={handleImportApply}
           onApplyEntries={handleImportedEntriesApply}
+          onOpenSettings={onOpenSettings}
+          gptMcpPreferences={settings.gptMcpPreferences}
         />
       )}
       {showLearningImportModal && (

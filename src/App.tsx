@@ -8,7 +8,7 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup } from "./api";
-import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveExamContext } from "./api";
+import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
@@ -18,7 +18,8 @@ import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
-import type { EntryKind, ExamSession, WrongAnswerEntry } from "./types";
+import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, WrongAnswerEntry } from "./types";
+import type { SettingsTab } from "./components/SettingsModal";
 import { downloadMarkdown, openPrintableEntry } from "./utils/exportEntry";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamSessionView from "./features/exam/components/ExamSessionView";
@@ -51,12 +52,15 @@ export default function App() {
     settingsError,
     setSettings,
     patchSettings,
+    patchViewPreferences,
+    patchChatGptMcpPreferences,
     refreshSettings,
     clearSettingsError,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
+  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
     entryId: string;
     questionNumber: string;
@@ -90,15 +94,29 @@ export default function App() {
 
   useEffect(() => {
     if (!examSession) {
-      void syncMcpBridgeActiveExamContext({ sessionId: null, questionId: null, questionIndex: null, userResponse: "", scratchNote: "", markedForReview: false, submitted: false, updatedAt: new Date().toISOString() });
+      void syncMcpBridgeActiveExamContext({ sessionId: null, questionId: null, questionIndex: null, userResponse: "", scratchNote: "", markedForReview: false, submitted: false, updatedAt: new Date().toISOString(), contextUpdatedAt: new Date().toISOString() });
       return;
     }
     const current = examSession.questions[examSession.currentQuestionIndex];
     const response = current ? examSession.responses.find((item) => item.questionNumber === current.questionNumber) : undefined;
-    const context = { sessionId: examSession.id, questionId: current?.id ?? null, questionIndex: examSession.currentQuestionIndex, userResponse: response?.response ?? "", scratchNote: response?.scratchNote ?? "", markedForReview: response?.markedForReview ?? false, submitted: examSession.status === "submitted", updatedAt: examSession.updatedAt };
+    const context: ActiveExamContext = {
+      sessionId: examSession.id,
+      questionId: current?.id ?? null,
+      questionIndex: examSession.currentQuestionIndex,
+      userResponse: response?.response ?? "",
+      scratchNote: response?.scratchNote ?? "",
+      markedForReview: response?.markedForReview ?? false,
+      submitted: examSession.status === "submitted",
+      updatedAt: examSession.updatedAt,
+      shareUserResponse: settings.chatGptMcpPreferences.shareUserResponse,
+      shareScratchNote: settings.chatGptMcpPreferences.shareScratchNote,
+      shareQuestionImages: settings.chatGptMcpPreferences.shareQuestionImages,
+      shareSourcePageImages: settings.chatGptMcpPreferences.shareSourcePageImages,
+      contextUpdatedAt: new Date().toISOString(),
+    };
     const timer = window.setTimeout(() => { void syncMcpBridgeActiveExamContext(context); }, 350);
     return () => window.clearTimeout(timer);
-  }, [examSession]);
+  }, [examSession, settings.chatGptMcpPreferences]);
 
   const flushExamSessionSave = useCallback(async (session: ExamSession, updateUi = true): Promise<boolean> => {
     const sequence = ++examSaveSequenceRef.current;
@@ -305,6 +323,30 @@ export default function App() {
   });
   const { syncActiveContext } = useBridgeActiveSync(settings.mcpBridge.enabled);
 
+  const syncExamChatGptContext = useCallback(async (sharing: Pick<
+    ChatGptMcpPreferences,
+    "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
+  >) => {
+    const session = examSessionRef.current;
+    if (!session) throw new Error("현재 응시 중인 모의고사 세션이 없습니다.");
+    const current = session.questions[session.currentQuestionIndex];
+    const response = current
+      ? session.responses.find((item) => item.questionNumber === current.questionNumber)
+      : undefined;
+    await syncMcpBridgeActiveExamContext({
+      sessionId: session.id,
+      questionId: current?.id ?? null,
+      questionIndex: session.currentQuestionIndex,
+      userResponse: response?.response ?? "",
+      scratchNote: response?.scratchNote ?? "",
+      markedForReview: response?.markedForReview ?? false,
+      submitted: session.status === "submitted",
+      updatedAt: session.updatedAt,
+      ...sharing,
+      contextUpdatedAt: new Date().toISOString(),
+    });
+  }, []);
+
   useEffect(() => {
     if (!isTauri() || !settings.autoBackup.enabled) return;
     const lastBackup = settings.autoBackup.lastBackupAt
@@ -330,6 +372,11 @@ export default function App() {
       cancelled = true;
     };
   }, [settings, patchSettings, setSettingsMessage]);
+
+  const openSettings = (tab?: SettingsTab) => {
+    setSettingsInitialTab(tab);
+    setShowSettings(true);
+  };
 
   const selectEntry = (entryId: string, section?: EntryKind) => {
     void requestNavigation({ entryId, section });
@@ -463,7 +510,7 @@ export default function App() {
           setListFilter={setListFilter}
           todayReviewCount={todayReviewCount}
           startReview={actions.startReview}
-          onOpenSettings={() => setShowSettings(true)}
+          onOpenSettings={() => openSettings()}
         />
 
         <div className="content">
@@ -532,6 +579,19 @@ export default function App() {
                   <button type="button" onClick={() => void closeExamSession()} disabled={examSubmitting || examSaving}>시험 닫기</button>
                   <ExamSessionView
                     session={examSession}
+                    examPreferences={settings.examPreferences}
+                    onOpenSettings={() => openSettings("exam")}
+                    chatGptPreferences={settings.chatGptMcpPreferences}
+                    onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
+                    onSyncChatGptContext={syncExamChatGptContext}
+                    onOpenChatGptSettings={() => openSettings("chatgpt")}
+                    onCheckLocalMcp={async () => {
+                      const status = await mcpBridge.testMcpBridgeConnection();
+                      if (status.status !== "listening" && status.status !== "connected") {
+                        throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
+                      }
+                    }}
+                    remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
                     onChange={setExamSession}
                     onSubmittingChange={setExamSubmitting}
                     onSubmit={handleExamSubmit}
@@ -581,6 +641,25 @@ export default function App() {
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
               onInitialQuestionTargetConsumed={handleQuestionTargetConsumed}
+              viewPreferences={settings.viewPreferences}
+              onViewPreferencesChange={(patch) => void patchViewPreferences(patch)}
+              onOpenSettings={(tab) => openSettings(tab ?? "view")}
+              chatGptPreferences={settings.chatGptMcpPreferences}
+              onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
+              onSyncChatGptContext={async (context) => {
+                await syncMcpBridgeActiveContext({
+                  entryId: context.entryId,
+                  questionNumber: context.questionNumber,
+                });
+              }}
+              onOpenChatGptSettings={() => openSettings("chatgpt")}
+              onCheckLocalMcp={async () => {
+                const status = await mcpBridge.testMcpBridgeConnection();
+                if (status.status !== "listening" && status.status !== "connected") {
+                  throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
+                }
+              }}
+              remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               onActiveContextChange={(context) => syncActiveContext(context)}
             />}
             </>
@@ -627,6 +706,7 @@ export default function App() {
         setSelectedId={setSelectedId}
         handleWikiLinkClick={handleWikiLinkClick}
         existingTargets={linkableTargets}
+        onOpenSettings={openSettings}
       />
       {showSettings && (
         <SettingsModal
@@ -660,7 +740,7 @@ export default function App() {
           setMcpBridgePortInput={mcpBridge.setMcpBridgePortInput}
           updateMcpBridgeConfig={mcpBridge.updateMcpBridgeConfig}
           applyMcpBridgePort={mcpBridge.applyMcpBridgePort}
-          testMcpBridgeConnection={mcpBridge.testMcpBridgeConnection}
+          testMcpBridgeConnection={async () => { await mcpBridge.testMcpBridgeConnection(); }}
           createMcpBridgePairing={mcpBridge.createPairing}
           rotateMcpBridgeCredential={mcpBridge.rotateCredential}
           disconnectMcpBridgeClients={mcpBridge.disconnectClients}
@@ -668,7 +748,12 @@ export default function App() {
           isMcpBridgePairingPending={mcpBridge.isMcpBridgePairingPending}
           isMcpBridgeConnectionTesting={mcpBridge.isMcpBridgeConnectionTesting}
           isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
-          onClose={() => setShowSettings(false)}
+          onPatchChatGptMcpPreferences={patchChatGptMcpPreferences}
+          initialTab={settingsInitialTab}
+          onClose={() => {
+            setShowSettings(false);
+            setSettingsInitialTab(undefined);
+          }}
         />
       )}
     </div>

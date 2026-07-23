@@ -23,6 +23,18 @@ import {
   saveExamSessions as saveExamSessionsToStorage,
 } from "./features/exam/storage/examSessionStorage";
 import { normalizeEntry } from "./utils/entry";
+import {
+  DEFAULT_EXAM_PREFERENCES,
+  DEFAULT_CHATGPT_MCP_PREFERENCES,
+  DEFAULT_GPT_MCP_PREFERENCES,
+  DEFAULT_IMAGE_PREFERENCES,
+  DEFAULT_VIEW_PREFERENCES,
+  normalizeExamPreferences,
+  normalizeChatGptMcpPreferences,
+  normalizeGptMcpPreferences,
+  normalizeImagePreferences,
+  resolveViewPreferences,
+} from "./utils/viewPreferences";
 
 const imageUrlCache = new Map<string, string>();
 const ENTRIES_STORAGE_KEY = "wrong-answer-entries";
@@ -47,7 +59,7 @@ function parseStoredEntries(raw: string): WrongAnswerEntry[] {
   return entries.map((entry) => normalizeEntry(entry as WrongAnswerEntry));
 }
 
-export const defaultSettings: AppSettings = {
+export const DEFAULT_SETTINGS: AppSettings = {
   templates: [],
   promptTemplates: [],
   memoTemplates: [],
@@ -58,6 +70,11 @@ export const defaultSettings: AppSettings = {
     hasStoredKey: false,
   },
   importPreferences: {},
+  viewPreferences: DEFAULT_VIEW_PREFERENCES,
+  examPreferences: DEFAULT_EXAM_PREFERENCES,
+  imagePreferences: DEFAULT_IMAGE_PREFERENCES,
+  gptMcpPreferences: DEFAULT_GPT_MCP_PREFERENCES,
+  chatGptMcpPreferences: DEFAULT_CHATGPT_MCP_PREFERENCES,
   answerViewPreferences: {
     viewMode: "card",
     hideAnswers: false,
@@ -70,6 +87,9 @@ export const defaultSettings: AppSettings = {
     port: 43129,
   },
 };
+
+/** @deprecated Use DEFAULT_SETTINGS */
+export const defaultSettings = DEFAULT_SETTINGS;
 
 export const builtInPromptTemplates: PromptTemplate[] = [
   {
@@ -351,7 +371,7 @@ export async function loadSettings(): Promise<AppSettings> {
       return normalizeSettings(data);
     }
     const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return normalizeSettings(raw ? JSON.parse(raw) : defaultSettings);
+    return normalizeSettings(raw ? JSON.parse(raw) : DEFAULT_SETTINGS);
   } catch (error) {
     throw new Error(errorMessage(error, "설정을 불러오지 못했습니다."), {
       cause: error,
@@ -451,6 +471,12 @@ function normalizeAiProvider(raw: unknown): AiProviderSettings {
 }
 
 export function normalizeSettings(raw: AppSettings): AppSettings {
+  const legacyStorage = typeof localStorage !== "undefined" ? localStorage : undefined;
+  const viewPreferences = resolveViewPreferences(raw?.viewPreferences, {
+    answerViewPreferences: raw?.answerViewPreferences,
+    storage: legacyStorage,
+  });
+
   return {
     templates: Array.isArray(raw?.templates)
       ? raw.templates
@@ -469,9 +495,14 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
           ? raw.importPreferences.lastPromptTemplateId
           : undefined,
     },
+    viewPreferences,
+    examPreferences: normalizeExamPreferences(raw?.examPreferences),
+    imagePreferences: normalizeImagePreferences(raw?.imagePreferences),
+    gptMcpPreferences: normalizeGptMcpPreferences(raw?.gptMcpPreferences),
+    chatGptMcpPreferences: normalizeChatGptMcpPreferences(raw?.chatGptMcpPreferences),
     answerViewPreferences: {
       viewMode: raw?.answerViewPreferences?.viewMode === "table" ? "table" : "card",
-      hideAnswers: Boolean(raw?.answerViewPreferences?.hideAnswers),
+      hideAnswers: viewPreferences.hideAnswers,
     },
     autoBackup: {
       enabled: Boolean(raw?.autoBackup?.enabled),

@@ -1076,11 +1076,117 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("더보기"));
+    fireEvent.click(screen.getByText("도구"));
     fireEvent.click(screen.getByRole("button", { name: "Markdown" }));
     fireEvent.click(screen.getByRole("button", { name: "PDF 인쇄" }));
 
     expect(onExportMarkdown).toHaveBeenCalledTimes(1);
     expect(onOpenPrint).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("EntryDetail view settings integration", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("keeps subject metadata under the title instead of the top toolbar", () => {
+    const { container } = render(
+      <EntryDetail
+        entry={{ ...sheetEntry, tags: ["문법"], difficulty: "high" }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const toolbar = container.querySelector(".detail-toolbar-left");
+    const meta = container.querySelector(".detail-meta-row");
+    expect(toolbar).not.toBeNull();
+    expect(meta).not.toBeNull();
+    expect(toolbar?.querySelector(".subject-badge")).toBeNull();
+    expect(meta?.querySelector(".subject-badge")).toHaveTextContent("국어");
+    expect(meta?.textContent).toContain("문법");
+    expect(meta?.textContent).toContain("난이도");
+    expect(screen.getByRole("button", { name: "보기 설정" })).toBeInTheDocument();
+  });
+
+  it("opens the shared view settings tab from quick view and the settings button", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "설정 열기" }));
+    expect(onOpenSettings).toHaveBeenCalledWith("view");
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "더 많은 보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체 설정 열기" }));
+    expect(onOpenSettings).toHaveBeenCalledWith("view");
+  });
+
+  it("hides answer-hiding controls for concept entries", () => {
+    render(
+      <EntryDetail
+        entry={{ ...sheetEntry, entryKind: "concept", title: "개념 노트" }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    expect(screen.queryByLabelText("정답 가리기")).not.toBeInTheDocument();
+    expect(screen.queryByText("정답 가리기")).not.toBeInTheDocument();
+  });
+
+  it("notifies parent when quick view preferences change", () => {
+    const onViewPreferencesChange = vi.fn();
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        viewPreferences={{
+          sheetLayout: "single",
+          fontSize: "normal",
+          hideAnswers: false,
+          showDifficulty: true,
+          showOriginalPages: true,
+          showLearningVisuals: true,
+          compactToolbar: false,
+        }}
+        onViewPreferencesChange={onViewPreferencesChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "2단" }));
+    expect(onViewPreferencesChange).toHaveBeenCalledWith({ sheetLayout: "columns" });
   });
 });

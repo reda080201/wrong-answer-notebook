@@ -266,8 +266,9 @@ fn active_question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i3
 fn load_exam_sessions(state:&BridgeHttpState)->Result<Vec<Value>,(i32,String)>{if !state.exam_sessions_path.exists(){return Ok(Vec::new());}let bytes=fs::read(&state.exam_sessions_path).map_err(|error|(-32603,error.to_string()))?;serde_json::from_slice(&bytes).map_err(|_|(-32603,"시험 세션 저장소를 읽지 못했습니다.".into()))}
 fn load_active_exam_context(state:&BridgeHttpState)->Option<Value>{fs::read(&state.active_exam_context_path).ok().and_then(|bytes|serde_json::from_slice::<Value>(&bytes).ok())}
 fn active_exam_session_for_context(state:&BridgeHttpState,context:&Value)->Result<Option<Value>,(i32,String)>{let Some(session_id)=context.get("sessionId").and_then(Value::as_str).filter(|value|!value.trim().is_empty())else{return Ok(None);};let sessions=load_exam_sessions(state)?;Ok(sessions.into_iter().find(|session|session.get("id").and_then(Value::as_str)==Some(session_id)))}
-fn active_exam_question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let Some(context)=load_active_exam_context(state)else{return Ok(json!({"active":false,"message":"현재 응시 중인 모의고사 세션이 없습니다."}));};let Some(session)=active_exam_session_for_context(state,&context)? else{return Ok(json!({"active":false,"message":"현재 응시 중인 모의고사 세션이 없습니다."}));};let index=context.get("questionIndex").and_then(Value::as_u64).or_else(||session.get("currentQuestionIndex").and_then(Value::as_u64)).unwrap_or(0) as usize;let question=session.get("questions").and_then(Value::as_array).and_then(|items|items.get(index)).cloned().unwrap_or(Value::Null);let submitted=session.get("status").and_then(Value::as_str)==Some("submitted");let mut safe=question.clone();if let Some(object)=safe.as_object_mut(){object.remove("correctAnswer");object.remove("explanation");object.remove("answerKey");}let response=session.get("responses").and_then(Value::as_array).and_then(|items|{let number=question.get("questionNumber").and_then(Value::as_str)?;items.iter().find(|item|item.get("questionNumber").and_then(Value::as_str)==Some(number))});let images=exam_image_resources(state,&session,&question,args.get("includeSourcePageImages").and_then(Value::as_bool).unwrap_or(false));let live_response=context.get("userResponse").filter(|value|!value.is_null()).cloned().or_else(||response.and_then(|item|item.get("response")).cloned()).unwrap_or(Value::String(String::new()));let live_note=context.get("scratchNote").filter(|value|!value.is_null()).cloned().or_else(||response.and_then(|item|item.get("scratchNote")).cloned()).unwrap_or(Value::String(String::new()));let live_marked=context.get("markedForReview").and_then(Value::as_bool).or_else(||response.and_then(|item|item.get("markedForReview")).and_then(Value::as_bool)).unwrap_or(false);Ok(json!({"active":true,"sessionId":session.get("id"),"title":session.get("title"),"subject":session.get("subject"),"status":session.get("status"),"questionIndex":index,"totalQuestions":session.get("questions").and_then(Value::as_array).map_or(0,Vec::len),"question":safe,"images":images,"response":live_response,"scratchNote":live_note,"markedForReview":live_marked,"submitted":submitted,"answerAvailable":false}))}
-fn exam_image_resources(state:&BridgeHttpState,session:&Value,question:&Value,include_source_pages:bool)->Value{let Some(session_id)=session.get("id").and_then(Value::as_str)else{return Value::Array(Vec::new())};let number=question.get("questionNumber").and_then(Value::as_str).unwrap_or("");let mut names=question.get("questionImages").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|item|item.as_str().map(str::to_owned)).collect::<Vec<_>>();if let Some(figures)=question.get("figures").and_then(Value::as_array){names.extend(figures.iter().filter_map(|item|item.get("image").and_then(Value::as_str).map(str::to_owned)));}if include_source_pages{names.extend(question.get("sourcePageImages").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|item|item.as_str().map(str::to_owned)));}names.sort();names.dedup();let mut total=0u64;Value::Array(names.into_iter().filter_map(|filename|{if namesafe_image(&state.images_path,&filename).ok()?{let size=fs::metadata(state.images_path.join(&filename)).ok()?.len();if total.checked_add(size)? > MAX_RESOURCE_BYTES{return None;}total+=size;Some(json!({"uri":format!("notebook-exam-image://session/{session_id}/{number}/{filename}"),"name":filename,"mimeType":mime_for(&filename).ok()?}))}else{None}}).take(MAX_RESOURCE_IMAGES).collect())}
+fn requested_source_page_images(args:&Value,sharing:&crate::ActiveExamContext)->bool{args.get("includeSourcePageImages").and_then(Value::as_bool).unwrap_or(false)&&sharing.share_source_page_images}
+fn active_exam_question_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let Some(context)=load_active_exam_context(state)else{return Ok(json!({"active":false,"message":"현재 응시 중인 모의고사 세션이 없습니다."}));};let Some(session)=active_exam_session_for_context(state,&context)? else{return Ok(json!({"active":false,"message":"현재 응시 중인 모의고사 세션이 없습니다."}));};let sharing=crate::ActiveExamContext::from_value(&context);let index=context.get("questionIndex").and_then(Value::as_u64).or_else(||session.get("currentQuestionIndex").and_then(Value::as_u64)).unwrap_or(0) as usize;let question=session.get("questions").and_then(Value::as_array).and_then(|items|items.get(index)).cloned().unwrap_or(Value::Null);let submitted=session.get("status").and_then(Value::as_str)==Some("submitted");let mut safe=question.clone();if let Some(object)=safe.as_object_mut(){object.remove("correctAnswer");object.remove("explanation");object.remove("answerKey");}let response=session.get("responses").and_then(Value::as_array).and_then(|items|{let number=question.get("questionNumber").and_then(Value::as_str)?;items.iter().find(|item|item.get("questionNumber").and_then(Value::as_str)==Some(number))});let include_source_pages=requested_source_page_images(args,&sharing);let images=exam_image_resources(state,&session,&question,sharing.share_question_images,include_source_pages);let live_response=context.get("userResponse").filter(|value|!value.is_null()).cloned().or_else(||response.and_then(|item|item.get("response")).cloned()).unwrap_or(Value::String(String::new()));let live_note=context.get("scratchNote").filter(|value|!value.is_null()).cloned().or_else(||response.and_then(|item|item.get("scratchNote")).cloned()).unwrap_or(Value::String(String::new()));let live_marked=context.get("markedForReview").and_then(Value::as_bool).or_else(||response.and_then(|item|item.get("markedForReview")).and_then(Value::as_bool)).unwrap_or(false);let mut payload=json!({"active":true,"sessionId":session.get("id"),"title":session.get("title"),"subject":session.get("subject"),"status":session.get("status"),"questionIndex":index,"totalQuestions":session.get("questions").and_then(Value::as_array).map_or(0,Vec::len),"question":safe,"markedForReview":live_marked,"submitted":submitted,"answerAvailable":false});if sharing.share_user_response{payload["response"]=live_response;}if sharing.share_scratch_note{payload["scratchNote"]=live_note;}if images.as_array().is_some_and(|items|!items.is_empty()){payload["images"]=images;}if let Some(updated_at)=sharing.context_updated_at.as_ref().filter(|value|!value.trim().is_empty()){payload["contextUpdatedAt"]=Value::String(updated_at.clone());}Ok(payload)}
+fn exam_image_resources(state:&BridgeHttpState,session:&Value,question:&Value,include_direct_images:bool,include_source_pages:bool)->Value{let Some(session_id)=session.get("id").and_then(Value::as_str)else{return Value::Array(Vec::new())};let number=question.get("questionNumber").and_then(Value::as_str).unwrap_or("");let mut names=Vec::new();if include_direct_images{names.extend(question.get("questionImages").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|item|item.as_str().map(str::to_owned)));if let Some(figures)=question.get("figures").and_then(Value::as_array){names.extend(figures.iter().filter_map(|item|item.get("image").and_then(Value::as_str).map(str::to_owned)));}}if include_source_pages{names.extend(question.get("sourcePageImages").and_then(Value::as_array).cloned().unwrap_or_default().into_iter().filter_map(|item|item.as_str().map(str::to_owned)));}names.sort();names.dedup();let mut total=0u64;Value::Array(names.into_iter().filter_map(|filename|{if namesafe_image(&state.images_path,&filename).ok()?{let size=fs::metadata(state.images_path.join(&filename)).ok()?.len();if total.checked_add(size)? > MAX_RESOURCE_BYTES{return None;}total+=size;Some(json!({"uri":format!("notebook-exam-image://session/{session_id}/{number}/{filename}"),"name":filename,"mimeType":mime_for(&filename).ok()?}))}else{None}}).take(MAX_RESOURCE_IMAGES).collect())}
 fn exam_session_summary_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let sessions=load_exam_sessions(state)?;let requested=args.get("sessionId").and_then(Value::as_str);let Some(session)=sessions.into_iter().find(|item|requested.map_or(item.get("status").and_then(Value::as_str)==Some("in_progress"),|id|item.get("id").and_then(Value::as_str)==Some(id)))else{return Err((-32004,"시험 세션을 찾지 못했습니다.".into()));};let questions=session.get("questions").and_then(Value::as_array).cloned().unwrap_or_default();let responses=session.get("responses").and_then(Value::as_array).cloned().unwrap_or_default();let submitted=session.get("status").and_then(Value::as_str)==Some("submitted");let mut result=json!({"sessionId":session.get("id"),"title":session.get("title"),"currentQuestionIndex":session.get("currentQuestionIndex"),"totalQuestions":questions.len(),"answeredCount":responses.iter().filter(|item|item.get("response").and_then(Value::as_str).is_some_and(|value|!value.trim().is_empty())).count(),"markedForReviewCount":responses.iter().filter(|item|item.get("markedForReview").and_then(Value::as_bool)==Some(true)).count(),"submitted":submitted,"startedAt":session.get("startedAt"),"updatedAt":session.get("updatedAt")});if submitted{if let Some(score)=session.get("score"){result["score"]=score.clone();}}Ok(result)}
 fn normalize_exam_answer(value:&str)->String{let mut normalized=value.trim().replace(char::is_whitespace,"");for (from,to) in [("①","1"),("②","2"),("③","3"),("④","4"),("⑤","5"),("⑥","6"),("⑦","7"),("⑧","8"),("⑨","9"),("⑩","10")]{normalized=normalized.replace(from,to);}normalized=normalized.replace(['(',')'],"").replace("번","");if normalized.ends_with('.') {normalized.pop();}if normalized.chars().all(|ch|ch.is_ascii_digit()||ch==','){let mut parts=normalized.split(',').filter(|part|!part.is_empty()).map(|part|part.parse::<u64>().map(|number|number.to_string()).unwrap_or_else(|_|part.to_owned())).collect::<Vec<_>>();parts.sort_by_key(|part|part.parse::<u64>().unwrap_or(u64::MAX));return parts.join(",");}normalized}
 fn submitted_exam_result_payload(state:&BridgeHttpState,args:&Value)->Result<Value,(i32,String)>{let id=args.get("sessionId").and_then(Value::as_str).filter(|value|!value.is_empty()).ok_or((-32602,"sessionId가 필요합니다.".into()))?;let sessions=load_exam_sessions(state)?;let Some(session)=sessions.into_iter().find(|item|item.get("id").and_then(Value::as_str)==Some(id))else{return Err((-32004,"시험 세션을 찾지 못했습니다.".into()));};if session.get("status").and_then(Value::as_str)!=Some("submitted"){return Ok(json!({"sessionId":id,"submitted":false,"message":"시험 제출 후에 결과를 확인할 수 있습니다."}));}let responses=session.get("responses").and_then(Value::as_array).cloned().unwrap_or_default();let results=session.get("questions").and_then(Value::as_array).map(|questions|questions.iter().map(|question|{let number=question.get("questionNumber").cloned().unwrap_or(Value::Null);let response=responses.iter().find(|item|item.get("questionNumber")==Some(&number));let answer=question.get("correctAnswer").and_then(Value::as_str).unwrap_or_default();let given=response.and_then(|item|item.get("response")).and_then(Value::as_str).unwrap_or_default();json!({"questionNumber":number,"response":given,"correct":!answer.is_empty()&&!given.is_empty()&&normalize_exam_answer(answer)==normalize_exam_answer(given),"correctAnswer":question.get("correctAnswer"),"explanation":question.get("explanation"),"markedForReview":response.and_then(|item|item.get("markedForReview")).and_then(Value::as_bool).unwrap_or(false)})}).collect::<Vec<_>>()).unwrap_or_default();Ok(json!({"sessionId":id,"submitted":true,"title":session.get("title"),"score":session.get("score"),"results":results}))}
@@ -280,6 +281,23 @@ fn namesafe_image(images:&Path,filename:&str)->Result<bool,String>{if filename.i
 fn valid_image_header(bytes:&[u8],ext:&str)->bool{match ext.to_ascii_lowercase().as_str(){"png"=>bytes.len()>=8&&bytes[..8]==[0x89,b'P',b'N',b'G',0x0d,0x0a,0x1a,0x0a],"jpg"|"jpeg"=>bytes.len()>=3&&bytes[0]==0xff&&bytes[1]==0xd8&&bytes[2]==0xff,"webp"=>bytes.len()>=12&&&bytes[..4]==b"RIFF"&&&bytes[8..12]==b"WEBP",_=>false}}
 fn mime_for(filename:&str)->Result<&'static str,String>{match Path::new(filename).extension().and_then(|value|value.to_str()).unwrap_or_default().to_ascii_lowercase().as_str(){"png"=>Ok("image/png"),"jpg"|"jpeg"=>Ok("image/jpeg"),"webp"=>Ok("image/webp"),_=>Err("지원하지 않는 이미지 형식입니다.".into())}}
 fn store_error(error:String)->(i32,String){(-32000,error)} fn error_value(id:Value,code:i32,message:&str)->Value{json!({"jsonrpc":"2.0","id":id,"error":{"code":code,"message":message}})} fn rpc_error(id:Value,code:i32,message:&str)->Response{Json(error_value(id,code,message)).into_response()} fn now_string()->String{std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|value|value.as_secs().to_string()).unwrap_or_else(|_|"0".into())}
+
+#[cfg(test)]
+fn test_bridge_http_state(store: Arc<NotebookStore>, data_dir: PathBuf) -> BridgeHttpState {
+    BridgeHttpState {
+        store,
+        images_path: data_dir.join("images"),
+        exam_sessions_path: data_dir.join("exam-sessions.json"),
+        active_exam_context_path: data_dir.join("active-exam-context.json"),
+        auth_token: Arc::new(Mutex::new(String::new())),
+        pairing_codes: Arc::new(Mutex::new(HashMap::new())),
+        sessions: Arc::new(Mutex::new(HashMap::new())),
+        pairing_attempts: Arc::new(Mutex::new(HashMap::new())),
+        active_context: Arc::new(Mutex::new(ActiveContext::default())),
+        status: Arc::new(Mutex::new(stopped_status())),
+        audit_path: data_dir.join("mcp-audit.jsonl"),
+    }
+}
 fn audit(state:&BridgeHttpState,tool:&str,duration:Duration,success:bool,result_count:usize,error_code:Option<i32>){if let Some(parent)=state.audit_path.parent(){let _=fs::create_dir_all(parent);}if state.audit_path.metadata().map(|meta|meta.len()>1_000_000).unwrap_or(false){let _=fs::rename(&state.audit_path,state.audit_path.with_extension("jsonl.1"));}if let Ok(mut file)=OpenOptions::new().create(true).append(true).open(&state.audit_path){let _=writeln!(file,"{}",json!({"time":now_string(),"tool":tool,"durationMs":duration.as_millis() as u64,"success":success,"resultCount":result_count,"errorCode":error_code}));}}
 
 #[cfg(test)]
@@ -329,6 +347,89 @@ mod tests {
         assert!(status.last_test_at.is_some());
         assert!(status.last_client_connected_at.is_none());
         manager.stop();
+    }
+
+    fn write_exam_sharing_fixture(dir: &std::path::Path, context: Value) {
+        let images = dir.join("images");
+        fs::create_dir_all(&images).unwrap();
+        fs::write(images.join("q1.png"), png()).unwrap();
+        fs::write(images.join("page1.png"), png()).unwrap();
+        let sessions = json!([{
+            "id": "exam-1",
+            "title": "모의고사",
+            "subject": "수학",
+            "status": "in_progress",
+            "currentQuestionIndex": 0,
+            "questions": [{
+                "questionNumber": "1",
+                "body": "문항 본문",
+                "correctAnswer": "3",
+                "explanation": "비미 해설",
+                "questionImages": ["q1.png"],
+                "sourcePageImages": ["page1.png"]
+            }],
+            "responses": []
+        }]);
+        fs::write(dir.join("exam-sessions.json"), serde_json::to_vec(&sessions).unwrap()).unwrap();
+        fs::write(dir.join("active-exam-context.json"), serde_json::to_vec(&context).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn active_exam_question_omits_sensitive_fields_when_share_flags_are_false() {
+        let dir = tempdir().unwrap();
+        write_exam_sharing_fixture(dir.path(), json!({
+            "sessionId": "exam-1",
+            "questionIndex": 0,
+            "userResponse": "2",
+            "scratchNote": "memo",
+            "shareUserResponse": false,
+            "shareScratchNote": false,
+            "shareQuestionImages": false,
+            "shareSourcePageImages": false
+        }));
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), dir.path().join("images")));
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+        let payload = active_exam_question_payload(&state, &json!({"includeSourcePageImages": true})).unwrap();
+        assert_eq!(payload["active"], true);
+        assert!(payload.get("response").is_none());
+        assert!(payload.get("scratchNote").is_none());
+        assert!(payload.get("images").is_none());
+        assert!(payload["question"].get("correctAnswer").is_none());
+        assert!(payload["question"].get("explanation").is_none());
+    }
+
+    #[test]
+    fn active_exam_question_honors_share_flags_and_blocks_source_pages_without_consent() {
+        let dir = tempdir().unwrap();
+        write_exam_sharing_fixture(dir.path(), json!({
+            "sessionId": "exam-1",
+            "questionIndex": 0,
+            "userResponse": "2",
+            "scratchNote": "memo",
+            "shareUserResponse": true,
+            "shareScratchNote": true,
+            "shareQuestionImages": true,
+            "shareSourcePageImages": false,
+            "contextUpdatedAt": "2026-01-01T00:00:00Z"
+        }));
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), dir.path().join("images")));
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+        let payload = active_exam_question_payload(&state, &json!({"includeSourcePageImages": true})).unwrap();
+        assert_eq!(payload["response"], "2");
+        assert_eq!(payload["scratchNote"], "memo");
+        assert_eq!(payload["contextUpdatedAt"], "2026-01-01T00:00:00Z");
+        let images = payload["images"].as_array().unwrap();
+        assert_eq!(images.len(), 1);
+        assert_eq!(images[0]["name"], "q1.png");
+    }
+
+    #[test]
+    fn requested_source_page_images_requires_both_request_and_consent() {
+        let sharing = crate::ActiveExamContext { share_source_page_images: false, ..Default::default() };
+        assert!(!requested_source_page_images(&json!({"includeSourcePageImages": true}), &sharing));
+        let sharing = crate::ActiveExamContext { share_source_page_images: true, ..Default::default() };
+        assert!(requested_source_page_images(&json!({"includeSourcePageImages": true}), &sharing));
+        assert!(!requested_source_page_images(&json!({}), &sharing));
     }
 
     #[tokio::test]

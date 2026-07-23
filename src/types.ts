@@ -350,6 +350,11 @@ export interface ActiveExamContext {
   markedForReview: boolean;
   submitted: boolean;
   updatedAt: string;
+  shareUserResponse?: boolean;
+  shareScratchNote?: boolean;
+  shareQuestionImages?: boolean;
+  shareSourcePageImages?: boolean;
+  contextUpdatedAt?: string;
 }
 
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
@@ -467,6 +472,50 @@ export interface McpActiveContext {
   questionNumber: string | null;
 }
 
+export interface ViewPreferences {
+  sheetLayout: "single" | "columns";
+  fontSize: "normal" | "large" | "xlarge";
+  hideAnswers: boolean;
+  showDifficulty: boolean;
+  showOriginalPages: boolean;
+  showLearningVisuals: boolean;
+  compactToolbar: boolean;
+}
+
+export interface ExamPreferences {
+  showScratchNote: boolean;
+  showOriginalPages: boolean;
+  showNavigator: boolean;
+  autoAdvanceOnAnswer: boolean;
+  warnUnansweredOnSubmit: boolean;
+  showTimer: boolean;
+  showMcpHelp: boolean;
+}
+
+export interface ImagePreferences {
+  preserveSourcePages: boolean;
+  showUnlinkedImages: boolean;
+  thumbnailSize: "small" | "medium" | "large";
+}
+
+export interface GptMcpPreferences {
+  mcpShareScope: "current-question" | "session-summary" | "submitted-result";
+  importReviewExpanded: boolean;
+  importDetailCollapsedByDefault: boolean;
+}
+
+/** ChatGPT 앱과 읽기 전용 로컬 MCP를 연결할 때의 사용자 동의 설정입니다. */
+export interface ChatGptMcpPreferences {
+  displayName: string;
+  remoteBaseUrl?: string;
+  shareUserResponse: boolean;
+  shareScratchNote: boolean;
+  shareQuestionImages: boolean;
+  shareSourcePageImages: boolean;
+  copyPromptBeforeOpen: boolean;
+  openChatGptAfterCopy: boolean;
+}
+
 export interface AppSettings {
   templates: EntryTemplate[];
   promptTemplates: PromptTemplate[];
@@ -475,6 +524,11 @@ export interface AppSettings {
   importPreferences: {
     lastPromptTemplateId?: string;
   };
+  viewPreferences: ViewPreferences;
+  examPreferences: ExamPreferences;
+  imagePreferences: ImagePreferences;
+  gptMcpPreferences: GptMcpPreferences;
+  chatGptMcpPreferences: ChatGptMcpPreferences;
   answerViewPreferences: {
     viewMode: "card" | "table";
     hideAnswers: boolean;

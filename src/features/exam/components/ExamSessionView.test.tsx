@@ -129,4 +129,18 @@ describe("ExamSessionView", () => {
     expect(screen.getByRole("button", { name: "시험 제출" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /②\s*보기 2/ })).toHaveAttribute("aria-pressed", "true");
   });
+
+  it("opens the exam settings destination", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <ExamSessionView
+        session={createSession()}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "설정" }));
+    expect(onOpenSettings).toHaveBeenCalledWith("exam");
+  });
 });

@@ -87,8 +87,8 @@ export default function QuickViewSettingsMenu({
           </button>
           {advancedOpen && (
             <div className="quick-view-settings__advanced-panel">
-              {onOpenHelp && <button type="button" onClick={onOpenHelp}>도움말</button>}
-              {onOpenAllSettings && <button type="button" onClick={onOpenAllSettings}>전체 설정 열기</button>}
+              {onOpenHelp && <button type="button" onClick={() => { setOpen(false); setAdvancedOpen(false); onOpenHelp(); }}>도움말</button>}
+              {onOpenAllSettings && <button type="button" onClick={() => { setOpen(false); setAdvancedOpen(false); onOpenAllSettings(); }}>전체 설정 열기</button>}
               {!onOpenHelp && !onOpenAllSettings && <span>추가 설정은 앱 설정에서 관리합니다.</span>}
             </div>
           )}

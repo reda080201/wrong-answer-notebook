@@ -7,11 +7,13 @@ import type {
   EntryFormData,
   PromptTemplate,
   SheetAnswerItem,
+  GptMcpPreferences,
   SheetFigureItem,
   Subject,
   WrongAnswerEntry,
 } from "../types";
 import { SUBJECTS } from "../types";
+import type { SettingsTab } from "./SettingsModal";
 import {
   parseAllInOneImport,
   parseImportedStudyText,
@@ -57,6 +59,8 @@ interface ImportFromGptModalProps {
   onSavePromptTemplate?: (template: PromptTemplate) => Promise<void>;
   sourceEntry?: WrongAnswerEntry;
   mode?: "import" | "solution";
+  onOpenSettings?: (tab?: SettingsTab) => void;
+  gptMcpPreferences?: GptMcpPreferences;
 }
 
 function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
@@ -260,7 +264,11 @@ export default function ImportFromGptModal({
   onSavePromptTemplate,
   sourceEntry,
   mode = "import",
+  onOpenSettings,
+  gptMcpPreferences,
 }: ImportFromGptModalProps) {
+  const importReviewExpanded = gptMcpPreferences?.importReviewExpanded ?? true;
+  const importDetailOpen = !(gptMcpPreferences?.importDetailCollapsedByDefault ?? true);
   const isSolutionMode = mode === "solution" && Boolean(sourceEntry);
   const solutionPrompt = sourceEntry ? buildMathSolutionPrompt(sourceEntry) : "";
   const availablePromptTemplates = useMemo(
@@ -707,6 +715,11 @@ export default function ImportFromGptModal({
             <button type="button" className="btn-secondary btn-sm" onClick={() => setHelpOpen(true)}>
               가져오기 도움말
             </button>
+            {onOpenSettings && (
+              <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenSettings("gpt-mcp")}>
+                설정
+              </button>
+            )}
             <button type="button" className="btn-icon" onClick={onClose} aria-label="닫기">
               닫기
             </button>
@@ -1134,7 +1147,8 @@ export default function ImportFromGptModal({
                   )}
 
                   {validationReport && validationReport.issues.length > 0 && (
-                    <div className="import-validation-report">
+                    <details className="import-validation-report" open={importReviewExpanded}>
+                      <summary>검토 이슈</summary>
                       {validationPolicy.blocking.length > 0 && (
                         <div className="import-validation-section import-validation-section--blocking">
                           <strong>적용 불가</strong>
@@ -1162,7 +1176,7 @@ export default function ImportFromGptModal({
                           {issue.message}
                         </p>
                       ))}
-                    </div>
+                    </details>
                   )}
 
                   {!hasBlockingValidationIssues && hasConfirmableValidationIssues && (
@@ -1282,7 +1296,7 @@ export default function ImportFromGptModal({
                               value={item.explanation}
                               onChange={(event) => updateAnswer(item.id, { explanation: event.target.value })}
                             />
-                            <details className="import-answer-details">
+                            <details className="import-answer-details" open={importDetailOpen}>
                               <summary>상세 편집</summary>
                             <textarea
                               aria-label={`${item.questionNumber || "답안"} 풀이 전략`}

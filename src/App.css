@@ -2346,6 +2346,14 @@ button.formula-chip:hover {
 }
 
 /* Title block */
+.detail-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.35rem 0 0.45rem;
+}
+
 .detail-title-block {
   margin-bottom: 1rem;
   padding-bottom: 0.85rem;
@@ -6542,6 +6550,97 @@ button.formula-chip:hover {
 
 .exam-session-save-error button {
   flex: 0 0 auto;
+}
+
+.chatgpt-help-launcher {
+  position: relative;
+}
+
+.chatgpt-help-panel {
+  position: absolute;
+  z-index: 120;
+  right: 0;
+  top: calc(100% + 0.5rem);
+  width: min(34rem, calc(100vw - 2rem));
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid var(--control-border);
+  border-radius: 0.5rem;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+}
+
+.chatgpt-help-panel header,
+.chatgpt-help-actions,
+.chatgpt-help-questions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.chatgpt-help-panel header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.chatgpt-help-panel header p,
+.chatgpt-help-note {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.chatgpt-help-panel fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.45rem;
+  margin: 0;
+  padding: 0.65rem;
+  border: 1px solid var(--control-border);
+}
+
+.chatgpt-help-panel fieldset label {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.chatgpt-help-questions button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chatgpt-help-fallback {
+  min-height: 7rem;
+  width: 100%;
+  resize: vertical;
+  color: var(--text);
+  background: var(--control-bg);
+  border: 1px solid var(--control-border);
+}
+
+.chatgpt-connection-status {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--control-border);
+}
+
+.chatgpt-connection-status p {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .chatgpt-help-panel fieldset {
+    grid-template-columns: 1fr;
+  }
 }
 
 .exam-session-header,
