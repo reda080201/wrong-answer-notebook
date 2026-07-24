@@ -7,6 +7,21 @@ vi.mock("../api", () => ({
   getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
 }));
 
+const { downloadMarkdown, printExamDocument } = vi.hoisted(() => ({
+  downloadMarkdown: vi.fn(),
+  printExamDocument: vi.fn(async () => undefined),
+}));
+
+vi.mock("../utils/exportEntry", () => ({
+  downloadMarkdown,
+}));
+
+vi.mock("../features/export/services/printExamDocument", () => ({
+  printExamDocument,
+}));
+
+import { DEFAULT_CHATGPT_MCP_PREFERENCES, DEFAULT_EXAM_PRINT_PREFERENCES } from "../utils/viewPreferences";
+
 const sheetEntry: WrongAnswerEntry = {
   id: "sheet-1",
   subject: "국어",
@@ -1058,9 +1073,9 @@ describe("EntryDetail sheet layout", () => {
     expect(localStorage.getItem("wrong-answer-answer-view")).toBe("table");
   });
 
-  it("calls markdown and print export actions", () => {
-    const onExportMarkdown = vi.fn();
-    const onOpenPrint = vi.fn();
+  it("opens share hub for markdown and print/PDF actions", async () => {
+    downloadMarkdown.mockClear();
+    printExamDocument.mockClear();
     render(
       <EntryDetail
         entry={sheetEntry}
@@ -1071,17 +1086,24 @@ describe("EntryDetail sheet layout", () => {
         onAnnotationsChange={vi.fn()}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
-        onExportMarkdown={onExportMarkdown}
-        onOpenPrint={onOpenPrint}
+        examPrintPreferences={DEFAULT_EXAM_PRINT_PREFERENCES}
+        onExamPrintPreferencesChange={vi.fn()}
+        chatGptPreferences={DEFAULT_CHATGPT_MCP_PREFERENCES}
+        onChatGptPreferencesChange={vi.fn()}
+        onSyncExportContext={vi.fn(async () => undefined)}
       />,
     );
 
-    fireEvent.click(screen.getByText("도구"));
-    fireEvent.click(screen.getByRole("button", { name: "Markdown" }));
-    fireEvent.click(screen.getByRole("button", { name: "PDF 인쇄" }));
+    fireEvent.click(screen.getByRole("button", { name: "공유·내보내기" }));
+    expect(screen.getByRole("dialog", { name: "공유·내보내기" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("기타 내보내기"));
+    fireEvent.click(screen.getByRole("button", { name: "Markdown 내보내기" }));
+    expect(downloadMarkdown).toHaveBeenCalledTimes(1);
 
-    expect(onExportMarkdown).toHaveBeenCalledTimes(1);
-    expect(onOpenPrint).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /다시 풀기용 시험지 만들기/ }));
+    fireEvent.click(screen.getByRole("button", { name: "미리보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "인쇄/PDF 저장" }));
+    await waitFor(() => expect(printExamDocument).toHaveBeenCalledTimes(1));
   });
 });
 
@@ -1131,9 +1153,6 @@ describe("EntryDetail view settings integration", () => {
         onOpenSettings={onOpenSettings}
       />,
     );
-
-    fireEvent.click(screen.getByRole("button", { name: "설정 열기" }));
-    expect(onOpenSettings).toHaveBeenCalledWith("view");
 
     fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
     fireEvent.click(screen.getByRole("button", { name: "더 많은 보기 설정" }));

@@ -224,6 +224,8 @@ export interface QuestionMeta {
   note?: string;
   mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
+  /** User-owned curation ratings. Difficulty remains the existing difficultyScore field. */
+  rating?: QuestionRating;
   updatedAt: string;
 }
 
@@ -299,6 +301,10 @@ export interface ExamQuestionSnapshot {
   contentSegments?: QuestionContentSegment[];
   correctAnswer?: string;
   explanation?: string;
+  generatedExamId?: string;
+  sourceEntryId?: string;
+  sourceQuestionNumber?: string;
+  generatedQuestionPosition?: number;
 }
 
 export interface ExamResponse {
@@ -492,10 +498,102 @@ export interface ExamPreferences {
   showMcpHelp: boolean;
 }
 
+
+
+
+
 export interface ImagePreferences {
   preserveSourcePages: boolean;
   showUnlinkedImages: boolean;
   thumbnailSize: "small" | "medium" | "large";
+}
+
+export interface QuestionRating {
+  importanceScore?: number;
+  qualityScore?: number;
+  userQualityScore?: number;
+  aiQualityScore?: number;
+  aiQualityConfidence?: number;
+  lastEvaluatedAt?: string;
+  evaluationSource?: "manual" | "heuristic" | "gemini";
+}
+
+export type GeneratedExamPreset = "real_exam" | "hard" | "important" | "quality" | "weakness" | "wrong_retry" | "random" | "custom";
+
+export interface ExamBlueprintSlot {
+  position: number;
+  targetDifficultyMin?: number;
+  targetDifficultyMax?: number;
+  answerType?: "multiple_choice" | "short_answer" | "any";
+  preferredUnits?: string[];
+}
+
+export interface ExamBlueprint {
+  id: string;
+  name: string;
+  subject?: string;
+  totalQuestions: number;
+  totalPoints?: number;
+  timeLimitMinutes?: number;
+  slots: ExamBlueprintSlot[];
+}
+
+export interface GeneratedExamQuestion {
+  position: number;
+  points?: number;
+  source: QuestionSourceReference;
+  /** @deprecated Loaded only for legacy migration. */
+  sourceEntryId?: string;
+  /** @deprecated Loaded only for legacy migration. */
+  sourceQuestionNumber?: string;
+  snapshot: ExamQuestionSnapshot;
+  locked: boolean;
+  selectionScore: number;
+  selectionReasons: string[];
+}
+
+export type QuestionSourceStatus = "linked" | "snapshot_only" | "missing" | "unknown";
+
+export interface QuestionSourceReference {
+  sourceEntryId: string;
+  sourceEntryTitle: string;
+  sourceQuestionNumber: string;
+  sourceSubject?: string;
+  sourceExamName?: string;
+  sourceExamRound?: string;
+  sourceSection?: string;
+  sourceTags?: string[];
+  sourceSnapshotHash?: string;
+  sourceStatus?: QuestionSourceStatus;
+}
+
+export interface ExamGenerationReport {
+  candidateCount: number;
+  selectedCount: number;
+  excludedCounts: Record<string, number>;
+  difficultyDistribution: Record<string, number>;
+  unitDistribution: Record<string, number>;
+  sourceDistribution: Record<string, number>;
+  relaxedConstraints: string[];
+  warnings: string[];
+  usedGeminiEvaluation: boolean;
+  generatedAt: string;
+}
+
+export interface GeneratedExam {
+  id: string;
+  title: string;
+  subject: string;
+  blueprintId?: string;
+  preset: GeneratedExamPreset;
+  createdAt: string;
+  updatedAt: string;
+  seed: string;
+  status: "draft" | "ready" | "archived";
+  timeLimitMinutes?: number;
+  totalPoints?: number;
+  questions: GeneratedExamQuestion[];
+  generationReport: ExamGenerationReport;
 }
 
 export interface GptMcpPreferences {
@@ -504,7 +602,7 @@ export interface GptMcpPreferences {
   importDetailCollapsedByDefault: boolean;
 }
 
-/** ChatGPT 앱과 읽기 전용 로컬 MCP를 연결할 때의 사용자 동의 설정입니다. */
+/** ChatGPT preferences for read-only local MCP bridge. */
 export interface ChatGptMcpPreferences {
   displayName: string;
   remoteBaseUrl?: string;
@@ -514,6 +612,56 @@ export interface ChatGptMcpPreferences {
   shareSourcePageImages: boolean;
   copyPromptBeforeOpen: boolean;
   openChatGptAfterCopy: boolean;
+}
+
+/** Retake exam sheet PDF preset */
+export type ExamPrintPreset =
+  | "real_exam"
+  | "spacious"
+  | "wrong_only"
+  | "source_like"
+  | "custom";
+
+/** Share/export question scope */
+export type ExportScopeMode =
+  | "current"
+  | "selected"
+  | "wrong"
+  | "important"
+  | "marked"
+  | "whole"
+  | "manual";
+
+/** Exam print/PDF preferences */
+export interface ExamPrintPreferences {
+  preset: ExamPrintPreset;
+  paperSize: "a4" | "letter";
+  orientation: "portrait" | "landscape" | "auto";
+  layout: "single" | "columns" | "auto";
+  includeHeader: boolean;
+  includeAnswerSheet: boolean;
+  includePageNumbers: boolean;
+  includeSourcePages: boolean;
+  workspaceSize: "none" | "small" | "normal" | "large";
+  extraScratchPages: number;
+  sourceDisplay?: "hidden" | "below-question" | "index-at-end";
+  includeSourceIndex?: boolean;
+}
+
+/** App-owned export context read by MCP */
+export interface McpExportContext {
+  entryId: string | null;
+  sessionId?: string | null;
+  scope: ExportScopeMode;
+  questionNumbers: string[];
+  submitted: boolean;
+  shareOptions: Pick<
+    ChatGptMcpPreferences,
+    "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
+  >;
+  updatedAt: string;
+  generatedExamId?: string | null;
+  includeSourceReferences?: boolean;
 }
 
 export interface AppSettings {
@@ -526,6 +674,7 @@ export interface AppSettings {
   };
   viewPreferences: ViewPreferences;
   examPreferences: ExamPreferences;
+  examPrintPreferences: ExamPrintPreferences;
   imagePreferences: ImagePreferences;
   gptMcpPreferences: GptMcpPreferences;
   chatGptMcpPreferences: ChatGptMcpPreferences;
@@ -538,6 +687,17 @@ export interface AppSettings {
     lastBackupAt?: string;
   };
   mcpBridge: McpBridgeSettings;
+  updatePreferences: AppUpdatePreferences;
+}
+
+export interface AppUpdatePreferences {
+  autoCheckEnabled: boolean;
+  notificationsEnabled: boolean;
+  backupBeforeInstall: boolean;
+  channel: "stable";
+  skippedVersion?: string;
+  lastCheckedAt?: string;
+  lastSeenReleaseNotesVersion?: string;
 }
 
 export type IntegritySeverity = "info" | "warning" | "error";

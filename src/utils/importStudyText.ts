@@ -71,6 +71,13 @@ interface ImportV2Wrapper {
   entries?: unknown;
 }
 
+interface QuestionExportDocument {
+  schemaVersion?: unknown;
+  title?: unknown;
+  subject?: unknown;
+  questions?: unknown;
+}
+
 const DEFAULT_TAGS: string[] = [];
 
 export function isImportJson(value: unknown): value is ImportJsonShape {
@@ -113,6 +120,9 @@ export function parseImportedStudyText(
   }
 
   if (isImportJson(parsed)) {
+    if (getString((parsed as ImportJsonShape & { schemaVersion?: unknown }).schemaVersion) === "wrong-answer-notebook-question-export-v1") {
+      return { detectedFormat: "json", data: normalizeQuestionExportDocument(parsed as QuestionExportDocument, fallbackSubject) };
+    }
     const entryKind = getString(parsed.entryKind);
     if (entryKind === "concept") {
       const title = getString(parsed.title);
@@ -265,6 +275,41 @@ export function parseImportedStudyText(
       mastered: false,
     },
   };
+}
+
+function normalizeQuestionExportDocument(document: QuestionExportDocument, fallbackSubject: Subject): Partial<EntryFormData> {
+  const questions = Array.isArray(document.questions) ? document.questions : [];
+  const segments: Record<string, QuestionContentSegment[]> = {};
+  const figures: SheetFigureItem[] = [];
+  const blocks: string[] = [];
+  for (const [index, raw] of questions.entries()) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    const number = getString(item.displayQuestionNumber) || String(index + 1);
+    const question = getString(item.question);
+    if (getString(item.passage)) blocks.push(`[자료]\n${getString(item.passage)}`);
+    blocks.push(`${number}. ${question}`);
+    const choices = Array.isArray(item.choices) ? item.choices.map((choice) => getString(choice)).filter(Boolean) : [];
+    blocks.push(...choices);
+    if (Array.isArray(item.contentSegments)) {
+      const normalized = item.contentSegments.flatMap((segment, segmentIndex): QuestionContentSegment[] => {
+        if (!segment || typeof segment !== "object") return [];
+        const value = segment as Record<string, unknown>;
+        const id = getString(value.id) || `segment-${segmentIndex + 1}`;
+        if (value.type === "text" && typeof value.text === "string") return [{ id, type: "text", text: value.text }];
+        if (value.type === "condition" && typeof value.text === "string") return [{ id, type: "condition", text: value.text, label: getString(value.label) || undefined }];
+        if (value.type === "figure" && getString(value.figureId)) return [{ id, type: "figure", figureId: getString(value.figureId) }];
+        return [];
+      });
+      if (normalized.length) segments[number] = normalized;
+    }
+    if (Array.isArray(item.figures)) for (const rawFigure of item.figures) {
+      if (!rawFigure || typeof rawFigure !== "object") continue;
+      const figure = rawFigure as Record<string, unknown>;
+      figures.push({ id: getString(figure.id) || `figure-${number}-${figures.length + 1}`, questionNumber: number, title: getString(figure.title), caption: getString(figure.caption), image: getString(figure.image) || undefined, source: figure.source === "described_only" ? "described_only" : figure.source === "gpt_cleaned" ? "gpt_cleaned" : "original", placement: figure.placement && typeof figure.placement === "object" ? figure.placement as SheetFigureItem["placement"] : undefined });
+    }
+  }
+  return { entryKind: "problem_sheet", title: getString(document.title) || "문항 추출본", subject: normalizeSubject(document.subject, fallbackSubject), question: blocks.join("\n"), questionImages: figures.flatMap((figure) => figure.image ? [figure.image] : []), figures, questionContentSegments: segments, tags: ["문항 추출본"], memo: "문항 추출본으로 가져왔습니다.", difficult: false, difficulty: "none", myAnswer: "", correctAnswer: "", explanationParts: [], answerKey: [], annotations: [], mastered: false };
 }
 
 const SUPPORTED_V2_IMPORT_TYPES = new Set<ImportV2Type>([

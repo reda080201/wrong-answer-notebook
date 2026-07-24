@@ -27,6 +27,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Version consistency
+        run: npm run version:check
+
       - name: Test
         run: npm run test
 

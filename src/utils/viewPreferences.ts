@@ -1,5 +1,7 @@
 import type {
   ExamPreferences,
+  ExamPrintPreferences,
+  ExamPrintPreset,
   ChatGptMcpPreferences,
   GptMcpPreferences,
   ImagePreferences,
@@ -50,6 +52,21 @@ export const DEFAULT_GPT_MCP_PREFERENCES: GptMcpPreferences = {
   mcpShareScope: "current-question",
   importReviewExpanded: true,
   importDetailCollapsedByDefault: true,
+};
+
+export const DEFAULT_EXAM_PRINT_PREFERENCES: ExamPrintPreferences = {
+  preset: "real_exam",
+  paperSize: "a4",
+  orientation: "portrait",
+  layout: "auto",
+  includeHeader: true,
+  includeAnswerSheet: true,
+  includePageNumbers: true,
+  includeSourcePages: false,
+  workspaceSize: "small",
+  extraScratchPages: 0,
+  sourceDisplay: "hidden",
+  includeSourceIndex: false,
 };
 
 export const DEFAULT_CHATGPT_MCP_PREFERENCES: ChatGptMcpPreferences = {
@@ -199,4 +216,46 @@ export function resolveViewPreferences(
     return normalizeViewPreferences(raw);
   }
   return migrateViewPreferences(legacy);
+}
+
+function normalizeExamPrintPreset(value: unknown): ExamPrintPreset {
+  if (value === "spacious" || value === "wrong_only" || value === "source_like" || value === "custom" || value === "real_exam") {
+    return value;
+  }
+  return DEFAULT_EXAM_PRINT_PREFERENCES.preset;
+}
+
+function normalizePaperSize(value: unknown): ExamPrintPreferences["paperSize"] {
+  return value === "letter" ? "letter" : "a4";
+}
+
+function normalizeOrientation(value: unknown): ExamPrintPreferences["orientation"] {
+  return value === "landscape" || value === "auto" ? value : "portrait";
+}
+
+function normalizePrintLayout(value: unknown): ExamPrintPreferences["layout"] {
+  return value === "single" || value === "columns" ? value : "auto";
+}
+
+function normalizeWorkspaceSize(value: unknown): ExamPrintPreferences["workspaceSize"] {
+  return value === "none" || value === "normal" || value === "large" ? value : "small";
+}
+
+export function normalizeExamPrintPreferences(raw: unknown): ExamPrintPreferences {
+  const value = raw && typeof raw === "object" ? (raw as Partial<ExamPrintPreferences>) : {};
+  const scratch = Number(value.extraScratchPages);
+  return {
+    preset: normalizeExamPrintPreset(value.preset),
+    paperSize: normalizePaperSize(value.paperSize),
+    orientation: normalizeOrientation(value.orientation),
+    layout: normalizePrintLayout(value.layout),
+    includeHeader: value.includeHeader !== false,
+    includeAnswerSheet: value.includeAnswerSheet !== false,
+    includePageNumbers: value.includePageNumbers !== false,
+    includeSourcePages: Boolean(value.includeSourcePages),
+    workspaceSize: normalizeWorkspaceSize(value.workspaceSize),
+    extraScratchPages: Number.isFinite(scratch) ? Math.max(0, Math.min(3, Math.round(scratch))) : 0,
+    sourceDisplay: value.sourceDisplay === "below-question" || value.sourceDisplay === "index-at-end" ? value.sourceDisplay : "hidden",
+    includeSourceIndex: Boolean(value.includeSourceIndex),
+  };
 }

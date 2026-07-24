@@ -8,7 +8,7 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup } from "./api";
-import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext } from "./api";
+import { loadExamSessions, saveExamSessions, loadGeneratedExams, saveGeneratedExams, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
@@ -18,9 +18,8 @@ import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
-import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, WrongAnswerEntry } from "./types";
+import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, GeneratedExam, McpExportContext, WrongAnswerEntry } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
-import { downloadMarkdown, openPrintableEntry } from "./utils/exportEntry";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamSessionView from "./features/exam/components/ExamSessionView";
 import { createExamSession } from "./features/exam/services/examSession";
@@ -30,6 +29,14 @@ import {
 } from "./features/exam/storage/examSessionStorage";
 import { scoreExamSession } from "./features/exam/services/examScoring";
 import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "./features/entries/model/entryDraft";
+import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
+import GeneratedExamList from "./features/exam-builder/components/GeneratedExamList";
+import { createSessionFromGeneratedExam } from "./features/exam-builder/services/createSessionFromGeneratedExam";
+import { mergeGeneratedExam } from "./features/exam-builder/storage/generatedExamStorage";
+import { buildGeneratedExamPrintModel } from "./features/exam-builder/services/buildGeneratedExamPrintModel";
+import { printExamDocument } from "./features/export/services/printExamDocument";
+import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
+import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
 
 export default function App() {
   const {
@@ -54,6 +61,7 @@ export default function App() {
     patchSettings,
     patchViewPreferences,
     patchChatGptMcpPreferences,
+    patchExamPrintPreferences,
     refreshSettings,
     clearSettingsError,
   } = useSettings();
@@ -72,6 +80,10 @@ export default function App() {
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
+  const [generatedExams, setGeneratedExams] = useState<GeneratedExam[]>([]);
+  const [showExamBuilder, setShowExamBuilder] = useState(false);
+  const [showGeneratedExams, setShowGeneratedExams] = useState(false);
+  const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
   const examSaveTimerRef = useRef<number | null>(null);
@@ -90,6 +102,28 @@ export default function App() {
       if (!cancelled) setSavedExamSessions([]);
     });
     return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadGeneratedExams().then((items) => { if (!cancelled) setGeneratedExams(Array.isArray(items) ? items : []); }).catch(() => { if (!cancelled) setGeneratedExams([]); });
+    return () => { cancelled = true; };
+  }, [setExamSaving, setExamSaveError, setSavedExamSessions]);
+
+  const persistGeneratedExam = useCallback(async (exam: GeneratedExam) => {
+    setGeneratedExams((current) => {
+      const next = mergeGeneratedExam(current, exam);
+      void saveGeneratedExams(next);
+      return next;
+    });
+  }, []);
+
+  const removeGeneratedExam = useCallback((id: string) => {
+    setGeneratedExams((current) => {
+      const next = current.filter((item) => item.id !== id);
+      void saveGeneratedExams(next);
+      return next;
+    });
   }, []);
 
   useEffect(() => {
@@ -142,7 +176,7 @@ export default function App() {
       setExamSaving(false);
     }
     return saved;
-  }, []);
+  }, [setExamSaving, setExamSaveError, setSavedExamSessions]);
 
   const closeExamSession = useCallback(async (): Promise<boolean> => {
     if (examSubmitting) {
@@ -157,11 +191,13 @@ export default function App() {
     if (current && !(await flushExamSessionSave(current))) return false;
     examSessionRef.current = null;
     setExamSession(null);
+    setActiveGeneratedExam(null);
     return true;
   }, [examSubmitting, flushExamSessionSave]);
 
   const openExamSession = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
     setExamStartError(null);
+    setActiveGeneratedExam(null);
     if (resumable) {
       setExamSession(resumable);
       return;
@@ -180,6 +216,18 @@ export default function App() {
     }
     setExamSession(next);
   }, []);
+
+  const openGeneratedExam = useCallback((exam: GeneratedExam) => {
+    if (!exam.questions.length) return;
+    setActiveGeneratedExam(exam);
+    setExamStartError(null);
+    setExamSession(createSessionFromGeneratedExam(exam));
+    setShowGeneratedExams(false);
+  }, []);
+
+  const printGeneratedExam = useCallback(async (exam: GeneratedExam) => {
+    await printExamDocument(buildGeneratedExamPrintModel(exam, settings.examPrintPreferences));
+  }, [settings.examPrintPreferences]);
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -266,6 +314,7 @@ export default function App() {
   useEffect(() => {
     if (!examSession) return;
     const entry = entries.find((item) => item.id === examSession.entryId);
+    if (examSession.entryId.startsWith("generated:")) return;
     const overlayIsStale =
       !selected ||
       selected.id !== examSession.entryId ||
@@ -316,6 +365,21 @@ export default function App() {
     setSettingsMessage: actions.setSettingsMessage,
   });
   const setSettingsMessage = actions.setSettingsMessage;
+  const updater = useAppUpdater(settings, patchSettings, async () => {
+    if (examSubmitting || examSaving || actions.showForm || actions.showImportModal || showExamBuilder) {
+      actions.setSettingsMessage("시험 또는 저장 중에는 업데이트를 설치할 수 없습니다. 작업을 마친 뒤 다시 시도해 주세요.");
+      return false;
+    }
+    if (settings.updatePreferences.backupBeforeInstall && isTauri()) {
+      try {
+        await createAutoBackup();
+      } catch {
+        actions.setSettingsMessage("업데이트 전 백업에 실패했습니다. 데이터를 보호하기 위해 설치를 중단했습니다.");
+        return false;
+      }
+    }
+    return true;
+  });
   const mcpBridge = useMcpBridgeSettings({
     mcpBridge: settings.mcpBridge,
     persistMcpBridge: async (next) => patchSettings({ mcpBridge: next }),
@@ -460,6 +524,7 @@ export default function App() {
       .filter((item) => item.entryId === selected.id && item.status === "submitted")
       .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
     : [];
+  const availableUpdate = updater.state.status === "available" ? updater.state : null;
 
   return (
     <div className="app">
@@ -480,6 +545,8 @@ export default function App() {
         openImport={actions.openImport}
         openLearningImport={() => actions.setShowLearningImportModal(true)}
         onSubjectSelect={setSubjectFilter}
+        onOpenExamBuilder={() => setShowExamBuilder(true)}
+        onOpenGeneratedExams={() => setShowGeneratedExams(true)}
       />
 
       <main className="main">
@@ -494,6 +561,14 @@ export default function App() {
                 닫기
               </button>
             </div>
+          </div>
+        )}
+        {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && !examSession && (
+          <div className="app-update-banner" role="status">
+            <span>새 버전 {availableUpdate.latestVersion}을 사용할 수 있습니다.</span>
+            <button type="button" onClick={() => openSettings("updates")}>변경사항</button>
+            <button type="button" onClick={() => void updater.installUpdate()}>업데이트</button>
+            <button type="button" aria-label="업데이트 알림 닫기" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>나중에</button>
           </div>
         )}
         <AppToolbar
@@ -528,7 +603,26 @@ export default function App() {
             onStartImportantReview={() => actions.startReview("important")}
           />
 
-          {selected ? (
+          {examSession && activeGeneratedExam ? (
+            <div className="exam-session-overlay exam-session-overlay--generated">
+              {examSaveError && <div className="exam-session-save-error" role="alert">진행 상태 저장 실패: {examSaveError}</div>}
+              <button type="button" onClick={() => void closeExamSession()} disabled={examSubmitting || examSaving}>시험 닫기</button>
+              <ExamSessionView
+                session={examSession}
+                examPreferences={settings.examPreferences}
+                onOpenSettings={() => openSettings("exam")}
+                chatGptPreferences={settings.chatGptMcpPreferences}
+                onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
+                onSyncChatGptContext={syncExamChatGptContext}
+                onOpenChatGptSettings={() => openSettings("chatgpt")}
+                onCheckLocalMcp={async () => { const status = await mcpBridge.testMcpBridgeConnection(); if (status.status !== "listening" && status.status !== "connected") throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다."); }}
+                remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
+                onChange={setExamSession}
+                onSubmittingChange={setExamSubmitting}
+                onSubmit={handleExamSubmit}
+              />
+            </div>
+          ) : selected ? (
             <>
               {selected.entryKind === "problem_sheet" && !examSession && (() => {
                 const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
@@ -618,8 +712,23 @@ export default function App() {
               existingTargets={linkableTargets}
               allEntries={entries}
               onOpenEntry={openEntryById}
-              onExportMarkdown={() => downloadMarkdown(selected)}
-              onOpenPrint={() => openPrintableEntry(selected)}
+              examSession={savedExamSessions.find((item) => item.entryId === selected.id) ?? null}
+              examPrintPreferences={settings.examPrintPreferences}
+              onExamPrintPreferencesChange={(patch) => void patchExamPrintPreferences(patch)}
+              onSyncExportContext={async (payload) => {
+                const context: McpExportContext = {
+                  entryId: selected.id,
+                  sessionId: savedExamSessions.find((item) => item.entryId === selected.id)?.id ?? null,
+                  scope: payload.scope,
+                  questionNumbers: payload.questionNumbers,
+                  submitted: payload.submitted,
+                  shareOptions: payload.shareOptions,
+                  updatedAt: new Date().toISOString(),
+                  generatedExamId: activeGeneratedExam?.id ?? null,
+                  includeSourceReferences: false,
+                };
+                await syncMcpBridgeExportContext(context);
+              }}
               onReview={actions.handleReview}
               onQuickMemo={actions.handleQuickMemo}
               onLearningBlocksChange={actions.handleLearningBlocksChange}
@@ -708,6 +817,22 @@ export default function App() {
         existingTargets={linkableTargets}
         onOpenSettings={openSettings}
       />
+      {showExamBuilder && (
+        <ExamBuilderWizard
+          entries={entries}
+          onClose={() => setShowExamBuilder(false)}
+          onSave={persistGeneratedExam}
+          onStart={async (exam) => { await persistGeneratedExam(exam); setShowExamBuilder(false); openGeneratedExam(exam); }}
+        />
+      )}
+      {showGeneratedExams && (
+        <div className="modal-backdrop" onClick={() => setShowGeneratedExams(false)}>
+          <div className="modal-card generated-exams-modal" role="dialog" aria-modal="true" aria-label="내 모의고사" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
+            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={removeGeneratedExam} onPrint={(exam) => void printGeneratedExam(exam)} />
+          </div>
+        </div>
+      )}
       {showSettings && (
         <SettingsModal
           settings={settings}
@@ -749,6 +874,12 @@ export default function App() {
           isMcpBridgeConnectionTesting={mcpBridge.isMcpBridgeConnectionTesting}
           isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
           onPatchChatGptMcpPreferences={patchChatGptMcpPreferences}
+          updateState={updater.state}
+          onCheckForUpdate={async () => { await updater.checkForUpdate(); }}
+          onInstallUpdate={async () => { await updater.installUpdate(); }}
+          onRestartAfterUpdate={async () => { await updater.restart(); }}
+          onOpenReleasePage={() => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); }}
+          onPatchUpdatePreferences={async (patch) => { await patchSettings({ updatePreferences: { ...settings.updatePreferences, ...patch } }); }}
           initialTab={settingsInitialTab}
           onClose={() => {
             setShowSettings(false);

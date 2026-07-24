@@ -46,7 +46,7 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   const allowed = entries.filter((entry) => entry.name.toLowerCase().endsWith(".json") || isImage(entry.name));
   if (allowed.reduce((sum, entry) => sum + uncompressedSize(entry), 0) > IMPORT_LIMITS.MAX_UNCOMPRESSED_BYTES) throw new Error("ZIP의 압축 해제 예상 크기가 1GB를 초과합니다.");
   const jsonEntries = allowed.filter((entry) => entry.name.toLowerCase().endsWith(".json"));
-  const json = jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "import.json") ?? (jsonEntries.length === 1 ? jsonEntries[0] : undefined);
+  const json = jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "import.json") ?? jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "questions.json") ?? (jsonEntries.length === 1 ? jsonEntries[0] : undefined);
   if (!json) throw new Error("ZIP 안에는 import.json 또는 JSON 파일 1개가 필요합니다.");
   if (uncompressedSize(json) > IMPORT_LIMITS.MAX_JSON_BYTES) throw new Error(`JSON 파일이 ${IMPORT_LIMITS.MAX_JSON_BYTES / 1024 / 1024}MB를 초과합니다.`);
   const images = allowed.filter((entry) => isImage(entry.name));

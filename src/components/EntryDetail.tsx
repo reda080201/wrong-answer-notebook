@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../types";
+import type { ExportHubView } from "../features/export/types";
 import type { SettingsTab } from "./SettingsModal";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
@@ -39,9 +40,8 @@ import StudyZoomViewport, { getQuestionZoomStorageKey } from "./StudyZoomViewpor
 import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
-import GptExportModal from "./GptExportModal";
+import ExportHubModal from "../features/export/components/ExportHubModal";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
-import ChatGptHelpLauncher from "../features/chatgpt/components/ChatGptHelpLauncher";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -58,6 +58,18 @@ interface EntryDetailProps {
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
+  examSession?: ExamSession | null;
+  examPrintPreferences?: ExamPrintPreferences;
+  onExamPrintPreferencesChange?: (patch: Partial<ExamPrintPreferences>) => Promise<void> | void;
+  onSyncExportContext?: (payload: {
+    scope: ExportScopeMode;
+    questionNumbers: string[];
+    submitted: boolean;
+    shareOptions: Pick<
+      ChatGptMcpPreferences,
+      "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
+    >;
+  }) => Promise<void>;
   onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
   onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
@@ -171,8 +183,10 @@ export default function EntryDetail({
   allEntries = [],
   onOpenEntry,
   onQuickGptSolution,
-  onExportMarkdown,
-  onOpenPrint,
+  examSession,
+  examPrintPreferences,
+  onExamPrintPreferencesChange,
+  onSyncExportContext,
   onReview,
   onQuickMemo,
   onLearningBlocksChange,
@@ -188,7 +202,6 @@ export default function EntryDetail({
   onOpenSettings,
   chatGptPreferences,
   onChatGptPreferencesChange,
-  onSyncChatGptContext,
   onOpenChatGptSettings,
   onCheckLocalMcp,
   remoteMcpConfigured,
@@ -209,7 +222,9 @@ export default function EntryDetail({
   const [quickMemoText, setQuickMemoText] = useState("");
   const [studyControlCompact, setStudyControlCompact] = useState(viewPreferences?.compactToolbar ?? loadStudyControlCompact);
   const [showTextReview, setShowTextReview] = useState(false);
-  const [showGptExport, setShowGptExport] = useState(false);
+  const [showExportHub, setShowExportHub] = useState(false);
+  const [exportHubView, setExportHubView] = useState<ExportHubView>("home");
+  const [exportHubScope, setExportHubScope] = useState<ExportScopeMode>("current");
   const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
@@ -275,12 +290,14 @@ export default function EntryDetail({
     [questionBlocks],
   );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
+  const questionIdentifier = (question?: QuestionBlock) =>
+    question?.numberLabel ? String(question.numberLabel) : question?.displayNumber ? String(question.displayNumber) : null;
   useEffect(() => {
     const theaterQuestion = theaterQuestionIndex === null ? undefined : questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined;
     const focused = focusMode === "closed" ? undefined : focusedQuestion;
     onActiveContextChange?.({
       entryId: entry.id,
-      questionNumber: theaterQuestion?.displayNumber ? String(theaterQuestion.displayNumber) : focused?.displayNumber ? String(focused.displayNumber) : null,
+      questionNumber: questionIdentifier(theaterQuestion) ?? questionIdentifier(focused),
       source: theaterQuestion ? "theater" : focused ? "focused" : "detail",
     });
   }, [entry.id, focusMode, focusedQuestion, onActiveContextChange, questionAnchors, theaterQuestionIndex]);
@@ -404,6 +421,12 @@ export default function EntryDetail({
       setToasts((items) => items.filter((item) => item.id !== id));
     }, 2400);
   }, []);
+
+  const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode) => {
+    setExportHubView(view);
+    setExportHubScope(scope ?? (selectedQuestionNumbers.length > 0 ? "selected" : "current"));
+    setShowExportHub(true);
+  }, [selectedQuestionNumbers.length]);
 
   const moveTheaterQuestion = useCallback((delta: number) => {
     if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
@@ -1244,16 +1267,6 @@ export default function EntryDetail({
               </button>
             </div>
           )}
-          <QuickViewSettingsMenu
-            layout={isSheet ? sheetLayout : undefined}
-            onLayoutChange={isSheet ? ((layout) => updateViewPreference("sheetLayout", layout)) : undefined}
-            fontSize={focusTextSize}
-            onFontSizeChange={(size) => updateViewPreference("fontSize", size)}
-            hideAnswers={(isSheet || entry.entryKind === "wrong_answer") ? hideAnswers : undefined}
-            onHideAnswersChange={(isSheet || entry.entryKind === "wrong_answer") ? ((hidden) => updateViewPreference("hideAnswers", hidden)) : undefined}
-            onOpenHelp={() => setViewHelpOpen(true)}
-            onOpenAllSettings={() => onOpenSettings?.("view")}
-          />
         </div>
         <div className="detail-actions">
           <div className="detail-actions-primary">
@@ -1267,11 +1280,24 @@ export default function EntryDetail({
                 집중 보기
               </button>
             )}
-            {onOpenSettings && (
-              <button type="button" className="btn-icon" onClick={() => onOpenSettings("view")} aria-label="설정 열기">
-                설정
+            {isSheet && (
+              <button type="button" className="btn-icon" onClick={() => openExportHub()}>
+                공유·내보내기
               </button>
             )}
+            <button type="button" className="btn-icon" onClick={onEdit}>
+              수정
+            </button>
+            <QuickViewSettingsMenu
+              layout={isSheet ? sheetLayout : undefined}
+              onLayoutChange={isSheet ? ((layout) => updateViewPreference("sheetLayout", layout)) : undefined}
+              fontSize={focusTextSize}
+              onFontSizeChange={(size) => updateViewPreference("fontSize", size)}
+              hideAnswers={(isSheet || entry.entryKind === "wrong_answer") ? hideAnswers : undefined}
+              onHideAnswersChange={(isSheet || entry.entryKind === "wrong_answer") ? ((hidden) => updateViewPreference("hideAnswers", hidden)) : undefined}
+              onOpenHelp={() => setViewHelpOpen(true)}
+              onOpenAllSettings={() => onOpenSettings?.("view")}
+            />
           </div>
           <details className="detail-more-menu">
             <summary className="btn-icon">도구</summary>
@@ -1281,9 +1307,6 @@ export default function EntryDetail({
                   GPT 해설
                 </button>
               )}
-              <button type="button" className="btn-icon" onClick={onEdit}>
-                수정
-              </button>
               <button
                 type="button"
                 className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
@@ -1291,26 +1314,6 @@ export default function EntryDetail({
               >
                 어려움 표시
               </button>
-              {isSheet && (
-                <button type="button" className="btn-icon" onClick={() => setShowGptExport(true)}>
-                  GPT에게 보내기
-                </button>
-              )}
-              {chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
-                <ChatGptHelpLauncher
-                  mode="detail"
-                  preferences={chatGptPreferences}
-                  onPreferencesChange={onChatGptPreferencesChange}
-                  onSyncContext={() => onSyncChatGptContext({
-                    entryId: entry.id,
-                    questionNumber: theaterQuestion?.displayNumber ? String(theaterQuestion.displayNumber) : focusedQuestion?.displayNumber ? String(focusedQuestion.displayNumber) : null,
-                  })}
-                  onOpenSettings={onOpenChatGptSettings}
-                  onCheckLocalMcp={onCheckLocalMcp}
-                  remoteMcpConfigured={remoteMcpConfigured}
-                  label="ChatGPT에서 도움받기"
-                />
-              )}
               {isSheet && onTitleChange && (
                 <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>
                   이름 변경
@@ -1330,16 +1333,6 @@ export default function EntryDetail({
               >
                 {entry.mastered ? "완료 해제" : "복습 완료"}
               </button>
-              {isSheet && (
-                <>
-                  <button type="button" className="btn-icon" onClick={onExportMarkdown}>
-                    Markdown
-                  </button>
-                  <button type="button" className="btn-icon" onClick={onOpenPrint}>
-                    PDF 인쇄
-                  </button>
-                </>
-              )}
               <button type="button" className="btn-icon danger" onClick={onDelete}>
                 삭제
               </button>
@@ -1525,7 +1518,7 @@ export default function EntryDetail({
                 </button>
                 {selectionMode && (
                   <>
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => setShowGptExport(true)} disabled={selectedQuestionNumbers.length === 0}>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => openExportHub("chatgpt-share", "selected")} disabled={selectedQuestionNumbers.length === 0}>
                       GPT에게 보내기
                     </button>
                     <button type="button" className="btn-secondary btn-sm" onClick={markSelectedImportant} disabled={selectedQuestionNumbers.length === 0}>
@@ -2171,13 +2164,13 @@ export default function EntryDetail({
           onPrevious={() => moveTheaterQuestion(-1)}
           onNext={() => moveTheaterQuestion(1)}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
-          onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
+          onToggleImportant={() => handleToggleQuestionImportant(questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber))}
           onDifficultyScoreChange={(score) =>
-            void handleQuestionDifficultyScoreChange(String(theaterQuestion.displayNumber), score)
+            void handleQuestionDifficultyScoreChange(questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber), score)
           }
           onOpenGptExport={() => {
-            setSelectedQuestionNumbers([String(theaterQuestion.displayNumber)]);
-            setShowGptExport(true);
+            setSelectedQuestionNumbers([questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber)]);
+            openExportHub("chatgpt-share", "selected");
           }}
           onReview={(result) => void handleReviewResult(result, theaterQuestion)}
           reviewSaving={reviewSaving !== null}
@@ -2219,7 +2212,7 @@ export default function EntryDetail({
           onQuickMemoOpenChange={setQuickMemoOpen}
           onQuickMemoTextChange={setQuickMemoText}
           onQuickMemoSubmit={() => void handleQuickMemoSubmit()}
-          onOpenGptExport={isSheet ? () => setShowGptExport(true) : undefined}
+          onOpenGptExport={isSheet ? () => openExportHub("chatgpt-share", "current") : undefined}
         />
       )}
       {viewHelpOpen && (
@@ -2238,25 +2231,34 @@ export default function EntryDetail({
         </div>
       )}
 
-      {showGptExport && (
-        <GptExportModal
+      {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
+        <ExportHubModal
           entry={entry}
           allEntries={allEntries}
+          examSession={examSession}
           currentQuestionNumber={
             theaterQuestion
-              ? String(theaterQuestion.displayNumber)
+              ? questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber)
               : focusedQuestion
-                ? String(focusedQuestion.displayNumber)
+                ? questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber)
                 : "1"
           }
           selectedQuestionNumbers={selectedQuestionNumbers}
-          onClose={() => setShowGptExport(false)}
-          onCopied={() => {
-            setShowGptExport(false);
-            pushToast("GPT에 붙여넣을 문제를 복사했습니다.", "success");
-          }}
+          examPrintPreferences={examPrintPreferences}
+          onExamPrintPreferencesChange={onExamPrintPreferencesChange}
+          chatGptPreferences={chatGptPreferences}
+          onChatGptPreferencesChange={onChatGptPreferencesChange}
+          onSyncExportContext={onSyncExportContext}
+          onCheckLocalMcp={onCheckLocalMcp}
+          remoteMcpConfigured={remoteMcpConfigured}
+          onOpenSettings={() => onOpenChatGptSettings?.()}
+          onClose={() => setShowExportHub(false)}
+          initialView={exportHubView}
+          initialScope={exportHubScope}
+          onToast={(message) => pushToast(message, "success")}
         />
       )}
+
       {toasts.length > 0 && (
         <div className="study-toast-stack" aria-live="polite">
           {toasts.map((toast) => (

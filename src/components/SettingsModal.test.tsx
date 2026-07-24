@@ -18,6 +18,18 @@ const settings: AppSettings = {
     showLearningVisuals: true,
     compactToolbar: false,
   },
+  examPrintPreferences: {
+    preset: "real_exam",
+    paperSize: "a4",
+    orientation: "portrait",
+    layout: "auto",
+    includeHeader: true,
+    includeAnswerSheet: true,
+    includePageNumbers: true,
+    includeSourcePages: false,
+    workspaceSize: "small",
+    extraScratchPages: 0,
+  },
   examPreferences: {
     showScratchNote: true,
     showOriginalPages: true,
@@ -49,6 +61,7 @@ const settings: AppSettings = {
   answerViewPreferences: { viewMode: "card", hideAnswers: false },
   autoBackup: { enabled: false },
   mcpBridge: { enabled: false, port: 43129 },
+  updatePreferences: { autoCheckEnabled: true, notificationsEnabled: true, backupBeforeInstall: true, channel: "stable" },
 };
 
 describe("SettingsModal", () => {

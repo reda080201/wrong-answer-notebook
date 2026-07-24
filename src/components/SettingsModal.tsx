@@ -33,7 +33,8 @@ export type SettingsTab =
   | "chatgpt"
   | "data"
   | "templates"
-  | "advanced";
+  | "advanced"
+  | "updates";
 
 const SETTINGS_TABS: Array<[SettingsTab, string]> = [
   ["theme", "테마"],
@@ -46,6 +47,7 @@ const SETTINGS_TABS: Array<[SettingsTab, string]> = [
   ["data", "데이터 관리"],
   ["templates", "템플릿"],
   ["advanced", "고급"],
+  ["updates", "업데이트"],
 ];
 
 interface SettingsModalProps {
@@ -90,6 +92,12 @@ interface SettingsModalProps {
   isMcpBridgeConnectionTesting?: boolean;
   isMcpBridgeBrowserBlocked?: boolean;
   onPatchChatGptMcpPreferences?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void>;
+  updateState?: import("../features/updater/model/appUpdate").AppUpdateState;
+  onCheckForUpdate?: () => Promise<void>;
+  onInstallUpdate?: () => Promise<void>;
+  onRestartAfterUpdate?: () => Promise<void>;
+  onOpenReleasePage?: () => void;
+  onPatchUpdatePreferences?: (patch: Partial<import("../types").AppUpdatePreferences>) => Promise<void>;
 }
 
 export default function SettingsModal({
@@ -134,6 +142,12 @@ export default function SettingsModal({
   isMcpBridgeConnectionTesting = false,
   isMcpBridgeBrowserBlocked = !isTauri(),
   onPatchChatGptMcpPreferences,
+  updateState = { status: "idle" },
+  onCheckForUpdate,
+  onInstallUpdate,
+  onRestartAfterUpdate,
+  onOpenReleasePage,
+  onPatchUpdatePreferences,
 }: SettingsModalProps) {
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
@@ -578,6 +592,22 @@ export default function SettingsModal({
               <div className="advanced-settings-panel">
                 <p>고급 설정은 진단 정보와 위험한 옵션을 분리해 두는 공간입니다.</p>
                 <p>백업, 복원, 무결성 검사, 이미지 정리는 데이터 관리 탭에서 실행하세요.</p>
+              </div>
+            )}
+
+            {activeTab === "updates" && (
+              <div className="settings-pref-panel updater-settings-panel">
+                <p className="settings-label">앱 업데이트</p>
+                <p>현재 버전: {updateState.status === "available" ? updateState.currentVersion : updateState.status === "up_to_date" ? updateState.currentVersion : "설치된 데스크톱 앱에서 확인"}</p>
+                {updateState.status === "available" && <><p>최신 버전: {updateState.latestVersion}</p><div className="update-notes"><pre>{updateState.notes || "변경사항이 없습니다."}</pre></div><button type="button" className="theme-btn" onClick={() => void onInstallUpdate?.()}>다운로드 및 설치</button></>}
+                {updateState.status === "downloading" && <p>업데이트 다운로드 중… {updateState.percent === undefined ? `${Math.round(updateState.downloadedBytes / 1024 / 1024)}MB` : `${updateState.percent}%`}</p>}
+                {updateState.status === "restart_required" && <button type="button" className="theme-btn" onClick={() => void onRestartAfterUpdate?.()}>지금 다시 시작</button>}
+                {updateState.status === "up_to_date" && <p>최신 버전입니다.</p>}
+                {updateState.status === "offline" && <p>{updateState.message}</p>}
+                <div className="settings-actions"><button type="button" className="theme-btn" onClick={() => void onCheckForUpdate?.()}>업데이트 확인</button><button type="button" className="theme-btn" onClick={onOpenReleasePage}>GitHub Releases 열기</button></div>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.autoCheckEnabled} onChange={(event) => void onPatchUpdatePreferences?.({ autoCheckEnabled: event.target.checked })} /> 앱 시작 시 업데이트 확인</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.notificationsEnabled} onChange={(event) => void onPatchUpdatePreferences?.({ notificationsEnabled: event.target.checked })} /> 업데이트 알림 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.backupBeforeInstall} onChange={(event) => void onPatchUpdatePreferences?.({ backupBeforeInstall: event.target.checked })} /> 설치 전 자동 백업</label>
               </div>
             )}
           </section>

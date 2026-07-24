@@ -5,11 +5,13 @@ import type {
   ChatGptMcpPreferences,
   EntryTemplate,
   ExamPreferences,
+  ExamPrintPreferences,
   GptMcpPreferences,
   ImagePreferences,
   MemoTemplate,
   PromptTemplate,
   ViewPreferences,
+  AppUpdatePreferences,
 } from "../types";
 
 export function useSettings() {
@@ -160,6 +162,17 @@ export function useSettings() {
     [updateSettings],
   );
 
+  const patchExamPrintPreferences = useCallback(
+    async (patch: Partial<ExamPrintPreferences>) => {
+      const current = settingsRef.current;
+      await updateSettings({
+        ...current,
+        examPrintPreferences: { ...current.examPrintPreferences, ...patch },
+      });
+    },
+    [updateSettings],
+  );
+
   const patchImagePreferences = useCallback(
     async (patch: Partial<ImagePreferences>) => {
       const current = settingsRef.current;
@@ -207,6 +220,11 @@ export function useSettings() {
     [updateSettings],
   );
 
+  const patchUpdatePreferences = useCallback(async (patch: Partial<AppUpdatePreferences>) => {
+    const current = settingsRef.current;
+    await updateSettings({ ...current, updatePreferences: { ...current.updatePreferences, ...patch } });
+  }, [updateSettings]);
+
   return {
     settings,
     settingsError,
@@ -214,6 +232,7 @@ export function useSettings() {
     patchSettings,
     patchViewPreferences,
     patchExamPreferences,
+    patchExamPrintPreferences,
     patchImagePreferences,
     patchGptMcpPreferences,
     patchChatGptMcpPreferences,
@@ -224,6 +243,7 @@ export function useSettings() {
     upsertMemoTemplate,
     removeMemoTemplate,
     setLastImportTemplate,
+    patchUpdatePreferences,
     refreshSettings,
     clearSettingsError: () => setSettingsError(null),
   };

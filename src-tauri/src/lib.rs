@@ -792,6 +792,19 @@ fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Res
 }
 
 #[tauri::command]
+fn load_generated_exams(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("generated-exams.json");
+    if !path.exists() { return Ok(serde_json::json!([])); }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    serde_json::from_str(&raw).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Result<(), String> {
+    write_json_atomic(&app_dir(&app)?.join("generated-exams.json"), &exams)
+}
+
+#[tauri::command]
 fn get_mcp_bridge_status(
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
 ) -> mcp_bridge::McpBridgeStatus {
@@ -876,6 +889,14 @@ fn sync_active_exam_context(
     context: serde_json::Value,
 ) -> Result<(), String> {
     bridge.sync_active_exam_context(context)
+}
+
+#[tauri::command]
+fn sync_active_export_context(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+    context: serde_json::Value,
+) -> Result<(), String> {
+    bridge.sync_active_export_context(context)
 }
 
 #[tauri::command]
@@ -1508,6 +1529,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
+            #[cfg(desktop)]
+            {
+                app.handle().plugin(tauri_plugin_process::init())?;
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             let handle = app.handle().clone();
             let store = Arc::new(notebook_store::NotebookStore::new(
                 data_file(&handle).map_err(std::io::Error::other)?,
@@ -1541,6 +1567,8 @@ pub fn run() {
             save_entries,
             load_exam_sessions,
             save_exam_sessions,
+            load_generated_exams,
+            save_generated_exams,
             load_settings,
             save_settings,
             get_ai_provider_status,
@@ -1565,6 +1593,7 @@ pub fn run() {
             disconnect_mcp_bridge_clients,
             sync_active_context,
             sync_active_exam_context,
+            sync_active_export_context,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

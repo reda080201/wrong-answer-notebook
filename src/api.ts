@@ -9,6 +9,8 @@ import type {
   IntegrityReport,
   McpActiveContext,
   ActiveExamContext,
+  AppUpdatePreferences,
+  McpExportContext,
   ExamSession,
   McpBridgeSettings,
   McpBridgeStatus,
@@ -17,6 +19,8 @@ import type {
   PromptTemplate,
   WrongAnswerEntry,
 } from "./types";
+import type { GeneratedExam } from "./types";
+import { loadGeneratedExams as loadGeneratedExamsFromStorage, saveGeneratedExams as saveGeneratedExamsToStorage } from "./features/exam-builder/storage/generatedExamStorage";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 import {
   loadExamSessions as loadExamSessionsFromStorage,
@@ -26,11 +30,13 @@ import { normalizeEntry } from "./utils/entry";
 import {
   DEFAULT_EXAM_PREFERENCES,
   DEFAULT_CHATGPT_MCP_PREFERENCES,
+  DEFAULT_EXAM_PRINT_PREFERENCES,
   DEFAULT_GPT_MCP_PREFERENCES,
   DEFAULT_IMAGE_PREFERENCES,
   DEFAULT_VIEW_PREFERENCES,
   normalizeExamPreferences,
   normalizeChatGptMcpPreferences,
+  normalizeExamPrintPreferences,
   normalizeGptMcpPreferences,
   normalizeImagePreferences,
   resolveViewPreferences,
@@ -72,6 +78,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   importPreferences: {},
   viewPreferences: DEFAULT_VIEW_PREFERENCES,
   examPreferences: DEFAULT_EXAM_PREFERENCES,
+  examPrintPreferences: DEFAULT_EXAM_PRINT_PREFERENCES,
   imagePreferences: DEFAULT_IMAGE_PREFERENCES,
   gptMcpPreferences: DEFAULT_GPT_MCP_PREFERENCES,
   chatGptMcpPreferences: DEFAULT_CHATGPT_MCP_PREFERENCES,
@@ -85,6 +92,12 @@ export const DEFAULT_SETTINGS: AppSettings = {
   mcpBridge: {
     enabled: false,
     port: 43129,
+  },
+  updatePreferences: {
+    autoCheckEnabled: true,
+    notificationsEnabled: true,
+    backupBeforeInstall: true,
+    channel: "stable",
   },
 };
 
@@ -497,6 +510,7 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
     },
     viewPreferences,
     examPreferences: normalizeExamPreferences(raw?.examPreferences),
+    examPrintPreferences: normalizeExamPrintPreferences(raw?.examPrintPreferences),
     imagePreferences: normalizeImagePreferences(raw?.imagePreferences),
     gptMcpPreferences: normalizeGptMcpPreferences(raw?.gptMcpPreferences),
     chatGptMcpPreferences: normalizeChatGptMcpPreferences(raw?.chatGptMcpPreferences),
@@ -509,6 +523,20 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
       lastBackupAt: raw?.autoBackup?.lastBackupAt,
     },
     mcpBridge: normalizeMcpBridgeSettings(raw?.mcpBridge),
+    updatePreferences: normalizeUpdatePreferences(raw?.updatePreferences),
+  };
+}
+
+function normalizeUpdatePreferences(raw: unknown): AppUpdatePreferences {
+  const value = raw && typeof raw === "object" ? raw as Partial<AppUpdatePreferences> : {};
+  return {
+    autoCheckEnabled: value.autoCheckEnabled !== false,
+    notificationsEnabled: value.notificationsEnabled !== false,
+    backupBeforeInstall: value.backupBeforeInstall !== false,
+    channel: "stable",
+    skippedVersion: typeof value.skippedVersion === "string" ? value.skippedVersion : undefined,
+    lastCheckedAt: typeof value.lastCheckedAt === "string" ? value.lastCheckedAt : undefined,
+    lastSeenReleaseNotesVersion: typeof value.lastSeenReleaseNotesVersion === "string" ? value.lastSeenReleaseNotesVersion : undefined,
   };
 }
 
@@ -590,6 +618,11 @@ export async function syncMcpBridgeActiveExamContext(context: ActiveExamContext)
   await invoke("sync_active_exam_context", { context });
 }
 
+export async function syncMcpBridgeExportContext(context: McpExportContext): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("sync_active_export_context", { context });
+}
+
 export async function loadExamSessions(): Promise<ExamSession[]> {
   try {
     if (isTauri()) {
@@ -614,6 +647,24 @@ export async function saveExamSessions(sessions: ExamSession[]): Promise<void> {
     throw new Error(errorMessage(error, "모의고사 세션을 저장하지 못했습니다."), {
       cause: error,
     });
+  }
+}
+
+export async function loadGeneratedExams(): Promise<GeneratedExam[]> {
+  try {
+    if (isTauri()) return await invoke<GeneratedExam[]>("load_generated_exams");
+    return loadGeneratedExamsFromStorage();
+  } catch (error) {
+    throw new Error(errorMessage(error, "생성 모의고사를 불러오지 못했습니다."), { cause: error });
+  }
+}
+
+export async function saveGeneratedExams(exams: GeneratedExam[]): Promise<void> {
+  try {
+    if (isTauri()) { await invoke("save_generated_exams", { exams }); return; }
+    saveGeneratedExamsToStorage(exams);
+  } catch (error) {
+    throw new Error(errorMessage(error, "생성 모의고사를 저장하지 못했습니다."), { cause: error });
   }
 }
 
