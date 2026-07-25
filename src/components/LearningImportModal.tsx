@@ -12,6 +12,7 @@ import {
 } from "../utils/conceptKnowledgeImport";
 import MathText from "./MathText";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
+import Dialog from "../shared/ui/Dialog";
 
 interface LearningImportModalProps {
   onClose: () => void;
@@ -88,8 +89,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="특강 가져오기">
-      <div className="learning-import-modal">
+    <Dialog open onClose={onClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Learning Import</span>
@@ -158,7 +158,6 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
             {saving ? "저장 중..." : "특강 저장"}
           </button>
         </footer>
-      </div>
       {Boolean(conceptImportValue) && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}
@@ -170,6 +169,6 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
           }}
         />
       )}
-    </div>
+    </Dialog>
   );
 }

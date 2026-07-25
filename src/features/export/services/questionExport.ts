@@ -131,6 +131,9 @@ export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: 
     const block = blocks.find((candidate) => normalizeQuestionNumber(candidate.numberLabel) === number || normalizeQuestionNumber(candidate.displayNumber) === number);
     if (!block) {
       if (entry.entryKind === "wrong_answer" && requested.length === 1) {
+        // #region agent log
+        fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'C',location:'questionExport.ts:wrong_answer-fallback',message:'wrong_answer export fallback used',data:{number,requestedCount:requested.length,questionLen:entry.question?.length??0,blocksCount:blocks.length,choicesForcedEmpty:true},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         return {
           position: index + 1,
           displayQuestionNumber: questionNumbers[index] ?? number,
@@ -144,12 +147,16 @@ export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: 
     const contentSegments = Object.entries(entry.questionContentSegments ?? {})
       .find(([key]) => normalizeQuestionNumber(key) === number)?.[1];
     const figures = (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number);
+    const choices = block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim());
+    // #region agent log
+    fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'C',location:'questionExport.ts:parsed-block',message:'parsed question export item',data:{number,bodyLen:block.body.length,choicesCount:choices.length,figuresCount:figures.length,hasSegments:Boolean(contentSegments?.length)},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     return {
       position: index + 1,
       displayQuestionNumber: block.numberLabel || number,
       question: block.body,
       contentSegments,
-      choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim()),
+      choices,
       figures,
     };
   });

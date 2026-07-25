@@ -32,7 +32,13 @@ function waitForImages(doc: Document): Promise<void> {
 
 export async function printExamDocument(model: ExamPrintModel): Promise<void> {
   const imageUrls = await collectImageUrls(model);
-  const popup = window.open("", "_blank", "noopener,noreferrer,width=960,height=720");
+  // Do not pass "noopener" in features — Chromium then returns null and print always fails.
+  const features = "width=960,height=720";
+  const popup = window.open("", "_blank", features);
+  if (popup) popup.opener = null;
+  // #region agent log
+  fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'post-fix',hypothesisId:'A',location:'printExamDocument.ts:window.open',message:'print popup open result',data:{features,popupIsNull:popup===null,popupType:popup===null?'null':typeof popup,questionCount:model.questions.length,openerCleared:popup?popup.opener===null:null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!popup) throw new Error("인쇄 창을 열 수 없습니다. 팝업 차단을 해제해 주세요.");
   const doc = popup.document;
   doc.open();

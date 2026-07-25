@@ -7,6 +7,7 @@ import {
   type ConceptKnowledgeImportMode,
 } from "../utils/conceptKnowledgeImport";
 import MathText from "./MathText";
+import Dialog from "../shared/ui/Dialog";
 
 interface ConceptImportPreviewModalProps {
   value: unknown;
@@ -58,8 +59,7 @@ export default function ConceptImportPreviewModal({
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="개념 자료 JSON 변환">
-      <div className="concept-import-modal">
+    <Dialog open onClose={onClose} className="concept-import-modal" ariaLabel="개념 자료 JSON 변환" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Concept Knowledge Import</span>
@@ -135,7 +135,6 @@ export default function ConceptImportPreviewModal({
             {saving ? "저장 중..." : "변환해서 저장"}
           </button>
         </footer>
-      </div>
-    </div>
+    </Dialog>
   );
 }

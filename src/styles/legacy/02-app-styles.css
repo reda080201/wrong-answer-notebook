@@ -591,6 +591,11 @@
   padding: 2rem;
 }
 
+.dialog-host {
+  position: static;
+  display: contents;
+}
+
 .modal-overlay img {
   max-width: 90vw;
   max-height: 90vh;

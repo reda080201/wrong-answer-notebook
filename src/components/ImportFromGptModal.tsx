@@ -45,6 +45,7 @@ import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entr
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 import { readZipImport } from "../features/import/services/zipImport";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
+import Dialog from "../shared/ui/Dialog";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -702,14 +703,8 @@ export default function ImportFromGptModal({
   };
 
   return (
-    <div className="form-overlay" onClick={onClose}>
-      <div
-        className="form-modal form-modal--wide import-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="import-modal-title"
-        onClick={(event) => event.stopPropagation()}
-      >
+    <>
+      <Dialog open onClose={onClose} className="form-modal form-modal--wide import-modal" ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : "GPT 결과 가져오기"} closeDisabled={aiGenerating} busy={aiGenerating}>
         <div className="form-header import-modal-header">
           <h2 id="import-modal-title">{isSolutionMode ? "GPT 해설 빠른 가져오기" : "GPT 결과 가져오기"}</h2>
           <div className="import-modal-header-actions">
@@ -1454,9 +1449,7 @@ export default function ImportFromGptModal({
             {isSolutionMode ? "해설 적용하기" : "폼으로 보내기"}
           </button>
         </div>
-        {helpOpen && (
-          <div className="import-help-backdrop" role="presentation">
-            <section className="import-help-dialog" role="dialog" aria-modal="true" aria-labelledby="import-help-title">
+        <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} className="import-help-dialog" backdropClassName="import-help-backdrop" ariaLabel="가져오기 도움말">
               <header><h3 id="import-help-title">가져오기 도움말</h3><button type="button" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>
               <ul>
                 <li>프롬프트를 복사해 GPT 결과를 JSON으로 받은 뒤 붙여넣습니다.</li>
@@ -1465,10 +1458,8 @@ export default function ImportFromGptModal({
                 <li>손글씨 제외 여부와 원본/정리된 그림 연결 상태를 확인하세요.</li>
                 <li>저장 전 미리보기에서 문제·정답·해설이 섞이지 않았는지 검토하세요.</li>
               </ul>
-            </section>
-          </div>
-        )}
-      </div>
+        </Dialog>
+      </Dialog>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}
@@ -1487,6 +1478,6 @@ export default function ImportFromGptModal({
           onApplyEntries={onApplyEntries}
         />
       )}
-    </div>
+    </>
   );
 }

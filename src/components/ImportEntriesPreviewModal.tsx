@@ -3,6 +3,7 @@ import type { EntryFormData } from "../types";
 import type { ImportedStudyDocument } from "../utils/importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
 import { parseQuestionText } from "../utils/textLayout";
+import Dialog from "../shared/ui/Dialog";
 
 interface ImportEntriesPreviewModalProps {
   document: ImportedStudyDocument;
@@ -53,8 +54,7 @@ export default function ImportEntriesPreviewModal({
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="여러 항목 가져오기 미리보기">
-      <div className="concept-import-modal import-entries-modal">
+    <Dialog open onClose={onClose} className="concept-import-modal import-entries-modal" ariaLabel="여러 항목 가져오기 미리보기" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">All-in-one Import</span>
@@ -110,7 +110,6 @@ export default function ImportEntriesPreviewModal({
             {saving ? "저장 중..." : `${document.entries.length}개 항목 저장`}
           </button>
         </footer>
-      </div>
-    </div>
+    </Dialog>
   );
 }

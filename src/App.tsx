@@ -37,6 +37,7 @@ import { buildGeneratedExamPrintModel } from "./features/exam-builder/services/b
 import { printExamDocument } from "./features/export/services/printExamDocument";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
+import Dialog from "./shared/ui/Dialog";
 
 export default function App() {
   const {
@@ -829,14 +830,10 @@ export default function App() {
           onStart={async (exam) => { await persistGeneratedExam(exam); setShowExamBuilder(false); openGeneratedExam(exam); }}
         />
       )}
-      {showGeneratedExams && (
-        <div className="modal-backdrop" onClick={() => setShowGeneratedExams(false)}>
-          <div className="modal-card generated-exams-modal" role="dialog" aria-modal="true" aria-label="내 모의고사" onClick={(event) => event.stopPropagation()}>
+      <Dialog open={showGeneratedExams} onClose={() => setShowGeneratedExams(false)} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
             <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={removeGeneratedExam} onPrint={(exam) => void printGeneratedExam(exam)} />
-          </div>
-        </div>
-      )}
+      </Dialog>
       {showSettings && (
         <SettingsModal
           settings={settings}

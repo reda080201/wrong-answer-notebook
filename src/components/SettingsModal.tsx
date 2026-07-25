@@ -22,6 +22,8 @@ import type {
   ThemeMode,
   ViewPreferences,
 } from "../types";
+import Dialog from "../shared/ui/Dialog";
+import Tabs from "../shared/ui/Tabs";
 
 export type SettingsTab =
   | "theme"
@@ -193,8 +195,7 @@ export default function SettingsModal({
   const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="설정">
-      <div className="settings-modal">
+    <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정">
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">설정</span>
@@ -221,18 +222,13 @@ export default function SettingsModal({
         )}
 
         <div className="settings-modal-body">
-          <nav className="settings-modal-tabs" aria-label="설정 탭">
-            {SETTINGS_TABS.map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                className={activeTab === key ? "active" : ""}
-                onClick={() => setActiveTab(key)}
-              >
-                {label}
-              </button>
-            ))}
-          </nav>
+          <Tabs
+            className="settings-modal-tabs"
+            ariaLabel="설정 탭"
+            value={activeTab}
+            onChange={setActiveTab}
+            items={SETTINGS_TABS.map(([id, label]) => ({ id, label }))}
+          />
 
           <section className="settings-modal-panel">
             {activeTab === "theme" && (
@@ -612,8 +608,7 @@ export default function SettingsModal({
             )}
           </section>
         </div>
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

@@ -6,6 +6,7 @@ import { updateExamResponse } from "../services/examSession";
 import QuestionContentView from "../../../components/QuestionContentView";
 import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
+import Dialog from "../../../shared/ui/Dialog";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -29,7 +30,7 @@ export function parseChoice(choice: string) {
 }
 
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
-  return <div className="exam-dialog-backdrop" role="presentation"><section className="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-help-title"><header><h3 id="exam-help-title">시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></section></div>;
+  return <Dialog open onClose={onClose} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="시험 도움말"><header><h3>시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></Dialog>;
 }
 
 export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt, examPreferences, onOpenSettings, chatGptPreferences, onChatGptPreferencesChange, onSyncChatGptContext, onOpenChatGptSettings, onCheckLocalMcp, remoteMcpConfigured }: ExamSessionViewProps) {
@@ -107,7 +108,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     )}
     {score && <section className="exam-result-summary" aria-live="polite"><h3>채점 결과</h3><p>정답 {score.correctCount} / {score.totalQuestions} · 정답률 {score.percentCorrect}%</p><p>틀린 문항: {score.questionResults.filter((item) => !item.correct).map((item) => item.questionNumber).join(", ") || "없음"}</p><p>미응답: {unanswered.join(", ") || "없음"} · 검토 표시: {marked.join(", ") || "없음"}</p></section>}
     {helpOpen && <ExamHelpDialog onClose={() => setHelpOpen(false)} />}
-    {consentOpen && <div className="exam-dialog-backdrop" role="presentation"><section className="exam-dialog" role="dialog" aria-modal="true" aria-label="GPT 전송 동의"><p>{onAskGpt ? "현재 문제, 내 답, 풀이 메모를 전송합니다." : "현재 문제는 로컬 MCP 브리지에만 공개됩니다."}</p>{onAskGpt && <button type="button" onClick={() => { onAskGpt({ question: question.question, response: response?.response ?? "", scratchNote: response?.scratchNote ?? "" }); setConsentOpen(false); }}>전송</button>}<button type="button" onClick={() => setConsentOpen(false)}>닫기</button></section></div>}
-    {submitOpen && <div className="exam-dialog-backdrop" role="presentation"><section className="exam-dialog" role="dialog" aria-modal="true" aria-labelledby="exam-submit-title"><h3 id="exam-submit-title">시험을 제출할까요?</h3><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}<footer><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></footer></section></div>}
+    <Dialog open={consentOpen} onClose={() => setConsentOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="GPT 전송 동의"><p>{onAskGpt ? "현재 문제, 내 답, 풀이 메모를 전송합니다." : "현재 문제는 로컬 MCP 브리지에만 공개됩니다."}</p>{onAskGpt && <button type="button" onClick={() => { onAskGpt({ question: question.question, response: response?.response ?? "", scratchNote: response?.scratchNote ?? "" }); setConsentOpen(false); }}>전송</button>}<button type="button" onClick={() => setConsentOpen(false)}>닫기</button></Dialog>
+    <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}<footer><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></footer></Dialog>
   </section>;
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, WrongAnswerEntry } from "../../../types";
 import { downloadMarkdown } from "../../../utils/exportEntry";
 import { buildGptExportPayload } from "../../../utils/gptExport";
@@ -9,6 +9,7 @@ import ChatGptSharePanel from "./ChatGptSharePanel";
 import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
+import Dialog from "../../../shared/ui/Dialog";
 
 interface ExportHubModalProps {
   entry: WrongAnswerEntry;
@@ -50,22 +51,12 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     initialScope,
     onToast,
   } = props;
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const [view, setView] = useState<ExportHubView>(initialView);
   const [scope, setScope] = useState<ExportScopeMode>(initialScope ?? (selectedQuestionNumbers.length ? "selected" : "current"));
   const [manualRange, setManualRange] = useState(selectedQuestionNumbers.join(", "));
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
   const printModel = useMemo(() => buildExamPrintModel({ entry, questionNumbers: scopeResult.questionNumbers, preferences: examPrintPreferences, preset: examPrintPreferences.preset, scope }), [entry, scopeResult.questionNumbers, examPrintPreferences, scope]);
 
-  useEffect(() => {
-    const node = dialogRef.current;
-    node?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
   const copyText = async (text: string, message: string) => {
     await navigator.clipboard.writeText(text);
     onToast?.(message);
@@ -97,8 +88,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     onToast?.("문항 ZIP을 저장했습니다.");
   };
   return (
-    <div className="modal-backdrop export-hub-backdrop" onClick={onClose}>
-      <div className="modal-card export-hub-modal" role="dialog" aria-modal="true" aria-label="공유·내보내기" tabIndex={-1} ref={dialogRef} onClick={(event) => event.stopPropagation()}>
+    <Dialog open onClose={onClose} className="modal-card export-hub-modal" ariaLabel="공유·내보내기" backdropClassName="modal-backdrop export-hub-backdrop">
         <header className="modal-header">
           <div>
             <p className="modal-eyebrow">공유·내보내기</p>
@@ -166,8 +156,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
             initialScope={scope}
           />
         ) : null}
-      </div>
-    </div>
+    </Dialog>
   );
 }
 

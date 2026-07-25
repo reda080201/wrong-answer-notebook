@@ -42,6 +42,10 @@ import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
 import ExportHubModal from "../features/export/components/ExportHubModal";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
+import Dialog from "../shared/ui/Dialog";
+import Tabs from "../shared/ui/Tabs";
+import Toast from "../shared/ui/Toast";
+import Menu from "../shared/ui/Menu";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1236,36 +1240,13 @@ export default function EntryDetail({
       <div className="detail-toolbar">
         <div className="detail-toolbar-left">
           {!isConcept && !isLecture && (
-            <div className="study-mode-tabs" aria-label="학습 보기 모드">
-              <button
-                type="button"
-                className={detailViewMode === "paper" ? "active" : ""}
-                onClick={() => handleStudyModeChange("paper")}
-              >
-                문제지
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "solution" ? "active" : ""}
-                onClick={() => handleStudyModeChange("solution")}
-              >
-                해설지
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "learning" ? "active" : ""}
-                onClick={() => handleStudyModeChange("learning")}
-              >
-                특강
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "analysis" ? "active" : ""}
-                onClick={() => handleStudyModeChange("analysis")}
-              >
-                분석
-              </button>
-            </div>
+            <Tabs
+              className="study-mode-tabs"
+              ariaLabel="학습 보기 모드"
+              value={detailViewMode}
+              onChange={handleStudyModeChange}
+              items={[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }]}
+            />
           )}
         </div>
         <div className="detail-actions">
@@ -1299,9 +1280,7 @@ export default function EntryDetail({
               onOpenAllSettings={() => onOpenSettings?.("view")}
             />
           </div>
-          <details className="detail-more-menu">
-            <summary className="btn-icon">도구</summary>
-            <div className="detail-more-menu-popover">
+          <Menu label="도구" className="detail-more-menu">
               {onQuickGptSolution && (
                 <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
                   GPT 해설
@@ -1336,8 +1315,7 @@ export default function EntryDetail({
               <button type="button" className="btn-icon danger" onClick={onDelete}>
                 삭제
               </button>
-            </div>
-          </details>
+          </Menu>
         </div>
       </div>
       )}
@@ -2215,9 +2193,7 @@ export default function EntryDetail({
           onOpenGptExport={isSheet ? () => openExportHub("chatgpt-share", "current") : undefined}
         />
       )}
-      {viewHelpOpen && (
-        <div className="modal-backdrop" role="presentation" onClick={() => setViewHelpOpen(false)}>
-          <section className="exam-dialog" role="dialog" aria-modal="true" aria-label="보기 도움말" onClick={(event) => event.stopPropagation()}>
+      <Dialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} className="exam-dialog" ariaLabel="보기 도움말">
             <header>
               <h3>보기 도움말</h3>
               <button type="button" className="btn-icon" onClick={() => setViewHelpOpen(false)}>닫기</button>
@@ -2227,9 +2203,7 @@ export default function EntryDetail({
               <li>전체 설정에서는 보기, 시험, 이미지, GPT·MCP 기본값을 함께 관리합니다.</li>
               <li>개념노트와 특강자료에는 정답 가리기가 표시되지 않습니다.</li>
             </ul>
-          </section>
-        </div>
-      )}
+      </Dialog>
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
@@ -2261,11 +2235,7 @@ export default function EntryDetail({
 
       {toasts.length > 0 && (
         <div className="study-toast-stack" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`study-toast study-toast--${toast.tone}`}>
-              {toast.message}
-            </div>
-          ))}
+          {toasts.map((toast) => <Toast key={toast.id} tone={toast.tone}>{toast.message}</Toast>)}
         </div>
       )}
       {isFocusExpanded && (

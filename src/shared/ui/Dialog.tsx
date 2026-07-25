@@ -1,0 +1,121 @@
+import { useEffect, useId, useRef, type ReactNode } from "react";
+
+const FOCUSABLE_SELECTOR = [
+  "button:not([disabled])",
+  "[href]",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  '[tabindex]:not([tabindex="-1"])',
+].join(", ");
+
+interface DialogProps {
+  open: boolean;
+  onClose: () => void;
+  children: ReactNode;
+  ariaLabel?: string;
+  title?: ReactNode;
+  titleId?: string;
+  backdropClassName?: string;
+  className?: string;
+  closeOnBackdrop?: boolean;
+  closeDisabled?: boolean;
+  busy?: boolean;
+}
+
+export default function Dialog({
+  open,
+  onClose,
+  children,
+  ariaLabel,
+  title,
+  titleId,
+  backdropClassName = "modal-backdrop",
+  className = "modal-card",
+  closeOnBackdrop = true,
+  closeDisabled = false,
+  busy = false,
+}: DialogProps) {
+  const generatedTitleId = useId();
+  const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeDisabledRef = useRef(closeDisabled);
+
+  useEffect(() => {
+    closeDisabledRef.current = closeDisabled;
+  }, [closeDisabled]);
+
+  useEffect(() => {
+    if (!open) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = dialogRef.current;
+    // #region agent log
+    fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'D',location:'Dialog.tsx:open-effect',message:'dialog opened',data:{ariaLabel:ariaLabel??null,hasTitle:Boolean(title),closeDisabled,closeOnBackdrop,className},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
+    const frame = window.requestAnimationFrame(() => {
+      const autoFocusTarget = dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
+      (autoFocusTarget ?? focusable()[0] ?? dialog)?.focus();
+    });
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (closeDisabledRef.current) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) {
+        event.preventDefault();
+        dialog?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown, true);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown, true);
+      // #region agent log
+      fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'D',location:'Dialog.tsx:cleanup',message:'dialog closed cleanup',data:{restoredFocus:Boolean(previousFocus),ariaLabel:ariaLabel??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      previousFocus?.focus();
+    };
+  }, [onClose, open]);
+
+  if (!open) return null;
+
+  return (
+    <div
+      className={backdropClassName}
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && closeOnBackdrop && !closeDisabled) onClose();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className={className}
+        role="dialog"
+        aria-modal="true"
+        aria-label={resolvedTitleId ? undefined : ariaLabel}
+        aria-labelledby={resolvedTitleId}
+        aria-busy={busy || undefined}
+        tabIndex={-1}
+      >
+        {title && <h2 id={resolvedTitleId}>{title}</h2>}
+        {children}
+      </div>
+    </div>
+  );
+}
