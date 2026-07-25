@@ -1437,7 +1437,10 @@ fn restore_backup_zip(
     if let Err(error) = move_result {
         let rollback_error = rollback_restore_paths(&moved).err();
         let _ = fs::remove_dir_all(&rollback_dir);
-        return Err(rollback_error.map_or(error, |rollback| format!("{error} 복원 rollback 실패: {rollback}")));
+        return Err(match rollback_error {
+            Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
+            None => error,
+        });
     }
 
     let commit_result = (|| -> Result<(), String> {
@@ -1459,7 +1462,10 @@ fn restore_backup_zip(
     if let Err(error) = commit_result {
         let rollback_error = rollback_restore_paths(&moved).err();
         let _ = fs::remove_dir_all(&rollback_dir);
-        return Err(rollback_error.map_or(error, |rollback| format!("{error} 복원 rollback 실패: {rollback}")));
+        return Err(match rollback_error {
+            Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
+            None => error,
+        });
     }
     fs::remove_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
     Ok(())

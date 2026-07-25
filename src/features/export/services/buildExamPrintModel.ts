@@ -96,6 +96,7 @@ export function buildExamPrintModel(options: {
         ...figure,
         image: representation.image,
         source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const,
+        resolvedRepresentation: representation.kind,
         needsReview: representation.needsReview,
       };
     });

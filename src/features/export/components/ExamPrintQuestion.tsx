@@ -17,8 +17,8 @@ export default function ExamPrintQuestion({ question, imageUrls, workspaceSize }
       .map((segment) => segment.figureId),
   );
   const renderFigure = (figure: NonNullable<ExamPrintQuestionModel["figures"]>[number], key: string) => {
-    const representation = resolveFigureRepresentation(figure, { forPrint: true });
-    if (representation.kind === "semantic_render" && figure.semanticSpec) {
+    const representation = figure.resolvedRepresentation ?? resolveFigureRepresentation(figure, { forPrint: true }).kind;
+    if (representation === "semantic_render" && figure.semanticSpec) {
       return <div key={key} className="exam-print-figure exam-print-semantic"><SemanticFigureView spec={figure.semanticSpec} title={figure.title} /></div>;
     }
     if (figure.source === "described_only" || !figure.image) {

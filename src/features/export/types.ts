@@ -14,7 +14,7 @@ export interface ExamPrintQuestionModel {
   kind: "objective" | "subjective";
   choices: string[];
   segments: QuestionContentSegment[];
-  figures: SheetFigureItem[];
+  figures: Array<SheetFigureItem & { resolvedRepresentation?: "cleaned" | "original" | "semantic_render" | "described_only" }>;
   passage?: string;
   workspaceSize: ExamPrintPreferences["workspaceSize"];
   sourceLabel?: string;

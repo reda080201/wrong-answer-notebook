@@ -131,7 +131,8 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "이름 변경" }));
+    fireEvent.click(screen.getByRole("button", { name: "도구" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "이름 변경" }));
     fireEvent.change(screen.getByLabelText("시험지 이름"), {
       target: { value: "기말고사" },
     });

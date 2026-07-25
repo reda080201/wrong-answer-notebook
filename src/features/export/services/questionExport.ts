@@ -25,8 +25,6 @@ export interface QuestionExportOptions {
   includeSourcePages: boolean;
   includeAnswers?: boolean;
   includeExplanations?: boolean;
-  includeUserResponses?: boolean;
-  includeScratchNotes?: boolean;
 }
 
 export interface QuestionExportPackage {
@@ -85,8 +83,6 @@ export function buildQuestionExportPackage(input: { title: string; subject: stri
     includeSourcePages: false,
     includeAnswers: false,
     includeExplanations: false,
-    includeUserResponses: false,
-    includeScratchNotes: false,
     ...input.options,
   };
   const questions = input.questions.map((question) => {
@@ -105,7 +101,7 @@ export function buildQuestionExportPackage(input: { title: string; subject: stri
     return [...new Set(names.filter((name): name is string => Boolean(name)))];
   }));
   const markdown = buildMarkdown(input.title, questions, options);
-  return { manifest: { schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, subject: input.subject, exportType: "questions_only", createdAt: new Date().toISOString(), questionCount: questions.length, questionNumbers: questions.map((question) => question.displayQuestionNumber), includesAnswers: options.includeAnswers, includesExplanations: options.includeExplanations, includesUserResponses: options.includeUserResponses, includesScratchNotes: options.includeScratchNotes, includesSourceReferences: options.includeSourceReferences, includesSourcePages: options.includeSourcePages, imageDirectory: "images" }, questions, markdown, text: buildText(input.title, questions, options), imageNames };
+  return { manifest: { schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, subject: input.subject, exportType: "questions_only", createdAt: new Date().toISOString(), questionCount: questions.length, questionNumbers: questions.map((question) => question.displayQuestionNumber), includesAnswers: options.includeAnswers, includesExplanations: options.includeExplanations, includesUserResponses: false, includesScratchNotes: false, includesSourceReferences: options.includeSourceReferences, includesSourcePages: options.includeSourcePages, imageDirectory: "images" }, questions, markdown, text: buildText(input.title, questions, options), imageNames };
 }
 
 export async function buildQuestionExportZip(input: { title: string; subject: string; questions: QuestionExportItem[]; options?: Partial<QuestionExportOptions> }): Promise<Blob> {
@@ -125,7 +121,7 @@ export async function buildQuestionExportZip(input: { title: string; subject: st
         try {
           const response = await fetch(await getImageUrl(filename));
           if (!response.ok) return "";
-          const name = safeImageName(question.position, pageIndex + 1, "source_page", filename);
+          const name = `q${String(question.position).padStart(2, "0")}_source_page_${String(pageIndex + 1).padStart(2, "0")}.${filename.match(/\.(png|jpe?g|webp)$/i)?.[1]?.toLowerCase() ?? "png"}`;
           images?.file(name, await response.blob());
           const exportedPath = `images/${name}`;
           sourcePagePaths.set(filename, exportedPath);
