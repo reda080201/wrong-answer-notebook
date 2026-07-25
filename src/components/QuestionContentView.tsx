@@ -1,6 +1,8 @@
 import type { QuestionContentSegment, SheetFigureItem } from "../types";
 import MathText from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
+import SemanticFigureView from "../features/figures/components/SemanticFigureView";
+import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 
 interface QuestionContentViewProps {
   text: string;
@@ -9,11 +11,13 @@ interface QuestionContentViewProps {
 }
 
 function FigureContent({ figure }: { figure: SheetFigureItem }) {
-  if (figure.source === "described_only" || !figure.image) {
+  const representation = resolveFigureRepresentation(figure);
+  if (representation.kind === "semantic_render" && figure.semanticSpec) return <SemanticFigureView spec={figure.semanticSpec} title={figure.title} />;
+  if (representation.kind === "described_only" || !representation.image) {
     return <aside className="question-described-figure"><strong>도표 설명</strong><p>{figure.caption || figure.title || "이미지 없이 설명만 제공됩니다."}</p></aside>;
   }
-  const label = figure.source === "original" ? "원본 그림" : "정리된 원본 그림";
-  return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}</figcaption><ZoomableImageViewer filenames={[figure.image]} /></figure>;
+  const label = representation.kind === "original" ? "원본 그림" : "GPT 정리본";
+  return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption><ZoomableImageViewer filenames={[representation.image]} /></figure>;
 }
 
 export default function QuestionContentView({ text, segments, figures = [] }: QuestionContentViewProps) {

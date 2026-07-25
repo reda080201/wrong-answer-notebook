@@ -200,12 +200,108 @@ export interface SheetFigureItem {
   image?: string;
   source: "original" | "gpt_cleaned" | "described_only";
   needsReview?: boolean;
+  original?: FigureOriginalRepresentation;
+  cleaned?: FigureCleanedRepresentation;
+  semanticSpec?: DiagramSemanticSpec;
+  verification?: FigureVerification;
+  preferredRepresentation?: FigurePreferredRepresentation;
+  /** Prevents later automatic verification from replacing an explicit user choice. */
+  representationSelectionSource?: "automatic" | "user";
   placement?: {
     questionNumber: string;
     afterSegmentId?: string;
     beforeChoiceIndex?: number;
     order?: number;
   };
+}
+
+export interface NormalizedCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FigureOriginalRepresentation {
+  image: string;
+  sourcePageImage?: string;
+  crop?: NormalizedCrop;
+}
+
+export interface FigureCleanedRepresentation {
+  image: string;
+  generatedBy: "gpt";
+  generatedAt: string;
+  sourceImageHash: string;
+  promptVersion: string;
+}
+
+export type DiagramSemanticType =
+  | "function_graph"
+  | "coordinate_geometry"
+  | "plane_geometry"
+  | "solid_geometry"
+  | "probability_tree"
+  | "table"
+  | "venn_diagram"
+  | "number_line"
+  | "sequence_diagram"
+  | "custom_math_diagram";
+
+export interface DiagramSemanticSpec {
+  type: DiagramSemanticType;
+  points?: Array<{ id: string; label?: string; x?: number; y?: number }>;
+  segments?: Array<{ id?: string; from: string; to: string; style?: "solid" | "dashed" }>;
+  circles?: Array<{ id: string; center?: string; radius?: number }>;
+  curves?: Array<Record<string, unknown>>;
+  equations?: string[];
+  axes?: Array<Record<string, unknown>>;
+  regions?: Array<Record<string, unknown>>;
+  labels?: Array<{ id?: string; text: string; targetId?: string }>;
+  numericValues?: Array<{ targetId?: string; value: string }>;
+  relations?: Array<{
+    type: "point_on_line" | "point_on_segment" | "point_on_circle" | "collinear" | "parallel" | "perpendicular" | "tangent" | "equal_length" | "equal_angle" | "midpoint" | "intersection" | "inside" | "outside" | "connected" | "open_point" | "closed_point";
+    targets: string[];
+    confidence?: number;
+  }>;
+  constraints?: string[];
+  warnings?: string[];
+  confidence?: number;
+}
+
+export type FigurePreferredRepresentation = "cleaned" | "semantic_render" | "original";
+
+export type FigureVerificationIssueType =
+  | "missing_point" | "wrong_label" | "missing_segment" | "wrong_intersection"
+  | "wrong_tangency" | "wrong_line_style" | "wrong_relation_mark"
+  | "wrong_numeric_value" | "wrong_open_closed_point" | "wrong_shading"
+  | "wrong_graph_feature" | "text_figure_conflict" | "other";
+
+export interface FigureVerificationIssue {
+  type: FigureVerificationIssueType;
+  message: string;
+  targetId?: string;
+}
+
+export interface FigureVerification {
+  status: "verified" | "needs_review" | "rejected";
+  confidence: number;
+  checks: {
+    pointLabelsMatch?: boolean;
+    topologyMatch?: boolean;
+    lineStylesMatch?: boolean;
+    relationMarksMatch?: boolean;
+    numericLabelsMatch?: boolean;
+    graphFeaturesMatch?: boolean;
+    shadingMatch?: boolean;
+    textConditionMatch?: boolean;
+    visualLayoutPreserved?: boolean;
+  };
+  blockingIssues: FigureVerificationIssue[];
+  warnings: FigureVerificationIssue[];
+  userApproved?: boolean;
+  verifiedAt?: string;
+  verifier?: string;
 }
 
 export type QuestionContentSegment =

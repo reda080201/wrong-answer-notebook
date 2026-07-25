@@ -4,12 +4,14 @@ import { getImageUrl } from "../../../api";
 import ExamPrintDocument from "../components/ExamPrintDocument";
 import type { ExamPrintModel } from "../types";
 import examPrintCss from "../styles/examPrint.css?raw";
+import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 async function collectImageUrls(model: ExamPrintModel): Promise<Record<string, string>> {
   const names = new Set<string>();
   for (const question of model.questions) {
     for (const figure of question.figures ?? []) {
-      if (figure.image) names.add(figure.image);
+      const image = resolveFigureRepresentation(figure, { forPrint: true }).image;
+      if (image) names.add(image);
     }
   }
   for (const filename of model.sourcePageImages) names.add(filename);

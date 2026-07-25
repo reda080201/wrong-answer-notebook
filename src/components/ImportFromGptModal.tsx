@@ -44,6 +44,7 @@ import ImportEntriesPreviewModal from "./ImportEntriesPreviewModal";
 import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entryDraft";
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 import { readZipImport } from "../features/import/services/zipImport";
+import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -124,7 +125,7 @@ function expectedPromptInstruction(expectedQuestionNumbers: string[]): string {
 
 function assertImportJsonSize(name: string, size: number) {
   if (size > MAX_IMPORT_JSON_BYTES) {
-    throw new Error(`${name} 파일이 너무 큽니다. JSON은 5MB 이하만 가져올 수 있습니다.`);
+    throw new Error(`${name} 파일이 너무 큽니다. JSON은 ${MAX_IMPORT_JSON_BYTES / 1024 / 1024}MB 이하만 가져올 수 있습니다.`);
   }
 }
 
@@ -134,11 +135,11 @@ function assertImportImages(files: File[]) {
   }
   const total = files.reduce((sum, file) => sum + file.size, 0);
   if (total > MAX_IMPORT_TOTAL_IMAGE_BYTES) {
-    throw new Error("이미지 전체 용량이 너무 큽니다. 전체 100MB 이하만 가져올 수 있습니다.");
+    throw new Error(`이미지 전체 용량이 너무 큽니다. 전체 ${MAX_IMPORT_TOTAL_IMAGE_BYTES / 1024 / 1024}MB 이하만 가져올 수 있습니다.`);
   }
   const oversized = files.find((file) => file.size > MAX_IMPORT_IMAGE_BYTES);
   if (oversized) {
-    throw new Error(`${oversized.name} 파일이 너무 큽니다. 이미지는 파일당 10MB 이하만 가져올 수 있습니다.`);
+    throw new Error(`${oversized.name} 파일이 너무 큽니다. 이미지는 파일당 ${MAX_IMPORT_IMAGE_BYTES / 1024 / 1024}MB 이하만 가져올 수 있습니다.`);
   }
 }
 
@@ -1382,6 +1383,22 @@ export default function ImportFromGptModal({
                             </small>
                             {figure.needsReview && <small className="answer-review-badge">검토 필요</small>}
                             {figure.caption && <p>{figure.caption}</p>}
+                            {(figure.original || figure.cleaned || figure.semanticSpec) && (
+                              <>
+                                <div className="import-figure-actions" aria-label={`${figure.questionNumber || "?"}번 그림 표현`}>
+                                  <span>원본 {figure.original?.image ? "있음" : "없음"}</span>
+                                  <span>GPT 정리본 {figure.cleaned?.image ? "있음" : "없음"}</span>
+                                  <span>구조 데이터 {figure.semanticSpec ? "있음" : "없음"}</span>
+                                </div>
+                                <div className="import-figure-actions">
+                                  {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "original", representationSelectionSource: "user", needsReview: false })}>원본 사용</button>}
+                                  {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "cleaned", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true }, needsReview: false, image: figure.cleaned?.image, source: "gpt_cleaned" })}>GPT 정리본 승인</button>}
+                                  {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "semantic_render", representationSelectionSource: "user" })}>구조 렌더링 사용</button>}
+                                  <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, applyAutomaticFigurePreference({ ...figure, representationSelectionSource: "automatic", preferredRepresentation: undefined }))}>자동 선택 다시 적용</button>
+                                </div>
+                                {figure.verification && <small>검증 {Math.round(figure.verification.confidence * 100)}% · 차단 {figure.verification.blockingIssues.length}건 · 경고 {figure.verification.warnings.length}건</small>}
+                              </>
+                            )}
                             {!figure.image && (
                               <div className="import-figure-actions">
                                 <button

@@ -7,7 +7,7 @@ import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
-import { createAutoBackup } from "./api";
+import { createAutoBackup, createPreUpdateBackup } from "./api";
 import { loadExamSessions, saveExamSessions, loadGeneratedExams, saveGeneratedExams, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
@@ -84,6 +84,7 @@ export default function App() {
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
   const examSaveTimerRef = useRef<number | null>(null);
@@ -365,14 +366,16 @@ export default function App() {
     setSettingsMessage: actions.setSettingsMessage,
   });
   const setSettingsMessage = actions.setSettingsMessage;
-  const updater = useAppUpdater(settings, patchSettings, async () => {
+  const updater = useAppUpdater(settings, patchSettings, async (update) => {
     if (examSubmitting || examSaving || actions.showForm || actions.showImportModal || showExamBuilder) {
       actions.setSettingsMessage("시험 또는 저장 중에는 업데이트를 설치할 수 없습니다. 작업을 마친 뒤 다시 시도해 주세요.");
       return false;
     }
     if (settings.updatePreferences.backupBeforeInstall && isTauri()) {
       try {
-        await createAutoBackup();
+        const { getVersion } = await import("@tauri-apps/api/app");
+        const currentVersion = await getVersion();
+        await createPreUpdateBackup(currentVersion, update.latestVersion);
       } catch {
         actions.setSettingsMessage("업데이트 전 백업에 실패했습니다. 데이터를 보호하기 위해 설치를 중단했습니다.");
         return false;
@@ -563,12 +566,13 @@ export default function App() {
             </div>
           </div>
         )}
-        {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && !examSession && (
+        {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && availableUpdate.latestVersion !== dismissedUpdateVersion && !examSession && (
           <div className="app-update-banner" role="status">
             <span>새 버전 {availableUpdate.latestVersion}을 사용할 수 있습니다.</span>
             <button type="button" onClick={() => openSettings("updates")}>변경사항</button>
             <button type="button" onClick={() => void updater.installUpdate()}>업데이트</button>
-            <button type="button" aria-label="업데이트 알림 닫기" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>나중에</button>
+            <button type="button" onClick={() => setDismissedUpdateVersion(availableUpdate.latestVersion)}>나중에</button>
+            <button type="button" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>이번 버전 건너뛰기</button>
           </div>
         )}
         <AppToolbar
@@ -875,7 +879,7 @@ export default function App() {
           isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
           onPatchChatGptMcpPreferences={patchChatGptMcpPreferences}
           updateState={updater.state}
-          onCheckForUpdate={async () => { await updater.checkForUpdate(); }}
+          onCheckForUpdate={async () => { await updater.checkForUpdate({ ignoreSkipped: true }); }}
           onInstallUpdate={async () => { await updater.installUpdate(); }}
           onRestartAfterUpdate={async () => { await updater.restart(); }}
           onOpenReleasePage={() => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); }}

@@ -1,0 +1,451 @@
+/* Extracted from App.css: balanced chunk 8. Keep import order stable. */
+
+.question-theater {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: auto;
+  padding: 4rem 1rem 2rem;
+  background: rgba(15, 23, 42, 0.62);
+}
+
+.question-theater-shell {
+  width: min(960px, 100%);
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  background: var(--paper-bg);
+  color: var(--text);
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.32);
+}
+
+.question-theater-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--paper-border);
+  background: var(--surface);
+}
+
+.question-theater-toolbar button {
+  border: 1px solid var(--control-border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--text);
+  padding: 0.45rem 0.7rem;
+  font-weight: 900;
+}
+
+.question-theater-toolbar strong {
+  min-width: 8rem;
+  text-align: center;
+}
+
+.difficulty-score-input,
+.question-score-editor,
+.question-theater-score-editor {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.difficulty-score-input input[type="range"],
+.question-score-editor input[type="range"],
+.question-theater-score-editor input[type="range"] {
+  min-width: 8rem;
+  flex: 1 1 8rem;
+}
+
+.difficulty-score-input input[type="number"],
+.question-score-editor input[type="number"],
+.question-theater-score-editor input[type="number"] {
+  width: 5.5rem;
+}
+
+.difficulty-score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 0.76rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.32rem 0.52rem;
+}
+
+.difficulty-score-pill--easy {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #15803d;
+}
+
+.difficulty-score-pill--normal {
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #2563eb;
+}
+
+.difficulty-score-pill--hard {
+  border-color: rgba(245, 158, 11, 0.42);
+  color: #b45309;
+}
+
+.difficulty-score-pill--very-hard {
+  border-color: rgba(239, 68, 68, 0.42);
+  color: #dc2626;
+}
+
+.question-theater .focused-question-view {
+  padding: 1rem;
+}
+
+.question-theater-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.75fr);
+  gap: 1rem;
+  padding: 1rem;
+}
+
+.question-theater-panels article {
+  padding: 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.lecture-reader {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.lecture-reader-cover {
+  margin-bottom: 1rem;
+  padding: 1.4rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 12px;
+  background: var(--paper-bg);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+}
+
+.lecture-reader-cover h2 {
+  margin: 0.25rem 0;
+  font-size: 1.55rem;
+}
+
+.lecture-reader-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.lecture-block {
+  padding: 1.15rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+}
+
+.lecture-block--diagram,
+.lecture-block--formula {
+  grid-column: span 2;
+}
+
+.lecture-block-head,
+.lecture-linked-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.lecture-linked {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.entry-mini-badge--lecture,
+.kind-badge--lecture {
+  background: color-mix(in srgb, #e0f2fe 70%, var(--surface));
+  color: #0369a1;
+}
+
+.solution-book {
+  padding: 26px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.08);
+}
+
+.solution-book-list {
+  display: grid;
+  gap: 18px;
+}
+
+.solution-book-card {
+  padding: 18px;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.solution-book-card-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1d4ed8;
+  font-weight: 900;
+}
+
+.solution-book-row {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eef2f7;
+}
+
+.solution-book-row:last-child {
+  border-bottom: 0;
+}
+
+.solution-book-label {
+  color: #475569;
+  font-size: 0.84rem;
+  font-weight: 900;
+}
+
+.solution-book-content {
+  min-width: 0;
+  line-height: 1.8;
+}
+
+.solution-book-row--muted {
+  background: #fbfdff;
+}
+
+.solution-concepts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.solution-concepts button {
+  padding: 4px 8px;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.solution-steps,
+.solution-points {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.solution-steps li,
+.solution-points li {
+  margin: 0.35rem 0;
+}
+
+.solution-empty,
+.solution-empty-panel {
+  color: var(--muted);
+}
+
+.solution-explanation-parts {
+  display: grid;
+  gap: 14px;
+}
+
+.study-analysis {
+  max-width: 1040px;
+  margin: 0 auto;
+}
+
+.study-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.study-analysis-card {
+  padding: 18px;
+  border: 1px solid #d9e2ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.study-analysis-card--wide {
+  grid-column: 1 / -1;
+}
+
+.study-analysis-card h4 {
+  margin: 0 0 12px;
+  color: #0f172a;
+}
+
+.study-analysis-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.study-analysis-stats div {
+  padding: 10px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.study-analysis-stats dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.study-analysis-stats dd {
+  margin: 3px 0 0;
+  font-weight: 900;
+}
+
+.study-analysis-danger {
+  color: #b42318;
+  font-weight: 800;
+}
+
+.study-analysis-empty {
+  color: var(--muted);
+}
+
+.study-analysis-list,
+.study-review-history {
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.study-cause-list {
+  display: grid;
+  gap: 10px;
+}
+
+.study-cause {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-left: 4px solid #94a3b8;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.study-cause--high {
+  border-left-color: #dc2626;
+}
+
+.study-cause--low {
+  border-left-color: #16a34a;
+}
+
+.study-cause p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.study-analysis-note,
+.study-analysis-strategy {
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.study-review-history li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin: 7px 0;
+}
+
+@media (max-width: 760px) {
+  .study-paper,
+  .solution-book,
+  .study-analysis {
+    padding: 12px;
+  }
+
+  .study-paper-sheet,
+  .solution-book {
+    padding: 16px;
+  }
+
+  .study-paper-cover,
+  .solution-book-cover,
+  .study-analysis-cover {
+    flex-direction: column;
+  }
+
+  .solution-book-row,
+  .study-analysis-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .solution-book-label {
+    padding-bottom: 4px;
+    border-bottom: 1px solid #eef2f7;
+  }
+
+  .study-paper .question-choices {
+    grid-template-columns: 1fr;
+    margin-inline: 14px;
+  }
+
+  .study-paper .question-body {
+    padding-inline: 14px;
+  }
+}
+
+.detail-toolbar {
+  background: linear-gradient(180deg, var(--panel-bg) 0%, var(--surface-soft) 100%);
+}
+
+.study-mode-tabs {
+  padding: 2px;
+  border-color: var(--paper-border);
+  border-radius: 999px;
+  background: var(--surface-soft);
+  box-shadow: none;
+}
+
+.study-mode-tabs button {
+  min-width: auto;
+  padding: 4px 9px;
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.study-mode-tabs button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: none;
+}

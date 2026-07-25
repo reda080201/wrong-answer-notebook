@@ -1,0 +1,350 @@
+/* Extracted from App.css: balanced chunk 4. Keep import order stable. */
+
+.exam-session-history header,
+.exam-session-history-list,
+.review-complete-stats,
+.study-question-attempt-list {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.exam-session-history header {
+  justify-content: space-between;
+  margin-bottom: 0.55rem;
+}
+
+.exam-session-history header span,
+.exam-session-history-list small {
+  color: var(--text-muted);
+}
+
+.exam-session-history-list {
+  overflow-x: auto;
+}
+
+.exam-session-history-list button {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 7rem;
+  padding: 0.55rem;
+  border: 1px solid var(--control-border);
+  border-radius: 0.55rem;
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+}
+
+.exam-question-paper .exam-question-text > p,
+.exam-passage > p {
+  white-space: pre-wrap;
+  line-height: 1.75;
+}
+
+.exam-passage {
+  margin: 0.85rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 0.65rem;
+  background: var(--surface-soft);
+}
+
+.exam-markdown-table-wrap {
+  overflow-x: auto;
+  margin: 0.75rem 0;
+}
+
+.exam-markdown-table-wrap table {
+  border-collapse: collapse;
+  min-width: 100%;
+}
+
+.exam-markdown-table-wrap td {
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--paper-border);
+}
+
+.exam-question-images {
+  margin: 1rem 0;
+}
+
+.review-complete {
+  display: grid;
+  gap: 0.8rem;
+  max-width: 34rem;
+  margin: 3rem auto;
+  padding: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 1rem;
+  background: var(--surface);
+  text-align: center;
+}
+
+.review-complete h3,
+.review-complete p {
+  margin: 0;
+}
+
+.review-complete-stats {
+  justify-content: center;
+}
+
+.review-complete-stats div {
+  min-width: 5rem;
+  padding: 0.65rem;
+  border-radius: 0.6rem;
+  background: var(--surface-soft);
+}
+
+.review-complete-stats dt {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.review-complete-stats dd {
+  margin: 0.2rem 0 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.study-analysis-confidence {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.study-question-attempt-list {
+  flex-wrap: wrap;
+}
+
+.study-question-attempt {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.study-question-attempt span {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 900px) {
+  .toolbar {
+    flex-wrap: wrap;
+  }
+
+  .toolbar .search-input {
+    flex: 1 1 100%;
+  }
+
+  .entry-card-header {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .important-question-panel header {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .question-theater-toolbar {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+.quick-concept-panel {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.quick-concept-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.quick-concept-head strong {
+  font-size: 0.9rem;
+}
+
+.quick-concept-head span {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.quick-concept-fields {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.quick-concept-fields input {
+  min-width: 0;
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.quick-concept-fields input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.quick-concept-fields .btn-primary {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+}
+
+.quick-concept-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.78rem;
+}
+
+/* Subject drag reorder */
+.subject-row {
+  border-radius: 8px;
+}
+
+.subject-row.dragging {
+  opacity: 0.45;
+}
+
+.subject-row.drag-over {
+  outline: 2px dashed var(--accent);
+  outline-offset: 2px;
+}
+
+.subject-row .subject-item {
+  width: 100%;
+}
+
+.subject-drag-handle {
+  cursor: grab;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: -2px;
+  user-select: none;
+  padding-right: 0.35rem;
+}
+
+.subject-drag-handle:active {
+  cursor: grabbing;
+}
+
+.subject-drag-placeholder {
+  width: 1.2rem;
+  display: inline-block;
+}
+
+.subject-hint {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+  line-height: 1.4;
+}
+
+/* Title block */
+.detail-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.35rem 0 0.45rem;
+}
+
+.detail-title-block {
+  margin-bottom: 1rem;
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin-bottom: 0.35rem;
+  word-break: keep-all;
+}
+
+.section-heading {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.65rem;
+}
+
+/* Fill images (explanation) */
+.image-gallery--fill {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.image-fill-wrap {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  cursor: zoom-in;
+}
+
+.image-fill-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(75vh, 960px);
+  object-fit: contain;
+  margin: 0 auto;
+}
+
+.detail-panel--zoom .image-fill-img {
+  max-height: min(88vh, 1400px);
+}
+
+.image-fill-loading {
+  min-height: 160px;
+  background: var(--bg);
+  border-radius: var(--radius);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.image-fill-error,
+.image-thumb--error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  color: var(--danger);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.image-thumb--error {
+  min-height: 96px;
+}
+.modal-overlay--fullscreen {
+  background: rgba(0, 0, 0, 0.92);
+  padding: 1rem;
+}

@@ -11,6 +11,7 @@ import {
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
+import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { decodeTextFile } from "../features/import/services/decodeTextFile";
 
@@ -615,12 +616,13 @@ function normalizeImportFigures(
   return normalizeFigures(value).map((figure) => {
     const image = figure.image && isSafeImportImageFilename(figure.image) ? figure.image : undefined;
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
-    return {
+    const normalized = {
       ...figure,
       image,
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || Boolean(figure.image && !image),
     };
+    return applyAutomaticFigurePreference(normalized);
   });
 }
 

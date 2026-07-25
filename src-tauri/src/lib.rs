@@ -24,6 +24,14 @@ const MAX_BACKUP_ENTRY_COUNT: usize = 10_000;
 const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
 const AI_KEYRING_USER: &str = "gemini-api-key";
 const ENTRIES_SCHEMA_VERSION: u32 = 2;
+const CURRENT_DATA_SCHEMA_VERSION: u32 = 1;
+const PERSISTENT_DATA_FILES: &[&str] = &[
+    "entries.json",
+    "settings.json",
+    "exam-sessions.json",
+    "generated-exams.json",
+    "data-schema.json",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -505,6 +513,11 @@ fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
         if let Some(image) = &figure.image {
             images.push(image.clone());
         }
+        for key in ["original", "cleaned"] {
+            if let Some(image) = figure.extra.get(key).and_then(|value| value.get("image")).and_then(serde_json::Value::as_str) {
+                images.push(image.to_owned());
+            }
+        }
     }
     images
 }
@@ -789,6 +802,56 @@ fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String
 #[tauri::command]
 fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
     write_json_atomic(&app_dir(&app)?.join("exam-sessions.json"), &sessions)
+}
+
+fn data_schema_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    Ok(app_dir(app)?.join("data-schema.json"))
+}
+
+fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
+    let path = data_schema_file(app)?;
+    if path.exists() {
+        let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        let value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("데이터 스키마를 읽지 못했습니다: {e}"))?;
+        if value.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(CURRENT_DATA_SCHEMA_VERSION as u64) {
+            return Err("지원하지 않는 데이터 스키마 버전입니다.".into());
+        }
+        return Ok(());
+    }
+    let entries_path = data_file(app)?;
+    if entries_path.exists() {
+        let raw = fs::read_to_string(entries_path).map_err(|e| e.to_string())?;
+        let document: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("entries.json을 읽지 못했습니다: {e}"))?;
+        parse_entries_value(document)?;
+    }
+    let settings_path = settings_file(app)?;
+    if settings_path.exists() {
+        let raw = fs::read_to_string(settings_path).map_err(|e| e.to_string())?;
+        let _: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("settings.json을 읽지 못했습니다: {e}"))?;
+    }
+    let value = serde_json::json!({
+        "schemaVersion": CURRENT_DATA_SCHEMA_VERSION,
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "updatedAt": unix_time_string(),
+    });
+    write_json_atomic(&path, &value)
+}
+
+fn collect_workspace_files(root: &Path, current: &Path, output: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
+    if !current.exists() {
+        return Ok(());
+    }
+    for item in fs::read_dir(current).map_err(|e| e.to_string())? {
+        let path = item.map_err(|e| e.to_string())?.path();
+        if path.is_dir() {
+            collect_workspace_files(root, &path, output)?;
+            continue;
+        }
+        let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
+        let name = Path::new("import-workspaces").join(relative).to_string_lossy().replace('\\', "/");
+        output.push((name, path));
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -1130,10 +1193,43 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
+    for filename in PERSISTENT_DATA_FILES.iter().copied().filter(|name| *name != "entries.json" && *name != "settings.json") {
+        let path = app_dir(app)?.join(filename);
+        if !path.is_file() {
+            continue;
+        }
+        let bytes = fs::read(&path).map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > MAX_BACKUP_JSON_BYTES {
+            return Err(format!("{filename} 파일이 백업 허용 용량을 초과했습니다."));
+        }
+        zip.start_file(filename, options).map_err(|e| e.to_string())?;
+        zip.write_all(&bytes).map_err(|e| e.to_string())?;
+    }
+
+    let workspace_root = app_dir(app)?.join("import-workspaces");
+    let mut workspace_files = Vec::new();
+    collect_workspace_files(&workspace_root, &workspace_root, &mut workspace_files)?;
+    for (archive_name, path) in workspace_files {
+        let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+        if size > MAX_BACKUP_JSON_BYTES {
+            return Err(format!("{archive_name} 파일이 백업 허용 용량을 초과했습니다."));
+        }
+        zip.start_file(&archive_name, options).map_err(|e| e.to_string())?;
+        let mut source = fs::File::open(path).map_err(|e| e.to_string())?;
+        std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
+    }
+
+    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
+    included_files.extend(PERSISTENT_DATA_FILES.iter().copied().filter(|name| *name != "entries.json" && *name != "settings.json"));
     let meta = serde_json::json!({
-        "version": 1,
+        "backupFormat": 2,
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "dataSchemaVersion": CURRENT_DATA_SCHEMA_VERSION,
         "createdAt": unix_time_string(),
-        "source": "tauri"
+        "source": "tauri",
+        "includedFiles": included_files,
+        "includesImages": true,
+        "includesImportWorkspaces": workspace_root.exists(),
     });
     zip.start_file("backup-meta.json", options)
         .map_err(|e| e.to_string())?;
@@ -1179,6 +1275,27 @@ fn create_auto_backup(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
+fn create_pre_update_backup(app: tauri::AppHandle, from_version: String, to_version: String) -> Result<String, String> {
+    let backup_dir = app_dir(&app)?.join("backups");
+    fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
+    let path = backup_dir.join(format!("pre-update-{from_version}-to-{to_version}-{}.zip", unix_time_string()));
+    create_backup_zip_at(&app, &path)?;
+    let mut backups: Vec<PathBuf> = fs::read_dir(&backup_dir)
+        .map_err(|e| e.to_string())?
+        .filter_map(|item| item.ok().map(|entry| entry.path()))
+        .filter(|item| item.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with("pre-update-") && name.ends_with(".zip")))
+        .collect();
+    backups.sort();
+    while backups.len() > 3 {
+        if let Some(oldest) = backups.first().cloned() {
+            fs::remove_file(oldest).map_err(|e| e.to_string())?;
+            backups.remove(0);
+        }
+    }
+    Ok(path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 fn restore_backup_zip(
     app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
@@ -1197,6 +1314,7 @@ fn restore_backup_zip(
     let image_dir = images_dir(&app)?;
     let mut restored_entries: Option<Vec<WrongAnswerEntry>> = None;
     let mut settings_json: Option<serde_json::Value> = None;
+    let mut optional_files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut images: Vec<(String, Vec<u8>)> = Vec::new();
     let mut total_image_bytes = 0u64;
 
@@ -1215,6 +1333,19 @@ fn restore_backup_zip(
             } else {
                 settings_json = Some(value);
             }
+        } else if PERSISTENT_DATA_FILES.contains(&name.as_str()) {
+            if file.size() > MAX_BACKUP_JSON_BYTES {
+                return Err(format!("{name} 파일이 너무 큽니다."));
+            }
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+            if name == "data-schema.json" {
+                let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+                if value.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(CURRENT_DATA_SCHEMA_VERSION as u64) {
+                    return Err("백업의 데이터 스키마 버전이 지원되지 않습니다.".into());
+                }
+            }
+            optional_files.push((name, bytes));
         } else if let Some(filename) = name.strip_prefix("images/") {
             if filename.contains('/') || filename.is_empty() {
                 continue;
@@ -1240,6 +1371,17 @@ fn restore_backup_zip(
                 .ok_or_else(|| "이미지 확장자를 확인할 수 없습니다.".to_string())?;
             validate_image_header_bytes(&bytes, ext)?;
             images.push((filename.to_string(), bytes));
+        } else if let Some(relative) = name.strip_prefix("import-workspaces/") {
+            if relative.is_empty() || relative.contains("..") || Path::new(relative).is_absolute() || relative.contains('\\') {
+                return Err("백업 작업실 경로가 올바르지 않습니다.".into());
+            }
+            if file.size() > MAX_BACKUP_JSON_BYTES {
+                return Err(format!("{name} 파일이 너무 큽니다."));
+            }
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
+            let destination = app_dir.join("import-workspaces").join(relative);
+            write_bytes_atomic(&destination, &bytes)?;
         }
     }
 
@@ -1250,6 +1392,9 @@ fn restore_backup_zip(
     store.save_entries(&restored_entries)?;
     if let Some(settings_json) = settings_json {
         write_json_atomic(&app_dir.join("settings.json"), &settings_json)?;
+    }
+    for (name, bytes) in optional_files {
+        write_bytes_atomic(&app_dir.join(name), &bytes)?;
     }
 
     Ok(())
@@ -1535,6 +1680,9 @@ pub fn run() {
                 app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
             }
             let handle = app.handle().clone();
+            if let Err(error) = ensure_data_schema_manifest(&handle) {
+                eprintln!("data schema validation deferred: {error}");
+            }
             let store = Arc::new(notebook_store::NotebookStore::new(
                 data_file(&handle).map_err(std::io::Error::other)?,
                 images_dir(&handle).map_err(std::io::Error::other)?,
@@ -1582,6 +1730,7 @@ pub fn run() {
             delete_image,
             create_backup_zip,
             create_auto_backup,
+            create_pre_update_backup,
             restore_backup_zip,
             run_integrity_check,
             cleanup_orphan_images,

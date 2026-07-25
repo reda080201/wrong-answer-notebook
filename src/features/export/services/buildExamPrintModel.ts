@@ -7,6 +7,7 @@ import type { ExportScopeMode } from "../../../types";
 import type { QuestionBlock } from "../../../utils/textLayout";
 import { resolveExamPrintContentOptions } from "./examPrintPresets";
 import { buildExamPrintFilenameBase } from "./exportFilename";
+import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 function figuresForQuestion(entry: WrongAnswerEntry, questionNumber: string): SheetFigureItem[] {
   return (entry.figures ?? []).filter(
@@ -89,7 +90,15 @@ export function buildExamPrintModel(options: {
     });
     const visibleFigures = figures.filter((figure) =>
       figure.source === "described_only" || figure.source === "original" || figure.source === "gpt_cleaned" || !figure.source,
-    );
+    ).map((figure) => {
+      const representation = resolveFigureRepresentation(figure, { forPrint: true });
+      return {
+        ...figure,
+        image: representation.image,
+        source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const,
+        needsReview: representation.needsReview,
+      };
+    });
     const choices = block?.choices.map((choice) => choice.text) ?? [];
     return {
       questionNumber,

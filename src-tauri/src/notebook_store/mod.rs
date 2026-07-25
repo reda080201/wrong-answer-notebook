@@ -97,7 +97,12 @@ impl NotebookStore {
             referenced.extend(entry.explanation_images);
             referenced.extend(entry.images);
             referenced.extend(entry.explanation_parts.into_iter().flat_map(|part| part.images));
-            referenced.extend(entry.figures.into_iter().filter_map(|figure| figure.image));
+            for figure in entry.figures {
+                if let Some(image) = figure.image { referenced.insert(image); }
+                for key in ["original", "cleaned"] {
+                    if let Some(image) = figure.extra.get(key).and_then(|value| value.get("image")).and_then(Value::as_str) { referenced.insert(image.to_owned()); }
+                }
+            }
         }
         Ok(referenced)
     }

@@ -8,7 +8,7 @@ import type { ExportHubView } from "../types";
 import ChatGptSharePanel from "./ChatGptSharePanel";
 import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
-import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob } from "../services/questionExport";
+import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
 
 interface ExportHubModalProps {
   entry: WrongAnswerEntry;
@@ -84,14 +84,14 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   };
   const exportQuestions = async (format: "json" | "markdown" | "text") => {
     const numbers = scopeResult.questionNumbers.length ? scopeResult.questionNumbers : [currentQuestionNumber ?? ""].filter(Boolean);
-    const questions = numbers.map((number, index) => ({ position: index + 1, displayQuestionNumber: number, question: entry.question, contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => key === number)?.[1], choices: [], figures: (entry.figures ?? []).filter((figure) => figure.questionNumber === number).map((figure) => ({ id: figure.id, caption: figure.caption, source: figure.source, placement: figure.placement, image: figure.image })) }));
+    const questions = entryToQuestionExport(entry, numbers, false).questions;
     const pack = buildQuestionExportPackage({ title: entry.title, subject: entry.subject, questions, options: { includeSourceReferences: false } });
     const text = format === "json" ? JSON.stringify({ manifest: pack.manifest, questions: pack.questions }, null, 2) : format === "markdown" ? pack.markdown : pack.text;
     await copyText(text, "문항 추출본을 복사했습니다.");
   };
   const exportQuestionZip = async () => {
     const numbers = scopeResult.questionNumbers.length ? scopeResult.questionNumbers : [currentQuestionNumber ?? ""].filter(Boolean);
-    const questions = numbers.map((number, index) => ({ position: index + 1, displayQuestionNumber: number, question: entry.question, contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => key === number)?.[1], choices: [], figures: (entry.figures ?? []).filter((figure) => figure.questionNumber === number).map((figure) => ({ id: figure.id, caption: figure.caption, source: figure.source, placement: figure.placement, image: figure.image })) }));
+    const questions = entryToQuestionExport(entry, numbers, true).questions;
     const blob = await buildQuestionExportZip({ title: entry.title, subject: entry.subject, questions, options: { includeSourceReferences: true } });
     downloadBlob(blob, `${entry.title.replace(/[^a-zA-Z0-9가-힣_-]/g, "_")}_문항.zip`);
     onToast?.("문항 ZIP을 저장했습니다.");

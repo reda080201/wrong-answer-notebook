@@ -24,6 +24,7 @@ import type {
 import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
+import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
 
@@ -516,9 +517,59 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
       image: item.image ? `${item.image}`.trim() : undefined,
       source: isFigureSource(item.source) ? item.source : "gpt_cleaned",
       needsReview: Boolean(item.needsReview),
+      original: normalizeFigureOriginal(item.original),
+      cleaned: normalizeFigureCleaned(item.cleaned),
+      semanticSpec: normalizeDiagramSemanticSpec(item.semanticSpec),
+      verification: normalizeFigureVerification(item.verification),
+      preferredRepresentation: item.preferredRepresentation === "cleaned" || item.preferredRepresentation === "semantic_render" || item.preferredRepresentation === "original" ? item.preferredRepresentation : undefined,
+      representationSelectionSource: item.representationSelectionSource === "user" ? "user" as const : item.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
       placement: normalizeFigurePlacement(item.placement),
     }))
-    .filter((item) => item.questionNumber || item.title || item.caption || item.image);
+    .filter((item) => item.questionNumber || item.title || item.caption || item.image || item.original?.image || item.cleaned?.image || item.semanticSpec)
+    .map(applyAutomaticFigurePreference);
+}
+
+function normalizeFigureOriginal(raw: unknown): SheetFigureItem["original"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.image !== "string" || !value.image.trim()) return undefined;
+  const crop = value.crop && typeof value.crop === "object" ? value.crop as Record<string, unknown> : undefined;
+  const normalizedCrop = crop && [crop.x, crop.y, crop.width, crop.height].every((item) => typeof item === "number" && Number.isFinite(item))
+    ? { x: Number(crop.x), y: Number(crop.y), width: Number(crop.width), height: Number(crop.height) }
+    : undefined;
+  return { image: value.image.trim(), sourcePageImage: typeof value.sourcePageImage === "string" ? value.sourcePageImage.trim() || undefined : undefined, crop: normalizedCrop };
+}
+
+function normalizeFigureCleaned(raw: unknown): SheetFigureItem["cleaned"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (typeof value.image !== "string" || !value.image.trim() || typeof value.sourceImageHash !== "string" || typeof value.promptVersion !== "string") return undefined;
+  return { image: value.image.trim(), generatedBy: "gpt", generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : "", sourceImageHash: value.sourceImageHash, promptVersion: value.promptVersion };
+}
+
+function normalizeDiagramSemanticSpec(raw: unknown): SheetFigureItem["semanticSpec"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  const types = ["function_graph", "coordinate_geometry", "plane_geometry", "solid_geometry", "probability_tree", "table", "venn_diagram", "number_line", "sequence_diagram", "custom_math_diagram"];
+  if (typeof value.type !== "string" || !types.includes(value.type)) return undefined;
+  return structuredClone(value) as unknown as SheetFigureItem["semanticSpec"];
+}
+
+function normalizeFigureVerification(raw: unknown): SheetFigureItem["verification"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  if (value.status !== "verified" && value.status !== "needs_review" && value.status !== "rejected") return undefined;
+  const confidence = typeof value.confidence === "number" && Number.isFinite(value.confidence) ? Math.min(1, Math.max(0, value.confidence)) : 0;
+  return {
+    status: value.status,
+    confidence,
+    checks: value.checks && typeof value.checks === "object" ? structuredClone(value.checks) as NonNullable<SheetFigureItem["verification"]>["checks"] : {},
+    blockingIssues: Array.isArray(value.blockingIssues) ? structuredClone(value.blockingIssues) as NonNullable<SheetFigureItem["verification"]>["blockingIssues"] : [],
+    warnings: Array.isArray(value.warnings) ? structuredClone(value.warnings) as NonNullable<SheetFigureItem["verification"]>["warnings"] : [],
+    userApproved: Boolean(value.userApproved),
+    verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined,
+    verifier: typeof value.verifier === "string" ? value.verifier : undefined,
+  };
 }
 
 function normalizeFigurePlacement(raw: unknown): SheetFigureItem["placement"] {
@@ -751,7 +802,7 @@ export function getEntryTitle(entry: WrongAnswerEntry): string {
 
 export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromParts = entry.explanationParts.flatMap((p) => p.images);
-  const fromFigures = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
+  const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   return [
     ...new Set([
       ...entry.questionImages,

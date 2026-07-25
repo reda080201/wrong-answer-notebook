@@ -2,15 +2,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import type { AppSettings } from "../../../types";
 import type { AppUpdateState, AvailableUpdate } from "../model/appUpdate";
-import { UPDATE_AUTO_CHECK_INTERVAL_MS, UPDATE_STARTUP_DELAY_MS, tauriUpdater } from "../services/appUpdater";
+import { calculateUpdatePercent, classifyUpdaterError, UPDATE_AUTO_CHECK_INTERVAL_MS, UPDATE_STARTUP_DELAY_MS, tauriUpdater, updaterErrorMessage } from "../services/appUpdater";
 import { sanitizeReleaseNotes } from "../services/updateNotes";
 
-export function useAppUpdater(settings: AppSettings, patchSettings: (patch: Partial<AppSettings>) => Promise<void>, beforeInstall?: () => Promise<boolean>) {
+export function useAppUpdater(settings: AppSettings, patchSettings: (patch: Partial<AppSettings>) => Promise<void>, beforeInstall?: (update: AvailableUpdate) => Promise<boolean>) {
   const [state, setState] = useState<AppUpdateState>({ status: "idle" });
   const updateRef = useRef<AvailableUpdate | null>(null);
   const checkingRef = useRef(false);
+  const installingRef = useRef(false);
 
-  const checkForUpdate = useCallback(async () => {
+  const checkForUpdate = useCallback(async (options?: { ignoreSkipped?: boolean }) => {
     if (checkingRef.current) return state;
     checkingRef.current = true;
     setState({ status: "checking" });
@@ -26,28 +27,35 @@ export function useAppUpdater(settings: AppSettings, patchSettings: (patch: Part
       if (!update) { setState({ status: "up_to_date", currentVersion, checkedAt: now }); return { status: "up_to_date" } as const; }
       update.notes = sanitizeReleaseNotes(update.notes);
       updateRef.current = update;
-      if (settings.updatePreferences.skippedVersion === update.latestVersion) { setState({ status: "up_to_date", currentVersion, checkedAt: now }); return { status: "up_to_date" } as const; }
+      if (!options?.ignoreSkipped && settings.updatePreferences.skippedVersion === update.latestVersion) { setState({ status: "up_to_date", currentVersion, checkedAt: now }); return { status: "up_to_date" } as const; }
       setState({ status: "available", ...update });
       return { status: "available" } as const;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "업데이트 확인에 실패했습니다.";
-      setState({ status: "offline", message: "업데이트 서버에 연결하지 못했습니다. 현재 버전은 계속 사용할 수 있습니다.", checkedAt: new Date().toISOString() });
-      void message;
-      return { status: "offline" } as const;
+      const code = classifyUpdaterError(error, "check");
+      setState({ status: "error", code, message: updaterErrorMessage(code) });
+      return { status: "error", code } as const;
     } finally { checkingRef.current = false; }
   }, [patchSettings, settings, state]);
 
   const installUpdate = useCallback(async () => {
     const update = updateRef.current;
-    if (!update || state.status !== "available") return;
-    if (beforeInstall && !(await beforeInstall())) return;
+    if (!update || state.status !== "available" || installingRef.current) return;
+    installingRef.current = true;
+    if (beforeInstall && !(await beforeInstall(update))) { installingRef.current = false; return; }
     setState({ status: "downloading", latestVersion: update.latestVersion, downloadedBytes: 0 });
+    let phase: "download" | "install" = "download";
     try {
-      await tauriUpdater.downloadAndInstall(update, (progress) => {
-        setState((current) => current.status === "downloading" ? { ...current, downloadedBytes: progress.downloadedBytes, totalBytes: progress.totalBytes, percent: progress.totalBytes ? Math.round(progress.downloadedBytes / progress.totalBytes * 100) : undefined } : current);
+      await tauriUpdater.download(update, (progress) => {
+        setState((current) => current.status === "downloading" ? { ...current, downloadedBytes: progress.downloadedBytes, totalBytes: progress.totalBytes, percent: calculateUpdatePercent(progress.downloadedBytes, progress.totalBytes) } : current);
       });
+      phase = "install";
+      setState({ status: "installing", latestVersion: update.latestVersion });
+      await tauriUpdater.install(update);
       setState({ status: "restart_required", latestVersion: update.latestVersion });
-    } catch { setState({ status: "error", code: "download_failed", message: "업데이트 다운로드를 완료하지 못했습니다. 인터넷 연결을 확인한 뒤 다시 시도해 주세요." }); }
+    } catch (error) {
+      const code = classifyUpdaterError(error, phase);
+      setState({ status: "error", code, message: updaterErrorMessage(code) });
+    } finally { installingRef.current = false; }
   }, [beforeInstall, state.status]);
 
   const restart = useCallback(async () => { if (state.status === "restart_required") await tauriUpdater.restart(); }, [state.status]);

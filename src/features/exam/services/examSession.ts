@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 import type { ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date()): ExamSession {
   const blocks = parseQuestionText(entry.question);
@@ -12,7 +13,10 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
     const normalizedNumber = normalizeQuestionNumber(number);
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const stimulus = stimuli.filter((item) => item.start < block.start && item.end <= block.start).at(-1);
-    const figures = entry.figures?.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizedNumber) ?? [];
+    const figures = (entry.figures?.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizedNumber) ?? []).map((figure) => {
+      const representation = resolveFigureRepresentation(figure);
+      return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
+    });
     return {
       id: `${entry.id}-${number}`,
       questionNumber: number,
