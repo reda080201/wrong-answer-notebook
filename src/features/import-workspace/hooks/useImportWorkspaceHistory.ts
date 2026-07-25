@@ -39,6 +39,11 @@ export function useImportWorkspaceHistory(initial: ImportWorkspace) {
     });
   }, [present]);
 
-  return { workspace: present, setWorkspace: update, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 };
-}
+  const replaceWorkspace = useCallback((next: ImportWorkspace) => {
+    setPresent(clone(next));
+    setPast([]);
+    setFuture([]);
+  }, []);
 
+  return { workspace: present, setWorkspace: update, replaceWorkspace, undo, redo, canUndo: past.length > 0, canRedo: future.length > 0 };
+}

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { buildQuestionExportPackage, entryToQuestionExport } from "./questionExport";
+import { describe, expect, it, vi } from "vitest";
+import { buildQuestionExportPackage, buildQuestionExportZip, entryToQuestionExport } from "./questionExport";
 
 describe("question export", () => {
   it("keeps structure and excludes answer-like data from the default package", () => {
@@ -33,5 +33,17 @@ describe("question export", () => {
   it("does not export the whole sheet when a problem-sheet number is missing", () => {
     const entry = { id: "sheet-1", subject: "수학", title: "시험지", question: "1. 하나", entryKind: "problem_sheet", figures: [] } as never;
     expect(() => entryToQuestionExport(entry, ["9"])).toThrow("9번 문항을 찾지 못해");
+  });
+
+  it("keeps export variants distinct and does not mutate source figures", async () => {
+    const figure = { id: "f1", questionNumber: "1", title: "", caption: "", image: "preferred.png", source: "original" as const, original: { image: "same.png", sourcePageImage: "same.png" }, cleaned: { image: "same.png", generatedBy: "gpt" as const, generatedAt: "", sourceImageHash: "h", promptVersion: "v" } };
+    const input = { title: "세트", subject: "수학", questions: [{ position: 1, displayQuestionNumber: "1", question: "본문", choices: [], figures: [figure] }] };
+    const before = structuredClone(input);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob(["image"]), { status: 200 })));
+    const blob = await buildQuestionExportZip({ ...input, options: { includeSourcePages: true } });
+    const zipText = await blob.arrayBuffer();
+    expect(new TextDecoder().decode(zipText)).not.toContain("q01_figure_01.png");
+    expect(input).toEqual(before);
+    vi.unstubAllGlobals();
   });
 });

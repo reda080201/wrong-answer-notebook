@@ -61,9 +61,10 @@ export default function Menu({ label, children, className = "" }: MenuProps) {
   const addMenuItemRole = (child: ReactNode): ReactNode => {
     if (!isValidElement(child)) return child;
     if (child.type === Fragment) {
-      return Children.map(child.props.children, addMenuItemRole);
+      const fragment = child as React.ReactElement<{ children?: ReactNode }>;
+      return Children.map(fragment.props.children, addMenuItemRole);
     }
-    return cloneElement(child, { role: "menuitem" });
+    return cloneElement(child as React.ReactElement<{ role?: string }>, { role: "menuitem" });
   };
   const menuChildren = Children.map(children, addMenuItemRole);
 

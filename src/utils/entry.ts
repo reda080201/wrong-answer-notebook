@@ -567,6 +567,9 @@ function normalizeFigureVerification(raw: unknown): SheetFigureItem["verificatio
     blockingIssues: Array.isArray(value.blockingIssues) ? structuredClone(value.blockingIssues) as NonNullable<SheetFigureItem["verification"]>["blockingIssues"] : [],
     warnings: Array.isArray(value.warnings) ? structuredClone(value.warnings) as NonNullable<SheetFigureItem["verification"]>["warnings"] : [],
     userApproved: Boolean(value.userApproved),
+    verificationSource: value.verificationSource === "gpt_self_check" || value.verificationSource === "second_pass_model" || value.verificationSource === "local_validator" || value.verificationSource === "user"
+      ? value.verificationSource
+      : undefined,
     verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined,
     verifier: typeof value.verifier === "string" ? value.verifier : undefined,
   };

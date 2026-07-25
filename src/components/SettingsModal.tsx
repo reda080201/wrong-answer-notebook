@@ -23,7 +23,6 @@ import type {
   ViewPreferences,
 } from "../types";
 import Dialog from "../shared/ui/Dialog";
-import Tabs from "../shared/ui/Tabs";
 
 export type SettingsTab =
   | "theme"
@@ -222,13 +221,9 @@ export default function SettingsModal({
         )}
 
         <div className="settings-modal-body">
-          <Tabs
-            className="settings-modal-tabs"
-            ariaLabel="설정 탭"
-            value={activeTab}
-            onChange={setActiveTab}
-            items={SETTINGS_TABS.map(([id, label]) => ({ id, label }))}
-          />
+          <nav className="settings-modal-tabs" aria-label="설정 탭">
+            {SETTINGS_TABS.map(([id, label]) => <button key={id} type="button" className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id)}>{label}</button>)}
+          </nav>
 
           <section className="settings-modal-panel">
             {activeTab === "theme" && (

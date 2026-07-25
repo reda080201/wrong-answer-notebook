@@ -43,7 +43,6 @@ import LectureReaderView from "./LectureReaderView";
 import ExportHubModal from "../features/export/components/ExportHubModal";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
 import Dialog from "../shared/ui/Dialog";
-import Tabs from "../shared/ui/Tabs";
 import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
 
@@ -1240,13 +1239,9 @@ export default function EntryDetail({
       <div className="detail-toolbar">
         <div className="detail-toolbar-left">
           {!isConcept && !isLecture && (
-            <Tabs
-              className="study-mode-tabs"
-              ariaLabel="학습 보기 모드"
-              value={detailViewMode}
-              onChange={handleStudyModeChange}
-              items={[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }]}
-            />
+            <nav className="study-mode-tabs" aria-label="학습 보기 모드">
+              {[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }].map((item) => <button key={item.id} type="button" className={detailViewMode === item.id ? "active" : ""} onClick={() => handleStudyModeChange(item.id as typeof detailViewMode)}>{item.label}</button>)}
+            </nav>
           )}
         </div>
         <div className="detail-actions">

@@ -1295,6 +1295,29 @@ fn create_pre_update_backup(app: tauri::AppHandle, from_version: String, to_vers
     Ok(path.to_string_lossy().to_string())
 }
 
+fn remove_restore_path(path: &Path) -> Result<(), String> {
+    if path.is_dir() {
+        fs::remove_dir_all(path).map_err(|e| e.to_string())
+    } else if path.exists() {
+        fs::remove_file(path).map_err(|e| e.to_string())
+    } else {
+        Ok(())
+    }
+}
+
+fn rollback_restore_paths(moved: &[(PathBuf, PathBuf)]) -> Result<(), String> {
+    for (original, backup) in moved.iter().rev() {
+        remove_restore_path(original)?;
+        if backup.exists() {
+            if let Some(parent) = original.parent() {
+                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+            }
+            fs::rename(backup, original).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn restore_backup_zip(
     app: tauri::AppHandle,
@@ -1303,7 +1326,7 @@ fn restore_backup_zip(
 ) -> Result<(), String> {
     let backup_metadata = fs::metadata(&backup_path).map_err(|e| e.to_string())?;
     if backup_metadata.len() > MAX_BACKUP_ZIP_BYTES {
-        return Err("백업 ZIP 파일이 너무 큽니다. 50MB 이하만 복원할 수 있습니다.".into());
+        return Err(format!("백업 ZIP 파일이 너무 큽니다. {}MB 이하만 복원할 수 있습니다.", MAX_BACKUP_ZIP_BYTES / 1024 / 1024));
     }
     let file = fs::File::open(&backup_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -1316,6 +1339,7 @@ fn restore_backup_zip(
     let mut settings_json: Option<serde_json::Value> = None;
     let mut optional_files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut images: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut workspace_files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut total_image_bytes = 0u64;
 
     for index in 0..archive.len() {
@@ -1380,23 +1404,64 @@ fn restore_backup_zip(
             }
             let mut bytes = Vec::new();
             file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-            let destination = app_dir.join("import-workspaces").join(relative);
-            write_bytes_atomic(&destination, &bytes)?;
+            if relative.ends_with(".json") {
+                serde_json::from_slice::<serde_json::Value>(&bytes)
+                    .map_err(|e| format!("백업 작업실 JSON이 올바르지 않습니다: {e}"))?;
+            }
+            workspace_files.push((relative.to_string(), bytes));
         }
     }
 
     let restored_entries = restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
-    for (filename, bytes) in images {
-        write_bytes_atomic(&image_dir.join(filename), &bytes)?;
-    }
-    store.save_entries(&restored_entries)?;
-    if let Some(settings_json) = settings_json {
-        write_json_atomic(&app_dir.join("settings.json"), &settings_json)?;
-    }
-    for (name, bytes) in optional_files {
-        write_bytes_atomic(&app_dir.join(name), &bytes)?;
+    let rollback_dir = app_dir.join(format!(".restore-rollback-{}", Uuid::new_v4()));
+    fs::create_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut move_target = |target: PathBuf, label: &str| -> Result<(), String> {
+        if !target.exists() { return Ok(()); }
+        let backup = rollback_dir.join(label);
+        fs::rename(&target, &backup).map_err(|e| e.to_string())?;
+        moved.push((target, backup));
+        Ok(())
+    };
+    let move_result = (|| -> Result<(), String> {
+        move_target(data_file(&app)?, "entries.json")?;
+        if settings_json.is_some() { move_target(settings_file(&app)?, "settings.json")?; }
+        for (name, _) in &optional_files {
+            move_target(app_dir.join(name), &format!("optional-{}", name.replace('/', "_")))?;
+        }
+        if !images.is_empty() { move_target(image_dir.clone(), "images")?; }
+        if !workspace_files.is_empty() { move_target(app_dir.join("import-workspaces"), "import-workspaces")?; }
+        Ok(())
+    })();
+    drop(move_target);
+    if let Err(error) = move_result {
+        let rollback_error = rollback_restore_paths(&moved).err();
+        let _ = fs::remove_dir_all(&rollback_dir);
+        return Err(rollback_error.map_or(error, |rollback| format!("{error} 복원 rollback 실패: {rollback}")));
     }
 
+    let commit_result = (|| -> Result<(), String> {
+        store.save_entries(&restored_entries)?;
+        if let Some(settings_json) = settings_json {
+            write_json_atomic(&settings_file(&app)?, &settings_json)?;
+        }
+        for (name, bytes) in &optional_files {
+            write_bytes_atomic(&app_dir.join(name), bytes)?;
+        }
+        for (filename, bytes) in &images {
+            write_bytes_atomic(&image_dir.join(filename), bytes)?;
+        }
+        for (relative, bytes) in &workspace_files {
+            write_bytes_atomic(&app_dir.join("import-workspaces").join(relative), bytes)?;
+        }
+        Ok(())
+    })();
+    if let Err(error) = commit_result {
+        let rollback_error = rollback_restore_paths(&moved).err();
+        let _ = fs::remove_dir_all(&rollback_dir);
+        return Err(rollback_error.map_or(error, |rollback| format!("{error} 복원 rollback 실패: {rollback}")));
+    }
+    fs::remove_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
     Ok(())
 }
 

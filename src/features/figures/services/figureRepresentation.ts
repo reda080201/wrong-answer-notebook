@@ -17,10 +17,12 @@ export interface ResolvedFigureRepresentation {
 
 export function automaticPreferredRepresentation(figure: SheetFigureItem): FigurePreferredRepresentation {
   const verification = figure.verification;
-  if (figure.cleaned?.image && verification?.status === "verified" && verification.blockingIssues.length === 0 && verification.confidence >= 0.95) {
+  // Legacy saved entries have no source marker; preserve their existing policy.
+  const trustedVerification = verification?.verificationSource !== "gpt_self_check";
+  if (figure.cleaned?.image && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0 && verification.confidence >= 0.95) {
     return "cleaned";
   }
-  if (figure.semanticSpec && verification?.status === "verified" && verification.blockingIssues.length === 0) {
+  if (figure.semanticSpec && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0) {
     return "semantic_render";
   }
   return "original";

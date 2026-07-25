@@ -1,5 +1,7 @@
 import MathText from "../../../components/MathText";
 import type { ExamPrintQuestionModel } from "../types";
+import SemanticFigureView from "../../figures/components/SemanticFigureView";
+import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 interface ExamPrintQuestionProps {
   question: ExamPrintQuestionModel;
@@ -15,6 +17,10 @@ export default function ExamPrintQuestion({ question, imageUrls, workspaceSize }
       .map((segment) => segment.figureId),
   );
   const renderFigure = (figure: NonNullable<ExamPrintQuestionModel["figures"]>[number], key: string) => {
+    const representation = resolveFigureRepresentation(figure, { forPrint: true });
+    if (representation.kind === "semantic_render" && figure.semanticSpec) {
+      return <div key={key} className="exam-print-figure exam-print-semantic"><SemanticFigureView spec={figure.semanticSpec} title={figure.title} /></div>;
+    }
     if (figure.source === "described_only" || !figure.image) {
       return <aside key={key} className="exam-print-described"><strong>도표 설명</strong><p>{figure.caption || figure.title || "이미지 없이 설명만 제공됩니다."}</p></aside>;
     }

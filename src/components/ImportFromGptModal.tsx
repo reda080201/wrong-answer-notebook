@@ -45,7 +45,9 @@ import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entr
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 import { readZipImport } from "../features/import/services/zipImport";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
+import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../utils/importImageReferences";
 import Dialog from "../shared/ui/Dialog";
+import FigureComparisonPanel from "../features/figures/components/FigureComparisonPanel";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -307,6 +309,7 @@ export default function ImportFromGptModal({
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
+  const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
   const conceptImportValue = useMemo(() => {
     if (batchImport) return null;
@@ -548,11 +551,10 @@ export default function ImportFromGptModal({
     const fileIndexByKey = new Map<string, number>();
 
     for (const entry of imported.entries) {
-      const referenced = [
-        ...(entry.questionImages ?? []),
-        ...(entry.figures ?? []).flatMap((figure) => figure.image ? [figure.image] : []),
-        ...(entry.explanationParts ?? []).flatMap((part) => part.images ?? []),
-      ].filter(isSafeImportImageFilename);
+      const allReferenced = collectEntryImportImageReferences(entry);
+      const unsafeReference = allReferenced.find((image) => !isSafeImportImageFilename(image));
+      if (unsafeReference) throw new Error(`JSON의 이미지 참조 \`${unsafeReference}\`가 안전한 파일명이 아닙니다.`);
+      const referenced = allReferenced;
       for (const image of referenced) {
         const key = imageFileKey(image);
         const file = imageByName.get(key);
@@ -579,17 +581,10 @@ export default function ImportFromGptModal({
             return index === undefined ? image : savedFilenames[index] ?? image;
           }),
         })),
-        figures: (entry.figures ?? []).map((figure): SheetFigureItem => {
-          if (!figure.image || !isSafeImportImageFilename(figure.image)) {
-            return figure.source === "described_only"
-              ? { ...figure, image: undefined }
-              : { ...figure, image: undefined, needsReview: true };
-          }
-          const index = fileIndexByKey.get(imageFileKey(figure.image));
-          const saved = index === undefined ? undefined : savedFilenames[index];
-          return saved
-            ? { ...figure, image: saved, needsReview: figure.needsReview ?? false }
-            : { ...figure, image: undefined, needsReview: true };
+        ...mapEntryImportImageReferences(entry, (image) => {
+          if (!isSafeImportImageFilename(image)) return undefined;
+          const index = fileIndexByKey.get(imageFileKey(image));
+          return index === undefined ? undefined : savedFilenames[index];
         }),
       })),
     };
@@ -1386,12 +1381,13 @@ export default function ImportFromGptModal({
                                   <span>구조 데이터 {figure.semanticSpec ? "있음" : "없음"}</span>
                                 </div>
                                 <div className="import-figure-actions">
-                                  {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "original", representationSelectionSource: "user", needsReview: false })}>원본 사용</button>}
-                                  {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "cleaned", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true }, needsReview: false, image: figure.cleaned?.image, source: "gpt_cleaned" })}>GPT 정리본 승인</button>}
-                                  {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, { preferredRepresentation: "semantic_render", representationSelectionSource: "user" })}>구조 렌더링 사용</button>}
+                                  {figure.original?.image && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "원본과 정리본 비교가 끝난 뒤 선택할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "original", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() }, needsReview: false })}>원본 사용</button>}
+                                  {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "원본과 정리본 비교가 끝난 뒤 승인할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "cleaned", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() }, needsReview: false, image: figure.cleaned?.image, source: "gpt_cleaned" })}>GPT 정리본 승인</button>}
+                                  {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "구조 렌더링 비교가 끝난 뒤 선택할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "semantic_render", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() } })}>구조 렌더링 사용</button>}
                                   <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, applyAutomaticFigurePreference({ ...figure, representationSelectionSource: "automatic", preferredRepresentation: undefined }))}>자동 선택 다시 적용</button>
                                 </div>
                                 {figure.verification && <small>검증 {Math.round(figure.verification.confidence * 100)}% · 차단 {figure.verification.blockingIssues.length}건 · 경고 {figure.verification.warnings.length}건</small>}
+                                <FigureComparisonPanel figure={figure} onReady={(ready) => setFigureComparisonReady((current) => current[figure.id] === ready ? current : { ...current, [figure.id]: ready })} />
                               </>
                             )}
                             {!figure.image && (

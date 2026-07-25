@@ -78,8 +78,5 @@ export async function openChatGpt(): Promise<void> {
   // Do not pass "noopener" in features — Chromium then returns null and open always fails.
   const opened = window.open(CHATGPT_URL, "_blank");
   if (opened) opened.opener = null;
-  // #region agent log
-  fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'post-fix',hypothesisId:'B',location:'chatGptConnection.ts:openChatGpt',message:'chatgpt window.open result',data:{features:null,openedIsNull:opened===null,openedType:opened===null?'null':typeof opened,url:CHATGPT_URL,openerCleared:opened?opened.opener===null:null},timestamp:Date.now()})}).catch(()=>{});
-  // #endregion
   if (!opened) throw new Error("ChatGPT 창을 열지 못했습니다. 주소를 직접 복사해 열어 주세요.");
 }

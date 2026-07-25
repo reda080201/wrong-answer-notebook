@@ -49,9 +49,6 @@ export default function Dialog({
     if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
-    // #region agent log
-    fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'D',location:'Dialog.tsx:open-effect',message:'dialog opened',data:{ariaLabel:ariaLabel??null,hasTitle:Boolean(title),closeDisabled,closeOnBackdrop,className},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
     const frame = window.requestAnimationFrame(() => {
       const autoFocusTarget = dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
@@ -86,9 +83,6 @@ export default function Dialog({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown, true);
-      // #region agent log
-      fetch('http://127.0.0.1:7928/ingest/558f3d61-3668-41a9-94c0-b971ea590ede',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'82f5f5'},body:JSON.stringify({sessionId:'82f5f5',runId:'audit-pass1',hypothesisId:'D',location:'Dialog.tsx:cleanup',message:'dialog closed cleanup',data:{restoredFocus:Boolean(previousFocus),ariaLabel:ariaLabel??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       previousFocus?.focus();
     };
   }, [onClose, open]);

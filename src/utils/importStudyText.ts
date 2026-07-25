@@ -618,11 +618,24 @@ function normalizeImportFigures(
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
     const normalized = {
       ...figure,
+      // External JSON may describe a user decision, but only an in-app click can create one.
+      representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
+      verification: figure.verification
+        ? { ...figure.verification, userApproved: false, verificationSource: "gpt_self_check" as const }
+        : undefined,
       image,
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || Boolean(figure.image && !image),
     };
-    return applyAutomaticFigurePreference(normalized);
+    const automatic = applyAutomaticFigurePreference(normalized);
+    return {
+      ...automatic,
+      // A GPT self-check is informative only; it cannot authorize a cleaned/semantic representation.
+      image: automatic.source === "original" ? (automatic.original?.image ?? automatic.image) : automatic.original?.image,
+      source: automatic.original?.image ? "original" : automatic.source,
+      preferredRepresentation: automatic.original?.image ? "original" : automatic.preferredRepresentation,
+      needsReview: automatic.original?.image || automatic.cleaned?.image || automatic.semanticSpec ? true : automatic.needsReview,
+    };
   });
 }
 

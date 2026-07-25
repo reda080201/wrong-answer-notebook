@@ -300,6 +300,7 @@ export interface FigureVerification {
   blockingIssues: FigureVerificationIssue[];
   warnings: FigureVerificationIssue[];
   userApproved?: boolean;
+  verificationSource?: "gpt_self_check" | "second_pass_model" | "local_validator" | "user";
   verifiedAt?: string;
   verifier?: string;
 }
