@@ -229,7 +229,13 @@ impl McpBridgeManager {
             return Err("tools/list 응답을 검증하지 못했습니다.".into());
         }
         let health = client.post(&url).header("x-wan-self-test", "1").bearer_auth(&token).json(&json!({"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"health_check","arguments":{}}})).send().await.map_err(|e| format!("health_check 요청 실패: {e}"))?.json::<Value>().await.map_err(|e| e.to_string())?;
-        if !health.to_string().contains("\"ok\":true") {
+        let health_text = health
+            .pointer("/result/content/0/text")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "health_check 응답 본문을 확인하지 못했습니다.".to_owned())?;
+        let health_payload: Value = serde_json::from_str(health_text)
+            .map_err(|e| format!("health_check payload를 읽지 못했습니다: {e}"))?;
+        if health_payload.get("ok") != Some(&Value::Bool(true)) {
             return Err("health_check 응답을 검증하지 못했습니다.".into());
         }
         if let Ok(mut current) = self.status.lock() {
@@ -1747,6 +1753,11 @@ mod tests {
         let port = socket.local_addr().unwrap().port();
         drop(socket);
         let manager = McpBridgeManager::new_for_test(store, dir.path().to_path_buf(), "test-token");
+        manager
+            .sessions
+            .lock()
+            .unwrap()
+            .insert("test-token".into(), Instant::now() + SESSION_TTL);
         manager.start(port).await.unwrap();
         tokio::time::sleep(Duration::from_millis(20)).await;
         (dir, manager, port)
