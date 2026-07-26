@@ -4,7 +4,11 @@ import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
   createBackup,
+  deleteImage,
+  previewOrphanImages,
+  rewriteImportAssetReferences,
   restoreBackup,
+  saveImportAssetFiles,
   runNativeIntegrityCheck,
 } from "../api";
 import { SUBJECTS } from "../types";
@@ -24,7 +28,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { findDuplicateEntries } from "../utils/duplicates";
-import { getAllImageFilenames, getEntryTitle } from "../utils/entry";
+import { getEntryTitle } from "../utils/entry";
 import {
   entryToFormData,
   mergeGptSolutionIntoEntry,
@@ -107,6 +111,7 @@ export function useAppActions({
     useState<WrongAnswerEntry | undefined>();
   const [importedInitialData, setImportedInitialData] =
     useState<Partial<EntryFormData> | undefined>();
+  const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
   const [editingEntry, setEditingEntry] =
     useState<WrongAnswerEntry | undefined>();
   const [reviewMode, setReviewMode] = useState<ReviewMode | null>(null);
@@ -165,12 +170,24 @@ export function useAppActions({
       throw new Error("중복 가능성이 있어 저장을 취소했습니다.");
     }
 
-    if (editingEntry) {
-      await updateEntry(editingEntry.id, preparedData, removedImages);
-      setSelectedId(editingEntry.id);
-    } else {
-      const id = await addEntry(preparedData);
-      setSelectedId(id);
+    let savedFilenames: string[] = [];
+    let finalData = preparedData;
+    if (pendingImportFiles.length) {
+      const importedAssets = await saveImportAssetFiles(pendingImportFiles);
+      savedFilenames = importedAssets.savedFilenames;
+      finalData = rewriteImportAssetReferences(preparedData, importedAssets.sourceToSaved);
+    }
+    try {
+      if (editingEntry) {
+        await updateEntry(editingEntry.id, finalData, removedImages);
+        setSelectedId(editingEntry.id);
+      } else {
+        const id = await addEntry(finalData);
+        setSelectedId(id);
+      }
+    } catch (error) {
+      await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      throw error;
     }
   };
 
@@ -393,9 +410,19 @@ export function useAppActions({
 
   const handleImportedEntriesApply = async (
     importedEntries: Partial<EntryFormData>[],
+    assetFiles: File[] = [],
   ) => {
     if (!importedEntries.length) return;
-    const forms = importedEntries.map((imported): EntryFormData => {
+    let savedFilenames: string[] = [];
+    let sourceToSaved: Record<string, string> = {};
+    if (assetFiles.length) {
+      const importedAssets = await saveImportAssetFiles(assetFiles);
+      savedFilenames = importedAssets.savedFilenames;
+      sourceToSaved = importedAssets.sourceToSaved;
+    }
+    try {
+      const forms = importedEntries.map((rawImported): EntryFormData => {
+      const imported = rewriteImportAssetReferences(rawImported, sourceToSaved);
       const entryKind: EntryKind =
         imported.entryKind === "wrong_answer" ||
         imported.entryKind === "problem_sheet" ||
@@ -443,10 +470,14 @@ export function useAppActions({
         concepts: imported.concepts ?? [],
         checklist: imported.checklist ?? [],
       };
-    });
-    const ids = await addEntries(forms);
-    setActiveSection(forms[0].entryKind);
-    setSelectedId(ids[0] ?? null);
+      });
+      const ids = await addEntries(forms);
+      setActiveSection(forms[0].entryKind);
+      setSelectedId(ids[0] ?? null);
+    } catch (error) {
+      await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      throw error;
+    }
   };
 
   const handleLearningImportApply = async (
@@ -504,9 +535,14 @@ export function useAppActions({
   };
 
   const handleCleanupOrphans = async () => {
-    const removed = await cleanupOrphanImages(
-      entries.flatMap(getAllImageFilenames),
-    );
+    const preview = await previewOrphanImages();
+    if (!preview.filenames.length) {
+      setSettingsMessage("정리할 미사용 이미지가 없습니다.");
+      return;
+    }
+    const confirmed = window.confirm(`사용하지 않는 이미지 ${preview.filenames.length}개(${Math.ceil(preview.totalBytes / 1024)}KB)를 삭제합니다. 계속하시겠습니까?`);
+    if (!confirmed) return;
+    const removed = await cleanupOrphanImages();
     setSettingsMessage(`사용하지 않는 이미지 ${removed}개를 정리했습니다.`);
   };
 
@@ -560,6 +596,7 @@ export function useAppActions({
   const handleImportApply = (
     data: Partial<EntryFormData>,
     applyMode?: GptSolutionApplyMode,
+    assetFiles: File[] = [],
   ) => {
     if (importMode === "solution" && solutionSourceEntry) {
       const merged = mergeGptSolutionIntoEntry(
@@ -568,6 +605,7 @@ export function useAppActions({
         applyMode ?? "fill",
       );
       setImportedInitialData(undefined);
+      setPendingImportFiles([]);
       setEditingEntry({
         ...solutionSourceEntry,
         ...merged,
@@ -579,6 +617,7 @@ export function useAppActions({
       return;
     }
     setImportedInitialData(data);
+    setPendingImportFiles(assetFiles);
     setActiveSection(data.entryKind ?? "problem_sheet");
     setEditingEntry(undefined);
     setPrefilledTitle("");
@@ -593,12 +632,14 @@ export function useAppActions({
     setEditingEntry(undefined);
     setPrefilledTitle("");
     setImportedInitialData(undefined);
+    setPendingImportFiles([]);
   };
 
   const closeImportModal = () => {
     setShowImportModal(false);
     setSolutionSourceEntry(undefined);
     setImportMode("import");
+    setPendingImportFiles([]);
   };
 
   return {
@@ -610,6 +651,7 @@ export function useAppActions({
     importMode,
     solutionSourceEntry,
     importedInitialData,
+    pendingImportFiles,
     editingEntry,
     reviewMode,
     setReviewMode,

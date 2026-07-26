@@ -8,7 +8,7 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import SettingsModal from "./components/SettingsModal";
 import { createAutoBackup, createPreUpdateBackup } from "./api";
-import { loadExamSessions, saveExamSessions, loadGeneratedExams, saveGeneratedExams, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
+import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
@@ -18,6 +18,7 @@ import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
+import { useGeneratedExams } from "./hooks/useGeneratedExams";
 import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, GeneratedExam, McpExportContext, WrongAnswerEntry } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
@@ -32,7 +33,6 @@ import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "./features/en
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamList from "./features/exam-builder/components/GeneratedExamList";
 import { createSessionFromGeneratedExam } from "./features/exam-builder/services/createSessionFromGeneratedExam";
-import { mergeGeneratedExam } from "./features/exam-builder/storage/generatedExamStorage";
 import { buildGeneratedExamPrintModel } from "./features/exam-builder/services/buildGeneratedExamPrintModel";
 import { printExamDocument } from "./features/export/services/printExamDocument";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
@@ -81,10 +81,10 @@ export default function App() {
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
-  const [generatedExams, setGeneratedExams] = useState<GeneratedExam[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
+  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
@@ -106,27 +106,13 @@ export default function App() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void loadGeneratedExams().then((items) => { if (!cancelled) setGeneratedExams(Array.isArray(items) ? items : []); }).catch(() => { if (!cancelled) setGeneratedExams([]); });
-    return () => { cancelled = true; };
-  }, [setExamSaving, setExamSaveError, setSavedExamSessions]);
-
   const persistGeneratedExam = useCallback(async (exam: GeneratedExam) => {
-    setGeneratedExams((current) => {
-      const next = mergeGeneratedExam(current, exam);
-      void saveGeneratedExams(next);
-      return next;
-    });
-  }, []);
+    await upsertGeneratedExam(exam);
+  }, [upsertGeneratedExam]);
 
-  const removeGeneratedExam = useCallback((id: string) => {
-    setGeneratedExams((current) => {
-      const next = current.filter((item) => item.id !== id);
-      void saveGeneratedExams(next);
-      return next;
-    });
-  }, []);
+  const deleteGeneratedExam = useCallback((id: string) => {
+    void removeGeneratedExam(id);
+  }, [removeGeneratedExam]);
 
   useEffect(() => {
     if (!examSession) {
@@ -832,7 +818,7 @@ export default function App() {
       )}
       <Dialog open={showGeneratedExams} onClose={() => setShowGeneratedExams(false)} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
-            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={removeGeneratedExam} onPrint={(exam) => void printGeneratedExam(exam)} />
+            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={deleteGeneratedExam} onPrint={(exam) => void printGeneratedExam(exam)} />
       </Dialog>
       {showSettings && (
         <SettingsModal

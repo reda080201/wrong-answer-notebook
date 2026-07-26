@@ -13,6 +13,69 @@ use std::sync::Mutex;
 
 pub const ENTRIES_SCHEMA_VERSION: u32 = 2;
 
+pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String> {
+    let mut referenced = HashSet::new();
+    referenced.extend(entry.question_images.iter().cloned());
+    referenced.extend(entry.explanation_images.iter().cloned());
+    referenced.extend(entry.images.iter().cloned());
+    referenced.extend(
+        entry
+            .extra
+            .get("sourcePageImages")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flat_map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned)),
+    );
+    referenced.extend(
+        entry
+            .explanation_parts
+            .iter()
+            .flat_map(|part| part.images.iter().cloned()),
+    );
+    referenced.extend(
+        entry
+            .extra
+            .get("learningBlocks")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flat_map(|blocks| {
+                blocks.iter().flat_map(|block| {
+                    block
+                        .get("images")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flat_map(|images| {
+                            images.iter().filter_map(Value::as_str).map(str::to_owned)
+                        })
+                })
+            }),
+    );
+    for figure in &entry.figures {
+        if let Some(image) = &figure.image {
+            referenced.insert(image.clone());
+        }
+        for key in ["original", "cleaned"] {
+            if let Some(image) = figure
+                .extra
+                .get(key)
+                .and_then(|value| value.get("image"))
+                .and_then(Value::as_str)
+            {
+                referenced.insert(image.to_owned());
+            }
+        }
+        if let Some(source_page) = figure
+            .extra
+            .get("original")
+            .and_then(|value| value.get("sourcePageImage"))
+            .and_then(Value::as_str)
+        {
+            referenced.insert(source_page.to_owned());
+        }
+    }
+    referenced
+}
+
 #[derive(Debug)]
 pub struct NotebookStore {
     entries_path: PathBuf,
@@ -155,30 +218,7 @@ impl NotebookStore {
     pub fn referenced_image_filenames(&self) -> Result<HashSet<String>, String> {
         let mut referenced = HashSet::new();
         for entry in self.load_entries()? {
-            referenced.extend(entry.question_images);
-            referenced.extend(entry.explanation_images);
-            referenced.extend(entry.images);
-            referenced.extend(
-                entry
-                    .explanation_parts
-                    .into_iter()
-                    .flat_map(|part| part.images),
-            );
-            for figure in entry.figures {
-                if let Some(image) = figure.image {
-                    referenced.insert(image);
-                }
-                for key in ["original", "cleaned"] {
-                    if let Some(image) = figure
-                        .extra
-                        .get(key)
-                        .and_then(|value| value.get("image"))
-                        .and_then(Value::as_str)
-                    {
-                        referenced.insert(image.to_owned());
-                    }
-                }
-            }
+            referenced.extend(collect_entry_image_filenames(&entry));
         }
         Ok(referenced)
     }

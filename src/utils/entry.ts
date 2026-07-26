@@ -811,12 +811,15 @@ export function getEntryTitle(entry: WrongAnswerEntry): string {
 
 export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromParts = entry.explanationParts.flatMap((p) => p.images);
+  const fromLearningBlocks = (entry.learningBlocks ?? []).flatMap((block) => block.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   return [
     ...new Set([
       ...entry.questionImages,
+      ...(entry.sourcePageImages ?? []),
       ...fromParts,
       ...fromFigures,
+      ...fromLearningBlocks,
       ...(entry.images ?? []),
     ]),
   ];

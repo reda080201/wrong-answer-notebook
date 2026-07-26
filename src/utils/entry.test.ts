@@ -119,6 +119,15 @@ describe("normalizeEntry", () => {
     expect(getAllImageFilenames(entry)).toEqual(expect.arrayContaining(["original.png", "page.png", "cleaned.png"]));
   });
 
+  it("collects source pages and learning block images", () => {
+    const entry = normalizeEntry(rawEntry({
+      entryKind: "lecture",
+      sourcePageImages: ["source-page.png"],
+      learningBlocks: [{ id: "block-1", type: "concept", title: "", content: "", images: ["block.png"] }],
+    }));
+    expect(getAllImageFilenames(entry)).toEqual(expect.arrayContaining(["source-page.png", "block.png"]));
+  });
+
   it("syncs legacy image fields to a verified cleaned representation", () => {
     const entry = normalizeEntry(rawEntry({ entryKind: "problem_sheet", figures: [{
       id: "bundle-2", questionNumber: "1", title: "그래프", caption: "", source: "original", image: "original.png",

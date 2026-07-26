@@ -54,6 +54,7 @@ jobs:
           $body >> $env:GITHUB_OUTPUT
           "RELEASE_NOTES_EOF" >> $env:GITHUB_OUTPUT
       - run: npm run lint
+      - run: npm run check:debug
       - run: npm run test
       - run: npm run build
       - run: cargo fmt --check

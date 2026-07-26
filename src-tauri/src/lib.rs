@@ -505,64 +505,9 @@ fn build_gemini_parts(
 }
 
 fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
-    let mut images = entry.question_images.clone();
-    if let Some(source_pages) = entry
-        .extra
-        .get("sourcePageImages")
-        .and_then(serde_json::Value::as_array)
-    {
-        images.extend(
-            source_pages
-                .iter()
-                .filter_map(serde_json::Value::as_str)
-                .map(str::to_owned),
-        );
-    }
-    images.extend(entry.images.clone());
-    images.extend(entry.explanation_images.clone());
-    for part in &entry.explanation_parts {
-        images.extend(part.images.clone());
-    }
-    for figure in &entry.figures {
-        if let Some(image) = &figure.image {
-            images.push(image.clone());
-        }
-        for key in ["original", "cleaned"] {
-            if let Some(image) = figure
-                .extra
-                .get(key)
-                .and_then(|value| value.get("image"))
-                .and_then(serde_json::Value::as_str)
-            {
-                images.push(image.to_owned());
-            }
-        }
-        if let Some(source_page) = figure
-            .extra
-            .get("original")
-            .and_then(|value| value.get("sourcePageImage"))
-            .and_then(serde_json::Value::as_str)
-        {
-            images.push(source_page.to_owned());
-        }
-    }
-    if let Some(blocks) = entry
-        .extra
-        .get("learningBlocks")
-        .and_then(serde_json::Value::as_array)
-    {
-        for block in blocks {
-            if let Some(block_images) = block.get("images").and_then(serde_json::Value::as_array) {
-                images.extend(
-                    block_images
-                        .iter()
-                        .filter_map(serde_json::Value::as_str)
-                        .map(str::to_owned),
-                );
-            }
-        }
-    }
-    images
+    notebook_store::collect_entry_image_filenames(entry)
+        .into_iter()
+        .collect()
 }
 
 fn write_entries_json_atomic(path: &Path, entries: &[WrongAnswerEntry]) -> Result<(), String> {
@@ -1271,7 +1216,8 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         return Err("백업에 포함할 파일이 너무 많습니다.".into());
     }
 
-    let file = fs::File::create(backup_path).map_err(|e| e.to_string())?;
+    let temp_path = backup_path.with_extension(format!("zip.tmp-{}", Uuid::new_v4()));
+    let file = fs::File::create(&temp_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
@@ -1353,10 +1299,14 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     }
 
     zip.finish().map_err(|e| e.to_string())?;
-    if fs::metadata(backup_path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_ZIP_BYTES {
-        let _ = fs::remove_file(backup_path);
+    if fs::metadata(&temp_path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_ZIP_BYTES {
+        let _ = fs::remove_file(&temp_path);
         return Err("완성된 백업 ZIP이 1GB 제한을 초과했습니다.".into());
     }
+    fs::rename(&temp_path, backup_path).map_err(|error| {
+        let _ = fs::remove_file(&temp_path);
+        error.to_string()
+    })?;
     Ok(())
 }
 
@@ -1571,12 +1521,10 @@ fn restore_backup_zip(
                 &format!("optional-{}", name.replace('/', "_")),
             )?;
         }
-        if !images.is_empty() {
-            move_target(image_dir.clone(), "images")?;
-        }
-        if !workspace_files.is_empty() {
-            move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
-        }
+        // Replace managed directories even when the backup contains no files;
+        // otherwise stale images/workspaces survive a restore.
+        move_target(image_dir.clone(), "images")?;
+        move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
         Ok(())
     })();
     drop(move_target);
@@ -1603,6 +1551,8 @@ fn restore_backup_zip(
         for (relative, bytes) in &workspace_files {
             write_bytes_atomic(&app_dir.join("import-workspaces").join(relative), bytes)?;
         }
+        fs::create_dir_all(&image_dir).map_err(|e| e.to_string())?;
+        fs::create_dir_all(app_dir.join("import-workspaces")).map_err(|e| e.to_string())?;
         Ok(())
     })();
     if let Err(error) = commit_result {
@@ -1613,7 +1563,9 @@ fn restore_backup_zip(
             None => error,
         });
     }
-    fs::remove_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
+    // Data has already been restored successfully. Cleanup failure must not
+    // report a false restore failure or trigger a second restore attempt.
+    let _ = fs::remove_dir_all(&rollback_dir);
     Ok(())
 }
 
@@ -1666,9 +1618,9 @@ fn run_integrity_check(
 #[tauri::command]
 fn cleanup_orphan_images(
     app: tauri::AppHandle,
-    referenced_images: Vec<String>,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
 ) -> Result<usize, String> {
-    let referenced: HashSet<String> = referenced_images.into_iter().collect();
+    let referenced = store.referenced_image_filenames()?;
     let image_dir = images_dir(&app)?;
     let mut removed = 0;
     for item in fs::read_dir(image_dir).map_err(|e| e.to_string())? {
@@ -1682,6 +1634,44 @@ fn cleanup_orphan_images(
         }
     }
     Ok(removed)
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct OrphanImagePreview {
+    filenames: Vec<String>,
+    total_bytes: u64,
+}
+
+#[tauri::command]
+fn preview_orphan_images(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+) -> Result<OrphanImagePreview, String> {
+    let referenced = store.referenced_image_filenames()?;
+    let image_dir = images_dir(&app)?;
+    let mut filenames = Vec::new();
+    let mut total_bytes = 0u64;
+    if image_dir.exists() {
+        for item in fs::read_dir(image_dir).map_err(|e| e.to_string())? {
+            let path = item.map_err(|e| e.to_string())?.path();
+            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if validate_image_filename(filename).is_err() || referenced.contains(filename) {
+                continue;
+            }
+            total_bytes = total_bytes
+                .checked_add(fs::metadata(&path).map_err(|e| e.to_string())?.len())
+                .ok_or_else(|| "이미지 용량을 계산하지 못했습니다.".to_string())?;
+            filenames.push(filename.to_owned());
+        }
+    }
+    filenames.sort();
+    Ok(OrphanImagePreview {
+        filenames,
+        total_bytes,
+    })
 }
 
 #[cfg(test)]
@@ -1839,6 +1829,14 @@ mod tests {
     #[test]
     fn collects_figure_images() {
         let mut entry = sample_entry();
+        entry.extra.insert(
+            "sourcePageImages".into(),
+            serde_json::json!(["source-page.png"]),
+        );
+        entry.extra.insert(
+            "learningBlocks".into(),
+            serde_json::json!([{ "images": ["block.png"] }]),
+        );
         entry.figures = vec![SheetFigureItem {
             id: "figure-1".into(),
             question_number: "1".into(),
@@ -1849,8 +1847,15 @@ mod tests {
             needs_review: None,
             extra: serde_json::Map::new(),
         }];
+        entry.figures[0].extra.insert(
+            "original".into(),
+            serde_json::json!({ "sourcePageImage": "figure-source.png" }),
+        );
 
         assert!(collect_entry_images(&entry).contains(&"figure.png".to_string()));
+        assert!(collect_entry_images(&entry).contains(&"source-page.png".to_string()));
+        assert!(collect_entry_images(&entry).contains(&"block.png".to_string()));
+        assert!(collect_entry_images(&entry).contains(&"figure-source.png".to_string()));
     }
 
     #[test]
@@ -1978,6 +1983,7 @@ pub fn run() {
             restore_backup_zip,
             run_integrity_check,
             cleanup_orphan_images,
+            preview_orphan_images,
             get_mcp_bridge_status,
             set_mcp_bridge_enabled,
             test_mcp_bridge,

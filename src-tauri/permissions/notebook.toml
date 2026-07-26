@@ -19,6 +19,7 @@ commands.allow = [
   "restore_backup_zip",
   "run_integrity_check",
   "cleanup_orphan_images",
+  "preview_orphan_images",
   "get_mcp_bridge_status",
   "set_mcp_bridge_enabled",
   "test_mcp_bridge",

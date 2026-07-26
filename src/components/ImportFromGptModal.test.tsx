@@ -868,12 +868,13 @@ describe("ImportFromGptModal", () => {
     fireEvent.change(screen.getByLabelText("올인원 가져오기"), { target: { files: [file] } });
 
     expect(await screen.findByDisplayValue("ZIP 시험지")).toBeInTheDocument();
-    await waitFor(() => expect(saveImageFiles).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ name: "q1.png" })])));
+    expect(saveImageFiles).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
 
     await waitFor(() => expect(onApply).toHaveBeenCalledWith(
-      expect.objectContaining({ entryKind: "problem_sheet", questionImages: ["img_mock.png"] }),
+      expect.objectContaining({ entryKind: "problem_sheet", questionImages: ["q1.png"] }),
       undefined,
+      expect.arrayContaining([expect.objectContaining({ name: "q1.png" })]),
     ));
   }, 30000);
 
@@ -943,6 +944,8 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
+    const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 펼쳐 확인했습니다/);
+    if (confirmation) fireEvent.click(confirmation);
     fireEvent.click(screen.getByRole("button", { name: "2개 항목 저장" }));
     await waitFor(() => expect(onApplyEntries).toHaveBeenCalledWith(
       expect.arrayContaining([

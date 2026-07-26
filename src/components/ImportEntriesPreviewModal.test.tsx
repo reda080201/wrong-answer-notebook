@@ -41,6 +41,8 @@ describe("ImportEntriesPreviewModal", () => {
     expect(screen.getByText("혼합 가져오기")).toBeInTheDocument();
     expect(screen.getAllByText("시험지")).toHaveLength(2);
     expect(screen.getByText("극한 특강")).toBeInTheDocument();
+    const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 펼쳐 확인했습니다/);
+    if (confirmation) fireEvent.click(confirmation);
     fireEvent.click(screen.getByRole("button", { name: "2개 항목 저장" }));
     await waitFor(() => expect(onApplyEntries).toHaveBeenCalledWith(document.entries));
   });

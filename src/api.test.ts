@@ -13,6 +13,8 @@ import {
   getAiProviderStatus,
   loadExamSessions,
   MAX_IMPORT_IMAGE_BYTES,
+  cleanupOrphanImages,
+  previewOrphanImages,
   saveExamSessions,
   saveImageFiles,
 } from "./api";
@@ -118,6 +120,38 @@ describe("image file security limits", () => {
 
     await expect(saveImageFiles([largeImage])).rejects.toThrow("25MB 이하");
     expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("uses stored entries, including source pages and learning blocks, for browser orphan cleanup", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({
+      schemaVersion: 2,
+      entries: [{
+        id: "lecture-1",
+        subject: "수학",
+        title: "특강",
+        question: "",
+        entryKind: "lecture",
+        questionImages: [],
+        sourcePageImages: ["img_source.png"],
+        learningBlocks: [{ id: "block-1", type: "concept", title: "", content: "", images: ["img_block.png"] }],
+        explanationParts: [],
+        annotations: [],
+        tags: [],
+        figures: [],
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        mastered: false,
+      }],
+    }));
+    localStorage.setItem("img_source.png", "data:image/png;base64,source");
+    localStorage.setItem("img_block.png", "data:image/png;base64,block");
+    localStorage.setItem("img_orphan.png", "data:image/png;base64,orphan");
+
+    await expect(previewOrphanImages()).resolves.toEqual(expect.objectContaining({ filenames: ["img_orphan.png"] }));
+    await expect(cleanupOrphanImages()).resolves.toBe(1);
+    expect(localStorage.getItem("img_source.png")).toBeTruthy();
+    expect(localStorage.getItem("img_block.png")).toBeTruthy();
+    expect(localStorage.getItem("img_orphan.png")).toBeNull();
   });
 });
 

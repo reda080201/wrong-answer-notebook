@@ -107,58 +107,60 @@ export function buildQuestionExportPackage(input: { title: string; subject: stri
 export async function buildQuestionExportZip(input: { title: string; subject: string; questions: QuestionExportItem[]; options?: Partial<QuestionExportOptions> }): Promise<Blob> {
   const pack = buildQuestionExportPackage(input);
   const zip = new JSZip();
-  zip.file("manifest.json", JSON.stringify(pack.manifest, null, 2));
-  zip.file("questions.json", JSON.stringify({ schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, questions: pack.questions }, null, 2));
-  zip.file("questions.md", pack.markdown);
-  zip.file("README.txt", pack.manifest.includesAnswers || pack.manifest.includesExplanations ? "이 패키지는 사용자가 선택한 답안/해설을 포함합니다.\n" : "이 패키지는 정답과 해설을 포함하지 않는 문항 추출본입니다.\n");
   const images = zip.folder("images");
   const sourcePagePaths = new Map<string, string>();
-  for (const question of pack.questions) {
+  const exportQuestions = structuredClone(pack.questions) as QuestionExportItem[];
+  const fetchImage = async (filename: string, context: string): Promise<Blob> => {
+    const response = await fetch(await getImageUrl(filename));
+    if (!response.ok) throw new Error(`${context} 이미지 ${filename}을(를) 읽지 못했습니다.`);
+    return response.blob();
+  };
+  for (const question of exportQuestions) {
     if (pack.manifest.includesSourcePages) {
-      question.sourcePageImages = (await Promise.all((question.sourcePageImages ?? []).map(async (filename, pageIndex) => {
+      const rewrittenSourcePages: string[] = [];
+      for (const [pageIndex, filename] of (question.sourcePageImages ?? []).entries()) {
         const existing = sourcePagePaths.get(filename);
-        if (existing) return existing;
-        try {
-          const response = await fetch(await getImageUrl(filename));
-          if (!response.ok) return "";
-          const name = `q${String(question.position).padStart(2, "0")}_source_page_${String(pageIndex + 1).padStart(2, "0")}.${filename.match(/\.(png|jpe?g|webp)$/i)?.[1]?.toLowerCase() ?? "png"}`;
-          images?.file(name, await response.blob());
-          const exportedPath = `images/${name}`;
-          sourcePagePaths.set(filename, exportedPath);
-          return exportedPath;
-        } catch {
-          return "";
+        if (existing) {
+          rewrittenSourcePages.push(existing);
+          continue;
         }
-      }))).filter(Boolean);
+        const extension = filename.match(/\.(png|jpe?g|webp)$/i)?.[1]?.toLowerCase() ?? "png";
+        const name = `q${String(question.position).padStart(2, "0")}_source_page_${String(pageIndex + 1).padStart(2, "0")}.${extension}`;
+        images?.file(name, await fetchImage(filename, "원본 페이지"));
+        const exportedPath = `images/${name}`;
+        sourcePagePaths.set(filename, exportedPath);
+        rewrittenSourcePages.push(exportedPath);
+      }
+      question.sourcePageImages = rewrittenSourcePages;
     } else {
       question.sourcePageImages = [];
     }
     for (const [index, figure] of question.figures.entries()) {
       const preferred = resolveFigureRepresentation(completeFigure(figure)).image;
       const variants = [["original", figure.original?.image], ["source_page", pack.manifest.includesSourcePages ? figure.original?.sourcePageImage : undefined], ["cleaned", figure.cleaned?.image], ["preferred", preferred]] as const;
-      const written = new Map<string, string>();
       for (const [variant, filename] of variants) {
         if (!filename) continue;
-        const variantKey = `${variant}:${filename}`;
-        let name = written.get(variantKey);
-        if (!name) name = safeImageName(question.position, index + 1, variant, filename);
-        try {
-          if (!written.has(variantKey)) {
-            const response = await fetch(await getImageUrl(filename));
-            if (!response.ok) continue;
-            images?.file(name, await response.blob());
-            written.set(variantKey, name);
-          }
-          const exportedPath = `images/${name}`;
-          if (variant === "original" && figure.original) figure.original.image = exportedPath;
-          if (variant === "source_page" && figure.original) figure.original.sourcePageImage = exportedPath;
-          if (variant === "cleaned" && figure.cleaned) figure.cleaned.image = exportedPath;
-          if (variant === "preferred") figure.image = exportedPath;
-        } catch { /* preserve structured metadata even when an optional asset cannot be read */ }
+        const name = safeImageName(question.position, index + 1, variant, filename);
+        images?.file(name, await fetchImage(filename, "문항"));
+        const exportedPath = `images/${name}`;
+        if (variant === "original" && figure.original) figure.original.image = exportedPath;
+        if (variant === "source_page" && figure.original) figure.original.sourcePageImage = exportedPath;
+        if (variant === "cleaned" && figure.cleaned) figure.cleaned.image = exportedPath;
+        if (variant === "preferred") figure.image = exportedPath;
       }
     }
   }
-  zip.file("questions.json", JSON.stringify({ schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, questions: pack.questions }, null, 2));
+  const markdown = buildMarkdown(input.title, exportQuestions, {
+    ...input.options,
+    includeSourceReferences: Boolean(pack.manifest.includesSourceReferences),
+    includeSourcePages: Boolean(pack.manifest.includesSourcePages),
+    includeAnswers: Boolean(pack.manifest.includesAnswers),
+    includeExplanations: Boolean(pack.manifest.includesExplanations),
+  });
+  zip.file("manifest.json", JSON.stringify(pack.manifest, null, 2));
+  zip.file("questions.json", JSON.stringify({ schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, questions: exportQuestions }, null, 2));
+  zip.file("questions.md", markdown);
+  zip.file("README.txt", pack.manifest.includesAnswers || pack.manifest.includesExplanations ? "이 패키지는 사용자가 선택한 답안/해설을 포함합니다.\n" : "이 패키지는 정답과 해설을 포함하지 않는 문항 추출본입니다.\n");
   return zip.generateAsync({ type: "blob" });
 }
 
