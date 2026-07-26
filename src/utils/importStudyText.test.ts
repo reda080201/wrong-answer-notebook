@@ -146,6 +146,16 @@ describe("importStudyText", () => {
       }))).toThrow("entries[0]");
     });
 
+    it("uses an explicit lecture importType before attempting inference", () => {
+      const result = parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "lecture",
+        entries: [{ title: "단서 없는 특강", learningBlocks: [] }],
+      }));
+      expect(result.entries[0].entryKind).toBe("lecture");
+      expect(result.entryKindResolutions?.[0]).toEqual({ entryKind: "lecture", source: "import_type" });
+    });
+
     it("preserves lecture images, source pages, figures, and block image links", () => {
       const result = parseImportedStudyText(JSON.stringify({
         entryKind: "lecture",

@@ -22,7 +22,7 @@ function lecture(): WrongAnswerEntry {
     myAnswer: "",
     correctAnswer: "",
     explanationParts: [],
-    memo: "복습 메모",
+    memo: "다시 볼 내용",
     annotations: [],
     tags: [],
     figures: [{ id: "figure-1", questionNumber: "", title: "연결 도형", caption: "도형 설명", image: "figure.png", source: "original" }],
@@ -42,6 +42,8 @@ describe("LectureReaderView", () => {
     render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
 
     expect(screen.getByRole("heading", { name: "특강 개요" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "복습 메모" })).toBeInTheDocument();
+    expect(screen.getByText("다시 볼 내용")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "1. 첫 번째" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "2. 두 번째" })).toBeInTheDocument();
     expect(screen.getByText("원본 자료")).toBeInTheDocument();
