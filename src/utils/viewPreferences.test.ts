@@ -53,6 +53,7 @@ describe("normalizeViewPreferences", () => {
       showOriginalPages: false,
       showLearningVisuals: false,
       compactToolbar: true,
+      lectureLayout: "document",
     });
   });
 });
@@ -97,6 +98,7 @@ describe("migrateViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: true,
+      lectureLayout: "document",
     });
   });
 
@@ -109,6 +111,7 @@ describe("migrateViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      lectureLayout: "document",
     });
   });
 });
@@ -132,6 +135,7 @@ describe("resolveViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      lectureLayout: "document",
     });
   });
 
@@ -254,6 +258,7 @@ describe("normalizeSettings integration", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      lectureLayout: "document",
     });
     expect(normalized.answerViewPreferences).toEqual({
       viewMode: "table",

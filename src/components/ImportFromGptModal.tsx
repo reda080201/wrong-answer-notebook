@@ -21,6 +21,7 @@ import {
   readImportFile,
   type ImportedStudyDocument,
   type ImportedStudyText,
+  type EntryKindResolution,
 } from "../utils/importStudyText";
 import {
   isAppCompatibleEntriesJson,
@@ -303,6 +304,8 @@ export default function ImportFromGptModal({
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
+  const [entryKindResolution, setEntryKindResolution] = useState<EntryKindResolution | null>(null);
+  const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
   const [confirmedValidationErrors, setConfirmedValidationErrors] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
@@ -312,13 +315,13 @@ export default function ImportFromGptModal({
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
   const conceptImportValue = useMemo(() => {
-    if (batchImport) return null;
+    if (batchImport || draftOverride || zipProgress) return null;
     const parsedValue = tryParseConceptKnowledgeText(rawText);
     if (!parsedValue) return null;
     return isConceptKnowledgeJson(parsedValue) || isAppCompatibleEntriesJson(parsedValue)
       ? parsedValue
       : null;
-  }, [batchImport, rawText]);
+  }, [batchImport, draftOverride, rawText, zipProgress]);
   const conceptImportKey = conceptImportValue ? rawText : "";
   const shouldShowConceptPreview = Boolean(
     conceptImportValue &&
@@ -327,10 +330,10 @@ export default function ImportFromGptModal({
   );
 
   const parsed: ImportedStudyText | null = useMemo(() => {
-    if (conceptImportValue || batchImport) return null;
+    if (conceptImportValue || batchImport || draftOverride || zipProgress) return null;
     if (!rawText.trim()) return null;
     return parseImportedStudyText(rawText, filename, fallbackSubject);
-  }, [batchImport, conceptImportValue, fallbackSubject, filename, rawText]);
+  }, [batchImport, conceptImportValue, draftOverride, fallbackSubject, filename, rawText, zipProgress]);
   const expectedQuestionParse = useMemo(
     () => parseExpectedQuestionNumbers(expectedQuestionInput),
     [expectedQuestionInput],
@@ -350,6 +353,12 @@ export default function ImportFromGptModal({
   }, [draftOverride, expectedQuestionNumbers, parsed]);
 
   useEffect(() => {
+    if (!draftOverride && !batchImport) {
+      setEntryKindResolution(parsed?.entryKindResolution ?? null);
+    }
+  }, [batchImport, draftOverride, parsed]);
+
+  useEffect(() => {
     if (!watchClipboard) return;
     let cancelled = false;
     let lastText = rawText;
@@ -362,6 +371,8 @@ export default function ImportFromGptModal({
         setFilename(undefined);
         setDraftOverride(null);
         setBatchImport(null);
+        setEntryKindResolution(null);
+        setImportWarnings([]);
         setError(null);
         setCopyMessage("클립보드에서 GPT 답변을 가져왔습니다.");
       } catch {
@@ -398,14 +409,21 @@ export default function ImportFromGptModal({
   const hasBlockingValidationIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableValidationIssues = validationPolicy.confirmable.length > 0;
   const hasDraftContent = draft?.entryKind === "lecture"
-    ? Boolean(draft.title?.trim() || draft.learningBlocks?.length)
+    ? Boolean(draft.title?.trim() || draft.question?.trim() || draft.learningBlocks?.length)
     : draft?.entryKind === "concept"
       ? Boolean(draft.title?.trim() || draft.question?.trim())
       : Boolean(draft?.question?.trim());
-  const canApply = hasDraftContent &&
-    !hasBlockingValidationIssues &&
-    (!hasConfirmableValidationIssues || confirmedValidationErrors);
+  const applyBlockReason = useMemo(() => {
+    if (!draft?.entryKind) return "항목 종류를 확인해야 합니다.";
+    if (!hasDraftContent) return draft.entryKind === "lecture" ? "본문이나 특강 블록이 없습니다." : "본문이나 특강 블록이 없습니다.";
+    if (hasBlockingValidationIssues) return "누락 문항 검증 오류가 있습니다.";
+    if (hasConfirmableValidationIssues && !confirmedValidationErrors) return "위험 항목 확인 체크가 필요합니다.";
+    if (zipProgress) return "ZIP 이미지 연결이 완료되지 않았습니다.";
+    return null;
+  }, [confirmedValidationErrors, draft, hasBlockingValidationIssues, hasConfirmableValidationIssues, hasDraftContent, zipProgress]);
+  const canApply = !applyBlockReason;
   const aiImageFilenames = isSolutionMode && sourceEntry ? sourceEntry.questionImages : images;
+  const detectedFormat = draftOverride || batchImport ? "json" : parsed?.detectedFormat;
   const hasAiVisionImages = aiImageFilenames.length > 0;
   const canUseAiProvider = Boolean(
     onGenerateWithAi &&
@@ -429,6 +447,8 @@ export default function ImportFromGptModal({
       setFilename(file.name);
       setDraftOverride(null);
       setBatchImport(null);
+      setEntryKindResolution(null);
+      setImportWarnings([]);
     } catch (fileError) {
       setError(
         fileError instanceof Error && fileError.message
@@ -459,6 +479,8 @@ export default function ImportFromGptModal({
       setFilename(undefined);
       setDraftOverride(null);
       setBatchImport(null);
+      setEntryKindResolution(null);
+      setImportWarnings([]);
       setError(null);
       setCopyMessage("클립보드에서 가져왔습니다.");
     } catch {
@@ -490,6 +512,8 @@ export default function ImportFromGptModal({
         setFilename("gemini.json");
         setDraftOverride(null);
         setBatchImport(null);
+        setEntryKindResolution(null);
+        setImportWarnings([]);
         setDismissedConceptPreviewKey("");
         setCopyMessage("AI provider 개념 자료 JSON을 가져왔습니다.");
         return;
@@ -503,6 +527,8 @@ export default function ImportFromGptModal({
       setFilename("gemini.json");
       setDraftOverride(null);
       setBatchImport(null);
+      setEntryKindResolution(null);
+      setImportWarnings([]);
       setCopyMessage("AI provider 결과를 가져왔습니다.");
     } catch (aiError) {
       setError(
@@ -549,8 +575,9 @@ export default function ImportFromGptModal({
     const imageByName = new Map(imageFiles.map((file) => [imageFileKey(file.name), file]));
     const filesToSave: File[] = [];
     const fileIndexByKey = new Map<string, number>();
+    const warnings: string[] = [];
 
-    for (const entry of imported.entries) {
+    for (const [entryIndex, entry] of imported.entries.entries()) {
       const allReferenced = collectEntryImportImageReferences(entry);
       const unsafeReference = allReferenced.find((image) => !isSafeImportImageFilename(image));
       if (unsafeReference) throw new Error(`JSON의 이미지 참조 \`${unsafeReference}\`가 안전한 파일명이 아닙니다.`);
@@ -558,7 +585,13 @@ export default function ImportFromGptModal({
       for (const image of referenced) {
         const key = imageFileKey(image);
         const file = imageByName.get(key);
-        if (!file) throw new Error(`JSON에서 참조한 이미지 \`${image}\`를 찾을 수 없습니다.`);
+        if (!file) {
+          if (entry.entryKind === "lecture") {
+            warnings.push(`entries[${entryIndex}]에서 참조한 이미지 \`${image}\`를 찾지 못해 연결을 해제했습니다.`);
+            continue;
+          }
+          throw new Error(`JSON에서 참조한 이미지 \`${image}\`를 찾을 수 없습니다.`);
+        }
         if (fileIndexByKey.has(key)) continue;
         fileIndexByKey.set(key, filesToSave.length);
         filesToSave.push(file);
@@ -568,6 +601,7 @@ export default function ImportFromGptModal({
     const savedFilenames = filesToSave.length ? await saveImageFiles(filesToSave) : [];
     return {
       ...imported,
+      warnings: [...(imported.warnings ?? []), ...warnings],
       entries: imported.entries.map((entry) => ({
         ...entry,
         questionImages: (entry.questionImages ?? []).map((image) => {
@@ -603,11 +637,14 @@ export default function ImportFromGptModal({
       if (linkedDocument.entries.length === 1) {
         setBatchImport(null);
         setDraftOverride(linkedDocument.entries[0]);
+        setEntryKindResolution(linkedDocument.entryKindResolutions?.[0] ?? null);
       } else {
         if (!onApplyEntries) throw new Error("이 화면에서는 여러 항목 저장을 지원하지 않습니다.");
         setDraftOverride(null);
+        setEntryKindResolution(null);
         setBatchImport(linkedDocument);
       }
+      setImportWarnings(linkedDocument.warnings ?? []);
       const figureCount = linkedDocument.entries.reduce(
         (sum, entry) => sum + (entry.figures?.length ?? 0),
         0,
@@ -668,7 +705,10 @@ export default function ImportFromGptModal({
   };
 
   const apply = () => {
-    if (!draft || !canApply) return;
+    if (!draft || !canApply) {
+      setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
+      return;
+    }
     const rejectedNotes = normalizeRejectedNotes(draft.rejectedNotes);
     const answerKey = scrubRejectedNotesFromAnswers(draft.answerKey ?? [], rejectedNotes);
     const question = cleanQuestionText(removeRejectedNotes(draft.question ?? "", rejectedNotes));
@@ -693,7 +733,9 @@ export default function ImportFromGptModal({
     }
     onApply({
       ...normalizedDraft,
-      questionImages: isSolutionMode ? sourceEntry?.questionImages ?? [] : images,
+      questionImages: isSolutionMode
+        ? sourceEntry?.questionImages ?? []
+        : [...new Set([...(draft.questionImages ?? []), ...images])],
     }, isSolutionMode ? applyMode : undefined);
   };
 
@@ -831,6 +873,8 @@ export default function ImportFromGptModal({
                     setFilename(undefined);
                     setDraftOverride(null);
                     setBatchImport(null);
+                    setEntryKindResolution(null);
+                    setImportWarnings([]);
                     setError(null);
                   }}
                   placeholder={isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
@@ -1051,10 +1095,35 @@ export default function ImportFromGptModal({
                   {error}
                 </p>
               )}
-              {!draft || !parsed ? (
+              {!draft ? (
                 <div className="import-preview-empty">붙여넣기 또는 파일 업로드를 하면 미리보기가 표시됩니다.</div>
               ) : (
                 <>
+                  <div className="import-entry-kind-field">
+                    <label htmlFor="import-entry-kind">항목 종류</label>
+                    <select
+                      id="import-entry-kind"
+                      value={draft.entryKind ?? ""}
+                      onChange={(event) => {
+                        const value = event.target.value as EntryFormData["entryKind"];
+                        setDraft((current) => current ? { ...current, entryKind: value } : current);
+                        setEntryKindResolution({ entryKind: value, source: "explicit" });
+                        setConfirmedValidationErrors(false);
+                      }}
+                    >
+                      <option value="problem_sheet">문제지</option>
+                      <option value="wrong_answer">개별 오답</option>
+                      <option value="concept">개념노트</option>
+                      <option value="lecture">특강자료</option>
+                    </select>
+                    {entryKindResolution?.source === "heuristic" && <span className="import-auto-kind-badge">문제지로 자동 판정됨</span>}
+                  </div>
+                  {importWarnings.length > 0 && (
+                    <div className="import-asset-warnings" role="alert">
+                      <strong>이미지 연결 확인</strong>
+                      <ul>{importWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+                    </div>
+                  )}
                   {validationReport?.audit && (
                     <div className={`import-audit-summary ${validationReport.issues.some((issue) => issue.severity === "error") ? "import-audit-summary--danger" : ""}`} role="alert">
                       <strong>
@@ -1078,7 +1147,7 @@ export default function ImportFromGptModal({
                       )}
                     </div>
                   )}
-                  {parsed.detectedFormat !== "json" && (
+                  {detectedFormat && detectedFormat !== "json" && (
                     <div className="import-format-warning" role="alert">
                       JSON이 아닌 텍스트로 감지되었습니다. GPT 프롬프트를 다시 복사해 순수 JSON 객체로 받아오면 답안지와 난이도 연결이 더 정확합니다.
                     </div>
@@ -1086,7 +1155,7 @@ export default function ImportFromGptModal({
                   <dl className="import-preview-meta">
                     <div>
                       <dt>형식</dt>
-                      <dd>{parsed.detectedFormat === "json" ? "JSON" : "텍스트"}</dd>
+                      <dd>{detectedFormat === "json" ? "JSON" : "텍스트"}</dd>
                     </div>
                     <div>
                       <dt>제목</dt>
@@ -1445,6 +1514,9 @@ export default function ImportFromGptModal({
             {isSolutionMode ? "해설 적용하기" : "폼으로 보내기"}
           </button>
         </div>
+        {!canApply && applyBlockReason && (
+          <p className="import-apply-reason" role="status">{applyBlockReason}</p>
+        )}
         <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} className="import-help-dialog" backdropClassName="import-help-backdrop" ariaLabel="가져오기 도움말">
               <header><h3 id="import-help-title">가져오기 도움말</h3><button type="button" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>
               <ul>

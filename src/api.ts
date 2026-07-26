@@ -109,7 +109,28 @@ export const builtInPromptTemplates: PromptTemplate[] = [
     id: "builtin-sheet-png-package",
     name: "시험지+답안지+PNG 패키지",
     builtIn: true,
-    content: `사진 속 문제지와 답안지를 분석해 import.json과 실제 PNG/JPG/WebP 자산으로 구성된 패키지를 만들어줘.
+    content: `사진 속 문제지와 답안지를 분석해 wrong-answer-notebook-import-v2 형식의 import.json과 실제 PNG/JPG/WebP 자산으로 구성된 패키지를 만들어줘.
+
+표준 출력은 반드시 다음 wrapper 구조를 따른다.
+{
+  "schemaVersion": "wrong-answer-notebook-import-v2",
+  "importType": "problem_sheet",
+  "title": "자료 제목",
+  "subject": "수학",
+  "entries": [{
+    "entryKind": "problem_sheet",
+    "title": "시험지 제목",
+    "subject": "수학",
+    "question": "...",
+    "answerKey": [],
+    "figures": [],
+    "learningBlocks": [],
+    "rejectedNotes": [],
+    "audit": {}
+  }]
+}
+
+entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_answer, 개념노트는 concept, 특강은 lecture다. entries의 모든 항목에 entryKind를 반드시 넣고 importType과 일치시킨다. 여러 종류가 섞이면 importType은 mixed다. import.json의 이미지 파일명은 ZIP 내부 파일명과 대소문자까지 정확히 일치시킨다.
 
 이 모드는 실제 이미지 생성이 가능한 PNG 패키지 모드다. JSON 설명만 작성하지 말고 원본 도형 crop을 입력으로 사용해 cleaned PNG를 생성해라.
 
@@ -155,6 +176,7 @@ figure 예시:
     content: `사진 속 문제지와 답안지를 오답노트 앱에 넣을 JSON으로 정리해줘. 이 모드는 JSON 전용이며 이미지를 생성하거나 파일을 첨부하지 않는다.
 
 규칙:
+- 최상위 단일 시험지 객체에는 반드시 "entryKind": "problem_sheet"를 넣어줘.
 - 반드시 순수 JSON 객체 1개만 출력해줘. 첫 글자는 {, 마지막 글자는 } 이어야 해.
 - PNG를 생성하지 말고, 원본 도형의 상세 구조·관계·수치·라벨을 semanticSpec과 caption에 기록해.
 - figures[].original에는 필요한 원본 crop과 source page의 파일명 계획만 적고 실제 이미지가 없으면 image를 만들지 마.

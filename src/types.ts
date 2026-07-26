@@ -168,6 +168,8 @@ export interface LearningBlock {
   sourceQuestionNumber?: string;
   diagramType?: LearningDiagramType;
   diagramSpec?: DiagramSpec;
+  images?: string[];
+  figureIds?: string[];
 }
 
 export interface SheetAnswerItem {
@@ -583,7 +585,10 @@ export interface ViewPreferences {
   showOriginalPages: boolean;
   showLearningVisuals: boolean;
   compactToolbar: boolean;
+  lectureLayout?: LectureLayout;
 }
+
+export type LectureLayout = "document" | "cards";
 
 export interface ExamPreferences {
   showScratchNote: boolean;
@@ -817,6 +822,7 @@ export interface WrongAnswerEntry {
   title: string;
   question: string;
   questionImages: string[];
+  sourcePageImages?: string[];
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;
   /** 어려운 문제 표시 (필터용) */

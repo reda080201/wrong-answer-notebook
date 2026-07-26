@@ -506,6 +506,18 @@ fn build_gemini_parts(
 
 fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
     let mut images = entry.question_images.clone();
+    if let Some(source_pages) = entry
+        .extra
+        .get("sourcePageImages")
+        .and_then(serde_json::Value::as_array)
+    {
+        images.extend(
+            source_pages
+                .iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_owned),
+        );
+    }
     images.extend(entry.images.clone());
     images.extend(entry.explanation_images.clone());
     for part in &entry.explanation_parts {
@@ -523,6 +535,30 @@ fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
                 .and_then(serde_json::Value::as_str)
             {
                 images.push(image.to_owned());
+            }
+        }
+        if let Some(source_page) = figure
+            .extra
+            .get("original")
+            .and_then(|value| value.get("sourcePageImage"))
+            .and_then(serde_json::Value::as_str)
+        {
+            images.push(source_page.to_owned());
+        }
+    }
+    if let Some(blocks) = entry
+        .extra
+        .get("learningBlocks")
+        .and_then(serde_json::Value::as_array)
+    {
+        for block in blocks {
+            if let Some(block_images) = block.get("images").and_then(serde_json::Value::as_array) {
+                images.extend(
+                    block_images
+                        .iter()
+                        .filter_map(serde_json::Value::as_str)
+                        .map(str::to_owned),
+                );
             }
         }
     }

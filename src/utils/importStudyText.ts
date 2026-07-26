@@ -20,6 +20,13 @@ export type ImportDetectedFormat = "json" | "text";
 export interface ImportedStudyText {
   detectedFormat: ImportDetectedFormat;
   data: Partial<EntryFormData>;
+  entryKindResolution?: EntryKindResolution;
+  warnings?: string[];
+}
+
+export interface EntryKindResolution {
+  entryKind: EntryKind;
+  source: "explicit" | "import_type" | "heuristic";
 }
 
 export type ImportV2Type = "problem_sheet" | "concept_entries" | "lecture" | "mixed";
@@ -30,6 +37,8 @@ export interface ImportedStudyDocument {
   title?: string;
   subject?: Subject;
   entries: Partial<EntryFormData>[];
+  entryKindResolutions?: EntryKindResolution[];
+  warnings?: string[];
 }
 
 interface ImportJsonShape {
@@ -113,7 +122,7 @@ export function parseImportedStudyText(
   if (isImportV2Wrapper(parsed)) {
     const document = parseAllInOneImport(input, filename, fallbackSubject);
     if (document.entries.length === 1) {
-      return { detectedFormat: "json", data: document.entries[0] };
+      return { detectedFormat: "json", data: document.entries[0], entryKindResolution: document.entryKindResolutions?.[0], warnings: document.warnings };
     }
     throw new ImportParseError(
       `v2 wrapper에 entries가 ${document.entries.length}개 있습니다. 다중 항목 preview를 사용해 주세요.`,
@@ -124,7 +133,8 @@ export function parseImportedStudyText(
     if (getString((parsed as ImportJsonShape & { schemaVersion?: unknown }).schemaVersion) === "wrong-answer-notebook-question-export-v1") {
       return { detectedFormat: "json", data: normalizeQuestionExportDocument(parsed as QuestionExportDocument, fallbackSubject) };
     }
-    const entryKind = getString(parsed.entryKind);
+    const resolution = resolveEntryKind(parsed);
+    const entryKind = resolution.entryKind;
     if (entryKind === "concept") {
       const title = getString(parsed.title);
       const summary = getString(parsed.summary) || getString(parsed.question);
@@ -140,7 +150,8 @@ export function parseImportedStudyText(
             memo: getString(parsed.memo),
             tags: normalizeTags(parsed.tags),
             checklist: normalizeChecklist(parsed.checklist),
-            questionImages: [],
+            questionImages: normalizeTextList(parsed.questionImages),
+            sourcePageImages: normalizeTextList(parsed.sourcePageImages),
             difficult: false,
             difficulty: "none",
             myAnswer: "",
@@ -152,6 +163,7 @@ export function parseImportedStudyText(
             annotations: [],
             mastered: false,
           },
+          entryKindResolution: resolution,
         };
       }
     }
@@ -172,14 +184,15 @@ export function parseImportedStudyText(
             tags: normalizeTags(parsed.tags),
             concepts: normalizeTextList(parsed.concepts),
             checklist: normalizeChecklist(parsed.checklist),
-            questionImages: [],
+            questionImages: normalizeTextList(parsed.questionImages),
+            sourcePageImages: normalizeTextList(parsed.sourcePageImages),
             difficult: false,
             difficulty: "none",
             myAnswer: "",
             correctAnswer: "",
             explanationParts: [],
             answerKey: [],
-            figures: [],
+            figures: normalizeImportFigures(parsed.figures),
             learningBlocks,
             sourceType: normalizeLectureSourceType(parsed.sourceType),
             linkedEntryIds: normalizeTextList(parsed.linkedEntryIds),
@@ -187,6 +200,7 @@ export function parseImportedStudyText(
             annotations: [],
             mastered: parsed.mastered === true,
           },
+          entryKindResolution: resolution,
         };
       }
     }
@@ -237,7 +251,8 @@ export function parseImportedStudyText(
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
-          questionImages: normalizeTextList(parsed.questionImages ?? parsed.sourcePageImages),
+          questionImages: normalizeTextList(parsed.questionImages),
+          sourcePageImages: normalizeTextList(parsed.sourcePageImages),
           difficult: false,
           difficulty: "none",
           difficultyScore,
@@ -246,6 +261,7 @@ export function parseImportedStudyText(
           annotations: [],
           mastered: false,
         },
+        entryKindResolution: resolution,
       };
     }
   }
@@ -344,12 +360,13 @@ export function parseAllInOneImport(
 
   const isWrapper = schemaVersion === "wrong-answer-notebook-import-v2" || "entries" in parsed;
   if (!isWrapper) {
-    assertEntryKind(parsed);
+    const resolution = resolveEntryKind(parsed);
     return {
       importType: "single",
       title: getString(parsed.title) || undefined,
       subject: normalizeSubject(parsed.subject, fallbackSubject),
-      entries: [normalizeAllInOneEntry(parsed, filename, fallbackSubject)],
+      entries: [normalizeAllInOneEntry({ ...parsed, entryKind: resolution.entryKind }, filename, fallbackSubject)],
+      entryKindResolutions: [resolution],
     };
   }
 
@@ -366,7 +383,7 @@ export function parseAllInOneImport(
 
   const rawImportType = getString((parsed as ImportV2Wrapper).importType);
   const inferredType = inferImportType(rawEntries);
-  const importType = schemaVersion
+  const importType = rawImportType
     ? rawImportType as ImportV2Type
     : inferredType;
   if (!SUPPORTED_V2_IMPORT_TYPES.has(importType)) {
@@ -375,13 +392,17 @@ export function parseAllInOneImport(
 
   const wrapperSubject = normalizeSubject((parsed as ImportV2Wrapper).subject, fallbackSubject);
   const wrapperTitle = getString((parsed as ImportV2Wrapper).title);
-  const entries = rawEntries.map((rawEntry) => {
-    if (!isImportJson(rawEntry)) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
-    const entryKind = assertEntryKind(rawEntry);
+  const entryKindResolutions: EntryKindResolution[] = [];
+  const entries = rawEntries.map((rawEntry, index) => {
+    if (!isImportJson(rawEntry)) throw new ImportParseError(`entries[${index}]의 형식이 올바르지 않습니다.`);
+    const resolution = resolveEntryKind(rawEntry, importType, index);
+    entryKindResolutions.push(resolution);
+    const entryKind = resolution.entryKind;
     assertImportTypeMatches(importType, entryKind);
     const entrySubject = normalizeSubject(rawEntry.subject, wrapperSubject);
     const withWrapperDefaults: ImportJsonShape = {
       ...rawEntry,
+      entryKind,
       subject: rawEntry.subject ?? wrapperSubject,
       title: rawEntry.title ?? (rawEntries.length === 1 ? wrapperTitle : undefined),
     };
@@ -398,6 +419,7 @@ export function parseAllInOneImport(
     title: wrapperTitle || undefined,
     subject: wrapperSubject,
     entries,
+    entryKindResolutions,
   };
 }
 
@@ -480,19 +502,41 @@ function normalizeLectureSourceType(value: unknown): LectureSourceType {
     : "json";
 }
 
-function assertEntryKind(value: ImportJsonShape): EntryKind {
-  const entryKind = getString(value.entryKind) as EntryKind;
-  if (!entryKind) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
-  if (!SUPPORTED_ENTRY_KINDS.has(entryKind)) {
-    throw new ImportParseError("지원하지 않는 entryKind입니다.");
+function entryKindForImportType(importType: ImportV2Type): EntryKind | undefined {
+  if (importType === "problem_sheet") return "problem_sheet";
+  if (importType === "concept_entries") return "concept";
+  if (importType === "lecture") return "lecture";
+  return undefined;
+}
+
+function inferSingleEntryKind(value: ImportJsonShape): EntryKind {
+  if (value.question || value.answerKey || value.audit || value.figures) return "problem_sheet";
+  if (value.sourceType && Array.isArray(value.learningBlocks) && value.learningBlocks.length > 0) return "lecture";
+  throw new ImportParseError("entryKind를 결정할 수 없습니다. problem_sheet, wrong_answer, concept, lecture 중 하나를 선택하세요.");
+}
+
+function resolveEntryKind(
+  value: ImportJsonShape,
+  importType?: ImportV2Type,
+  index?: number,
+): EntryKindResolution {
+  const explicit = getString(value.entryKind) as EntryKind;
+  if (explicit) {
+    if (!SUPPORTED_ENTRY_KINDS.has(explicit)) throw new ImportParseError("지원하지 않는 entryKind입니다.");
+    return { entryKind: explicit, source: "explicit" };
   }
-  return entryKind;
+  const fromImportType = importType ? entryKindForImportType(importType) : undefined;
+  if (fromImportType) return { entryKind: fromImportType, source: "import_type" };
+  if (importType === "mixed") {
+    throw new ImportParseError(`entries[${index ?? 0}]의 entryKind를 결정할 수 없습니다. problem_sheet, wrong_answer, concept, lecture 중 하나를 선택하세요.`);
+  }
+  return { entryKind: inferSingleEntryKind(value), source: "heuristic" };
 }
 
 function inferImportType(entries: unknown[]): ImportV2Type {
-  const kinds = entries.map((entry) => {
-    if (!isImportJson(entry)) throw new ImportParseError("가져올 항목에 entryKind가 없습니다.");
-    return assertEntryKind(entry);
+  const kinds = entries.map((entry, index) => {
+    if (!isImportJson(entry)) throw new ImportParseError(`entries[${index}]의 형식이 올바르지 않습니다.`);
+    return resolveEntryKind(entry, undefined, index).entryKind;
   });
   if (kinds.every((kind) => kind === "problem_sheet")) return "problem_sheet";
   if (kinds.every((kind) => kind === "concept")) return "concept_entries";
@@ -614,10 +658,30 @@ function normalizeImportFigures(
   learningBlocks: NonNullable<EntryFormData["learningBlocks"]> = [],
 ): SheetFigureItem[] {
   return normalizeFigures(value).map((figure) => {
-    const image = figure.image && isSafeImportImageFilename(figure.image) ? figure.image : undefined;
+    const safe = (filename: string | undefined) => filename && isSafeImportImageFilename(filename) ? filename : undefined;
+    const image = safe(figure.image);
+    const originalImage = safe(figure.original?.image);
+    const sourcePageImage = safe(figure.original?.sourcePageImage);
+    const cleanedImage = safe(figure.cleaned?.image);
+    const original = figure.original
+      ? originalImage
+        ? { ...figure.original, image: originalImage, sourcePageImage }
+        : undefined
+      : undefined;
+    const cleaned = figure.cleaned && cleanedImage
+      ? { ...figure.cleaned, image: cleanedImage }
+      : undefined;
+    const hadInvalidReference = Boolean(
+      (figure.image && !image) ||
+      (figure.original?.image && !originalImage) ||
+      (figure.original?.sourcePageImage && !sourcePageImage) ||
+      (figure.cleaned?.image && !cleanedImage),
+    );
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
     const normalized = {
       ...figure,
+      original,
+      cleaned,
       // External JSON may describe a user decision, but only an in-app click can create one.
       representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
       verification: figure.verification
@@ -625,7 +689,7 @@ function normalizeImportFigures(
         : undefined,
       image,
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
-      needsReview: figure.needsReview || Boolean(figure.image && !image),
+      needsReview: figure.needsReview || hadInvalidReference,
     };
     const automatic = applyAutomaticFigurePreference(normalized);
     return {

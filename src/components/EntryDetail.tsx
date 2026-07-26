@@ -1547,6 +1547,8 @@ export default function EntryDetail({
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
               onOpenLinkedEntry={onOpenEntry}
+              layout={viewPreferences?.lectureLayout ?? "document"}
+              onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
             />
           ) : !isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
