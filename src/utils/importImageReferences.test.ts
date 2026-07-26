@@ -20,4 +20,24 @@ describe("import image references", () => {
     expect(mapped.figures?.[0]).toMatchObject({ image: "saved-old.png", original: { image: "saved-old.png", sourcePageImage: "saved-page.png" } });
     expect(entry.figures?.[0].image).toBe("old.png");
   });
+
+  it("removes unmapped nested references when an import cannot resolve an asset", () => {
+    const entry: Partial<EntryFormData> = {
+      figures: [{
+        id: "f1",
+        questionNumber: "1",
+        title: "",
+        caption: "",
+        image: "missing.png",
+        source: "original",
+        original: { image: "missing.png", sourcePageImage: "missing-page.png" },
+        cleaned: { image: "cleaned.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "h", promptVersion: "v" },
+      }],
+      learningBlocks: [{ id: "b1", type: "concept", title: "", content: "", images: ["missing-block.png"] }],
+    };
+
+    const mapped = mapEntryImportImageReferences(entry, () => undefined, { removeUnmapped: true });
+    expect(mapped.figures?.[0]).toMatchObject({ image: undefined, original: undefined, cleaned: undefined });
+    expect(mapped.learningBlocks?.[0]?.images).toEqual([]);
+  });
 });

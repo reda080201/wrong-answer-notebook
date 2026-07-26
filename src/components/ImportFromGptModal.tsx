@@ -626,7 +626,7 @@ export default function ImportFromGptModal({
           if (!isSafeImportImageFilename(image)) return undefined;
           const index = fileIndexByKey.get(imageFileKey(image));
           return index === undefined ? undefined : savedFilenames[index];
-        }),
+        }, { removeUnmapped: true }),
       })),
     };
   };

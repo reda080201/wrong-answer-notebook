@@ -239,5 +239,16 @@ describe("importStudyText", () => {
       expect(figure?.source).toBe("original");
       expect(figure?.image).toBe("original.png");
     });
+
+    it("preserves a legacy figure image when no original variant is supplied", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "problem_sheet",
+        title: "Legacy figure",
+        question: "1. 문제",
+        figures: [{ id: "f1", questionNumber: "1", image: "graph.png" }],
+      }));
+
+      expect(result.data.figures?.[0]).toMatchObject({ image: "graph.png" });
+    });
   });
 });

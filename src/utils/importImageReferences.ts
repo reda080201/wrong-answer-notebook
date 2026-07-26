@@ -22,8 +22,13 @@ export function collectEntryImportImageReferences(entry: Partial<EntryFormData>)
 export function mapFigureImageReferences(
   figure: SheetFigureItem,
   mapImage: (filename: string) => string | undefined,
+  removeUnmapped = false,
 ): SheetFigureItem {
-  const map = (filename: string | undefined) => filename ? mapImage(filename) ?? filename : undefined;
+  const map = (filename: string | undefined) => {
+    if (!filename) return undefined;
+    const mapped = mapImage(filename);
+    return mapped ?? (removeUnmapped ? undefined : filename);
+  };
   return {
     ...figure,
     image: map(figure.image),
@@ -46,19 +51,25 @@ export function mapFigureImageReferences(
 export function mapEntryImportImageReferences(
   entry: Partial<EntryFormData>,
   mapImage: (filename: string) => string | undefined,
+  options: { removeUnmapped?: boolean } = {},
 ): Partial<EntryFormData> {
+  const removeUnmapped = options.removeUnmapped ?? false;
+  const map = (filename: string) => {
+    const mapped = mapImage(filename);
+    return mapped ?? (removeUnmapped ? undefined : filename);
+  };
   return {
     ...entry,
-    questionImages: (entry.questionImages ?? []).map(mapImage).filter((image): image is string => Boolean(image)),
-    sourcePageImages: (entry.sourcePageImages ?? []).map(mapImage).filter((image): image is string => Boolean(image)),
+    questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
+    sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     explanationParts: (entry.explanationParts ?? []).map((part) => ({
       ...part,
-      images: (part.images ?? []).map(mapImage).filter((image): image is string => Boolean(image)),
+      images: (part.images ?? []).map(map).filter((image): image is string => Boolean(image)),
     })),
-    figures: (entry.figures ?? []).map((figure) => mapFigureImageReferences(figure, mapImage)),
+    figures: (entry.figures ?? []).map((figure) => mapFigureImageReferences(figure, mapImage, removeUnmapped)),
     learningBlocks: (entry.learningBlocks ?? []).map((block) => ({
       ...block,
-      images: (block.images ?? []).map(mapImage).filter((image): image is string => Boolean(image)),
+      images: (block.images ?? []).map(map).filter((image): image is string => Boolean(image)),
     })),
   };
 }

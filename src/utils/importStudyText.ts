@@ -701,7 +701,7 @@ function normalizeImportFigures(
     return {
       ...automatic,
       // A GPT self-check is informative only; it cannot authorize a cleaned/semantic representation.
-      image: automatic.source === "original" ? (automatic.original?.image ?? automatic.image) : automatic.original?.image,
+      image: automatic.original?.image ?? automatic.image,
       source: automatic.original?.image ? "original" : automatic.source,
       preferredRepresentation: automatic.original?.image ? "original" : automatic.preferredRepresentation,
       needsReview: automatic.original?.image || automatic.cleaned?.image || automatic.semanticSpec ? true : automatic.needsReview,
