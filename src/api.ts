@@ -10,6 +10,7 @@ import type {
   McpActiveContext,
   ActiveExamContext,
   AppUpdatePreferences,
+  OrphanImagePreview,
   McpExportContext,
   ExamSession,
   McpBridgeSettings,
@@ -26,7 +27,7 @@ import {
   loadExamSessions as loadExamSessionsFromStorage,
   saveExamSessions as saveExamSessionsToStorage,
 } from "./features/exam/storage/examSessionStorage";
-import { normalizeEntry } from "./utils/entry";
+import { getAllImageFilenames, normalizeEntry } from "./utils/entry";
 import {
   DEFAULT_EXAM_PREFERENCES,
   DEFAULT_CHATGPT_MCP_PREFERENCES,
@@ -962,13 +963,28 @@ export async function runNativeIntegrityCheck(): Promise<IntegrityReport | null>
   return invoke<IntegrityReport>("run_integrity_check");
 }
 
-export async function cleanupOrphanImages(referencedImages: string[]): Promise<number> {
+export async function previewOrphanImages(): Promise<OrphanImagePreview> {
   if (isTauri()) {
-    return invoke<number>("cleanup_orphan_images", { referencedImages });
+    return invoke<OrphanImagePreview>("preview_orphan_images");
   }
 
+  const rawEntries = localStorage.getItem(ENTRIES_STORAGE_KEY);
+  const entries = rawEntries ? parseStoredEntries(rawEntries) : [];
+  const referenced = new Set(entries.flatMap(getAllImageFilenames));
+  const filenames = Object.keys(localStorage).filter((key) => key.startsWith("img_") && !referenced.has(key));
+  const totalBytes = filenames.reduce((sum, filename) => sum + (localStorage.getItem(filename)?.length ?? 0), 0);
+  return { filenames, totalBytes };
+}
+
+export async function cleanupOrphanImages(): Promise<number> {
+  if (isTauri()) {
+    return invoke<number>("cleanup_orphan_images");
+  }
+
+  const rawEntries = localStorage.getItem(ENTRIES_STORAGE_KEY);
+  const entries = rawEntries ? parseStoredEntries(rawEntries) : [];
+  const referenced = new Set(entries.flatMap(getAllImageFilenames));
   let removed = 0;
-  const referenced = new Set(referencedImages);
   for (const key of Object.keys(localStorage)) {
     if (key.startsWith("img_") && !referenced.has(key)) {
       localStorage.removeItem(key);

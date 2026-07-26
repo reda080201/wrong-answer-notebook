@@ -816,6 +816,11 @@ export interface IntegrityReport {
   issues: IntegrityIssue[];
 }
 
+export interface OrphanImagePreview {
+  filenames: string[];
+  totalBytes: number;
+}
+
 export interface WrongAnswerEntry {
   id: string;
   subject: string;

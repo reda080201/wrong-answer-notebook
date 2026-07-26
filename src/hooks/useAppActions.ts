@@ -4,6 +4,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
   createBackup,
+  previewOrphanImages,
   restoreBackup,
   runNativeIntegrityCheck,
 } from "../api";
@@ -24,7 +25,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { findDuplicateEntries } from "../utils/duplicates";
-import { getAllImageFilenames, getEntryTitle } from "../utils/entry";
+import { getEntryTitle } from "../utils/entry";
 import {
   entryToFormData,
   mergeGptSolutionIntoEntry,
@@ -504,9 +505,14 @@ export function useAppActions({
   };
 
   const handleCleanupOrphans = async () => {
-    const removed = await cleanupOrphanImages(
-      entries.flatMap(getAllImageFilenames),
-    );
+    const preview = await previewOrphanImages();
+    if (!preview.filenames.length) {
+      setSettingsMessage("정리할 미사용 이미지가 없습니다.");
+      return;
+    }
+    const confirmed = window.confirm(`사용하지 않는 이미지 ${preview.filenames.length}개(${Math.ceil(preview.totalBytes / 1024)}KB)를 삭제합니다. 계속하시겠습니까?`);
+    if (!confirmed) return;
+    const removed = await cleanupOrphanImages();
     setSettingsMessage(`사용하지 않는 이미지 ${removed}개를 정리했습니다.`);
   };
 
