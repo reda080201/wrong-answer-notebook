@@ -87,6 +87,13 @@ function imageFileKey(name: string): string {
   return basename(name).toLowerCase();
 }
 
+export function entryKindAutoLabel(entryKind: EntryFormData["entryKind"]): string {
+  if (entryKind === "lecture") return "특강자료로 자동 판정됨";
+  if (entryKind === "concept") return "개념노트로 자동 판정됨";
+  if (entryKind === "wrong_answer") return "개별 오답으로 자동 판정됨";
+  return "문제지로 자동 판정됨";
+}
+
 function isSupportedImageFile(name: string): boolean {
   return /\.(png|jpe?g|webp)$/i.test(name);
 }
@@ -619,7 +626,7 @@ export default function ImportFromGptModal({
           if (!isSafeImportImageFilename(image)) return undefined;
           const index = fileIndexByKey.get(imageFileKey(image));
           return index === undefined ? undefined : savedFilenames[index];
-        }),
+        }, { removeUnmapped: true }),
       })),
     };
   };
@@ -1116,7 +1123,7 @@ export default function ImportFromGptModal({
                       <option value="concept">개념노트</option>
                       <option value="lecture">특강자료</option>
                     </select>
-                    {entryKindResolution?.source === "heuristic" && <span className="import-auto-kind-badge">문제지로 자동 판정됨</span>}
+                    {entryKindResolution?.source === "heuristic" && <span className="import-auto-kind-badge">{entryKindAutoLabel(entryKindResolution.entryKind)}</span>}
                   </div>
                   {importWarnings.length > 0 && (
                     <div className="import-asset-warnings" role="alert">

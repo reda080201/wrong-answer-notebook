@@ -1,9 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
+import { saveImageFiles } from "../api";
 import type { WrongAnswerEntry } from "../types";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
-import ImportFromGptModal from "./ImportFromGptModal";
+import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn(),
@@ -17,6 +19,13 @@ function confirmDangerousImportIfShown() {
 }
 
 describe("ImportFromGptModal", () => {
+  it("uses the matching label for every automatically inferred entry kind", () => {
+    expect(entryKindAutoLabel("problem_sheet")).toBe("문제지로 자동 판정됨");
+    expect(entryKindAutoLabel("wrong_answer")).toBe("개별 오답으로 자동 판정됨");
+    expect(entryKindAutoLabel("concept")).toBe("개념노트로 자동 판정됨");
+    expect(entryKindAutoLabel("lecture")).toBe("특강자료로 자동 판정됨");
+  });
+
   const sourceEntry: WrongAnswerEntry = {
     id: "entry-1",
     subject: "수학",
@@ -827,6 +836,46 @@ describe("ImportFromGptModal", () => {
       );
     });
   });
+
+  it("runs a single-entry ZIP through save, draft preview, and form apply", async () => {
+    const onApply = vi.fn();
+    const zip = new JSZip();
+    zip.file("import.json", JSON.stringify({
+      schemaVersion: "wrong-answer-notebook-import-v2",
+      importType: "problem_sheet",
+      title: "ZIP 시험지",
+      subject: "수학",
+      entries: [{
+        entryKind: "problem_sheet",
+        title: "ZIP 시험지",
+        question: "1. 이미지 문제",
+        questionImages: ["q1.png"],
+        audit: {
+          expectedQuestionNumbers: ["1"],
+          detectedQuestionNumbers: ["1"],
+          missingQuestionNumbers: [],
+          uncertainQuestionNumbers: [],
+          handwritingExcluded: true,
+          needsReviewCount: 0,
+        },
+      }],
+    }));
+    zip.file("q1.png", new Uint8Array([137, 80, 78, 71]));
+    const blob = await zip.generateAsync({ type: "blob" });
+    const file = new File([blob], "bundle.zip", { type: "application/zip" });
+
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={onApply} />);
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), { target: { files: [file] } });
+
+    expect(await screen.findByDisplayValue("ZIP 시험지")).toBeInTheDocument();
+    await waitFor(() => expect(saveImageFiles).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ name: "q1.png" })])));
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({ entryKind: "problem_sheet", questionImages: ["img_mock.png"] }),
+      undefined,
+    ));
+  }, 30000);
 
   it("opens a single v2 wrapper as an editable problem sheet preview", async () => {
     const onApply = vi.fn();

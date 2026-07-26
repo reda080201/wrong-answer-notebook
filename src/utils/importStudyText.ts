@@ -382,10 +382,9 @@ export function parseAllInOneImport(
   }
 
   const rawImportType = getString((parsed as ImportV2Wrapper).importType);
-  const inferredType = inferImportType(rawEntries);
   const importType = rawImportType
-    ? rawImportType as ImportV2Type
-    : inferredType;
+    ? validateImportType(rawImportType)
+    : inferImportType(rawEntries);
   if (!SUPPORTED_V2_IMPORT_TYPES.has(importType)) {
     throw new ImportParseError("지원하지 않는 importType입니다.");
   }
@@ -507,6 +506,13 @@ function entryKindForImportType(importType: ImportV2Type): EntryKind | undefined
   if (importType === "concept_entries") return "concept";
   if (importType === "lecture") return "lecture";
   return undefined;
+}
+
+function validateImportType(value: string): ImportV2Type {
+  if (!SUPPORTED_V2_IMPORT_TYPES.has(value as ImportV2Type)) {
+    throw new ImportParseError("지원하지 않는 importType입니다.");
+  }
+  return value as ImportV2Type;
 }
 
 function inferSingleEntryKind(value: ImportJsonShape): EntryKind {
@@ -695,7 +701,7 @@ function normalizeImportFigures(
     return {
       ...automatic,
       // A GPT self-check is informative only; it cannot authorize a cleaned/semantic representation.
-      image: automatic.source === "original" ? (automatic.original?.image ?? automatic.image) : automatic.original?.image,
+      image: automatic.original?.image ?? automatic.image,
       source: automatic.original?.image ? "original" : automatic.source,
       preferredRepresentation: automatic.original?.image ? "original" : automatic.preferredRepresentation,
       needsReview: automatic.original?.image || automatic.cleaned?.image || automatic.semanticSpec ? true : automatic.needsReview,

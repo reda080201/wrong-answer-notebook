@@ -53,7 +53,8 @@ export default function LectureReaderView({
   const figures = entry.figures ?? [];
   const connectedFigureIds = new Set(blocks.flatMap((block) => block.figureIds ?? []));
   const unlinkedFigures = figures.filter((figure) => !connectedFigureIds.has(figure.id));
-  const overview = entry.question.trim() || entry.memo.trim();
+  const overview = entry.question.trim();
+  const memo = entry.memo.trim();
 
   return (
     <article className={`lecture-reader lecture-reader--${layout}`}>
@@ -72,7 +73,13 @@ export default function LectureReaderView({
       {overview && (
         <section className="lecture-overview" id="lecture-overview">
           <h3>특강 개요</h3>
-          <MathText text={entry.question.trim() || entry.memo} />
+          <MathText text={overview} />
+        </section>
+      )}
+      {memo && (
+        <section className="lecture-support-section" id="lecture-memo">
+          <h3>복습 메모</h3>
+          <MathText text={memo} />
         </section>
       )}
 

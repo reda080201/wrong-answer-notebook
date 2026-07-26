@@ -206,6 +206,7 @@ figure 예시:
 
 형식:
 {
+  "entryKind": "problem_sheet",
   "title": "시험지 제목",
   "subject": "수학",
   "question": "1. ...\\n① ...",
