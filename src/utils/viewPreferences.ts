@@ -30,6 +30,7 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   showOriginalPages: true,
   showLearningVisuals: true,
   compactToolbar: false,
+  lectureLayout: "document",
 };
 
 export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
@@ -108,6 +109,7 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     showOriginalPages: value.showOriginalPages !== false,
     showLearningVisuals: value.showLearningVisuals !== false,
     compactToolbar: Boolean(value.compactToolbar),
+    lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",
   };
 }
 

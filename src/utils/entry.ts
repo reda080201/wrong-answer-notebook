@@ -499,9 +499,15 @@ export function normalizeLearningBlocks(raw: unknown): LearningBlock[] {
           : undefined,
         diagramType: normalizeLearningDiagramType(item.diagramType),
         diagramSpec: normalizeDiagramSpec(item.diagramSpec),
+        images: Array.isArray(item.images)
+          ? item.images.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+          : undefined,
+        figureIds: Array.isArray(item.figureIds)
+          ? item.figureIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+          : undefined,
       };
     })
-    .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec);
+    .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec || item.images?.length || item.figureIds?.length);
 }
 
 export function normalizeFigures(raw: unknown): SheetFigureItem[] {

@@ -43,10 +43,18 @@ describe("builtInPromptTemplates", () => {
     const prompt = builtInPromptTemplates.find((template) => template.id === "builtin-sheet-png-package");
 
     expect(prompt?.content).toContain("import.json");
+    expect(prompt?.content).toContain('"schemaVersion": "wrong-answer-notebook-import-v2"');
+    expect(prompt?.content).toContain('"importType": "problem_sheet"');
+    expect(prompt?.content).toContain('"entryKind": "problem_sheet"');
     expect(prompt?.content).toContain("figures");
     expect(prompt?.content).toContain("graph_1.png");
     expect(prompt?.content).toContain("base64 이미지");
     expect(prompt?.content).not.toContain('"tags"');
+  });
+
+  it("keeps the JSON-only prompt explicit about the problem-sheet entry kind", () => {
+    const prompt = builtInPromptTemplates.find((template) => template.id === "builtin-sheet-answer-json");
+    expect(prompt?.content).toContain('"entryKind": "problem_sheet"');
   });
 });
 

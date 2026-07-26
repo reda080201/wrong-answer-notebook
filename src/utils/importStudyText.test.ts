@@ -127,14 +127,43 @@ describe("importStudyText", () => {
       expect(() => parseImportedStudyText(JSON.stringify(badEntries))).toThrow("entries는 배열이어야 합니다");
     });
 
-    it("throws clear error for entry without entryKind", () => {
+    it("infers a missing entryKind for a problem-sheet wrapper", () => {
       const noEntryKind = {
         schemaVersion: "wrong-answer-notebook-import-v2",
         importType: "problem_sheet",
         entries: [{ question: "Q1", subject: "수학" }],
       };
-      expect(() => parseImportedStudyText(JSON.stringify(noEntryKind))).toThrow(ImportParseError);
-      expect(() => parseImportedStudyText(JSON.stringify(noEntryKind))).toThrow("entryKind가 없습니다");
+      const result = parseImportedStudyText(JSON.stringify(noEntryKind));
+      expect(result.data.entryKind).toBe("problem_sheet");
+      expect(result.entryKindResolution).toEqual({ entryKind: "problem_sheet", source: "import_type" });
+    });
+
+    it("reports the item index when mixed import cannot infer entryKind", () => {
+      expect(() => parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "mixed",
+        entries: [{ question: "Q1", subject: "수학" }],
+      }))).toThrow("entries[0]");
+    });
+
+    it("preserves lecture images, source pages, figures, and block image links", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "lecture",
+        title: "함수 특강",
+        subject: "수학",
+        sourceType: "json",
+        questionImages: ["page.png"],
+        sourcePageImages: ["source.png"],
+        figures: [{ id: "fig-1", questionNumber: "", title: "그래프", caption: "설명", image: "figure.png", source: "original" }],
+        learningBlocks: [{ id: "block-1", type: "concept", title: "핵심", content: "내용", images: ["block.png"], figureIds: ["fig-1"] }],
+      }));
+      expect(result.data).toMatchObject({
+        entryKind: "lecture",
+        questionImages: ["page.png"],
+        sourcePageImages: ["source.png"],
+        figures: [expect.objectContaining({ id: "fig-1", image: "figure.png" })],
+        learningBlocks: [expect.objectContaining({ images: ["block.png"], figureIds: ["fig-1"] })],
+      });
     });
 
     it("rejects unsupported schema versions and import types", () => {
