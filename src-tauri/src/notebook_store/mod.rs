@@ -44,7 +44,9 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
                         .get("images")
                         .and_then(Value::as_array)
                         .into_iter()
-                        .flat_map(|images| images.iter().filter_map(Value::as_str).map(str::to_owned))
+                        .flat_map(|images| {
+                            images.iter().filter_map(Value::as_str).map(str::to_owned)
+                        })
                 })
             }),
     );
