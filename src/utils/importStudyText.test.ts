@@ -185,5 +185,20 @@ describe("importStudyText", () => {
       expect(result.data.entryKind).toBe("concept");
       expect(result.data.title).toBe("Test concept");
     });
+
+    it("does not trust user approval fields from external figure JSON", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "problem_sheet",
+        title: "Figure import",
+        question: "1. 문제",
+        figures: [{ id: "f1", questionNumber: "1", image: "preferred.png", source: "gpt_cleaned", original: { image: "original.png" }, cleaned: { image: "cleaned.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "h", promptVersion: "v" }, preferredRepresentation: "cleaned", representationSelectionSource: "user", verification: { status: "verified", confidence: 1, blockingIssues: [], warnings: [], userApproved: true } }],
+      }));
+      const figure = result.data.figures?.[0];
+      expect(figure?.representationSelectionSource).not.toBe("user");
+      expect(figure?.verification?.userApproved).toBe(false);
+      expect(figure?.verification?.verificationSource).toBe("gpt_self_check");
+      expect(figure?.source).toBe("original");
+      expect(figure?.image).toBe("original.png");
+    });
   });
 });

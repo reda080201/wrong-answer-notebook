@@ -13,6 +13,7 @@ interface AppSidebarProps {
   entries: WrongAnswerEntry[];
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
+  onSectionSelect?: (section: EntryKind) => void;
   stats: {
     total: number;
     pending: number;
@@ -30,6 +31,8 @@ interface AppSidebarProps {
   openImport: () => void;
   openLearningImport: () => void;
   onSubjectSelect: (subject: string | null) => void;
+  onOpenExamBuilder?: () => void;
+  onOpenGeneratedExams?: () => void;
 }
 
 const sectionTabs = [
@@ -44,6 +47,7 @@ export default function AppSidebar({
   entries,
   setActiveSection,
   setSelectedId,
+  onSectionSelect,
   stats,
   learningStats,
   subjectOrder,
@@ -55,6 +59,8 @@ export default function AppSidebar({
   openImport,
   openLearningImport,
   onSubjectSelect,
+  onOpenExamBuilder,
+  onOpenGeneratedExams,
 }: AppSidebarProps) {
   const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
   const sidebarStats =
@@ -102,8 +108,12 @@ export default function AppSidebar({
             type="button"
             className={`section-tab-btn ${activeSection === key ? "active" : ""}`}
             onClick={() => {
-              setActiveSection(key);
-              setSelectedId(null);
+              if (onSectionSelect) {
+                onSectionSelect(key);
+              } else {
+                setActiveSection(key);
+                setSelectedId(null);
+              }
             }}
           >
             {label}
@@ -152,6 +162,16 @@ export default function AppSidebar({
       </div>
 
       <div className="sidebar-footer">
+        {activeSection === "problem_sheet" && onOpenExamBuilder && (
+          <button type="button" className="btn-new" onClick={onOpenExamBuilder}>
+            모의고사 만들기
+          </button>
+        )}
+        {onOpenGeneratedExams && (
+          <button type="button" className="btn-new btn-new--secondary" onClick={onOpenGeneratedExams}>
+            내 모의고사
+          </button>
+        )}
         <button type="button" className="btn-new" onClick={openNew}>
           + 새 {entryKindName(activeSection)} 추가
         </button>

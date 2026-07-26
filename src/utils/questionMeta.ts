@@ -3,7 +3,7 @@ import type { QuestionBlock } from "./textLayout";
 import { parseQuestionText } from "./textLayout";
 import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
-import { calculateNextReview } from "./review";
+import { calculateNextReview } from "./reviewSchedule";
 import { isMistakeCauseType, isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
 
 export function normalizeQuestionNumber(value: string | number | undefined | null): string {
@@ -111,6 +111,17 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
         ? normalizeMistakeAnalysis(item.mistakeAnalysis)
         : undefined,
       review: normalizeQuestionReview(item.review),
+      rating: item.rating && typeof item.rating === "object"
+        ? {
+            importanceScore: normalizeDifficultyScore(item.rating.importanceScore),
+            qualityScore: normalizeDifficultyScore(item.rating.qualityScore),
+            userQualityScore: normalizeDifficultyScore(item.rating.userQualityScore),
+            aiQualityScore: normalizeDifficultyScore(item.rating.aiQualityScore),
+            aiQualityConfidence: normalizeDifficultyScore(item.rating.aiQualityConfidence),
+            lastEvaluatedAt: isValidIsoDate(item.rating.lastEvaluatedAt) ? item.rating.lastEvaluatedAt : undefined,
+            evaluationSource: item.rating.evaluationSource === "manual" || item.rating.evaluationSource === "heuristic" || item.rating.evaluationSource === "gemini" ? item.rating.evaluationSource : undefined,
+          }
+        : undefined,
       updatedAt:
         item.updatedAt && !Number.isNaN(new Date(item.updatedAt).getTime())
           ? item.updatedAt

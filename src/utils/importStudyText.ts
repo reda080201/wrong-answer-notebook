@@ -1,6 +1,6 @@
-import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
+import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
-import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType } from "./entry";
+import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments } from "./entry";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import {
   normalizeImportAudit,
@@ -11,6 +11,7 @@ import {
 import { cleanQuestionText } from "./textCleanup";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
+import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { decodeTextFile } from "../features/import/services/decodeTextFile";
 
@@ -36,6 +37,8 @@ interface ImportJsonShape {
   title?: unknown;
   subject?: unknown;
   question?: unknown;
+  questionImages?: unknown;
+  sourcePageImages?: unknown;
   summary?: unknown;
   tags?: unknown;
   memo?: unknown;
@@ -54,6 +57,8 @@ interface ImportJsonShape {
   audit?: unknown;
   rejectedNotes?: unknown;
   questionMeta?: unknown;
+  questionContentSegments?: unknown;
+  contentSegments?: unknown;
   sourceType?: unknown;
   linkedEntryIds?: unknown;
   mastered?: unknown;
@@ -65,6 +70,13 @@ interface ImportV2Wrapper {
   title?: unknown;
   subject?: unknown;
   entries?: unknown;
+}
+
+interface QuestionExportDocument {
+  schemaVersion?: unknown;
+  title?: unknown;
+  subject?: unknown;
+  questions?: unknown;
 }
 
 const DEFAULT_TAGS: string[] = [];
@@ -109,6 +121,9 @@ export function parseImportedStudyText(
   }
 
   if (isImportJson(parsed)) {
+    if (getString((parsed as ImportJsonShape & { schemaVersion?: unknown }).schemaVersion) === "wrong-answer-notebook-question-export-v1") {
+      return { detectedFormat: "json", data: normalizeQuestionExportDocument(parsed as QuestionExportDocument, fallbackSubject) };
+    }
     const entryKind = getString(parsed.entryKind);
     if (entryKind === "concept") {
       const title = getString(parsed.title);
@@ -179,7 +194,9 @@ export function parseImportedStudyText(
     const rawQuestion = getString(parsed.question);
     if (rawQuestion.trim()) {
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
-      const question = removeRejectedNotes(rawQuestion, rejectedNotes);
+      const question = removeFigureTokens(removeRejectedNotes(rawQuestion, rejectedNotes));
+      const questionContentSegments = normalizeQuestionContentSegments(parsed.questionContentSegments ?? parsed.contentSegments)
+        ?? contentSegmentsFromQuestionTokens(rawQuestion);
       const importantNotes = splitImportantNotes(parsed.importantNotes);
       const answerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
         attachQuestionNotes(normalizeAnswerKey(parsed.answerKey), importantNotes.questionNotes),
@@ -216,10 +233,11 @@ export function parseImportedStudyText(
           figures,
           learningBlocks,
           questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
+          questionContentSegments,
           importAudit,
           rejectedNotes,
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
-          questionImages: [],
+          questionImages: normalizeTextList(parsed.questionImages ?? parsed.sourcePageImages),
           difficult: false,
           difficulty: "none",
           difficultyScore,
@@ -258,6 +276,41 @@ export function parseImportedStudyText(
       mastered: false,
     },
   };
+}
+
+function normalizeQuestionExportDocument(document: QuestionExportDocument, fallbackSubject: Subject): Partial<EntryFormData> {
+  const questions = Array.isArray(document.questions) ? document.questions : [];
+  const segments: Record<string, QuestionContentSegment[]> = {};
+  const figures: SheetFigureItem[] = [];
+  const blocks: string[] = [];
+  for (const [index, raw] of questions.entries()) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    const number = getString(item.displayQuestionNumber) || String(index + 1);
+    const question = getString(item.question);
+    if (getString(item.passage)) blocks.push(`[자료]\n${getString(item.passage)}`);
+    blocks.push(`${number}. ${question}`);
+    const choices = Array.isArray(item.choices) ? item.choices.map((choice) => getString(choice)).filter(Boolean) : [];
+    blocks.push(...choices);
+    if (Array.isArray(item.contentSegments)) {
+      const normalized = item.contentSegments.flatMap((segment, segmentIndex): QuestionContentSegment[] => {
+        if (!segment || typeof segment !== "object") return [];
+        const value = segment as Record<string, unknown>;
+        const id = getString(value.id) || `segment-${segmentIndex + 1}`;
+        if (value.type === "text" && typeof value.text === "string") return [{ id, type: "text", text: value.text }];
+        if (value.type === "condition" && typeof value.text === "string") return [{ id, type: "condition", text: value.text, label: getString(value.label) || undefined }];
+        if (value.type === "figure" && getString(value.figureId)) return [{ id, type: "figure", figureId: getString(value.figureId) }];
+        return [];
+      });
+      if (normalized.length) segments[number] = normalized;
+    }
+    if (Array.isArray(item.figures)) for (const rawFigure of item.figures) {
+      if (!rawFigure || typeof rawFigure !== "object") continue;
+      const figure = rawFigure as Record<string, unknown>;
+      figures.push({ id: getString(figure.id) || `figure-${number}-${figures.length + 1}`, questionNumber: number, title: getString(figure.title), caption: getString(figure.caption), image: getString(figure.image) || undefined, source: figure.source === "described_only" ? "described_only" : figure.source === "gpt_cleaned" ? "gpt_cleaned" : "original", placement: figure.placement && typeof figure.placement === "object" ? figure.placement as SheetFigureItem["placement"] : undefined });
+    }
+  }
+  return { entryKind: "problem_sheet", title: getString(document.title) || "문항 추출본", subject: normalizeSubject(document.subject, fallbackSubject), question: blocks.join("\n"), questionImages: figures.flatMap((figure) => figure.image ? [figure.image] : []), figures, questionContentSegments: segments, tags: ["문항 추출본"], memo: "문항 추출본으로 가져왔습니다.", difficult: false, difficulty: "none", myAnswer: "", correctAnswer: "", explanationParts: [], answerKey: [], annotations: [], mastered: false };
 }
 
 const SUPPORTED_V2_IMPORT_TYPES = new Set<ImportV2Type>([
@@ -563,11 +616,25 @@ function normalizeImportFigures(
   return normalizeFigures(value).map((figure) => {
     const image = figure.image && isSafeImportImageFilename(figure.image) ? figure.image : undefined;
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
-    return {
+    const normalized = {
       ...figure,
+      // External JSON may describe a user decision, but only an in-app click can create one.
+      representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
+      verification: figure.verification
+        ? { ...figure.verification, userApproved: false, verificationSource: "gpt_self_check" as const }
+        : undefined,
       image,
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || Boolean(figure.image && !image),
+    };
+    const automatic = applyAutomaticFigurePreference(normalized);
+    return {
+      ...automatic,
+      // A GPT self-check is informative only; it cannot authorize a cleaned/semantic representation.
+      image: automatic.source === "original" ? (automatic.original?.image ?? automatic.image) : automatic.original?.image,
+      source: automatic.original?.image ? "original" : automatic.source,
+      preferredRepresentation: automatic.original?.image ? "original" : automatic.preferredRepresentation,
+      needsReview: automatic.original?.image || automatic.cleaned?.image || automatic.semanticSpec ? true : automatic.needsReview,
     };
   });
 }
@@ -628,6 +695,27 @@ function normalizeDifficulty(value: unknown): Difficulty | undefined {
   if (value === "low" || value === "하" || value === "쉬움") return "low";
   if (value === "none" || value === "없음") return "none";
   return undefined;
+}
+
+function contentSegmentsFromQuestionTokens(question: string): Record<string, QuestionContentSegment[]> | undefined {
+  const entries = parseQuestionText(question)
+    .filter((block) => block.kind === "question")
+    .flatMap((block) => {
+      const segments = block.bodySegments.flatMap((body, index): QuestionContentSegment[] => {
+        const id = `import-${normalizeQuestionNumber(block.numberLabel) || block.displayNumber}-${index + 1}`;
+        const figure = body.text.trim().match(/^\[FIGURE:([^\]]+)\]$/i);
+        if (figure?.[1]) return [{ id, type: "figure", figureId: figure[1].trim() }];
+        return [body.kind === "condition"
+          ? { id, type: "condition", label: body.label, text: body.text }
+          : { id, type: "text", text: body.text }];
+      });
+      return segments.length ? [[normalizeQuestionNumber(block.numberLabel) || String(block.displayNumber), segments] as const] : [];
+    });
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
+
+function removeFigureTokens(question: string): string {
+  return question.replace(/^\s*\[FIGURE:[^\]]+\]\s*(?:\r?\n)?/gim, "").trim();
 }
 
 interface QuestionMetadata {

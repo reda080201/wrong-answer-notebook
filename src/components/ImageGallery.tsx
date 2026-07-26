@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getImageUrl } from "../api";
+import Dialog from "../shared/ui/Dialog";
 
 interface ImageGalleryProps {
   filenames: string[];
@@ -67,12 +68,7 @@ function ImageThumb({
         >
           <img src={src} alt="첨부 이미지" className="image-fill-img" loading="lazy" />
         </div>
-        {lightbox && (
-          <div
-            className="modal-overlay modal-overlay--fullscreen"
-            onClick={() => setLightbox(false)}
-            role="dialog"
-          >
+        <Dialog open={lightbox} onClose={() => setLightbox(false)} className="modal-overlay modal-overlay--fullscreen" backdropClassName="dialog-host" ariaLabel="이미지 확대 보기">
             <button
               type="button"
               className="modal-close"
@@ -87,8 +83,7 @@ function ImageThumb({
               className="modal-img-full"
               onClick={(e) => e.stopPropagation()}
             />
-          </div>
-        )}
+        </Dialog>
       </>
     );
   }
@@ -104,12 +99,7 @@ function ImageThumb({
       >
         <img src={src} alt="첨부 이미지" loading="lazy" />
       </div>
-      {lightbox && (
-        <div
-          className="modal-overlay"
-          onClick={() => setLightbox(false)}
-          role="dialog"
-        >
+      <Dialog open={lightbox} onClose={() => setLightbox(false)} className="modal-overlay" backdropClassName="dialog-host" ariaLabel="이미지 확대 보기">
           <button
             type="button"
             className="modal-close"
@@ -119,8 +109,7 @@ function ImageThumb({
             ✕
           </button>
           <img src={src} alt="확대 이미지" onClick={(e) => e.stopPropagation()} />
-        </div>
-      )}
+      </Dialog>
     </>
   );
 }

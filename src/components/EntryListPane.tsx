@@ -18,6 +18,7 @@ interface EntryListPaneProps {
   filtered: WrongAnswerEntry[];
   selectedId: string | null;
   setSelectedId: (id: string) => void;
+  onSelectEntry?: (id: string) => void;
   quickConceptSubject: Subject;
   onQuickConceptCreate: (data: EntryFormData) => Promise<void>;
   onOpenImportantQuestion?: (entryId: string, questionNumber: string) => void;
@@ -42,6 +43,7 @@ export default function EntryListPane({
   filtered,
   selectedId,
   setSelectedId,
+  onSelectEntry,
   quickConceptSubject,
   onQuickConceptCreate,
   onOpenImportantQuestion,
@@ -49,17 +51,29 @@ export default function EntryListPane({
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
-  const importantQuestions = entries
-    .filter((entry) => entry.entryKind === "problem_sheet")
-    .flatMap((entry) =>
-      normalizeQuestionMeta(entry.questionMeta)
-        .filter((meta) => meta.important)
-        .map((meta) => ({ entry, meta })),
-    );
+  const importantQuestions = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.entryKind === "problem_sheet")
+        .flatMap((entry) =>
+          normalizeQuestionMeta(entry.questionMeta)
+            .filter((meta) => meta.important)
+            .map((meta) => ({ entry, meta })),
+        ),
+    [entries],
+  );
   const groupedSheets = useMemo(
     () => (activeSection === "problem_sheet" ? buildSheetGroups(filtered) : []),
     [activeSection, filtered],
   );
+
+  const selectEntry = (entryId: string) => {
+    if (onSelectEntry) {
+      onSelectEntry(entryId);
+      return;
+    }
+    setSelectedId(entryId);
+  };
 
   useEffect(() => {
     if (activeSection !== "problem_sheet") return;
@@ -83,11 +97,14 @@ export default function EntryListPane({
     <div
       key={entry.id}
       className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
-      onClick={() => setSelectedId(entry.id)}
+      onClick={() => selectEntry(entry.id)}
       role="button"
       tabIndex={0}
       onKeyDown={(event) => {
-        if (event.key === "Enter") setSelectedId(entry.id);
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectEntry(entry.id);
+        }
       }}
     >
       <div className="entry-card-header">

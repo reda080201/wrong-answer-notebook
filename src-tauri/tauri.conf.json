@@ -31,7 +31,8 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -39,5 +40,12 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4QjM2Q0Y1RTVBOUYyQkQKUldTOThxbmw5V3l6U0lCU1VGRUh0ZnpvWjljYW5nbDRxY0k2djFOY1hMWG9OS3dqQVRCeEM5THMK",
+      "endpoints": ["https://github.com/reda080201/wrong-answer-notebook/releases/latest/download/latest.json"],
+      "windows": { "installMode": "passive" }
+    }
   }
 }

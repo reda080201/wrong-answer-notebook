@@ -1,0 +1,503 @@
+/* Extracted from App.css: balanced chunk 2. Keep import order stable. */
+
+.solution-learning-main {
+  min-width: 0;
+}
+
+.learning-content-panel {
+  position: sticky;
+  top: 1rem;
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--paper-bg) 92%, transparent), color-mix(in srgb, var(--surface-soft) 84%, transparent)),
+    var(--surface);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+}
+
+.learning-content-panel--main {
+  position: static;
+  padding: 1.2rem;
+}
+
+.learning-content-panel--main .learning-content-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.collapsible .learning-content-panel {
+  position: static;
+  box-shadow: none;
+}
+
+.learning-content-head {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.learning-content-head span {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+}
+
+.learning-content-head h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.learning-content-grid {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.learning-card {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper-bg) 92%, transparent);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.learning-card h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.learning-card p {
+  margin: 0;
+  color: var(--text);
+  line-height: 1.65;
+}
+
+.concept-card {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--paper-border));
+  background: linear-gradient(180deg, var(--paper-bg) 0%, var(--accent-soft) 100%);
+}
+
+.formula-card {
+  background: linear-gradient(180deg, var(--paper-bg) 0%, color-mix(in srgb, var(--success) 16%, var(--paper-bg)) 100%);
+}
+
+.routine-card {
+  background: linear-gradient(180deg, var(--paper-bg) 0%, color-mix(in srgb, var(--concept) 14%, var(--paper-bg)) 100%);
+}
+
+.warning-card {
+  background: linear-gradient(180deg, var(--paper-bg) 0%, color-mix(in srgb, var(--danger) 14%, var(--paper-bg)) 100%);
+}
+
+.review-card,
+.checklist-card {
+  background: linear-gradient(180deg, var(--paper-bg) 0%, color-mix(in srgb, var(--warning) 14%, var(--paper-bg)) 100%);
+}
+
+.diagram-card {
+  background: linear-gradient(180deg, var(--paper-bg) 0%, color-mix(in srgb, var(--accent) 12%, var(--paper-bg)) 100%);
+}
+
+.learning-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.formula-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-right: 0.35rem;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--paper-border));
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.74rem;
+  font-weight: 900;
+  line-height: 1.2;
+  white-space: normal;
+}
+
+button.formula-chip {
+  cursor: pointer;
+}
+
+button.formula-chip:hover {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+}
+
+.learning-line-list,
+.learning-routine-list {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.learning-line-item {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.learning-block-content {
+  margin-top: 0.35rem;
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.learning-diagram-card {
+  margin: 0.65rem 0 0;
+  padding: 0.6rem;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--paper-bg) 76%, transparent);
+  color: var(--text);
+}
+
+.learning-diagram-svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  margin: 0 auto;
+}
+
+.learning-diagram-card figcaption {
+  margin-top: 0.4rem;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.learning-diagram-highlights,
+.learning-diagram-params {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0.55rem 0 0;
+  padding-left: 1.1rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.learning-diagram-params {
+  padding-top: 0.45rem;
+  border-top: 1px dashed var(--paper-border);
+}
+
+.learning-routine-list section {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.learning-routine-list ol,
+.learning-choice-list,
+.learning-checklist {
+  margin: 0;
+  padding-left: 1.15rem;
+  color: #334155;
+  line-height: 1.65;
+}
+
+.learning-choice-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.learning-choice-list li {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+}
+
+.learning-severity {
+  display: inline-flex;
+  margin-right: 0.4rem;
+  padding: 0.16rem 0.42rem;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.learning-severity--high {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.learning-severity--medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.learning-severity--low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.learning-memo {
+  padding: 0.65rem;
+  border: 1px solid rgba(203, 213, 225, 0.8);
+  border-radius: 10px;
+  background: rgba(248, 250, 252, 0.82);
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+.learning-checklist li {
+  display: flex;
+  gap: 0.45rem;
+  align-items: baseline;
+}
+
+.learning-checklist li.checked {
+  color: #64748b;
+  text-decoration: line-through;
+}
+
+.learning-muted,
+.learning-content-empty {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+}
+
+.learning-content-empty {
+  padding: 1rem;
+  border: 1px dashed var(--paper-border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+  text-align: center;
+}
+
+.learning-content-empty strong {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--text);
+}
+
+.learning-content-cta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.45rem;
+  margin-top: 0.7rem;
+}
+
+.learning-content-cta button {
+  min-height: 32px;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--control-border, var(--border));
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.learning-content-cta button:not(:disabled):hover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.learning-content-cta button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.study-flow-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-bottom: 0.9rem;
+  padding: 0.45rem;
+  overflow-x: auto;
+  border: 1px solid var(--paper-border);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.study-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 34px;
+  padding: 0.34rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.study-flow-step small,
+.study-flow-step i {
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  font-style: normal;
+}
+
+.study-flow-step--done {
+  border-color: color-mix(in srgb, var(--success) 55%, var(--paper-border));
+  background: color-mix(in srgb, var(--success) 14%, var(--surface));
+}
+
+.study-flow-step--needed {
+  border-color: var(--paper-border);
+  background: var(--surface);
+}
+
+.study-flow-step--warning {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--paper-border));
+  background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+}
+
+.study-flow-step--available {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--paper-border));
+  background: var(--accent-soft);
+}
+
+.learning-import-modal {
+  display: grid;
+  gap: 1rem;
+  width: min(1040px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg, var(--surface));
+  box-shadow: var(--shadow);
+}
+
+.learning-import-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 1rem;
+}
+
+.learning-import-input,
+.learning-import-preview {
+  display: grid;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.learning-import-input textarea {
+  min-height: 260px;
+  padding: 0.75rem;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.concept-import-modal {
+  display: grid;
+  gap: 1rem;
+  width: min(980px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--panel-bg, var(--surface));
+  box-shadow: var(--shadow);
+}
+
+.concept-import-modes {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.concept-import-modes button {
+  border: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 0.55rem 0.85rem;
+  font-weight: 700;
+}
+
+.concept-import-modes button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.concept-import-summary {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.concept-import-preview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 0.85rem;
+}
+
+.import-entries-preview {
+  align-content: start;
+  max-height: min(62vh, 640px);
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.import-entry-preview-card {
+  display: grid;
+  align-content: start;
+  gap: 0.65rem;
+}
+
+.import-entry-preview-head,
+.import-entry-preview-counts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.import-entry-preview-counts span {
+  padding: 0.25rem 0.45rem;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+  background: var(--control-bg);
+}
+
+.concept-import-block-preview {
+  border-top: 1px solid var(--border);
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+}
+
+.import-concept-detected {
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  padding: 0.65rem 0.8rem;
+}
+
+.learning-import-blocks {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 460px;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+.detail-question-section {
+  margin-bottom: 1.25rem;
+}

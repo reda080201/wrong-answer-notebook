@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { WrongAnswerEntry } from "../types";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
+import Dialog from "../shared/ui/Dialog";
 
 interface TextReviewPanelProps {
   entry: WrongAnswerEntry;
@@ -70,8 +71,7 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="텍스트 검수">
-      <div className="text-review-panel text-review-panel--drawer">
+    <Dialog open onClose={onClose} className="text-review-panel text-review-panel--drawer" ariaLabel="텍스트 검수" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Text Review</span>
@@ -164,7 +164,6 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
             {saving ? "저장 중..." : "검수한 텍스트 저장"}
           </button>
         </footer>
-      </div>
-    </div>
+    </Dialog>
   );
 }

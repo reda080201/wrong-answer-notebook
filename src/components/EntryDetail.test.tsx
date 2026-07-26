@@ -7,6 +7,21 @@ vi.mock("../api", () => ({
   getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
 }));
 
+const { downloadMarkdown, printExamDocument } = vi.hoisted(() => ({
+  downloadMarkdown: vi.fn(),
+  printExamDocument: vi.fn(async () => undefined),
+}));
+
+vi.mock("../utils/exportEntry", () => ({
+  downloadMarkdown,
+}));
+
+vi.mock("../features/export/services/printExamDocument", () => ({
+  printExamDocument,
+}));
+
+import { DEFAULT_CHATGPT_MCP_PREFERENCES, DEFAULT_EXAM_PRINT_PREFERENCES } from "../utils/viewPreferences";
+
 const sheetEntry: WrongAnswerEntry = {
   id: "sheet-1",
   subject: "국어",
@@ -47,6 +62,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
 
     expect(localStorage.getItem("wrong-answer-sheet-layout")).toBe("columns");
@@ -115,7 +131,8 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "이름 변경" }));
+    fireEvent.click(screen.getByRole("button", { name: "도구" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "이름 변경" }));
     fireEvent.change(screen.getByLabelText("시험지 이름"), {
       target: { value: "기말고사" },
     });
@@ -216,7 +233,6 @@ describe("EntryDetail sheet layout", () => {
 
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지" })).toHaveClass("active");
-    expect(screen.getByText("시각화")).toBeInTheDocument();
     expect(screen.getByText("접선 시각화")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /학습 내용/ }));
     expect(screen.getByText("개념·루틴·주의점")).toBeInTheDocument();
@@ -909,6 +925,7 @@ describe("EntryDetail sheet layout", () => {
 
   it("handles keyboard shortcuts for answers, navigation, review, and modes", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
+    const onQuestionMetaChange = vi.fn().mockResolvedValue(undefined);
     render(
       <EntryDetail
         entry={{
@@ -921,6 +938,7 @@ describe("EntryDetail sheet layout", () => {
         onToggleDifficult={vi.fn()}
         onAnnotationsChange={vi.fn()}
         onReview={onReview}
+        onQuestionMetaChange={onQuestionMetaChange}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
       />,
@@ -937,16 +955,20 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
+    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
     fireEvent.keyDown(window, { key: "1" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "again"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function)));
+    expect(onReview).not.toHaveBeenCalled();
     await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 어려움" })).not.toBeDisabled());
 
     fireEvent.keyDown(window, { key: "2" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "hard"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 맞음" })).not.toBeDisabled());
 
     fireEvent.keyDown(window, { key: "3" });
-    await waitFor(() => expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), "good"));
+    await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledTimes(3));
+
+    fireEvent.click(within(screen.getByLabelText("집중 보기 빠른 조작")).getByRole("button", { name: "나가기" }));
 
     fireEvent.keyDown(window, { key: "s" });
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
@@ -1052,9 +1074,9 @@ describe("EntryDetail sheet layout", () => {
     expect(localStorage.getItem("wrong-answer-answer-view")).toBe("table");
   });
 
-  it("calls markdown and print export actions", () => {
-    const onExportMarkdown = vi.fn();
-    const onOpenPrint = vi.fn();
+  it("opens share hub for markdown and print/PDF actions", async () => {
+    downloadMarkdown.mockClear();
+    printExamDocument.mockClear();
     render(
       <EntryDetail
         entry={sheetEntry}
@@ -1065,16 +1087,126 @@ describe("EntryDetail sheet layout", () => {
         onAnnotationsChange={vi.fn()}
         onWikiLinkClick={vi.fn()}
         existingTargets={new Set()}
-        onExportMarkdown={onExportMarkdown}
-        onOpenPrint={onOpenPrint}
+        examPrintPreferences={DEFAULT_EXAM_PRINT_PREFERENCES}
+        onExamPrintPreferencesChange={vi.fn()}
+        chatGptPreferences={DEFAULT_CHATGPT_MCP_PREFERENCES}
+        onChatGptPreferencesChange={vi.fn()}
+        onSyncExportContext={vi.fn(async () => undefined)}
       />,
     );
 
-    fireEvent.click(screen.getByText("더보기"));
-    fireEvent.click(screen.getByRole("button", { name: "Markdown" }));
-    fireEvent.click(screen.getByRole("button", { name: "PDF 인쇄" }));
+    fireEvent.click(screen.getByRole("button", { name: "공유·내보내기" }));
+    expect(screen.getByRole("dialog", { name: "공유·내보내기" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("기타 내보내기"));
+    fireEvent.click(screen.getByRole("button", { name: "Markdown 내보내기" }));
+    expect(downloadMarkdown).toHaveBeenCalledTimes(1);
 
-    expect(onExportMarkdown).toHaveBeenCalledTimes(1);
-    expect(onOpenPrint).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: /다시 풀기용 시험지 만들기/ }));
+    fireEvent.click(screen.getByRole("button", { name: "미리보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "인쇄/PDF 저장" }));
+    await waitFor(() => expect(printExamDocument).toHaveBeenCalledTimes(1));
+  });
+});
+
+describe("EntryDetail view settings integration", () => {
+  beforeEach(() => {
+    localStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  it("keeps subject metadata under the title instead of the top toolbar", () => {
+    const { container } = render(
+      <EntryDetail
+        entry={{ ...sheetEntry, tags: ["문법"], difficulty: "high" }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const toolbar = container.querySelector(".detail-toolbar-left");
+    const meta = container.querySelector(".detail-meta-row");
+    expect(toolbar).not.toBeNull();
+    expect(meta).not.toBeNull();
+    expect(toolbar?.querySelector(".subject-badge")).toBeNull();
+    expect(meta?.querySelector(".subject-badge")).toHaveTextContent("국어");
+    expect(meta?.textContent).toContain("문법");
+    expect(meta?.textContent).toContain("난이도");
+    expect(screen.getByRole("button", { name: "보기 설정" })).toBeInTheDocument();
+  });
+
+  it("opens the shared view settings tab from quick view and the settings button", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onOpenSettings={onOpenSettings}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "더 많은 보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "전체 설정 열기" }));
+    expect(onOpenSettings).toHaveBeenCalledWith("view");
+  });
+
+  it("hides answer-hiding controls for concept entries", () => {
+    render(
+      <EntryDetail
+        entry={{ ...sheetEntry, entryKind: "concept", title: "개념 노트" }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    expect(screen.queryByLabelText("정답 가리기")).not.toBeInTheDocument();
+    expect(screen.queryByText("정답 가리기")).not.toBeInTheDocument();
+  });
+
+  it("notifies parent when quick view preferences change", () => {
+    const onViewPreferencesChange = vi.fn();
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        viewPreferences={{
+          sheetLayout: "single",
+          fontSize: "normal",
+          hideAnswers: false,
+          showDifficulty: true,
+          showOriginalPages: true,
+          showLearningVisuals: true,
+          compactToolbar: false,
+        }}
+        onViewPreferencesChange={onViewPreferencesChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    fireEvent.click(screen.getByRole("button", { name: "2단" }));
+    expect(onViewPreferencesChange).toHaveBeenCalledWith({ sheetLayout: "columns" });
   });
 });

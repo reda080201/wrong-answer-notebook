@@ -7,3 +7,11 @@ src-tauri/target
 app-icon.png
 *.log
 *.tsbuildinfo
+*.key
+*.key.pub
+updater-private-key*
+private-key.pem
+*.key
+*.key.pub
+updater-private-key*
+private-key.pem

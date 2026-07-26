@@ -27,6 +27,21 @@
   --radius: 12px;
   --shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
   --detail-bg: #121820;
+  --status-success-bg: rgba(61, 214, 140, 0.14);
+  --status-success-border: rgba(61, 214, 140, 0.42);
+  --status-success-text: #8af0b7;
+  --status-error-bg: rgba(255, 107, 107, 0.14);
+  --status-error-border: rgba(255, 107, 107, 0.42);
+  --status-error-text: #ffaaaa;
+  --focus-bg: #121820;
+  --focus-card-bg: #1a2332;
+  --focus-card-border: #314058;
+  --focus-nav-bg: rgba(18, 24, 32, 0.96);
+  --paper-elevated: #172033;
+  --paper-label-bg: rgba(79, 140, 255, 0.18);
+  --paper-label-text: #8fb6ff;
+  --paper-subtle-bg: #202b3d;
+  --paper-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
 }
 
 [data-theme="light"] {
@@ -54,6 +69,21 @@
   --concept-bg: rgba(142, 36, 170, 0.15);
   --shadow: 0 4px 20px rgba(26, 35, 50, 0.08);
   --detail-bg: #f8fafc;
+  --status-success-bg: #f0fdf4;
+  --status-success-border: #bbf7d0;
+  --status-success-text: #166534;
+  --status-error-bg: #fff1f2;
+  --status-error-border: #fecaca;
+  --status-error-text: #991b1b;
+  --focus-bg: #f8fafc;
+  --focus-card-bg: #ffffff;
+  --focus-card-border: #d7dee9;
+  --focus-nav-bg: rgba(248, 250, 252, 0.96);
+  --paper-elevated: #ffffff;
+  --paper-label-bg: #dbeafe;
+  --paper-label-text: #1d4ed8;
+  --paper-subtle-bg: #f8fafc;
+  --paper-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
 :root {

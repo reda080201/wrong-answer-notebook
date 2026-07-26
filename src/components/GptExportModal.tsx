@@ -6,6 +6,7 @@ import {
   type GptExportRangeMode,
 } from "../utils/gptExport";
 import { getEntryTitle } from "../utils/entry";
+import Dialog from "../shared/ui/Dialog";
 
 interface GptExportModalProps {
   entry: WrongAnswerEntry;
@@ -92,8 +93,7 @@ export default function GptExportModal({
   };
 
   return (
-    <div className="modal-backdrop" role="dialog" aria-modal="true" aria-label="GPT에게 보내기">
-      <div className="gpt-export-modal">
+    <Dialog open onClose={onClose} className="gpt-export-modal" ariaLabel="GPT에게 보내기">
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">GPT Export</span>
@@ -170,7 +170,6 @@ export default function GptExportModal({
             복사
           </button>
         </footer>
-      </div>
-    </div>
+    </Dialog>
   );
 }

@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import EntryListPane from "./EntryListPane";
 import type { EntryKind, WrongAnswerEntry } from "../types";
+import * as questionMeta from "../utils/questionMeta";
 
 function entry(
   id: string,
@@ -32,6 +33,10 @@ function entry(
 }
 
 describe("EntryListPane", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("renders badges and previews for lecture/problem/concept/wrong_answer entries", () => {
     const entries = [
       entry("sheet", "problem_sheet", "시험지"),
@@ -80,9 +85,10 @@ describe("EntryListPane", () => {
     const card = screen.getByRole("button", { name: /오답/ });
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: "Enter" });
+    fireEvent.keyDown(card, { key: " " });
 
     expect(setSelectedId).toHaveBeenCalledWith("wrong");
-    expect(setSelectedId).toHaveBeenCalledTimes(2);
+    expect(setSelectedId).toHaveBeenCalledTimes(3);
   });
 
   it("shows only important sheet questions and opens the selected question", () => {
@@ -114,6 +120,47 @@ describe("EntryListPane", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "바로 보기" }));
     expect(onOpenImportantQuestion).toHaveBeenCalledWith("sheet", "2");
+  });
+
+  it("memoizes important question derivation when entries are unchanged", () => {
+    const normalizeSpy = vi.spyOn(questionMeta, "normalizeQuestionMeta");
+    const entries = [
+      entry("sheet", "problem_sheet", "시험지", {
+        questionMeta: [
+          { questionNumber: "2", important: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+        ],
+      }),
+    ];
+
+    const { rerender } = render(
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={entries}
+        filtered={[]}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+      />,
+    );
+
+    expect(normalizeSpy).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={entries}
+        filtered={[]}
+        selectedId="sheet"
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+      />,
+    );
+
+    expect(normalizeSpy).toHaveBeenCalledTimes(1);
   });
 
   it("groups sheet parts into a folder card", () => {

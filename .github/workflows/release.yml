@@ -1,0 +1,110 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - "app-v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, for example app-v1.1.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - run: npm ci
+      - run: npm run version:check
+      - name: Verify signing secret
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw 'TAURI_SIGNING_PRIVATE_KEY secret is required.' }
+      - name: Verify tag version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
+          if ($tag -ne "app-v$version") { throw "tag $tag does not match app-v$version" }
+          git ls-remote --exit-code origin "refs/tags/$tag" | Out-Null
+      - name: Read release notes
+        id: release_notes
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $path = "releases/v$version.md"
+          if (!(Test-Path $path)) { throw "release notes missing: $path" }
+          $body = Get-Content $path -Raw
+          if ([string]::IsNullOrWhiteSpace($body)) { throw "release notes empty: $path" }
+          "body<<RELEASE_NOTES_EOF" >> $env:GITHUB_OUTPUT
+          $body >> $env:GITHUB_OUTPUT
+          "RELEASE_NOTES_EOF" >> $env:GITHUB_OUTPUT
+      - run: npm run lint
+      - run: npm run test
+      - run: npm run build
+      - run: cargo fmt --check
+        working-directory: src-tauri
+      - run: cargo check
+        working-directory: src-tauri
+      - run: cargo test
+        working-directory: src-tauri
+      - run: npm run tauri -- build --no-bundle
+      - name: Publish signed Tauri release
+        uses: tauri-apps/tauri-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: app-v__VERSION__
+          releaseName: "오답노트 v__VERSION__"
+          releaseBody: ${{ steps.release_notes.outputs.body }}
+          releaseDraft: true
+          prerelease: false
+          uploadUpdaterJson: true
+          uploadUpdaterSignatures: true
+          updaterJsonPreferNsis: true
+      - name: Verify updater manifest
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          $tag = "app-v$version"
+          $release = gh release view $tag --json isDraft,isPrerelease,assets | ConvertFrom-Json
+          if (-not $release.isDraft -or $release.isPrerelease) { throw "release must remain a non-prerelease draft during verification" }
+          $dir = Join-Path $env:RUNNER_TEMP 'updater-manifest'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          gh release download $tag --pattern latest.json --dir $dir --clobber
+          $manifest = Get-Content (Join-Path $dir 'latest.json') -Raw | ConvertFrom-Json
+          if ($manifest.version -ne $version) { throw "latest.json version mismatch" }
+          if ([string]::IsNullOrWhiteSpace($manifest.notes)) { throw 'latest.json notes is empty' }
+          $platform = $manifest.platforms.'windows-x86_64'
+          if ($null -eq $platform -or [string]::IsNullOrWhiteSpace($platform.url) -or [string]::IsNullOrWhiteSpace($platform.signature)) { throw 'windows-x86_64 URL/signature missing' }
+          $assetNames = @($release.assets | ForEach-Object { $_.name })
+          $assetName = [IO.Path]::GetFileName(([Uri]$platform.url).AbsolutePath)
+          if ($assetNames -notcontains $assetName) { throw "manifest URL asset missing: $assetName" }
+          if (-not ($assetNames | Where-Object { $_ -match '\.sig$' })) { throw 'updater signature is missing' }
+          if (-not ($assetNames | Where-Object { $_ -match '\.nsis\.zip$' })) { throw 'NSIS updater artifact is missing' }
+          if (-not ($assetNames | Where-Object { $_ -match '-setup\.exe$' })) { throw 'NSIS installer is missing' }
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish verified release
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          gh release edit "app-v$version" --draft=false
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

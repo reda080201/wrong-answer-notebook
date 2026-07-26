@@ -1,135 +1,115 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { defaultSettings } from "../api";
-import {
-  DEFAULT_MCP_BRIDGE_SETTINGS,
-  MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
-} from "../hooks/useMcpBridgeSettings";
+import type { AppSettings } from "../types";
 import SettingsModal from "./SettingsModal";
 
-vi.mock("@tauri-apps/api/core", () => ({
-  isTauri: vi.fn(() => false),
-}));
+const settings: AppSettings = {
+  templates: [],
+  promptTemplates: [],
+  memoTemplates: [],
+  aiProvider: { type: "manual", enabled: false, keySource: "env", hasStoredKey: false },
+  importPreferences: {},
+  viewPreferences: {
+    sheetLayout: "single",
+    fontSize: "normal",
+    hideAnswers: false,
+    showDifficulty: true,
+    showOriginalPages: true,
+    showLearningVisuals: true,
+    compactToolbar: false,
+  },
+  examPrintPreferences: {
+    preset: "real_exam",
+    paperSize: "a4",
+    orientation: "portrait",
+    layout: "auto",
+    includeHeader: true,
+    includeAnswerSheet: true,
+    includePageNumbers: true,
+    includeSourcePages: false,
+    workspaceSize: "small",
+    extraScratchPages: 0,
+  },
+  examPreferences: {
+    showScratchNote: true,
+    showOriginalPages: true,
+    showNavigator: true,
+    autoAdvanceOnAnswer: false,
+    warnUnansweredOnSubmit: true,
+    showTimer: false,
+    showMcpHelp: true,
+  },
+  imagePreferences: {
+    preserveSourcePages: true,
+    showUnlinkedImages: true,
+    thumbnailSize: "medium",
+  },
+  gptMcpPreferences: {
+    mcpShareScope: "current-question",
+    importReviewExpanded: true,
+    importDetailCollapsedByDefault: true,
+  },
+  chatGptMcpPreferences: {
+    displayName: "오답노트",
+    shareUserResponse: true,
+    shareScratchNote: true,
+    shareQuestionImages: true,
+    shareSourcePageImages: false,
+    copyPromptBeforeOpen: true,
+    openChatGptAfterCopy: true,
+  },
+  answerViewPreferences: { viewMode: "card", hideAnswers: false },
+  autoBackup: { enabled: false },
+  mcpBridge: { enabled: false, port: 43129 },
+  updatePreferences: { autoCheckEnabled: true, notificationsEnabled: true, backupBeforeInstall: true, channel: "stable" },
+};
 
-function renderSettingsModal(overrides: Record<string, unknown> = {}) {
-  const props = {
-    settings: defaultSettings,
-    settingsError: null,
-    settingsMessage: null,
-    clearSettingsError: vi.fn(),
-    setSettingsMessage: vi.fn(),
-    setSettings: vi.fn().mockResolvedValue(undefined),
-    theme: "system" as const,
-    setTheme: vi.fn(),
-    aiProviderStatus: null,
-    aiProviderKeyInput: "",
-    setAiProviderKeyInput: vi.fn(),
-    updateAiProviderConfig: vi.fn().mockResolvedValue(undefined),
-    storeAiProviderKey: vi.fn().mockResolvedValue(undefined),
-    removeAiProviderKey: vi.fn().mockResolvedValue(undefined),
-    integrityReport: null,
-    saveTemplate: vi.fn().mockResolvedValue(undefined),
-    deleteTemplate: vi.fn().mockResolvedValue(undefined),
-    savePromptTemplate: vi.fn().mockResolvedValue(undefined),
-    deletePromptTemplate: vi.fn().mockResolvedValue(undefined),
-    deleteMemoTemplate: vi.fn().mockResolvedValue(undefined),
-    handleBackup: vi.fn().mockResolvedValue(undefined),
-    handleRestore: vi.fn().mockResolvedValue(undefined),
-    runIntegrity: vi.fn().mockResolvedValue(undefined),
-    handleCleanupOrphans: vi.fn().mockResolvedValue(undefined),
-    onClose: vi.fn(),
-    ...overrides,
-  };
+describe("SettingsModal", () => {
+  it("opens the requested initial tab and updates view preferences", async () => {
+    const setSettings = vi.fn().mockResolvedValue(undefined);
+    render(
+      <SettingsModal
+        initialTab="view"
+        settings={settings}
+        settingsError={null}
+        settingsMessage={null}
+        clearSettingsError={vi.fn()}
+        setSettingsMessage={vi.fn()}
+        setSettings={setSettings}
+        theme="system"
+        setTheme={vi.fn()}
+        aiProviderStatus={null}
+        aiProviderKeyInput=""
+        setAiProviderKeyInput={vi.fn()}
+        updateAiProviderConfig={vi.fn()}
+        storeAiProviderKey={vi.fn()}
+        removeAiProviderKey={vi.fn()}
+        integrityReport={null}
+        saveTemplate={vi.fn()}
+        deleteTemplate={vi.fn()}
+        savePromptTemplate={vi.fn()}
+        deletePromptTemplate={vi.fn()}
+        deleteMemoTemplate={vi.fn()}
+        handleBackup={vi.fn()}
+        handleRestore={vi.fn()}
+        runIntegrity={vi.fn()}
+        handleCleanupOrphans={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
 
-  return render(<SettingsModal {...props} />);
-}
+    expect(screen.getByRole("button", { name: "보기" })).toHaveClass("active");
+    fireEvent.click(screen.getByLabelText("정답 가리기"));
+    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({
+      viewPreferences: expect.objectContaining({ hideAnswers: true }),
+      answerViewPreferences: expect.objectContaining({ hideAnswers: true }),
+    }));
 
-describe("SettingsModal MCP bridge tab", () => {
-  it("shows Korean bridge controls disabled by default in browser mode", () => {
-    renderSettingsModal();
-
-    fireEvent.click(screen.getByRole("button", { name: "고급" }));
-
-    expect(screen.getByText("MCP 브릿지", { selector: "p.settings-label" })).toBeInTheDocument();
-    expect(screen.getByText(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE)).toBeInTheDocument();
-
-    const enableToggle = screen.getByRole("checkbox", { name: /MCP 브릿지 사용/ });
-    expect(enableToggle).not.toBeChecked();
-    expect(enableToggle).toBeDisabled();
-
-    expect(screen.getByLabelText("포트")).toHaveValue(DEFAULT_MCP_BRIDGE_SETTINGS.port);
-    expect(screen.getByLabelText("포트")).toBeDisabled();
-    expect(screen.getByText(/상태:/)).toHaveTextContent("꺼짐");
-    expect(screen.getByText(/읽기 전용:/)).toHaveTextContent("예");
-    expect(screen.getByText(/마지막 연결 테스트:/)).toHaveTextContent("아직 실행하지 않음");
-    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).toHaveTextContent("아직 없음");
-  });
-
-  it("renders runtime status, port, and connection test result", () => {
-    renderSettingsModal({
-      mcpBridgeSettings: { enabled: true, port: 4100 },
-      mcpBridgeStatus: {
-        status: "listening",
-        port: 4100,
-        readOnly: true,
-        error: null,
-        message: "브릿지가 포트를 열었습니다.",
-        clientCount: 1,
-        lastTestAt: "2026-07-12T12:00:00.000Z",
-        lastTestOk: true,
-        lastClientConnectedAt: "2026-07-12T13:00:00.000Z",
-      },
-      mcpBridgePortInput: "4100",
-      isMcpBridgeBrowserBlocked: false,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "고급" }));
-
-    expect(screen.getByText(/상태:/)).toHaveTextContent("수신 중");
-    expect(screen.getByText(/포트:/)).toHaveTextContent("4100");
-    expect(screen.getByText(/읽기 전용:/)).toHaveTextContent("예");
-    expect(screen.getByText(/마지막 연결 테스트:/)).toHaveTextContent("성공");
-    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).not.toHaveTextContent("아직 없음");
-    expect(screen.getByText(/연결된 클라이언트:/)).toHaveTextContent("1");
-    expect(screen.getByText(/안내:/)).toHaveTextContent("브릿지가 포트를 열었습니다.");
-  });
-
-  it("formats Rust epoch-second timestamps for MCP status", () => {
-    renderSettingsModal({
-      mcpBridgeSettings: { enabled: true, port: 43129 },
-      mcpBridgeStatus: {
-        status: "listening",
-        port: 43129,
-        readOnly: true,
-        error: null,
-        lastTestAt: "1784019600",
-        lastTestOk: true,
-        lastClientConnectedAt: "1784019660",
-      },
-      isMcpBridgeBrowserBlocked: false,
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "고급" }));
-    expect(screen.getByText(/마지막 연결 테스트:/)).not.toHaveTextContent("1784019600");
-    expect(screen.getByText(/마지막 외부 클라이언트 접속:/)).not.toHaveTextContent("1784019660");
-  });
-
-  it("shows one-time pairing controls without a persistent token field", () => {
-    const createMcpBridgePairing = vi.fn().mockResolvedValue(undefined);
-    renderSettingsModal({
-      mcpBridgeSettings: { enabled: true, port: 43129 },
-      isMcpBridgeBrowserBlocked: false,
-      createMcpBridgePairing,
-      mcpBridgePairingSession: {
-        code: "PAIR-1234",
-        expiresAt: "2026-07-13T12:00:00.000Z",
-        bridgeUrl: "http://127.0.0.1:43129/mcp",
-      },
-    });
-
-    fireEvent.click(screen.getByRole("button", { name: "고급" }));
-    expect(screen.getByRole("button", { name: "연결 코드 만들기" })).toBeEnabled();
-    expect(screen.getByText("PAIR-1234")).toBeInTheDocument();
-    expect(screen.queryByLabelText(/bearer|토큰/i)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "시험" }));
+    expect(screen.getByText("풀이 메모 표시")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "이미지" }));
+    expect(screen.getByText("원본 페이지 보존")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "GPT·MCP" }));
+    expect(screen.getByText("가져오기 검토 기본 펼침")).toBeInTheDocument();
   });
 });

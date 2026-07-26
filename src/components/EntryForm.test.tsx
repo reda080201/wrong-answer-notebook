@@ -9,6 +9,35 @@ vi.mock("../api", () => ({
 }));
 
 describe("EntryForm", () => {
+  it("explains why an empty form cannot be saved", () => {
+    const onSave = vi.fn();
+    render(<EntryForm onSave={onSave} onClose={vi.fn()} defaultEntryKind="wrong_answer" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("제목, 문제, 이미지 또는 학습 내용");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("recognizes a lecture with learning blocks as editable content", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <EntryForm
+        onSave={onSave}
+        onClose={vi.fn()}
+        defaultEntryKind="lecture"
+        initialData={{
+          entryKind: "lecture",
+          learningBlocks: [{ id: "block-1", type: "concept", title: "핵심", content: "정의" }],
+        }}
+      />,
+    );
+
+    expect(screen.getByRole("heading", { name: "특강 추가" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalled());
+  });
+
   it("keeps the form open and shows an error when save fails", async () => {
     const onClose = vi.fn();
     const onSave = vi.fn().mockRejectedValue(new Error("disk full"));

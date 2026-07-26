@@ -14,6 +14,7 @@ interface MathToken {
 }
 
 const MATH_PATTERN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?!\$)(?:\\.|[^$\n])+\$)/g;
+const RAW_LATEX_PATTERN = /\\(?:sum|frac|lim|sqrt|sin|cos|tan|log|int|left|right|begin\{cases\}|infty)(?:\\[A-Za-z]+|[A-Za-z0-9{}_^+\-*/=().,|!\s])*|(?:[A-Za-z0-9{}()]+(?:\^[A-Za-z0-9{}()+\-*/=.,]+|_[A-Za-z0-9{}()+\-*/=.,]+))+/g;
 
 function toMathToken(raw: string): MathToken {
   if (raw.startsWith("$$")) return { raw, expression: raw.slice(2, -2), displayMode: true };
@@ -23,13 +24,25 @@ function toMathToken(raw: string): MathToken {
 }
 
 export function splitMathText(text: string): Array<string | MathToken> {
+  const explicitRanges = [...text.matchAll(MATH_PATTERN)].map((match) => ({
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+    token: toMathToken(match[0]),
+  }));
+  const rawRanges = [...text.matchAll(RAW_LATEX_PATTERN)]
+    .map((match) => ({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, raw: match[0].trim() }))
+    .filter((range) => range.raw.length > 1 && !explicitRanges.some((explicit) => range.start < explicit.end && range.end > explicit.start));
+  const ranges = [
+    ...explicitRanges.map((range) => ({ start: range.start, end: range.end, token: range.token })),
+    ...rawRanges.map((range) => ({ start: range.start, end: range.end, token: { raw: range.raw, expression: range.raw, displayMode: /^\\(?:begin\{cases\}|sum|frac|int|lim)/.test(range.raw) && !/[가-힣]/.test(range.raw) } })),
+  ].sort((a, b) => a.start - b.start);
   const result: Array<string | MathToken> = [];
   let cursor = 0;
-  for (const match of text.matchAll(MATH_PATTERN)) {
-    const index = match.index ?? 0;
-    if (index > cursor) result.push(text.slice(cursor, index));
-    result.push(toMathToken(match[0]));
-    cursor = index + match[0].length;
+  for (const range of ranges) {
+    if (range.start < cursor) continue;
+    if (range.start > cursor) result.push(text.slice(cursor, range.start));
+    result.push(range.token);
+    cursor = range.end;
   }
   if (cursor < text.length) result.push(text.slice(cursor));
   return result;

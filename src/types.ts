@@ -200,7 +200,117 @@ export interface SheetFigureItem {
   image?: string;
   source: "original" | "gpt_cleaned" | "described_only";
   needsReview?: boolean;
+  original?: FigureOriginalRepresentation;
+  cleaned?: FigureCleanedRepresentation;
+  semanticSpec?: DiagramSemanticSpec;
+  verification?: FigureVerification;
+  preferredRepresentation?: FigurePreferredRepresentation;
+  /** Prevents later automatic verification from replacing an explicit user choice. */
+  representationSelectionSource?: "automatic" | "user";
+  placement?: {
+    questionNumber: string;
+    afterSegmentId?: string;
+    beforeChoiceIndex?: number;
+    order?: number;
+  };
 }
+
+export interface NormalizedCrop {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface FigureOriginalRepresentation {
+  image: string;
+  sourcePageImage?: string;
+  crop?: NormalizedCrop;
+}
+
+export interface FigureCleanedRepresentation {
+  image: string;
+  generatedBy: "gpt";
+  generatedAt: string;
+  sourceImageHash: string;
+  promptVersion: string;
+}
+
+export type DiagramSemanticType =
+  | "function_graph"
+  | "coordinate_geometry"
+  | "plane_geometry"
+  | "solid_geometry"
+  | "probability_tree"
+  | "table"
+  | "venn_diagram"
+  | "number_line"
+  | "sequence_diagram"
+  | "custom_math_diagram";
+
+export interface DiagramSemanticSpec {
+  type: DiagramSemanticType;
+  points?: Array<{ id: string; label?: string; x?: number; y?: number }>;
+  segments?: Array<{ id?: string; from: string; to: string; style?: "solid" | "dashed" }>;
+  circles?: Array<{ id: string; center?: string; radius?: number }>;
+  curves?: Array<Record<string, unknown>>;
+  equations?: string[];
+  axes?: Array<Record<string, unknown>>;
+  regions?: Array<Record<string, unknown>>;
+  labels?: Array<{ id?: string; text: string; targetId?: string }>;
+  numericValues?: Array<{ targetId?: string; value: string }>;
+  relations?: Array<{
+    type: "point_on_line" | "point_on_segment" | "point_on_circle" | "collinear" | "parallel" | "perpendicular" | "tangent" | "equal_length" | "equal_angle" | "midpoint" | "intersection" | "inside" | "outside" | "connected" | "open_point" | "closed_point";
+    targets: string[];
+    confidence?: number;
+  }>;
+  constraints?: string[];
+  warnings?: string[];
+  confidence?: number;
+}
+
+export type FigurePreferredRepresentation = "cleaned" | "semantic_render" | "original";
+
+export type FigureVerificationIssueType =
+  | "missing_point" | "wrong_label" | "missing_segment" | "wrong_intersection"
+  | "wrong_tangency" | "wrong_line_style" | "wrong_relation_mark"
+  | "wrong_numeric_value" | "wrong_open_closed_point" | "wrong_shading"
+  | "wrong_graph_feature" | "text_figure_conflict" | "other";
+
+export interface FigureVerificationIssue {
+  type: FigureVerificationIssueType;
+  message: string;
+  targetId?: string;
+}
+
+export interface FigureVerification {
+  status: "verified" | "needs_review" | "rejected";
+  confidence: number;
+  checks: {
+    pointLabelsMatch?: boolean;
+    topologyMatch?: boolean;
+    lineStylesMatch?: boolean;
+    relationMarksMatch?: boolean;
+    numericLabelsMatch?: boolean;
+    graphFeaturesMatch?: boolean;
+    shadingMatch?: boolean;
+    textConditionMatch?: boolean;
+    visualLayoutPreserved?: boolean;
+  };
+  blockingIssues: FigureVerificationIssue[];
+  warnings: FigureVerificationIssue[];
+  userApproved?: boolean;
+  verificationSource?: "gpt_self_check" | "second_pass_model" | "local_validator" | "user";
+  verifiedAt?: string;
+  verifier?: string;
+}
+
+export type QuestionContentSegment =
+  | { id: string; type: "text"; text: string }
+  | { id: string; type: "condition"; label?: string; text: string }
+  | { id: string; type: "equation"; latex: string; display: boolean }
+  | { id: string; type: "table"; rows: string[][] }
+  | { id: string; type: "figure"; figureId: string };
 
 export interface QuestionMeta {
   questionNumber: string;
@@ -211,6 +321,8 @@ export interface QuestionMeta {
   note?: string;
   mistakeAnalysis?: MistakeAnalysis;
   review?: ReviewState;
+  /** User-owned curation ratings. Difficulty remains the existing difficultyScore field. */
+  rating?: QuestionRating;
   updatedAt: string;
 }
 
@@ -283,8 +395,13 @@ export interface ExamQuestionSnapshot {
   /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
   sourcePageImages?: string[];
   figures: SheetFigureItem[];
+  contentSegments?: QuestionContentSegment[];
   correctAnswer?: string;
   explanation?: string;
+  generatedExamId?: string;
+  sourceEntryId?: string;
+  sourceQuestionNumber?: string;
+  generatedQuestionPosition?: number;
 }
 
 export interface ExamResponse {
@@ -336,6 +453,11 @@ export interface ActiveExamContext {
   markedForReview: boolean;
   submitted: boolean;
   updatedAt: string;
+  shareUserResponse?: boolean;
+  shareScratchNote?: boolean;
+  shareQuestionImages?: boolean;
+  shareSourcePageImages?: boolean;
+  contextUpdatedAt?: string;
 }
 
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
@@ -453,6 +575,192 @@ export interface McpActiveContext {
   questionNumber: string | null;
 }
 
+export interface ViewPreferences {
+  sheetLayout: "single" | "columns";
+  fontSize: "normal" | "large" | "xlarge";
+  hideAnswers: boolean;
+  showDifficulty: boolean;
+  showOriginalPages: boolean;
+  showLearningVisuals: boolean;
+  compactToolbar: boolean;
+}
+
+export interface ExamPreferences {
+  showScratchNote: boolean;
+  showOriginalPages: boolean;
+  showNavigator: boolean;
+  autoAdvanceOnAnswer: boolean;
+  warnUnansweredOnSubmit: boolean;
+  showTimer: boolean;
+  showMcpHelp: boolean;
+}
+
+
+
+
+
+export interface ImagePreferences {
+  preserveSourcePages: boolean;
+  showUnlinkedImages: boolean;
+  thumbnailSize: "small" | "medium" | "large";
+}
+
+export interface QuestionRating {
+  importanceScore?: number;
+  qualityScore?: number;
+  userQualityScore?: number;
+  aiQualityScore?: number;
+  aiQualityConfidence?: number;
+  lastEvaluatedAt?: string;
+  evaluationSource?: "manual" | "heuristic" | "gemini";
+}
+
+export type GeneratedExamPreset = "real_exam" | "hard" | "important" | "quality" | "weakness" | "wrong_retry" | "random" | "custom";
+
+export interface ExamBlueprintSlot {
+  position: number;
+  targetDifficultyMin?: number;
+  targetDifficultyMax?: number;
+  answerType?: "multiple_choice" | "short_answer" | "any";
+  preferredUnits?: string[];
+}
+
+export interface ExamBlueprint {
+  id: string;
+  name: string;
+  subject?: string;
+  totalQuestions: number;
+  totalPoints?: number;
+  timeLimitMinutes?: number;
+  slots: ExamBlueprintSlot[];
+}
+
+export interface GeneratedExamQuestion {
+  position: number;
+  points?: number;
+  source: QuestionSourceReference;
+  /** @deprecated Loaded only for legacy migration. */
+  sourceEntryId?: string;
+  /** @deprecated Loaded only for legacy migration. */
+  sourceQuestionNumber?: string;
+  snapshot: ExamQuestionSnapshot;
+  locked: boolean;
+  selectionScore: number;
+  selectionReasons: string[];
+}
+
+export type QuestionSourceStatus = "linked" | "snapshot_only" | "missing" | "unknown";
+
+export interface QuestionSourceReference {
+  sourceEntryId: string;
+  sourceEntryTitle: string;
+  sourceQuestionNumber: string;
+  sourceSubject?: string;
+  sourceExamName?: string;
+  sourceExamRound?: string;
+  sourceSection?: string;
+  sourceTags?: string[];
+  sourceSnapshotHash?: string;
+  sourceStatus?: QuestionSourceStatus;
+}
+
+export interface ExamGenerationReport {
+  candidateCount: number;
+  selectedCount: number;
+  excludedCounts: Record<string, number>;
+  difficultyDistribution: Record<string, number>;
+  unitDistribution: Record<string, number>;
+  sourceDistribution: Record<string, number>;
+  relaxedConstraints: string[];
+  warnings: string[];
+  usedGeminiEvaluation: boolean;
+  generatedAt: string;
+}
+
+export interface GeneratedExam {
+  id: string;
+  title: string;
+  subject: string;
+  blueprintId?: string;
+  preset: GeneratedExamPreset;
+  createdAt: string;
+  updatedAt: string;
+  seed: string;
+  status: "draft" | "ready" | "archived";
+  timeLimitMinutes?: number;
+  totalPoints?: number;
+  questions: GeneratedExamQuestion[];
+  generationReport: ExamGenerationReport;
+}
+
+export interface GptMcpPreferences {
+  mcpShareScope: "current-question" | "session-summary" | "submitted-result";
+  importReviewExpanded: boolean;
+  importDetailCollapsedByDefault: boolean;
+}
+
+/** ChatGPT preferences for read-only local MCP bridge. */
+export interface ChatGptMcpPreferences {
+  displayName: string;
+  remoteBaseUrl?: string;
+  shareUserResponse: boolean;
+  shareScratchNote: boolean;
+  shareQuestionImages: boolean;
+  shareSourcePageImages: boolean;
+  copyPromptBeforeOpen: boolean;
+  openChatGptAfterCopy: boolean;
+}
+
+/** Retake exam sheet PDF preset */
+export type ExamPrintPreset =
+  | "real_exam"
+  | "spacious"
+  | "wrong_only"
+  | "source_like"
+  | "custom";
+
+/** Share/export question scope */
+export type ExportScopeMode =
+  | "current"
+  | "selected"
+  | "wrong"
+  | "important"
+  | "marked"
+  | "whole"
+  | "manual";
+
+/** Exam print/PDF preferences */
+export interface ExamPrintPreferences {
+  preset: ExamPrintPreset;
+  paperSize: "a4" | "letter";
+  orientation: "portrait" | "landscape" | "auto";
+  layout: "single" | "columns" | "auto";
+  includeHeader: boolean;
+  includeAnswerSheet: boolean;
+  includePageNumbers: boolean;
+  includeSourcePages: boolean;
+  workspaceSize: "none" | "small" | "normal" | "large";
+  extraScratchPages: number;
+  sourceDisplay?: "hidden" | "below-question" | "index-at-end";
+  includeSourceIndex?: boolean;
+}
+
+/** App-owned export context read by MCP */
+export interface McpExportContext {
+  entryId: string | null;
+  sessionId?: string | null;
+  scope: ExportScopeMode;
+  questionNumbers: string[];
+  submitted: boolean;
+  shareOptions: Pick<
+    ChatGptMcpPreferences,
+    "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
+  >;
+  updatedAt: string;
+  generatedExamId?: string | null;
+  includeSourceReferences?: boolean;
+}
+
 export interface AppSettings {
   templates: EntryTemplate[];
   promptTemplates: PromptTemplate[];
@@ -461,6 +769,12 @@ export interface AppSettings {
   importPreferences: {
     lastPromptTemplateId?: string;
   };
+  viewPreferences: ViewPreferences;
+  examPreferences: ExamPreferences;
+  examPrintPreferences: ExamPrintPreferences;
+  imagePreferences: ImagePreferences;
+  gptMcpPreferences: GptMcpPreferences;
+  chatGptMcpPreferences: ChatGptMcpPreferences;
   answerViewPreferences: {
     viewMode: "card" | "table";
     hideAnswers: boolean;
@@ -470,6 +784,17 @@ export interface AppSettings {
     lastBackupAt?: string;
   };
   mcpBridge: McpBridgeSettings;
+  updatePreferences: AppUpdatePreferences;
+}
+
+export interface AppUpdatePreferences {
+  autoCheckEnabled: boolean;
+  notificationsEnabled: boolean;
+  backupBeforeInstall: boolean;
+  channel: "stable";
+  skippedVersion?: string;
+  lastCheckedAt?: string;
+  lastSeenReleaseNotesVersion?: string;
 }
 
 export type IntegritySeverity = "info" | "warning" | "error";
@@ -510,6 +835,8 @@ export interface WrongAnswerEntry {
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
   questionMeta?: QuestionMeta[];
+  /** 문항 번호별 표시 순서. 기존 question 문자열 데이터와 함께 유지됩니다. */
+  questionContentSegments?: Record<string, QuestionContentSegment[]>;
   sheetGroup?: SheetGroup;
   importAudit?: ImportAudit;
   rejectedNotes?: string[];

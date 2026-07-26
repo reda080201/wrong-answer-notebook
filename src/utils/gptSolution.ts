@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { EntryFormData, ExplanationPart, SheetAnswerItem, WrongAnswerEntry } from "../types";
-import { hasExplanationContent } from "./entry";
+import { createEntryDraftFromEntry } from "../features/entries/model/entryDraft";
 
 export type GptSolutionApplyMode = "fill" | "overwrite";
 
@@ -13,9 +13,6 @@ function hasText(value: string | undefined): boolean {
   return Boolean(value?.trim());
 }
 
-function cloneDiagramSpec<T extends SheetAnswerItem["diagramSpec"]>(spec: T): T {
-  return spec ? ({ ...spec, highlights: spec.highlights ? [...spec.highlights] : undefined } as T) : spec;
-}
 
 function firstAnswer(imported: Partial<EntryFormData>): SheetAnswerItem | undefined {
   return imported.answerKey?.find(
@@ -121,6 +118,8 @@ export function buildMathSolutionPrompt(entry: GptSolutionSource): string {
 - 문항별 오답 원인을 판단할 수 있으면 answerKey[].mistakeAnalysis에 causes, primaryCause, preventionNote, practiceMode를 넣어줘. 이 값은 questionMeta.mistakeAnalysis로도 연결돼 문항별 통계에 사용돼.
 - concepts는 단원명/공식명/핵심 개념명만 짧게 넣고, strategy는 한 문장 풀이 전략, steps는 학생이 다시 봐도 이해되도록 단계별 배열로 써줘.
 - wrongPoint는 틀리기 쉬운 지점, reviewPoint는 다음 복습 때 확인할 행동으로 써줘.
+- 도표/그래프/기하 그림은 원본 이미지를 직접 보고 정리하는 image-to-image clean reconstruction을 우선해. 원본 구도, 종횡비, 점 위치, 연결, 실선·점선, 관계 표시, 수치, 열린점·닫힌점, 음영을 보존하고 손글씨와 촬영 노이즈만 제거해.
+- figures에는 original, cleaned, semanticSpec, verification을 별도로 저장하고 기존 원본을 cleaned 이미지로 덮어쓰지 마. 불확실한 관계는 확정하지 말고 warning과 confidence를 남겨.
 - 도표/그래프/기하 그림이 있는 문항은 figures 설명만으로 끝내지 말고, 가능하면 learningBlocks[].type을 "diagram"으로 만들고 diagramSpec을 함께 채워줘.
 - 시각화가 도움이 되는 문항은 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec에 허용 타입, 라벨, params를 넣어줘. 허용 type은 "derivative-tangent", "absolute-value-corner", "piecewise-differentiability", "coordinate-graph", "normal-distribution", "probability-tree", "venn-diagram", "geometry-helper", "trig-unit-circle", "sequence-flow"뿐이야.
 - diagramSpec.params에는 점, 선, 원, 축, 함수식, 강조 대상, 라벨, 핵심 관계를 넣어줘. 설명만 하지 말고 앱이 React SVG로 그릴 수 있을 정도로 구조화해줘.
@@ -275,51 +274,25 @@ export function mergeGptSolutionIntoEntry(
     questionImages: base.questionImages,
     entryKind: base.entryKind,
     tags: base.tags,
+    questionMeta: base.questionMeta,
+    questionContentSegments: base.questionContentSegments,
+    sheetGroup: base.sheetGroup,
+    mistakeAnalysis: base.mistakeAnalysis,
+    concepts: base.concepts,
+    linkedEntryIds: base.linkedEntryIds,
+    reviewAttempts: base.reviewAttempts,
+    review: base.review,
+    checklist: base.checklist,
+    annotations: base.annotations,
+    mastered: base.mastered,
+    difficult: base.difficult,
+    difficulty: base.difficulty,
+    myAnswer: base.myAnswer,
+    figures: base.figures,
+    sourceType: base.sourceType,
   };
 }
 
 export function entryToFormData(entry: WrongAnswerEntry): EntryFormData {
-  return {
-    subject: entry.subject,
-    title: entry.title,
-    question: entry.question,
-    questionImages: [...entry.questionImages],
-    entryKind: entry.entryKind,
-    difficult: entry.difficult,
-    difficulty: entry.difficulty ?? "none",
-    difficultyScore: entry.difficultyScore,
-    myAnswer: entry.myAnswer,
-    correctAnswer: entry.correctAnswer,
-    explanationParts: hasExplanationContent(entry)
-      ? entry.explanationParts.map((part) => ({ ...part, images: [...part.images] }))
-      : [{ id: uuidv4(), text: "", images: [] }],
-    memo: entry.memo,
-    annotations: [...(entry.annotations ?? [])],
-    tags: [...entry.tags],
-    answerKey: (entry.answerKey ?? []).map((item) => ({
-      ...item,
-      importantPoints: [...item.importantPoints],
-      concepts: item.concepts ? [...item.concepts] : [],
-      diagramType: item.diagramType,
-      diagramSpec: cloneDiagramSpec(item.diagramSpec),
-      steps: item.steps ? [...item.steps] : undefined,
-      choiceJudgements: item.choiceJudgements ? item.choiceJudgements.map((judgement) => ({ ...judgement })) : undefined,
-    })),
-    figures: (entry.figures ?? []).map((figure) => ({ ...figure })),
-    learningBlocks: (entry.learningBlocks ?? []).map((block) => ({
-      ...block,
-      diagramSpec: cloneDiagramSpec(block.diagramSpec),
-    })),
-    importAudit: entry.importAudit ? {
-      ...entry.importAudit,
-      expectedQuestionNumbers: [...entry.importAudit.expectedQuestionNumbers],
-      detectedQuestionNumbers: [...entry.importAudit.detectedQuestionNumbers],
-      missingQuestionNumbers: [...entry.importAudit.missingQuestionNumbers],
-      uncertainQuestionNumbers: [...entry.importAudit.uncertainQuestionNumbers],
-    } : undefined,
-    rejectedNotes: [...(entry.rejectedNotes ?? [])],
-    mastered: entry.mastered,
-    review: entry.review,
-    checklist: entry.checklist ? entry.checklist.map((item) => ({ ...item })) : [],
-  };
+  return createEntryDraftFromEntry(entry);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
@@ -39,7 +39,11 @@ export default function ReviewPanel({
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
+  const panelRef = useRef<HTMLDivElement>(null);
+  const mountedRef = useRef(true);
+  const savingRef = useRef(false);
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
@@ -49,6 +53,51 @@ export default function ReviewPanel({
     setRevealed(false);
     setReviewStats({ again: 0, hard: 0, good: 0 });
   }, [reviewItems]);
+
+  useEffect(() => {
+    savingRef.current = saving;
+  }, [saving]);
+
+  const requestClose = useCallback(() => {
+    if (!savingRef.current) onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusable = () => Array.from(
+      panelRef.current?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) ?? [],
+    );
+    const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !savingRef.current) {
+        event.preventDefault();
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const items = focusable();
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      mountedRef.current = false;
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus();
+    };
+  }, [requestClose]);
   const current = reviewItems[index] ?? null;
   const progress = useMemo(
     () => (reviewItems.length > 0 ? `${Math.min(index + 1, reviewItems.length)} / ${reviewItems.length}` : "0 / 0"),
@@ -56,15 +105,23 @@ export default function ReviewPanel({
   );
 
   const handleReview = async (result: ReviewResult) => {
-    if (!current) return;
+    if (!current || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
+    setSaveError(null);
     try {
       await onReview(current, result);
+      if (!mountedRef.current) return;
       setReviewStats((stats) => ({ ...stats, [result]: stats[result] + 1 }));
       setRevealed(false);
       setIndex((value) => Math.min(value + 1, reviewItems.length));
+    } catch (error) {
+      if (mountedRef.current) {
+        setSaveError(error instanceof Error && error.message ? error.message : "복습 결과를 저장하지 못했습니다.");
+      }
     } finally {
-      setSaving(false);
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
     }
   };
 
@@ -73,18 +130,18 @@ export default function ReviewPanel({
     current?.kind === "sheet-question"
       ? resolveSheetQuestion(current.entry, current.questionNumber)
       : null;
-
   return (
-    <div className="review-panel">
+    <div ref={panelRef} className="review-panel" role="dialog" aria-modal="true" aria-label={title} aria-busy={saving} tabIndex={-1}>
       <div className="review-panel-header">
         <div>
           <h2>{title}</h2>
           <span>{progress}</span>
         </div>
-        <button type="button" className="btn-icon" onClick={onClose}>
+        <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
           닫기
         </button>
       </div>
+      {saveError && <p className="form-error" role="alert">{saveError}</p>}
 
       {!current || !currentEntry ? (
         reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
@@ -96,7 +153,7 @@ export default function ReviewPanel({
               <div><dt>어려움</dt><dd>{reviewStats.hard}</dd></div>
               <div><dt>맞음</dt><dd>{reviewStats.good}</dd></div>
             </dl>
-            <button type="button" className="btn-primary" onClick={onClose}>복습 닫기</button>
+            <button type="button" className="btn-primary" onClick={requestClose} disabled={saving}>복습 닫기</button>
           </section>
         ) : (
           <div className="review-empty">복습할 항목이 없습니다.</div>

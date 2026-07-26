@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChecklistItem, QuestionMeta, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../types";
+import type { ExportHubView } from "../features/export/types";
+import type { SettingsTab } from "./SettingsModal";
 import { hasExplanationContent } from "../utils/entry";
 import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
@@ -38,7 +40,11 @@ import StudyZoomViewport, { getQuestionZoomStorageKey } from "./StudyZoomViewpor
 import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
-import GptExportModal from "./GptExportModal";
+import ExportHubModal from "../features/export/components/ExportHubModal";
+import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
+import Dialog from "../shared/ui/Dialog";
+import Toast from "../shared/ui/Toast";
+import Menu from "../shared/ui/Menu";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -55,6 +61,18 @@ interface EntryDetailProps {
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
+  examSession?: ExamSession | null;
+  examPrintPreferences?: ExamPrintPreferences;
+  onExamPrintPreferencesChange?: (patch: Partial<ExamPrintPreferences>) => Promise<void> | void;
+  onSyncExportContext?: (payload: {
+    scope: ExportScopeMode;
+    questionNumbers: string[];
+    submitted: boolean;
+    shareOptions: Pick<
+      ChatGptMcpPreferences,
+      "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
+    >;
+  }) => Promise<void>;
   onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
   onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
@@ -71,6 +89,19 @@ interface EntryDetailProps {
     source: "detail" | "focused" | "theater";
   }) => void;
   initialQuestionTarget?: { questionNumber: string; requestId: number } | null;
+  onInitialQuestionTargetConsumed?: (
+    requestId: number,
+    result: "opened" | "not-found",
+  ) => void;
+  viewPreferences?: ViewPreferences;
+  onViewPreferencesChange?: (patch: Partial<ViewPreferences>) => void;
+  onOpenSettings?: (tab?: SettingsTab) => void;
+  chatGptPreferences?: ChatGptMcpPreferences;
+  onChatGptPreferencesChange?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void> | void;
+  onSyncChatGptContext?: (context: { entryId: string; questionNumber: string | null }) => Promise<void>;
+  onOpenChatGptSettings?: () => void;
+  onCheckLocalMcp?: () => Promise<void>;
+  remoteMcpConfigured?: boolean;
 }
 
 type SheetLayout = "single" | "columns";
@@ -155,8 +186,10 @@ export default function EntryDetail({
   allEntries = [],
   onOpenEntry,
   onQuickGptSolution,
-  onExportMarkdown,
-  onOpenPrint,
+  examSession,
+  examPrintPreferences,
+  onExamPrintPreferencesChange,
+  onSyncExportContext,
   onReview,
   onQuickMemo,
   onLearningBlocksChange,
@@ -166,24 +199,36 @@ export default function EntryDetail({
   onQuestionMetaChange,
   onActiveContextChange,
   initialQuestionTarget,
+  onInitialQuestionTargetConsumed,
+  viewPreferences,
+  onViewPreferencesChange,
+  onOpenSettings,
+  chatGptPreferences,
+  onChatGptPreferencesChange,
+  onOpenChatGptSettings,
+  onCheckLocalMcp,
+  remoteMcpConfigured,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
-  const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(loadFocusTextSize);
+  const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
   const [activeStudyPanel, setActiveStudyPanel] = useState<StudyPanel>(loadFocusPanel);
   const [memoMode, setMemoMode] = useState(false);
-  const [sheetLayout, setSheetLayout] = useState<SheetLayout>(loadSheetLayout);
+  const [sheetLayout, setSheetLayout] = useState<SheetLayout>(viewPreferences?.sheetLayout ?? loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
   const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
-  const [hideAnswers, setHideAnswers] = useState(loadAnswerHidden);
+  const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
   const [quickMemoText, setQuickMemoText] = useState("");
-  const [studyControlCompact, setStudyControlCompact] = useState(loadStudyControlCompact);
+  const [studyControlCompact, setStudyControlCompact] = useState(viewPreferences?.compactToolbar ?? loadStudyControlCompact);
   const [showTextReview, setShowTextReview] = useState(false);
-  const [showGptExport, setShowGptExport] = useState(false);
+  const [showExportHub, setShowExportHub] = useState(false);
+  const [exportHubView, setExportHubView] = useState<ExportHubView>("home");
+  const [exportHubScope, setExportHubScope] = useState<ExportScopeMode>("current");
+  const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
   const [theaterQuestionIndex, setTheaterQuestionIndex] = useState<number | null>(null);
@@ -200,6 +245,23 @@ export default function EntryDetail({
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
+  const consumedInitialTargetRef = useRef<number | null>(null);
+
+  const updateViewPreference = useCallback(<K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K]) => {
+    if (key === "sheetLayout") setSheetLayout(value as SheetLayout);
+    if (key === "fontSize") setFocusTextSize(value as FocusTextSize);
+    if (key === "hideAnswers") setHideAnswers(Boolean(value));
+    if (key === "compactToolbar") setStudyControlCompact(Boolean(value));
+    onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
+  }, [onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (!viewPreferences) return;
+    setSheetLayout(viewPreferences.sheetLayout);
+    setFocusTextSize(viewPreferences.fontSize);
+    setHideAnswers(viewPreferences.hideAnswers);
+    setStudyControlCompact(viewPreferences.compactToolbar);
+  }, [viewPreferences]);
 
   const filledParts = entry.explanationParts
     .map((p, i) => ({ part: p, index: i }))
@@ -231,12 +293,14 @@ export default function EntryDetail({
     [questionBlocks],
   );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
+  const questionIdentifier = (question?: QuestionBlock) =>
+    question?.numberLabel ? String(question.numberLabel) : question?.displayNumber ? String(question.displayNumber) : null;
   useEffect(() => {
     const theaterQuestion = theaterQuestionIndex === null ? undefined : questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined;
     const focused = focusMode === "closed" ? undefined : focusedQuestion;
     onActiveContextChange?.({
       entryId: entry.id,
-      questionNumber: theaterQuestion?.displayNumber ? String(theaterQuestion.displayNumber) : focused?.displayNumber ? String(focused.displayNumber) : null,
+      questionNumber: questionIdentifier(theaterQuestion) ?? questionIdentifier(focused),
       source: theaterQuestion ? "theater" : focused ? "focused" : "detail",
     });
   }, [entry.id, focusMode, focusedQuestion, onActiveContextChange, questionAnchors, theaterQuestionIndex]);
@@ -284,28 +348,32 @@ export default function EntryDetail({
   const hasSuspiciousText = suspiciousSegments.length > 0;
 
   useEffect(() => {
-    localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
-  }, [sheetLayout]);
-
-  useEffect(() => {
     localStorage.setItem(ANSWER_VIEW_KEY, answerView);
   }, [answerView]);
-
-  useEffect(() => {
-    localStorage.setItem(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
-  }, [hideAnswers]);
-
-  useEffect(() => {
-    localStorage.setItem(FOCUS_TEXT_SIZE_KEY, focusTextSize);
-  }, [focusTextSize]);
 
   useEffect(() => {
     localStorage.setItem(FOCUS_PANEL_KEY, activeStudyPanel);
   }, [activeStudyPanel]);
 
   useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
+  }, [onViewPreferencesChange, sheetLayout]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
+  }, [hideAnswers, onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
+    localStorage.setItem(FOCUS_TEXT_SIZE_KEY, focusTextSize);
+  }, [focusTextSize, onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (onViewPreferencesChange) return;
     localStorage.setItem(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
-  }, [studyControlCompact]);
+  }, [onViewPreferencesChange, studyControlCompact]);
 
   useEffect(() => {
     setActiveSearchIndex(0);
@@ -357,8 +425,44 @@ export default function EntryDetail({
     }, 2400);
   }, []);
 
+  const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode) => {
+    setExportHubView(view);
+    setExportHubScope(scope ?? (selectedQuestionNumbers.length > 0 ? "selected" : "current"));
+    setShowExportHub(true);
+  }, [selectedQuestionNumbers.length]);
+
+  const moveTheaterQuestion = useCallback((delta: number) => {
+    if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
+      const nextQueueIndex = Math.max(
+        0,
+        Math.min(selectedReviewQueue.questionNumbers.length - 1, selectedReviewQueue.currentIndex + delta),
+      );
+      const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
+      const nextQuestionIndex = questionAnchors.findIndex(
+        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+      );
+      if (nextQuestionIndex >= 0) {
+        setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
+        setTheaterQuestionIndex(nextQuestionIndex);
+        setFocusedQuestionIndex(nextQuestionIndex);
+      }
+      return;
+    }
+    setTheaterQuestionIndex((current) => {
+      const currentIndex = current ?? 0;
+      const next = Math.max(0, Math.min(questionAnchors.length - 1, currentIndex + delta));
+      setFocusedQuestionIndex(next);
+      return next;
+    });
+  }, [entry.id, questionAnchors, selectedReviewQueue]);
+
   const moveFocusedQuestion = useCallback((delta: number) => {
     if (!isSheet || questionAnchors.length === 0) return;
+    // Keep theater and focused indices in lockstep while the overlay is open.
+    if (theaterQuestionIndex !== null) {
+      moveTheaterQuestion(delta);
+      return;
+    }
     setFocusedQuestionIndex((index) => {
       const next = Math.max(0, Math.min(questionAnchors.length - 1, index + delta));
       const target = questionAnchors[next] as QuestionBlock | undefined;
@@ -367,24 +471,32 @@ export default function EntryDetail({
       }
       return next;
     });
-  }, [focusMode, isSheet, questionAnchors, scrollToQuestion]);
+  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, theaterQuestionIndex]);
 
-  const handleReviewResult = useCallback(async (result: ReviewResult) => {
+  const handleReviewResult = useCallback(async (
+    result: ReviewResult,
+    explicitQuestion?: QuestionBlock,
+  ) => {
     if (reviewSaving) return;
+    if (isSheet && !explicitQuestion && theaterQuestionIndex === null && focusMode === "closed") {
+      pushToast("문제를 크게 보거나 집중 보기에서 복습 결과를 기록하세요.", "info");
+      return;
+    }
     setReviewSaving(result);
     try {
-      const currentTheaterQuestion =
-        theaterQuestionIndex !== null
+      const currentSheetQuestion =
+        explicitQuestion ??
+        (theaterQuestionIndex !== null
           ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
-          : undefined;
-      if (isSheet && currentTheaterQuestion && onQuestionMetaChange) {
+          : focusedQuestion);
+      if (isSheet && currentSheetQuestion && onQuestionMetaChange) {
         await onQuestionMetaChange(entry, (current) => {
           const questionMeta = normalizeQuestionMeta(current).find(
-            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentTheaterQuestion.displayNumber),
+            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentSheetQuestion.displayNumber),
           );
           return applyQuestionReviewResult(
             current,
-            currentTheaterQuestion.displayNumber,
+            currentSheetQuestion.displayNumber,
             result,
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
@@ -425,7 +537,7 @@ export default function EntryDetail({
     } finally {
       setReviewSaving(null);
     }
-  }, [entry, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
+  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
 
   const handleQuickMemoSubmit = async () => {
     const text = quickMemoText.trim();
@@ -629,48 +741,31 @@ export default function EntryDetail({
 
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
+    if (consumedInitialTargetRef.current === initialQuestionTarget.requestId) return;
     const normalized = normalizeQuestionNumber(initialQuestionTarget.questionNumber);
     const index = questionAnchors.findIndex(
       (block) =>
         normalizeQuestionNumber(block.displayNumber) === normalized ||
         normalizeQuestionNumber(block.numberLabel) === normalized,
     );
-    if (index >= 0) openTheaterMode(index);
-  }, [initialQuestionTarget, isSheet, openTheaterMode, questionAnchors]);
+    consumedInitialTargetRef.current = initialQuestionTarget.requestId;
+    if (index >= 0) {
+      openTheaterMode(index);
+      onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "opened");
+    } else {
+      onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "not-found");
+    }
+  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
+    if (theaterQuestionIndex !== null) setFocusedQuestionIndex(theaterQuestionIndex);
     setTheaterQuestionIndex(null);
     setSelectedReviewQueue(null);
     if (target?.kind === "question") {
       window.setTimeout(() => scrollToQuestion(target.start), 0);
     }
   }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
-
-  const moveTheaterQuestion = useCallback((delta: number) => {
-    if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
-      const nextQueueIndex = Math.max(
-        0,
-        Math.min(selectedReviewQueue.questionNumbers.length - 1, selectedReviewQueue.currentIndex + delta),
-      );
-      const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
-      const nextQuestionIndex = questionAnchors.findIndex(
-        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
-      );
-      if (nextQuestionIndex >= 0) {
-        setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
-        setTheaterQuestionIndex(nextQuestionIndex);
-        setFocusedQuestionIndex(nextQuestionIndex);
-      }
-      return;
-    }
-    setTheaterQuestionIndex((current) => {
-      const currentIndex = current ?? 0;
-      const next = Math.max(0, Math.min(questionAnchors.length - 1, currentIndex + delta));
-      setFocusedQuestionIndex(next);
-      return next;
-    });
-  }, [entry.id, questionAnchors, selectedReviewQueue]);
 
   const executeStudyAction = useCallback((id: NextStudyActionId) => {
     if (id === "review-text") {
@@ -1143,84 +1238,10 @@ export default function EntryDetail({
       {!isFocusExpanded && (
       <div className="detail-toolbar">
         <div className="detail-toolbar-left">
-          <span className="subject-badge">{entry.subject}</span>
-          {isSheet ? (
-            <span className="kind-badge kind-badge--sheet">문제지</span>
-          ) : isConcept ? (
-            <span className="kind-badge kind-badge--concept">개념</span>
-          ) : isLecture ? (
-            <span className="kind-badge kind-badge--lecture">특강자료</span>
-          ) : (
-            <span className="kind-badge kind-badge--wrong">오답</span>
-          )}
-          {hasSuspiciousText && (
-            <button
-              type="button"
-              className="text-review-badge"
-              onClick={() => setShowTextReview(true)}
-            >
-              텍스트 검수 필요 {suspiciousSegments.length}
-            </button>
-          )}
-          {entry.difficulty && entry.difficulty !== "none" && (
-            <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
-              난이도: {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
-            </span>
-          )}
-          {entry.tags.map((t) => (
-            <span key={t} className="tag">
-              #{t}
-            </span>
-          ))}
           {!isConcept && !isLecture && (
-            <div className="study-mode-tabs" aria-label="학습 보기 모드">
-              <button
-                type="button"
-                className={detailViewMode === "paper" ? "active" : ""}
-                onClick={() => handleStudyModeChange("paper")}
-              >
-                문제지
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "solution" ? "active" : ""}
-                onClick={() => handleStudyModeChange("solution")}
-              >
-                해설지
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "learning" ? "active" : ""}
-                onClick={() => handleStudyModeChange("learning")}
-              >
-                특강
-              </button>
-              <button
-                type="button"
-                className={detailViewMode === "analysis" ? "active" : ""}
-                onClick={() => handleStudyModeChange("analysis")}
-              >
-                분석
-              </button>
-            </div>
-          )}
-          {isSheet && (
-            <div className="sheet-layout-toggle" aria-label="시험지 보기 방식">
-              <button
-                type="button"
-                className={sheetLayout === "single" ? "active" : ""}
-                onClick={() => setSheetLayout("single")}
-              >
-                단일 열
-              </button>
-              <button
-                type="button"
-                className={sheetLayout === "columns" ? "active" : ""}
-                onClick={() => setSheetLayout("columns")}
-              >
-                2단
-              </button>
-            </div>
+            <nav className="study-mode-tabs" aria-label="학습 보기 모드">
+              {[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }].map((item) => <button key={item.id} type="button" className={detailViewMode === item.id ? "active" : ""} onClick={() => handleStudyModeChange(item.id as typeof detailViewMode)}>{item.label}</button>)}
+            </nav>
           )}
         </div>
         <div className="detail-actions">
@@ -1235,18 +1256,31 @@ export default function EntryDetail({
                 집중 보기
               </button>
             )}
-            {onQuickGptSolution && (
-              <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
-                GPT 해설
+            {isSheet && (
+              <button type="button" className="btn-icon" onClick={() => openExportHub()}>
+                공유·내보내기
               </button>
             )}
             <button type="button" className="btn-icon" onClick={onEdit}>
               수정
             </button>
+            <QuickViewSettingsMenu
+              layout={isSheet ? sheetLayout : undefined}
+              onLayoutChange={isSheet ? ((layout) => updateViewPreference("sheetLayout", layout)) : undefined}
+              fontSize={focusTextSize}
+              onFontSizeChange={(size) => updateViewPreference("fontSize", size)}
+              hideAnswers={(isSheet || entry.entryKind === "wrong_answer") ? hideAnswers : undefined}
+              onHideAnswersChange={(isSheet || entry.entryKind === "wrong_answer") ? ((hidden) => updateViewPreference("hideAnswers", hidden)) : undefined}
+              onOpenHelp={() => setViewHelpOpen(true)}
+              onOpenAllSettings={() => onOpenSettings?.("view")}
+            />
           </div>
-          <details className="detail-more-menu">
-            <summary className="btn-icon">더보기</summary>
-            <div className="detail-more-menu-popover">
+          <Menu label="도구" className="detail-more-menu">
+              {onQuickGptSolution && (
+                <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
+                  GPT 해설
+                </button>
+              )}
               <button
                 type="button"
                 className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`}
@@ -1254,11 +1288,6 @@ export default function EntryDetail({
               >
                 어려움 표시
               </button>
-              {isSheet && (
-                <button type="button" className="btn-icon" onClick={() => setShowGptExport(true)}>
-                  GPT에게 보내기
-                </button>
-              )}
               {isSheet && onTitleChange && (
                 <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>
                   이름 변경
@@ -1278,21 +1307,10 @@ export default function EntryDetail({
               >
                 {entry.mastered ? "완료 해제" : "복습 완료"}
               </button>
-              {isSheet && (
-                <>
-                  <button type="button" className="btn-icon" onClick={onExportMarkdown}>
-                    Markdown
-                  </button>
-                  <button type="button" className="btn-icon" onClick={onOpenPrint}>
-                    PDF 인쇄
-                  </button>
-                </>
-              )}
               <button type="button" className="btn-icon danger" onClick={onDelete}>
                 삭제
               </button>
-            </div>
-          </details>
+          </Menu>
         </div>
       </div>
       )}
@@ -1403,6 +1421,37 @@ export default function EntryDetail({
               )}
             </div>
           )}
+          <div className="detail-meta-row">
+            <span className="subject-badge">{entry.subject}</span>
+            {isSheet ? (
+              <span className="kind-badge kind-badge--sheet">문제지</span>
+            ) : isConcept ? (
+              <span className="kind-badge kind-badge--concept">개념</span>
+            ) : isLecture ? (
+              <span className="kind-badge kind-badge--lecture">특강자료</span>
+            ) : (
+              <span className="kind-badge kind-badge--wrong">오답</span>
+            )}
+            {hasSuspiciousText && (
+              <button
+                type="button"
+                className="text-review-badge"
+                onClick={() => setShowTextReview(true)}
+              >
+                텍스트 검수 필요 {suspiciousSegments.length}
+              </button>
+            )}
+            {entry.difficulty && entry.difficulty !== "none" && (
+              <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
+                난이도: {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
+              </span>
+            )}
+            {entry.tags.map((t) => (
+              <span key={t} className="tag">
+                #{t}
+              </span>
+            ))}
+          </div>
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
@@ -1442,7 +1491,7 @@ export default function EntryDetail({
                 </button>
                 {selectionMode && (
                   <>
-                    <button type="button" className="btn-secondary btn-sm" onClick={() => setShowGptExport(true)} disabled={selectedQuestionNumbers.length === 0}>
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => openExportHub("chatgpt-share", "selected")} disabled={selectedQuestionNumbers.length === 0}>
                       GPT에게 보내기
                     </button>
                     <button type="button" className="btn-secondary btn-sm" onClick={markSelectedImportant} disabled={selectedQuestionNumbers.length === 0}>
@@ -2088,15 +2137,16 @@ export default function EntryDetail({
           onPrevious={() => moveTheaterQuestion(-1)}
           onNext={() => moveTheaterQuestion(1)}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
-          onToggleImportant={() => handleToggleQuestionImportant(String(theaterQuestion.displayNumber))}
+          onToggleImportant={() => handleToggleQuestionImportant(questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber))}
           onDifficultyScoreChange={(score) =>
-            void handleQuestionDifficultyScoreChange(String(theaterQuestion.displayNumber), score)
+            void handleQuestionDifficultyScoreChange(questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber), score)
           }
           onOpenGptExport={() => {
-            setSelectedQuestionNumbers([String(theaterQuestion.displayNumber)]);
-            setShowGptExport(true);
+            setSelectedQuestionNumbers([questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber)]);
+            openExportHub("chatgpt-share", "selected");
           }}
-          onReview={(result) => void handleReviewResult(result)}
+          onReview={(result) => void handleReviewResult(result, theaterQuestion)}
+          reviewSaving={reviewSaving !== null}
           onClose={closeTheaterMode}
         />
       )}
@@ -2125,42 +2175,62 @@ export default function EntryDetail({
           onPrevious={() => moveFocusedQuestion(-1)}
           onNext={() => moveFocusedQuestion(1)}
           onToggleAnswers={() => setHideAnswers((value) => !value)}
-          onReview={(result) => void handleReviewResult(result)}
+          onReview={(result) => void handleReviewResult(
+            result,
+            isSheet && focusMode !== "closed" ? focusedQuestion : undefined,
+          )}
           onToggleDifficult={handleToggleDifficultWithToast}
           onModeChange={handleStudyModeChange}
           onCompactChange={setStudyControlCompact}
           onQuickMemoOpenChange={setQuickMemoOpen}
           onQuickMemoTextChange={setQuickMemoText}
           onQuickMemoSubmit={() => void handleQuickMemoSubmit()}
-          onOpenGptExport={isSheet ? () => setShowGptExport(true) : undefined}
+          onOpenGptExport={isSheet ? () => openExportHub("chatgpt-share", "current") : undefined}
         />
       )}
-      {showGptExport && (
-        <GptExportModal
+      <Dialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} className="exam-dialog" ariaLabel="보기 도움말">
+            <header>
+              <h3>보기 도움말</h3>
+              <button type="button" className="btn-icon" onClick={() => setViewHelpOpen(false)}>닫기</button>
+            </header>
+            <ul>
+              <li>빠른 보기 설정은 현재 화면의 배치, 글자 크기, 정답 가리기를 바로 바꾼니다.</li>
+              <li>전체 설정에서는 보기, 시험, 이미지, GPT·MCP 기본값을 함께 관리합니다.</li>
+              <li>개념노트와 특강자료에는 정답 가리기가 표시되지 않습니다.</li>
+            </ul>
+      </Dialog>
+
+      {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
+        <ExportHubModal
           entry={entry}
           allEntries={allEntries}
+          examSession={examSession}
           currentQuestionNumber={
             theaterQuestion
-              ? String(theaterQuestion.displayNumber)
+              ? questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber)
               : focusedQuestion
-                ? String(focusedQuestion.displayNumber)
+                ? questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber)
                 : "1"
           }
           selectedQuestionNumbers={selectedQuestionNumbers}
-          onClose={() => setShowGptExport(false)}
-          onCopied={() => {
-            setShowGptExport(false);
-            pushToast("GPT에 붙여넣을 문제를 복사했습니다.", "success");
-          }}
+          examPrintPreferences={examPrintPreferences}
+          onExamPrintPreferencesChange={onExamPrintPreferencesChange}
+          chatGptPreferences={chatGptPreferences}
+          onChatGptPreferencesChange={onChatGptPreferencesChange}
+          onSyncExportContext={onSyncExportContext}
+          onCheckLocalMcp={onCheckLocalMcp}
+          remoteMcpConfigured={remoteMcpConfigured}
+          onOpenSettings={() => onOpenChatGptSettings?.()}
+          onClose={() => setShowExportHub(false)}
+          initialView={exportHubView}
+          initialScope={exportHubScope}
+          onToast={(message) => pushToast(message, "success")}
         />
       )}
+
       {toasts.length > 0 && (
         <div className="study-toast-stack" aria-live="polite">
-          {toasts.map((toast) => (
-            <div key={toast.id} className={`study-toast study-toast--${toast.tone}`}>
-              {toast.message}
-            </div>
-          ))}
+          {toasts.map((toast) => <Toast key={toast.id} tone={toast.tone}>{toast.message}</Toast>)}
         </div>
       )}
       {isFocusExpanded && (

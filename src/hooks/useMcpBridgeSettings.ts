@@ -108,8 +108,17 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
 
   const testMcpBridgeConnection = useCallback(async () => {
     setConnectionTesting(true);
-    try { const status = await testMcpBridgeConnectionApi(); setRuntimeStatus(toRuntimeStatus(status)); setSettingsMessage(`연결 테스트 성공 (포트 ${status.port}).`); }
-    catch (error) { setSettingsMessage(error instanceof Error ? error.message : "연결 테스트에 실패했습니다."); }
+    try {
+      const status = await testMcpBridgeConnectionApi();
+      const runtimeStatus = toRuntimeStatus(status);
+      setRuntimeStatus(runtimeStatus);
+      setSettingsMessage(`연결 테스트 성공 (포트 ${status.port}).`);
+      return runtimeStatus;
+    }
+    catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : "연결 테스트에 실패했습니다.");
+      throw error;
+    }
     finally { setConnectionTesting(false); }
   }, [setSettingsMessage]);
 

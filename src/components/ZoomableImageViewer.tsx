@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
 import { getImageUrl } from "../api";
+import Dialog from "../shared/ui/Dialog";
 
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 4;
@@ -90,8 +91,7 @@ export default function ZoomableImageViewer({ filenames }: { filenames: string[]
           </button>
         ))}
       </div>
-      {open && (
-        <div className="zoom-viewer" role="dialog" aria-modal="true" aria-label="이미지 확대 보기">
+      <Dialog open={open} onClose={() => setOpen(false)} className="zoom-viewer" backdropClassName="dialog-host" ariaLabel="이미지 확대 보기">
           <div className="zoom-viewer-toolbar">
             <span>{index + 1} / {sources.length}</span>
             <button type="button" onClick={() => setScale((value) => clampScale(value - 0.25))}>축소</button>
@@ -120,8 +120,7 @@ export default function ZoomableImageViewer({ filenames }: { filenames: string[]
               <button type="button" disabled={index === sources.length - 1} onClick={() => setIndex((value) => value + 1)}>다음</button>
             </div>
           )}
-        </div>
-      )}
+      </Dialog>
     </>
   );
 }

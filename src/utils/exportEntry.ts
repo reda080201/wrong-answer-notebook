@@ -1,13 +1,9 @@
 import type { SheetAnswerItem, WrongAnswerEntry } from "../types";
+import { buildExamPrintModel } from "../features/export/services/buildExamPrintModel";
+import { printExamDocument } from "../features/export/services/printExamDocument";
+import { DEFAULT_EXAM_PRINT_PREFERENCES } from "./viewPreferences";
+import { resolveExportQuestionNumbers } from "../features/export/services/resolveExportQuestionNumbers";
 import { getEntryTitle } from "./entry";
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 function answerDifficultyLabel(item: SheetAnswerItem): string {
   if (item.difficulty === "high") return "상";
@@ -98,52 +94,16 @@ export function downloadMarkdown(entry: WrongAnswerEntry): void {
   URL.revokeObjectURL(url);
 }
 
-export function openPrintableEntry(entry: WrongAnswerEntry): void {
-  const html = `<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8" />
-  <title>${escapeHtml(getEntryTitle(entry))}</title>
-  <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; line-height: 1.7; max-width: 880px; margin: 40px auto; padding: 0 24px; color: #111; }
-    h1 { font-size: 28px; margin-bottom: 8px; }
-    h2 { margin-top: 32px; border-bottom: 1px solid #ddd; padding-bottom: 6px; }
-    pre { white-space: pre-wrap; word-break: break-word; font: inherit; }
-    .meta { color: #555; margin-bottom: 24px; }
-    .answer { break-inside: avoid; border: 1px solid #ddd; padding: 14px; margin: 12px 0; border-radius: 8px; }
-    @media print { body { margin: 0 auto; } button { display: none; } }
-  </style>
-</head>
-<body>
-  <button onclick="window.print()">PDF로 저장/인쇄</button>
-  <h1>${escapeHtml(getEntryTitle(entry))}</h1>
-  <div class="meta">${escapeHtml(entry.subject)} · ${entry.tags.map((tag) => `#${escapeHtml(tag)}`).join(" ")}</div>
-  <h2>본문</h2>
-  <pre>${escapeHtml(entry.question)}</pre>
-  ${entry.memo.trim() ? `<h2>메모</h2><pre>${escapeHtml(entry.memo)}</pre>` : ""}
-  ${(entry.answerKey ?? []).length ? `<h2>답안지</h2>${(entry.answerKey ?? []).map((item) => `
-    <section class="answer">
-      <strong>${escapeHtml(item.questionNumber || "?")}번 · ${escapeHtml(item.answer || "정답 없음")}</strong>
-      ${item.difficulty ? `<p>난이도: ${escapeHtml(answerDifficultyLabel(item))}</p>` : ""}
-      ${item.concepts?.length ? `<p>개념: ${escapeHtml(item.concepts.join(", "))}</p>` : ""}
-      ${item.strategy?.trim() ? `<p>풀이 전략: ${escapeHtml(item.strategy)}</p>` : ""}
-      ${item.notes?.trim() ? `<p>문제별 메모: ${escapeHtml(item.notes)}</p>` : ""}
-      ${answerSteps(item).length ? `<ol>${answerSteps(item).map((step) => `<li>${escapeHtml(step)}</li>`).join("")}</ol>` : ""}
-      ${item.choiceJudgements?.length ? `<h3>보기별 판단</h3><ul>${item.choiceJudgements.map((judgement) => `<li>${escapeHtml([judgement.marker, judgement.text].filter(Boolean).join(": "))}</li>`).join("")}</ul>` : ""}
-      ${(item.wrongPoint?.trim() || item.importantPoints.length) ? `<h3>오답 포인트</h3><ul>${(item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints).map((point) => `<li>${escapeHtml(point)}</li>`).join("")}</ul>` : ""}
-      ${item.reviewPoint?.trim() ? `<p>다음 복습: ${escapeHtml(item.reviewPoint)}</p>` : ""}
-    </section>`).join("")}` : ""}
-  ${(entry.figures ?? []).length ? `<h2>도표/그림</h2>${(entry.figures ?? []).map((figure) => `
-    <section class="answer">
-      <strong>${escapeHtml(figure.questionNumber || "?")}번 · ${escapeHtml(figure.title || "도표/그림")}</strong>
-      ${figure.caption.trim() ? `<pre>${escapeHtml(figure.caption)}</pre>` : ""}
-      ${figure.image ? `<p>이미지: ${escapeHtml(figure.image)}</p>` : ""}
-      ${figure.needsReview ? `<p>검토 필요</p>` : ""}
-    </section>`).join("")}` : ""}
-</body>
-</html>`;
-  const win = window.open("", "_blank");
-  if (!win) return;
-  win.document.write(html);
-  win.document.close();
+export async function openPrintableEntry(entry: WrongAnswerEntry): Promise<void> {
+  const resolved = resolveExportQuestionNumbers({
+    entry,
+    scope: "whole",
+  });
+  const model = buildExamPrintModel({
+    entry,
+    preferences: DEFAULT_EXAM_PRINT_PREFERENCES,
+    questionNumbers: resolved.questionNumbers,
+    scope: "whole",
+  });
+  await printExamDocument(model);
 }

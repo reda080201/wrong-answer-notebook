@@ -79,7 +79,7 @@ export function normalizeImportedLearningBlocks(raw: unknown): LearningBlock[] {
       const record = item as Record<string, unknown>;
       const type = typeof record.type === "string" && SAFE_BLOCK_TYPES.has(record.type as LearningBlockType)
         ? record.type as LearningBlockType
-        : "checklist";
+        : "concept";
       const title = typeof record.title === "string" ? record.title : "학습 내용";
       const itemList = Array.isArray(record.items)
         ? record.items.map((item) => `${item ?? ""}`.trim()).filter(Boolean).map((item) => `- ${item}`).join("\n")
