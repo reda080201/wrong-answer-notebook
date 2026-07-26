@@ -1,8 +1,8 @@
 mod mcp_bridge;
 mod notebook_store;
 
-use serde::{Deserialize, Serialize};
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
@@ -131,10 +131,7 @@ fn default_entry_kind() -> String {
 }
 
 fn app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
 }
@@ -289,7 +286,9 @@ fn image_path(app: &tauri::AppHandle, filename: &str) -> Result<PathBuf, String>
 fn validate_image_header_bytes(bytes: &[u8], ext: &str) -> Result<(), String> {
     let valid = match ext.to_ascii_lowercase().as_str() {
         "png" => bytes.len() >= 8 && bytes[..8] == [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
-        "jpg" | "jpeg" => bytes.len() >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff,
+        "jpg" | "jpeg" => {
+            bytes.len() >= 3 && bytes[0] == 0xff && bytes[1] == 0xd8 && bytes[2] == 0xff
+        }
         "gif" => bytes.len() >= 6 && (&bytes[..6] == b"GIF87a" || &bytes[..6] == b"GIF89a"),
         "webp" => bytes.len() >= 12 && &bytes[..4] == b"RIFF" && &bytes[8..12] == b"WEBP",
         _ => false,
@@ -305,14 +304,15 @@ fn validate_image_magic(path: &Path, ext: &str, max_bytes: u64) -> Result<(), St
     let metadata = fs::metadata(path).map_err(|e| e.to_string())?;
     if metadata.len() > max_bytes {
         let max_mb = max_bytes / 1024 / 1024;
-        return Err(format!("이미지 파일이 너무 큽니다. {max_mb}MB 이하만 저장할 수 있습니다."));
+        return Err(format!(
+            "이미지 파일이 너무 큽니다. {max_mb}MB 이하만 저장할 수 있습니다."
+        ));
     }
     let mut file = fs::File::open(path).map_err(|e| e.to_string())?;
     let mut header = [0u8; 12];
     let read = file.read(&mut header).map_err(|e| e.to_string())?;
     validate_image_header_bytes(&header[..read], ext)
 }
-
 
 fn compatible_image_extensions(left: &str, right: &str) -> bool {
     let left = left.to_ascii_lowercase();
@@ -359,7 +359,6 @@ fn extension_for_image_mime(mime: &str) -> Option<&'static str> {
         _ => None,
     }
 }
-
 
 fn resolve_import_image_extension(
     filename: Option<&str>,
@@ -468,7 +467,9 @@ fn build_gemini_parts(
     image_filenames: &[String],
 ) -> Result<Vec<serde_json::Value>, String> {
     if image_filenames.len() > MAX_AI_IMAGE_COUNT {
-        return Err(format!("AI 분석 이미지는 한 번에 {MAX_AI_IMAGE_COUNT}개 이하만 사용할 수 있습니다."));
+        return Err(format!(
+            "AI 분석 이미지는 한 번에 {MAX_AI_IMAGE_COUNT}개 이하만 사용할 수 있습니다."
+        ));
     }
     let mut parts = vec![serde_json::json!({ "text": text })];
     let mut total_bytes = 0_u64;
@@ -496,7 +497,8 @@ fn build_gemini_parts(
             .and_then(|value| value.to_str())
             .unwrap_or_default();
         validate_image_magic(&path, ext, MAX_AI_IMAGE_BYTES)?;
-        let bytes = fs::read(&path).map_err(|e| format!("AI 분석 이미지를 읽지 못했습니다: {e}"))?;
+        let bytes =
+            fs::read(&path).map_err(|e| format!("AI 분석 이미지를 읽지 못했습니다: {e}"))?;
         parts.push(gemini_inline_data_part(mime_type, &bytes));
     }
     Ok(parts)
@@ -514,7 +516,12 @@ fn collect_entry_images(entry: &WrongAnswerEntry) -> Vec<String> {
             images.push(image.clone());
         }
         for key in ["original", "cleaned"] {
-            if let Some(image) = figure.extra.get(key).and_then(|value| value.get("image")).and_then(serde_json::Value::as_str) {
+            if let Some(image) = figure
+                .extra
+                .get(key)
+                .and_then(|value| value.get("image"))
+                .and_then(serde_json::Value::as_str)
+            {
                 images.push(image.to_owned());
             }
         }
@@ -583,8 +590,12 @@ fn load_settings_raw(app: &tauri::AppHandle) -> Result<String, String> {
 }
 
 fn has_env_ai_key() -> bool {
-    std::env::var("GOOGLE_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
-        || std::env::var("GEMINI_API_KEY").map(|v| !v.trim().is_empty()).unwrap_or(false)
+    std::env::var("GOOGLE_API_KEY")
+        .map(|v| !v.trim().is_empty())
+        .unwrap_or(false)
+        || std::env::var("GEMINI_API_KEY")
+            .map(|v| !v.trim().is_empty())
+            .unwrap_or(false)
 }
 
 fn legacy_ai_provider_key(app: &tauri::AppHandle) -> Result<Option<String>, String> {
@@ -626,7 +637,9 @@ fn has_stored_ai_provider_key(app: &tauri::AppHandle) -> bool {
     stored_ai_provider_key()
         .map(|key| key.is_some())
         .unwrap_or(false)
-        || legacy_ai_provider_key(app).map(|key| key.is_some()).unwrap_or(false)
+        || legacy_ai_provider_key(app)
+            .map(|key| key.is_some())
+            .unwrap_or(false)
 }
 
 fn save_stored_ai_provider_key(app: &tauri::AppHandle, api_key: &str) -> Result<(), String> {
@@ -660,7 +673,8 @@ fn read_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<String, String>
 
 fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
     let raw = load_settings_raw(app).unwrap_or_else(|_| "{}".into());
-    let value: serde_json::Value = serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
+    let value: serde_json::Value =
+        serde_json::from_str(&raw).unwrap_or_else(|_| serde_json::json!({}));
     let mut config = value
         .get("aiProvider")
         .cloned()
@@ -685,7 +699,10 @@ fn save_ai_provider_config_to_settings(
     }
     let mut public_config = serde_json::to_value(config).map_err(|e| e.to_string())?;
     if let Some(obj) = public_config.as_object_mut() {
-        obj.insert("hasStoredKey".into(), serde_json::Value::Bool(config.has_stored_key));
+        obj.insert(
+            "hasStoredKey".into(),
+            serde_json::Value::Bool(config.has_stored_key),
+        );
     }
     value["aiProvider"] = public_config;
     write_json_atomic(&settings_file(app)?, &value)
@@ -698,7 +715,8 @@ fn ai_provider_status(app: &tauri::AppHandle) -> AiProviderStatus {
         AiProviderKeySource::Env => has_env_key,
         AiProviderKeySource::TauriSettings => config.has_stored_key,
     };
-    let available = config.enabled && !matches!(config.provider_type, AiProviderType::Manual) && has_key;
+    let available =
+        config.enabled && !matches!(config.provider_type, AiProviderType::Manual) && has_key;
     AiProviderStatus {
         provider_type: config.provider_type,
         enabled: config.enabled,
@@ -764,7 +782,9 @@ fn unix_time_string() -> String {
 }
 
 #[tauri::command]
-fn load_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>) -> Result<Vec<WrongAnswerEntry>, String> {
+fn load_entries(
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+) -> Result<Vec<WrongAnswerEntry>, String> {
     store.load_entries()
 }
 
@@ -777,7 +797,9 @@ fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>
         .and_then(|value| value.as_u64())
         .ok_or_else(|| "저장 데이터 schemaVersion을 확인할 수 없습니다.".to_string())?;
     if version != ENTRIES_SCHEMA_VERSION as u64 {
-        return Err(format!("지원하지 않는 저장 데이터 schemaVersion입니다: {version}"));
+        return Err(format!(
+            "지원하지 않는 저장 데이터 schemaVersion입니다: {version}"
+        ));
     }
     let entries = value
         .get("entries")
@@ -787,14 +809,19 @@ fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>
 }
 
 #[tauri::command]
-fn save_entries(store: tauri::State<'_, Arc<notebook_store::NotebookStore>>, entries: Vec<WrongAnswerEntry>) -> Result<(), String> {
+fn save_entries(
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    entries: Vec<WrongAnswerEntry>,
+) -> Result<(), String> {
     store.save_entries(&entries)
 }
 
 #[tauri::command]
 fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let path = app_dir(&app)?.join("exam-sessions.json");
-    if !path.exists() { return Ok(serde_json::json!([])); }
+    if !path.exists() {
+        return Ok(serde_json::json!([]));
+    }
     let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&raw).map_err(|error| error.to_string())
 }
@@ -812,8 +839,13 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
     let path = data_schema_file(app)?;
     if path.exists() {
         let raw = fs::read_to_string(&path).map_err(|e| e.to_string())?;
-        let value: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("데이터 스키마를 읽지 못했습니다: {e}"))?;
-        if value.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(CURRENT_DATA_SCHEMA_VERSION as u64) {
+        let value: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("데이터 스키마를 읽지 못했습니다: {e}"))?;
+        if value
+            .get("schemaVersion")
+            .and_then(serde_json::Value::as_u64)
+            != Some(CURRENT_DATA_SCHEMA_VERSION as u64)
+        {
             return Err("지원하지 않는 데이터 스키마 버전입니다.".into());
         }
         return Ok(());
@@ -821,13 +853,15 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
     let entries_path = data_file(app)?;
     if entries_path.exists() {
         let raw = fs::read_to_string(entries_path).map_err(|e| e.to_string())?;
-        let document: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("entries.json을 읽지 못했습니다: {e}"))?;
+        let document: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("entries.json을 읽지 못했습니다: {e}"))?;
         parse_entries_value(document)?;
     }
     let settings_path = settings_file(app)?;
     if settings_path.exists() {
         let raw = fs::read_to_string(settings_path).map_err(|e| e.to_string())?;
-        let _: serde_json::Value = serde_json::from_str(&raw).map_err(|e| format!("settings.json을 읽지 못했습니다: {e}"))?;
+        let _: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|e| format!("settings.json을 읽지 못했습니다: {e}"))?;
     }
     let value = serde_json::json!({
         "schemaVersion": CURRENT_DATA_SCHEMA_VERSION,
@@ -837,7 +871,11 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
     write_json_atomic(&path, &value)
 }
 
-fn collect_workspace_files(root: &Path, current: &Path, output: &mut Vec<(String, PathBuf)>) -> Result<(), String> {
+fn collect_workspace_files(
+    root: &Path,
+    current: &Path,
+    output: &mut Vec<(String, PathBuf)>,
+) -> Result<(), String> {
     if !current.exists() {
         return Ok(());
     }
@@ -848,7 +886,10 @@ fn collect_workspace_files(root: &Path, current: &Path, output: &mut Vec<(String
             continue;
         }
         let relative = path.strip_prefix(root).map_err(|e| e.to_string())?;
-        let name = Path::new("import-workspaces").join(relative).to_string_lossy().replace('\\', "/");
+        let name = Path::new("import-workspaces")
+            .join(relative)
+            .to_string_lossy()
+            .replace('\\', "/");
         output.push((name, path));
     }
     Ok(())
@@ -857,7 +898,9 @@ fn collect_workspace_files(root: &Path, current: &Path, output: &mut Vec<(String
 #[tauri::command]
 fn load_generated_exams(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     let path = app_dir(&app)?.join("generated-exams.json");
-    if !path.exists() { return Ok(serde_json::json!([])); }
+    if !path.exists() {
+        return Ok(serde_json::json!([]));
+    }
     let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
     serde_json::from_str(&raw).map_err(|error| error.to_string())
 }
@@ -882,12 +925,19 @@ async fn set_mcp_bridge_enabled(
     port: Option<u16>,
 ) -> Result<mcp_bridge::McpBridgeStatus, String> {
     let requested_port = port.unwrap_or(mcp_bridge::DEFAULT_MCP_PORT);
-    if requested_port < 1024 { return Err("MCP 포트는 1024 이상이어야 합니다.".into()); }
+    if requested_port < 1024 {
+        return Err("MCP 포트는 1024 이상이어야 합니다.".into());
+    }
     let status = bridge.set_enabled(enabled, requested_port).await?;
-    let mut settings: serde_json::Value = serde_json::from_str(&load_settings_raw(&app)?)
-        .unwrap_or_else(|_| serde_json::json!({}));
-    let root = settings.as_object_mut().ok_or_else(|| "설정 형식이 올바르지 않습니다.".to_string())?;
-    root.insert("mcpBridge".into(), serde_json::json!({ "enabled": enabled, "port": requested_port }));
+    let mut settings: serde_json::Value =
+        serde_json::from_str(&load_settings_raw(&app)?).unwrap_or_else(|_| serde_json::json!({}));
+    let root = settings
+        .as_object_mut()
+        .ok_or_else(|| "설정 형식이 올바르지 않습니다.".to_string())?;
+    root.insert(
+        "mcpBridge".into(),
+        serde_json::json!({ "enabled": enabled, "port": requested_port }),
+    );
     write_json_atomic(&settings_file(&app)?, &settings)?;
     Ok(status)
 }
@@ -991,7 +1041,10 @@ fn save_ai_provider_config(
 }
 
 #[tauri::command]
-fn save_ai_provider_key(app: tauri::AppHandle, api_key: String) -> Result<AiProviderStatus, String> {
+fn save_ai_provider_key(
+    app: tauri::AppHandle,
+    api_key: String,
+) -> Result<AiProviderStatus, String> {
     let trimmed = api_key.trim();
     if trimmed.is_empty() {
         return Err("API key가 비어 있습니다.".into());
@@ -1138,7 +1191,8 @@ fn create_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), S
 fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<(), String> {
     let entries = load_entries_raw(app)?;
     let settings = load_settings_raw(app)?;
-    if entries.len() as u64 > MAX_BACKUP_JSON_BYTES || settings.len() as u64 > MAX_BACKUP_JSON_BYTES {
+    if entries.len() as u64 > MAX_BACKUP_JSON_BYTES || settings.len() as u64 > MAX_BACKUP_JSON_BYTES
+    {
         return Err("백업 데이터 JSON이 허용 용량을 초과했습니다.".into());
     }
     let image_dir = images_dir(app)?;
@@ -1185,15 +1239,21 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-    zip.start_file("entries.json", options).map_err(|e| e.to_string())?;
+    zip.start_file("entries.json", options)
+        .map_err(|e| e.to_string())?;
     zip.write_all(entries.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    zip.start_file("settings.json", options).map_err(|e| e.to_string())?;
+    zip.start_file("settings.json", options)
+        .map_err(|e| e.to_string())?;
     zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    for filename in PERSISTENT_DATA_FILES.iter().copied().filter(|name| *name != "entries.json" && *name != "settings.json") {
+    for filename in PERSISTENT_DATA_FILES
+        .iter()
+        .copied()
+        .filter(|name| *name != "entries.json" && *name != "settings.json")
+    {
         let path = app_dir(app)?.join(filename);
         if !path.is_file() {
             continue;
@@ -1202,7 +1262,8 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         if bytes.len() as u64 > MAX_BACKUP_JSON_BYTES {
             return Err(format!("{filename} 파일이 백업 허용 용량을 초과했습니다."));
         }
-        zip.start_file(filename, options).map_err(|e| e.to_string())?;
+        zip.start_file(filename, options)
+            .map_err(|e| e.to_string())?;
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
     }
 
@@ -1212,15 +1273,23 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     for (archive_name, path) in workspace_files {
         let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
         if size > MAX_BACKUP_JSON_BYTES {
-            return Err(format!("{archive_name} 파일이 백업 허용 용량을 초과했습니다."));
+            return Err(format!(
+                "{archive_name} 파일이 백업 허용 용량을 초과했습니다."
+            ));
         }
-        zip.start_file(&archive_name, options).map_err(|e| e.to_string())?;
+        zip.start_file(&archive_name, options)
+            .map_err(|e| e.to_string())?;
         let mut source = fs::File::open(path).map_err(|e| e.to_string())?;
         std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
     }
 
     let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
-    included_files.extend(PERSISTENT_DATA_FILES.iter().copied().filter(|name| *name != "entries.json" && *name != "settings.json"));
+    included_files.extend(
+        PERSISTENT_DATA_FILES
+            .iter()
+            .copied()
+            .filter(|name| *name != "entries.json" && *name != "settings.json"),
+    );
     let meta = serde_json::json!({
         "backupFormat": 2,
         "appVersion": env!("CARGO_PKG_VERSION"),
@@ -1233,8 +1302,12 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     });
     zip.start_file("backup-meta.json", options)
         .map_err(|e| e.to_string())?;
-    zip.write_all(serde_json::to_string_pretty(&meta).map_err(|e| e.to_string())?.as_bytes())
-        .map_err(|e| e.to_string())?;
+    zip.write_all(
+        serde_json::to_string_pretty(&meta)
+            .map_err(|e| e.to_string())?
+            .as_bytes(),
+    )
+    .map_err(|e| e.to_string())?;
 
     for (filename, path, _) in images {
         zip.start_file(format!("images/{filename}"), options)
@@ -1275,15 +1348,26 @@ fn create_auto_backup(app: tauri::AppHandle) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn create_pre_update_backup(app: tauri::AppHandle, from_version: String, to_version: String) -> Result<String, String> {
+fn create_pre_update_backup(
+    app: tauri::AppHandle,
+    from_version: String,
+    to_version: String,
+) -> Result<String, String> {
     let backup_dir = app_dir(&app)?.join("backups");
     fs::create_dir_all(&backup_dir).map_err(|e| e.to_string())?;
-    let path = backup_dir.join(format!("pre-update-{from_version}-to-{to_version}-{}.zip", unix_time_string()));
+    let path = backup_dir.join(format!(
+        "pre-update-{from_version}-to-{to_version}-{}.zip",
+        unix_time_string()
+    ));
     create_backup_zip_at(&app, &path)?;
     let mut backups: Vec<PathBuf> = fs::read_dir(&backup_dir)
         .map_err(|e| e.to_string())?
         .filter_map(|item| item.ok().map(|entry| entry.path()))
-        .filter(|item| item.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.starts_with("pre-update-") && name.ends_with(".zip")))
+        .filter(|item| {
+            item.file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| name.starts_with("pre-update-") && name.ends_with(".zip"))
+        })
         .collect();
     backups.sort();
     while backups.len() > 3 {
@@ -1326,7 +1410,10 @@ fn restore_backup_zip(
 ) -> Result<(), String> {
     let backup_metadata = fs::metadata(&backup_path).map_err(|e| e.to_string())?;
     if backup_metadata.len() > MAX_BACKUP_ZIP_BYTES {
-        return Err(format!("백업 ZIP 파일이 너무 큽니다. {}MB 이하만 복원할 수 있습니다.", MAX_BACKUP_ZIP_BYTES / 1024 / 1024));
+        return Err(format!(
+            "백업 ZIP 파일이 너무 큽니다. {}MB 이하만 복원할 수 있습니다.",
+            MAX_BACKUP_ZIP_BYTES / 1024 / 1024
+        ));
     }
     let file = fs::File::open(&backup_path).map_err(|e| e.to_string())?;
     let mut archive = zip::ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -1350,8 +1437,10 @@ fn restore_backup_zip(
                 return Err(format!("{name} 파일이 너무 큽니다."));
             }
             let mut content = String::new();
-            file.read_to_string(&mut content).map_err(|e| e.to_string())?;
-            let value: serde_json::Value = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+            file.read_to_string(&mut content)
+                .map_err(|e| e.to_string())?;
+            let value: serde_json::Value =
+                serde_json::from_str(&content).map_err(|e| e.to_string())?;
             if name == "entries.json" {
                 restored_entries = Some(parse_entries_value(value)?);
             } else {
@@ -1364,8 +1453,13 @@ fn restore_backup_zip(
             let mut bytes = Vec::new();
             file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
             if name == "data-schema.json" {
-                let value: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-                if value.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(CURRENT_DATA_SCHEMA_VERSION as u64) {
+                let value: serde_json::Value =
+                    serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+                if value
+                    .get("schemaVersion")
+                    .and_then(serde_json::Value::as_u64)
+                    != Some(CURRENT_DATA_SCHEMA_VERSION as u64)
+                {
                     return Err("백업의 데이터 스키마 버전이 지원되지 않습니다.".into());
                 }
             }
@@ -1396,7 +1490,11 @@ fn restore_backup_zip(
             validate_image_header_bytes(&bytes, ext)?;
             images.push((filename.to_string(), bytes));
         } else if let Some(relative) = name.strip_prefix("import-workspaces/") {
-            if relative.is_empty() || relative.contains("..") || Path::new(relative).is_absolute() || relative.contains('\\') {
+            if relative.is_empty()
+                || relative.contains("..")
+                || Path::new(relative).is_absolute()
+                || relative.contains('\\')
+            {
                 return Err("백업 작업실 경로가 올바르지 않습니다.".into());
             }
             if file.size() > MAX_BACKUP_JSON_BYTES {
@@ -1412,12 +1510,15 @@ fn restore_backup_zip(
         }
     }
 
-    let restored_entries = restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
+    let restored_entries =
+        restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
     let rollback_dir = app_dir.join(format!(".restore-rollback-{}", Uuid::new_v4()));
     fs::create_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut move_target = |target: PathBuf, label: &str| -> Result<(), String> {
-        if !target.exists() { return Ok(()); }
+        if !target.exists() {
+            return Ok(());
+        }
         let backup = rollback_dir.join(label);
         fs::rename(&target, &backup).map_err(|e| e.to_string())?;
         moved.push((target, backup));
@@ -1425,12 +1526,21 @@ fn restore_backup_zip(
     };
     let move_result = (|| -> Result<(), String> {
         move_target(data_file(&app)?, "entries.json")?;
-        if settings_json.is_some() { move_target(settings_file(&app)?, "settings.json")?; }
-        for (name, _) in &optional_files {
-            move_target(app_dir.join(name), &format!("optional-{}", name.replace('/', "_")))?;
+        if settings_json.is_some() {
+            move_target(settings_file(&app)?, "settings.json")?;
         }
-        if !images.is_empty() { move_target(image_dir.clone(), "images")?; }
-        if !workspace_files.is_empty() { move_target(app_dir.join("import-workspaces"), "import-workspaces")?; }
+        for (name, _) in &optional_files {
+            move_target(
+                app_dir.join(name),
+                &format!("optional-{}", name.replace('/', "_")),
+            )?;
+        }
+        if !images.is_empty() {
+            move_target(image_dir.clone(), "images")?;
+        }
+        if !workspace_files.is_empty() {
+            move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
+        }
         Ok(())
     })();
     drop(move_target);
@@ -1478,10 +1588,7 @@ fn run_integrity_check(
 ) -> Result<IntegrityReport, String> {
     let entries = store.load_entries()?;
     let image_dir = images_dir(&app)?;
-    let referenced: HashSet<String> = entries
-        .iter()
-        .flat_map(collect_entry_images)
-        .collect();
+    let referenced: HashSet<String> = entries.iter().flat_map(collect_entry_images).collect();
 
     let mut issues = Vec::new();
     if image_dir.exists() {
@@ -1521,7 +1628,10 @@ fn run_integrity_check(
 }
 
 #[tauri::command]
-fn cleanup_orphan_images(app: tauri::AppHandle, referenced_images: Vec<String>) -> Result<usize, String> {
+fn cleanup_orphan_images(
+    app: tauri::AppHandle,
+    referenced_images: Vec<String>,
+) -> Result<usize, String> {
     let referenced: HashSet<String> = referenced_images.into_iter().collect();
     let image_dir = images_dir(&app)?;
     let mut removed = 0;
@@ -1599,7 +1709,11 @@ mod tests {
 
     #[test]
     fn validates_image_headers() {
-        assert!(validate_image_header_bytes(&[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a], "png").is_ok());
+        assert!(validate_image_header_bytes(
+            &[0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a],
+            "png"
+        )
+        .is_ok());
         assert!(validate_image_header_bytes(&[0xff, 0xd8, 0xff], "jpg").is_ok());
         assert!(validate_image_header_bytes(b"not an image", "png").is_err());
     }
@@ -1624,10 +1738,15 @@ mod tests {
             resolve_import_image_extension(None, Some("image/png"), &png).unwrap(),
             "png"
         );
-        assert_eq!(resolve_import_image_extension(None, None, &png).unwrap(), "png");
+        assert_eq!(
+            resolve_import_image_extension(None, None, &png).unwrap(),
+            "png"
+        );
         assert!(resolve_import_image_extension(Some("scan.txt"), None, &png).is_err());
         assert!(resolve_import_image_extension(Some("scan.jpg"), None, &png).is_err());
-        assert!(resolve_import_image_extension(None, Some("image/png"), &[0xff, 0xd8, 0xff]).is_err());
+        assert!(
+            resolve_import_image_extension(None, Some("image/png"), &[0xff, 0xd8, 0xff]).is_err()
+        );
     }
 
     #[test]
@@ -1722,7 +1841,10 @@ mod tests {
         assert!(!ctx.share_scratch_note);
         assert!(ctx.share_question_images);
         assert!(!ctx.share_source_page_images);
-        assert_eq!(ctx.context_updated_at.as_deref(), Some("2026-01-01T00:00:00Z"));
+        assert_eq!(
+            ctx.context_updated_at.as_deref(),
+            Some("2026-01-01T00:00:00Z")
+        );
     }
 
     #[test]
@@ -1748,7 +1870,8 @@ pub fn run() {
             #[cfg(desktop)]
             {
                 app.handle().plugin(tauri_plugin_process::init())?;
-                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
             }
             let handle = app.handle().clone();
             if let Err(error) = ensure_data_schema_manifest(&handle) {
@@ -1767,15 +1890,29 @@ pub fn run() {
             let should_start = load_settings_raw(&handle)
                 .ok()
                 .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-                .and_then(|settings| settings.get("mcpBridge").and_then(|value| value.get("enabled")).and_then(|value| value.as_bool()))
+                .and_then(|settings| {
+                    settings
+                        .get("mcpBridge")
+                        .and_then(|value| value.get("enabled"))
+                        .and_then(|value| value.as_bool())
+                })
                 .unwrap_or(false);
             if should_start {
                 let bridge_to_start = Arc::clone(&bridge);
-                let saved_port = load_settings_raw(&handle).ok()
+                let saved_port = load_settings_raw(&handle)
+                    .ok()
                     .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-                    .and_then(|settings| settings.get("mcpBridge").and_then(|value| value.get("port")).and_then(|value| value.as_u64()))
-                    .and_then(|value| u16::try_from(value).ok()).unwrap_or(mcp_bridge::DEFAULT_MCP_PORT);
-                tauri::async_runtime::spawn(async move { let _ = bridge_to_start.set_enabled(true, saved_port).await; });
+                    .and_then(|settings| {
+                        settings
+                            .get("mcpBridge")
+                            .and_then(|value| value.get("port"))
+                            .and_then(|value| value.as_u64())
+                    })
+                    .and_then(|value| u16::try_from(value).ok())
+                    .unwrap_or(mcp_bridge::DEFAULT_MCP_PORT);
+                tauri::async_runtime::spawn(async move {
+                    let _ = bridge_to_start.set_enabled(true, saved_port).await;
+                });
             }
             app.manage(store);
             app.manage(bridge);

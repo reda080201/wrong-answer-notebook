@@ -49,13 +49,13 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Cargo check
-        working-directory: src-tauri
-        run: cargo check
-
       - name: Cargo fmt
         working-directory: src-tauri
         run: cargo fmt --check
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check
 
       - name: Cargo test
         working-directory: src-tauri

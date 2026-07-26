@@ -39,55 +39,117 @@ pub struct QuestionRecord {
 
 impl NotebookStore {
     pub fn new(entries_path: PathBuf, images_path: PathBuf) -> Self {
-        Self { entries_path, images_path, write_lock: Mutex::new(()) }
+        Self {
+            entries_path,
+            images_path,
+            write_lock: Mutex::new(()),
+        }
     }
 
-    pub fn entries_path(&self) -> &Path { &self.entries_path }
-    pub fn images_path(&self) -> &Path { &self.images_path }
+    pub fn entries_path(&self) -> &Path {
+        &self.entries_path
+    }
+    pub fn images_path(&self) -> &Path {
+        &self.images_path
+    }
 
     /// Accepts the historical array format and the current schema-v2 wrapper.
     pub fn load_entries(&self) -> Result<Vec<WrongAnswerEntry>, String> {
-        if !self.entries_path.exists() { return Ok(Vec::new()); }
+        if !self.entries_path.exists() {
+            return Ok(Vec::new());
+        }
         let raw = fs::read_to_string(&self.entries_path).map_err(|error| error.to_string())?;
-        if raw.trim().is_empty() { return Ok(Vec::new()); }
+        if raw.trim().is_empty() {
+            return Ok(Vec::new());
+        }
         let value: Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
         parse_entries_value(value)
     }
 
     pub fn save_entries(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
-        let _guard = self.write_lock.lock().map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
         self.write_entries_locked(entries)
     }
 
     pub fn get_entry(&self, entry_id: &str) -> Result<Option<WrongAnswerEntry>, String> {
-        Ok(self.load_entries()?.into_iter().find(|entry| entry.id == entry_id))
+        Ok(self
+            .load_entries()?
+            .into_iter()
+            .find(|entry| entry.id == entry_id))
     }
 
     pub fn search(&self, query: SearchQuery<'_>) -> Result<Vec<WrongAnswerEntry>, String> {
         let needle = query.query.trim().to_lowercase();
-        let subject = query.subject.map(|value| value.trim().to_lowercase()).filter(|value| !value.is_empty());
-        let entry_kind = query.entry_kind.map(str::trim).filter(|value| !value.is_empty());
+        let subject = query
+            .subject
+            .map(|value| value.trim().to_lowercase())
+            .filter(|value| !value.is_empty());
+        let entry_kind = query
+            .entry_kind
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
         let limit = query.limit.clamp(1, 50);
-        Ok(self.load_entries()?.into_iter().filter(|entry| {
-            let matches_subject = subject.as_ref().map_or(true, |value| entry.subject.to_lowercase() == *value);
-            let matches_kind = entry_kind.map_or(true, |value| entry.entry_kind == value);
-            let haystack = entry_search_text(entry).to_lowercase();
-            matches_subject && matches_kind && (needle.is_empty() || haystack.contains(&needle))
-        }).take(limit).collect())
+        Ok(self
+            .load_entries()?
+            .into_iter()
+            .filter(|entry| {
+                let matches_subject = subject
+                    .as_ref()
+                    .map_or(true, |value| entry.subject.to_lowercase() == *value);
+                let matches_kind = entry_kind.map_or(true, |value| entry.entry_kind == value);
+                let haystack = entry_search_text(entry).to_lowercase();
+                matches_subject && matches_kind && (needle.is_empty() || haystack.contains(&needle))
+            })
+            .take(limit)
+            .collect())
     }
 
-    pub fn get_question(&self, entry_id: &str, question_number: &str) -> Result<Option<QuestionRecord>, String> {
+    pub fn get_question(
+        &self,
+        entry_id: &str,
+        question_number: &str,
+    ) -> Result<Option<QuestionRecord>, String> {
         let wanted = normalize_question_number(question_number);
-        let Some(entry) = self.get_entry(entry_id)? else { return Ok(None); };
+        let Some(entry) = self.get_entry(entry_id)? else {
+            return Ok(None);
+        };
         if entry.entry_kind != "problem_sheet" {
-            return Ok(Some(QuestionRecord { body: entry.question.clone(), choices: Vec::new(), answer_key: None, question_number: wanted, entry }));
+            return Ok(Some(QuestionRecord {
+                body: entry.question.clone(),
+                choices: Vec::new(),
+                answer_key: None,
+                question_number: wanted,
+                entry,
+            }));
         }
         let blocks = parse_question_blocks(&entry.question);
-        let Some((number, body, choices)) = blocks.into_iter().find(|(number, _, _)| normalize_question_number(number) == wanted) else { return Ok(None); };
-        let answer_key = entry.answer_key.iter().find(|item| {
-            item.get("questionNumber").and_then(Value::as_str).map(normalize_question_number).as_deref() == Some(wanted.as_str())
-        }).cloned();
-        Ok(Some(QuestionRecord { entry, question_number: number, body, choices, answer_key }))
+        let Some((number, body, choices)) = blocks
+            .into_iter()
+            .find(|(number, _, _)| normalize_question_number(number) == wanted)
+        else {
+            return Ok(None);
+        };
+        let answer_key = entry
+            .answer_key
+            .iter()
+            .find(|item| {
+                item.get("questionNumber")
+                    .and_then(Value::as_str)
+                    .map(normalize_question_number)
+                    .as_deref()
+                    == Some(wanted.as_str())
+            })
+            .cloned();
+        Ok(Some(QuestionRecord {
+            entry,
+            question_number: number,
+            body,
+            choices,
+            answer_key,
+        }))
     }
 
     pub fn referenced_image_filenames(&self) -> Result<HashSet<String>, String> {
@@ -96,11 +158,25 @@ impl NotebookStore {
             referenced.extend(entry.question_images);
             referenced.extend(entry.explanation_images);
             referenced.extend(entry.images);
-            referenced.extend(entry.explanation_parts.into_iter().flat_map(|part| part.images));
+            referenced.extend(
+                entry
+                    .explanation_parts
+                    .into_iter()
+                    .flat_map(|part| part.images),
+            );
             for figure in entry.figures {
-                if let Some(image) = figure.image { referenced.insert(image); }
+                if let Some(image) = figure.image {
+                    referenced.insert(image);
+                }
                 for key in ["original", "cleaned"] {
-                    if let Some(image) = figure.extra.get(key).and_then(|value| value.get("image")).and_then(Value::as_str) { referenced.insert(image.to_owned()); }
+                    if let Some(image) = figure
+                        .extra
+                        .get(key)
+                        .and_then(|value| value.get("image"))
+                        .and_then(Value::as_str)
+                    {
+                        referenced.insert(image.to_owned());
+                    }
                 }
             }
         }
@@ -112,15 +188,23 @@ impl NotebookStore {
     }
 
     fn write_entries_locked(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
-        if let Some(parent) = self.entries_path.parent() { fs::create_dir_all(parent).map_err(|error| error.to_string())?; }
-        let document = serde_json::json!({ "schemaVersion": ENTRIES_SCHEMA_VERSION, "entries": entries });
+        if let Some(parent) = self.entries_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let document =
+            serde_json::json!({ "schemaVersion": ENTRIES_SCHEMA_VERSION, "entries": entries });
         let bytes = serde_json::to_vec_pretty(&document).map_err(|error| error.to_string())?;
-        let parent = self.entries_path.parent().ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?;
-        let mut temp = tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
+        let parent = self
+            .entries_path
+            .parent()
+            .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?;
+        let mut temp =
+            tempfile::NamedTempFile::new_in(parent).map_err(|error| error.to_string())?;
         use std::io::Write;
         temp.write_all(&bytes).map_err(|error| error.to_string())?;
         temp.flush().map_err(|error| error.to_string())?;
-        temp.persist(&self.entries_path).map_err(|error| error.error.to_string())?;
+        temp.persist(&self.entries_path)
+            .map_err(|error| error.error.to_string())?;
         Ok(())
     }
 }
@@ -147,7 +231,9 @@ pub fn entry_search_text(entry: &WrongAnswerEntry) -> String {
 fn append_json_search_text(value: Option<&Value>, parts: &mut Vec<String>) {
     match value {
         Some(Value::String(text)) => parts.push(text.clone()),
-        Some(Value::Array(values)) => values.iter().for_each(|item| append_json_search_text(Some(item), parts)),
+        Some(Value::Array(values)) => values
+            .iter()
+            .for_each(|item| append_json_search_text(Some(item), parts)),
         _ => {}
     }
 }
@@ -157,18 +243,27 @@ fn append_json_search_text(value: Option<&Value>, parts: &mut Vec<String>) {
 pub fn matched_snippet(entry: &WrongAnswerEntry, query: &str, max_chars: usize) -> String {
     let text = entry_search_text(entry);
     let needle = query.trim();
-    if needle.is_empty() { return text.chars().take(max_chars).collect(); }
+    if needle.is_empty() {
+        return text.chars().take(max_chars).collect();
+    }
     let lowered = text.to_lowercase();
     let lowered_needle = needle.to_lowercase();
     let Some(byte_index) = lowered.find(&lowered_needle) else {
         return text.chars().take(max_chars).collect();
     };
-    let start_chars = text[..byte_index].chars().count().saturating_sub(max_chars / 3);
+    let start_chars = text[..byte_index]
+        .chars()
+        .count()
+        .saturating_sub(max_chars / 3);
     let all_chars: Vec<char> = text.chars().collect();
     let end_chars = (start_chars + max_chars).min(all_chars.len());
     let mut snippet: String = all_chars[start_chars..end_chars].iter().collect();
-    if start_chars > 0 { snippet.insert_str(0, "..."); }
-    if end_chars < all_chars.len() { snippet.push_str("..."); }
+    if start_chars > 0 {
+        snippet.insert_str(0, "...");
+    }
+    if end_chars < all_chars.len() {
+        snippet.push_str("...");
+    }
     snippet
 }
 
@@ -181,16 +276,33 @@ pub fn parse_entries_value(value: Value) -> Result<Vec<WrongAnswerEntry>, String
         },
         _ => return Err("저장 데이터 형식이 올바르지 않습니다.".to_owned()),
     };
-    entries.into_iter().map(|entry| serde_json::from_value(entry).map_err(|error| error.to_string())).collect()
+    entries
+        .into_iter()
+        .map(|entry| serde_json::from_value(entry).map_err(|error| error.to_string()))
+        .collect()
 }
 
 /// The same human forms accepted by the import validator: 01, 1., 1번, 문제 1, #1.
 pub fn normalize_question_number(value: &str) -> String {
-    let value = value.trim().trim_start_matches('#').trim().trim_start_matches("문제").trim();
-    let value = value.strip_suffix('번').unwrap_or(value).trim_end_matches('.').trim();
+    let value = value
+        .trim()
+        .trim_start_matches('#')
+        .trim()
+        .trim_start_matches("문제")
+        .trim();
+    let value = value
+        .strip_suffix('번')
+        .unwrap_or(value)
+        .trim_end_matches('.')
+        .trim();
     if value.chars().all(|character| character.is_ascii_digit()) {
-        value.parse::<u32>().map(|number| number.to_string()).unwrap_or_else(|_| value.to_owned())
-    } else { value.to_owned() }
+        value
+            .parse::<u32>()
+            .map(|number| number.to_string())
+            .unwrap_or_else(|_| value.to_owned())
+    } else {
+        value.to_owned()
+    }
 }
 
 /// Line parser kept deliberately in parity with the frontend `parseQuestionText`:
@@ -198,50 +310,82 @@ pub fn normalize_question_number(value: &str) -> String {
 /// question headers after body text has started.
 pub fn parse_question_blocks(text: &str) -> Vec<(String, String, Vec<String>)> {
     let lines: Vec<&str> = text.lines().collect();
-    let starts: Vec<usize> = lines.iter().enumerate().filter_map(|(index, line)| {
-        let previous = index.checked_sub(1).and_then(|value| lines.get(value)).copied();
-        is_question_start(line, previous).then_some(index)
-    }).collect();
+    let starts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            let previous = index
+                .checked_sub(1)
+                .and_then(|value| lines.get(value))
+                .copied();
+            is_question_start(line, previous).then_some(index)
+        })
+        .collect();
 
-    starts.iter().enumerate().filter_map(|(position, &start)| {
-        let end = starts.get(position + 1).copied().unwrap_or(lines.len());
-        let first = *lines.get(start)?;
-        let (number, prefix_len) = parse_number_prefix(first.trim_start())?;
-        let mut body = Vec::new();
-        let mut choices = Vec::new();
-        let mut inside_view = false;
-        for (line_index, line) in lines[start..end].iter().enumerate() {
-            if line_index == 0 {
-                let leading = line.len() - line.trim_start().len();
-                let content = &line[(leading + prefix_len).min(line.len())..];
-                if !content.trim().is_empty() { body.push(content.trim().to_owned()); }
-                continue;
+    starts
+        .iter()
+        .enumerate()
+        .filter_map(|(position, &start)| {
+            let end = starts.get(position + 1).copied().unwrap_or(lines.len());
+            let first = *lines.get(start)?;
+            let (number, prefix_len) = parse_number_prefix(first.trim_start())?;
+            let mut body = Vec::new();
+            let mut choices = Vec::new();
+            let mut inside_view = false;
+            for (line_index, line) in lines[start..end].iter().enumerate() {
+                if line_index == 0 {
+                    let leading = line.len() - line.trim_start().len();
+                    let content = &line[(leading + prefix_len).min(line.len())..];
+                    if !content.trim().is_empty() {
+                        body.push(content.trim().to_owned());
+                    }
+                    continue;
+                }
+                let trimmed = line.trim();
+                if is_view_marker(trimmed) {
+                    inside_view = true;
+                    body.push(trimmed.to_owned());
+                    continue;
+                }
+                if inside_view && is_view_item(trimmed) {
+                    body.push(trimmed.to_owned());
+                    continue;
+                }
+                if is_choice_prefix(trimmed) {
+                    inside_view = false;
+                    choices.push(trimmed.to_owned());
+                } else if !trimmed.is_empty() {
+                    body.push(trimmed.to_owned());
+                }
             }
-            let trimmed = line.trim();
-            if is_view_marker(trimmed) { inside_view = true; body.push(trimmed.to_owned()); continue; }
-            if inside_view && is_view_item(trimmed) { body.push(trimmed.to_owned()); continue; }
-            if is_choice_prefix(trimmed) { inside_view = false; choices.push(trimmed.to_owned()); }
-            else if !trimmed.is_empty() { body.push(trimmed.to_owned()); }
-        }
-        Some((number, body.join("\n"), choices))
-    }).collect()
+            Some((number, body.join("\n"), choices))
+        })
+        .collect()
 }
 
 fn is_question_start(value: &str, previous: Option<&str>) -> bool {
     let value = value.trim_start();
-    let Some(_) = parse_number_prefix(value) else { return false; };
+    let Some(_) = parse_number_prefix(value) else {
+        return false;
+    };
     !(has_numeric_close_marker(value) && previous.is_some_and(|line| !line.trim().is_empty()))
 }
 
 fn has_numeric_close_marker(value: &str) -> bool {
-    let digits: String = value.chars().take_while(|character| character.is_ascii_digit()).collect();
+    let digits: String = value
+        .chars()
+        .take_while(|character| character.is_ascii_digit())
+        .collect();
     !digits.is_empty() && value[digits.len()..].starts_with(')')
 }
 
 fn parse_number_prefix(value: &str) -> Option<(String, usize)> {
     let value = value.trim_start();
     if let Some(rest) = value.strip_prefix("[문제 ") {
-        let digits: String = rest.chars().take_while(|character| character.is_ascii_digit()).collect();
+        let digits: String = rest
+            .chars()
+            .take_while(|character| character.is_ascii_digit())
+            .collect();
         let consumed = "[문제 ".len() + digits.len();
         if !digits.is_empty() && rest[digits.len()..].starts_with(']') {
             return Some((normalize_question_number(&digits), consumed + 1));
@@ -249,46 +393,98 @@ fn parse_number_prefix(value: &str) -> Option<(String, usize)> {
     }
     for prefix in ["문제 ", "#"] {
         if let Some(rest) = value.strip_prefix(prefix) {
-            let digits: String = rest.chars().take_while(|character| character.is_ascii_digit()).collect();
+            let digits: String = rest
+                .chars()
+                .take_while(|character| character.is_ascii_digit())
+                .collect();
             if !digits.is_empty() {
-                return Some((normalize_question_number(&digits), prefix.len() + digits.len()));
+                return Some((
+                    normalize_question_number(&digits),
+                    prefix.len() + digits.len(),
+                ));
             }
         }
     }
-    let digits: String = value.chars().take_while(|character| character.is_ascii_digit()).collect();
-    if digits.is_empty() { return None; }
+    let digits: String = value
+        .chars()
+        .take_while(|character| character.is_ascii_digit())
+        .collect();
+    if digits.is_empty() {
+        return None;
+    }
     let suffix = &value[digits.len()..];
     if suffix.starts_with('.') || suffix.starts_with(')') || suffix.starts_with("번") {
-        Some((normalize_question_number(&digits), digits.len() + if suffix.starts_with("번") { "번".len() } else { 1 }))
-    } else { None }
+        Some((
+            normalize_question_number(&digits),
+            digits.len()
+                + if suffix.starts_with("번") {
+                    "번".len()
+                } else {
+                    1
+                },
+        ))
+    } else {
+        None
+    }
 }
 
 fn is_choice_prefix(value: &str) -> bool {
     let first = value.chars().next();
-    if matches!(first, Some('①' | '②' | '③' | '④' | '⑤' | '⑥' | '⑦' | '⑧' | '⑨' | '⑩')) { return true; }
+    if matches!(
+        first,
+        Some('①' | '②' | '③' | '④' | '⑤' | '⑥' | '⑦' | '⑧' | '⑨' | '⑩')
+    ) {
+        return true;
+    }
     let bytes = value.as_bytes();
-    if value.starts_with('(') && bytes.get(1).is_some_and(|byte| byte.is_ascii_digit()) { return true; }
-    if value.chars().next().is_some_and(|character| character.is_ascii_digit()) && value.chars().skip_while(|character| character.is_ascii_digit()).next() == Some(')') { return true; }
+    if value.starts_with('(') && bytes.get(1).is_some_and(|byte| byte.is_ascii_digit()) {
+        return true;
+    }
+    if value
+        .chars()
+        .next()
+        .is_some_and(|character| character.is_ascii_digit())
+        && value
+            .chars()
+            .skip_while(|character| character.is_ascii_digit())
+            .next()
+            == Some(')')
+    {
+        return true;
+    }
     let mut chars = value.chars();
-    let Some(first) = chars.next() else { return false; };
+    let Some(first) = chars.next() else {
+        return false;
+    };
     matches!(first, 'ㄱ'..='ㅎ' | 'A'..='E' | 'a'..='e') && matches!(chars.next(), Some('.' | ')'))
 }
 
-fn is_view_marker(value: &str) -> bool { matches!(value, "보기" | "<보기>") }
+fn is_view_marker(value: &str) -> bool {
+    matches!(value, "보기" | "<보기>")
+}
 fn is_view_item(value: &str) -> bool {
     let mut chars = value.chars();
-    matches!((chars.next(), chars.next()), (Some('ㄱ'..='ㅎ'), Some('.' | ')')))
+    matches!(
+        (chars.next(), chars.next()),
+        (Some('ㄱ'..='ㅎ'), Some('.' | ')'))
+    )
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{entry_search_text, matched_snippet, normalize_question_number, parse_question_blocks, parse_entries_value, NotebookStore};
+    use super::{
+        entry_search_text, matched_snippet, normalize_question_number, parse_entries_value,
+        parse_question_blocks, NotebookStore,
+    };
     use crate::SheetFigureItem;
     use serde_json::json;
     #[test]
     fn normalizes_import_number_forms() {
         for value in ["01", "1", "1.", "1번", "문제 1", "#1", "10.", "문제 10"] {
-            assert_eq!(normalize_question_number(value), if value.contains("10") { "10" } else { "1" });
+            assert_eq!(
+                normalize_question_number(value),
+                if value.contains("10") { "10" } else { "1" }
+            );
         }
     }
 
@@ -296,7 +492,13 @@ mod tests {
     fn parses_frontend_question_forms_without_promoting_choices() {
         let text = "[문제 1] 첫 문제\n조건: x > 0\n① 선택지\n(1) 보기\n1) 보기\nㄱ. 보기\nA. 보기\n문제 10 둘째 문제\n<보기>\nㄱ. 참\n① ㄱ";
         let blocks = parse_question_blocks(text);
-        assert_eq!(blocks.iter().map(|(number, _, _)| number.as_str()).collect::<Vec<_>>(), ["1", "10"]);
+        assert_eq!(
+            blocks
+                .iter()
+                .map(|(number, _, _)| number.as_str())
+                .collect::<Vec<_>>(),
+            ["1", "10"]
+        );
         assert!(blocks[0].1.contains("조건"));
         assert!(!blocks[0].1.contains("① 선택지"));
         assert_eq!(blocks[0].2.len(), 5);
@@ -307,16 +509,37 @@ mod tests {
     fn satisfies_shared_question_parser_fixture() {
         let fixture: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../src/fixtures/question-parser-parity.json"
-        )).expect("shared fixture must be valid JSON");
+        ))
+        .expect("shared fixture must be valid JSON");
         for case in fixture {
             let source = case["source"].as_str().expect("source");
-            let expected_numbers: Vec<&str> = case["numbers"].as_array().expect("numbers")
-                .iter().map(|value| value.as_str().expect("number")).collect();
-            let expected_bodies: Vec<&str> = case["bodies"].as_array().expect("bodies")
-                .iter().map(|value| value.as_str().expect("body")).collect();
+            let expected_numbers: Vec<&str> = case["numbers"]
+                .as_array()
+                .expect("numbers")
+                .iter()
+                .map(|value| value.as_str().expect("number"))
+                .collect();
+            let expected_bodies: Vec<&str> = case["bodies"]
+                .as_array()
+                .expect("bodies")
+                .iter()
+                .map(|value| value.as_str().expect("body"))
+                .collect();
             let parsed = parse_question_blocks(source);
-            assert_eq!(parsed.iter().map(|(number, _, _)| number.as_str()).collect::<Vec<_>>(), expected_numbers);
-            assert_eq!(parsed.iter().map(|(_, body, _)| body.as_str()).collect::<Vec<_>>(), expected_bodies);
+            assert_eq!(
+                parsed
+                    .iter()
+                    .map(|(number, _, _)| number.as_str())
+                    .collect::<Vec<_>>(),
+                expected_numbers
+            );
+            assert_eq!(
+                parsed
+                    .iter()
+                    .map(|(_, body, _)| body.as_str())
+                    .collect::<Vec<_>>(),
+                expected_bodies
+            );
         }
     }
 
@@ -352,7 +575,10 @@ mod tests {
             "figures":[{"id":"f1","questionNumber":"1","title":"그래프","caption":"설명","image":"f.png","source":"gpt_cleaned","needsReview":false,"future":{"nested":{"kept":true}}}]
         }])).unwrap();
         let directory = tempfile::tempdir().unwrap();
-        let store = NotebookStore::new(directory.path().join("entries.json"), directory.path().join("images"));
+        let store = NotebookStore::new(
+            directory.path().join("entries.json"),
+            directory.path().join("images"),
+        );
         store.save_entries(&entries).unwrap();
         let restored = store.load_entries().unwrap();
         let figure = &restored[0].figures[0];
