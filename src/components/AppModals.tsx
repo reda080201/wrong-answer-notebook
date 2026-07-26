@@ -48,6 +48,7 @@ interface AppModalsProps {
   handleImportApply: (
     data: Partial<EntryFormData>,
     applyMode?: GptSolutionApplyMode,
+    assetFiles?: File[],
   ) => void;
   showLearningImportModal: boolean;
   setShowLearningImportModal: (show: boolean) => void;
@@ -57,6 +58,7 @@ interface AppModalsProps {
   ) => Promise<void>;
   handleImportedEntriesApply: (
     entries: Partial<EntryFormData>[],
+    assetFiles?: File[],
   ) => Promise<void>;
   reviewMode: "today" | "random" | "difficult" | "important" | null;
   reviewSeed: ReviewItem[];
@@ -106,6 +108,7 @@ export default function AppModals({
   onOpenSettings,
 }: AppModalsProps) {
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
+  const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
   const buildWorkspace = (items: Partial<EntryFormData>[]): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -116,14 +119,14 @@ export default function AppModals({
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
-  const handleWorkspaceEntries = async (items: Partial<EntryFormData>[]) => {
+  const handleWorkspaceEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[]) => {
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
-    if (problemSheets.length > 1) { setWorkspace(buildWorkspace(problemSheets)); return; }
-    await handleImportedEntriesApply(items);
+    if (problemSheets.length > 1) { setWorkspace(buildWorkspace(problemSheets)); setWorkspaceAssetFiles(assetFiles ?? []); return; }
+    await handleImportedEntriesApply(items, assetFiles);
   };
   return (
     <>
-      {workspace && <ImportWorkspaceView initialWorkspace={workspace} onSave={handleImportedEntriesApply} onClose={() => setWorkspace(null)} />}
+      {workspace && <ImportWorkspaceView initialWorkspace={workspace} onSave={(items) => handleImportedEntriesApply(items, workspaceAssetFiles)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
       {showForm && (
         <EntryForm
           entry={editingEntry}

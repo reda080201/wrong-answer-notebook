@@ -11,6 +11,7 @@ import type {
   ActiveExamContext,
   AppUpdatePreferences,
   OrphanImagePreview,
+  EntryFormData,
   McpExportContext,
   ExamSession,
   McpBridgeSettings,
@@ -28,6 +29,7 @@ import {
   saveExamSessions as saveExamSessionsToStorage,
 } from "./features/exam/storage/examSessionStorage";
 import { getAllImageFilenames, normalizeEntry } from "./utils/entry";
+import { mapEntryImportImageReferences } from "./utils/importImageReferences";
 import {
   DEFAULT_EXAM_PREFERENCES,
   DEFAULT_CHATGPT_MCP_PREFERENCES,
@@ -760,13 +762,13 @@ export function createBrowserImageKey(filename: string): string {
 
 export async function saveImageFiles(files: FileList | File[]): Promise<string[]> {
   const names: string[] = [];
-  for (const file of Array.from(files)) {
-    if (!file.type.startsWith("image/")) continue;
-    if (file.size > MAX_IMPORT_IMAGE_BYTES) {
-      throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
-    }
-    if (isTauri()) {
-      try {
+  try {
+    for (const file of Array.from(files)) {
+      if (!file.type.startsWith("image/")) continue;
+      if (file.size > MAX_IMPORT_IMAGE_BYTES) {
+        throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
+      }
+      if (isTauri()) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const filename = await invoke<string>("save_import_image_bytes", {
           bytes,
@@ -774,19 +776,36 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
           mime: file.type || undefined,
         });
         names.push(filename);
-      } catch (error) {
-        throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), {
-          cause: error,
-        });
+        continue;
       }
-      continue;
+      const dataUrl = await fileToDataUrl(file);
+      const key = createBrowserImageKey(file.name);
+      localStorage.setItem(key, dataUrl);
+      names.push(key);
     }
-    const dataUrl = await fileToDataUrl(file);
-    const key = createBrowserImageKey(file.name);
-    localStorage.setItem(key, dataUrl);
-    names.push(key);
+  } catch (error) {
+    await Promise.all(names.map((filename) => deleteImage(filename).catch(() => undefined)));
+    throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), { cause: error });
   }
   return names;
+}
+
+function importAssetKey(name: string): string {
+  return name.split(/[\\/]/).pop()?.trim().toLowerCase() ?? name.trim().toLowerCase();
+}
+
+export async function saveImportAssetFiles(files: File[]): Promise<{ savedFilenames: string[]; sourceToSaved: Record<string, string> }> {
+  const savedFilenames = await saveImageFiles(files);
+  const sourceToSaved: Record<string, string> = {};
+  files.forEach((file, index) => {
+    const saved = savedFilenames[index];
+    if (saved) sourceToSaved[importAssetKey(file.name)] = saved;
+  });
+  return { savedFilenames, sourceToSaved };
+}
+
+export function rewriteImportAssetReferences<T extends Partial<EntryFormData>>(data: T, sourceToSaved: Record<string, string>): T {
+  return mapEntryImportImageReferences(data, (filename) => sourceToSaved[importAssetKey(filename)] ?? filename) as T;
 }
 
 async function pickImagesBrowser(): Promise<string[]> {

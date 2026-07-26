@@ -52,8 +52,8 @@ import FigureComparisonPanel from "../features/figures/components/FigureComparis
 
 interface ImportFromGptModalProps {
   onClose: () => void;
-  onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode) => void;
-  onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
+  onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]) => void;
+  onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[]) => Promise<void> | void;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
   aiProvider?: AiProviderSettings;
@@ -311,6 +311,7 @@ export default function ImportFromGptModal({
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
+  const [assetFiles, setAssetFiles] = useState<File[]>([]);
   const [entryKindResolution, setEntryKindResolution] = useState<EntryKindResolution | null>(null);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
@@ -605,27 +606,15 @@ export default function ImportFromGptModal({
       }
     }
 
-    const savedFilenames = filesToSave.length ? await saveImageFiles(filesToSave) : [];
     return {
       ...imported,
+      assetFiles: filesToSave,
       warnings: [...(imported.warnings ?? []), ...warnings],
       entries: imported.entries.map((entry) => ({
         ...entry,
-        questionImages: (entry.questionImages ?? []).map((image) => {
-          const index = fileIndexByKey.get(imageFileKey(image));
-          return index === undefined ? image : savedFilenames[index] ?? image;
-        }),
-        explanationParts: (entry.explanationParts ?? []).map((part) => ({
-          ...part,
-          images: (part.images ?? []).map((image) => {
-            const index = fileIndexByKey.get(imageFileKey(image));
-            return index === undefined ? image : savedFilenames[index] ?? image;
-          }),
-        })),
         ...mapEntryImportImageReferences(entry, (image) => {
           if (!isSafeImportImageFilename(image)) return undefined;
-          const index = fileIndexByKey.get(imageFileKey(image));
-          return index === undefined ? undefined : savedFilenames[index];
+          return fileIndexByKey.has(imageFileKey(image)) ? image : undefined;
         }, { removeUnmapped: true }),
       })),
     };
@@ -644,10 +633,12 @@ export default function ImportFromGptModal({
       if (linkedDocument.entries.length === 1) {
         setBatchImport(null);
         setDraftOverride(linkedDocument.entries[0]);
+        setAssetFiles(linkedDocument.assetFiles ?? []);
         setEntryKindResolution(linkedDocument.entryKindResolutions?.[0] ?? null);
       } else {
         if (!onApplyEntries) throw new Error("이 화면에서는 여러 항목 저장을 지원하지 않습니다.");
         setDraftOverride(null);
+        setAssetFiles([]);
         setEntryKindResolution(null);
         setBatchImport(linkedDocument);
       }
@@ -738,12 +729,17 @@ export default function ImportFromGptModal({
       setError("손글씨/도표 연결 위험 항목을 확인한 뒤 체크박스를 선택해야 적용할 수 있습니다.");
       return;
     }
-    onApply({
+    const nextData = {
       ...normalizedDraft,
       questionImages: isSolutionMode
         ? sourceEntry?.questionImages ?? []
         : [...new Set([...(draft.questionImages ?? []), ...images])],
-    }, isSolutionMode ? applyMode : undefined);
+    };
+    if (!isSolutionMode && assetFiles.length > 0) {
+      onApply(nextData, undefined, assetFiles);
+    } else {
+      onApply(nextData, isSolutionMode ? applyMode : undefined);
+    }
   };
 
   return (

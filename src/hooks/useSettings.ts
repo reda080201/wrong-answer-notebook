@@ -18,6 +18,7 @@ export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const settingsRef = useRef(settings);
+  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -36,17 +37,23 @@ export function useSettings() {
     refreshSettings();
   }, [refreshSettings]);
 
-  const updateSettings = useCallback(async (next: AppSettings) => {
-    try {
-      setSettingsError(null);
-      await saveSettings(next);
-      setSettings(next);
-      settingsRef.current = next;
-    } catch (error) {
-      const message = errorMessage(error, "설정을 저장하지 못했습니다.");
-      setSettingsError(message);
-      throw new Error(message, { cause: error });
-    }
+  const updateSettings = useCallback((next: AppSettings) => {
+    // Update the in-memory snapshot before enqueueing so consecutive patches
+    // are based on one monotonic state rather than a stale React render.
+    settingsRef.current = next;
+    setSettings(next);
+    setSettingsError(null);
+    const operation = saveQueueRef.current.then(async () => {
+      try {
+        await saveSettings(next);
+      } catch (error) {
+        const message = errorMessage(error, "설정을 저장하지 못했습니다.");
+        setSettingsError(message);
+        throw new Error(message, { cause: error });
+      }
+    });
+    saveQueueRef.current = operation.catch(() => undefined);
+    return operation;
   }, []);
 
   const patchSettings = useCallback(

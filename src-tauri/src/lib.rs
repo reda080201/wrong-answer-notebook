@@ -1216,7 +1216,8 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         return Err("백업에 포함할 파일이 너무 많습니다.".into());
     }
 
-    let file = fs::File::create(backup_path).map_err(|e| e.to_string())?;
+    let temp_path = backup_path.with_extension(format!("zip.tmp-{}", Uuid::new_v4()));
+    let file = fs::File::create(&temp_path).map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
@@ -1298,10 +1299,14 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     }
 
     zip.finish().map_err(|e| e.to_string())?;
-    if fs::metadata(backup_path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_ZIP_BYTES {
-        let _ = fs::remove_file(backup_path);
+    if fs::metadata(&temp_path).map_err(|e| e.to_string())?.len() > MAX_BACKUP_ZIP_BYTES {
+        let _ = fs::remove_file(&temp_path);
         return Err("완성된 백업 ZIP이 1GB 제한을 초과했습니다.".into());
     }
+    fs::rename(&temp_path, backup_path).map_err(|error| {
+        let _ = fs::remove_file(&temp_path);
+        error.to_string()
+    })?;
     Ok(())
 }
 
@@ -1516,12 +1521,10 @@ fn restore_backup_zip(
                 &format!("optional-{}", name.replace('/', "_")),
             )?;
         }
-        if !images.is_empty() {
-            move_target(image_dir.clone(), "images")?;
-        }
-        if !workspace_files.is_empty() {
-            move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
-        }
+        // Replace managed directories even when the backup contains no files;
+        // otherwise stale images/workspaces survive a restore.
+        move_target(image_dir.clone(), "images")?;
+        move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
         Ok(())
     })();
     drop(move_target);
@@ -1548,6 +1551,8 @@ fn restore_backup_zip(
         for (relative, bytes) in &workspace_files {
             write_bytes_atomic(&app_dir.join("import-workspaces").join(relative), bytes)?;
         }
+        fs::create_dir_all(&image_dir).map_err(|e| e.to_string())?;
+        fs::create_dir_all(app_dir.join("import-workspaces")).map_err(|e| e.to_string())?;
         Ok(())
     })();
     if let Err(error) = commit_result {
@@ -1558,7 +1563,9 @@ fn restore_backup_zip(
             None => error,
         });
     }
-    fs::remove_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
+    // Data has already been restored successfully. Cleanup failure must not
+    // report a false restore failure or trigger a second restore attempt.
+    let _ = fs::remove_dir_all(&rollback_dir);
     Ok(())
 }
 

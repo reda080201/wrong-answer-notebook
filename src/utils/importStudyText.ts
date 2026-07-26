@@ -39,6 +39,8 @@ export interface ImportedStudyDocument {
   entries: Partial<EntryFormData>[];
   entryKindResolutions?: EntryKindResolution[];
   warnings?: string[];
+  /** ZIP assets are kept in memory until the user commits the import. */
+  assetFiles?: File[];
 }
 
 interface ImportJsonShape {

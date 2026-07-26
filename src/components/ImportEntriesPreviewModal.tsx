@@ -8,7 +8,7 @@ import Dialog from "../shared/ui/Dialog";
 interface ImportEntriesPreviewModalProps {
   document: ImportedStudyDocument;
   onClose: () => void;
-  onApplyEntries: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
+  onApplyEntries: (entries: Partial<EntryFormData>[], assetFiles?: File[]) => Promise<void> | void;
 }
 
 const ENTRY_KIND_LABELS = {
@@ -24,12 +24,11 @@ export default function ImportEntriesPreviewModal({
   onApplyEntries,
 }: ImportEntriesPreviewModalProps) {
   const [saving, setSaving] = useState(false);
+  const [confirmedWarnings, setConfirmedWarnings] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rows = useMemo(
     () => document.entries.map((entry, index) => {
-      const policy = entry.entryKind === "problem_sheet"
-        ? classifyImportValidationIssues(validateImportedStudyData(entry))
-        : { blocking: [], confirmable: [], other: [] };
+      const policy = classifyImportValidationIssues(validateImportedStudyData(entry));
       const questionCount = entry.entryKind === "problem_sheet"
         ? parseQuestionText(entry.question ?? "").filter((block) => block.kind === "question").length
         : 0;
@@ -38,13 +37,18 @@ export default function ImportEntriesPreviewModal({
     [document.entries],
   );
   const blockingCount = rows.reduce((sum, row) => sum + row.policy.blocking.length, 0);
+  const confirmableCount = rows.reduce((sum, row) => sum + row.policy.confirmable.length, 0);
 
   const handleApply = async () => {
-    if (blockingCount || saving) return;
+    if (blockingCount || (confirmableCount > 0 && !confirmedWarnings) || saving) return;
     setSaving(true);
     setError(null);
     try {
-      await onApplyEntries(document.entries);
+      if (document.assetFiles?.length) {
+        await onApplyEntries(document.entries, document.assetFiles);
+      } else {
+        await onApplyEntries(document.entries);
+      }
       onClose();
     } catch (applyError) {
       setError(applyError instanceof Error ? applyError.message : "여러 항목 저장에 실패했습니다.");
@@ -63,7 +67,7 @@ export default function ImportEntriesPreviewModal({
               {document.importType} · {document.entries.length}개 항목
             </p>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose}>닫기</button>
+          <button type="button" className="btn-icon" onClick={onClose} disabled={saving}>닫기</button>
         </header>
 
         {blockingCount > 0 && (
@@ -99,13 +103,20 @@ export default function ImportEntriesPreviewModal({
           ))}
         </section>
 
+        {confirmableCount > 0 && (
+          <label className="settings-checkbox import-warning-confirmation">
+            <input type="checkbox" checked={confirmedWarnings} onChange={(event) => setConfirmedWarnings(event.target.checked)} disabled={saving} />
+            확인 권장 항목을 모두 펼쳐 확인했습니다. ({confirmableCount}개)
+          </label>
+        )}
+
         <footer className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>취소</button>
+          <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>취소</button>
           <button
             type="button"
             className="btn-primary"
             onClick={handleApply}
-            disabled={Boolean(blockingCount) || saving}
+            disabled={Boolean(blockingCount) || (confirmableCount > 0 && !confirmedWarnings) || saving}
           >
             {saving ? "저장 중..." : `${document.entries.length}개 항목 저장`}
           </button>

@@ -38,4 +38,22 @@ describe("Dialog", () => {
     fireEvent.mouseDown(screen.getByRole("presentation"));
     expect(onClose).not.toHaveBeenCalled();
   });
+
+  it("sends Escape only to the topmost nested dialog", async () => {
+    const parentClose = vi.fn();
+    const childClose = vi.fn();
+    render(
+      <Dialog open onClose={parentClose} ariaLabel="부모 dialog">
+        <button type="button">부모 확인</button>
+        <Dialog open onClose={childClose} ariaLabel="자식 dialog">
+          <button type="button">자식 확인</button>
+        </Dialog>
+      </Dialog>,
+    );
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(childClose).toHaveBeenCalledOnce();
+    expect(parentClose).not.toHaveBeenCalled();
+  });
 });

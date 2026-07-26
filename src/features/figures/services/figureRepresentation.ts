@@ -53,8 +53,8 @@ export function resolveFigureRepresentation(
       };
     }
   }
-  if (preferred === "semantic_render" && figure.semanticSpec && verification?.status === "verified") {
-    return { kind: "semantic_render", needsReview: false, reason: "검증된 구조 렌더링" };
+  if (preferred === "semantic_render" && figure.semanticSpec && (userSelected || verification?.status === "verified")) {
+    return { kind: "semantic_render", needsReview: !userSelected && verification?.status !== "verified", reason: userSelected ? "사용자가 선택한 구조 렌더링" : "검증된 구조 렌더링" };
   }
   const originalImage = figure.original?.image ?? (figure.source === "original" ? figure.image : undefined);
   if (originalImage) return { kind: "original", image: originalImage, needsReview: false, reason: "원본 이미지" };
