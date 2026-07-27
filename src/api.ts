@@ -22,6 +22,7 @@ import type {
   WrongAnswerEntry,
 } from "./types";
 import type { GeneratedExam } from "./types";
+import type { ImportAssetSessionManifest } from "./features/import-workspace/model/importWorkspace";
 import { loadGeneratedExams as loadGeneratedExamsFromStorage, saveGeneratedExams as saveGeneratedExamsToStorage } from "./features/exam-builder/storage/generatedExamStorage";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 import {
@@ -926,27 +927,61 @@ export interface RestoreBackupResult {
 export interface ImportAssetStageResult {
   sessionId: string;
   sourceToStaged: Record<string, string>;
+  assets: Array<{
+    sourceName: string;
+    stagedFilename: string;
+    size: number;
+    sha256: string;
+    lastModified: number;
+  }>;
 }
 
 export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {
   if (!isTauri() || !files.length) return null;
   const sessionId = await invoke<string>("create_import_asset_session");
   const sourceToStaged: Record<string, string> = {};
+  const assets: ImportAssetStageResult["assets"] = [];
   try {
     for (const file of files) {
-      const result = await invoke<{ stagedFilename: string }>("stage_import_asset_bytes", {
+      const result = await invoke<{ stagedFilename: string; sha256: string }>("stage_import_asset_bytes", {
         sessionId,
         sourceName: file.name,
         bytes: new Uint8Array(await file.arrayBuffer()),
         mime: file.type || undefined,
       });
       sourceToStaged[normalizeImportImageKey(file.name)] = result.stagedFilename;
+      assets.push({
+        sourceName: file.name,
+        stagedFilename: result.stagedFilename,
+        size: file.size,
+        sha256: result.sha256,
+        lastModified: file.lastModified,
+      });
     }
-    return { sessionId, sourceToStaged };
+    return { sessionId, sourceToStaged, assets };
   } catch (error) {
     await discardImportAssetSession(sessionId).catch(() => undefined);
     throw error;
   }
+}
+
+export interface ImportAssetSessionValidationResult {
+  valid: boolean;
+  missingFiles: string[];
+  mismatchedFiles: string[];
+}
+
+export async function validateImportAssetSession(
+  manifest: ImportAssetSessionManifest,
+): Promise<ImportAssetSessionValidationResult> {
+  if (manifest.mode !== "tauri-staged") return { valid: true, missingFiles: [], mismatchedFiles: [] };
+  if (!isTauri()) return { valid: false, missingFiles: [], mismatchedFiles: ["데스크톱 자산 session"] };
+  return invoke<ImportAssetSessionValidationResult>("validate_import_asset_session", { manifest });
+}
+
+export async function cleanupStaleImportAssetSessions(protectedSessionIds: string[] = []): Promise<number> {
+  if (!isTauri()) return 0;
+  return invoke<number>("cleanup_stale_import_asset_sessions", { protectedSessionIds });
 }
 
 export async function commitImportAssetSession(sessionId: string): Promise<string[]> {

@@ -9,7 +9,7 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
-import { createAutoBackup, createPreUpdateBackup } from "./api";
+import { cleanupStaleImportAssetSessions, createAutoBackup, createPreUpdateBackup } from "./api";
 import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
@@ -39,6 +39,8 @@ import { printExamDocument } from "./features/export/services/printExamDocument"
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
+import { loadImportWorkspaceDraft } from "./features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { flushPendingAppWrites } from "./services/flushAppWrites";
 import Dialog from "./shared/ui/Dialog";
 
 export default function App() {
@@ -80,6 +82,7 @@ export default function App() {
     refreshSettings,
     clearSettingsError,
     retrySettingsSave,
+    flushSettings,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
@@ -95,11 +98,13 @@ export default function App() {
   const [examStartError, setExamStartError] = useState<{ entryId: string; message: string } | null>(null);
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
+  const [closeFlushError, setCloseFlushError] = useState<string | null>(null);
+  const [closeFlushSaving, setCloseFlushSaving] = useState(false);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
-  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError } = useGeneratedExams();
+  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
@@ -107,6 +112,8 @@ export default function App() {
   const examSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const examSaveSequenceRef = useRef(0);
   const allowWindowCloseRef = useRef(false);
+  const windowCloseInFlightRef = useRef(false);
+  const closeRetryRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -306,6 +313,13 @@ export default function App() {
   }, [examSession, flushExamSessionSave]);
 
   useEffect(() => {
+    if (!isTauri()) return;
+    const draft = loadImportWorkspaceDraft();
+    const protectedSessionIds = draft?.assetSession?.mode === "tauri-staged" ? [draft.assetSession.id] : [];
+    void cleanupStaleImportAssetSessions(protectedSessionIds).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (examSaveTimerRef.current !== null) {
         window.clearTimeout(examSaveTimerRef.current);
@@ -319,25 +333,40 @@ export default function App() {
     if (!isTauri()) return;
     const windowHandle = getCurrentWindow();
     let unlisten: (() => void) | undefined;
+    const attemptClose = async () => {
+      if (windowCloseInFlightRef.current) return;
+      windowCloseInFlightRef.current = true;
+      setCloseFlushSaving(true);
+      try {
+        if (examSaveTimerRef.current !== null) {
+          window.clearTimeout(examSaveTimerRef.current);
+          examSaveTimerRef.current = null;
+        }
+        await flushPendingAppWrites({
+          activeExam: examSessionRef.current,
+          flushExamSession: (session) => flushExamSessionSave(session),
+          flushGeneratedExams,
+          flushSettings,
+        });
+        setCloseFlushError(null);
+        allowWindowCloseRef.current = true;
+        await windowHandle.close();
+      } catch (error) {
+        allowWindowCloseRef.current = false;
+        setCloseFlushError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+      } finally {
+        windowCloseInFlightRef.current = false;
+        setCloseFlushSaving(false);
+      }
+    };
+    closeRetryRef.current = attemptClose;
     void windowHandle.onCloseRequested(async (event) => {
       if (allowWindowCloseRef.current) return;
-      const latest = examSessionRef.current;
-      if (!latest) return;
       event.preventDefault();
-      if (examSaveTimerRef.current !== null) {
-        window.clearTimeout(examSaveTimerRef.current);
-        examSaveTimerRef.current = null;
-      }
-      const saved = await flushExamSessionSave(latest);
-      if (!saved) {
-        setExamSaveError("시험 진행 상태를 저장하지 못했습니다. 다시 저장한 뒤 종료해 주세요.");
-        return;
-      }
-      allowWindowCloseRef.current = true;
-      await windowHandle.close();
+      await attemptClose();
     }).then((cleanup) => { unlisten = cleanup; });
-    return () => { unlisten?.(); };
-  }, [flushExamSessionSave]);
+    return () => { closeRetryRef.current = null; unlisten?.(); };
+  }, [flushExamSessionSave, flushGeneratedExams, flushSettings]);
 
   useEffect(() => {
     if (!examSession) return;
@@ -838,7 +867,7 @@ export default function App() {
       <Dialog open={showGeneratedExams} onClose={() => { void flushGeneratedExams(); setShowGeneratedExams(false); }} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
             {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
-            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}<button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>다시 저장</button></div>}
+            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}{hasGeneratedExamRetry && <><button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>실패한 변경 다시 저장</button><button type="button" className="btn-secondary" onClick={discardGeneratedExamFailure}>변경 취소</button></>}</div>}
             <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} />
       </Dialog>
       {showSettings && (
@@ -902,6 +931,14 @@ export default function App() {
           }}
         />
       )}
+      <Dialog open={Boolean(closeFlushError)} onClose={() => setCloseFlushError(null)} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
+        <p>{closeFlushError}</p>
+        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
+        <footer className="dialog-actions">
+          <button type="button" className="btn-secondary" onClick={() => setCloseFlushError(null)} disabled={closeFlushSaving}>종료 취소</button>
+          <button type="button" onClick={() => void closeRetryRef.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
+        </footer>
+      </Dialog>
     </div>
   );
 }

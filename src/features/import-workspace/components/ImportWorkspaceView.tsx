@@ -4,17 +4,23 @@ import type { ImportQuestionDraft, ImportWorkspace } from "../model/importWorksp
 import { commitImportWorkspace } from "../services/commitImportWorkspace";
 import { moveQuestion } from "../services/reorderQuestions";
 import { validateImportWorkspace } from "../services/validateImportWorkspace";
-import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, useImportWorkspaceAutosave } from "../hooks/useImportWorkspaceAutosave";
+import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft, useImportWorkspaceAutosave } from "../hooks/useImportWorkspaceAutosave";
 import { useImportWorkspaceHistory } from "../hooks/useImportWorkspaceHistory";
 import Dialog from "../../../shared/ui/Dialog";
 
-interface Props { initialWorkspace: ImportWorkspace; onSave: (entries: Partial<EntryFormData>[], assetSession?: ImportWorkspace["assetSession"]) => Promise<void> | void; onClose: () => void; canRecoverAssets?: (workspace: ImportWorkspace) => boolean; }
+interface Props {
+  initialWorkspace: ImportWorkspace;
+  onSave: (entries: Partial<EntryFormData>[], assetSession?: ImportWorkspace["assetSession"]) => Promise<void> | void;
+  onClose: () => void;
+  validateRecoveryAssets?: (workspace: ImportWorkspace) => Promise<{ valid: boolean; message?: string }>;
+  discardWorkspaceAssets?: (workspace: ImportWorkspace) => Promise<void>;
+}
 
 function questionText(question: ImportQuestionDraft): string {
   return question.sourceText ?? question.contentSegments.map((segment) => segment.type === "text" || segment.type === "condition" ? segment.text : segment.type === "equation" ? segment.latex : "").filter(Boolean).join(" ");
 }
 
-export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose, canRecoverAssets }: Props) {
+export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose, validateRecoveryAssets, discardWorkspaceAssets }: Props) {
   const { workspace, setWorkspace, replaceWorkspace, undo, redo, canUndo, canRedo } = useImportWorkspaceHistory(initialWorkspace);
   const [selectedGroupId, setSelectedGroupId] = useState(initialWorkspace.groups[0]?.id ?? "");
   const [selectedQuestionId, setSelectedQuestionId] = useState(initialWorkspace.groups[0]?.questions[0]?.id ?? "");
@@ -23,6 +29,10 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   const [busy, setBusy] = useState(false);
   const [recoveryAvailable, setRecoveryAvailable] = useState(false);
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [closePromptOpen, setClosePromptOpen] = useState(false);
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
   const selectedGroup = workspace.groups.find((group) => group.id === selectedGroupId);
   const questions = selectedGroup?.questions ?? [];
   const selectedQuestion = questions.find((question) => question.id === selectedQuestionId);
@@ -30,8 +40,77 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   const warnings = useMemo(() => validateImportWorkspace(workspace), [workspace]);
   const visibleQuestions = filter === "review" ? questions.filter((question) => question.status !== "ready") : questions;
 
-  useImportWorkspaceAutosave(workspace, !busy);
+  useImportWorkspaceAutosave(workspace, !busy && !recoveryAvailable && !closePromptOpen);
   useEffect(() => { setRecoveryAvailable(Boolean(loadImportWorkspaceDraft())); }, []);
+
+  const requestClose = () => {
+    if (busy || recoveryBusy || closeBusy) return;
+    setCloseError(null);
+    setClosePromptOpen(true);
+  };
+
+  const preserveAndClose = () => {
+    saveImportWorkspaceDraft(workspace);
+    setClosePromptOpen(false);
+    onClose();
+  };
+
+  const discardAndClose = async () => {
+    setCloseBusy(true);
+    setCloseError(null);
+    try {
+      await discardWorkspaceAssets?.(workspace);
+      clearImportWorkspaceDraft();
+      setClosePromptOpen(false);
+      onClose();
+    } catch (error) {
+      setCloseError(error instanceof Error ? error.message : "임시 이미지 자산을 폐기하지 못했습니다.");
+    } finally {
+      setCloseBusy(false);
+    }
+  };
+
+  const recoverDraft = async () => {
+    const recovered = loadImportWorkspaceDraft();
+    if (!recovered) {
+      setRecoveryError("복구 초안을 읽지 못했습니다.");
+      return;
+    }
+    setRecoveryBusy(true);
+    setRecoveryError(null);
+    try {
+      const validation = await validateRecoveryAssets?.(recovered);
+      if (validation && !validation.valid) {
+        setRecoveryError(validation.message ?? "복구 초안의 이미지 자산을 검증하지 못했습니다.");
+        return;
+      }
+      replaceWorkspace(recovered);
+      setSelectedGroupId(recovered.groups[0]?.id ?? "");
+      setSelectedQuestionId(recovered.groups[0]?.questions[0]?.id ?? "");
+      setRecoveryAvailable(false);
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
+
+  const discardRecoveryDraft = async () => {
+    const recovered = loadImportWorkspaceDraft();
+    setRecoveryBusy(true);
+    try {
+      if (recovered) await discardWorkspaceAssets?.(recovered);
+      clearImportWorkspaceDraft();
+      setRecoveryAvailable(false);
+      setRecoveryError(null);
+    } catch (error) {
+      setRecoveryError(error instanceof Error ? error.message : "복구 초안의 임시 자산을 폐기하지 못했습니다.");
+    } finally {
+      setRecoveryBusy(false);
+    }
+  };
+
+  const keepCurrentUpload = async () => {
+    await discardRecoveryDraft();
+  };
 
   const updateQuestion = (patch: Partial<ImportQuestionDraft>) => setWorkspace((current) => ({
     ...current,
@@ -59,12 +138,18 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     } finally { setBusy(false); }
   };
 
-  return <Dialog open onClose={onClose} className="import-workspace" backdropClassName="modal-backdrop import-workspace-backdrop" ariaLabel="가져오기 작업실" closeDisabled={busy} busy={busy}>
-    <header className="modal-header"><div><p className="modal-eyebrow">가져오기 작업실</p><h2>자료를 검토한 뒤 저장하세요</h2><p>자동 분석 결과는 제안으로만 사용되며, 저장 전 수정할 수 있습니다.</p></div><div className="import-workspace-header-actions"><button type="button" className="btn-secondary" onClick={undo} disabled={!canUndo || busy}>되돌리기</button><button type="button" className="btn-secondary" onClick={redo} disabled={!canRedo || busy}>다시 실행</button><button type="button" className="btn-icon" onClick={onClose} aria-label="작업실 닫기" disabled={busy}>✕</button></div></header>
-    {recoveryAvailable && <div className="import-workspace-recovery" role="status">이전에 저장된 가져오기 초안이 있습니다. 현재 업로드 대신 저장된 초안을 열 수 있습니다. {recoveryError && <p className="form-error">{recoveryError}</p>}<button type="button" onClick={() => { const recovered = loadImportWorkspaceDraft(); if (!recovered) { setRecoveryError("복구 초안을 읽지 못했습니다."); return; } if (canRecoverAssets && !canRecoverAssets(recovered)) { setRecoveryError("복구 초안의 이미지 자산을 찾지 못했습니다. 같은 파일을 다시 선택하거나 현재 업로드를 유지하세요."); return; } replaceWorkspace(recovered); setSelectedGroupId(recovered.groups[0]?.id ?? ""); setSelectedQuestionId(recovered.groups[0]?.questions[0]?.id ?? ""); setRecoveryAvailable(false); }}>저장 초안 열기</button><button type="button" onClick={() => setRecoveryAvailable(false)}>현재 업로드 유지</button><button type="button" onClick={() => { clearImportWorkspaceDraft(); setRecoveryAvailable(false); }}>복구 초안 삭제</button></div>}
+  return <Dialog open onClose={requestClose} className="import-workspace" backdropClassName="modal-backdrop import-workspace-backdrop" ariaLabel="가져오기 작업실" closeDisabled={busy || recoveryBusy || closeBusy} busy={busy || recoveryBusy || closeBusy}>
+    <header className="modal-header"><div><p className="modal-eyebrow">가져오기 작업실</p><h2>자료를 검토한 뒤 저장하세요</h2><p>자동 분석 결과는 제안으로만 사용되며, 저장 전 수정할 수 있습니다.</p></div><div className="import-workspace-header-actions"><button type="button" className="btn-secondary" onClick={undo} disabled={!canUndo || busy || recoveryBusy}>되돌리기</button><button type="button" className="btn-secondary" onClick={redo} disabled={!canRedo || busy || recoveryBusy}>다시 실행</button><button type="button" className="btn-icon" onClick={requestClose} aria-label="작업실 닫기" disabled={busy || recoveryBusy || closeBusy}>✕</button></div></header>
+    {recoveryAvailable && <div className="import-workspace-recovery" role="status">이전에 저장된 가져오기 초안이 있습니다. 자산 검증 후 저장된 초안을 열 수 있습니다. {recoveryError && <p className="form-error">{recoveryError}</p>}<button type="button" onClick={() => void recoverDraft()} disabled={recoveryBusy}>저장 초안 열기</button><button type="button" onClick={() => void keepCurrentUpload()} disabled={recoveryBusy}>현재 업로드 유지</button><button type="button" onClick={() => void discardRecoveryDraft()} disabled={recoveryBusy}>복구 초안 삭제</button></div>}
     <div className="import-workspace-grid"><aside className="import-workspace-sidebar"><h3>자료 및 회차</h3>{workspace.groups.map((group) => <button type="button" key={group.id} className={group.id === selectedGroupId ? "is-selected" : ""} onClick={() => { setSelectedGroupId(group.id); setSelectedQuestionId(group.questions[0]?.id ?? ""); }}>{group.title}<small>{group.questions.length}문항 · 신뢰도 {Math.round((group.confidence ?? 0) * 100)}%</small></button>)}{workspace.unassignedBlocks.length > 0 && <p className="form-error">미분류 블록 {workspace.unassignedBlocks.length}개</p>}</aside>
       <main className="import-workspace-list"><header><strong>{selectedGroup?.title ?? "문항"}</strong><div><button type="button" className={filter === "all" ? "is-selected" : ""} onClick={() => setFilter("all")}>전체</button><button type="button" className={filter === "review" ? "is-selected" : ""} onClick={() => setFilter("review")}>검토 필요</button></div></header>{visibleQuestions.map((question) => <article key={question.id} className={question.id === selectedQuestionId ? "is-selected" : ""} onClick={() => setSelectedQuestionId(question.id)}><div><strong>{question.displayQuestionNumber}번</strong><p>{questionText(question).slice(0, 150)}</p><small>{question.status === "ready" ? "준비됨" : question.warnings[0] ?? "검토 필요"}</small></div></article>)}</main>
       <aside className="import-workspace-editor"><h3>문항 편집</h3>{selectedQuestion ? <><label>현재 문항 번호<input value={selectedQuestion.displayQuestionNumber} onChange={(event) => updateQuestion({ displayQuestionNumber: event.target.value })} /></label><label>원본 문항 번호<input value={selectedQuestion.sourceQuestionNumber ?? ""} onChange={(event) => updateQuestion({ sourceQuestionNumber: event.target.value })} /></label><label>본문<textarea value={questionText(selectedQuestion)} onChange={(event) => updateQuestion({ sourceText: event.target.value, status: "needs_review" })} /></label><h4>선택지</h4>{selectedQuestion.choices.map((choice, index) => <label key={choice.id}>{choice.marker || `선지 ${index + 1}`}<input value={choice.content} onChange={(event) => updateQuestion({ choices: selectedQuestion.choices.map((item) => item.id === choice.id ? { ...item, content: event.target.value } : item) })} /></label>)}<p className="import-workspace-note">그림 {selectedQuestion.figures.length}개 · 원본 페이지 {selectedQuestion.sourcePageAssets.length}개</p><div className="import-workspace-move"><label>회차 이동<select value={selectedGroupId} onChange={(event) => moveSelectedQuestion(event.target.value, 0)}>{workspace.groups.map((group) => <option key={group.id} value={group.id}>{group.title}</option>)}</select></label><button type="button" onClick={() => moveSelectedQuestion(selectedGroupId, selectedQuestionIndex - 1)} disabled={selectedQuestionIndex <= 0}>위로</button><button type="button" onClick={() => moveSelectedQuestion(selectedGroupId, selectedQuestionIndex + 1)} disabled={selectedQuestionIndex < 0 || selectedQuestionIndex >= questions.length - 1}>아래로</button></div></> : <p>문항을 선택하세요.</p>}</aside>
-    </div><footer className="import-workspace-footer"><span>{workspace.groups.reduce((sum, group) => sum + group.questions.length, 0)}문항 · 경고 {warnings.length}개</span><label><input type="checkbox" checked={allowWarnings} onChange={(event) => setAllowWarnings(event.target.checked)} disabled={busy} /> 경고가 있는 회차도 저장</label><button type="button" className="btn-secondary" onClick={onClose} disabled={busy}>닫기</button><button type="button" disabled={busy} onClick={() => void save()}>{busy ? "저장 중…" : "검토 결과 저장"}</button></footer>
+    </div><footer className="import-workspace-footer"><span>{workspace.groups.reduce((sum, group) => sum + group.questions.length, 0)}문항 · 경고 {warnings.length}개</span><label><input type="checkbox" checked={allowWarnings} onChange={(event) => setAllowWarnings(event.target.checked)} disabled={busy || recoveryBusy} /> 경고가 있는 회차도 저장</label><button type="button" className="btn-secondary" onClick={requestClose} disabled={busy || recoveryBusy}>닫기</button><button type="button" disabled={busy || recoveryBusy} onClick={() => void save()}>{busy ? "저장 중…" : "검토 결과 저장"}</button></footer>
+    <Dialog open={closePromptOpen} onClose={() => setClosePromptOpen(false)} title="가져오기 작업실을 닫을까요?" closeDisabled={closeBusy} busy={closeBusy}>
+      <p>현재 초안과 staged 이미지 자산을 어떻게 처리할지 선택하세요.</p>
+      {closeError && <p className="form-error" role="alert">{closeError}</p>}
+      {workspace.assetSession?.mode === "memory-only" && <p className="form-hint">브라우저 메모리 이미지가 포함된 초안은 앱을 다시 시작하면 복구할 수 없습니다.</p>}
+      <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={() => setClosePromptOpen(false)} disabled={closeBusy}>계속 편집</button><button type="button" className="btn-secondary" onClick={preserveAndClose} disabled={closeBusy}>초안 보존하고 닫기</button><button type="button" className="btn-danger" onClick={() => void discardAndClose()} disabled={closeBusy}>{closeBusy ? "폐기 중…" : "초안·이미지 폐기"}</button></footer>
+    </Dialog>
   </Dialog>;
 }
