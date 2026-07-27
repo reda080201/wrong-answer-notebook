@@ -7,8 +7,9 @@ import AppSidebar from "./components/AppSidebar";
 import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
+import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
-import { createAutoBackup, createPreUpdateBackup } from "./api";
+import { cleanupStaleImportAssetSessions, createAutoBackup, createPreUpdateBackup } from "./api";
 import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
@@ -23,7 +24,6 @@ import { useGeneratedExams } from "./hooks/useGeneratedExams";
 import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, GeneratedExam, McpExportContext, WrongAnswerEntry } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
-import ExamSessionView from "./features/exam/components/ExamSessionView";
 import { createExamSession } from "./features/exam/services/examSession";
 import {
   EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS,
@@ -37,10 +37,14 @@ import { createSessionFromGeneratedExam } from "./features/exam-builder/services
 import { buildGeneratedExamPrintModel } from "./features/exam-builder/services/buildGeneratedExamPrintModel";
 import { printExamDocument } from "./features/export/services/printExamDocument";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
+import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
+import { loadImportWorkspaceDraft } from "./features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { flushPendingAppWrites } from "./services/flushAppWrites";
 import Dialog from "./shared/ui/Dialog";
 
 export default function App() {
+  const { confirm } = useAppDialog();
   const {
     entries,
     loading,
@@ -78,6 +82,7 @@ export default function App() {
     refreshSettings,
     clearSettingsError,
     retrySettingsSave,
+    flushSettings,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
@@ -93,11 +98,13 @@ export default function App() {
   const [examStartError, setExamStartError] = useState<{ entryId: string; message: string } | null>(null);
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
+  const [closeFlushError, setCloseFlushError] = useState<string | null>(null);
+  const [closeFlushSaving, setCloseFlushSaving] = useState(false);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
-  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError } = useGeneratedExams();
+  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
@@ -105,6 +112,8 @@ export default function App() {
   const examSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const examSaveSequenceRef = useRef(0);
   const allowWindowCloseRef = useRef(false);
+  const windowCloseInFlightRef = useRef(false);
+  const closeRetryRef = useRef<(() => Promise<void>) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -304,6 +313,13 @@ export default function App() {
   }, [examSession, flushExamSessionSave]);
 
   useEffect(() => {
+    if (!isTauri()) return;
+    const draft = loadImportWorkspaceDraft();
+    const protectedSessionIds = draft?.assetSession?.mode === "tauri-staged" ? [draft.assetSession.id] : [];
+    void cleanupStaleImportAssetSessions(protectedSessionIds).catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
     return () => {
       if (examSaveTimerRef.current !== null) {
         window.clearTimeout(examSaveTimerRef.current);
@@ -317,25 +333,40 @@ export default function App() {
     if (!isTauri()) return;
     const windowHandle = getCurrentWindow();
     let unlisten: (() => void) | undefined;
+    const attemptClose = async () => {
+      if (windowCloseInFlightRef.current) return;
+      windowCloseInFlightRef.current = true;
+      setCloseFlushSaving(true);
+      try {
+        if (examSaveTimerRef.current !== null) {
+          window.clearTimeout(examSaveTimerRef.current);
+          examSaveTimerRef.current = null;
+        }
+        await flushPendingAppWrites({
+          activeExam: examSessionRef.current,
+          flushExamSession: (session) => flushExamSessionSave(session),
+          flushGeneratedExams,
+          flushSettings,
+        });
+        setCloseFlushError(null);
+        allowWindowCloseRef.current = true;
+        await windowHandle.close();
+      } catch (error) {
+        allowWindowCloseRef.current = false;
+        setCloseFlushError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+      } finally {
+        windowCloseInFlightRef.current = false;
+        setCloseFlushSaving(false);
+      }
+    };
+    closeRetryRef.current = attemptClose;
     void windowHandle.onCloseRequested(async (event) => {
       if (allowWindowCloseRef.current) return;
-      const latest = examSessionRef.current;
-      if (!latest) return;
       event.preventDefault();
-      if (examSaveTimerRef.current !== null) {
-        window.clearTimeout(examSaveTimerRef.current);
-        examSaveTimerRef.current = null;
-      }
-      const saved = await flushExamSessionSave(latest);
-      if (!saved) {
-        setExamSaveError("시험 진행 상태를 저장하지 못했습니다. 다시 저장한 뒤 종료해 주세요.");
-        return;
-      }
-      allowWindowCloseRef.current = true;
-      await windowHandle.close();
+      await attemptClose();
     }).then((cleanup) => { unlisten = cleanup; });
-    return () => { unlisten?.(); };
-  }, [flushExamSessionSave]);
+    return () => { closeRetryRef.current = null; unlisten?.(); };
+  }, [flushExamSessionSave, flushGeneratedExams, flushSettings]);
 
   useEffect(() => {
     if (!examSession) return;
@@ -490,7 +521,7 @@ export default function App() {
     });
   };
 
-  const handleWikiLinkClick = (target: string) => {
+  const handleWikiLinkClick = async (target: string) => {
     const targetLower = target.toLowerCase();
     const found = entries.find(
       (entry) =>
@@ -503,9 +534,10 @@ export default function App() {
       return;
     }
 
-    const confirmCreate = confirm(
-      `"${target}" 항목을 찾을 수 없습니다. 이 제목으로 새 항목을 생성할까요?`,
-    );
+    const confirmCreate = await confirm({
+      title: "새 항목 만들기",
+      message: `"${target}" 항목을 찾을 수 없습니다. 이 제목으로 새 항목을 생성할까요?`,
+    });
     if (confirmCreate) {
       actions.openNewWithTitle(target);
     }
@@ -638,25 +670,35 @@ export default function App() {
             onStartImportantReview={() => actions.startReview("important")}
           />
 
-          {examSession && activeGeneratedExam ? (
-            <div className="exam-session-overlay exam-session-overlay--generated">
-              {examSaveError && <div className="exam-session-save-error" role="alert">진행 상태 저장 실패: {examSaveError}</div>}
-              <button type="button" onClick={() => void closeExamSession()} disabled={examSubmitting || examSaving}>시험 닫기</button>
-              <ExamSessionView
-                session={examSession}
-                examPreferences={settings.examPreferences}
-                onOpenSettings={() => openSettings("exam")}
-                chatGptPreferences={settings.chatGptMcpPreferences}
-                onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
-                onSyncChatGptContext={syncExamChatGptContext}
-                onOpenChatGptSettings={() => openSettings("chatgpt")}
-                onCheckLocalMcp={async () => { const status = await mcpBridge.testMcpBridgeConnection(); if (status.status !== "listening" && status.status !== "connected") throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다."); }}
-                remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
-                onChange={setExamSession}
-                onSubmittingChange={setExamSubmitting}
-                onSubmit={handleExamSubmit}
-              />
-            </div>
+          {examSession ? (
+            <ExamSessionOverlay
+              session={examSession}
+              generated={Boolean(activeGeneratedExam)}
+              examPreferences={settings.examPreferences}
+              onOpenSettings={(tab) => openSettings(tab ?? "exam")}
+              chatGptPreferences={settings.chatGptMcpPreferences}
+              onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
+              onSyncChatGptContext={syncExamChatGptContext}
+              onOpenChatGptSettings={() => openSettings("chatgpt")}
+              onCheckLocalMcp={async () => {
+                const status = await mcpBridge.testMcpBridgeConnection();
+                if (status.status !== "listening" && status.status !== "connected") {
+                  throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
+                }
+              }}
+              remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
+              onChange={setExamSession}
+              onSubmittingChange={setExamSubmitting}
+              onSubmit={handleExamSubmit}
+              onClose={closeExamSession}
+              submitting={examSubmitting}
+              saving={examSaving}
+              saveError={examSaveError}
+              onRetrySave={() => {
+                const current = examSessionRef.current;
+                if (current) void flushExamSessionSave(current);
+              }}
+            />
           ) : selected ? (
             <>
               {selected.entryKind === "problem_sheet" && !examSession && (() => {
@@ -688,45 +730,7 @@ export default function App() {
                   </div>
                 </section>
               )}
-              {examSession ? (
-                <div className="exam-session-overlay">
-                  {examSaveError && (
-                    <div className="exam-session-save-error" role="alert">
-                      <span>진행 상태 저장 실패: {examSaveError}</span>
-                      <button
-                        type="button"
-                        disabled={examSaving}
-                        onClick={() => {
-                          const current = examSessionRef.current;
-                          if (current) void flushExamSessionSave(current);
-                        }}
-                      >
-                        다시 저장
-                      </button>
-                    </div>
-                  )}
-                  <button type="button" onClick={() => void closeExamSession()} disabled={examSubmitting || examSaving}>시험 닫기</button>
-                  <ExamSessionView
-                    session={examSession}
-                    examPreferences={settings.examPreferences}
-                    onOpenSettings={() => openSettings("exam")}
-                    chatGptPreferences={settings.chatGptMcpPreferences}
-                    onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
-                    onSyncChatGptContext={syncExamChatGptContext}
-                    onOpenChatGptSettings={() => openSettings("chatgpt")}
-                    onCheckLocalMcp={async () => {
-                      const status = await mcpBridge.testMcpBridgeConnection();
-                      if (status.status !== "listening" && status.status !== "connected") {
-                        throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
-                      }
-                    }}
-                    remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
-                    onChange={setExamSession}
-                    onSubmittingChange={setExamSubmitting}
-                    onSubmit={handleExamSubmit}
-                  />
-                </div>
-              ) : <EntryDetail
+              <EntryDetail
               entry={selected}
               onEdit={actions.openEdit}
               onQuickGptSolution={
@@ -805,7 +809,7 @@ export default function App() {
               }}
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               onActiveContextChange={(context) => syncActiveContext(context)}
-            />}
+             />
             </>
           ) : (
             <div className="detail-panel empty-state">
@@ -863,7 +867,7 @@ export default function App() {
       <Dialog open={showGeneratedExams} onClose={() => { void flushGeneratedExams(); setShowGeneratedExams(false); }} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
             {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
-            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}<button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>다시 저장</button></div>}
+            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}{hasGeneratedExamRetry && <><button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>실패한 변경 다시 저장</button><button type="button" className="btn-secondary" onClick={discardGeneratedExamFailure}>변경 취소</button></>}</div>}
             <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} />
       </Dialog>
       {showSettings && (
@@ -927,6 +931,14 @@ export default function App() {
           }}
         />
       )}
+      <Dialog open={Boolean(closeFlushError)} onClose={() => setCloseFlushError(null)} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
+        <p>{closeFlushError}</p>
+        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
+        <footer className="dialog-actions">
+          <button type="button" className="btn-secondary" onClick={() => setCloseFlushError(null)} disabled={closeFlushSaving}>종료 취소</button>
+          <button type="button" onClick={() => void closeRetryRef.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
+        </footer>
+      </Dialog>
     </div>
   );
 }

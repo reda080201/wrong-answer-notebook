@@ -11,8 +11,11 @@ export function useGeneratedExams() {
   const examsRef = useRef<GeneratedExam[]>([]);
   const persistedRef = useRef<GeneratedExam[]>([]);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastOperationRef = useRef<Promise<void>>(Promise.resolve());
+  const failedTargetRef = useRef<GeneratedExam[] | null>(null);
   const mutationRef = useRef(0);
   const savingCountRef = useRef(0);
+  const [hasRetryableChange, setHasRetryableChange] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,7 +38,11 @@ export function useGeneratedExams() {
     return () => { cancelled = true; };
   }, []);
 
-  const enqueue = useCallback((next: GeneratedExam[]) => {
+  const enqueue = useCallback((next: GeneratedExam[], retrying = false) => {
+    if (!retrying) {
+      failedTargetRef.current = null;
+      setHasRetryableChange(false);
+    }
     examsRef.current = next;
     setExams(next);
     setError(null);
@@ -46,10 +53,16 @@ export function useGeneratedExams() {
       .then(() => saveGeneratedExams(next))
       .then(() => {
         persistedRef.current = next;
+        if (retrying && mutation === mutationRef.current) {
+          failedTargetRef.current = null;
+          setHasRetryableChange(false);
+        }
       })
       .catch((cause) => {
         const message = errorMessage(cause, "생성 모의고사를 저장하지 못했습니다.");
         if (mutation === mutationRef.current) {
+          failedTargetRef.current = next;
+          setHasRetryableChange(true);
           examsRef.current = persistedRef.current;
           setExams(persistedRef.current);
         }
@@ -60,14 +73,23 @@ export function useGeneratedExams() {
         savingCountRef.current -= 1;
         if (savingCountRef.current === 0) setSaving(false);
       });
+    lastOperationRef.current = operation;
     saveQueueRef.current = operation.catch(() => undefined);
     return operation;
   }, []);
 
   const upsert = useCallback((exam: GeneratedExam) => enqueue(mergeGeneratedExam(examsRef.current, exam)), [enqueue]);
   const remove = useCallback((id: string) => enqueue(examsRef.current.filter((exam) => exam.id !== id)), [enqueue]);
-  const retry = useCallback(() => enqueue(examsRef.current), [enqueue]);
-  const flush = useCallback(() => saveQueueRef.current, []);
+  const retry = useCallback(() => {
+    const failedTarget = failedTargetRef.current;
+    return failedTarget ? enqueue(failedTarget, true) : Promise.resolve();
+  }, [enqueue]);
+  const discardFailedChange = useCallback(() => {
+    failedTargetRef.current = null;
+    setHasRetryableChange(false);
+    setError(null);
+  }, []);
+  const flush = useCallback(() => lastOperationRef.current, []);
 
-  return { exams, loading, saving, error, upsert, remove, retry, flush, clearError: () => setError(null) };
+  return { exams, loading, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, clearError: () => setError(null) };
 }

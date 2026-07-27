@@ -1,20 +1,8 @@
 import type { Difficulty, QuestionMeta, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import type { QuestionBlock } from "./textLayout";
+import { normalizeQuestionNumber } from "./questionNumber";
 
 export type DifficultyScoreBand = "easy" | "normal" | "hard" | "very-hard" | "none";
-
-function normalizeQuestionNumberLike(value: string | number | undefined | null): string {
-  const raw = `${value ?? ""}`.trim();
-  const normalized = raw
-    .replace(/^\[\s*/, "")
-    .replace(/\s*\]$/, "")
-    .replace(/^#/, "")
-    .replace(/^(?:문제|문항)\s*/i, "")
-    .replace(/\s*(?:[.)]|번)\s*$/, "")
-    .replace(/^0+(?=\d)/, "")
-    .trim();
-  return normalized || raw;
-}
 
 export function normalizeDifficultyScore(value: unknown): number | undefined {
   if (value === undefined || value === null || value === "") return undefined;
@@ -79,16 +67,16 @@ export function resolveQuestionDifficultyScore(
   block: Pick<QuestionBlock, "displayNumber" | "numberLabel">,
 ): number | undefined {
   const candidates = new Set([
-    normalizeQuestionNumberLike(block.displayNumber),
-    normalizeQuestionNumberLike(block.numberLabel),
+    normalizeQuestionNumber(block.displayNumber),
+    normalizeQuestionNumber(block.numberLabel),
   ]);
   const meta = (questionMeta ?? []).find((item) =>
-    candidates.has(normalizeQuestionNumberLike(item.questionNumber)),
+    candidates.has(normalizeQuestionNumber(item.questionNumber)),
   );
   const metaScore = normalizeDifficultyScore(meta?.difficultyScore);
   if (metaScore) return metaScore;
   const answer = (answerKey ?? []).find((item) =>
-    candidates.has(normalizeQuestionNumberLike(item.questionNumber)),
+    candidates.has(normalizeQuestionNumber(item.questionNumber)),
   );
   return resolveAnswerDifficultyScore(answer);
 }

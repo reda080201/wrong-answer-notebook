@@ -4,95 +4,13 @@ import { parseQuestionText } from "./textLayout";
 import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
 import { calculateNextReview } from "./reviewSchedule";
-import { isMistakeCauseType, isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
-
-export function normalizeQuestionNumber(value: string | number | undefined | null): string {
-  const raw = `${value ?? ""}`.trim();
-  const normalized = raw
-    .replace(/^\[\s*/, "")
-    .replace(/\s*\]$/, "")
-    .replace(/^#/, "")
-    .replace(/^(?:문제|문항)\s*/i, "")
-    .replace(/\s*(?:[.)]|번)\s*$/, "")
-    .replace(/^0+(?=\d)/, "")
-    .trim();
-  return normalized || raw;
-}
-
-function isReviewResult(value: unknown): value is ReviewResult {
-  return value === "again" || value === "hard" || value === "good";
-}
-
-function isValidIsoDate(value: unknown): value is string {
-  return typeof value === "string" && !Number.isNaN(new Date(value).getTime());
-}
+import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
+export { normalizeQuestionNumber } from "./questionNumber";
+import { normalizeQuestionNumber } from "./questionNumber";
+import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
 
 export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const value = raw as Partial<ReviewState>;
-  const historySource = Array.isArray(value.history) ? value.history : [];
-  const history: ReviewEvent[] = historySource
-    .filter((event) => Boolean(event && typeof event === "object"))
-    .map((event) => event as Partial<ReviewEvent>)
-    .map((event) => ({
-      id: event.id || uuidv4(),
-      reviewedAt: isValidIsoDate(event.reviewedAt) ? event.reviewedAt : new Date().toISOString(),
-      result: isReviewResult(event.result) ? event.result : "again",
-      nextDueAt: event.nextDueAt === null || isValidIsoDate(event.nextDueAt) ? event.nextDueAt : null,
-      intervalDays: typeof event.intervalDays === "number" && event.intervalDays >= 0 ? event.intervalDays : 1,
-      causeSnapshot: Array.isArray(event.causeSnapshot)
-        ? event.causeSnapshot.filter(isMistakeCauseType)
-        : undefined,
-      strategy: isReviewStrategy(event.strategy) ? event.strategy : undefined,
-      stabilityDays:
-        typeof event.stabilityDays === "number" && event.stabilityDays > 0
-          ? event.stabilityDays
-          : undefined,
-      memoryDifficulty:
-        typeof event.memoryDifficulty === "number" && event.memoryDifficulty >= 1
-          ? Math.min(10, event.memoryDifficulty)
-          : undefined,
-      lapseCount:
-        typeof event.lapseCount === "number" && event.lapseCount >= 0
-          ? Math.floor(event.lapseCount)
-          : undefined,
-    }));
-
-  return {
-    dueAt: value.dueAt === null || isValidIsoDate(value.dueAt) ? value.dueAt : null,
-    lastReviewedAt: isValidIsoDate(value.lastReviewedAt) ? value.lastReviewedAt : undefined,
-    intervalDays: typeof value.intervalDays === "number" && value.intervalDays >= 0 ? value.intervalDays : 0,
-    streak: typeof value.streak === "number" && value.streak >= 0 ? Math.floor(value.streak) : 0,
-    history,
-    stabilityDays:
-      typeof value.stabilityDays === "number" && value.stabilityDays > 0
-        ? value.stabilityDays
-        : Math.max(0.5, typeof value.intervalDays === "number" ? value.intervalDays : 0),
-    memoryDifficulty:
-      typeof value.memoryDifficulty === "number" && value.memoryDifficulty >= 1
-        ? Math.min(10, value.memoryDifficulty)
-        : 5,
-    lapseCount:
-      typeof value.lapseCount === "number" && value.lapseCount >= 0
-        ? Math.floor(value.lapseCount)
-        : history.filter((event) => event.result === "again").length,
-    preLapseStabilityDays:
-      typeof value.preLapseStabilityDays === "number" && value.preLapseStabilityDays > 0
-        ? value.preLapseStabilityDays
-        : undefined,
-    relearningStep:
-      value.relearningStep === 0 || value.relearningStep === 1
-        ? value.relearningStep
-        : undefined,
-    repetitionCount:
-      typeof value.repetitionCount === "number" && value.repetitionCount >= 0
-        ? Math.floor(value.repetitionCount)
-        : history.length,
-    phase:
-      value.phase === "learning" || value.phase === "relearning" || value.phase === "long_term" || value.phase === "archived"
-        ? value.phase
-        : "learning",
-  };
+  return normalizeReviewState(raw, { defaultPhase: "learning" });
 }
 
 export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {

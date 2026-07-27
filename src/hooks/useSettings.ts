@@ -20,6 +20,7 @@ export function useSettings() {
   const [settingsSaveState, setSettingsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const settingsRef = useRef(settings);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastOperationRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -56,12 +57,13 @@ export function useSettings() {
       }
       setSettingsSaveState("saved");
     });
+    lastOperationRef.current = operation;
     saveQueueRef.current = operation.catch(() => undefined);
     return operation;
   }, []);
 
   const retrySettingsSave = useCallback(() => updateSettings(settingsRef.current), [updateSettings]);
-  const flushSettings = useCallback(() => saveQueueRef.current, []);
+  const flushSettings = useCallback(() => lastOperationRef.current, []);
 
   const patchSettings = useCallback(
     async (patch: Partial<AppSettings>) => {

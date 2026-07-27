@@ -12,6 +12,7 @@ import { cleanQuestionText } from "../utils/textCleanup";
 import { normalizeDifficultyScore } from "../utils/difficulty";
 import { SUBJECTS } from "../types";
 import ImageField from "./ImageField";
+import { useAppDialog } from "../shared/ui/AppDialogProvider";
 import {
   createEntryDraftFromEntry,
   createEmptyEntryDraft,
@@ -92,6 +93,7 @@ export default function EntryForm({
   memoTemplates = [],
   onSaveTemplate,
 }: EntryFormProps) {
+  const { prompt } = useAppDialog();
   const [form, setForm] = useState<EntryFormData>(emptyForm);
   const [tagInput, setTagInput] = useState("");
   const [removedImages, setRemovedImages] = useState<string[]>([]);
@@ -304,7 +306,7 @@ export default function EntryForm({
 
   const saveCurrentTemplate = async () => {
     if (!onSaveTemplate) return;
-    const name = prompt("템플릿 이름을 입력하세요.");
+    const name = await prompt({ title: "템플릿 저장", message: "템플릿 이름을 입력하세요." });
     if (!name?.trim()) return;
     await onSaveTemplate({
       id: uuidv4(),
@@ -382,7 +384,7 @@ export default function EntryForm({
       <div className="form-modal form-modal--wide" onClick={(e) => e.stopPropagation()}>
         <div className="form-header">
           <h2>{formTitle}</h2>
-          <button type="button" className="btn-icon" onClick={handleClose} disabled={saving}>
+          <button type="button" className="btn-icon" aria-label="항목 편집 닫기" onClick={handleClose} disabled={saving}>
             ✕
           </button>
         </div>
@@ -1225,6 +1227,7 @@ export default function EntryForm({
                       #{t}
                       <button
                         type="button"
+                        aria-label={`${t} 태그 삭제`}
                         style={{
                           marginLeft: "0.3rem",
                           color: "var(--danger)",

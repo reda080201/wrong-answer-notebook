@@ -313,20 +313,13 @@ export default function QuestionTheaterView({
                 {hideAnswers ? (
                   <p>정답이 가려져 있습니다.</p>
                 ) : (
-                  <>
-                    <h3>정답</h3>
-                    <MathText text={answer.answer || "정답 없음"} />
-                    {answer.explanation && (
-                      <>
-                        <h3>해설</h3>
-                        <LinkifiedText
-                          text={answer.explanation}
-                          onLinkClick={onWikiLinkClick}
-                          existingTargets={existingTargets}
-                        />
-                      </>
-                    )}
-                  </>
+                  <TheaterSolutionContent
+                    answer={answer}
+                    memo={memo}
+                    includeMemo={false}
+                    onWikiLinkClick={onWikiLinkClick}
+                    existingTargets={existingTargets}
+                  />
                 )}
               </div>
             ) : (
@@ -363,11 +356,13 @@ export default function QuestionTheaterView({
 function TheaterSolutionContent({
   answer,
   memo,
+  includeMemo = true,
   onWikiLinkClick,
   existingTargets,
 }: {
   answer: SheetAnswerItem;
   memo?: string;
+  includeMemo?: boolean;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }) {
@@ -387,8 +382,8 @@ function TheaterSolutionContent({
         <section>
           <h3>단계별 풀이</h3>
           <ol>
-            {answer.steps?.map((step) => (
-              <li key={step}><MathText text={step} /></li>
+            {answer.steps?.map((step, index) => (
+              <li key={`${answer.id}-step-${index}`}><MathText text={step} /></li>
             ))}
           </ol>
         </section>
@@ -422,7 +417,7 @@ function TheaterSolutionContent({
           <MathText text={answer.reviewPoint} />
         </section>
       )}
-      {[answer.notes, memo].filter(Boolean).length > 0 && (
+      {includeMemo && [answer.notes, memo].filter(Boolean).length > 0 && (
         <section>
           <h3>메모</h3>
           <MathText text={[answer.notes, memo].filter(Boolean).join("\n")} />

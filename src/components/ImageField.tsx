@@ -104,6 +104,7 @@ export default function ImageField({
               ) : null}
               <button
                 type="button"
+                aria-label={`${f} 이미지 삭제`}
                 onClick={(e) => {
                   e.stopPropagation();
                   onRemove(f);

@@ -46,6 +46,7 @@ import {
   getTodayReviewItems,
 } from "../utils/review";
 import { applyQuestionReviewResult, normalizeQuestionMeta, normalizeQuestionNumber } from "../utils/questionMeta";
+import { useAppDialog } from "../shared/ui/AppDialogProvider";
 import type { EntryPatch } from "./useEntries";
 
 type ReviewMode = "today" | "random" | "difficult" | "important";
@@ -116,6 +117,7 @@ export function useAppActions({
   setActiveSection,
   setSelectedId,
 }: UseAppActionsOptions) {
+  const { confirm, prompt } = useAppDialog();
   const [prefilledTitle, setPrefilledTitle] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -171,15 +173,16 @@ export function useAppActions({
     const duplicates = findDuplicateEntries(entries, preparedData, editingEntry?.id, 3);
     if (
       duplicates.length &&
-      !confirm(
-        [
+      !(await confirm({
+        title: "중복 항목 확인",
+        message: [
           "비슷한 항목이 발견되었습니다. 그래도 저장할까요?",
           ...duplicates.map(
             ({ entry, score }) =>
               `- ${getEntryTitle(entry)} (${Math.round(score * 100)}%)`,
           ),
         ].join("\n"),
-      )
+      }))
     ) {
       throw new Error("중복 가능성이 있어 저장을 취소했습니다.");
     }
@@ -213,9 +216,10 @@ export function useAppActions({
     );
     if (
       sameTitle &&
-      !confirm(
-        `"${getEntryTitle(sameTitle)}" 개념이 이미 있습니다. 그래도 새로 추가할까요?`,
-      )
+      !(await confirm({
+        title: "중복 개념 확인",
+        message: `"${getEntryTitle(sameTitle)}" 개념이 이미 있습니다. 그래도 새로 추가할까요?`,
+      }))
     ) {
       throw new Error("중복 가능성이 있어 저장을 취소했습니다.");
     }
@@ -252,9 +256,9 @@ export function useAppActions({
   };
 
   const addMemoTemplate = async () => {
-    const name = prompt("메모 템플릿 이름을 입력하세요.");
+    const name = await prompt({ title: "메모 템플릿 이름", message: "메모 템플릿 이름을 입력하세요." });
     if (!name?.trim()) return;
-    const content = prompt("메모 템플릿 내용을 입력하세요.");
+    const content = await prompt({ title: "메모 템플릿 내용", message: "메모 템플릿 내용을 입력하세요." });
     if (!content?.trim()) return;
     await saveMemoTemplate({
       id: crypto.randomUUID(),
@@ -507,7 +511,7 @@ export function useAppActions({
   };
 
   const handleRestore = async () => {
-    if (!confirm("백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?")) return;
+    if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
     const payload = await restoreBackup();
     if (payload && "entries" in payload) {
       await replaceEntries(payload.entries);
@@ -530,7 +534,11 @@ export function useAppActions({
       setSettingsMessage("정리할 미사용 이미지가 없습니다.");
       return;
     }
-    const confirmed = window.confirm(`사용하지 않는 이미지 ${preview.filenames.length}개(${Math.ceil(preview.totalBytes / 1024)}KB)를 삭제합니다. 계속하시겠습니까?`);
+    const confirmed = await confirm({
+      title: "미사용 이미지 정리",
+      message: `사용하지 않는 이미지 ${preview.filenames.length}개(${Math.ceil(preview.totalBytes / 1024)}KB)를 삭제합니다. 계속하시겠습니까?`,
+      confirmLabel: "삭제",
+    });
     if (!confirmed) return;
     const removed = await cleanupOrphanImages();
     setSettingsMessage(`사용하지 않는 이미지 ${removed}개를 정리했습니다.`);
@@ -578,7 +586,7 @@ export function useAppActions({
 
   const handleDelete = async () => {
     if (!selected) return;
-    if (!confirm("이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.")) return;
+    if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
     await deleteEntry(selected.id);
     setSelectedId(null);
   };

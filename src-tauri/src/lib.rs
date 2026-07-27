@@ -3,6 +3,7 @@ mod notebook_store;
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
@@ -1135,6 +1136,38 @@ struct ImportAssetStageResult {
     session_id: String,
     source_name: String,
     staged_filename: String,
+    sha256: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetSessionAssetManifest {
+    source_name: String,
+    staged_filename: Option<String>,
+    size: u64,
+    sha256: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetSessionManifest {
+    id: String,
+    mode: String,
+    assets: Vec<ImportAssetSessionAssetManifest>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetSessionValidationResult {
+    valid: bool,
+    missing_files: Vec<String>,
+    mismatched_files: Vec<String>,
+}
+
+const IMPORT_ASSET_SESSION_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1177,7 +1210,93 @@ fn stage_import_asset_bytes(
         session_id,
         source_name,
         staged_filename,
+        sha256: sha256_hex(&bytes),
     })
+}
+
+#[tauri::command]
+fn validate_import_asset_session(
+    app: tauri::AppHandle,
+    manifest: ImportAssetSessionManifest,
+) -> Result<ImportAssetSessionValidationResult, String> {
+    if manifest.mode != "tauri-staged" {
+        return Ok(ImportAssetSessionValidationResult {
+            valid: true,
+            missing_files: Vec::new(),
+            mismatched_files: Vec::new(),
+        });
+    }
+    let root = import_asset_session_root(&app, &manifest.id)?;
+    let assets_dir = root.join("assets");
+    let mut missing_files = Vec::new();
+    let mut mismatched_files = Vec::new();
+    for asset in manifest.assets {
+        let Some(staged_filename) = asset.staged_filename else {
+            mismatched_files.push(asset.source_name);
+            continue;
+        };
+        if validate_image_filename(&staged_filename).is_err() {
+            mismatched_files.push(asset.source_name);
+            continue;
+        }
+        let path = assets_dir.join(&staged_filename);
+        if !path.is_file() {
+            missing_files.push(asset.source_name);
+            continue;
+        }
+        let bytes = fs::read(&path).map_err(|error| error.to_string())?;
+        if bytes.len() as u64 != asset.size
+            || asset
+                .sha256
+                .as_deref()
+                .map(|hash| hash.to_ascii_lowercase())
+                != Some(sha256_hex(&bytes))
+        {
+            mismatched_files.push(asset.source_name);
+        }
+    }
+    Ok(ImportAssetSessionValidationResult {
+        valid: missing_files.is_empty() && mismatched_files.is_empty(),
+        missing_files,
+        mismatched_files,
+    })
+}
+
+#[tauri::command]
+fn cleanup_stale_import_asset_sessions(
+    app: tauri::AppHandle,
+    protected_session_ids: Vec<String>,
+) -> Result<usize, String> {
+    let root = app_dir(&app)?.join("import-workspaces");
+    if !root.exists() {
+        return Ok(0);
+    }
+    let protected: HashSet<String> = protected_session_ids
+        .into_iter()
+        .filter(|id| Uuid::parse_str(id).is_ok())
+        .collect();
+    let now = std::time::SystemTime::now();
+    let mut removed = 0;
+    for item in fs::read_dir(root).map_err(|error| error.to_string())? {
+        let path = item.map_err(|error| error.to_string())?.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(session_id) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if protected.contains(session_id) {
+            continue;
+        }
+        let modified = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(now);
+        if now.duration_since(modified).unwrap_or_default() >= IMPORT_ASSET_SESSION_MAX_AGE {
+            fs::remove_dir_all(path).map_err(|error| error.to_string())?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
 }
 
 #[tauri::command]
@@ -2102,6 +2221,8 @@ pub fn run() {
             stage_import_asset_bytes,
             commit_import_asset_session,
             discard_import_asset_session,
+            validate_import_asset_session,
+            cleanup_stale_import_asset_sessions,
             save_image,
             get_image_file_path,
             delete_image,

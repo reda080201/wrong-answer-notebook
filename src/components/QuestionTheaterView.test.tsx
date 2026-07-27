@@ -16,7 +16,7 @@ const questionBlock: QuestionBlock = {
   end: 8,
 };
 
-function renderTheater() {
+function renderTheater(steps = ["조건 정리", "계산"]) {
   return render(
     <QuestionTheaterView
       questionBlock={questionBlock}
@@ -28,7 +28,7 @@ function renderTheater() {
         answer: "42",
         explanation: "전체 풀이",
         strategy: "조건을 먼저 정리한다",
-        steps: ["조건 정리", "계산"],
+        steps,
         choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
         wrongPoint: "계산 실수",
         reviewPoint: "부호 확인",
@@ -74,5 +74,11 @@ describe("QuestionTheaterView", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "문제만 보기" }));
     expect(container.querySelector(".question-theater-main--split")).not.toBeInTheDocument();
+  });
+
+  it("renders repeated solution steps without collapsing list items", () => {
+    const { container } = renderTheater(["같은 단계", "같은 단계"]);
+    fireEvent.click(screen.getByRole("button", { name: "해설 보기" }));
+    expect(container.querySelectorAll(".question-theater-solution-content ol li")).toHaveLength(2);
   });
 });

@@ -931,7 +931,7 @@ describe("ImportFromGptModal", () => {
       title: "혼합 자료",
       subject: "수학",
       entries: [
-        { entryKind: "problem_sheet", title: "시험지 A", subject: "수학", question: "1. 문제" },
+        { entryKind: "problem_sheet", title: "시험지 A", subject: "수학", question: "1. 문제", answerKey: [{ questionNumber: "1", answer: "①" }] },
         { entryKind: "lecture", title: "특강 A", subject: "수학", learningBlocks: [{ type: "concept", title: "개념", content: "설명" }] },
       ],
     };
@@ -944,11 +944,12 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
-    const warningSummary = screen.queryByText(/확인 권장 항목 .* 보기/);
-    if (warningSummary) fireEvent.click(warningSummary);
+    screen.queryAllByText(/확인 권장 항목 .* 보기/).forEach((warningSummary) => fireEvent.click(warningSummary));
     const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
     if (confirmation) fireEvent.click(confirmation);
-    fireEvent.click(screen.getByRole("button", { name: "2개 항목 저장" }));
+    const saveBatchButton = screen.getByRole("button", { name: "2개 항목 저장" });
+    expect(saveBatchButton).not.toBeDisabled();
+    fireEvent.click(saveBatchButton);
     await waitFor(() => expect(onApplyEntries).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ entryKind: "problem_sheet", title: "시험지 A" }),

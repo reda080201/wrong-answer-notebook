@@ -15,6 +15,8 @@ commands.allow = [
   "stage_import_asset_bytes",
   "commit_import_asset_session",
   "discard_import_asset_session",
+  "validate_import_asset_session",
+  "cleanup_stale_import_asset_sessions",
   "save_image",
   "get_image_file_path",
   "delete_image",

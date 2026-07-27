@@ -11,8 +11,6 @@ import type {
   LearningBlockType,
   LearningDiagramType,
   LectureSourceType,
-  MistakeCauseType,
-  ReviewEvent,
   ReviewAttempt,
   ReviewResult,
   ReviewState,
@@ -21,9 +19,10 @@ import type {
   SheetAnswerItem,
   WrongAnswerEntry,
 } from "../types";
-import { isReviewStrategy, normalizeMistakeAnalysis } from "./mistakeAnalysis";
+import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
+import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
@@ -264,113 +263,14 @@ function isFigureSource(v: unknown): v is SheetFigureItem["source"] {
   return v === "original" || v === "gpt_cleaned" || v === "described_only";
 }
 
-function isReviewResult(v: unknown): v is ReviewResult {
-  return v === "again" || v === "hard" || v === "good";
-}
-
-function isValidIsoDate(v: unknown): v is string {
-  return typeof v === "string" && !Number.isNaN(new Date(v).getTime());
-}
-
 function normalizeReview(raw: unknown, mastered = false): ReviewState | undefined {
-  if (!raw || typeof raw !== "object") return undefined;
-  const value = raw as Partial<ReviewState>;
-  const historySource = Array.isArray(value.history) ? value.history : [];
-  const history: ReviewEvent[] = historySource
-    .filter((event) => Boolean(event && typeof event === "object"))
-    .map((event) => event as Partial<ReviewEvent>)
-    .map((event) => {
-      const reviewedAt = isValidIsoDate(event.reviewedAt)
-        ? event.reviewedAt
-        : new Date().toISOString();
-      const nextDueAt =
-        event.nextDueAt === null || isValidIsoDate(event.nextDueAt)
-          ? event.nextDueAt
-          : null;
-      return {
-        id: event.id || uuidv4(),
-        reviewedAt,
-        result: isReviewResult(event.result) ? event.result : "again",
-        nextDueAt,
-        intervalDays:
-          typeof event.intervalDays === "number" && event.intervalDays >= 0
-            ? event.intervalDays
-            : 1,
-        causeSnapshot: Array.isArray(event.causeSnapshot)
-          ? event.causeSnapshot.filter((item): item is MistakeCauseType =>
-              item === "calculation" ||
-              item === "condition_misread" ||
-              item === "concept_gap" ||
-              item === "strategy_gap" ||
-              item === "time_pressure" ||
-              item === "choice_trap" ||
-              item === "careless" ||
-              item === "unknown",
-            )
-          : undefined,
-        strategy: isReviewStrategy(event.strategy) ? event.strategy : undefined,
-        stabilityDays:
-          typeof event.stabilityDays === "number" && event.stabilityDays > 0
-            ? event.stabilityDays
-            : undefined,
-        memoryDifficulty:
-          typeof event.memoryDifficulty === "number" && event.memoryDifficulty >= 1
-            ? Math.min(10, event.memoryDifficulty)
-            : undefined,
-        lapseCount:
-          typeof event.lapseCount === "number" && event.lapseCount >= 0
-            ? Math.floor(event.lapseCount)
-            : undefined,
-      };
-    });
-
-  return {
-    dueAt: value.dueAt === null || isValidIsoDate(value.dueAt) ? value.dueAt : null,
-    lastReviewedAt: isValidIsoDate(value.lastReviewedAt)
-      ? value.lastReviewedAt
-      : undefined,
-    intervalDays:
-      typeof value.intervalDays === "number" && value.intervalDays >= 0
-        ? value.intervalDays
-        : 0,
-    streak:
-      typeof value.streak === "number" && value.streak >= 0
-        ? Math.floor(value.streak)
-        : 0,
-    history,
-    stabilityDays:
-      typeof value.stabilityDays === "number" && value.stabilityDays > 0
-        ? value.stabilityDays
-        : Math.max(0.5, typeof value.intervalDays === "number" ? value.intervalDays : 0),
-    memoryDifficulty:
-      typeof value.memoryDifficulty === "number" && value.memoryDifficulty >= 1
-        ? Math.min(10, value.memoryDifficulty)
-        : 5,
-    lapseCount:
-      typeof value.lapseCount === "number" && value.lapseCount >= 0
-        ? Math.floor(value.lapseCount)
-        : history.filter((event) => event.result === "again").length,
-    preLapseStabilityDays:
-      typeof value.preLapseStabilityDays === "number" && value.preLapseStabilityDays > 0
-        ? value.preLapseStabilityDays
-        : undefined,
-    relearningStep:
-      value.relearningStep === 0 || value.relearningStep === 1
-        ? value.relearningStep
-        : undefined,
-    repetitionCount:
-      typeof value.repetitionCount === "number" && value.repetitionCount >= 0
-        ? Math.floor(value.repetitionCount)
-        : history.length,
-    phase:
-      value.phase === "learning" || value.phase === "relearning" || value.phase === "long_term" || value.phase === "archived"
-        ? value.phase
-        : mastered
-          ? value.dueAt
-            ? "long_term"
-            : "archived"
-          : "learning",
-  };
+  const value = raw && typeof raw === "object" ? raw as Partial<ReviewState> : undefined;
+  const defaultPhase = mastered
+    ? value?.dueAt
+      ? "long_term"
+      : "archived"
+    : "learning";
+  return normalizeReviewState(raw, { defaultPhase });
 }
 
 function normalizeChecklist(raw: unknown): ChecklistItem[] {
