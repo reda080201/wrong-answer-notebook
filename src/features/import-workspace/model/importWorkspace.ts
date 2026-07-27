@@ -6,7 +6,7 @@ export type ImportWarningSeverity = "info" | "warning" | "error";
 
 export interface ImportSourceFile { id: string; name: string; type: "question" | "answer" | "explanation" | "image" | "json" | "unknown"; size: number; order: number; detectedGroupId?: string; }
 export interface ImportAsset { id: string; filename: string; mimeType: string; size: number; sourceFileId: string; kind: "figure" | "source-page" | "unassigned"; linkedQuestionIds: string[]; }
-export interface ImportAssetSessionManifest { id: string; mode: "memory-only" | "tauri-staged"; assets: Array<{ sourceName: string; size: number; lastModified: number }>; }
+export interface ImportAssetSessionManifest { id: string; mode: "memory-only" | "tauri-staged"; sourceToStaged?: Record<string, string>; assets: Array<{ sourceName: string; size: number; lastModified: number }>; }
 export interface ImportSourceReference { sourceFileId?: string; assetId?: string; page?: number; note?: string; }
 export interface ImportWorkspaceWarning { id: string; severity: ImportWarningSeverity; message: string; groupId?: string; questionId?: string; acknowledged?: boolean; }
 export interface ImportAnswerDraft extends Partial<SheetAnswerItem> { id: string; questionId?: string; confidence?: number; confirmed?: boolean; }

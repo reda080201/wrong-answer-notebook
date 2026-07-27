@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
+  commitImportAssetSession,
   createBackup,
   deleteImage,
   previewOrphanImages,
@@ -11,6 +12,7 @@ import {
   saveImportAssetFiles,
   runNativeIntegrityCheck,
 } from "../api";
+import type { ImportAssetSessionManifest } from "../features/import-workspace/model/importWorkspace";
 import { SUBJECTS } from "../types";
 import type {
   AppSettings,
@@ -393,11 +395,15 @@ export function useAppActions({
   const handleImportedEntriesApply = async (
     importedEntries: Partial<EntryFormData>[],
     assetFiles: File[] = [],
+    assetSession?: ImportAssetSessionManifest,
   ) => {
     if (!importedEntries.length) return;
     let savedFilenames: string[] = [];
     let sourceToSaved: Record<string, string> = {};
-    if (assetFiles.length) {
+    if (assetSession?.mode === "tauri-staged") {
+      savedFilenames = await commitImportAssetSession(assetSession.id);
+      sourceToSaved = assetSession.sourceToStaged ?? {};
+    } else if (assetFiles.length) {
       const importedAssets = await saveImportAssetFiles(assetFiles);
       savedFilenames = importedAssets.savedFilenames;
       sourceToSaved = importedAssets.sourceToSaved;

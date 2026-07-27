@@ -1129,6 +1129,83 @@ fn save_import_image_bytes(
     )
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetStageResult {
+    session_id: String,
+    source_name: String,
+    staged_filename: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetCommitResult {
+    session_id: String,
+    filenames: Vec<String>,
+}
+
+fn import_asset_session_root(app: &tauri::AppHandle, session_id: &str) -> Result<PathBuf, String> {
+    Uuid::parse_str(session_id).map_err(|_| "가져오기 자산 session ID가 올바르지 않습니다.".to_string())?;
+    Ok(app_dir(app)?.join("import-workspaces").join(session_id))
+}
+
+#[tauri::command]
+fn create_import_asset_session(app: tauri::AppHandle) -> Result<String, String> {
+    let session_id = Uuid::new_v4().to_string();
+    fs::create_dir_all(import_asset_session_root(&app, &session_id)?.join("assets"))
+        .map_err(|e| e.to_string())?;
+    Ok(session_id)
+}
+
+#[tauri::command]
+fn stage_import_asset_bytes(
+    app: tauri::AppHandle,
+    session_id: String,
+    source_name: String,
+    bytes: Vec<u8>,
+    mime: Option<String>,
+) -> Result<ImportAssetStageResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let staged_filename = save_import_image_bytes_to_dir(&root.join("assets"), &bytes, Some(&source_name), mime.as_deref())?;
+    Ok(ImportAssetStageResult { session_id, source_name, staged_filename })
+}
+
+#[tauri::command]
+fn commit_import_asset_session(app: tauri::AppHandle, session_id: String) -> Result<ImportAssetCommitResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let assets_dir = root.join("assets");
+    if !assets_dir.exists() { return Err("가져오기 자산 session을 찾을 수 없습니다.".into()); }
+    let destination = images_dir(&app)?;
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let result = (|| -> Result<(), String> {
+        for item in fs::read_dir(&assets_dir).map_err(|e| e.to_string())? {
+            let source = item.map_err(|e| e.to_string())?.path();
+            if !source.is_file() { continue; }
+            let filename = source.file_name().and_then(|name| name.to_str()).ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_string())?.to_string();
+            validate_image_filename(&filename)?;
+            let target = destination.join(&filename);
+            if target.exists() { return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}")); }
+            fs::rename(&source, &target).map_err(|e| e.to_string())?;
+            moved.push((source, target));
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        for (source, target) in moved.iter().rev() { let _ = fs::rename(target, source); }
+        return Err(error);
+    }
+    let filenames = moved.iter().filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_string)).collect();
+    let _ = fs::remove_dir_all(&root);
+    Ok(ImportAssetCommitResult { session_id, filenames })
+}
+
+#[tauri::command]
+fn discard_import_asset_session(app: tauri::AppHandle, session_id: String) -> Result<(), String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    if root.exists() { fs::remove_dir_all(root).map_err(|e| e.to_string())?; }
+    Ok(())
+}
+
 #[tauri::command]
 fn save_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
     let ext = std::path::Path::new(&source_path)
@@ -1981,6 +2058,10 @@ pub fn run() {
             clear_ai_provider_key,
             generate_import_with_ai,
             save_import_image_bytes,
+            create_import_asset_session,
+            stage_import_asset_bytes,
+            commit_import_asset_session,
+            discard_import_asset_session,
             save_image,
             get_image_file_path,
             delete_image,

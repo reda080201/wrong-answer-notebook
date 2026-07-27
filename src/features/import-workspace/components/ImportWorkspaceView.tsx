@@ -8,7 +8,7 @@ import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, useImportWorkspace
 import { useImportWorkspaceHistory } from "../hooks/useImportWorkspaceHistory";
 import Dialog from "../../../shared/ui/Dialog";
 
-interface Props { initialWorkspace: ImportWorkspace; onSave: (entries: Partial<EntryFormData>[]) => Promise<void> | void; onClose: () => void; canRecoverAssets?: (workspace: ImportWorkspace) => boolean; }
+interface Props { initialWorkspace: ImportWorkspace; onSave: (entries: Partial<EntryFormData>[], assetSession?: ImportWorkspace["assetSession"]) => Promise<void> | void; onClose: () => void; canRecoverAssets?: (workspace: ImportWorkspace) => boolean; }
 
 function questionText(question: ImportQuestionDraft): string {
   return question.sourceText ?? question.contentSegments.map((segment) => segment.type === "text" || segment.type === "condition" ? segment.text : segment.type === "equation" ? segment.latex : "").filter(Boolean).join(" ");
@@ -53,7 +53,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setBusy(true);
     try {
       const result = commitImportWorkspace(workspace, { allowWarnings });
-      await onSave(result.entries);
+      await onSave(result.entries, workspace.assetSession);
       clearImportWorkspaceDraft();
       onClose();
     } finally { setBusy(false); }

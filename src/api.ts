@@ -923,6 +923,42 @@ export interface RestoreBackupResult {
   warnings: string[];
 }
 
+export interface ImportAssetStageResult {
+  sessionId: string;
+  sourceToStaged: Record<string, string>;
+}
+
+export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {
+  if (!isTauri() || !files.length) return null;
+  const sessionId = await invoke<string>("create_import_asset_session");
+  const sourceToStaged: Record<string, string> = {};
+  try {
+    for (const file of files) {
+      const result = await invoke<{ stagedFilename: string }>("stage_import_asset_bytes", {
+        sessionId,
+        sourceName: file.name,
+        bytes: new Uint8Array(await file.arrayBuffer()),
+        mime: file.type || undefined,
+      });
+      sourceToStaged[normalizeImportImageKey(file.name)] = result.stagedFilename;
+    }
+    return { sessionId, sourceToStaged };
+  } catch (error) {
+    await discardImportAssetSession(sessionId).catch(() => undefined);
+    throw error;
+  }
+}
+
+export async function commitImportAssetSession(sessionId: string): Promise<string[]> {
+  if (!isTauri()) return [];
+  const result = await invoke<{ filenames: string[] }>("commit_import_asset_session", { sessionId });
+  return result.filenames;
+}
+
+export async function discardImportAssetSession(sessionId: string): Promise<void> {
+  if (isTauri()) await invoke("discard_import_asset_session", { sessionId });
+}
+
 export async function createBackup(entries: WrongAnswerEntry[], settings: AppSettings): Promise<string> {
   try {
     if (isTauri()) {
