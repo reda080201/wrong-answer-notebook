@@ -107,6 +107,7 @@ export default function AppSidebar({
             key={key}
             type="button"
             className={`section-tab-btn ${activeSection === key ? "active" : ""}`}
+            aria-current={activeSection === key ? "page" : undefined}
             onClick={() => {
               if (onSectionSelect) {
                 onSectionSelect(key);
@@ -167,7 +168,7 @@ export default function AppSidebar({
             모의고사 만들기
           </button>
         )}
-        {onOpenGeneratedExams && (
+        {activeSection === "problem_sheet" && onOpenGeneratedExams && (
           <button type="button" className="btn-new btn-new--secondary" onClick={onOpenGeneratedExams}>
             내 모의고사
           </button>

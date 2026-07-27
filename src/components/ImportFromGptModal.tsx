@@ -48,6 +48,7 @@ import { readZipImport } from "../features/import/services/zipImport";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../utils/importImageReferences";
 import Dialog from "../shared/ui/Dialog";
+import { useAppDialog } from "../shared/ui/AppDialogProvider";
 import FigureComparisonPanel from "../features/figures/components/FigureComparisonPanel";
 import { normalizeImportImageKey } from "../utils/importImageReferences";
 
@@ -274,6 +275,7 @@ export default function ImportFromGptModal({
   onOpenSettings,
   gptMcpPreferences,
 }: ImportFromGptModalProps) {
+  const { prompt } = useAppDialog();
   const importReviewExpanded = gptMcpPreferences?.importReviewExpanded ?? true;
   const importDetailOpen = !(gptMcpPreferences?.importDetailCollapsedByDefault ?? true);
   const isSolutionMode = mode === "solution" && Boolean(sourceEntry);
@@ -656,7 +658,11 @@ export default function ImportFromGptModal({
 
   const savePromptTemplate = async () => {
     if (!onSavePromptTemplate || !activePrompt) return;
-    const name = prompt("저장할 프롬프트 템플릿 이름을 입력하세요.", activePrompt.name);
+    const name = await prompt({
+      title: "프롬프트 템플릿 저장",
+      message: "저장할 프롬프트 템플릿 이름을 입력하세요.",
+      defaultValue: activePrompt.name,
+    });
     if (!name?.trim()) return;
     await onSavePromptTemplate({
       id: uuidv4(),

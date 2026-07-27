@@ -93,74 +93,52 @@ export default function EntryListPane({
     });
   };
 
-  const renderEntryCard = (entry: WrongAnswerEntry) => (
-    <div
-      key={entry.id}
-      className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
-      onClick={() => selectEntry(entry.id)}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          selectEntry(entry.id);
-        }
-      }}
-    >
-      <div className="entry-card-header">
-        <span className="subject-badge">{entry.subject}</span>
-        {entry.entryKind === "problem_sheet" && (
-          <span className="entry-mini-badge entry-mini-badge--sheet">
-            문제지
-          </span>
-        )}
-        {entry.entryKind === "concept" && (
-          <span className="entry-mini-badge entry-mini-badge--concept">
-            개념
-          </span>
-        )}
-        {entry.entryKind === "lecture" && (
-          <span className="entry-mini-badge entry-mini-badge--lecture">
-            특강
-          </span>
-        )}
-        {entry.sheetGroup && (
-          <span className="entry-mini-badge">{entry.sheetGroup.partTitle}</span>
-        )}
-        {entry.difficulty && entry.difficulty !== "none" && (
-          <span
-            className={`entry-mini-badge entry-mini-badge--difficulty entry-mini-badge--difficulty-${entry.difficulty}`}
-          >
-            {entry.difficulty === "high"
-              ? "상"
-              : entry.difficulty === "medium"
-                ? "중"
-                : "하"}
-          </span>
-        )}
-        {resolveEntryDifficultyScore(entry) > 0 && (
-          <span
-            className={`entry-mini-badge difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(resolveEntryDifficultyScore(entry))}`}
-          >
-            {difficultyScoreLabel(resolveEntryDifficultyScore(entry))}
-          </span>
-        )}
-        {entry.mastered && <span className="mastered-badge">✓ 완료</span>}
+  const renderEntryCard = (entry: WrongAnswerEntry) => {
+    const difficultyScore = resolveEntryDifficultyScore(entry);
+    const preview = getEntryCardPreview(entry);
+    const attachedImageCount = imageCount(entry);
+    return (
+      <div
+        key={entry.id}
+        className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
+        onClick={() => selectEntry(entry.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            selectEntry(entry.id);
+          }
+        }}
+      >
+        <div className="entry-card-header">
+          <span className="subject-badge">{entry.subject}</span>
+          {entry.entryKind === "problem_sheet" && <span className="entry-mini-badge entry-mini-badge--sheet">문제지</span>}
+          {entry.entryKind === "concept" && <span className="entry-mini-badge entry-mini-badge--concept">개념</span>}
+          {entry.entryKind === "lecture" && <span className="entry-mini-badge entry-mini-badge--lecture">특강</span>}
+          {entry.sheetGroup && <span className="entry-mini-badge">{entry.sheetGroup.partTitle}</span>}
+          {entry.difficulty && entry.difficulty !== "none" && (
+            <span className={`entry-mini-badge entry-mini-badge--difficulty entry-mini-badge--difficulty-${entry.difficulty}`}>
+              {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
+            </span>
+          )}
+          {difficultyScore > 0 && (
+            <span className={`entry-mini-badge difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(difficultyScore)}`}>
+              {difficultyScoreLabel(difficultyScore)}
+            </span>
+          )}
+          {entry.mastered && <span className="mastered-badge">✓ 완료</span>}
+        </div>
+        <p className="entry-card-question">{getEntryTitle(entry)}</p>
+        {preview && <p className="entry-card-preview">{preview}</p>}
+        <div className="entry-card-meta">
+          <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
+          {attachedImageCount > 0 && <span className="image-indicator">📷 {attachedImageCount}</span>}
+          {entry.tags.length > 0 && <span>#{entry.tags[0]}</span>}
+        </div>
       </div>
-      <p className="entry-card-question">{getEntryTitle(entry)}</p>
-      {getEntryCardPreview(entry) && (
-        <p className="entry-card-preview">{getEntryCardPreview(entry)}</p>
-      )}
-      <div className="entry-card-meta">
-        <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
-        {imageCount(entry) > 0 && (
-          <span className="image-indicator">📷 {imageCount(entry)}</span>
-        )}
-        {entry.tags.length > 0 && <span>#{entry.tags[0]}</span>}
-      </div>
-    </div>
-  );
-
+    );
+  };
   return (
     <div className="entry-list">
       {activeSection === "concept" && (

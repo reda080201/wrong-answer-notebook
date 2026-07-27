@@ -1239,8 +1239,11 @@ export default function EntryDetail({
       <div className="detail-toolbar">
         <div className="detail-toolbar-left">
           {!isConcept && !isLecture && (
-            <nav className="study-mode-tabs" aria-label="학습 보기 모드">
-              {[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }].map((item) => <button key={item.id} type="button" className={detailViewMode === item.id ? "active" : ""} onClick={() => handleStudyModeChange(item.id as typeof detailViewMode)}>{item.label}</button>)}
+            <nav className="study-mode-tabs" aria-label="학습 보기 모드" role="tablist">
+              {[{ id: "paper", label: "문제지" }, { id: "solution", label: "해설지" }, { id: "learning", label: "특강" }, { id: "analysis", label: "분석" }].map((item) => {
+                const selected = detailViewMode === item.id;
+                return <button key={item.id} type="button" role="tab" aria-selected={selected} aria-controls="detail-study-panel" tabIndex={selected ? 0 : -1} className={selected ? "active" : ""} onClick={() => handleStudyModeChange(item.id as typeof detailViewMode)}>{item.label}</button>;
+              })}
             </nav>
           )}
         </div>
@@ -1455,7 +1458,7 @@ export default function EntryDetail({
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
-        <section className="detail-question-section">
+        <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
           {!isConcept && !isFocusExpanded && (
             <StudyFlowStrip
               entry={entry}
