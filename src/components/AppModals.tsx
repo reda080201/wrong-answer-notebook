@@ -42,7 +42,7 @@ interface AppModalsProps {
   solutionSourceEntry?: WrongAnswerEntry;
   importFallbackSubject: Subject;
   aiProviderStatus: AiProviderStatus | null;
-  setSettings: (settings: AppSettings) => Promise<void>;
+  setLastImportTemplate: (templateId: string) => Promise<void>;
   savePromptTemplate: (template: PromptTemplate) => Promise<void>;
   closeImportModal: () => void;
   handleImportApply: (
@@ -89,7 +89,7 @@ export default function AppModals({
   solutionSourceEntry,
   importFallbackSubject,
   aiProviderStatus,
-  setSettings,
+  setLastImportTemplate,
   savePromptTemplate,
   closeImportModal,
   handleImportApply,
@@ -109,24 +109,25 @@ export default function AppModals({
 }: AppModalsProps) {
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
-  const buildWorkspace = (items: Partial<EntryFormData>[]): ImportWorkspace => {
+  const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = []): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
       const groupId = `import-group-${uuidv4()}`;
       const blocks = parseQuestionText(item.question ?? "").filter((block) => block.kind === "question");
-      const questions: ImportQuestionDraft[] = blocks.length ? blocks.map((block, index) => ({ id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures: (item.figures ?? []).filter((figure) => figure.questionNumber === block.numberLabel), sourcePageAssets: item.questionImages ?? [], answer: item.answerKey?.find((answer) => answer.questionNumber === block.numberLabel) ? { ...item.answerKey.find((answer) => answer.questionNumber === block.numberLabel)!, id: uuidv4(), confirmed: false } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: "ready", warnings: [] })) : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], sourcePageAssets: item.questionImages ?? [], answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
+      const sourcePageAssets = item.sourcePageImages ?? item.questionImages ?? [];
+      const questions: ImportQuestionDraft[] = blocks.length ? blocks.map((block, index) => ({ id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures: (item.figures ?? []).filter((figure) => figure.questionNumber === block.numberLabel), sourcePageAssets, answer: item.answerKey?.find((answer) => answer.questionNumber === block.numberLabel) ? { ...item.answerKey.find((answer) => answer.questionNumber === block.numberLabel)!, id: uuidv4(), confirmed: false } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: "ready", warnings: [] })) : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], sourcePageAssets, answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
       return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
     });
-    return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
+    return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: assetFiles.length ? { id: `memory-${uuidv4()}`, mode: "memory-only", assets: assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined, groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
   const handleWorkspaceEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[]) => {
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
-    if (problemSheets.length > 1) { setWorkspace(buildWorkspace(problemSheets)); setWorkspaceAssetFiles(assetFiles ?? []); return; }
+    if (problemSheets.length > 1) { setWorkspace(buildWorkspace(problemSheets, assetFiles)); setWorkspaceAssetFiles(assetFiles ?? []); return; }
     await handleImportedEntriesApply(items, assetFiles);
   };
   return (
     <>
-      {workspace && <ImportWorkspaceView initialWorkspace={workspace} onSave={(items) => handleImportedEntriesApply(items, workspaceAssetFiles)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
+      {workspace && <ImportWorkspaceView initialWorkspace={workspace} canRecoverAssets={(candidate) => !candidate.assetSession || candidate.assetSession.assets.every((asset) => workspaceAssetFiles.some((file) => file.name === asset.sourceName && file.size === asset.size && file.lastModified === asset.lastModified))} onSave={(items) => handleImportedEntriesApply(items, workspaceAssetFiles)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
       {showForm && (
         <EntryForm
           entry={editingEntry}
@@ -158,15 +159,7 @@ export default function AppModals({
           selectedPromptTemplateId={
             settings.importPreferences.lastPromptTemplateId
           }
-          onPromptTemplateSelect={(templateId) =>
-            setSettings({
-              ...settings,
-              importPreferences: {
-                ...settings.importPreferences,
-                lastPromptTemplateId: templateId,
-              },
-            })
-          }
+          onPromptTemplateSelect={(templateId) => setLastImportTemplate(templateId)}
           onSavePromptTemplate={savePromptTemplate}
           sourceEntry={solutionSourceEntry}
           mode={importMode}

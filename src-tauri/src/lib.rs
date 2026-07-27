@@ -243,6 +243,13 @@ pub struct IntegrityIssue {
     pub entry_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreBackupResult {
+    restored: bool,
+    warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrityReport {
@@ -1216,8 +1223,13 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         return Err("백업에 포함할 파일이 너무 많습니다.".into());
     }
 
-    let temp_path = backup_path.with_extension(format!("zip.tmp-{}", Uuid::new_v4()));
-    let file = fs::File::create(&temp_path).map_err(|e| e.to_string())?;
+    let parent = backup_path
+        .parent()
+        .ok_or_else(|| "백업 경로를 확인할 수 없습니다.".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temp_file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    let temp_path = temp_file.path().to_path_buf();
+    let file = temp_file.reopen().map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
@@ -1231,6 +1243,7 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
+    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
     for filename in PERSISTENT_DATA_FILES
         .iter()
         .copied()
@@ -1247,6 +1260,7 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         zip.start_file(filename, options)
             .map_err(|e| e.to_string())?;
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        included_files.push(filename);
     }
 
     let workspace_root = app_dir(app)?.join("import-workspaces");
@@ -1265,13 +1279,6 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
     }
 
-    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
-    included_files.extend(
-        PERSISTENT_DATA_FILES
-            .iter()
-            .copied()
-            .filter(|name| *name != "entries.json" && *name != "settings.json"),
-    );
     let meta = serde_json::json!({
         "backupFormat": 2,
         "appVersion": env!("CARGO_PKG_VERSION"),
@@ -1303,10 +1310,9 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         let _ = fs::remove_file(&temp_path);
         return Err("완성된 백업 ZIP이 1GB 제한을 초과했습니다.".into());
     }
-    fs::rename(&temp_path, backup_path).map_err(|error| {
-        let _ = fs::remove_file(&temp_path);
-        error.to_string()
-    })?;
+    temp_file
+        .persist(backup_path)
+        .map_err(|error| error.error.to_string())?;
     Ok(())
 }
 
@@ -1393,7 +1399,7 @@ fn restore_backup_zip(
     app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
     backup_path: String,
-) -> Result<(), String> {
+) -> Result<RestoreBackupResult, String> {
     let backup_metadata = fs::metadata(&backup_path).map_err(|e| e.to_string())?;
     if backup_metadata.len() > MAX_BACKUP_ZIP_BYTES {
         return Err(format!(
@@ -1512,10 +1518,8 @@ fn restore_backup_zip(
     };
     let move_result = (|| -> Result<(), String> {
         move_target(data_file(&app)?, "entries.json")?;
-        if settings_json.is_some() {
-            move_target(settings_file(&app)?, "settings.json")?;
-        }
-        for (name, _) in &optional_files {
+        move_target(settings_file(&app)?, "settings.json")?;
+        for name in PERSISTENT_DATA_FILES.iter().copied().filter(|name| *name != "entries.json" && *name != "settings.json") {
             move_target(
                 app_dir.join(name),
                 &format!("optional-{}", name.replace('/', "_")),
@@ -1565,8 +1569,11 @@ fn restore_backup_zip(
     }
     // Data has already been restored successfully. Cleanup failure must not
     // report a false restore failure or trigger a second restore attempt.
-    let _ = fs::remove_dir_all(&rollback_dir);
-    Ok(())
+    let mut warnings = Vec::new();
+    if let Err(error) = fs::remove_dir_all(&rollback_dir) {
+        warnings.push(format!("복원 임시 디렉터리를 정리하지 못했습니다: {error}"));
+    }
+    Ok(RestoreBackupResult { restored: true, warnings })
 }
 
 #[tauri::command]

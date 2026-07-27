@@ -78,6 +78,12 @@ interface UseAppActionsOptions {
     partial: EntryPatch,
   ) => Promise<void>;
   refresh: () => Promise<void>;
+  upsertTemplate: (template: EntryTemplate) => Promise<void>;
+  removeTemplate: (templateId: string) => Promise<void>;
+  upsertPromptTemplate: (template: PromptTemplate) => Promise<void>;
+  removePromptTemplate: (templateId: string) => Promise<void>;
+  upsertMemoTemplate: (template: MemoTemplate) => Promise<void>;
+  removeMemoTemplate: (templateId: string) => Promise<void>;
   setSettings: (settings: AppSettings) => Promise<void>;
   refreshSettings: () => Promise<void>;
   setActiveSection: (section: EntryKind) => void;
@@ -97,6 +103,12 @@ export function useAppActions({
   deleteEntry,
   patchEntry,
   refresh,
+  upsertTemplate,
+  removeTemplate,
+  upsertPromptTemplate,
+  removePromptTemplate,
+  upsertMemoTemplate,
+  removeMemoTemplate,
   setSettings,
   refreshSettings,
   setActiveSection,
@@ -211,60 +223,30 @@ export function useAppActions({
   };
 
   const saveTemplate = async (template: EntryTemplate) => {
-    await setSettings({
-      ...settings,
-      templates: [template, ...settings.templates],
-    });
+    await upsertTemplate(template);
     setSettingsMessage("템플릿을 저장했습니다.");
   };
 
   const deleteTemplate = async (templateId: string) => {
-    await setSettings({
-      ...settings,
-      templates: settings.templates.filter(
-        (template) => template.id !== templateId,
-      ),
-    });
+    await removeTemplate(templateId);
   };
 
   const savePromptTemplate = async (template: PromptTemplate) => {
-    await setSettings({
-      ...settings,
-      promptTemplates: [
-        template,
-        ...settings.promptTemplates.filter((item) => item.id !== template.id),
-      ],
-    });
+    await upsertPromptTemplate(template);
     setSettingsMessage("프롬프트 템플릿을 저장했습니다.");
   };
 
   const deletePromptTemplate = async (templateId: string) => {
-    await setSettings({
-      ...settings,
-      promptTemplates: settings.promptTemplates.filter(
-        (template) => template.id !== templateId || template.builtIn,
-      ),
-    });
+    await removePromptTemplate(templateId);
   };
 
   const saveMemoTemplate = async (template: MemoTemplate) => {
-    await setSettings({
-      ...settings,
-      memoTemplates: [
-        template,
-        ...settings.memoTemplates.filter((item) => item.id !== template.id),
-      ],
-    });
+    await upsertMemoTemplate(template);
     setSettingsMessage("메모 템플릿을 저장했습니다.");
   };
 
   const deleteMemoTemplate = async (templateId: string) => {
-    await setSettings({
-      ...settings,
-      memoTemplates: settings.memoTemplates.filter(
-        (template) => template.id !== templateId || template.builtIn,
-      ),
-    });
+    await removeMemoTemplate(templateId);
   };
 
   const addMemoTemplate = async () => {
@@ -521,7 +503,7 @@ export function useAppActions({
   const handleRestore = async () => {
     if (!confirm("백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?")) return;
     const payload = await restoreBackup();
-    if (payload) {
+    if (payload && "entries" in payload) {
       await replaceEntries(payload.entries);
       await setSettings(payload.settings);
       for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
@@ -531,7 +513,9 @@ export function useAppActions({
       await refresh();
       await refreshSettings();
     }
-    setSettingsMessage("백업 복원을 완료했습니다.");
+    setSettingsMessage(payload && "restored" in payload && payload.warnings.length
+      ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
+      : "백업 복원을 완료했습니다.");
   };
 
   const handleCleanupOrphans = async () => {

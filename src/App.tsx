@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import AppModals from "./components/AppModals";
 import AppSidebar from "./components/AppSidebar";
@@ -58,13 +59,25 @@ export default function App() {
   const {
     settings,
     settingsError,
+    settingsSaveState,
     setSettings,
     patchSettings,
     patchViewPreferences,
+    patchExamPreferences,
+    patchImagePreferences,
+    patchGptMcpPreferences,
     patchChatGptMcpPreferences,
     patchExamPrintPreferences,
+    upsertTemplate,
+    removeTemplate,
+    upsertPromptTemplate,
+    removePromptTemplate,
+    upsertMemoTemplate,
+    removeMemoTemplate,
+    setLastImportTemplate,
     refreshSettings,
     clearSettingsError,
+    retrySettingsSave,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
@@ -84,13 +97,14 @@ export default function App() {
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
-  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam } = useGeneratedExams();
+  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
   const examSaveTimerRef = useRef<number | null>(null);
   const examSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const examSaveSequenceRef = useRef(0);
+  const allowWindowCloseRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -110,8 +124,8 @@ export default function App() {
     await upsertGeneratedExam(exam);
   }, [upsertGeneratedExam]);
 
-  const deleteGeneratedExam = useCallback((id: string) => {
-    void removeGeneratedExam(id);
+  const deleteGeneratedExam = useCallback(async (id: string) => {
+    await removeGeneratedExam(id);
   }, [removeGeneratedExam]);
 
   useEffect(() => {
@@ -300,6 +314,30 @@ export default function App() {
   }, [flushExamSessionSave]);
 
   useEffect(() => {
+    if (!isTauri()) return;
+    const windowHandle = getCurrentWindow();
+    let unlisten: (() => void) | undefined;
+    void windowHandle.onCloseRequested(async (event) => {
+      if (allowWindowCloseRef.current) return;
+      const latest = examSessionRef.current;
+      if (!latest) return;
+      event.preventDefault();
+      if (examSaveTimerRef.current !== null) {
+        window.clearTimeout(examSaveTimerRef.current);
+        examSaveTimerRef.current = null;
+      }
+      const saved = await flushExamSessionSave(latest);
+      if (!saved) {
+        setExamSaveError("시험 진행 상태를 저장하지 못했습니다. 다시 저장한 뒤 종료해 주세요.");
+        return;
+      }
+      allowWindowCloseRef.current = true;
+      await windowHandle.close();
+    }).then((cleanup) => { unlisten = cleanup; });
+    return () => { unlisten?.(); };
+  }, [flushExamSessionSave]);
+
+  useEffect(() => {
     if (!examSession) return;
     const entry = entries.find((item) => item.id === examSession.entryId);
     if (examSession.entryId.startsWith("generated:")) return;
@@ -335,6 +373,12 @@ export default function App() {
     patchEntry,
     refresh,
     setSettings,
+    upsertTemplate,
+    removeTemplate,
+    upsertPromptTemplate,
+    removePromptTemplate,
+    upsertMemoTemplate,
+    removeMemoTemplate,
     refreshSettings,
     setActiveSection,
     setSelectedId,
@@ -790,7 +834,7 @@ export default function App() {
         solutionSourceEntry={actions.solutionSourceEntry}
         importFallbackSubject={actions.importFallbackSubject}
         aiProviderStatus={aiProviderStatus}
-        setSettings={setSettings}
+        setLastImportTemplate={setLastImportTemplate}
         savePromptTemplate={actions.savePromptTemplate}
         closeImportModal={actions.closeImportModal}
         handleImportApply={actions.handleImportApply}
@@ -816,18 +860,26 @@ export default function App() {
           onStart={async (exam) => { await persistGeneratedExam(exam); setShowExamBuilder(false); openGeneratedExam(exam); }}
         />
       )}
-      <Dialog open={showGeneratedExams} onClose={() => setShowGeneratedExams(false)} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
+      <Dialog open={showGeneratedExams} onClose={() => { void flushGeneratedExams(); setShowGeneratedExams(false); }} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
-            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={deleteGeneratedExam} onPrint={(exam) => void printGeneratedExam(exam)} />
+            {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
+            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}<button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>다시 저장</button></div>}
+            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} />
       </Dialog>
       {showSettings && (
         <SettingsModal
           settings={settings}
           settingsError={settingsError}
+          settingsSaveState={settingsSaveState}
+          retrySettingsSave={retrySettingsSave}
           settingsMessage={actions.settingsMessage}
           clearSettingsError={clearSettingsError}
           setSettingsMessage={actions.setSettingsMessage}
-          setSettings={setSettings}
+          patchSettings={patchSettings}
+          patchViewPreferences={patchViewPreferences}
+          patchExamPreferences={patchExamPreferences}
+          patchImagePreferences={patchImagePreferences}
+          patchGptMcpPreferences={patchGptMcpPreferences}
           theme={theme}
           setTheme={setTheme}
           aiProviderStatus={aiProviderStatus}
@@ -840,6 +892,7 @@ export default function App() {
           saveTemplate={actions.saveTemplate}
           deleteTemplate={actions.deleteTemplate}
           savePromptTemplate={actions.savePromptTemplate}
+          saveMemoTemplate={actions.saveMemoTemplate}
           deletePromptTemplate={actions.deletePromptTemplate}
           deleteMemoTemplate={actions.deleteMemoTemplate}
           handleBackup={actions.handleBackup}

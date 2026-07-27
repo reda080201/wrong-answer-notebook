@@ -944,7 +944,9 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
-    const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 펼쳐 확인했습니다/);
+    const warningSummary = screen.queryByText(/확인 권장 항목 .* 보기/);
+    if (warningSummary) fireEvent.click(warningSummary);
+    const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
     if (confirmation) fireEvent.click(confirmation);
     fireEvent.click(screen.getByRole("button", { name: "2개 항목 저장" }));
     await waitFor(() => expect(onApplyEntries).toHaveBeenCalledWith(

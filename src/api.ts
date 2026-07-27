@@ -30,6 +30,7 @@ import {
 } from "./features/exam/storage/examSessionStorage";
 import { getAllImageFilenames, normalizeEntry } from "./utils/entry";
 import { mapEntryImportImageReferences } from "./utils/importImageReferences";
+import { normalizeImportImageKey } from "./utils/importImageReferences";
 import {
   DEFAULT_EXAM_PREFERENCES,
   DEFAULT_CHATGPT_MCP_PREFERENCES,
@@ -760,14 +761,28 @@ export function createBrowserImageKey(filename: string): string {
   return `img_${uuidv4()}_${filename}`;
 }
 
+async function validateImageHeader(file: File, extension: string): Promise<void> {
+  const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 12));
+  const png = bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => bytes[index] === value);
+  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
+  if ((extension === "png" && !png) || (extension.startsWith("jp") && !jpeg) || (extension === "webp" && !webp)) {
+    throw new Error(`${file.name}의 이미지 형식 또는 magic header를 확인할 수 없습니다.`);
+  }
+}
+
 export async function saveImageFiles(files: FileList | File[]): Promise<string[]> {
   const names: string[] = [];
   try {
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith("image/")) continue;
+      const extension = file.name.match(/\.(png|jpe?g|webp)$/i)?.[1]?.toLowerCase();
+      if (!extension) throw new Error(`${file.name}은(는) 지원하지 않는 이미지 형식입니다.`);
+      const expectedMime = extension === "webp" ? "image/webp" : extension.startsWith("jp") ? "image/jpeg" : "image/png";
+      if (file.type && file.type !== expectedMime) throw new Error(`${file.name}의 MIME 형식이 확장자와 일치하지 않습니다.`);
       if (file.size > MAX_IMPORT_IMAGE_BYTES) {
         throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
       }
+      await validateImageHeader(file, extension);
       if (isTauri()) {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const filename = await invoke<string>("save_import_image_bytes", {
@@ -790,22 +805,30 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
   return names;
 }
 
-function importAssetKey(name: string): string {
-  return name.split(/[\\/]/).pop()?.trim().toLowerCase() ?? name.trim().toLowerCase();
-}
-
-export async function saveImportAssetFiles(files: File[]): Promise<{ savedFilenames: string[]; sourceToSaved: Record<string, string> }> {
-  const savedFilenames = await saveImageFiles(files);
+export async function saveImportAssetFiles(files: File[]): Promise<{ savedFilenames: string[]; savedAssets: Array<{ sourceName: string; sourceKey: string; savedFilename: string }>; sourceToSaved: Record<string, string> }> {
+  const normalizedKeys = files.map((file) => normalizeImportImageKey(file.name));
+  const duplicate = normalizedKeys.find((key, index) => normalizedKeys.indexOf(key) !== index);
+  if (duplicate) throw new Error(`중복된 이미지 파일명이 있습니다: ${duplicate}`);
+  const savedFilenames: string[] = [];
+  const savedAssets: Array<{ sourceName: string; sourceKey: string; savedFilename: string }> = [];
   const sourceToSaved: Record<string, string> = {};
-  files.forEach((file, index) => {
-    const saved = savedFilenames[index];
-    if (saved) sourceToSaved[importAssetKey(file.name)] = saved;
-  });
-  return { savedFilenames, sourceToSaved };
+  try {
+    for (const file of files) {
+      const [saved] = await saveImageFiles([file]);
+      savedFilenames.push(saved);
+      const sourceKey = normalizeImportImageKey(file.name);
+      sourceToSaved[sourceKey] = saved;
+      savedAssets.push({ sourceName: file.name, sourceKey, savedFilename: saved });
+    }
+  } catch (error) {
+    await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+    throw error;
+  }
+  return { savedFilenames, savedAssets, sourceToSaved };
 }
 
 export function rewriteImportAssetReferences<T extends Partial<EntryFormData>>(data: T, sourceToSaved: Record<string, string>): T {
-  return mapEntryImportImageReferences(data, (filename) => sourceToSaved[importAssetKey(filename)] ?? filename) as T;
+  return mapEntryImportImageReferences(data, (filename) => sourceToSaved[normalizeImportImageKey(filename)] ?? filename) as T;
 }
 
 async function pickImagesBrowser(): Promise<string[]> {
@@ -895,6 +918,11 @@ export interface BackupPayload {
   browserImages: Record<string, string>;
 }
 
+export interface RestoreBackupResult {
+  restored: true;
+  warnings: string[];
+}
+
 export async function createBackup(entries: WrongAnswerEntry[], settings: AppSettings): Promise<string> {
   try {
     if (isTauri()) {
@@ -939,7 +967,7 @@ export async function createBackup(entries: WrongAnswerEntry[], settings: AppSet
   }
 }
 
-export async function restoreBackup(): Promise<BackupPayload | null> {
+export async function restoreBackup(): Promise<BackupPayload | RestoreBackupResult | null> {
   try {
     if (isTauri()) {
       const selected = await open({
@@ -947,8 +975,7 @@ export async function restoreBackup(): Promise<BackupPayload | null> {
         filters: [{ name: "ZIP", extensions: ["zip"] }],
       });
       if (!selected || Array.isArray(selected)) return null;
-      await invoke("restore_backup_zip", { backupPath: selected });
-      return null;
+      return await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: selected });
     }
 
     return new Promise((resolve, reject) => {

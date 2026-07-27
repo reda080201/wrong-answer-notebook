@@ -1,5 +1,6 @@
 import JSZip from "jszip";
 import { IMPORT_LIMITS } from "./importLimits";
+import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 
 export interface ZipImportProgress { phase: "inspect" | "extract"; completed: number; total: number; }
 export interface ZipImportResult { jsonText: string; jsonName: string; imageFiles: File[]; }
@@ -50,6 +51,9 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   if (!json) throw new Error("ZIP 안에는 import.json 또는 JSON 파일 1개가 필요합니다.");
   if (uncompressedSize(json) > IMPORT_LIMITS.MAX_JSON_BYTES) throw new Error(`JSON 파일이 ${IMPORT_LIMITS.MAX_JSON_BYTES / 1024 / 1024}MB를 초과합니다.`);
   const images = allowed.filter((entry) => isImage(entry.name));
+  const imageKeys = images.map((entry) => normalizeImportImageKey(entry.name));
+  const duplicateKey = imageKeys.find((key, index) => imageKeys.indexOf(key) !== index);
+  if (duplicateKey) throw new Error(`중복된 이미지 파일명이 있습니다: ${duplicateKey}`);
   if (images.length > IMPORT_LIMITS.MAX_IMAGE_COUNT) throw new Error(`ZIP에 이미지가 ${images.length}개 있습니다. 현재 한 번에 최대 ${IMPORT_LIMITS.MAX_IMAGE_COUNT}개까지 가져올 수 있습니다.`);
   const oversized = images.find((entry) => uncompressedSize(entry) > IMPORT_LIMITS.MAX_IMAGE_BYTES);
   if (oversized) throw new Error(`\`${basename(oversized.name)}\`의 크기가 이미지 한 장 제한인 ${IMPORT_LIMITS.MAX_IMAGE_BYTES / 1024 / 1024}MB를 초과합니다.`);

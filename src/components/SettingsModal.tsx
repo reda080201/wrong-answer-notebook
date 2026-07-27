@@ -55,10 +55,17 @@ interface SettingsModalProps {
   initialTab?: SettingsTab;
   settings: AppSettings;
   settingsError: string | null;
+  settingsSaveState?: "idle" | "saving" | "saved" | "error";
+  retrySettingsSave?: () => Promise<void>;
   settingsMessage: string | null;
   clearSettingsError: () => void;
   setSettingsMessage: (message: string | null) => void;
-  setSettings: (settings: AppSettings) => Promise<void>;
+  patchSettings?: (patch: Partial<AppSettings>) => Promise<void>;
+  patchViewPreferences?: (patch: Partial<ViewPreferences>) => Promise<void>;
+  patchExamPreferences?: (patch: Partial<ExamPreferences>) => Promise<void>;
+  patchImagePreferences?: (patch: Partial<ImagePreferences>) => Promise<void>;
+  patchGptMcpPreferences?: (patch: Partial<GptMcpPreferences>) => Promise<void>;
+  setSettings?: (settings: AppSettings) => Promise<void>;
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
   aiProviderStatus: AiProviderStatus | null;
@@ -71,6 +78,7 @@ interface SettingsModalProps {
   saveTemplate: (template: EntryTemplate) => Promise<void>;
   deleteTemplate: (templateId: string) => Promise<void>;
   savePromptTemplate: (template: { id: string; name: string; content: string }) => Promise<void>;
+  saveMemoTemplate?: (template: { id: string; name: string; content: string }) => Promise<void>;
   deletePromptTemplate: (templateId: string) => Promise<void>;
   deleteMemoTemplate: (templateId: string) => Promise<void>;
   handleBackup: () => Promise<void>;
@@ -104,10 +112,17 @@ interface SettingsModalProps {
 export default function SettingsModal({
   settings,
   settingsError,
+  settingsSaveState = "idle",
+  retrySettingsSave,
   settingsMessage,
   clearSettingsError,
   setSettingsMessage,
-  setSettings,
+  patchSettings = async () => undefined,
+  patchViewPreferences = async () => undefined,
+  patchExamPreferences = async () => undefined,
+  patchImagePreferences = async () => undefined,
+  patchGptMcpPreferences = async () => undefined,
+  setSettings: legacySetSettings,
   theme,
   setTheme,
   aiProviderStatus,
@@ -120,6 +135,7 @@ export default function SettingsModal({
   saveTemplate,
   deleteTemplate,
   savePromptTemplate,
+  saveMemoTemplate = async () => undefined,
   deletePromptTemplate,
   deleteMemoTemplate,
   handleBackup,
@@ -157,31 +173,26 @@ export default function SettingsModal({
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
   const patchView = async (patch: Partial<ViewPreferences>) => {
-    const nextView = { ...settings.viewPreferences, ...patch };
-    await setSettings({
-      ...settings,
-      viewPreferences: nextView,
-      answerViewPreferences: { ...settings.answerViewPreferences, hideAnswers: nextView.hideAnswers },
-    });
+    if (legacySetSettings) {
+      const nextView = { ...settings.viewPreferences, ...patch };
+      await legacySetSettings({ ...settings, viewPreferences: nextView, answerViewPreferences: { ...settings.answerViewPreferences, hideAnswers: nextView.hideAnswers } });
+      return;
+    }
+    await patchViewPreferences(patch);
   };
   const patchExam = async (patch: Partial<ExamPreferences>) => {
-    await setSettings({ ...settings, examPreferences: { ...settings.examPreferences, ...patch } });
+    await patchExamPreferences(patch);
   };
   const patchImages = async (patch: Partial<ImagePreferences>) => {
-    await setSettings({ ...settings, imagePreferences: { ...settings.imagePreferences, ...patch } });
+    await patchImagePreferences(patch);
   };
   const patchGptMcp = async (patch: Partial<GptMcpPreferences>) => {
-    await setSettings({ ...settings, gptMcpPreferences: { ...settings.gptMcpPreferences, ...patch } });
+    await patchGptMcpPreferences(patch);
   };
   const patchChatGpt = async (patch: Partial<ChatGptMcpPreferences>) => {
     if (onPatchChatGptMcpPreferences) {
       await onPatchChatGptMcpPreferences(patch);
-      return;
     }
-    await setSettings({
-      ...settings,
-      chatGptMcpPreferences: { ...settings.chatGptMcpPreferences, ...patch },
-    });
   };
   const saveRemoteBaseUrl = async (raw: string) => {
     if (!raw.trim()) {
@@ -219,6 +230,8 @@ export default function SettingsModal({
             </button>
           </div>
         )}
+        {settingsSaveState === "saving" && <p className="form-hint" role="status">설정 저장 중...</p>}
+        {settingsSaveState === "error" && retrySettingsSave && <button type="button" className="btn-secondary" onClick={() => void retrySettingsSave()}>설정 다시 저장</button>}
 
         <div className="settings-modal-body">
           <nav className="settings-modal-tabs" aria-label="설정 탭">
@@ -458,13 +471,7 @@ export default function SettingsModal({
                     checked={settings.autoBackup.enabled}
                     disabled={!isTauri()}
                     onChange={(event) =>
-                      setSettings({
-                        ...settings,
-                        autoBackup: {
-                          ...settings.autoBackup,
-                          enabled: event.target.checked,
-                        },
-                      })
+                      patchSettings({ autoBackup: { ...settings.autoBackup, enabled: event.target.checked } })
                     }
                   />
                   자동 백업 {isTauri() ? "하루 1회" : "(데스크톱 앱에서 사용 가능)"}
@@ -547,13 +554,7 @@ export default function SettingsModal({
                               : "wrong_answer";
                           await saveTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, entryKind, data });
                         } else {
-                          await setSettings({
-                            ...settings,
-                            memoTemplates: [
-                              ...settings.memoTemplates.filter((item) => item.id !== templateDraft.id),
-                              { id: templateDraft.id ?? crypto.randomUUID(), name, content },
-                            ],
-                          });
+                          await saveMemoTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, content });
                         }
                       } catch (error) {
                         setSettingsMessage(error instanceof Error ? error.message : "템플릿 저장에 실패했습니다.");

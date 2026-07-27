@@ -2,7 +2,7 @@ import type { GeneratedExam } from "../../../types";
 import { formatQuestionSourceLabel } from "../services/questionSource";
 import EmptyState from "../../../shared/ui/EmptyState";
 
-interface Props { exams: GeneratedExam[]; onOpen: (exam: GeneratedExam) => void; onDelete: (id: string) => void; onPrint?: (exam: GeneratedExam) => void; }
+interface Props { exams: GeneratedExam[]; onOpen: (exam: GeneratedExam) => void; onDelete: (id: string) => void | Promise<void>; onPrint?: (exam: GeneratedExam) => void; }
 export default function GeneratedExamList({ exams, onOpen, onDelete, onPrint }: Props) {
   return (
     <section className="generated-exam-list" aria-label="내 모의고사">

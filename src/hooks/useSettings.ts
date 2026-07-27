@@ -17,6 +17,7 @@ import type {
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsSaveState, setSettingsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const settingsRef = useRef(settings);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -43,18 +44,24 @@ export function useSettings() {
     settingsRef.current = next;
     setSettings(next);
     setSettingsError(null);
+    setSettingsSaveState("saving");
     const operation = saveQueueRef.current.then(async () => {
       try {
         await saveSettings(next);
       } catch (error) {
         const message = errorMessage(error, "설정을 저장하지 못했습니다.");
         setSettingsError(message);
+        setSettingsSaveState("error");
         throw new Error(message, { cause: error });
       }
+      setSettingsSaveState("saved");
     });
     saveQueueRef.current = operation.catch(() => undefined);
     return operation;
   }, []);
+
+  const retrySettingsSave = useCallback(() => updateSettings(settingsRef.current), [updateSettings]);
+  const flushSettings = useCallback(() => saveQueueRef.current, []);
 
   const patchSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
@@ -235,6 +242,7 @@ export function useSettings() {
   return {
     settings,
     settingsError,
+    settingsSaveState,
     setSettings: updateSettings,
     patchSettings,
     patchViewPreferences,
@@ -252,6 +260,8 @@ export function useSettings() {
     setLastImportTemplate,
     patchUpdatePreferences,
     refreshSettings,
+    retrySettingsSave,
+    flushSettings,
     clearSettingsError: () => setSettingsError(null),
   };
 }

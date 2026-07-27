@@ -1,7 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
 
-const dialogStack: string[] = [];
-
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "[href]",
@@ -39,18 +37,21 @@ export default function Dialog({
   busy = false,
 }: DialogProps) {
   const generatedTitleId = useId();
-  const dialogId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeDisabledRef = useRef(closeDisabled);
+  const onCloseRef = useRef(onClose);
 
   useEffect(() => {
     closeDisabledRef.current = closeDisabled;
   }, [closeDisabled]);
 
   useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
     if (!open) return;
-    dialogStack.push(dialogId);
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
@@ -65,7 +66,7 @@ export default function Dialog({
         if (closeDisabledRef.current) return;
         event.preventDefault();
         event.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       if (event.key !== "Tab") return;
@@ -89,11 +90,9 @@ export default function Dialog({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown, true);
-      const index = dialogStack.lastIndexOf(dialogId);
-      if (index >= 0) dialogStack.splice(index, 1);
       previousFocus?.focus();
     };
-  }, [dialogId, onClose, open]);
+  }, [open]);
 
   if (!open) return null;
 
