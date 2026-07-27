@@ -25,6 +25,7 @@ export default function ImportEntriesPreviewModal({
 }: ImportEntriesPreviewModalProps) {
   const [saving, setSaving] = useState(false);
   const [confirmedWarnings, setConfirmedWarnings] = useState(false);
+  const [warningsViewed, setWarningsViewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const rows = useMemo(
     () => document.entries.map((entry, index) => {
@@ -97,7 +98,10 @@ export default function ImportEntriesPreviewModal({
                 <p key={issue.id} className="form-warning">적용 불가: {issue.message}</p>
               ))}
               {policy.confirmable.length > 0 && (
-                <p className="form-hint">확인 권장 항목 {policy.confirmable.length}개</p>
+                <details onToggle={(event) => { if (event.currentTarget.open) setWarningsViewed(true); }}>
+                  <summary className="form-hint" onClick={() => setWarningsViewed(true)}>확인 권장 항목 {policy.confirmable.length}개 보기</summary>
+                  {policy.confirmable.map((issue) => <p key={issue.id} className="form-warning">{issue.message}</p>)}
+                </details>
               )}
             </article>
           ))}
@@ -105,8 +109,8 @@ export default function ImportEntriesPreviewModal({
 
         {confirmableCount > 0 && (
           <label className="settings-checkbox import-warning-confirmation">
-            <input type="checkbox" checked={confirmedWarnings} onChange={(event) => setConfirmedWarnings(event.target.checked)} disabled={saving} />
-            확인 권장 항목을 모두 펼쳐 확인했습니다. ({confirmableCount}개)
+            <input type="checkbox" checked={confirmedWarnings} onChange={(event) => setConfirmedWarnings(event.target.checked)} disabled={saving || !warningsViewed} />
+            {warningsViewed ? "확인 권장 항목을 모두 확인했습니다." : "먼저 확인 권장 항목을 펼쳐 보세요."} ({confirmableCount}개)
           </label>
         )}
 

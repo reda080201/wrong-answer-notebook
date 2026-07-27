@@ -49,6 +49,7 @@ import { applyAutomaticFigurePreference } from "../features/figures/services/fig
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../utils/importImageReferences";
 import Dialog from "../shared/ui/Dialog";
 import FigureComparisonPanel from "../features/figures/components/FigureComparisonPanel";
+import { normalizeImportImageKey } from "../utils/importImageReferences";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -79,13 +80,7 @@ function answerDifficultyLabel(value: SheetAnswerItem["difficulty"]) {
   return "자동";
 }
 
-function basename(path: string): string {
-  return path.split(/[\\/]/).pop()?.trim() ?? path.trim();
-}
-
-function imageFileKey(name: string): string {
-  return basename(name).toLowerCase();
-}
+const imageFileKey = normalizeImportImageKey;
 
 export function entryKindAutoLabel(entryKind: EntryFormData["entryKind"]): string {
   if (entryKind === "lecture") return "특강자료로 자동 판정됨";
@@ -580,6 +575,9 @@ export default function ImportFromGptModal({
     imageFiles: File[],
   ): Promise<ImportedStudyDocument> => {
     const imported = parseAllInOneImport(jsonText, jsonName, fallbackSubject);
+    const imageKeys = imageFiles.map((file) => imageFileKey(file.name));
+    const duplicateKey = imageKeys.find((key, index) => imageKeys.indexOf(key) !== index);
+    if (duplicateKey) throw new Error(`중복된 이미지 파일명이 있습니다: ${duplicateKey}`);
     const imageByName = new Map(imageFiles.map((file) => [imageFileKey(file.name), file]));
     const filesToSave: File[] = [];
     const fileIndexByKey = new Map<string, number>();

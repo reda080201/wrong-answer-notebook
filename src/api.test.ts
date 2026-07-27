@@ -81,7 +81,7 @@ describe("image file security limits", () => {
   });
 
   it("stores browser image files in localStorage", async () => {
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
     const file = new File([bytes], "tiny.png", { type: "image/png" });
 
     const names = await saveImageFiles([file]);
@@ -120,6 +120,11 @@ describe("image file security limits", () => {
 
     await expect(saveImageFiles([largeImage])).rejects.toThrow("25MB 이하");
     expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+
+  it("accepts a supported image with an empty MIME type", async () => {
+    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "empty-type.png", { type: "" });
+    await expect(saveImageFiles([file])).resolves.toHaveLength(1);
   });
 
   it("uses stored entries, including source pages and learning blocks, for browser orphan cleanup", async () => {

@@ -41,9 +41,26 @@ describe("question export", () => {
     const before = structuredClone(input);
     vi.stubGlobal("fetch", vi.fn(async () => new Response(new Blob(["image"]), { status: 200 })));
     const blob = await buildQuestionExportZip({ ...input, options: { includeSourcePages: true } });
-    const zipText = await blob.arrayBuffer();
-    expect(new TextDecoder().decode(zipText)).not.toContain("q01_figure_01.png");
+    const archive = await JSZip.loadAsync(blob);
+    const names = Object.keys(archive.files);
+    expect(names).toEqual(expect.arrayContaining([
+      "images/q01_figure_01_original.png",
+      "images/q01_figure_01_source_page.png",
+      "images/q01_figure_01_cleaned.png",
+      "images/q01_figure_01_preferred.png",
+      "questions.json",
+      "questions.md",
+    ]));
+    const json = JSON.parse(await archive.file("questions.json")!.async("text")) as { questions: Array<{ figures: Array<{ image?: string; original?: { image?: string; sourcePageImage?: string }; cleaned?: { image?: string } }> }> };
+    const markdown = await archive.file("questions.md")!.async("text");
+    for (const figure of json.questions[0].figures) {
+      for (const path of [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((value): value is string => Boolean(value))) {
+        expect(names).toContain(path);
+      }
+    }
+    for (const path of markdown.match(/images\/[^)\]\s]+/g) ?? []) expect(names).toContain(path);
     expect(input).toEqual(before);
     vi.unstubAllGlobals();
   });
 });
+import JSZip from "jszip";

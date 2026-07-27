@@ -243,6 +243,13 @@ pub struct IntegrityIssue {
     pub entry_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RestoreBackupResult {
+    restored: bool,
+    warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct IntegrityReport {
@@ -1122,6 +1129,116 @@ fn save_import_image_bytes(
     )
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetStageResult {
+    session_id: String,
+    source_name: String,
+    staged_filename: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportAssetCommitResult {
+    session_id: String,
+    filenames: Vec<String>,
+}
+
+fn import_asset_session_root(app: &tauri::AppHandle, session_id: &str) -> Result<PathBuf, String> {
+    Uuid::parse_str(session_id)
+        .map_err(|_| "가져오기 자산 session ID가 올바르지 않습니다.".to_string())?;
+    Ok(app_dir(app)?.join("import-workspaces").join(session_id))
+}
+
+#[tauri::command]
+fn create_import_asset_session(app: tauri::AppHandle) -> Result<String, String> {
+    let session_id = Uuid::new_v4().to_string();
+    fs::create_dir_all(import_asset_session_root(&app, &session_id)?.join("assets"))
+        .map_err(|e| e.to_string())?;
+    Ok(session_id)
+}
+
+#[tauri::command]
+fn stage_import_asset_bytes(
+    app: tauri::AppHandle,
+    session_id: String,
+    source_name: String,
+    bytes: Vec<u8>,
+    mime: Option<String>,
+) -> Result<ImportAssetStageResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let staged_filename = save_import_image_bytes_to_dir(
+        &root.join("assets"),
+        &bytes,
+        Some(&source_name),
+        mime.as_deref(),
+    )?;
+    Ok(ImportAssetStageResult {
+        session_id,
+        source_name,
+        staged_filename,
+    })
+}
+
+#[tauri::command]
+fn commit_import_asset_session(
+    app: tauri::AppHandle,
+    session_id: String,
+) -> Result<ImportAssetCommitResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let assets_dir = root.join("assets");
+    if !assets_dir.exists() {
+        return Err("가져오기 자산 session을 찾을 수 없습니다.".into());
+    }
+    let destination = images_dir(&app)?;
+    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let result = (|| -> Result<(), String> {
+        for item in fs::read_dir(&assets_dir).map_err(|e| e.to_string())? {
+            let source = item.map_err(|e| e.to_string())?.path();
+            if !source.is_file() {
+                continue;
+            }
+            let filename = source
+                .file_name()
+                .and_then(|name| name.to_str())
+                .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_string())?
+                .to_string();
+            validate_image_filename(&filename)?;
+            let target = destination.join(&filename);
+            if target.exists() {
+                return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+            }
+            fs::rename(&source, &target).map_err(|e| e.to_string())?;
+            moved.push((source, target));
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        for (source, target) in moved.iter().rev() {
+            let _ = fs::rename(target, source);
+        }
+        return Err(error);
+    }
+    let filenames = moved
+        .iter()
+        .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_string))
+        .collect();
+    let _ = fs::remove_dir_all(&root);
+    Ok(ImportAssetCommitResult {
+        session_id,
+        filenames,
+    })
+}
+
+#[tauri::command]
+fn discard_import_asset_session(app: tauri::AppHandle, session_id: String) -> Result<(), String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    if root.exists() {
+        fs::remove_dir_all(root).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn save_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
     let ext = std::path::Path::new(&source_path)
@@ -1216,8 +1333,13 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         return Err("백업에 포함할 파일이 너무 많습니다.".into());
     }
 
-    let temp_path = backup_path.with_extension(format!("zip.tmp-{}", Uuid::new_v4()));
-    let file = fs::File::create(&temp_path).map_err(|e| e.to_string())?;
+    let parent = backup_path
+        .parent()
+        .ok_or_else(|| "백업 경로를 확인할 수 없습니다.".to_string())?;
+    fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    let temp_file = tempfile::NamedTempFile::new_in(parent).map_err(|e| e.to_string())?;
+    let temp_path = temp_file.path().to_path_buf();
+    let file = temp_file.reopen().map_err(|e| e.to_string())?;
     let mut zip = zip::ZipWriter::new(file);
     let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
@@ -1231,6 +1353,7 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
     zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
+    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
     for filename in PERSISTENT_DATA_FILES
         .iter()
         .copied()
@@ -1247,6 +1370,7 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         zip.start_file(filename, options)
             .map_err(|e| e.to_string())?;
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
+        included_files.push(filename);
     }
 
     let workspace_root = app_dir(app)?.join("import-workspaces");
@@ -1265,13 +1389,6 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
     }
 
-    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
-    included_files.extend(
-        PERSISTENT_DATA_FILES
-            .iter()
-            .copied()
-            .filter(|name| *name != "entries.json" && *name != "settings.json"),
-    );
     let meta = serde_json::json!({
         "backupFormat": 2,
         "appVersion": env!("CARGO_PKG_VERSION"),
@@ -1303,10 +1420,9 @@ fn create_backup_zip_at(app: &tauri::AppHandle, backup_path: &Path) -> Result<()
         let _ = fs::remove_file(&temp_path);
         return Err("완성된 백업 ZIP이 1GB 제한을 초과했습니다.".into());
     }
-    fs::rename(&temp_path, backup_path).map_err(|error| {
-        let _ = fs::remove_file(&temp_path);
-        error.to_string()
-    })?;
+    temp_file
+        .persist(backup_path)
+        .map_err(|error| error.error.to_string())?;
     Ok(())
 }
 
@@ -1393,7 +1509,7 @@ fn restore_backup_zip(
     app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
     backup_path: String,
-) -> Result<(), String> {
+) -> Result<RestoreBackupResult, String> {
     let backup_metadata = fs::metadata(&backup_path).map_err(|e| e.to_string())?;
     if backup_metadata.len() > MAX_BACKUP_ZIP_BYTES {
         return Err(format!(
@@ -1512,10 +1628,12 @@ fn restore_backup_zip(
     };
     let move_result = (|| -> Result<(), String> {
         move_target(data_file(&app)?, "entries.json")?;
-        if settings_json.is_some() {
-            move_target(settings_file(&app)?, "settings.json")?;
-        }
-        for (name, _) in &optional_files {
+        move_target(settings_file(&app)?, "settings.json")?;
+        for name in PERSISTENT_DATA_FILES
+            .iter()
+            .copied()
+            .filter(|name| *name != "entries.json" && *name != "settings.json")
+        {
             move_target(
                 app_dir.join(name),
                 &format!("optional-{}", name.replace('/', "_")),
@@ -1565,8 +1683,14 @@ fn restore_backup_zip(
     }
     // Data has already been restored successfully. Cleanup failure must not
     // report a false restore failure or trigger a second restore attempt.
-    let _ = fs::remove_dir_all(&rollback_dir);
-    Ok(())
+    let mut warnings = Vec::new();
+    if let Err(error) = fs::remove_dir_all(&rollback_dir) {
+        warnings.push(format!("복원 임시 디렉터리를 정리하지 못했습니다: {error}"));
+    }
+    Ok(RestoreBackupResult {
+        restored: true,
+        warnings,
+    })
 }
 
 #[tauri::command]
@@ -1974,6 +2098,10 @@ pub fn run() {
             clear_ai_provider_key,
             generate_import_with_ai,
             save_import_image_bytes,
+            create_import_asset_session,
+            stage_import_asset_bytes,
+            commit_import_asset_session,
+            discard_import_asset_session,
             save_image,
             get_image_file_path,
             delete_image,

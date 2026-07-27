@@ -11,6 +11,7 @@ export interface QuestionExportItem {
   displayQuestionNumber: string;
   source?: QuestionSourceReference;
   passage?: string;
+  questionImages?: string[];
   sourcePageImages?: string[];
   question: string;
   contentSegments?: ExamQuestionSnapshot["contentSegments"];
@@ -60,6 +61,7 @@ function buildMarkdown(title: string, questions: QuestionExportItem[], options: 
     `## ${item.displayQuestionNumber}번`, "", item.passage ?? "", item.question,
     options.includeAnswers && item.answer ? `정답: ${item.answer}` : "",
     options.includeExplanations && item.explanation ? `해설: ${item.explanation}` : "", "",
+    ...(item.questionImages ?? []).map((image) => `[문항 이미지: ${image}]`),
     ...item.figures.map((figure) => figure.image ? `[그림: ${figure.image}]` : figure.caption ? `[설명 도표: ${figure.caption}]` : ""),
     ...item.choices, "",
     options.includeSourceReferences && item.source ? `<details>\n<summary>원본 출처</summary>\n\n${formatQuestionSourceLabel(item.source)}\n\n</details>` : "",
@@ -72,6 +74,7 @@ function buildText(title: string, questions: QuestionExportItem[], options: Ques
     `${item.displayQuestionNumber}번`, item.passage ?? "", item.question,
     options.includeAnswers && item.answer ? `정답: ${item.answer}` : "",
     options.includeExplanations && item.explanation ? `해설: ${item.explanation}` : "",
+    ...(item.questionImages ?? []).map((image) => `[문항 이미지: ${image}]`),
     ...item.figures.map((figure) => figure.image ? `[그림: ${figure.image}]` : figure.caption ? `[설명 도표: ${figure.caption}]` : ""),
     ...item.choices, options.includeSourceReferences && item.source ? `원본: ${formatQuestionSourceLabel(item.source)}` : "", "",
   ])].join("\n");
@@ -96,10 +99,13 @@ export function buildQuestionExportPackage(input: { title: string; subject: stri
     if (!options.includeExplanations) copy.explanation = undefined;
     return copy;
   });
-  const imageNames = questions.flatMap((question) => question.figures.flatMap((figure) => {
+  const imageNames = questions.flatMap((question) => [
+    ...(question.questionImages ?? []),
+    ...question.figures.flatMap((figure) => {
     const names = [figure.original?.image, options.includeSourcePages ? figure.original?.sourcePageImage : undefined, figure.cleaned?.image, resolveFigureRepresentation(completeFigure(figure)).image];
     return [...new Set(names.filter((name): name is string => Boolean(name)))];
-  }));
+    }),
+  ]);
   const markdown = buildMarkdown(input.title, questions, options);
   return { manifest: { schemaVersion: "wrong-answer-notebook-question-export-v1", title: input.title, subject: input.subject, exportType: "questions_only", createdAt: new Date().toISOString(), questionCount: questions.length, questionNumbers: questions.map((question) => question.displayQuestionNumber), includesAnswers: options.includeAnswers, includesExplanations: options.includeExplanations, includesUserResponses: false, includesScratchNotes: false, includesSourceReferences: options.includeSourceReferences, includesSourcePages: options.includeSourcePages, imageDirectory: "images" }, questions, markdown, text: buildText(input.title, questions, options), imageNames };
 }
@@ -116,6 +122,14 @@ export async function buildQuestionExportZip(input: { title: string; subject: st
     return response.blob();
   };
   for (const question of exportQuestions) {
+    const rewrittenQuestionImages: string[] = [];
+    for (const [imageIndex, filename] of (question.questionImages ?? []).entries()) {
+      const extension = filename.match(/\.(png|jpe?g|webp)$/i)?.[1]?.toLowerCase() ?? "png";
+      const name = `q${String(question.position).padStart(2, "0")}_question_image_${String(imageIndex + 1).padStart(2, "0")}.${extension}`;
+      images?.file(name, await fetchImage(filename, "문항"));
+      rewrittenQuestionImages.push(`images/${name}`);
+    }
+    question.questionImages = rewrittenQuestionImages;
     if (pack.manifest.includesSourcePages) {
       const rewrittenSourcePages: string[] = [];
       for (const [pageIndex, filename] of (question.sourcePageImages ?? []).entries()) {
@@ -165,7 +179,7 @@ export async function buildQuestionExportZip(input: { title: string; subject: st
 }
 
 export function generatedExamToQuestionExport(exam: GeneratedExam, includeSourceReferences = true): { title: string; subject: string; questions: QuestionExportItem[] } {
-  return { title: exam.title, subject: exam.subject, questions: exam.questions.map((item) => ({ position: item.position, displayQuestionNumber: String(item.position), source: includeSourceReferences ? item.source : undefined, passage: item.snapshot.passage, sourcePageImages: item.snapshot.sourcePageImages, question: item.snapshot.question, contentSegments: item.snapshot.contentSegments, choices: item.snapshot.choices, figures: item.snapshot.figures, answer: item.snapshot.correctAnswer, explanation: item.snapshot.explanation })) };
+  return { title: exam.title, subject: exam.subject, questions: exam.questions.map((item) => ({ position: item.position, displayQuestionNumber: String(item.position), source: includeSourceReferences ? item.source : undefined, passage: item.snapshot.passage, questionImages: item.snapshot.questionImages, sourcePageImages: item.snapshot.sourcePageImages, question: item.snapshot.question, contentSegments: item.snapshot.contentSegments, choices: item.snapshot.choices, figures: item.snapshot.figures, answer: item.snapshot.correctAnswer, explanation: item.snapshot.explanation })) };
 }
 
 export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: string[], includeSourceReferences = false): { title: string; subject: string; questions: QuestionExportItem[] } {
@@ -179,7 +193,8 @@ export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: 
         return {
           position: index + 1,
           displayQuestionNumber: questionNumbers[index] ?? number,
-          sourcePageImages: entry.questionImages,
+          questionImages: entry.questionImages,
+          sourcePageImages: entry.sourcePageImages,
           question: entry.question,
           choices: [],
           figures: entry.figures ?? [],
@@ -196,7 +211,8 @@ export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: 
     return {
       position: index + 1,
       displayQuestionNumber: block.numberLabel || number,
-      sourcePageImages: entry.questionImages,
+      questionImages: entry.questionImages,
+      sourcePageImages: entry.sourcePageImages,
       question: block.body,
       contentSegments,
       choices,

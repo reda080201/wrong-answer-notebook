@@ -1,5 +1,10 @@
 import type { EntryFormData, SheetFigureItem } from "../types";
 
+export function normalizeImportImageKey(name: string): string {
+  const basename = name.split(/[\\/]/).pop()?.trim() ?? name.trim();
+  return basename.normalize("NFKC").toLocaleLowerCase("en-US");
+}
+
 export function collectFigureImageReferences(figure: SheetFigureItem): string[] {
   return [
     figure.image,
