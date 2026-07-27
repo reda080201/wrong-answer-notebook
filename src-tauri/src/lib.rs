@@ -1246,7 +1246,10 @@ fn validate_import_asset_session(
         }
         let bytes = fs::read(&path).map_err(|error| error.to_string())?;
         if bytes.len() as u64 != asset.size
-            || asset.sha256.as_deref().map(|hash| hash.to_ascii_lowercase())
+            || asset
+                .sha256
+                .as_deref()
+                .map(|hash| hash.to_ascii_lowercase())
                 != Some(sha256_hex(&bytes))
         {
             mismatched_files.push(asset.source_name);
