@@ -2080,6 +2080,10 @@ mod tests {
             "learningBlocks".into(),
             serde_json::json!([{ "images": ["block.png"] }]),
         );
+        entry.extra.insert(
+            "supplementalResources".into(),
+            serde_json::json!([{ "images": ["supplemental.png"] }]),
+        );
         entry.figures = vec![SheetFigureItem {
             id: "figure-1".into(),
             question_number: "1".into(),
@@ -2098,6 +2102,7 @@ mod tests {
         assert!(collect_entry_images(&entry).contains(&"figure.png".to_string()));
         assert!(collect_entry_images(&entry).contains(&"source-page.png".to_string()));
         assert!(collect_entry_images(&entry).contains(&"block.png".to_string()));
+        assert!(collect_entry_images(&entry).contains(&"supplemental.png".to_string()));
         assert!(collect_entry_images(&entry).contains(&"figure-source.png".to_string()));
     }
 

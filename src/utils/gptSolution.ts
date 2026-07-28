@@ -280,6 +280,7 @@ export function mergeGptSolutionIntoEntry(
     mistakeAnalysis: base.mistakeAnalysis,
     concepts: base.concepts,
     linkedEntryIds: base.linkedEntryIds,
+    supplementalResources: base.supplementalResources,
     reviewAttempts: base.reviewAttempts,
     review: base.review,
     checklist: base.checklist,

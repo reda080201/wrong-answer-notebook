@@ -79,6 +79,26 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByText("AI 판독 감사", {}, { timeout: 10000 })).toBeInTheDocument();
   }, 30000);
 
+  it("allows answer-only supplemental JSON without a question body", async () => {
+    const onApply = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={onApply}
+        sourceEntry={sourceEntry}
+        mode="supplemental"
+        supplementalMode="answer_key"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: { value: JSON.stringify({ answerKey: [{ questionNumber: "1", answer: "③" }] }) },
+    });
+    await waitFor(() => expect(screen.getByRole("button", { name: "폼으로 보내기" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ answerKey: [expect.objectContaining({ questionNumber: "1", answer: "③" })], question: "" }), undefined, [], [], undefined);
+  });
+
   it("adds user expected question numbers to Gemini prompts", async () => {
     const onGenerateWithAi = vi.fn().mockResolvedValue(JSON.stringify({
       title: "Vision 결과",

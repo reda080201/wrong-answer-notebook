@@ -50,6 +50,24 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
                 })
             }),
     );
+    referenced.extend(
+        entry
+            .extra
+            .get("supplementalResources")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flat_map(|resources| {
+                resources.iter().flat_map(|resource| {
+                    resource
+                        .get("images")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flat_map(|images| {
+                            images.iter().filter_map(Value::as_str).map(str::to_owned)
+                        })
+                })
+            }),
+    );
     for figure in &entry.figures {
         if let Some(image) = &figure.image {
             referenced.insert(image.clone());

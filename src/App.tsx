@@ -676,6 +676,11 @@ export default function App() {
             onQuickConceptCreate={actions.handleQuickConceptCreate}
             onOpenImportantQuestion={openImportantQuestion}
             onStartImportantReview={() => actions.startReview("important")}
+            onAddSupplemental={actions.openSupplementalImport}
+            onManageSupplemental={actions.openSupplementalManager}
+            onEditEntry={actions.openEditEntry}
+            onDeleteEntry={(entryId) => void actions.deleteEntryById(entryId)}
+            onLinkLearningEntry={actions.openLearningEntryLink}
           />
 
           {examSession ? (
@@ -864,6 +869,21 @@ export default function App() {
         handleWikiLinkClick={handleWikiLinkClick}
         existingTargets={linkableTargets}
         onOpenSettings={openSettings}
+        supplementalTarget={(() => {
+          if (!actions.supplementalTarget) return null;
+          const entry = entries.find((item) => item.id === actions.supplementalTarget?.entryId);
+          return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
+        })()}
+        onCloseSupplementalImport={actions.closeSupplementalImport}
+        applySupplementalMerge={actions.applySupplementalMerge}
+        supplementalManagerEntry={actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null}
+        onCloseSupplementalManager={actions.closeSupplementalManager}
+        renameSupplementalResource={actions.renameSupplementalResource}
+        deleteSupplementalResource={actions.deleteSupplementalResource}
+        supplementalLinkTarget={actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null}
+        supplementalLinkCandidates={entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept")}
+        onCloseSupplementalLink={actions.closeLearningEntryLink}
+        onLinkLearningEntry={actions.linkLearningEntry}
       />
       {showExamBuilder && (
         <ExamBuilderWizard

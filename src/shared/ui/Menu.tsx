@@ -4,9 +4,11 @@ interface MenuProps {
   label: ReactNode;
   children: ReactNode;
   className?: string;
+  triggerAriaLabel?: string;
+  stopPropagation?: boolean;
 }
 
-export default function Menu({ label, children, className = "" }: MenuProps) {
+export default function Menu({ label, children, className = "", triggerAriaLabel, stopPropagation = false }: MenuProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -64,18 +66,31 @@ export default function Menu({ label, children, className = "" }: MenuProps) {
       const fragment = child as React.ReactElement<{ children?: ReactNode }>;
       return Children.map(fragment.props.children, addMenuItemRole);
     }
-    return cloneElement(child as React.ReactElement<{ role?: string }>, { role: "menuitem" });
+    const element = child as React.ReactElement<{ role?: string; onClick?: (event: React.MouseEvent) => void }>;
+    return cloneElement(element, {
+      role: "menuitem",
+      onClick: (event) => {
+        element.props.onClick?.(event);
+        setOpen(false);
+      },
+    });
   };
   const menuChildren = Children.map(children, addMenuItemRole);
 
   return (
-    <div ref={ref} className={className}>
+    <div
+      ref={ref}
+      className={className}
+      onClick={stopPropagation ? (event) => event.stopPropagation() : undefined}
+      onKeyDown={stopPropagation ? (event) => event.stopPropagation() : undefined}
+    >
       <button
         ref={triggerRef}
         type="button"
         className="btn-icon"
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={triggerAriaLabel}
         onClick={() => {
           if (open) {
             closeMenu(true);

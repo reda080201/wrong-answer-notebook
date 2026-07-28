@@ -40,6 +40,7 @@ export function createEmptyEntryDraft(entryKind: EntryKind = "wrong_answer"): En
     learningBlocks: [],
     sourceType: undefined,
     linkedEntryIds: [],
+    supplementalResources: [],
     concepts: [],
     mastered: false,
   };
@@ -79,6 +80,7 @@ export function normalizeEntryDraftForSave(draft: Partial<EntryFormData>): Entry
     checklist: clone(merged.checklist ?? []),
     rejectedNotes: [...(merged.rejectedNotes ?? [])],
     linkedEntryIds: [...(merged.linkedEntryIds ?? [])],
+    supplementalResources: clone(merged.supplementalResources ?? []),
     concepts: [...(merged.concepts ?? [])],
   };
 }

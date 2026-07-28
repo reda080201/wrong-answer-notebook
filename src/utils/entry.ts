@@ -17,6 +17,9 @@ import type {
   QuestionContentSegment,
   SheetFigureItem,
   SheetAnswerItem,
+  SupplementalAppliedField,
+  SupplementalResource,
+  SupplementalResourceKind,
   WrongAnswerEntry,
 } from "../types";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
@@ -37,6 +40,51 @@ function isLectureSourceType(v: unknown): v is LectureSourceType {
 
 function isDifficulty(v: unknown): v is Difficulty {
   return v === "high" || v === "medium" || v === "low" || v === "none";
+}
+
+const SUPPLEMENTAL_KINDS = new Set<SupplementalResourceKind>([
+  "answer_key",
+  "solution",
+  "correction",
+  "source_pages",
+  "lecture",
+  "concept",
+  "other",
+]);
+
+const SUPPLEMENTAL_FIELDS = new Set<SupplementalAppliedField>([
+  "answerKey",
+  "explanationParts",
+  "figures",
+  "sourcePageImages",
+  "learningBlocks",
+]);
+
+function normalizeSupplementalResources(raw: unknown): SupplementalResource[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+    .map((item) => {
+      const kind = SUPPLEMENTAL_KINDS.has(item.kind as SupplementalResourceKind)
+        ? item.kind as SupplementalResourceKind
+        : "other";
+      const appliedFields = Array.isArray(item.appliedFields)
+        ? item.appliedFields.filter((field): field is SupplementalAppliedField => SUPPLEMENTAL_FIELDS.has(field as SupplementalAppliedField))
+        : [];
+      return {
+        ...item,
+        id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : uuidv4(),
+        kind,
+        title: typeof item.title === "string" ? item.title.trim() : "추가 자료",
+        createdAt: isValidIsoDate(item.createdAt) ? item.createdAt : new Date().toISOString(),
+        updatedAt: isValidIsoDate(item.updatedAt) ? item.updatedAt : new Date().toISOString(),
+        sourceFilename: typeof item.sourceFilename === "string" ? item.sourceFilename : undefined,
+        sourceEntryId: typeof item.sourceEntryId === "string" ? item.sourceEntryId : undefined,
+        questionNumbers: Array.isArray(item.questionNumbers) ? item.questionNumbers.map(String).filter(Boolean) : undefined,
+        images: Array.isArray(item.images) ? item.images.map(String).filter(Boolean) : undefined,
+        appliedFields,
+      };
+    });
 }
 
 function normalizeAnswerDifficulty(v: unknown): Exclude<Difficulty, "none"> | undefined {
@@ -695,6 +743,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     linkedEntryIds: Array.isArray(rest.linkedEntryIds)
       ? rest.linkedEntryIds.map((id) => `${id}`.trim()).filter(Boolean)
       : [],
+    supplementalResources: normalizeSupplementalResources(rest.supplementalResources),
     concepts: normalizeImportantPoints(rest.concepts),
     reviewAttempts: normalizeReviewAttempts(rest.reviewAttempts, rest.id),
     mastered: review?.phase === "archived",
@@ -712,6 +761,7 @@ export function getEntryTitle(entry: WrongAnswerEntry): string {
 export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromParts = entry.explanationParts.flatMap((p) => p.images);
   const fromLearningBlocks = (entry.learningBlocks ?? []).flatMap((block) => block.images ?? []);
+  const fromSupplementalResources = (entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   return [
     ...new Set([
@@ -720,6 +770,7 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
       ...fromParts,
       ...fromFigures,
       ...fromLearningBlocks,
+      ...fromSupplementalResources,
       ...(entry.images ?? []),
     ]),
   ];

@@ -33,4 +33,13 @@ describe("shared UI primitives", () => {
     fireEvent.keyDown(items[1], { key: "Home" });
     expect(items[0]).toHaveFocus();
   });
+
+  it("names and isolates a menu trigger", () => {
+    const parentClick = vi.fn();
+    render(<div onClick={parentClick}><Menu label="⋮" triggerAriaLabel="문제지 추가 자료 메뉴" stopPropagation><button type="button">자료 추가</button></Menu></div>);
+    const trigger = screen.getByRole("button", { name: "문제지 추가 자료 메뉴" });
+    fireEvent.click(trigger);
+    expect(parentClick).not.toHaveBeenCalled();
+    expect(screen.getByRole("menuitem", { name: "자료 추가" })).toBeInTheDocument();
+  });
 });
