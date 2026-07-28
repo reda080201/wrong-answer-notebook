@@ -55,4 +55,18 @@ describe("useGeneratedExams retry", () => {
     await expect(result.current.flush()).resolves.toBeUndefined();
     await waitFor(() => expect(result.current.hasRetryableChange).toBe(false));
   });
+
+  it("blocks mutations until the initial list has loaded", async () => {
+    let resolveLoad: ((value: GeneratedExam[]) => void) | undefined;
+    loadGeneratedExams.mockImplementationOnce(() => new Promise<GeneratedExam[]>((resolve) => { resolveLoad = resolve; }));
+    const { result } = renderHook(() => useGeneratedExams());
+
+    await act(async () => {
+      await expect(result.current.remove("exam-1")).rejects.toThrow("불러오는 중");
+    });
+    expect(saveGeneratedExams).not.toHaveBeenCalled();
+    resolveLoad?.([exam]);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.exams).toEqual([exam]);
+  });
 });

@@ -6,6 +6,7 @@ import { mergeGeneratedExam } from "../features/exam-builder/storage/generatedEx
 export function useGeneratedExams() {
   const [exams, setExams] = useState<GeneratedExam[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const examsRef = useRef<GeneratedExam[]>([]);
@@ -14,31 +15,52 @@ export function useGeneratedExams() {
   const failedTargetRef = useRef<GeneratedExam[] | null>(null);
   const failedErrorRef = useRef<Error | null>(null);
   const mutationRef = useRef(0);
+  const loadingRef = useRef(true);
+  const loadSucceededRef = useRef(false);
+  const loadErrorRef = useRef<string | null>(null);
   const savingCountRef = useRef(0);
   const [hasRetryableChange, setHasRetryableChange] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
+  const reload = useCallback(async () => {
+    const loadMutation = mutationRef.current;
+    loadingRef.current = true;
+    loadSucceededRef.current = false;
+    loadErrorRef.current = null;
     setLoading(true);
-    void loadGeneratedExams()
-      .then((loaded) => {
-        if (cancelled) return;
-        const next = Array.isArray(loaded) ? loaded : [];
-        examsRef.current = next;
-        persistedRef.current = next;
-        setExams(next);
-        setError(null);
-      })
-      .catch((cause) => {
-        if (!cancelled) setError(errorMessage(cause, "생성 모의고사를 불러오지 못했습니다."));
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
+    setLoadError(null);
+    try {
+      const loaded = await loadGeneratedExams();
+      if (loadMutation !== mutationRef.current) return;
+      const next = Array.isArray(loaded) ? loaded : [];
+      examsRef.current = next;
+      persistedRef.current = next;
+      setExams(next);
+      setError(null);
+      loadSucceededRef.current = true;
+    } catch (cause) {
+      if (loadMutation === mutationRef.current) {
+        const message = errorMessage(cause, "생성 모의고사를 불러오지 못했습니다.");
+        loadErrorRef.current = message;
+        setLoadError(message);
+      }
+    } finally {
+      if (loadMutation === mutationRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
+    }
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void reload().finally(() => { if (cancelled) return; });
+    return () => { cancelled = true; };
+  }, [reload]);
+
   const enqueue = useCallback((next: GeneratedExam[], retrying = false) => {
+    if (loadingRef.current || !loadSucceededRef.current) {
+      return Promise.reject(new Error(loadErrorRef.current ? "생성 모의고사를 불러오지 못했습니다." : "생성 모의고사를 불러오는 중입니다."));
+    }
     if (!retrying) {
       failedTargetRef.current = null;
       failedErrorRef.current = null;
@@ -98,5 +120,5 @@ export function useGeneratedExams() {
     if (failedErrorRef.current) throw failedErrorRef.current;
   }, []);
 
-  return { exams, loading, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, clearError: () => setError(null) };
+  return { exams, loading, loadError, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, clearError: () => setError(null) };
 }
