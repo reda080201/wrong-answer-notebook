@@ -28,7 +28,7 @@ export interface ImportFigureDraft extends SheetFigureItem { assetId?: string; c
 export interface ImportQuestionDraft {
   id: string; groupId: string; order: number; displayQuestionNumber: string; sourceQuestionNumber?: string; passage?: string;
   contentSegments: QuestionContentSegment[]; choices: Array<{ id: string; marker: string; content: string }>;
-  figures: ImportFigureDraft[]; sourcePageAssets: string[]; answer?: ImportAnswerDraft; explanationParts: ExplanationPart[];
+  figures: ImportFigureDraft[]; questionImageAssets: string[]; sourcePageAssets: string[]; answer?: ImportAnswerDraft; explanationParts: ExplanationPart[];
   sourceReferences: ImportSourceReference[]; status: ImportQuestionStatus; warnings: string[]; sourceText?: string;
   confirmed?: { groupId?: boolean; order?: boolean; content?: boolean; answer?: boolean; figures?: boolean };
 }
@@ -45,5 +45,5 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
   const questions = question ? [question] : group.questions;
   const questionText = questions.map((item) => [`${item.displayQuestionNumber}. ${item.contentSegments.filter((segment) => segment.type !== "figure").map((segment) => "text" in segment ? segment.text : segment.type === "equation" ? segment.latex : "").filter(Boolean).join("\n")}`, ...item.choices.map((choice) => `${choice.marker} ${choice.content}`.trim())].filter(Boolean).join("\n")).join("\n\n");
   const questionContentSegments = Object.fromEntries(questions.map((item) => [item.displayQuestionNumber, item.contentSegments]));
-  return { entryKind: "problem_sheet", title: group.title, subject: group.subject ?? "기타", question: questionText, questionImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))], figures: questions.flatMap((item) => item.figures), questionContentSegments, answerKey: questions.flatMap((item) => item.answer ? [item.answer as SheetAnswerItem] : []), explanationParts: questions.flatMap((item) => item.explanationParts), tags: [], difficult: false, difficulty: "none", myAnswer: "", correctAnswer: "", annotations: [], memo: "", mastered: false };
+  return { entryKind: "problem_sheet", title: group.title, subject: group.subject ?? "기타", question: questionText, questionImages: [...new Set(questions.flatMap((item) => item.questionImageAssets))], sourcePageImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))], figures: questions.flatMap((item) => item.figures), questionContentSegments, answerKey: questions.flatMap((item) => item.answer ? [item.answer as SheetAnswerItem] : []), explanationParts: questions.flatMap((item) => item.explanationParts), tags: [], difficult: false, difficulty: "none", myAnswer: "", correctAnswer: "", annotations: [], memo: "", mastered: false };
 }

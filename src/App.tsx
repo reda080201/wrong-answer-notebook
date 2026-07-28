@@ -59,6 +59,7 @@ export default function App() {
     toggleMastered,
     toggleDifficult,
     patchEntry,
+    flushEntries,
   } = useEntries();
   const {
     settings,
@@ -100,6 +101,7 @@ export default function App() {
   const [examSaving, setExamSaving] = useState(false);
   const [closeFlushError, setCloseFlushError] = useState<string | null>(null);
   const [closeFlushSaving, setCloseFlushSaving] = useState(false);
+  const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
@@ -114,6 +116,10 @@ export default function App() {
   const allowWindowCloseRef = useRef(false);
   const windowCloseInFlightRef = useRef(false);
   const closeRetryRef = useRef<(() => Promise<void>) | null>(null);
+
+  const registerWorkspaceDraftFlush = useCallback((flush: (() => Promise<void>) | null) => {
+    workspaceDraftFlushRef.current = flush;
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -345,8 +351,10 @@ export default function App() {
         await flushPendingAppWrites({
           activeExam: examSessionRef.current,
           flushExamSession: (session) => flushExamSessionSave(session),
+          flushEntries,
           flushGeneratedExams,
           flushSettings,
+          flushImportWorkspaceDraft: () => workspaceDraftFlushRef.current?.() ?? Promise.resolve(),
         });
         setCloseFlushError(null);
         allowWindowCloseRef.current = true;
@@ -366,7 +374,7 @@ export default function App() {
       await attemptClose();
     }).then((cleanup) => { unlisten = cleanup; });
     return () => { closeRetryRef.current = null; unlisten?.(); };
-  }, [flushExamSessionSave, flushGeneratedExams, flushSettings]);
+  }, [flushEntries, flushExamSessionSave, flushGeneratedExams, flushSettings]);
 
   useEffect(() => {
     if (!examSession) return;
@@ -824,6 +832,7 @@ export default function App() {
       </main>
 
       <AppModals
+        registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}
         showForm={actions.showForm}
         editingEntry={actions.editingEntry}
         handleSave={actions.handleSave}

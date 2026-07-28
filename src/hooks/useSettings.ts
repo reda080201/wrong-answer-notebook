@@ -20,7 +20,8 @@ export function useSettings() {
   const [settingsSaveState, setSettingsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const settingsRef = useRef(settings);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const lastOperationRef = useRef<Promise<void>>(Promise.resolve());
+  const mutationRef = useRef(0);
+  const failedErrorRef = useRef<Error | null>(null);
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -46,24 +47,35 @@ export function useSettings() {
     setSettings(next);
     setSettingsError(null);
     setSettingsSaveState("saving");
+    failedErrorRef.current = null;
+    const mutation = ++mutationRef.current;
     const operation = saveQueueRef.current.then(async () => {
       try {
         await saveSettings(next);
       } catch (error) {
         const message = errorMessage(error, "설정을 저장하지 못했습니다.");
-        setSettingsError(message);
-        setSettingsSaveState("error");
+        if (mutation === mutationRef.current) {
+          failedErrorRef.current = new Error(message, { cause: error });
+          setSettingsError(message);
+          setSettingsSaveState("error");
+        }
         throw new Error(message, { cause: error });
       }
-      setSettingsSaveState("saved");
+      if (mutation === mutationRef.current) {
+        failedErrorRef.current = null;
+        setSettingsError(null);
+        setSettingsSaveState("saved");
+      }
     });
-    lastOperationRef.current = operation;
     saveQueueRef.current = operation.catch(() => undefined);
     return operation;
   }, []);
 
   const retrySettingsSave = useCallback(() => updateSettings(settingsRef.current), [updateSettings]);
-  const flushSettings = useCallback(() => lastOperationRef.current, []);
+  const flushSettings = useCallback(async () => {
+    await saveQueueRef.current;
+    if (failedErrorRef.current) throw failedErrorRef.current;
+  }, []);
 
   const patchSettings = useCallback(
     async (patch: Partial<AppSettings>) => {

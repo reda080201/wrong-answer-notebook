@@ -11,8 +11,8 @@ export function useGeneratedExams() {
   const examsRef = useRef<GeneratedExam[]>([]);
   const persistedRef = useRef<GeneratedExam[]>([]);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const lastOperationRef = useRef<Promise<void>>(Promise.resolve());
   const failedTargetRef = useRef<GeneratedExam[] | null>(null);
+  const failedErrorRef = useRef<Error | null>(null);
   const mutationRef = useRef(0);
   const savingCountRef = useRef(0);
   const [hasRetryableChange, setHasRetryableChange] = useState(false);
@@ -41,6 +41,7 @@ export function useGeneratedExams() {
   const enqueue = useCallback((next: GeneratedExam[], retrying = false) => {
     if (!retrying) {
       failedTargetRef.current = null;
+      failedErrorRef.current = null;
       setHasRetryableChange(false);
     }
     examsRef.current = next;
@@ -55,25 +56,27 @@ export function useGeneratedExams() {
         persistedRef.current = next;
         if (retrying && mutation === mutationRef.current) {
           failedTargetRef.current = null;
+          failedErrorRef.current = null;
           setHasRetryableChange(false);
         }
+        if (mutation === mutationRef.current) setError(null);
       })
       .catch((cause) => {
         const message = errorMessage(cause, "생성 모의고사를 저장하지 못했습니다.");
         if (mutation === mutationRef.current) {
           failedTargetRef.current = next;
+          failedErrorRef.current = new Error(message, { cause });
           setHasRetryableChange(true);
           examsRef.current = persistedRef.current;
           setExams(persistedRef.current);
+          setError(message);
         }
-        setError(message);
         throw new Error(message, { cause });
       })
       .finally(() => {
         savingCountRef.current -= 1;
         if (savingCountRef.current === 0) setSaving(false);
       });
-    lastOperationRef.current = operation;
     saveQueueRef.current = operation.catch(() => undefined);
     return operation;
   }, []);
@@ -86,10 +89,14 @@ export function useGeneratedExams() {
   }, [enqueue]);
   const discardFailedChange = useCallback(() => {
     failedTargetRef.current = null;
+    failedErrorRef.current = null;
     setHasRetryableChange(false);
     setError(null);
   }, []);
-  const flush = useCallback(() => lastOperationRef.current, []);
+  const flush = useCallback(async () => {
+    await saveQueueRef.current;
+    if (failedErrorRef.current) throw failedErrorRef.current;
+  }, []);
 
   return { exams, loading, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, clearError: () => setError(null) };
 }

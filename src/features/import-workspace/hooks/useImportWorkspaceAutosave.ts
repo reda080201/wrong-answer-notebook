@@ -6,7 +6,19 @@ const STORAGE_KEY = "wrong-answer-import-workspace-draft";
 export function loadImportWorkspaceDraft(): ImportWorkspace | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) as ImportWorkspace : null;
+    if (!raw) return null;
+    const draft = JSON.parse(raw) as ImportWorkspace;
+    return {
+      ...draft,
+      groups: (draft.groups ?? []).map((group) => ({
+        ...group,
+        questions: (group.questions ?? []).map((question) => ({
+          ...question,
+          questionImageAssets: question.questionImageAssets ?? [],
+          sourcePageAssets: question.sourcePageAssets ?? [],
+        })),
+      })),
+    };
   } catch { return null; }
 }
 

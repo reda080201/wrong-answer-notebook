@@ -150,4 +150,23 @@ describe("useEntries", () => {
       ]),
     );
   });
+
+  it("flushes an in-flight entry save", async () => {
+    let resolveSave: (() => void) | undefined;
+    vi.mocked(saveEntries).mockImplementation(
+      () => new Promise<void>((resolve) => { resolveSave = resolve; }),
+    );
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const update = result.current.patchEntry(entry.id, { memo: "종료 직전" });
+    await waitFor(() => expect(saveEntries).toHaveBeenCalledTimes(1));
+    let flushed = false;
+    const flush = result.current.flushEntries().then(() => { flushed = true; });
+    await Promise.resolve();
+    expect(flushed).toBe(false);
+    resolveSave?.();
+    await act(async () => { await Promise.all([update, flush]); });
+    expect(flushed).toBe(true);
+  });
 });

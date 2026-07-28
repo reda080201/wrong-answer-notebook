@@ -18,6 +18,7 @@ export function useEntries() {
   const [error, setError] = useState<string | null>(null);
   const entriesRef = useRef<WrongAnswerEntry[]>([]);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
 
   const clearError = useCallback(() => setError(null), []);
 
@@ -29,6 +30,7 @@ export function useEntries() {
       setEntries(next);
       return value;
     });
+    lastOperationRef.current = task;
     saveQueueRef.current = task.then(() => undefined, () => undefined);
     return task;
   }, []);
@@ -51,6 +53,10 @@ export function useEntries() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  const flushEntries = useCallback(async () => {
+    await lastOperationRef.current;
+  }, []);
 
   const persist = useCallback(
     async (nextEntries: WrongAnswerEntry[]) => {
@@ -273,5 +279,6 @@ export function useEntries() {
     toggleMastered,
     toggleDifficult,
     refresh,
+    flushEntries,
   };
 }

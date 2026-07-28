@@ -89,4 +89,22 @@ describe("useSettings", () => {
       expect(result.current.settingsError).toBe("설정을 저장하지 못했습니다.");
     });
   });
+
+  it("clears an old save error after a newer save succeeds", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(mockedLoadSettings).toHaveBeenCalled());
+    let calls = 0;
+    mockedSaveSettings.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 1) throw new Error("일시 오류");
+    });
+
+    await act(async () => {
+      await expect(result.current.setSettings(defaultSettings)).rejects.toThrow("일시 오류");
+      await result.current.setSettings({ ...defaultSettings, answerViewPreferences: { ...defaultSettings.answerViewPreferences, hideAnswers: true } });
+    });
+
+    expect(result.current.settingsError).toBeNull();
+    expect(result.current.settingsSaveState).toBe("saved");
+  });
 });

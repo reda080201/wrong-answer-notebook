@@ -42,4 +42,17 @@ describe("useGeneratedExams retry", () => {
     expect(result.current.exams).toEqual([]);
     expect(result.current.hasRetryableChange).toBe(false);
   });
+
+  it("does not keep a discarded failure in the close flush", async () => {
+    saveGeneratedExams.mockRejectedValueOnce(new Error("저장 실패"));
+    const { result } = renderHook(() => useGeneratedExams());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await expect(result.current.remove("exam-1")).rejects.toThrow("저장 실패");
+    });
+    await act(async () => { result.current.discardFailedChange(); });
+    await expect(result.current.flush()).resolves.toBeUndefined();
+    await waitFor(() => expect(result.current.hasRetryableChange).toBe(false));
+  });
 });

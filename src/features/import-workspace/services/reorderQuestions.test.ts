@@ -5,7 +5,7 @@ import type { ImportDraftGroup } from "../model/importWorkspace";
 const group = (id: string, ids: string[]): ImportDraftGroup => ({
   id, title: id, questions: ids.map((questionId, order) => ({
     id: questionId, groupId: id, order, displayQuestionNumber: String(order + 1), sourceQuestionNumber: String(order + 1),
-    contentSegments: [{ id: `${questionId}-segment`, type: "text", text: questionId }], choices: [], figures: [], sourcePageAssets: [], explanationParts: [], sourceReferences: [], status: "ready", warnings: [],
+    contentSegments: [{ id: `${questionId}-segment`, type: "text", text: questionId }], choices: [], figures: [], questionImageAssets: [], sourcePageAssets: [], explanationParts: [], sourceReferences: [], status: "ready", warnings: [],
   })), answerItems: [], sourceFileIds: [], userConfirmed: false,
 });
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { EntryFormData } from "../../../types";
 import type { ImportQuestionDraft, ImportWorkspace } from "../model/importWorkspace";
 import { commitImportWorkspace } from "../services/commitImportWorkspace";
@@ -12,6 +12,7 @@ interface Props {
   initialWorkspace: ImportWorkspace;
   onSave: (entries: Partial<EntryFormData>[], assetSession?: ImportWorkspace["assetSession"]) => Promise<void> | void;
   onClose: () => void;
+  registerDraftFlush: (flush: (() => Promise<void>) | null) => void;
   validateRecoveryAssets?: (workspace: ImportWorkspace) => Promise<{ valid: boolean; message?: string }>;
   discardWorkspaceAssets?: (workspace: ImportWorkspace) => Promise<void>;
 }
@@ -20,7 +21,7 @@ function questionText(question: ImportQuestionDraft): string {
   return question.sourceText ?? question.contentSegments.map((segment) => segment.type === "text" || segment.type === "condition" ? segment.text : segment.type === "equation" ? segment.latex : "").filter(Boolean).join(" ");
 }
 
-export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose, validateRecoveryAssets, discardWorkspaceAssets }: Props) {
+export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose, registerDraftFlush, validateRecoveryAssets, discardWorkspaceAssets }: Props) {
   const { workspace, setWorkspace, replaceWorkspace, undo, redo, canUndo, canRedo } = useImportWorkspaceHistory(initialWorkspace);
   const [selectedGroupId, setSelectedGroupId] = useState(initialWorkspace.groups[0]?.id ?? "");
   const [selectedQuestionId, setSelectedQuestionId] = useState(initialWorkspace.groups[0]?.questions[0]?.id ?? "");
@@ -33,14 +34,21 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   const [closePromptOpen, setClosePromptOpen] = useState(false);
   const [closeBusy, setCloseBusy] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
+  const workspaceRef = useRef(workspace);
   const selectedGroup = workspace.groups.find((group) => group.id === selectedGroupId);
   const questions = selectedGroup?.questions ?? [];
   const selectedQuestion = questions.find((question) => question.id === selectedQuestionId);
   const selectedQuestionIndex = questions.findIndex((question) => question.id === selectedQuestionId);
   const warnings = useMemo(() => validateImportWorkspace(workspace), [workspace]);
   const visibleQuestions = filter === "review" ? questions.filter((question) => question.status !== "ready") : questions;
+  const memoryOnlyWithAssets = workspace.assetSession?.mode === "memory-only" && workspace.assetSession.assets.length > 0;
 
   useImportWorkspaceAutosave(workspace, !busy && !recoveryAvailable && !closePromptOpen);
+  useEffect(() => { workspaceRef.current = workspace; }, [workspace]);
+  useEffect(() => {
+    registerDraftFlush(async () => { saveImportWorkspaceDraft(workspaceRef.current); });
+    return () => registerDraftFlush(null);
+  }, [registerDraftFlush]);
   useEffect(() => { setRecoveryAvailable(Boolean(loadImportWorkspaceDraft())); }, []);
 
   const requestClose = () => {
@@ -50,6 +58,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   };
 
   const preserveAndClose = () => {
+    if (memoryOnlyWithAssets) return;
     saveImportWorkspaceDraft(workspace);
     setClosePromptOpen(false);
     onClose();
@@ -148,8 +157,8 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     <Dialog open={closePromptOpen} onClose={() => setClosePromptOpen(false)} title="가져오기 작업실을 닫을까요?" closeDisabled={closeBusy} busy={closeBusy}>
       <p>현재 초안과 staged 이미지 자산을 어떻게 처리할지 선택하세요.</p>
       {closeError && <p className="form-error" role="alert">{closeError}</p>}
-      {workspace.assetSession?.mode === "memory-only" && <p className="form-hint">브라우저 메모리 이미지가 포함된 초안은 앱을 다시 시작하면 복구할 수 없습니다.</p>}
-      <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={() => setClosePromptOpen(false)} disabled={closeBusy}>계속 편집</button><button type="button" className="btn-secondary" onClick={preserveAndClose} disabled={closeBusy}>초안 보존하고 닫기</button><button type="button" className="btn-danger" onClick={() => void discardAndClose()} disabled={closeBusy}>{closeBusy ? "폐기 중…" : "초안·이미지 폐기"}</button></footer>
+      {memoryOnlyWithAssets && <p className="form-hint">이미지 파일은 현재 작업실을 닫는 즉시 사라지므로 계속 편집하거나 초안·이미지를 폐기해야 합니다.</p>}
+      <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={() => setClosePromptOpen(false)} disabled={closeBusy}>계속 편집</button><button type="button" className="btn-secondary" onClick={preserveAndClose} disabled={closeBusy || memoryOnlyWithAssets}>초안 보존하고 닫기</button><button type="button" className="btn-danger" onClick={() => void discardAndClose()} disabled={closeBusy}>{closeBusy ? "폐기 중…" : "초안·이미지 폐기"}</button></footer>
     </Dialog>
   </Dialog>;
 }
