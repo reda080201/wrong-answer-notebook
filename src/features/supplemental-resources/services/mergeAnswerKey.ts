@@ -49,6 +49,41 @@ export interface ApplyAnswerMergeOptions {
   idFactory?: () => string;
 }
 
+export function getAnswerMergeResolutionIssues(
+  existingEntry: WrongAnswerEntry,
+  analysis: AnswerMergeAnalysis,
+  resolutions: AnswerMergeResolution[],
+): string[] {
+  const resolutionMap = new Map(resolutions.map((item) => [item.key, item]));
+  const targets = targetQuestionNumbers(existingEntry);
+  const issues: string[] = [];
+
+  for (const row of analysis.rows.filter((item) => item.status === "unmatched")) {
+    const resolution = resolutionMap.get(row.key);
+    if (resolution?.excluded) continue;
+    const target = normalizeQuestionNumber(resolution?.targetQuestionNumber ?? "");
+    if (!target || !targets.has(target)) {
+      issues.push(`${row.questionNumber}번 자료를 연결할 기존 문항 번호를 지정하거나 제외해 주세요.`);
+    }
+  }
+
+  const duplicateNumbers = new Set(
+    analysis.rows.filter((row) => row.status === "duplicate").map((row) => row.questionNumber),
+  );
+  for (const number of duplicateNumbers) {
+    const rows = analysis.rows.filter(
+      (row) => row.status === "duplicate" && row.questionNumber === number,
+    );
+    const selected = rows.filter((row) => resolutionMap.get(row.key)?.useDuplicate);
+    const allExcluded = rows.every((row) => resolutionMap.get(row.key)?.excluded);
+    if (selected.length !== 1 && !allExcluded) {
+      issues.push(`${number}번 중복 답안에서 사용할 항목 하나를 선택하거나 모두 제외해 주세요.`);
+    }
+  }
+
+  return issues;
+}
+
 const ANSWER_FIELDS: AnswerMergeField[] = [
   "answer",
   "explanation",
@@ -217,6 +252,14 @@ export function applyAnswerMerge(
   const allowed = new Set(options.allowedFields ?? ["answerKey", "explanationParts", "figures", "sourcePageImages", "learningBlocks"]);
   const resolutionMap = new Map(resolutions.map((item) => [item.key, item]));
   const analysis = analyzeAnswerMerge(existingEntry, importedData);
+  const resolutionIssues = getAnswerMergeResolutionIssues(
+    existingEntry,
+    analysis,
+    resolutions,
+  );
+  if (resolutionIssues.length > 0) {
+    throw new Error(resolutionIssues.join(" "));
+  }
   const answerKey = (existingEntry.answerKey ?? []).map(clone);
 
   if (allowed.has("answerKey")) {

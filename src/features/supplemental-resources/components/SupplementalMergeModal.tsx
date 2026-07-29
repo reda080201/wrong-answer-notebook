@@ -3,6 +3,7 @@ import type { EntryFormData, WrongAnswerEntry } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import {
   analyzeAnswerMerge,
+  getAnswerMergeResolutionIssues,
   type AnswerMergeResolution,
 } from "../services/mergeAnswerKey";
 import type { SupplementalImportMode } from "../model/supplementalResource";
@@ -28,6 +29,26 @@ const STATUS_LABEL: Record<string, string> = {
   duplicate: "중복",
 };
 
+const FIELD_LABEL: Record<string, string> = {
+  answer: "정답",
+  explanation: "풀이",
+  strategy: "풀이 전략",
+  steps: "풀이 단계",
+  choiceJudgements: "보기별 판단",
+  wrongPoint: "오답 포인트",
+  reviewPoint: "복습 포인트",
+  notes: "메모",
+  mistakeAnalysis: "실수 분석",
+  importantPoints: "중요 포인트",
+  difficulty: "난이도",
+  difficultyScore: "난이도 점수",
+  concepts: "개념",
+  diagramType: "도형 유형",
+  diagramSpec: "도형 구조",
+  needsReview: "검토 필요",
+  sourceNote: "출처 메모",
+};
+
 function rowText(value: unknown): string {
   if (value === undefined || value === null) return "없음";
   if (typeof value === "string") return value || "없음";
@@ -50,16 +71,12 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
   const updateResolution = (key: string, patch: Partial<AnswerMergeResolution>) => {
     setResolutions((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
   };
-  const duplicateNumbers = new Set(analysis.rows.filter((row) => row.status === "duplicate").map((row) => row.questionNumber));
-  const duplicateResolved = [...duplicateNumbers].every((number) => {
-    const rows = analysis.rows.filter((row) => row.status === "duplicate" && row.questionNumber === number);
-    return rows.some((row) => resolutionFor(row.key)?.useDuplicate) || rows.every((row) => resolutionFor(row.key)?.excluded);
-  });
-  const canSave = duplicateResolved && !saving;
+  const resolutionIssues = getAnswerMergeResolutionIssues(target, analysis, resolutions);
+  const canSave = resolutionIssues.length === 0 && !saving;
 
   const save = async () => {
     if (!canSave) {
-      setError("중복 답안을 해결한 뒤 저장할 수 있습니다.");
+      setError(resolutionIssues[0] ?? "병합 항목을 확인한 뒤 저장할 수 있습니다.");
       return;
     }
     setSaving(true);
@@ -89,11 +106,11 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
         </label>
         <p className="muted">기존 정답·해설은 기본적으로 유지됩니다. 충돌 행에서 새 값을 선택한 경우에만 해당 필드를 바꿉니다.</p>
         {analysis.blockingIssues.length > 0 && <div className="app-error-banner" role="alert">{analysis.blockingIssues.join(" ")}</div>}
+        {resolutionIssues.length > 0 && <div className="app-error-banner" role="alert">{resolutionIssues.join(" ")}</div>}
         <div className="supplemental-merge-table" role="table" aria-label="답안 병합 비교">
           {analysis.rows.length === 0 && <p className="list-empty">문항별 답안은 없으며 추가 이미지·해설 자료만 연결됩니다.</p>}
           {analysis.rows.map((row) => {
             const resolution = resolutionFor(row.key);
-            const conflictFields = row.fieldConflicts.map((item) => item.field);
             return (
               <article key={row.key} className={`supplemental-merge-row supplemental-merge-row--${row.status}`}>
                 <header>
@@ -105,17 +122,27 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
                   <div><small>새 정보</small><p>{rowText(row.incoming?.answer)}{row.incoming?.explanation ? ` · ${row.incoming.explanation}` : ""}</p></div>
                 </div>
                 {row.status === "conflict" && (
-                  <label>
-                    처리
-                    <select
-                      value={resolution?.fieldChoices && Object.values(resolution.fieldChoices)[0] === "incoming" ? "incoming" : "existing"}
-                      onChange={(event) => updateResolution(row.key, { fieldChoices: Object.fromEntries(conflictFields.map((field) => [field, event.target.value])) as AnswerMergeResolution["fieldChoices"] })}
-                      disabled={saving}
-                    >
-                      <option value="existing">기존 값 유지</option>
-                      <option value="incoming">새 값 적용</option>
-                    </select>
-                  </label>
+                  <div className="supplemental-merge-conflicts" aria-label={`${row.questionNumber}번 필드별 충돌 처리`}>
+                    {row.fieldConflicts.map((conflict) => (
+                      <label key={conflict.field}>
+                        <span>{FIELD_LABEL[conflict.field] ?? conflict.field}</span>
+                        <small>기존: {rowText(conflict.existing)} / 새 값: {rowText(conflict.incoming)}</small>
+                        <select
+                          value={resolution?.fieldChoices?.[conflict.field] ?? "existing"}
+                          onChange={(event) => updateResolution(row.key, {
+                            fieldChoices: {
+                              ...resolution?.fieldChoices,
+                              [conflict.field]: event.target.value as "existing" | "incoming",
+                            },
+                          })}
+                          disabled={saving}
+                        >
+                          <option value="existing">기존 값 유지</option>
+                          <option value="incoming">새 값 적용</option>
+                        </select>
+                      </label>
+                    ))}
+                  </div>
                 )}
                 {row.status === "unmatched" && (
                   <div className="supplemental-merge-actions">

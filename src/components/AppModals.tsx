@@ -2,7 +2,7 @@ import EntryForm from "./EntryForm";
 import ImportFromGptModal from "./ImportFromGptModal";
 import LearningImportModal from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
-import { discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
+import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
@@ -81,7 +81,7 @@ interface AppModalsProps {
   onOpenSettings?: (tab?: SettingsTab) => void;
   supplementalTarget?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null;
   onCloseSupplementalImport: () => void;
-  applySupplementalMerge: (payload: { entryId: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; savedImageFilenames: string[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }) => Promise<void>;
+  applySupplementalMerge: (payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }) => Promise<void>;
   supplementalManagerEntry?: WrongAnswerEntry | null;
   onCloseSupplementalManager: () => void;
   renameSupplementalResource: (entryId: string, resourceId: string, title: string) => Promise<void>;
@@ -139,7 +139,7 @@ export default function AppModals({
 }: AppModalsProps) {
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
-  const [pendingSupplemental, setPendingSupplemental] = useState<{ target: WrongAnswerEntry; mode: SupplementalImportMode; data: Partial<EntryFormData>; assetFiles: File[]; savedImageFilenames: string[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] } | null>(null);
+  const [pendingSupplemental, setPendingSupplemental] = useState<{ target: WrongAnswerEntry; expectedUpdatedAt: string; mode: SupplementalImportMode; data: Partial<EntryFormData>; assetFiles: File[]; savedImageFilenames: string[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] } | null>(null);
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -176,6 +176,15 @@ export default function AppModals({
   };
   const discardWorkspaceAssets = async (candidate: ImportWorkspace) => {
     if (candidate.assetSession?.mode === "tauri-staged") await discardImportAssetSession(candidate.assetSession.id);
+  };
+  const discardPendingSupplemental = (pending: NonNullable<typeof pendingSupplemental>) => {
+    void Promise.all([
+      pending.assetSession?.mode === "tauri-staged"
+        ? discardImportAssetSession(pending.assetSession.id).catch(() => undefined)
+        : Promise.resolve(),
+      ...pending.savedImageFilenames.map((filename) => deleteImage(filename).catch(() => undefined)),
+    ]);
+    setPendingSupplemental(null);
   };
 
   return (
@@ -240,7 +249,7 @@ export default function AppModals({
               sourceToStaged: staged.sourceToStaged,
               assets: staged.assets,
             } : undefined;
-            setPendingSupplemental({ target: supplementalTarget.entry, mode: supplementalTarget.mode, data, assetFiles: staged ? [] : assetFiles, savedImageFilenames, sourceFilename, assetSession });
+            setPendingSupplemental({ target: supplementalTarget.entry, expectedUpdatedAt: supplementalTarget.entry.updatedAt, mode: supplementalTarget.mode, data, assetFiles: staged ? [] : assetFiles, savedImageFilenames, sourceFilename, assetSession });
             onCloseSupplementalImport();
           }}
           onOpenSettings={onOpenSettings}
@@ -253,9 +262,9 @@ export default function AppModals({
           mode={pendingSupplemental.mode}
           assetFiles={pendingSupplemental.assetFiles}
           assetSession={pendingSupplemental.assetSession}
-          onClose={() => { if (pendingSupplemental.assetSession?.mode === "tauri-staged") void discardImportAssetSession(pendingSupplemental.assetSession.id); setPendingSupplemental(null); }}
+          onClose={() => discardPendingSupplemental(pendingSupplemental)}
           onSave={async ({ data, mode, title, resolutions, assetFiles, assetSession }) => {
-            await applySupplementalMerge({ entryId: pendingSupplemental.target.id, data, mode, title, resolutions, assetFiles, savedImageFilenames: pendingSupplemental.savedImageFilenames, sourceFilename: pendingSupplemental.sourceFilename, assetSession: pendingSupplemental.assetSession ?? assetSession });
+            await applySupplementalMerge({ entryId: pendingSupplemental.target.id, expectedUpdatedAt: pendingSupplemental.expectedUpdatedAt, data, mode, title, resolutions, assetFiles, sourceFilename: pendingSupplemental.sourceFilename, assetSession: pendingSupplemental.assetSession ?? assetSession });
             setPendingSupplemental(null);
           }}
         />

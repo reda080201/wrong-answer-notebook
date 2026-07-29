@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { deleteImage, errorMessage, loadEntries, saveEntries } from "../api";
+import { commitImportAssetSessionEntry, deleteImage, errorMessage, loadEntries, saveEntries } from "../api";
 import type { EntryFormData, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
 
@@ -191,6 +191,42 @@ export function useEntries() {
     [enqueueMutation],
   );
 
+  const patchEntryWithImportAssetSession = useCallback(
+    async (
+      id: string,
+      expectedUpdatedAt: string,
+      sessionId: string,
+      partial: EntryPatch,
+    ) => {
+      try {
+        setError(null);
+        const now = new Date().toISOString();
+        const task = saveQueueRef.current.then(async () => {
+          const current = entriesRef.current;
+          const existing = current.find((entry) => entry.id === id);
+          if (!existing) throw new Error("대상 문제지를 찾을 수 없습니다.");
+          if (existing.updatedAt !== expectedUpdatedAt) {
+            throw new Error("대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.");
+          }
+          const patch = typeof partial === "function" ? partial(existing) : partial;
+          const updated = { ...existing, ...patch, updatedAt: now };
+          await commitImportAssetSessionEntry(sessionId, id, expectedUpdatedAt, updated);
+          const next = current.map((entry) => (entry.id === id ? updated : entry));
+          entriesRef.current = next;
+          setEntries(next);
+        });
+        lastOperationRef.current = task;
+        saveQueueRef.current = task.then(() => undefined, () => undefined);
+        await task;
+      } catch (err) {
+        const message = errorMessage(err, "가져온 자료를 저장하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
+      }
+    },
+    [],
+  );
+
   const deleteEntry = useCallback(
     async (id: string) => {
       setError(null);
@@ -275,6 +311,7 @@ export function useEntries() {
     updateEntry,
     replaceEntries,
     patchEntry,
+    patchEntryWithImportAssetSession,
     deleteEntry,
     toggleMastered,
     toggleDifficult,

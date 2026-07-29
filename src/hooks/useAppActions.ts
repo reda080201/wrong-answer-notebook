@@ -83,6 +83,12 @@ interface UseAppActionsOptions {
     id: string,
     partial: EntryPatch,
   ) => Promise<void>;
+  patchEntryWithImportAssetSession: (
+    id: string,
+    expectedUpdatedAt: string,
+    sessionId: string,
+    partial: EntryPatch,
+  ) => Promise<void>;
   refresh: () => Promise<void>;
   upsertTemplate: (template: EntryTemplate) => Promise<void>;
   removeTemplate: (templateId: string) => Promise<void>;
@@ -108,6 +114,7 @@ export function useAppActions({
   replaceEntries,
   deleteEntry,
   patchEntry,
+  patchEntryWithImportAssetSession,
   refresh,
   upsertTemplate,
   removeTemplate,
@@ -684,38 +691,35 @@ export function useAppActions({
 
   const applySupplementalMerge = async ({
     entryId,
+    expectedUpdatedAt,
     data,
     mode,
     title,
     resolutions,
     assetFiles = [],
-    savedImageFilenames = [],
     assetSession,
     sourceFilename,
   }: {
     entryId: string;
+    expectedUpdatedAt: string;
     data: Partial<EntryFormData>;
     mode: SupplementalImportMode;
     title: string;
     resolutions: AnswerMergeResolution[];
     assetFiles?: File[];
-    savedImageFilenames?: string[];
     assetSession?: ImportAssetSessionManifest;
     sourceFilename?: string;
   }) => {
     const target = entries.find((entry) => entry.id === entryId);
     if (!target) throw new Error("대상 문제지를 찾을 수 없습니다.");
-    const baselineUpdatedAt = target.updatedAt;
-    let savedFilenames: string[] = [...savedImageFilenames];
+    let attemptSavedFilenames: string[] = [];
     try {
       let incoming = filterSupplementalData(data, mode);
       if (assetSession?.mode === "tauri-staged") {
-        const committed = await commitImportAssetSession(assetSession.id);
-        savedFilenames.push(...committed);
         incoming = rewriteImportAssetReferences(incoming, assetSession.sourceToStaged ?? {});
       } else if (assetFiles.length) {
         const importedAssets = await saveImportAssetFiles(assetFiles);
-        savedFilenames = importedAssets.savedFilenames;
+        attemptSavedFilenames = importedAssets.savedFilenames;
         incoming = rewriteImportAssetReferences(incoming, importedAssets.sourceToSaved);
       }
       const analysis = analyzeAnswerMerge(target, incoming);
@@ -737,15 +741,28 @@ export function useAppActions({
         sourceFilename,
         appliedFields: allowedFields,
       };
-      await patchEntry(entryId, (current) => {
-        if (current.updatedAt !== baselineUpdatedAt) {
-          throw new Error("대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.");
-        }
-        return applyAnswerMerge(current, incoming, resolutions, { allowedFields, resource });
-      });
+      const merge = (current: WrongAnswerEntry) =>
+        applyAnswerMerge(current, incoming, resolutions, { allowedFields, resource });
+      if (assetSession?.mode === "tauri-staged") {
+        await patchEntryWithImportAssetSession(
+          entryId,
+          expectedUpdatedAt,
+          assetSession.id,
+          merge,
+        );
+      } else {
+        await patchEntry(entryId, (current) => {
+          if (current.updatedAt !== expectedUpdatedAt) {
+            throw new Error("대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.");
+          }
+          return merge(current);
+        });
+      }
       setSupplementalTarget(null);
     } catch (error) {
-      await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      await Promise.all(
+        attemptSavedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)),
+      );
       throw error;
     }
   };

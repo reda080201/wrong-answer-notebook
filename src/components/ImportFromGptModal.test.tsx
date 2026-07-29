@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
-import { saveImageFiles } from "../api";
+import { deleteImage, pickImages, saveImageFiles } from "../api";
 import type { WrongAnswerEntry } from "../types";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
@@ -11,6 +11,7 @@ vi.mock("../api", () => ({
   getImageUrl: vi.fn(),
   pickImages: vi.fn(),
   saveImageFiles: vi.fn().mockResolvedValue(["img_mock.png"]),
+  deleteImage: vi.fn().mockResolvedValue(undefined),
 }));
 
 function confirmDangerousImportIfShown() {
@@ -97,6 +98,29 @@ describe("ImportFromGptModal", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "폼으로 보내기" })).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
     expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ answerKey: [expect.objectContaining({ questionNumber: "1", answer: "③" })], question: "" }), undefined, [], [], undefined);
+  });
+
+  it("removes every supplemental image created by the modal when a cancelled draft removed it from the list", async () => {
+    vi.mocked(pickImages).mockResolvedValueOnce(["supplemental-created.png"]);
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        sourceEntry={sourceEntry}
+        mode="supplemental"
+        supplementalMode="answer_key"
+      />,
+    );
+
+    fireEvent.click(document.querySelector(".image-upload-area")!);
+    await screen.findByLabelText("supplemental-created.png 이미지 삭제");
+    fireEvent.click(screen.getByLabelText("supplemental-created.png 이미지 삭제"));
+    fireEvent.click(screen.getByRole("button", { name: "취소" }));
+
+    await waitFor(() => {
+      expect(deleteImage).toHaveBeenCalledWith("supplemental-created.png");
+    });
   });
 
   it("adds user expected question numbers to Gemini prompts", async () => {

@@ -59,6 +59,7 @@ export default function App() {
     toggleMastered,
     toggleDifficult,
     patchEntry,
+    patchEntryWithImportAssetSession,
     flushEntries,
   } = useEntries();
   const {
@@ -410,6 +411,7 @@ export default function App() {
     replaceEntries,
     deleteEntry,
     patchEntry,
+    patchEntryWithImportAssetSession,
     refresh,
     setSettings,
     upsertTemplate,

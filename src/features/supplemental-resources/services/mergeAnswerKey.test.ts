@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
-import { analyzeAnswerMerge, applyAnswerMerge } from "./mergeAnswerKey";
+import { analyzeAnswerMerge, applyAnswerMerge, getAnswerMergeResolutionIssues } from "./mergeAnswerKey";
 
 const entry = (answerKey: WrongAnswerEntry["answerKey"] = []): WrongAnswerEntry => ({
   id: "sheet-1",
@@ -60,11 +60,37 @@ describe("supplemental answer merge", () => {
     expect(applied.answerKey?.[0]).toMatchObject({ answer: "④", explanation: "새 풀이" });
   });
 
+  it("applies conflict choices independently for each answer field", () => {
+    const base = entry([{ id: "existing", questionNumber: "1", answer: "③", explanation: "기존 풀이", importantPoints: [] }]);
+    const incoming = { answerKey: [answer("1", "④", { explanation: "새 풀이" })] };
+    const analysis = analyzeAnswerMerge(base, incoming);
+    const merged = applyAnswerMerge(base, incoming, [{
+      key: analysis.rows[0].key,
+      fieldChoices: { answer: "incoming", explanation: "existing" },
+    }]);
+
+    expect(merged.answerKey?.[0]).toMatchObject({ answer: "④", explanation: "기존 풀이" });
+  });
+
   it("blocks duplicate numbers and preserves unmatched rows as warnings", () => {
     const base = entry();
     const analysis = analyzeAnswerMerge(base, { answerKey: [answer("2", "①"), answer("02", "②"), answer("99", "③")] });
     expect(analysis.blockingIssues).toHaveLength(1);
     expect(analysis.rows.map((row) => row.status)).toEqual(["duplicate", "duplicate", "unmatched"]);
+  });
+
+  it("requires unmatched rows to be excluded or mapped to a real target question", () => {
+    const base = entry();
+    const incoming = { answerKey: [answer("99", "③")] };
+    const analysis = analyzeAnswerMerge(base, incoming);
+    expect(getAnswerMergeResolutionIssues(base, analysis, [{ key: analysis.rows[0].key }]))
+      .toContain("99번 자료를 연결할 기존 문항 번호를 지정하거나 제외해 주세요.");
+    expect(getAnswerMergeResolutionIssues(base, analysis, [{
+      key: analysis.rows[0].key,
+      targetQuestionNumber: "2번",
+    }])).toEqual([]);
+    expect(() => applyAnswerMerge(base, incoming, [{ key: analysis.rows[0].key }]))
+      .toThrow("기존 문항 번호");
   });
 
   it("appends source pages, figures, blocks, and history without mutating the source entry", () => {

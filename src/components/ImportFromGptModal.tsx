@@ -56,7 +56,7 @@ import { supplementalModeLabel } from "../features/supplemental-resources/model/
 
 interface ImportFromGptModalProps {
   onClose: () => void;
-  onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => void;
+  onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[]) => Promise<void> | void;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
@@ -325,6 +325,13 @@ export default function ImportFromGptModal({
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
   const preserveSupplementalImagesRef = useRef(false);
+  // Supplemental drafts can be cancelled after an image was removed from the UI.
+  // Keep the complete set created by this modal so those final-store files are not orphaned.
+  const createdSupplementalImagesRef = useRef(new Set<string>());
+  const rememberSupplementalImages = (filenames: string[]) => {
+    if (!isSupplementalMode) return;
+    filenames.forEach((filename) => createdSupplementalImagesRef.current.add(filename));
+  };
   const conceptImportValue = useMemo(() => {
     if (batchImport || draftOverride || zipProgress) return null;
     const parsedValue = tryParseConceptKnowledgeText(rawText);
@@ -729,7 +736,7 @@ export default function ImportFromGptModal({
     setConfirmedValidationErrors(false);
   };
 
-  const apply = () => {
+  const apply = async () => {
     if (!draft || !canApply) {
       setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
       return;
@@ -768,19 +775,37 @@ export default function ImportFromGptModal({
         ? supplementalImages
         : draft.sourcePageImages ?? [],
     };
-    if (isSupplementalMode) {
-      preserveSupplementalImagesRef.current = true;
-      onApply(nextData, undefined, assetFiles, images, filename);
-    } else if (!isSolutionMode && assetFiles.length > 0) {
-      onApply(nextData, undefined, assetFiles);
-    } else {
-      onApply(nextData, isSolutionMode ? applyMode : undefined);
+    try {
+      if (isSupplementalMode) {
+        await onApply(
+          nextData,
+          undefined,
+          assetFiles,
+          [...createdSupplementalImagesRef.current],
+          filename,
+        );
+        preserveSupplementalImagesRef.current = true;
+      } else if (!isSolutionMode && assetFiles.length > 0) {
+        await onApply(nextData, undefined, assetFiles);
+      } else {
+        await onApply(nextData, isSolutionMode ? applyMode : undefined);
+      }
+    } catch (applyError) {
+      setError(
+        applyError instanceof Error && applyError.message
+          ? applyError.message
+          : "가져오기 항목을 적용하지 못했습니다.",
+      );
     }
   };
 
   const handleClose = () => {
-    if (isSupplementalMode && !preserveSupplementalImagesRef.current && images.length) {
-      void Promise.all(images.map((filename) => deleteImage(filename).catch(() => undefined)));
+    if (isSupplementalMode && !preserveSupplementalImagesRef.current) {
+      void Promise.all(
+        [...createdSupplementalImagesRef.current].map((filename) =>
+          deleteImage(filename).catch(() => undefined),
+        ),
+      );
     }
     onClose();
   };
@@ -1119,13 +1144,17 @@ export default function ImportFromGptModal({
               {!isSolutionMode && (
                 <>
                   <ImagePreprocessor
-                    onAddImage={(filenameToAdd) => setImages((current) => [...current, filenameToAdd])}
+                    onAddImage={(filenameToAdd) => {
+                      rememberSupplementalImages([filenameToAdd]);
+                      setImages((current) => [...current, filenameToAdd]);
+                    }}
                   />
 
                   <ImageField
                     label="원본 사진"
                     images={images}
                     onChange={setImages}
+                    onImagesAdded={rememberSupplementalImages}
                     onRemove={(filenameToRemove) =>
                       setImages((current) => current.filter((item) => item !== filenameToRemove))
                     }
@@ -1553,10 +1582,10 @@ export default function ImportFromGptModal({
         </div>
 
         <div className="form-footer">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={handleClose}>
             취소
           </button>
-          <button type="button" className="btn-primary" disabled={!canApply} onClick={apply}>
+          <button type="button" className="btn-primary" disabled={!canApply} onClick={() => void apply()}>
             {isSolutionMode ? "해설 적용하기" : "폼으로 보내기"}
           </button>
         </div>

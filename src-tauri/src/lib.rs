@@ -1350,6 +1350,31 @@ fn commit_import_asset_session(
 }
 
 #[tauri::command]
+fn commit_import_asset_session_entry(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    session_id: String,
+    entry_id: String,
+    expected_updated_at: String,
+    entry: WrongAnswerEntry,
+) -> Result<ImportAssetCommitResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let filenames = store.commit_staged_entry_update(
+        &root.join("assets"),
+        &entry_id,
+        &expected_updated_at,
+        entry,
+    )?;
+    // Entry data and image promotion already succeeded. Leaving an empty staging
+    // directory is harmless and must not turn a successful merge into a false error.
+    let _ = fs::remove_dir_all(&root);
+    Ok(ImportAssetCommitResult {
+        session_id,
+        filenames,
+    })
+}
+
+#[tauri::command]
 fn discard_import_asset_session(app: tauri::AppHandle, session_id: String) -> Result<(), String> {
     let root = import_asset_session_root(&app, &session_id)?;
     if root.exists() {
@@ -2225,6 +2250,7 @@ pub fn run() {
             create_import_asset_session,
             stage_import_asset_bytes,
             commit_import_asset_session,
+            commit_import_asset_session_entry,
             discard_import_asset_session,
             validate_import_asset_session,
             cleanup_stale_import_asset_sessions,
