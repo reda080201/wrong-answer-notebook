@@ -21,6 +21,7 @@ export function collectEntryImportImageReferences(entry: Partial<EntryFormData>)
     ...(entry.figures ?? []).flatMap(collectFigureImageReferences),
     ...(entry.explanationParts ?? []).flatMap((part) => part.images ?? []),
     ...(entry.learningBlocks ?? []).flatMap((block) => block.images ?? []),
+    ...(entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []),
   ].filter((value): value is string => Boolean(value?.trim()));
 }
 
@@ -75,6 +76,10 @@ export function mapEntryImportImageReferences(
     learningBlocks: (entry.learningBlocks ?? []).map((block) => ({
       ...block,
       images: (block.images ?? []).map(map).filter((image): image is string => Boolean(image)),
+    })),
+    supplementalResources: (entry.supplementalResources ?? []).map((resource) => ({
+      ...resource,
+      images: (resource.images ?? []).map(map).filter((image): image is string => Boolean(image)),
     })),
   };
 }

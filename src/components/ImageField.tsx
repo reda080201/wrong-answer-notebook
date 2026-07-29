@@ -6,6 +6,8 @@ interface ImageFieldProps {
   images: string[];
   onChange: (images: string[]) => void;
   onRemove: (filename: string) => void;
+  /** Reports files created by this control so a parent can clean up a cancelled draft. */
+  onImagesAdded?: (filenames: string[]) => void;
 }
 
 export default function ImageField({
@@ -13,6 +15,7 @@ export default function ImageField({
   images,
   onChange,
   onRemove,
+  onImagesAdded,
 }: ImageFieldProps) {
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [failed, setFailed] = useState<Set<string>>(new Set());
@@ -46,7 +49,10 @@ export default function ImageField({
     setUploadError(null);
     try {
       const added = await pickImages();
-      if (added.length) onChange([...images, ...added]);
+      if (added.length) {
+        onImagesAdded?.(added);
+        onChange([...images, ...added]);
+      }
     } catch (error) {
       setUploadError(
         error instanceof Error && error.message
@@ -63,7 +69,10 @@ export default function ImageField({
     setUploadError(null);
     try {
       const added = await saveImageFiles(event.dataTransfer.files);
-      if (added.length) onChange([...images, ...added]);
+      if (added.length) {
+        onImagesAdded?.(added);
+        onChange([...images, ...added]);
+      }
     } catch (error) {
       setUploadError(
         error instanceof Error && error.message

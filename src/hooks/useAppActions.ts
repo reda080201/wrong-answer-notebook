@@ -46,6 +46,9 @@ import {
   getTodayReviewItems,
 } from "../utils/review";
 import { applyQuestionReviewResult, normalizeQuestionMeta, normalizeQuestionNumber } from "../utils/questionMeta";
+import { collectEntryImportImageReferences } from "../utils/importImageReferences";
+import { applyAnswerMerge, analyzeAnswerMerge, mergeResourceLink, type AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
+import { allowedFieldsForSupplementalMode, filterSupplementalData, supplementalKindForMode, type SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { useAppDialog } from "../shared/ui/AppDialogProvider";
 import type { EntryPatch } from "./useEntries";
 
@@ -80,6 +83,12 @@ interface UseAppActionsOptions {
     id: string,
     partial: EntryPatch,
   ) => Promise<void>;
+  patchEntryWithImportAssetSession: (
+    id: string,
+    expectedUpdatedAt: string,
+    sessionId: string,
+    partial: EntryPatch,
+  ) => Promise<void>;
   refresh: () => Promise<void>;
   upsertTemplate: (template: EntryTemplate) => Promise<void>;
   removeTemplate: (templateId: string) => Promise<void>;
@@ -105,6 +114,7 @@ export function useAppActions({
   replaceEntries,
   deleteEntry,
   patchEntry,
+  patchEntryWithImportAssetSession,
   refresh,
   upsertTemplate,
   removeTemplate,
@@ -128,6 +138,9 @@ export function useAppActions({
   const [importedInitialData, setImportedInitialData] =
     useState<Partial<EntryFormData> | undefined>();
   const [pendingImportFiles, setPendingImportFiles] = useState<File[]>([]);
+  const [supplementalTarget, setSupplementalTarget] = useState<{ entryId: string; mode: SupplementalImportMode } | null>(null);
+  const [supplementalManagerEntryId, setSupplementalManagerEntryId] = useState<string | null>(null);
+  const [supplementalLinkEntryId, setSupplementalLinkEntryId] = useState<string | null>(null);
   const [editingEntry, setEditingEntry] =
     useState<WrongAnswerEntry | undefined>();
   const [reviewMode, setReviewMode] = useState<ReviewMode | null>(null);
@@ -585,6 +598,56 @@ export function useAppActions({
     }
   };
 
+  const openEditEntry = (entryId: string) => {
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) return;
+    setPrefilledTitle("");
+    setImportedInitialData(undefined);
+    setEditingEntry(entry);
+    setShowForm(true);
+  };
+
+  const deleteEntryById = async (entryId: string) => {
+    const entry = entries.find((item) => item.id === entryId);
+    if (!entry) return;
+    if (!(await confirm({ title: "항목 삭제", message: `"${getEntryTitle(entry)}"을(를) 삭제할까요? 첨부 이미지도 함께 삭제됩니다.`, confirmLabel: "삭제" }))) return;
+    await deleteEntry(entryId);
+    if (selected?.id === entryId) setSelectedId(null);
+  };
+
+  const openSupplementalImport = (entryId: string, mode: SupplementalImportMode) => {
+    if (!entries.some((entry) => entry.id === entryId && entry.entryKind === "problem_sheet")) return;
+    setSupplementalManagerEntryId(null);
+    setSupplementalTarget({ entryId, mode });
+  };
+
+  const closeSupplementalImport = () => setSupplementalTarget(null);
+  const openSupplementalManager = (entryId: string) => {
+    if (!entries.some((entry) => entry.id === entryId && entry.entryKind === "problem_sheet")) return;
+    setSupplementalTarget(null);
+    setSupplementalManagerEntryId(entryId);
+  };
+  const closeSupplementalManager = () => setSupplementalManagerEntryId(null);
+  const openLearningEntryLink = (entryId: string) => setSupplementalLinkEntryId(entryId);
+  const closeLearningEntryLink = () => setSupplementalLinkEntryId(null);
+  const linkLearningEntry = async (entryId: string, source: WrongAnswerEntry) => {
+    await patchEntry(entryId, (current) => mergeResourceLink(current, source.id, source.entryKind === "lecture" ? "lecture" : "concept", source.title));
+    setSupplementalLinkEntryId(null);
+  };
+
+  const renameSupplementalResource = async (entryId: string, resourceId: string, title: string) => {
+    await patchEntry(entryId, (current) => ({
+      supplementalResources: (current.supplementalResources ?? []).map((resource) => resource.id === resourceId ? { ...resource, title, updatedAt: new Date().toISOString() } : resource),
+    }));
+  };
+
+  const deleteSupplementalResource = async (entryId: string, resourceId: string) => {
+    if (!(await confirm({ title: "추가 자료 이력 삭제", message: "이 기록만 삭제되며 이미 추가된 정답과 해설은 유지됩니다.", confirmLabel: "이력 삭제" }))) return;
+    await patchEntry(entryId, (current) => ({
+      supplementalResources: (current.supplementalResources ?? []).filter((resource) => resource.id !== resourceId),
+    }));
+  };
+
   const handleDelete = async () => {
     if (!selected) return;
     if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
@@ -624,6 +687,84 @@ export function useAppActions({
     setSolutionSourceEntry(undefined);
     setImportMode("import");
     setShowForm(true);
+  };
+
+  const applySupplementalMerge = async ({
+    entryId,
+    expectedUpdatedAt,
+    data,
+    mode,
+    title,
+    resolutions,
+    assetFiles = [],
+    assetSession,
+    sourceFilename,
+  }: {
+    entryId: string;
+    expectedUpdatedAt: string;
+    data: Partial<EntryFormData>;
+    mode: SupplementalImportMode;
+    title: string;
+    resolutions: AnswerMergeResolution[];
+    assetFiles?: File[];
+    assetSession?: ImportAssetSessionManifest;
+    sourceFilename?: string;
+  }) => {
+    const target = entries.find((entry) => entry.id === entryId);
+    if (!target) throw new Error("대상 문제지를 찾을 수 없습니다.");
+    let attemptSavedFilenames: string[] = [];
+    try {
+      let incoming = filterSupplementalData(data, mode);
+      if (assetSession?.mode === "tauri-staged") {
+        incoming = rewriteImportAssetReferences(incoming, assetSession.sourceToStaged ?? {});
+      } else if (assetFiles.length) {
+        const importedAssets = await saveImportAssetFiles(assetFiles);
+        attemptSavedFilenames = importedAssets.savedFilenames;
+        incoming = rewriteImportAssetReferences(incoming, importedAssets.sourceToSaved);
+      }
+      const analysis = analyzeAnswerMerge(target, incoming);
+      const allowedFields = [...allowedFieldsForSupplementalMode(mode)];
+      const resourceImages = collectEntryImportImageReferences(incoming);
+      const now = new Date().toISOString();
+      const appliedQuestions = analysis.rows
+        .filter((row) => row.status !== "unmatched" && row.status !== "duplicate" && !resolutions.find((item) => item.key === row.key)?.excluded)
+        .map((row) => row.questionNumber)
+        .filter(Boolean);
+      const resource = {
+        id: uuidv4(),
+        kind: supplementalKindForMode(mode),
+        title: title.trim() || "추가 자료",
+        createdAt: now,
+        updatedAt: now,
+        questionNumbers: [...new Set(appliedQuestions)],
+        images: [...new Set(resourceImages)],
+        sourceFilename,
+        appliedFields: allowedFields,
+      };
+      const merge = (current: WrongAnswerEntry) =>
+        applyAnswerMerge(current, incoming, resolutions, { allowedFields, resource });
+      if (assetSession?.mode === "tauri-staged") {
+        await patchEntryWithImportAssetSession(
+          entryId,
+          expectedUpdatedAt,
+          assetSession.id,
+          merge,
+        );
+      } else {
+        await patchEntry(entryId, (current) => {
+          if (current.updatedAt !== expectedUpdatedAt) {
+            throw new Error("대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.");
+          }
+          return merge(current);
+        });
+      }
+      setSupplementalTarget(null);
+    } catch (error) {
+      await Promise.all(
+        attemptSavedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)),
+      );
+      throw error;
+    }
   };
 
   const closeForm = () => {
@@ -684,8 +825,23 @@ export function useAppActions({
     openImport,
     openQuickGptSolution,
     openEdit,
+    openEditEntry,
+    deleteEntryById,
+    supplementalTarget,
+    supplementalManagerEntryId,
+    openSupplementalImport,
+    closeSupplementalImport,
+    openSupplementalManager,
+    closeSupplementalManager,
+    renameSupplementalResource,
+    deleteSupplementalResource,
+    supplementalLinkEntryId,
+    openLearningEntryLink,
+    closeLearningEntryLink,
+    linkLearningEntry,
     handleDelete,
     handleImportApply,
+    applySupplementalMerge,
     closeForm,
     closeImportModal,
   };

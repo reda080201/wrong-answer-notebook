@@ -202,4 +202,27 @@ describe("EntryListPane", () => {
     fireEvent.click(screen.getByRole("button", { name: "1~20" }));
     expect(setSelectedId).toHaveBeenCalledWith("p1");
   });
+
+  it("shows supplemental menu only for problem sheets and keeps card selection isolated", () => {
+    const setSelectedId = vi.fn();
+    const onAddSupplemental = vi.fn();
+    render(
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={[entry("sheet", "problem_sheet", "시험지"), entry("wrong", "wrong_answer", "오답")]}
+        filtered={[entry("sheet", "problem_sheet", "시험지")]}
+        selectedId={null}
+        setSelectedId={setSelectedId}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+        onAddSupplemental={onAddSupplemental}
+      />,
+    );
+    const menuTrigger = screen.getByRole("button", { name: "시험지 추가 자료 및 관리" });
+    fireEvent.click(menuTrigger);
+    fireEvent.click(screen.getByRole("menuitem", { name: "답지와 해설 추가" }));
+    expect(onAddSupplemental).toHaveBeenCalledWith("sheet", "answer_and_solution");
+    expect(setSelectedId).not.toHaveBeenCalled();
+  });
 });

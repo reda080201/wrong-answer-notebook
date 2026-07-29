@@ -10,8 +10,9 @@ describe("import image references", () => {
       figures: [{ id: "f1", questionNumber: "1", title: "", caption: "", image: "preferred.png", source: "original", original: { image: "original.png", sourcePageImage: "source.png" }, cleaned: { image: "cleaned.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "h", promptVersion: "v" } }],
       explanationParts: [{ id: "e1", text: "", images: ["explanation.png"] }],
       learningBlocks: [{ id: "b1", type: "concept", title: "개념", content: "내용", images: ["block.png"], figureIds: ["f1"] }],
+      supplementalResources: [{ id: "r1", kind: "source_pages", title: "원본", createdAt: "2026-01-01", updatedAt: "2026-01-01", images: ["supplemental.png"] }],
     };
-    expect(collectEntryImportImageReferences(entry)).toEqual(["page.png", "source-page.png", "preferred.png", "original.png", "source.png", "cleaned.png", "explanation.png", "block.png"]);
+    expect(collectEntryImportImageReferences(entry)).toEqual(["page.png", "source-page.png", "preferred.png", "original.png", "source.png", "cleaned.png", "explanation.png", "block.png", "supplemental.png"]);
   });
 
   it("maps every nested reference without mutating the entry", () => {

@@ -10,6 +10,9 @@ import { getEntryTitle } from "../utils/entry";
 import { normalizeQuestionMeta } from "../utils/questionMeta";
 import { buildSheetGroups } from "../utils/sheetGroup";
 import { difficultyScoreBand, difficultyScoreLabel, resolveEntryDifficultyScore } from "../utils/difficulty";
+import Menu from "../shared/ui/Menu";
+import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
+import { getSheetResourceStatus } from "../features/supplemental-resources/utils/getSheetResourceStatus";
 
 interface EntryListPaneProps {
   activeSection: EntryKind;
@@ -23,6 +26,11 @@ interface EntryListPaneProps {
   onQuickConceptCreate: (data: EntryFormData) => Promise<void>;
   onOpenImportantQuestion?: (entryId: string, questionNumber: string) => void;
   onStartImportantReview?: () => void;
+  onAddSupplemental?: (entryId: string, mode: SupplementalImportMode) => void;
+  onManageSupplemental?: (entryId: string) => void;
+  onEditEntry?: (entryId: string) => void;
+  onDeleteEntry?: (entryId: string) => void;
+  onLinkLearningEntry?: (entryId: string) => void;
 }
 
 const EXPANDED_GROUPS_KEY = "wrong-answer-expanded-sheet-groups";
@@ -48,6 +56,11 @@ export default function EntryListPane({
   onQuickConceptCreate,
   onOpenImportantQuestion,
   onStartImportantReview,
+  onAddSupplemental,
+  onManageSupplemental,
+  onEditEntry,
+  onDeleteEntry,
+  onLinkLearningEntry,
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
@@ -97,6 +110,7 @@ export default function EntryListPane({
     const difficultyScore = resolveEntryDifficultyScore(entry);
     const preview = getEntryCardPreview(entry);
     const attachedImageCount = imageCount(entry);
+    const resourceStatus = entry.entryKind === "problem_sheet" ? getSheetResourceStatus(entry) : null;
     return (
       <div
         key={entry.id}
@@ -128,6 +142,19 @@ export default function EntryListPane({
             </span>
           )}
           {entry.mastered && <span className="mastered-badge">✓ 완료</span>}
+          {entry.entryKind === "problem_sheet" && (
+            <Menu label="⋮" triggerAriaLabel={`${getEntryTitle(entry)} 추가 자료 및 관리`} stopPropagation>
+              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_key")}>답지만 추가</button>
+              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_and_solution")}>답지와 해설 추가</button>
+              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "solution")}>해설만 추가</button>
+              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "source_pages")}>원본 페이지 추가</button>
+              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "correction")}>정오표·보충자료 추가</button>
+              <button type="button" onClick={() => onLinkLearningEntry?.(entry.id)}>특강·개념자료 연결</button>
+              <button type="button" onClick={() => onManageSupplemental?.(entry.id)}>추가 자료 관리</button>
+              <button type="button" onClick={() => onEditEntry?.(entry.id)}>문제지 수정</button>
+              <button type="button" onClick={() => onDeleteEntry?.(entry.id)}>문제지 삭제</button>
+            </Menu>
+          )}
         </div>
         <p className="entry-card-question">{getEntryTitle(entry)}</p>
         {preview && <p className="entry-card-preview">{preview}</p>}
@@ -135,6 +162,12 @@ export default function EntryListPane({
           <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
           {attachedImageCount > 0 && <span className="image-indicator">📷 {attachedImageCount}</span>}
           {entry.tags.length > 0 && <span>#{entry.tags[0]}</span>}
+          {resourceStatus && (
+            <span className="entry-resource-status">
+              문항 {resourceStatus.questionCount}개 · 정답 {resourceStatus.answerCount}/{resourceStatus.questionCount} · 해설 {resourceStatus.explanationCount}/{resourceStatus.questionCount}
+              {resourceStatus.supplementalCount > 0 && ` · 추가 자료 ${resourceStatus.supplementalCount}개`}
+            </span>
+          )}
         </div>
       </div>
     );

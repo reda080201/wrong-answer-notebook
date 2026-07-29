@@ -201,6 +201,61 @@
   width: 100%;
 }
 
+.detail-more-menu-popover > button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  padding: 0.45rem 0.55rem;
+  border-radius: 6px;
+}
+
+.detail-more-menu-popover > button:hover,
+.detail-more-menu-popover > button:focus-visible {
+  background: var(--surface-hover);
+}
+
+.supplemental-merge-modal,
+.supplemental-resource-manager {
+  max-width: 920px;
+}
+
+.supplemental-merge-table,
+.supplemental-resource-row {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.supplemental-merge-row,
+.supplemental-resource-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+
+.supplemental-merge-row > header,
+.supplemental-merge-values,
+.supplemental-merge-actions,
+.supplemental-resource-actions {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.supplemental-merge-values {
+  align-items: flex-start;
+}
+
+.supplemental-merge-values > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.supplemental-merge-row--conflict { border-color: var(--warning); }
+.supplemental-merge-row--duplicate { border-color: var(--danger); }
+
 .btn-focus-primary {
   border-color: var(--accent);
   background: var(--accent);

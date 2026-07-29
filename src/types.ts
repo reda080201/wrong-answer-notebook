@@ -194,6 +194,36 @@ export interface SheetAnswerItem {
   sourceNote?: string;
 }
 
+export type SupplementalResourceKind =
+  | "answer_key"
+  | "solution"
+  | "correction"
+  | "source_pages"
+  | "lecture"
+  | "concept"
+  | "other";
+
+export type SupplementalAppliedField =
+  | "answerKey"
+  | "explanationParts"
+  | "figures"
+  | "sourcePageImages"
+  | "learningBlocks";
+
+export interface SupplementalResource {
+  id: string;
+  kind: SupplementalResourceKind;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  sourceFilename?: string;
+  sourceEntryId?: string;
+  questionNumbers?: string[];
+  images?: string[];
+  appliedFields?: SupplementalAppliedField[];
+  [key: string]: unknown;
+}
+
 export interface SheetFigureItem {
   id: string;
   questionNumber: string;
@@ -858,6 +888,7 @@ export interface WrongAnswerEntry {
   learningBlocks?: LearningBlock[];
   sourceType?: LectureSourceType;
   linkedEntryIds?: string[];
+  supplementalResources?: SupplementalResource[];
   concepts?: string[];
   /** @deprecated 마이그레이션용 — explanationParts로 이전됨 */
   explanation?: string;

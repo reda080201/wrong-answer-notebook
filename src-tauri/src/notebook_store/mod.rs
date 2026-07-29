@@ -50,6 +50,24 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
                 })
             }),
     );
+    referenced.extend(
+        entry
+            .extra
+            .get("supplementalResources")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flat_map(|resources| {
+                resources.iter().flat_map(|resource| {
+                    resource
+                        .get("images")
+                        .and_then(Value::as_array)
+                        .into_iter()
+                        .flat_map(|images| {
+                            images.iter().filter_map(Value::as_str).map(str::to_owned)
+                        })
+                })
+            }),
+    );
     for figure in &entry.figures {
         if let Some(image) = &figure.image {
             referenced.insert(image.clone());
@@ -135,6 +153,70 @@ impl NotebookStore {
             .lock()
             .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
         self.write_entries_locked(entries)
+    }
+
+    /// Promotes one staged import session only if the target entry still matches the
+    /// review baseline. If writing entries fails, every promoted asset is moved back.
+    pub fn commit_staged_entry_update(
+        &self,
+        assets_dir: &Path,
+        entry_id: &str,
+        expected_updated_at: &str,
+        next_entry: WrongAnswerEntry,
+    ) -> Result<Vec<String>, String> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
+        if !assets_dir.exists() {
+            return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
+        }
+
+        let mut entries = self.load_entries()?;
+        let index = entries
+            .iter()
+            .position(|entry| entry.id == entry_id)
+            .ok_or_else(|| "대상 문제지를 찾을 수 없습니다.".to_owned())?;
+        if entries[index].updated_at != expected_updated_at {
+            return Err(
+                "대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.".to_owned(),
+            );
+        }
+
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let result = (|| -> Result<(), String> {
+            for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
+                let source = item.map_err(|error| error.to_string())?.path();
+                if !source.is_file() {
+                    continue;
+                }
+                let filename = source
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
+                    .to_owned();
+                let target = self.images_path.join(&filename);
+                if target.exists() {
+                    return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+                }
+                fs::rename(&source, &target).map_err(|error| error.to_string())?;
+                moved.push((source, target));
+            }
+            entries[index] = next_entry;
+            self.write_entries_locked(&entries)
+        })();
+
+        if let Err(error) = result {
+            for (source, target) in moved.iter().rev() {
+                let _ = fs::rename(target, source);
+            }
+            return Err(error);
+        }
+
+        Ok(moved
+            .iter()
+            .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
+            .collect())
     }
 
     pub fn get_entry(&self, entry_id: &str) -> Result<Option<WrongAnswerEntry>, String> {
@@ -630,5 +712,61 @@ mod tests {
         assert_eq!(figure.source, "gpt_cleaned");
         assert_eq!(figure.needs_review, Some(false));
         assert_eq!(figure.extra["future"]["nested"]["kept"], true);
+    }
+
+    #[test]
+    fn staged_entry_commit_checks_the_review_baseline_before_promoting_images() {
+        let entry = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"baseline", "mastered":false
+        }]))
+        .unwrap()
+        .pop()
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let images = directory.path().join("images");
+        std::fs::create_dir_all(&images).unwrap();
+        let store = NotebookStore::new(directory.path().join("entries.json"), images.clone());
+        store.save_entries(&[entry.clone()]).unwrap();
+        let assets = directory.path().join("staged-assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        std::fs::write(assets.join("new-image.png"), [1_u8, 2, 3]).unwrap();
+
+        let mut next = entry.clone();
+        next.memo = "병합됨".to_owned();
+        next.updated_at = "after".to_owned();
+        let filenames = store
+            .commit_staged_entry_update(&assets, "e1", "baseline", next)
+            .unwrap();
+
+        assert_eq!(filenames, vec!["new-image.png"]);
+        assert!(images.join("new-image.png").exists());
+        assert!(!assets.join("new-image.png").exists());
+        assert_eq!(store.load_entries().unwrap()[0].memo, "병합됨");
+    }
+
+    #[test]
+    fn staged_entry_commit_keeps_assets_staged_when_the_review_baseline_is_stale() {
+        let entry = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"baseline", "mastered":false
+        }]))
+        .unwrap()
+        .pop()
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let images = directory.path().join("images");
+        std::fs::create_dir_all(&images).unwrap();
+        let store = NotebookStore::new(directory.path().join("entries.json"), images.clone());
+        store.save_entries(&[entry.clone()]).unwrap();
+        let assets = directory.path().join("staged-assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        std::fs::write(assets.join("new-image.png"), [1_u8, 2, 3]).unwrap();
+
+        let error = store
+            .commit_staged_entry_update(&assets, "e1", "stale", entry)
+            .unwrap_err();
+
+        assert!(error.contains("변경"));
+        assert!(assets.join("new-image.png").exists());
+        assert!(!images.join("new-image.png").exists());
     }
 }

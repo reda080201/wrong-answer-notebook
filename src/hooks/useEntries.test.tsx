@@ -4,13 +4,14 @@ import type { EntryFormData, WrongAnswerEntry } from "../types";
 
 vi.mock("../api", () => ({
   deleteImage: vi.fn(),
+  commitImportAssetSessionEntry: vi.fn(),
   errorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? `${fallback} (${error.message})` : fallback,
   loadEntries: vi.fn(),
   saveEntries: vi.fn(),
 }));
 
-import { deleteImage, loadEntries, saveEntries } from "../api";
+import { commitImportAssetSessionEntry, deleteImage, loadEntries, saveEntries } from "../api";
 import { useEntries } from "./useEntries";
 
 const entry: WrongAnswerEntry = {
@@ -53,11 +54,13 @@ const form: EntryFormData = {
 describe("useEntries", () => {
   beforeEach(() => {
     vi.mocked(deleteImage).mockReset();
+    vi.mocked(commitImportAssetSessionEntry).mockReset();
     vi.mocked(loadEntries).mockReset();
     vi.mocked(saveEntries).mockReset();
     vi.mocked(loadEntries).mockResolvedValue([entry]);
     vi.mocked(saveEntries).mockResolvedValue(undefined);
     vi.mocked(deleteImage).mockResolvedValue(undefined);
+    vi.mocked(commitImportAssetSessionEntry).mockResolvedValue([]);
   });
 
   it("does not delete removed images when saving an update fails", async () => {
@@ -168,5 +171,28 @@ describe("useEntries", () => {
     resolveSave?.();
     await act(async () => { await Promise.all([update, flush]); });
     expect(flushed).toBe(true);
+  });
+
+  it("commits a staged asset session and its entry patch without a separate entries write", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.patchEntryWithImportAssetSession(
+        entry.id,
+        entry.updatedAt,
+        "11111111-1111-4111-8111-111111111111",
+        { memo: "staged 자료 병합" },
+      );
+    });
+
+    expect(saveEntries).not.toHaveBeenCalled();
+    expect(commitImportAssetSessionEntry).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      entry.id,
+      entry.updatedAt,
+      expect.objectContaining({ memo: "staged 자료 병합" }),
+    );
+    expect(result.current.entries[0]).toMatchObject({ memo: "staged 자료 병합" });
   });
 });

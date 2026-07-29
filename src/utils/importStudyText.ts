@@ -208,6 +208,47 @@ export function parseImportedStudyText(
     }
 
     const rawQuestion = getString(parsed.question);
+    const answerOnlyKey = scrubRejectedNotesFromAnswers(normalizeAnswerKey(parsed.answerKey), normalizeRejectedNotes(parsed.rejectedNotes));
+    const answerOnlyBlocks = normalizeLearningBlocks(parsed.learningBlocks);
+    const answerOnlyFigures = normalizeImportFigures(parsed.figures, answerOnlyKey, answerOnlyBlocks);
+    if (!rawQuestion.trim() && (
+      answerOnlyKey.length > 0 ||
+      answerOnlyFigures.length > 0 ||
+      answerOnlyBlocks.length > 0 ||
+      normalizeTextList(parsed.sourcePageImages).length > 0 ||
+      normalizeTextList(parsed.questionImages).length > 0
+    )) {
+      return {
+        detectedFormat: "json",
+        data: {
+          entryKind: "problem_sheet",
+          subject: normalizeSubject(parsed.subject, fallbackSubject),
+          title: getString(parsed.title) || titleFromFilename(filename) || "추가 자료",
+          question: "",
+          memo: getString(parsed.memo),
+          correctAnswer: getString(parsed.correctAnswer),
+          tags: normalizeTags(parsed.tags),
+          answerKey: answerOnlyKey,
+          figures: answerOnlyFigures,
+          learningBlocks: answerOnlyBlocks,
+          questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerOnlyKey),
+          questionContentSegments: undefined,
+          importAudit: parsed.audit ? normalizeImportAudit(parsed.audit, { question: "", answerKey: answerOnlyKey, figures: answerOnlyFigures }) : undefined,
+          rejectedNotes: normalizeRejectedNotes(parsed.rejectedNotes),
+          mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
+          questionImages: normalizeTextList(parsed.questionImages),
+          sourcePageImages: normalizeTextList(parsed.sourcePageImages),
+          difficult: false,
+          difficulty: "none",
+          difficultyScore: maxAnswerDifficultyScore(answerOnlyKey),
+          myAnswer: "",
+          explanationParts: normalizeExplanationParts(parsed.explanationParts),
+          annotations: [],
+          mastered: false,
+        },
+        entryKindResolution: resolution,
+      };
+    }
     if (rawQuestion.trim()) {
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
       const question = removeFigureTokens(removeRejectedNotes(rawQuestion, rejectedNotes));

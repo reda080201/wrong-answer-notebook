@@ -2,7 +2,7 @@ import EntryForm from "./EntryForm";
 import ImportFromGptModal from "./ImportFromGptModal";
 import LearningImportModal from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
-import { discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
+import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
@@ -23,6 +23,11 @@ import type {
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
+import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
+import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
+import SupplementalLinkModal from "../features/supplemental-resources/components/SupplementalLinkModal";
+import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
+import type { AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
 import type { ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
 import { normalizeChoice } from "../features/import-workspace/model/importWorkspace";
 import { parseQuestionText } from "../utils/textLayout";
@@ -74,6 +79,17 @@ interface AppModalsProps {
   handleWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   onOpenSettings?: (tab?: SettingsTab) => void;
+  supplementalTarget?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null;
+  onCloseSupplementalImport: () => void;
+  applySupplementalMerge: (payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }) => Promise<void>;
+  supplementalManagerEntry?: WrongAnswerEntry | null;
+  onCloseSupplementalManager: () => void;
+  renameSupplementalResource: (entryId: string, resourceId: string, title: string) => Promise<void>;
+  deleteSupplementalResource: (entryId: string, resourceId: string) => Promise<void>;
+  supplementalLinkTarget?: WrongAnswerEntry | null;
+  supplementalLinkCandidates: WrongAnswerEntry[];
+  onCloseSupplementalLink: () => void;
+  onLinkLearningEntry: (entryId: string, source: WrongAnswerEntry) => Promise<void>;
 }
 
 export default function AppModals({
@@ -109,9 +125,21 @@ export default function AppModals({
   handleWikiLinkClick,
   existingTargets,
   onOpenSettings,
+  supplementalTarget,
+  onCloseSupplementalImport,
+  applySupplementalMerge,
+  supplementalManagerEntry,
+  onCloseSupplementalManager,
+  renameSupplementalResource,
+  deleteSupplementalResource,
+  supplementalLinkTarget,
+  supplementalLinkCandidates,
+  onCloseSupplementalLink,
+  onLinkLearningEntry,
 }: AppModalsProps) {
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
+  const [pendingSupplemental, setPendingSupplemental] = useState<{ target: WrongAnswerEntry; expectedUpdatedAt: string; mode: SupplementalImportMode; data: Partial<EntryFormData>; assetFiles: File[]; savedImageFilenames: string[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] } | null>(null);
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -148,6 +176,15 @@ export default function AppModals({
   };
   const discardWorkspaceAssets = async (candidate: ImportWorkspace) => {
     if (candidate.assetSession?.mode === "tauri-staged") await discardImportAssetSession(candidate.assetSession.id);
+  };
+  const discardPendingSupplemental = (pending: NonNullable<typeof pendingSupplemental>) => {
+    void Promise.all([
+      pending.assetSession?.mode === "tauri-staged"
+        ? discardImportAssetSession(pending.assetSession.id).catch(() => undefined)
+        : Promise.resolve(),
+      ...pending.savedImageFilenames.map((filename) => deleteImage(filename).catch(() => undefined)),
+    ]);
+    setPendingSupplemental(null);
   };
 
   return (
@@ -193,6 +230,59 @@ export default function AppModals({
           onApplyEntries={handleWorkspaceEntries}
           onOpenSettings={onOpenSettings}
           gptMcpPreferences={settings.gptMcpPreferences}
+        />
+      )}
+      {supplementalTarget && !pendingSupplemental && (
+        <ImportFromGptModal
+          fallbackSubject={SUBJECTS.includes(supplementalTarget.entry.subject as Subject) ? supplementalTarget.entry.subject as Subject : "기타"}
+          sourceEntry={supplementalTarget.entry}
+          mode="supplemental"
+          supplementalMode={supplementalTarget.mode}
+          onClose={onCloseSupplementalImport}
+          onApply={async (data, _applyMode, assetFiles = [], savedImageFilenames = [], sourceFilename) => {
+            const staged = assetFiles.length ? await stageImportAssetFiles(assetFiles) : null;
+            const assetSession = staged ? {
+              id: staged.sessionId,
+              mode: "tauri-staged" as const,
+              manifestVersion: 1 as const,
+              createdAt: new Date().toISOString(),
+              sourceToStaged: staged.sourceToStaged,
+              assets: staged.assets,
+            } : undefined;
+            setPendingSupplemental({ target: supplementalTarget.entry, expectedUpdatedAt: supplementalTarget.entry.updatedAt, mode: supplementalTarget.mode, data, assetFiles: staged ? [] : assetFiles, savedImageFilenames, sourceFilename, assetSession });
+            onCloseSupplementalImport();
+          }}
+          onOpenSettings={onOpenSettings}
+        />
+      )}
+      {pendingSupplemental && (
+        <SupplementalMergeModal
+          target={pendingSupplemental.target}
+          imported={pendingSupplemental.data}
+          mode={pendingSupplemental.mode}
+          assetFiles={pendingSupplemental.assetFiles}
+          assetSession={pendingSupplemental.assetSession}
+          onClose={() => discardPendingSupplemental(pendingSupplemental)}
+          onSave={async ({ data, mode, title, resolutions, assetFiles, assetSession }) => {
+            await applySupplementalMerge({ entryId: pendingSupplemental.target.id, expectedUpdatedAt: pendingSupplemental.expectedUpdatedAt, data, mode, title, resolutions, assetFiles, sourceFilename: pendingSupplemental.sourceFilename, assetSession: pendingSupplemental.assetSession ?? assetSession });
+            setPendingSupplemental(null);
+          }}
+        />
+      )}
+      {supplementalManagerEntry && (
+        <SupplementalResourceManagerModal
+          entry={supplementalManagerEntry}
+          onClose={onCloseSupplementalManager}
+          onRename={(resourceId, title) => renameSupplementalResource(supplementalManagerEntry.id, resourceId, title)}
+          onDelete={(resourceId) => deleteSupplementalResource(supplementalManagerEntry.id, resourceId)}
+        />
+      )}
+      {supplementalLinkTarget && (
+        <SupplementalLinkModal
+          target={supplementalLinkTarget}
+          candidates={supplementalLinkCandidates.filter((entry) => entry.id !== supplementalLinkTarget.id)}
+          onClose={onCloseSupplementalLink}
+          onLink={(source) => onLinkLearningEntry(supplementalLinkTarget.id, source)}
         />
       )}
       {showLearningImportModal && (

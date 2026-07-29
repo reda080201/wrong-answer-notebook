@@ -26,6 +26,13 @@ function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
 }
 
 describe("normalizeEntry", () => {
+  it("normalizes optional supplemental resource history without breaking legacy entries", () => {
+    const legacy = normalizeEntry(rawEntry());
+    expect(legacy.supplementalResources).toEqual([]);
+    const withResource = normalizeEntry(rawEntry({ supplementalResources: [{ id: "r1", kind: "source_pages", title: "원본", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", images: ["page.png"], futureFlag: true }] }));
+    expect(withResource.supplementalResources?.[0]).toMatchObject({ id: "r1", kind: "source_pages", images: ["page.png"], futureFlag: true });
+  });
+
   it("migrates legacy explanation and image fields", () => {
     const entry = normalizeEntry(
       rawEntry({
@@ -355,5 +362,12 @@ describe("normalizeEntry", () => {
       ruleLabel: "×2+1",
       termLabels: ["a1", "a2", "a3"],
     })).toEqual(expect.objectContaining({ type: "sequence-flow", termLabels: ["a1", "a2", "a3"] }));
+  });
+});
+
+describe("getAllImageFilenames", () => {
+  it("keeps images referenced by supplemental resource history", () => {
+    const entry = normalizeEntry(rawEntry({ supplementalResources: [{ id: "r", kind: "source_pages", title: "원본", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z", images: ["resource.png"] }] }));
+    expect(getAllImageFilenames(entry)).toContain("resource.png");
   });
 });
