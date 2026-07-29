@@ -41,7 +41,9 @@ import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
 import { loadImportWorkspaceDraft } from "./features/import-workspace/hooks/useImportWorkspaceAutosave";
 import { flushPendingAppWrites } from "./services/flushAppWrites";
+import { createSerialTaskQueue } from "./hooks/useSerialTaskQueue";
 import Dialog from "./shared/ui/Dialog";
+import ErrorNotice from "./shared/ui/ErrorNotice";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -112,7 +114,7 @@ export default function App() {
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
   const examSaveTimerRef = useRef<number | null>(null);
-  const examSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const examSaveQueueRef = useRef(createSerialTaskQueue());
   const examSaveSequenceRef = useRef(0);
   const allowWindowCloseRef = useRef(false);
   const windowCloseInFlightRef = useRef(false);
@@ -177,7 +179,7 @@ export default function App() {
     if (updateUi) setSavedExamSessions(nextSessions);
     setExamSaving(true);
     const saveTask = examSaveQueueRef.current
-      .then(async () => {
+      .enqueue(async () => {
         await saveExamSessions(nextSessions);
         return true;
       })
@@ -187,7 +189,6 @@ export default function App() {
         }
         return false;
       });
-    examSaveQueueRef.current = saveTask.then(() => undefined);
     const saved = await saveTask;
     if (sequence === examSaveSequenceRef.current) {
       if (saved) setExamSaveError(null);
@@ -626,19 +627,7 @@ export default function App() {
       />
 
       <main className="main">
-        {error && (
-          <div className="app-error-banner" role="alert">
-            <span>{error}</span>
-            <div className="app-error-actions">
-              <button type="button" onClick={refresh}>
-                다시 시도
-              </button>
-              <button type="button" onClick={clearError} aria-label="오류 닫기">
-                닫기
-              </button>
-            </div>
-          </div>
-        )}
+        {error && <ErrorNotice message={error} onRetry={() => void refresh()} onDismiss={clearError} />}
         {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && availableUpdate.latestVersion !== dismissedUpdateVersion && !examSession && (
           <div className="app-update-banner" role="status">
             <span>새 버전 {availableUpdate.latestVersion}을 사용할 수 있습니다.</span>

@@ -46,7 +46,10 @@ import {
   normalizeImagePreferences,
   resolveViewPreferences,
 } from "./utils/viewPreferences";
+import { toAppError } from "./services/appError";
+import { readStorageJson, writeStorageJson } from "./services/storageJson";
 
+export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
 const ENTRIES_STORAGE_KEY = "wrong-answer-entries";
 const SETTINGS_STORAGE_KEY = "wrong-answer-settings";
@@ -59,8 +62,11 @@ interface StoredEntriesDocument {
   entries: unknown[];
 }
 
-function parseStoredEntries(raw: string): WrongAnswerEntry[] {
-  const parsed = JSON.parse(raw) as unknown;
+function isUnknownStorageValue(value: unknown): value is unknown {
+  return value === value;
+}
+
+function parseStoredEntries(parsed: unknown): WrongAnswerEntry[] {
   const entries = Array.isArray(parsed)
     ? parsed
     : parsed && typeof parsed === "object" && "entries" in parsed && Array.isArray(parsed.entries)
@@ -341,13 +347,7 @@ export const builtInMemoTemplates: MemoTemplate[] = [
 ];
 
 export function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message.trim()) {
-    return `${fallback} (${error.message})`;
-  }
-  if (typeof error === "string" && error.trim()) {
-    return `${fallback} (${error})`;
-  }
-  return fallback;
+  return toAppError(error, fallback).message;
 }
 
 export async function loadEntries(): Promise<WrongAnswerEntry[]> {
@@ -356,8 +356,8 @@ export async function loadEntries(): Promise<WrongAnswerEntry[]> {
     if (isTauri()) {
       data = await invoke<WrongAnswerEntry[]>("load_entries");
     } else {
-      const raw = localStorage.getItem(ENTRIES_STORAGE_KEY);
-      data = raw ? parseStoredEntries(raw) : [];
+      const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
+      data = stored === null ? [] : parseStoredEntries(stored);
     }
     return data.map(normalizeEntry);
   } catch (error) {
@@ -377,7 +377,7 @@ export async function saveEntries(entries: WrongAnswerEntry[]): Promise<void> {
       schemaVersion: ENTRIES_SCHEMA_VERSION,
       entries,
     };
-    localStorage.setItem(ENTRIES_STORAGE_KEY, JSON.stringify(document));
+    writeStorageJson(localStorage, ENTRIES_STORAGE_KEY, document);
   } catch (error) {
     throw new Error(errorMessage(error, "노트를 저장하지 못했습니다."), {
       cause: error,
@@ -391,8 +391,8 @@ export async function loadSettings(): Promise<AppSettings> {
       const data = await invoke<AppSettings>("load_settings");
       return normalizeSettings(data);
     }
-    const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
-    return normalizeSettings(raw ? JSON.parse(raw) : DEFAULT_SETTINGS);
+    const stored = readStorageJson<unknown>(localStorage, SETTINGS_STORAGE_KEY, isUnknownStorageValue);
+    return normalizeSettings((stored ?? DEFAULT_SETTINGS) as AppSettings);
   } catch (error) {
     throw new Error(errorMessage(error, "설정을 불러오지 못했습니다."), {
       cause: error,
@@ -407,7 +407,7 @@ export async function saveSettings(settings: AppSettings): Promise<void> {
       await invoke("save_settings", { settings: normalized });
       return;
     }
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(normalized));
+    writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalized);
   } catch (error) {
     throw new Error(errorMessage(error, "설정을 저장하지 못했습니다."), {
       cause: error,
@@ -866,11 +866,14 @@ function fileToDataUrl(file: File): Promise<string> {
 
 export async function getImageUrl(filename: string): Promise<string> {
   const cached = imageUrlCache.get(filename);
-  if (cached) return cached;
+  if (cached) {
+    imageUrlCache.delete(filename);
+    imageUrlCache.set(filename, cached);
+    return cached;
+  }
 
   const localDataUrl = localStorage.getItem(filename);
   if (localDataUrl) {
-    imageUrlCache.set(filename, localDataUrl);
     return localDataUrl;
   }
 
@@ -881,7 +884,7 @@ export async function getImageUrl(filename: string): Promise<string> {
   try {
     const path = await invoke<string>("get_image_file_path", { filename });
     const url = convertFileSrc(path);
-    imageUrlCache.set(filename, url);
+    cacheImageUrl(filename, url);
     return url;
   } catch (error) {
     throw new Error(errorMessage(error, "이미지를 불러오지 못했습니다."), {
@@ -890,9 +893,24 @@ export async function getImageUrl(filename: string): Promise<string> {
   }
 }
 
+function cacheImageUrl(filename: string, url: string): void {
+  imageUrlCache.delete(filename);
+  imageUrlCache.set(filename, url);
+  while (imageUrlCache.size > IMAGE_URL_CACHE_LIMIT) {
+    const oldest = imageUrlCache.keys().next().value;
+    if (oldest === undefined) return;
+    imageUrlCache.delete(oldest);
+  }
+}
+
+export function clearImageUrlCache(filename?: string): void {
+  if (filename) imageUrlCache.delete(filename);
+  else imageUrlCache.clear();
+}
+
 export async function deleteImage(filename: string): Promise<void> {
   try {
-    imageUrlCache.delete(filename);
+    clearImageUrlCache(filename);
     if (localStorage.getItem(filename)) {
       localStorage.removeItem(filename);
       if (!isTauri()) return;
@@ -1064,7 +1082,9 @@ export async function restoreBackup(): Promise<BackupPayload | RestoreBackupResu
         filters: [{ name: "ZIP", extensions: ["zip"] }],
       });
       if (!selected || Array.isArray(selected)) return null;
-      return await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: selected });
+      const restored = await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: selected });
+      clearImageUrlCache();
+      return restored;
     }
 
     return new Promise((resolve, reject) => {
@@ -1103,8 +1123,8 @@ export async function previewOrphanImages(): Promise<OrphanImagePreview> {
     return invoke<OrphanImagePreview>("preview_orphan_images");
   }
 
-  const rawEntries = localStorage.getItem(ENTRIES_STORAGE_KEY);
-  const entries = rawEntries ? parseStoredEntries(rawEntries) : [];
+  const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
+  const entries = stored === null ? [] : parseStoredEntries(stored);
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   const filenames = Object.keys(localStorage).filter((key) => key.startsWith("img_") && !referenced.has(key));
   const totalBytes = filenames.reduce((sum, filename) => sum + (localStorage.getItem(filename)?.length ?? 0), 0);
@@ -1116,14 +1136,14 @@ export async function cleanupOrphanImages(): Promise<number> {
     return invoke<number>("cleanup_orphan_images");
   }
 
-  const rawEntries = localStorage.getItem(ENTRIES_STORAGE_KEY);
-  const entries = rawEntries ? parseStoredEntries(rawEntries) : [];
+  const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
+  const entries = stored === null ? [] : parseStoredEntries(stored);
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   let removed = 0;
   for (const key of Object.keys(localStorage)) {
     if (key.startsWith("img_") && !referenced.has(key)) {
       localStorage.removeItem(key);
-      imageUrlCache.delete(key);
+      clearImageUrlCache(key);
       removed += 1;
     }
   }

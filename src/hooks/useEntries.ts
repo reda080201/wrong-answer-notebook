@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { commitImportAssetSessionEntry, deleteImage, errorMessage, loadEntries, saveEntries } from "../api";
 import type { EntryFormData, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
+import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
 type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T };
 export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
@@ -17,13 +18,13 @@ export function useEntries() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const entriesRef = useRef<WrongAnswerEntry[]>([]);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
+  const { enqueue, drain } = useSerialTaskQueue();
 
   const clearError = useCallback(() => setError(null), []);
 
   const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
-    const task = saveQueueRef.current.then(async () => {
+    const task = enqueue(async () => {
       const { next, value } = mutation(entriesRef.current);
       await saveEntries(next);
       entriesRef.current = next;
@@ -31,15 +32,14 @@ export function useEntries() {
       return value;
     });
     lastOperationRef.current = task;
-    saveQueueRef.current = task.then(() => undefined, () => undefined);
     return task;
-  }, []);
+  }, [enqueue]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      await saveQueueRef.current;
+      await drain();
       const data = await loadEntries();
       entriesRef.current = data;
       setEntries(data);
@@ -48,7 +48,7 @@ export function useEntries() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [drain]);
 
   useEffect(() => {
     void refresh();
@@ -201,7 +201,7 @@ export function useEntries() {
       try {
         setError(null);
         const now = new Date().toISOString();
-        const task = saveQueueRef.current.then(async () => {
+        const task = enqueue(async () => {
           const current = entriesRef.current;
           const existing = current.find((entry) => entry.id === id);
           if (!existing) throw new Error("대상 문제지를 찾을 수 없습니다.");
@@ -216,7 +216,6 @@ export function useEntries() {
           setEntries(next);
         });
         lastOperationRef.current = task;
-        saveQueueRef.current = task.then(() => undefined, () => undefined);
         await task;
       } catch (err) {
         const message = errorMessage(err, "가져온 자료를 저장하지 못했습니다.");
@@ -224,7 +223,7 @@ export function useEntries() {
         throw new Error(message, { cause: err });
       }
     },
-    [],
+    [enqueue],
   );
 
   const deleteEntry = useCallback(

@@ -1,13 +1,15 @@
 import { useEffect } from "react";
 import type { ImportWorkspace } from "../model/importWorkspace";
+import { readStorageJson, writeStorageJson } from "../../../services/storageJson";
 
 const STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
 export function loadImportWorkspaceDraft(): ImportWorkspace | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const draft = JSON.parse(raw) as ImportWorkspace;
+    const draft = readStorageJson(localStorage, STORAGE_KEY, (value): value is ImportWorkspace =>
+      value !== null && typeof value === "object" && "id" in value && "groups" in value,
+    );
+    if (!draft) return null;
     return {
       ...draft,
       groups: (draft.groups ?? []).map((group) => ({
@@ -25,7 +27,7 @@ export function loadImportWorkspaceDraft(): ImportWorkspace | null {
 export function clearImportWorkspaceDraft(): void { localStorage.removeItem(STORAGE_KEY); }
 
 export function saveImportWorkspaceDraft(workspace: ImportWorkspace): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(workspace));
+  writeStorageJson(localStorage, STORAGE_KEY, workspace);
 }
 
 export function useImportWorkspaceAutosave(workspace: ImportWorkspace, enabled = true): void {

@@ -14,6 +14,9 @@ import {
   loadExamSessions,
   MAX_IMPORT_IMAGE_BYTES,
   cleanupOrphanImages,
+  clearImageUrlCache,
+  getImageUrl,
+  IMAGE_URL_CACHE_LIMIT,
   previewOrphanImages,
   saveExamSessions,
   saveImageFiles,
@@ -65,6 +68,7 @@ describe("image file security limits", () => {
     vi.clearAllMocks();
     mockedIsTauri.mockReturnValue(false);
     localStorage.clear();
+    clearImageUrlCache();
   });
 
   it("exposes the shared 25MB import image cap", () => {
@@ -110,6 +114,23 @@ describe("image file security limits", () => {
     const payload = mockedInvoke.mock.calls[0]?.[1] as { bytes: Uint8Array };
     expect(Array.from(payload.bytes)).toEqual(Array.from(bytes));
     expect(localStorage.length).toBe(0);
+  });
+
+  it("bounds desktop image URL caching and does not cache browser data URLs", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    mockedInvoke.mockImplementation(async (_command, args) => `C:/images/${(args as { filename: string }).filename}`);
+    for (let index = 0; index <= IMAGE_URL_CACHE_LIMIT; index += 1) {
+      await getImageUrl(`image-${index}.png`);
+    }
+    const afterInitialLoad = mockedInvoke.mock.calls.length;
+    await getImageUrl("image-0.png");
+    expect(mockedInvoke).toHaveBeenCalledTimes(afterInitialLoad + 1);
+
+    mockedIsTauri.mockReturnValue(false);
+    localStorage.setItem("img_browser.png", "data:image/png;base64,value");
+    await getImageUrl("img_browser.png");
+    await getImageUrl("img_browser.png");
+    expect(mockedInvoke).toHaveBeenCalledTimes(afterInitialLoad + 1);
   });
 
   it("rejects oversized image files in Tauri mode", async () => {
