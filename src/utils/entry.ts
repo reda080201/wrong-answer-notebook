@@ -29,6 +29,15 @@ import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
+import {
+  isLearningImportance,
+  isLearningReviewStatus,
+  isLearningSubjectDomain,
+  normalizeChoiceExamples,
+  normalizeLearningSourceReferences,
+  normalizePassageExamples,
+  normalizeSubjectLearningMetadata,
+} from "../features/learning/model/learningMetadata";
 
 function isEntryKind(v: unknown): v is EntryKind {
   return v === "wrong_answer" || v === "problem_sheet" || v === "concept" || v === "lecture";
@@ -453,6 +462,26 @@ export function normalizeLearningBlocks(raw: unknown): LearningBlock[] {
         figureIds: Array.isArray(item.figureIds)
           ? item.figureIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
           : undefined,
+        subjectDomain: isLearningSubjectDomain(item.subjectDomain)
+          ? item.subjectDomain
+          : undefined,
+        unit: typeof item.unit === "string" ? item.unit.trim() || undefined : undefined,
+        subunit: typeof item.subunit === "string" ? item.subunit.trim() || undefined : undefined,
+        keywords: Array.isArray(item.keywords)
+          ? item.keywords.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+          : undefined,
+        importance: isLearningImportance(item.importance) ? item.importance : undefined,
+        reviewStatus: isLearningReviewStatus(item.reviewStatus) ? item.reviewStatus : undefined,
+        passageExamples: normalizePassageExamples(item.passageExamples),
+        choiceExamples: normalizeChoiceExamples(item.choiceExamples),
+        commonTraps: Array.isArray(item.commonTraps)
+          ? item.commonTraps.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+          : undefined,
+        relatedConcepts: Array.isArray(item.relatedConcepts)
+          ? item.relatedConcepts.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim())
+          : undefined,
+        sourceReferences: normalizeLearningSourceReferences(item.sourceReferences),
+        subjectMetadata: normalizeSubjectLearningMetadata(item.subjectMetadata),
       };
     })
     .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec || item.images?.length || item.figureIds?.length);

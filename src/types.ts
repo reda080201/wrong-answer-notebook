@@ -160,6 +160,93 @@ export type LearningBlockType =
   | "checklist"
   | "diagram";
 
+export type LearningSubjectDomain =
+  | "math"
+  | "language_media"
+  | "social_culture"
+  | "life_ethics"
+  | "general";
+
+export type LearningImportance = "essential" | "recommended" | "reference";
+export type LearningReviewStatus = "draft" | "needs_review" | "reviewed";
+
+export interface LearningSourceReference {
+  entryId: string;
+  entryTitle?: string;
+  questionNumber?: string;
+  sourceType?: "problem" | "answer" | "solution" | "lecture" | "concept" | "manual";
+}
+
+export interface LearningChoiceExample {
+  id: string;
+  text: string;
+  verdict?: "correct" | "incorrect" | "depends";
+  reason?: string;
+  isSynthetic?: boolean;
+}
+
+export interface LearningPassageExample {
+  id: string;
+  text: string;
+  explanation?: string;
+  clues?: string[];
+  isSynthetic?: boolean;
+}
+
+export interface MathLearningMetadata {
+  subject: "math";
+  knowledgeType: "formula" | "concept" | "solution_method" | "problem_signal" | "condition_check" | "transformation" | "common_trap";
+  formulaLatex?: string[];
+  prerequisites?: string[];
+  problemSignals?: string[];
+  whenToUse?: string[];
+  avoidWhen?: string[];
+  solutionSteps?: string[];
+  exampleOutline?: string;
+}
+
+export interface LanguageMediaLearningMetadata {
+  subject: "language_media";
+  knowledgeType: "concept" | "rule" | "exception" | "example" | "analysis_method" | "choice_pattern";
+  area?: "language" | "media";
+  rule?: string;
+  exceptions?: string[];
+  identificationClues?: string[];
+  commonWrongClaims?: string[];
+}
+
+export interface SocialCultureLearningMetadata {
+  subject: "social_culture";
+  knowledgeType: "concept" | "comparison" | "passage_pattern" | "choice_pattern" | "research_method" | "data_analysis" | "common_confusion";
+  definition?: string;
+  judgementCriteria?: string[];
+  passageClues?: string[];
+  casePatterns?: string[];
+  comparisonTargets?: string[];
+  commonConfusions?: string[];
+  dataTypes?: Array<"table" | "graph" | "research_case" | "passage" | "statistics">;
+}
+
+export interface LifeEthicsLearningMetadata {
+  subject: "life_ethics";
+  knowledgeType: "concept" | "thinker" | "ethical_issue" | "claim" | "comparison" | "passage_pattern" | "choice_pattern" | "common_confusion";
+  thinkers?: string[];
+  thinkerAliases?: string[];
+  ethicalIssues?: string[];
+  keyClaims?: string[];
+  affirmedClaims?: string[];
+  rejectedClaims?: string[];
+  passageClues?: string[];
+  comparisonThinkers?: string[];
+  commonConfusions?: string[];
+}
+
+export type SubjectLearningMetadata =
+  | MathLearningMetadata
+  | LanguageMediaLearningMetadata
+  | SocialCultureLearningMetadata
+  | LifeEthicsLearningMetadata;
+
 export interface LearningBlock {
   id: string;
   type: LearningBlockType;
@@ -170,6 +257,18 @@ export interface LearningBlock {
   diagramSpec?: DiagramSpec;
   images?: string[];
   figureIds?: string[];
+  subjectDomain?: LearningSubjectDomain;
+  unit?: string;
+  subunit?: string;
+  keywords?: string[];
+  importance?: LearningImportance;
+  reviewStatus?: LearningReviewStatus;
+  passageExamples?: LearningPassageExample[];
+  choiceExamples?: LearningChoiceExample[];
+  commonTraps?: string[];
+  relatedConcepts?: string[];
+  sourceReferences?: LearningSourceReference[];
+  subjectMetadata?: SubjectLearningMetadata;
 }
 
 export interface SheetAnswerItem {

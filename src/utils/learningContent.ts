@@ -1,5 +1,14 @@
 import type { LearningBlock, LearningBlockType, LectureSourceType, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { normalizeDiagramSpec, normalizeLearningDiagramType } from "./entry";
+import {
+  isLearningImportance,
+  isLearningReviewStatus,
+  isLearningSubjectDomain,
+  normalizeChoiceExamples,
+  normalizeLearningSourceReferences,
+  normalizePassageExamples,
+  normalizeSubjectLearningMetadata,
+} from "../features/learning/model/learningMetadata";
 
 const SAFE_BLOCK_TYPES = new Set<LearningBlockType>([
   "concept",
@@ -102,6 +111,18 @@ export function normalizeImportedLearningBlocks(raw: unknown): LearningBlock[] {
         sourceQuestionNumber: typeof record.sourceQuestionNumber === "string" ? record.sourceQuestionNumber.trim() : undefined,
         diagramType: normalizeLearningDiagramType(record.diagramType),
         diagramSpec: normalizeDiagramSpec(record.diagramSpec),
+        subjectDomain: isLearningSubjectDomain(record.subjectDomain) ? record.subjectDomain : undefined,
+        unit: typeof record.unit === "string" ? record.unit.trim() || undefined : undefined,
+        subunit: typeof record.subunit === "string" ? record.subunit.trim() || undefined : undefined,
+        keywords: Array.isArray(record.keywords) ? record.keywords.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()) : undefined,
+        importance: isLearningImportance(record.importance) ? record.importance : undefined,
+        reviewStatus: isLearningReviewStatus(record.reviewStatus) ? record.reviewStatus : undefined,
+        passageExamples: normalizePassageExamples(record.passageExamples),
+        choiceExamples: normalizeChoiceExamples(record.choiceExamples),
+        commonTraps: Array.isArray(record.commonTraps) ? record.commonTraps.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()) : undefined,
+        relatedConcepts: Array.isArray(record.relatedConcepts) ? record.relatedConcepts.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim()) : undefined,
+        sourceReferences: normalizeLearningSourceReferences(record.sourceReferences),
+        subjectMetadata: normalizeSubjectLearningMetadata(record.subjectMetadata),
       };
     })
     .filter(Boolean) as LearningBlock[];

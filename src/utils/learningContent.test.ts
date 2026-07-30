@@ -85,4 +85,28 @@ describe("learning content utilities", () => {
 
     expect(blocks[0]).toEqual(expect.objectContaining({ type: "concept", title: "핵심" }));
   });
+
+  it("preserves optional learning hub metadata from JSON imports", () => {
+    const blocks = parseLearningImportText(JSON.stringify({
+      learningBlocks: [{
+        title: "합성함수 미분",
+        content: "안쪽 함수를 먼저 미분한다.",
+        subjectDomain: "math",
+        unit: "미분",
+        keywords: ["연쇄법칙"],
+        importance: "essential",
+        reviewStatus: "reviewed",
+        subjectMetadata: { subject: "math", knowledgeType: "formula", formulaLatex: ["f(g(x))"] },
+      }],
+    }), "lecture.json");
+
+    expect(blocks[0]).toEqual(expect.objectContaining({
+      subjectDomain: "math",
+      unit: "미분",
+      keywords: ["연쇄법칙"],
+      importance: "essential",
+      reviewStatus: "reviewed",
+      subjectMetadata: expect.objectContaining({ subject: "math" }),
+    }));
+  });
 });
