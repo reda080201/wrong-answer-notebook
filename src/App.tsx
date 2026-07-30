@@ -45,6 +45,7 @@ import { createSerialTaskQueue } from "./hooks/useSerialTaskQueue";
 import Dialog from "./shared/ui/Dialog";
 import ErrorNotice from "./shared/ui/ErrorNotice";
 import LearningHubView from "./features/learning/components/LearningHubView";
+import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -93,6 +94,7 @@ export default function App() {
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
   const [showLearningHub, setShowLearningHub] = useState(false);
+  const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
     entryId: string;
@@ -694,6 +696,7 @@ export default function App() {
                 if (!blocks.some((block) => block.id === blockId)) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
                 return { learningBlocks: blocks.filter((block) => block.id !== blockId) };
               })}
+              onOpenCandidateReview={setLearningCandidateEntryId}
             />
           ) : <>
           <EntryListPane
@@ -868,6 +871,18 @@ export default function App() {
           </>}
         </div>
       </main>
+
+      {learningCandidateEntryId && (() => {
+        const candidateEntry = entries.find((entry) => entry.id === learningCandidateEntryId);
+        if (!candidateEntry) return null;
+        return <LearningCandidateReviewModal
+          entry={candidateEntry}
+          onClose={() => setLearningCandidateEntryId(null)}
+          onSave={(blocks) => patchEntry(candidateEntry.id, (current) => ({
+            learningBlocks: [...(current.learningBlocks ?? []), ...blocks.filter((block) => !(current.learningBlocks ?? []).some((existing) => existing.sourceQuestionNumber === block.sourceQuestionNumber && existing.type === block.type && existing.title.trim().toLocaleLowerCase("ko-KR") === block.title.trim().toLocaleLowerCase("ko-KR")))],
+          }))}
+        />;
+      })()}
 
       <AppModals
         registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}

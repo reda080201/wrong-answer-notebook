@@ -12,7 +12,7 @@ const entry: WrongAnswerEntry = {
 describe("LearningHubView", () => {
   it("renders math details and opens the linked question", () => {
     const onOpenSource = vi.fn();
-    render(<LearningHubView entries={[entry]} onOpenSource={onOpenSource} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+    render(<LearningHubView entries={[entry]} onOpenSource={onOpenSource} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     expect(screen.getByText("과목별 학습 지식 허브")).toBeInTheDocument();
     expect(screen.getByText("합성함수 미분")).toBeInTheDocument();
     expect(screen.getByText("언제 사용하는가")).toBeInTheDocument();
@@ -22,7 +22,7 @@ describe("LearningHubView", () => {
   });
 
   it("filters cards by combined search", () => {
-    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     fireEvent.change(screen.getByRole("textbox", { name: "학습 내용 검색" }), { target: { value: "없는 문자열" } });
     expect(screen.getByText("조건에 맞는 학습 카드가 없습니다.")).toBeInTheDocument();
   });
