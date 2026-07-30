@@ -77,6 +77,7 @@ export default function App() {
     patchImagePreferences,
     patchGptMcpPreferences,
     patchChatGptMcpPreferences,
+    patchUpdatePreferences,
     patchExamPrintPreferences,
     upsertTemplate,
     removeTemplate,
@@ -420,6 +421,7 @@ export default function App() {
     patchEntryWithImportAssetSession,
     refresh,
     setSettings,
+    patchSettings,
     upsertTemplate,
     removeTemplate,
     upsertPromptTemplate,
@@ -1000,7 +1002,7 @@ export default function App() {
           onInstallUpdate={async () => { await updater.installUpdate(); }}
           onRestartAfterUpdate={async () => { await updater.restart(); }}
           onOpenReleasePage={() => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); }}
-          onPatchUpdatePreferences={async (patch) => { await patchSettings({ updatePreferences: { ...settings.updatePreferences, ...patch } }); }}
+          onPatchUpdatePreferences={patchUpdatePreferences}
           initialTab={settingsInitialTab}
           onClose={() => {
             setShowSettings(false);

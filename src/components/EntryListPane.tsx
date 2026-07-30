@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { writeUiStorageJson } from "../services/uiStorage";
 import QuickConceptPanel from "./QuickConceptPanel";
 import type { EntryFormData, EntryKind, Subject, WrongAnswerEntry } from "../types";
 import {
@@ -93,7 +94,7 @@ export default function EntryListPane({
     const existing = new Set(groupedSheets.filter((item) => item.kind === "group").map((item) => item.groupId));
     setExpandedGroupIds((current) => {
       const next = new Set([...current].filter((id) => existing.has(id)));
-      localStorage.setItem(EXPANDED_GROUPS_KEY, JSON.stringify([...next]));
+      writeUiStorageJson(EXPANDED_GROUPS_KEY, [...next]);
       return next;
     });
   }, [activeSection, groupedSheets]);
@@ -101,7 +102,7 @@ export default function EntryListPane({
   const updateExpandedGroups = (updater: (current: Set<string>) => Set<string>) => {
     setExpandedGroupIds((current) => {
       const next = updater(current);
-      localStorage.setItem(EXPANDED_GROUPS_KEY, JSON.stringify([...next]));
+      writeUiStorageJson(EXPANDED_GROUPS_KEY, [...next]);
       return next;
     });
   };
