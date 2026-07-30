@@ -121,6 +121,6 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       <button type="button" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>
     </div>
     <div className="learning-hub-active-filters">{Object.entries(filters).filter(([key, value]) => key !== "search" ? value !== "all" && value !== false : Boolean(value)).map(([key, value]) => <span key={key}>{key === "search" ? `검색: ${value}` : key === "linkedOnly" ? "연결 문항" : String(value)}</span>)}</div>
-    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} {...item} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
+    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;
 }
