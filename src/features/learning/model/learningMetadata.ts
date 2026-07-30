@@ -37,6 +37,14 @@ function strings(value: unknown): string[] | undefined {
   return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
 }
 
+function sourceType(value: unknown): LearningSourceReference["sourceType"] {
+  return value === "problem" || value === "answer" || value === "solution" || value === "lecture" || value === "concept" || value === "manual" ? value : undefined;
+}
+
+function choiceVerdict(value: unknown): LearningChoiceExample["verdict"] {
+  return value === "correct" || value === "incorrect" || value === "depends" ? value : undefined;
+}
+
 export function normalizeLearningSourceReferences(value: unknown): LearningSourceReference[] | undefined {
   if (!Array.isArray(value)) return undefined;
   return value
@@ -45,7 +53,7 @@ export function normalizeLearningSourceReferences(value: unknown): LearningSourc
       entryId: typeof item.entryId === "string" ? item.entryId.trim() : "",
       entryTitle: typeof item.entryTitle === "string" ? item.entryTitle.trim() || undefined : undefined,
       questionNumber: typeof item.questionNumber === "string" ? item.questionNumber.trim() || undefined : undefined,
-      sourceType: item.sourceType === "problem" || item.sourceType === "answer" || item.sourceType === "solution" || item.sourceType === "lecture" || item.sourceType === "concept" || item.sourceType === "manual" ? item.sourceType : undefined,
+      sourceType: sourceType(item.sourceType),
     }))
     .filter((item) => Boolean(item.entryId));
 }
@@ -71,7 +79,7 @@ export function normalizeChoiceExamples(value: unknown): LearningChoiceExample[]
     .map((item, index) => ({
       id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `choice-${index + 1}`,
       text: typeof item.text === "string" ? item.text.trim() : "",
-      verdict: item.verdict === "correct" || item.verdict === "incorrect" || item.verdict === "depends" ? item.verdict : undefined,
+      verdict: choiceVerdict(item.verdict),
       reason: typeof item.reason === "string" ? item.reason.trim() || undefined : undefined,
       isSynthetic: item.isSynthetic === true,
     }))

@@ -55,7 +55,7 @@ function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave
   </form>;
 }
 
-function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock }: LearningHubItem & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock">) {
+function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock }: { item: LearningHubItem } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock">) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const { block } = item;
