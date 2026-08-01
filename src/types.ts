@@ -966,6 +966,41 @@ export interface AppSettings {
   };
   mcpBridge: McpBridgeSettings;
   updatePreferences: AppUpdatePreferences;
+  questionBankPreferences?: QuestionBankPreferences;
+}
+
+export type QuestionBankSort = "updated" | "difficulty" | "importance" | "quality" | "review_due";
+
+export interface QuestionBankStoredFilters {
+  subject?: string;
+  sourceType?: ProblemSourceType | "all";
+  unit?: string;
+  subunit?: string;
+  concept?: string;
+  minDifficulty?: number | null;
+  minImportance?: number | null;
+  minQuality?: number | null;
+  answerType?: QuestionAnswerType | "all";
+  wrongOnly?: boolean;
+  answerState?: "all" | "has" | "missing";
+  explanationState?: "all" | "has" | "missing";
+  hasImages?: "all" | "has" | "missing";
+  reviewDueOnly?: boolean;
+  year?: string;
+  tag?: string;
+}
+
+export interface QuestionBankPreset {
+  id: string;
+  name: string;
+  filters: QuestionBankStoredFilters;
+  sort: QuestionBankSort;
+}
+
+export interface QuestionBankPreferences {
+  recentFilters?: QuestionBankStoredFilters;
+  savedPresets?: QuestionBankPreset[];
+  lastSort?: QuestionBankSort;
 }
 
 export interface AppUpdatePreferences {

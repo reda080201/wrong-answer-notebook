@@ -34,3 +34,8 @@
 .question-bank-detail dd { margin: 4px 0 0; }
 .question-bank-detail section h4 { margin: 0 0 4px; font-size: 14px; }
 .question-bank-detail section p { margin: 0; white-space: pre-wrap; line-height: 1.55; }
+.question-bank-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin: 12px 0; }
+.question-bank-actions label, .question-bank-detail__classification label { display: grid; gap: 4px; font-size: 12px; color: var(--muted, #65707f); }
+.question-bank-actions input, .question-bank-actions select, .question-bank-detail__classification input { min-height: 32px; padding: 4px 8px; }
+.question-bank-picked { margin: 10px 0; padding: 8px 10px; border-left: 3px solid var(--accent, #277da1); background: var(--bg, #f7f8fb); font-size: 13px; }
+.question-bank-detail__classification { display: grid; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border, #dce1e8); }

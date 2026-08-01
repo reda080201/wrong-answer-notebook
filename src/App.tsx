@@ -78,6 +78,7 @@ export default function App() {
     patchGptMcpPreferences,
     patchChatGptMcpPreferences,
     patchUpdatePreferences,
+    patchQuestionBankPreferences,
     patchExamPrintPreferences,
     upsertTemplate,
     removeTemplate,
@@ -650,6 +651,17 @@ export default function App() {
           {showQuestionBank ? (
             <QuestionBankView
               entries={entries}
+              preferences={settings.questionBankPreferences}
+              onPreferencesChange={patchQuestionBankPreferences}
+              onPatchQuestionClassification={(entryId, questionNumber, classification) => patchEntry(entryId, (current) => ({
+                questionMeta: (() => {
+                  const metas = current.questionMeta ?? [];
+                  const found = metas.some((meta) => meta.questionNumber === questionNumber);
+                  return found
+                    ? metas.map((meta) => meta.questionNumber === questionNumber ? { ...meta, classification } : meta)
+                    : [...metas, { questionNumber, important: false, needsReview: false, classification, updatedAt: new Date().toISOString() }];
+                })(),
+              }))}
               onOpenQuestion={(item) => {
                 const entry = entries.find((candidate) => candidate.id === item.entryId);
                 if (!entry) return;
