@@ -87,6 +87,6 @@ export function rejectSimilarQuestionLinks(links: SimilarQuestionLink[], now = n
   return links.map((link) => ({ ...link, status: "rejected" as const, updatedAt: now }));
 }
 
-export function createSimilarQuestionLink(candidate: LocalSimilarQuestion, source: "local" | "manual" = "local", now = new Date().toISOString()): SimilarQuestionLink {
+export function createSimilarQuestionLink(candidate: LocalSimilarQuestion, source: "local" | "manual" | "gemini" = "local", now = new Date().toISOString()): SimilarQuestionLink {
   return { id: uuidv4(), targetEntryId: candidate.candidate.entryId, targetQuestionNumber: normalizeQuestionNumber(candidate.candidate.questionNumber), score: candidate.score, reasons: candidate.reasons, sharedConcepts: candidate.sharedConcepts, differences: candidate.differences, source, status: "suggested", createdAt: now, updatedAt: now };
 }
