@@ -3,12 +3,13 @@ import { writeUiStorageJson, writeUiStorageValue } from "./uiStorage";
 
 describe("ui storage helpers", () => {
   it("keeps the session alive when a UI preference exceeds storage quota", () => {
-    const original = localStorage.setItem;
-    localStorage.setItem = vi.fn(() => { throw new DOMException("full", "QuotaExceededError"); });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new DOMException("full", "QuotaExceededError");
+    });
     const onError = vi.fn();
     expect(writeUiStorageValue("ui-key", "value", onError)).toBe(false);
     expect(onError).toHaveBeenCalledOnce();
-    localStorage.setItem = original;
+    vi.restoreAllMocks();
   });
 
   it("uses the JSON storage contract for UI preferences", () => {
