@@ -115,7 +115,7 @@ export default function App() {
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
-  const { exams: generatedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
+  const { exams: generatedExams, loading: generatedExamsLoading, loadError: generatedExamsLoadError, reload: reloadGeneratedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const savedExamSessionsRef = useRef<ExamSession[]>([]);
   const examSessionRef = useRef<ExamSession | null>(null);
@@ -948,9 +948,11 @@ export default function App() {
       )}
       <Dialog open={showGeneratedExams} onClose={() => { void flushGeneratedExams(); setShowGeneratedExams(false); }} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
             <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
+            {generatedExamsLoading && <p className="form-hint" role="status">모의고사를 불러오는 중...</p>}
+            {generatedExamsLoadError && <div className="form-error" role="alert">{generatedExamsLoadError}<button type="button" className="btn-secondary" onClick={() => void reloadGeneratedExams()}>다시 불러오기</button></div>}
             {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
             {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}{hasGeneratedExamRetry && <><button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>실패한 변경 다시 저장</button><button type="button" className="btn-secondary" onClick={discardGeneratedExamFailure}>변경 취소</button></>}</div>}
-            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} />
+            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} disabled={generatedExamsLoading || Boolean(generatedExamsLoadError)} />
       </Dialog>
       {showSettings && (
         <SettingsModal

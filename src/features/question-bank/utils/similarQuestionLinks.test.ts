@@ -28,4 +28,11 @@ describe("similar question links", () => {
     expect(result).toHaveLength(1);
     expect(result[0].score).toBe(100);
   });
+
+  it("excludes only the source question when a question target is known", () => {
+    const ranked = rankLocalSimilarQuestions({
+      sourceId: "source", sourceQuestionNumber: "1", subject: "수학", unit: "미분", concepts: [], tags: [], keywords: [], text: "",
+    }, [item("source", "1", "미분", []), item("source", "2", "미분", []), item("other", "1", "미분", [])]);
+    expect(ranked.map((candidate) => candidate.candidate.id)).toEqual(["other:1", "source:2"]);
+  });
 });

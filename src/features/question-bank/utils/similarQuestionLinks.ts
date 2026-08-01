@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 import type { LearningBlock, SimilarQuestionLink, WrongAnswerEntry } from "../../../types";
 import type { QuestionBankItem } from "../model/questionBankTypes";
-import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export interface SimilarQuestionContext {
   sourceId: string;
@@ -9,6 +9,7 @@ export interface SimilarQuestionContext {
   subject?: string;
   unit?: string;
   subunit?: string;
+  difficultyScore?: number;
   concepts: string[];
   tags: string[];
   keywords: string[];
@@ -35,8 +36,11 @@ export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: Lea
     subject: entry.subject,
     unit: block?.unit,
     subunit: block?.subunit,
+    difficultyScore: block?.sourceQuestionNumber
+      ? normalizeQuestionMeta(entry.questionMeta).find((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber ?? ""))?.difficultyScore
+      : undefined,
     concepts: unique([...(block?.relatedConcepts ?? []), ...(block?.keywords ?? []), ...Object.values(metadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : [])]),
-    tags: [],
+    tags: unique(entry.tags ?? []),
     keywords: unique(block?.keywords ?? []),
     text: [block?.title, block?.content, ...(block?.commonTraps ?? [])].filter(Boolean).join("\n"),
   };
@@ -45,7 +49,9 @@ export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: Lea
 export function rankLocalSimilarQuestions(context: SimilarQuestionContext, items: QuestionBankItem[], links: SimilarQuestionLink[] = [], limit = 30): LocalSimilarQuestion[] {
   const excluded = new Set(links.filter((link) => link.status === "approved" || link.status === "rejected").map((link) => key(link.targetEntryId, link.targetQuestionNumber)));
   return items.flatMap((candidate) => {
-    if (candidate.subject !== context.subject || candidate.entryId === context.sourceId || excluded.has(key(candidate.entryId, candidate.questionNumber))) return [];
+    const isSourceQuestion = candidate.entryId === context.sourceId &&
+      (!context.sourceQuestionNumber || key(candidate.entryId, candidate.questionNumber) === key(context.sourceId, context.sourceQuestionNumber));
+    if (candidate.subject !== context.subject || isSourceQuestion || excluded.has(key(candidate.entryId, candidate.questionNumber))) return [];
     const sharedConcepts = (candidate.classification.concepts ?? []).filter((concept) => context.concepts.includes(concept));
     const reasons: string[] = [];
     let score = 0;
@@ -53,6 +59,13 @@ export function rankLocalSimilarQuestions(context: SimilarQuestionContext, items
     if (candidate.classification.subunit && candidate.classification.subunit === context.subunit) { score += 20; reasons.push("같은 소단원"); }
     score += sharedConcepts.length * 15;
     if (sharedConcepts.length) reasons.push(`공통 개념 ${sharedConcepts.length}개`);
+    const sharedTags = (candidate.classification.tags ?? []).filter((tag) => context.tags.includes(tag));
+    score += sharedTags.length * 5;
+    if (sharedTags.length) reasons.push(`공통 태그 ${sharedTags.length}개`);
+    if (context.difficultyScore !== undefined && candidate.classification.difficultyScore !== undefined && Math.abs(context.difficultyScore - candidate.classification.difficultyScore) <= 10) {
+      score += 10;
+      reasons.push("비슷한 난이도");
+    }
     if (candidate.hasExplanation) { score += 5; reasons.push("해설 있음"); }
     return [{ candidate, score: clamp(score), reasons, sharedConcepts, differences: [] }];
   }).sort((left, right) => right.score - left.score || (right.candidate.classification.qualityScore ?? 0) - (left.candidate.classification.qualityScore ?? 0) || left.candidate.id.localeCompare(right.candidate.id)).slice(0, limit);
