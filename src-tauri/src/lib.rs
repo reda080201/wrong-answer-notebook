@@ -1116,6 +1116,42 @@ fn generate_import_with_ai(
 }
 
 #[tauri::command]
+fn rank_similar_questions_with_ai(
+    app: tauri::AppHandle,
+    prompt: String,
+    candidates: serde_json::Value,
+) -> Result<String, String> {
+    let config = load_ai_provider_config(&app);
+    if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
+        return Err("AI provider가 비활성화되어 있습니다.".into());
+    }
+    let key = ai_provider_key(&app, &config)?;
+    let model = gemini_model(&config.provider_type);
+    let body = serde_json::json!({"contents":[{"role":"user","parts":[{"text":format!("{}\n\n후보 데이터(JSON):\n{}", prompt, candidates)}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}});
+    let response = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|e| format!("Gemini HTTP client를 만들지 못했습니다: {e}"))?
+        .post(format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+            model
+        ))
+        .header("x-goog-api-key", key)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("Gemini 호출에 실패했습니다: {e}"))?;
+    let status = response.status();
+    let value: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("Gemini 응답 JSON을 읽지 못했습니다: {e}"))?;
+    if !status.is_success() {
+        return Err("Gemini 유사 문제 재정렬에 실패했습니다.".into());
+    }
+    extract_gemini_text(value)
+}
+
+#[tauri::command]
 fn save_import_image_bytes(
     app: tauri::AppHandle,
     bytes: Vec<u8>,
@@ -2246,6 +2282,7 @@ pub fn run() {
             save_ai_provider_key,
             clear_ai_provider_key,
             generate_import_with_ai,
+            rank_similar_questions_with_ai,
             save_import_image_bytes,
             create_import_asset_session,
             stage_import_asset_bytes,

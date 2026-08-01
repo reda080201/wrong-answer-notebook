@@ -758,6 +758,11 @@ export async function generateImportWithAi(
   return invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
 }
 
+export async function rankSimilarQuestionsWithAi(prompt: string, candidates: unknown[]): Promise<string> {
+  if (!isTauri()) throw new Error("유사 문제 재정렬은 설치된 데스크톱 앱에서만 사용할 수 있습니다.");
+  return invoke<string>("rank_similar_questions_with_ai", { prompt, candidates });
+}
+
 export async function pickImages(): Promise<string[]> {
   if (!isTauri()) {
     return pickImagesBrowser();
