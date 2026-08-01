@@ -45,6 +45,7 @@ import ErrorNotice from "./shared/ui/ErrorNotice";
 import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
+import QuestionBankView from "./features/question-bank/components/QuestionBankView";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -94,6 +95,7 @@ export default function App() {
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
   const [showLearningHub, setShowLearningHub] = useState(false);
+  const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
@@ -298,6 +300,7 @@ export default function App() {
     }
     if (target.section) setActiveSection(target.section);
     setShowLearningHub(false);
+    setShowQuestionBank(false);
     if (target.entryId !== undefined) setSelectedId(target.entryId);
     if (target.question) {
       setQuestionTarget({ ...target.question, requestId: Date.now() });
@@ -603,6 +606,16 @@ export default function App() {
             }
           })();
         }}
+        questionBankOpen={showQuestionBank}
+        onOpenQuestionBank={() => {
+          void (async () => {
+            if (await requestNavigation({ entryId: null })) {
+              setShowLearningHub(false);
+              setShowQuestionBank(true);
+              setSelectedId(null);
+            }
+          })();
+        }}
       />
 
       <main className="main">
@@ -616,7 +629,7 @@ export default function App() {
             <button type="button" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>이번 버전 건너뛰기</button>
           </div>
         )}
-        {!showLearningHub && <AppToolbar
+        {!showLearningHub && !showQuestionBank && <AppToolbar
           activeSection={activeSection}
           search={search}
           setSearch={setSearch}
@@ -634,7 +647,20 @@ export default function App() {
         />}
 
         <div className="content">
-          {showLearningHub ? (
+          {showQuestionBank ? (
+            <QuestionBankView
+              entries={entries}
+              onOpenQuestion={(item) => {
+                const entry = entries.find((candidate) => candidate.id === item.entryId);
+                if (!entry) return;
+                void requestNavigation({
+                  section: entry.entryKind,
+                  entryId: entry.id,
+                  question: { entryId: entry.id, questionNumber: item.questionNumber },
+                });
+              }}
+            />
+          ) : showLearningHub ? (
             <LearningHubView
               entries={entries}
               onOpenSource={(entryId, questionNumber) => {

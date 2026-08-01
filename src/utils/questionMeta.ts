@@ -8,6 +8,7 @@ import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 export { normalizeQuestionNumber } from "./questionNumber";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
+import { normalizeQuestionClassification } from "./questionClassification";
 
 export function normalizeQuestionReview(raw: unknown): ReviewState | undefined {
   return normalizeReviewState(raw, { defaultPhase: "learning" });
@@ -18,33 +19,46 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
   return raw
     .filter((item) => Boolean(item && typeof item === "object"))
     .map((item) => item as Partial<QuestionMeta>)
-    .map((item) => ({
+    .map((item) => {
+      const rawClassification = item.classification && typeof item.classification === "object"
+        ? item.classification as Record<string, unknown>
+        : undefined;
+      const rawRating = item.rating && typeof item.rating === "object"
+        ? item.rating
+        : undefined;
+      const importanceScore = normalizeDifficultyScore(rawRating?.importanceScore)
+        ?? normalizeDifficultyScore(rawClassification?.importanceScore);
+      const qualityScore = normalizeDifficultyScore(rawRating?.qualityScore)
+        ?? normalizeDifficultyScore(rawClassification?.qualityScore);
+      return {
       questionNumber: normalizeQuestionNumber(item.questionNumber),
-      important: Boolean(item.important),
+      important: Boolean(item.important) || (item.important === undefined && (importanceScore ?? 0) >= 80),
       needsReview: Boolean(item.needsReview),
-      difficultyScore: normalizeDifficultyScore(item.difficultyScore),
+      difficultyScore: normalizeDifficultyScore(item.difficultyScore)
+        ?? normalizeDifficultyScore(rawClassification?.difficultyScore),
       bookmarkLabel: item.bookmarkLabel ? `${item.bookmarkLabel}`.trim() : undefined,
       note: item.note ? `${item.note}`.trim() : undefined,
       mistakeAnalysis: item.mistakeAnalysis
         ? normalizeMistakeAnalysis(item.mistakeAnalysis)
         : undefined,
       review: normalizeQuestionReview(item.review),
-      rating: item.rating && typeof item.rating === "object"
+      rating: rawRating || importanceScore !== undefined || qualityScore !== undefined
         ? {
-            importanceScore: normalizeDifficultyScore(item.rating.importanceScore),
-            qualityScore: normalizeDifficultyScore(item.rating.qualityScore),
-            userQualityScore: normalizeDifficultyScore(item.rating.userQualityScore),
-            aiQualityScore: normalizeDifficultyScore(item.rating.aiQualityScore),
-            aiQualityConfidence: normalizeDifficultyScore(item.rating.aiQualityConfidence),
-            lastEvaluatedAt: isValidIsoDate(item.rating.lastEvaluatedAt) ? item.rating.lastEvaluatedAt : undefined,
-            evaluationSource: item.rating.evaluationSource === "manual" || item.rating.evaluationSource === "heuristic" || item.rating.evaluationSource === "gemini" ? item.rating.evaluationSource : undefined,
+            importanceScore,
+            qualityScore,
+            userQualityScore: normalizeDifficultyScore(rawRating?.userQualityScore),
+            aiQualityScore: normalizeDifficultyScore(rawRating?.aiQualityScore),
+            aiQualityConfidence: normalizeDifficultyScore(rawRating?.aiQualityConfidence),
+            lastEvaluatedAt: isValidIsoDate(rawRating?.lastEvaluatedAt) ? rawRating.lastEvaluatedAt : undefined,
+            evaluationSource: rawRating?.evaluationSource === "manual" || rawRating?.evaluationSource === "heuristic" || rawRating?.evaluationSource === "gemini" ? rawRating.evaluationSource : undefined,
           }
         : undefined,
+      classification: normalizeQuestionClassification(item.classification),
       updatedAt:
         item.updatedAt && !Number.isNaN(new Date(item.updatedAt).getTime())
           ? item.updatedAt
           : new Date().toISOString(),
-    }))
+    }; })
     .filter((item) => item.questionNumber);
 }
 
