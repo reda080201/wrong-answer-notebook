@@ -31,6 +31,9 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   showLearningVisuals: true,
   compactToolbar: false,
   lectureLayout: "document",
+  conceptLinksEnabled: true,
+  automaticConceptLinksEnabled: false,
+  conceptLinkPreviewMode: "popover",
 };
 
 export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
@@ -110,6 +113,9 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     showLearningVisuals: value.showLearningVisuals !== false,
     compactToolbar: Boolean(value.compactToolbar),
     lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",
+    conceptLinksEnabled: value.conceptLinksEnabled !== false,
+    automaticConceptLinksEnabled: Boolean(value.automaticConceptLinksEnabled),
+    conceptLinkPreviewMode: "popover",
   };
 }
 
