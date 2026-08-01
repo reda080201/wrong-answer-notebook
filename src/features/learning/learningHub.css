@@ -39,3 +39,10 @@
 .learning-candidate-row span { display: grid; gap: 4px; }
 .learning-candidate-row small { white-space: pre-wrap; }
 .learning-candidate-row em { color: #66737c; font-size: 12px; font-style: normal; }
+.similar-question-links { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border, #dce1e8); }
+.similar-question-links header, .similar-question-links li, .similar-question-suggestions article { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.similar-question-links ul { display: grid; gap: 5px; padding-left: 18px; }
+.similar-question-suggestions { display: grid; gap: 8px; margin-top: 8px; }
+.similar-question-suggestions article { padding: 8px; background: var(--bg, #f7f8fb); }
+.similar-question-suggestions article div { display: grid; gap: 3px; flex: 1; }
+.similar-question-suggestions span { color: var(--muted, #65707f); font-size: 12px; }

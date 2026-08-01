@@ -3,6 +3,8 @@ import type { LearningBlock, LearningImportance, LearningReviewStatus, LearningS
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
 import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
+import type { QuestionBankItem } from "../../question-bank/model/questionBankTypes";
+import SimilarQuestionLinksPanel from "../../question-bank/components/SimilarQuestionLinksPanel";
 
 const DOMAIN_LABELS: Record<LearningSubjectDomain | "all", string> = {
   all: "모든 과목",
@@ -34,6 +36,7 @@ interface LearningHubViewProps {
   onDuplicateBlock: (entryId: string, blockId: string) => Promise<void>;
   onDeleteBlock: (entryId: string, blockId: string) => Promise<void>;
   onOpenCandidateReview: (entryId: string) => void;
+  questionBankItems?: QuestionBankItem[];
 }
 
 function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
@@ -55,7 +58,7 @@ function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave
   </form>;
 }
 
-function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock }: { item: LearningHubItem } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock">) {
+function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, questionBankItems = [] }: { item: LearningHubItem } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock" | "questionBankItems">) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const { block } = item;
@@ -84,11 +87,12 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
       {block.passageExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 지문 예시" : "지문 예시"}</h4><p>{example.text}</p>{example.explanation && <small>{example.explanation}</small>}</section>)}
       {block.choiceExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 선지 예시" : "선지 예시"}{example.verdict ? ` · ${example.verdict === "correct" ? "옳음" : example.verdict === "incorrect" ? "틀림" : "조건부"}` : ""}</h4><p>{example.text}</p>{example.reason && <small>{example.reason}</small>}</section>)}
       <footer><button type="button" onClick={() => onOpenSource(item.sourceEntryId, sourceQuestion)}>연결 문제 열기</button><span>{item.sourceEntryTitle}</span></footer>
+      <SimilarQuestionLinksPanel entryId={item.sourceEntryId} block={block} entrySubject={item.sourceSubject} items={questionBankItems} onOpen={onOpenSource} onChange={(links) => onUpdateBlock(item.sourceEntryId, block.id, { similarQuestionLinks: links })} />
     </>}
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [] }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
@@ -107,6 +111,6 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       <button type="button" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>
     </div>
     <div className="learning-hub-active-filters">{Object.entries(filters).filter(([key, value]) => key !== "search" ? value !== "all" && value !== false : Boolean(value)).map(([key, value]) => <span key={key}>{key === "search" ? `검색: ${value}` : key === "linkedOnly" ? "연결 문항" : String(value)}</span>)}</div>
-    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
+    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;
 }

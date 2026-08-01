@@ -46,6 +46,7 @@ import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import QuestionBankView from "./features/question-bank/components/QuestionBankView";
+import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -675,6 +676,7 @@ export default function App() {
           ) : showLearningHub ? (
             <LearningHubView
               entries={entries}
+              questionBankItems={buildQuestionBankItems(entries)}
               onOpenSource={(entryId, questionNumber) => {
                 const entry = entries.find((item) => item.id === entryId);
                 if (!entry) return;
