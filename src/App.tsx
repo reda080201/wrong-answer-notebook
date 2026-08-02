@@ -8,8 +8,8 @@ import EntryDetail from "./components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
-import { cleanupStaleImportAssetSessions, createAutoBackup, createPreUpdateBackup } from "./api";
-import { loadExamSessions, saveExamSessions, syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
+import { createPreUpdateBackup } from "./api";
+import { syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
 import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
 import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
@@ -19,30 +19,20 @@ import { useEntries } from "./hooks/useEntries";
 import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import { useTheme } from "./hooks/useTheme";
-import { useGeneratedExams } from "./hooks/useGeneratedExams";
-import type { ActiveExamContext, ChatGptMcpPreferences, EntryKind, ExamSession, GeneratedExam, McpExportContext, WrongAnswerEntry } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
-import { createExamSession } from "./features/exam/services/examSession";
-import {
-  EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS,
-  mergeExamSession,
-} from "./features/exam/storage/examSessionStorage";
-import { scoreExamSession } from "./features/exam/services/examScoring";
-import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "./features/entries/model/entryDraft";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
-import GeneratedExamList from "./features/exam-builder/components/GeneratedExamList";
-import { createSessionFromGeneratedExam } from "./features/exam-builder/services/createSessionFromGeneratedExam";
-import { buildGeneratedExamPrintModel } from "./features/exam-builder/services/buildGeneratedExamPrintModel";
-import { printExamDocument } from "./features/export/services/printExamDocument";
+import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
-import { loadImportWorkspaceDraft } from "./features/import-workspace/hooks/useImportWorkspaceAutosave";
-import { createSerialTaskQueue } from "./hooks/useSerialTaskQueue";
-import Dialog from "./shared/ui/Dialog";
 import ErrorNotice from "./shared/ui/ErrorNotice";
+import Dialog from "./shared/ui/Dialog";
 import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
+import { useExamSessionController } from "./hooks/useExamSessionController";
+import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
+import { useAppMaintenance } from "./hooks/useAppMaintenance";
 import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import QuestionBankView from "./features/question-bank/components/QuestionBankView";
@@ -108,157 +98,52 @@ export default function App() {
     questionNumber: string;
     requestId: number;
   } | null>(null);
-  const [examSession, setExamSession] = useState<ExamSession | null>(null);
-  const [examSubmitting, setExamSubmitting] = useState(false);
-  const [examStartError, setExamStartError] = useState<{ entryId: string; message: string } | null>(null);
-  const [examSaveError, setExamSaveError] = useState<string | null>(null);
-  const [examSaving, setExamSaving] = useState(false);
   const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
   const questionBankPreferenceFlushRef = useRef<(() => Promise<void>) | null>(null);
   const registerQuestionBankPreferenceFlush = useCallback((flush: (() => Promise<void>) | null) => {
     questionBankPreferenceFlushRef.current = flush;
   }, []);
-  const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
-  const [showExamBuilder, setShowExamBuilder] = useState(false);
-  const [showGeneratedExams, setShowGeneratedExams] = useState(false);
-  const [generatedExamCloseError, setGeneratedExamCloseError] = useState<string | null>(null);
-  const [generatedExamClosing, setGeneratedExamClosing] = useState(false);
-  const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
-  const { exams: generatedExams, loading: generatedExamsLoading, loadError: generatedExamsLoadError, reload: reloadGeneratedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
-  const savedExamSessionsRef = useRef<ExamSession[]>([]);
-  const examSessionRef = useRef<ExamSession | null>(null);
-  const examSaveTimerRef = useRef<number | null>(null);
-  const examSaveQueueRef = useRef(createSerialTaskQueue());
-  const examSaveSequenceRef = useRef(0);
+  const exam = useExamSessionController({
+    chatGptPreferences: settings.chatGptMcpPreferences,
+    addEntry,
+  });
+  const {
+    session: examSession,
+    setSession: setExamSession,
+    sessionRef: examSessionRef,
+    saveTimerRef: examSaveTimerRef,
+    submitting: examSubmitting,
+    setSubmitting: setExamSubmitting,
+    saving: examSaving,
+    saveError: examSaveError,
+    setSaveError: setExamSaveError,
+    startError: examStartError,
+    setStartError: setExamStartError,
+    savedSessions: savedExamSessions,
+    activeGeneratedExam,
+    open: openExamSession,
+    openGenerated: openGeneratedExamSession,
+    close: closeExamSession,
+    flush: flushExamSessionSave,
+    submit: handleExamSubmit,
+  } = exam;
 
   const registerWorkspaceDraftFlush = useCallback((flush: (() => Promise<void>) | null) => {
     workspaceDraftFlushRef.current = flush;
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    void loadExamSessions().then((sessions) => {
-      if (!cancelled) {
-        const normalized = Array.isArray(sessions) ? sessions : [];
-        savedExamSessionsRef.current = normalized;
-        setSavedExamSessions(normalized);
-      }
-    }).catch(() => {
-      if (!cancelled) setSavedExamSessions([]);
-    });
-    return () => { cancelled = true; };
-  }, []);
-
-  const persistGeneratedExam = useCallback(async (exam: GeneratedExam) => {
-    await upsertGeneratedExam(exam);
-  }, [upsertGeneratedExam]);
-
-  const deleteGeneratedExam = useCallback(async (id: string) => {
-    await removeGeneratedExam(id);
-  }, [removeGeneratedExam]);
-
-  useEffect(() => {
-    if (!examSession) {
-      void syncMcpBridgeActiveExamContext({ sessionId: null, questionId: null, questionIndex: null, userResponse: "", scratchNote: "", markedForReview: false, submitted: false, updatedAt: new Date().toISOString(), contextUpdatedAt: new Date().toISOString() });
-      return;
-    }
-    const current = examSession.questions[examSession.currentQuestionIndex];
-    const response = current ? examSession.responses.find((item) => item.questionNumber === current.questionNumber) : undefined;
-    const context: ActiveExamContext = {
-      sessionId: examSession.id,
-      questionId: current?.id ?? null,
-      questionIndex: examSession.currentQuestionIndex,
-      userResponse: response?.response ?? "",
-      scratchNote: response?.scratchNote ?? "",
-      markedForReview: response?.markedForReview ?? false,
-      submitted: examSession.status === "submitted",
-      updatedAt: examSession.updatedAt,
-      shareUserResponse: settings.chatGptMcpPreferences.shareUserResponse,
-      shareScratchNote: settings.chatGptMcpPreferences.shareScratchNote,
-      shareQuestionImages: settings.chatGptMcpPreferences.shareQuestionImages,
-      shareSourcePageImages: settings.chatGptMcpPreferences.shareSourcePageImages,
-      contextUpdatedAt: new Date().toISOString(),
-    };
-    const timer = window.setTimeout(() => { void syncMcpBridgeActiveExamContext(context); }, 350);
-    return () => window.clearTimeout(timer);
-  }, [examSession, settings.chatGptMcpPreferences]);
-
-  const flushExamSessionSave = useCallback(async (session: ExamSession, updateUi = true): Promise<boolean> => {
-    const sequence = ++examSaveSequenceRef.current;
-    const nextSessions = mergeExamSession(savedExamSessionsRef.current, session);
-    savedExamSessionsRef.current = nextSessions;
-    if (updateUi) setSavedExamSessions(nextSessions);
-    setExamSaving(true);
-    const saveTask = examSaveQueueRef.current
-      .enqueue(async () => {
-        await saveExamSessions(nextSessions);
-        return true;
-      })
-      .catch((error) => {
-        if (sequence === examSaveSequenceRef.current) {
-          setExamSaveError(error instanceof Error && error.message ? error.message : "모의고사 진행 상태를 저장하지 못했습니다.");
-        }
-        return false;
-      });
-    const saved = await saveTask;
-    if (sequence === examSaveSequenceRef.current) {
-      if (saved) setExamSaveError(null);
-      setExamSaving(false);
-    }
-    return saved;
-  }, [setExamSaving, setExamSaveError, setSavedExamSessions]);
-
-  const closeExamSession = useCallback(async (): Promise<boolean> => {
-    if (examSubmitting) {
-      setExamSaveError("시험 제출 중에는 이동하거나 닫을 수 없습니다.");
-      return false;
-    }
-    if (examSaveTimerRef.current !== null) {
-      window.clearTimeout(examSaveTimerRef.current);
-      examSaveTimerRef.current = null;
-    }
-    const current = examSessionRef.current;
-    if (current && !(await flushExamSessionSave(current))) return false;
-    examSessionRef.current = null;
-    setExamSession(null);
-    setActiveGeneratedExam(null);
-    return true;
-  }, [examSubmitting, flushExamSessionSave]);
-
-  const openExamSession = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
-    setExamStartError(null);
-    setActiveGeneratedExam(null);
-    if (resumable) {
-      setExamSession(resumable);
-      return;
-    }
-    const next = createExamSession(entry);
-    if (!next.questions.length) {
-      setExamStartError({ entryId: entry.id, message: "감지된 문항이 없어 모의고사를 시작할 수 없습니다. 문제 번호 형식을 확인해 주세요." });
-      return;
-    }
-    const missingAnswers = next.questions
-      .filter((question) => !question.correctAnswer?.trim())
-      .map((question) => question.questionNumber);
-    if (missingAnswers.length) {
-      setExamStartError({ entryId: entry.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.` });
-      return;
-    }
-    setExamSession(next);
-  }, []);
-
-  const openGeneratedExam = useCallback((exam: GeneratedExam) => {
-    if (!exam.questions.length) return;
-    setActiveGeneratedExam(exam);
-    setExamStartError(null);
-    setExamSession(createSessionFromGeneratedExam(exam));
-    setShowGeneratedExams(false);
-  }, []);
-
-  const printGeneratedExam = useCallback(async (exam: GeneratedExam) => {
-    await printExamDocument(buildGeneratedExamPrintModel(exam, settings.examPrintPreferences));
-  }, [settings.examPrintPreferences]);
+  const generatedExamController = useGeneratedExamController({
+    examPrintPreferences: settings.examPrintPreferences,
+    onOpenExam: openGeneratedExamSession,
+  });
+  const {
+    flush: flushGeneratedExams,
+    builderOpen: showExamBuilder,
+    setBuilderOpen: setShowExamBuilder,
+    listOpen: showGeneratedExams,
+    setListOpen: setShowGeneratedExams,
+  } = generatedExamController;
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -290,7 +175,7 @@ export default function App() {
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
-  }, [selectedId]);
+  }, [selectedId, setExamStartError]);
 
   const requestNavigation = useCallback(async (target: {
     section?: EntryKind;
@@ -317,39 +202,7 @@ export default function App() {
       setQuestionTarget({ ...target.question, requestId: Date.now() });
     }
     return true;
-  }, [activeSection, closeExamSession, examSession, examSubmitting, setActiveSection, setSelectedId]);
-
-  useEffect(() => {
-    examSessionRef.current = examSession;
-    if (examSaveTimerRef.current !== null) {
-      window.clearTimeout(examSaveTimerRef.current);
-      examSaveTimerRef.current = null;
-    }
-    if (examSession) {
-      examSaveTimerRef.current = window.setTimeout(() => {
-        const latest = examSessionRef.current;
-        if (latest) void flushExamSessionSave(latest);
-        examSaveTimerRef.current = null;
-      }, EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS);
-    }
-  }, [examSession, flushExamSessionSave]);
-
-  useEffect(() => {
-    if (!isTauri()) return;
-    const draft = loadImportWorkspaceDraft();
-    const protectedSessionIds = draft?.assetSession?.mode === "tauri-staged" ? [draft.assetSession.id] : [];
-    void cleanupStaleImportAssetSessions(protectedSessionIds).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (examSaveTimerRef.current !== null) {
-        window.clearTimeout(examSaveTimerRef.current);
-      }
-      const latest = examSessionRef.current;
-      if (latest) void flushExamSessionSave(latest, false);
-    };
-  }, [flushExamSessionSave]);
+  }, [activeSection, closeExamSession, examSession, examSubmitting, setActiveSection, setExamSaveError, setSelectedId]);
 
   const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose } = useWindowCloseGuard({
     activeExam: examSession,
@@ -472,33 +325,9 @@ export default function App() {
       ...sharing,
       contextUpdatedAt: new Date().toISOString(),
     });
-  }, []);
+  }, [examSessionRef]);
 
-  useEffect(() => {
-    if (!isTauri() || !settings.autoBackup.enabled) return;
-    const lastBackup = settings.autoBackup.lastBackupAt
-      ? new Date(settings.autoBackup.lastBackupAt)
-      : null;
-    const today = new Date().toDateString();
-    if (lastBackup?.toDateString() === today) return;
-
-    let cancelled = false;
-    createAutoBackup()
-      .then(async () => {
-        if (cancelled) return;
-        await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setSettingsMessage(
-            "자동 백업에 실패했습니다. 설정에서 수동 백업을 실행해 주세요.",
-          );
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [settings, patchSettings, setSettingsMessage]);
+  useAppMaintenance({ settings, patchSettings, report: setSettingsMessage });
 
   const openSettings = (tab?: SettingsTab) => {
     setSettingsInitialTab(tab);
@@ -546,62 +375,12 @@ export default function App() {
     if (found) selectEntry(entryId, found.entryKind);
   };
 
-  const handleExamSubmit = async (session: ExamSession) => {
-    const score = scoreExamSession(session);
-    const submitted = {
-      ...session,
-      status: "submitted" as const,
-      submittedAt: new Date().toISOString(),
-      score,
-    };
-    setExamSession(submitted);
-
-    const wrongQuestions = submitted.questions.filter((question) => {
-      const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber);
-      return result?.hasResponse && !result.correct;
-    });
-    for (const question of wrongQuestions) {
-      const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
-      const draft = createEmptyEntryDraft("wrong_answer");
-      await addEntry(normalizeEntryDraftForSave({
-        ...draft,
-        subject: submitted.subject,
-        title: `${submitted.title} · ${question.questionNumber}번 오답`,
-        question: [question.question, ...question.choices].filter(Boolean).join("\n"),
-        questionImages: question.questionImages,
-        figures: question.figures,
-        correctAnswer: question.correctAnswer ?? "",
-        memo: [
-          `모의고사: ${submitted.title}`,
-          response?.scratchNote?.trim(),
-        ].filter(Boolean).join("\n"),
-        explanationParts: question.explanation
-          ? [{ id: crypto.randomUUID(), text: question.explanation, images: [] }]
-          : draft.explanationParts,
-        tags: [submitted.subject, "모의고사", "채점 오답"],
-      }));
-    }
-  };
-
   const selectedExamHistory = selected
     ? savedExamSessions
       .filter((item) => item.entryId === selected.id && item.status === "submitted")
       .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
     : [];
   const availableUpdate = updater.state.status === "available" ? updater.state : null;
-  const closeGeneratedExamModal = useCallback(async () => {
-    if (generatedExamClosing) return;
-    setGeneratedExamClosing(true);
-    setGeneratedExamCloseError(null);
-    try {
-      await flushGeneratedExams();
-      setShowGeneratedExams(false);
-    } catch {
-      setGeneratedExamCloseError("모의고사 변경을 저장하지 못했습니다. 저장이 완료된 뒤 다시 닫아 주세요.");
-    } finally {
-      setGeneratedExamClosing(false);
-    }
-  }, [flushGeneratedExams, generatedExamClosing]);
   const openConceptLearningBlock = (entryId: string, blockId: string) => {
     void (async () => {
       if (await requestNavigation({ entryId: null })) {
@@ -976,19 +755,32 @@ export default function App() {
         <ExamBuilderWizard
           entries={entries}
           onClose={() => setShowExamBuilder(false)}
-          onSave={persistGeneratedExam}
-          onStart={async (exam) => { await persistGeneratedExam(exam); setShowExamBuilder(false); openGeneratedExam(exam); }}
+          onSave={generatedExamController.persist}
+          onStart={async (exam) => {
+            await generatedExamController.persist(exam);
+            setShowExamBuilder(false);
+            generatedExamController.openExam(exam);
+          }}
         />
       )}
-      <Dialog open={showGeneratedExams} onClose={() => void closeGeneratedExamModal()} closeDisabled={generatedExamClosing} busy={generatedExamClosing} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
-            <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => void closeGeneratedExamModal()} disabled={generatedExamClosing}>✕</button>
-            {generatedExamsLoading && <p className="form-hint" role="status">모의고사를 불러오는 중...</p>}
-            {generatedExamsLoadError && <div className="form-error" role="alert">{generatedExamsLoadError}<button type="button" className="btn-secondary" onClick={() => void reloadGeneratedExams()}>다시 불러오기</button></div>}
-            {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
-            {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}{hasGeneratedExamRetry && <><button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>실패한 변경 다시 저장</button><button type="button" className="btn-secondary" onClick={discardGeneratedExamFailure}>변경 취소</button></>}</div>}
-            {generatedExamCloseError && <div className="form-error" role="alert">{generatedExamCloseError}<button type="button" className="btn-secondary" onClick={() => void closeGeneratedExamModal()} disabled={generatedExamClosing}>다시 저장 후 닫기</button></div>}
-            <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} disabled={generatedExamsLoading || Boolean(generatedExamsLoadError)} />
-      </Dialog>
+      <GeneratedExamsDialog
+        open={showGeneratedExams}
+        closing={generatedExamController.closing}
+        closeError={generatedExamController.closeError}
+        loading={generatedExamController.loading}
+        loadError={generatedExamController.loadError}
+        saving={generatedExamController.saving}
+        saveError={generatedExamController.error}
+        hasRetryableChange={generatedExamController.hasRetryableChange}
+        exams={generatedExamController.exams}
+        onClose={generatedExamController.closeList}
+        onReload={generatedExamController.reload}
+        onRetry={generatedExamController.retry}
+        onDiscardFailure={generatedExamController.discardFailedChange}
+        onOpen={generatedExamController.openExam}
+        onDelete={generatedExamController.remove}
+        onPrint={generatedExamController.print}
+      />
       {showSettings && (
         <SettingsModal
           settings={settings}
