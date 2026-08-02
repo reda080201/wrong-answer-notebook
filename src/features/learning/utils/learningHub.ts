@@ -1,5 +1,6 @@
 import type { LearningBlock, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import { inferLearningSubjectDomain } from "../model/learningMetadata";
+import { normalizeThinkerName, thinkerMatches } from "./normalizeThinkerName";
 
 export interface LearningHubItem {
   block: LearningBlock;
@@ -18,6 +19,8 @@ export interface LearningHubFilters {
   importance: NonNullable<LearningBlock["importance"]> | "all";
   reviewStatus: NonNullable<LearningBlock["reviewStatus"]> | "all";
   linkedOnly: boolean;
+  thinkers: string[];
+  lifeEthicsKinds: Array<"passage_clue" | "incorrect_choice">;
 }
 
 export const DEFAULT_LEARNING_HUB_FILTERS: LearningHubFilters = {
@@ -28,6 +31,8 @@ export const DEFAULT_LEARNING_HUB_FILTERS: LearningHubFilters = {
   importance: "all",
   reviewStatus: "all",
   linkedOnly: false,
+  thinkers: [],
+  lifeEthicsKinds: [],
 };
 
 export function projectLearningBlocks(entries: WrongAnswerEntry[]): LearningHubItem[] {
@@ -77,8 +82,26 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
     if (filters.importance !== "all" && (block.importance ?? "reference") !== filters.importance) return false;
     if (filters.reviewStatus !== "all" && (block.reviewStatus ?? "draft") !== filters.reviewStatus) return false;
     if (filters.linkedOnly && !(block.sourceQuestionNumber || block.sourceReferences?.length)) return false;
+    if (filters.thinkers.length > 0) {
+      const metadata = block.subjectMetadata?.subject === "life_ethics" ? block.subjectMetadata : undefined;
+      if (!metadata || !thinkerMatches([...(metadata.thinkers ?? []), ...(metadata.comparisonThinkers ?? []), ...(metadata.thinkerAliases ?? [])], filters.thinkers)) return false;
+    }
+    if (filters.lifeEthicsKinds.length > 0) {
+      const metadata = block.subjectMetadata?.subject === "life_ethics" ? block.subjectMetadata : undefined;
+      const kinds = new Set<"passage_clue" | "incorrect_choice">();
+      if ((metadata?.passageClues?.length ?? 0) > 0 || metadata?.knowledgeType === "passage_pattern") kinds.add("passage_clue");
+      if ((metadata?.rejectedClaims?.length ?? 0) > 0 || block.choiceExamples?.some((example) => example.verdict === "incorrect")) kinds.add("incorrect_choice");
+      if (!filters.lifeEthicsKinds.some((kind) => kinds.has(kind))) return false;
+    }
     return !search || getLearningBlockSearchText(item).includes(search);
   });
+}
+
+export function learningHubThinkers(items: LearningHubItem[]): string[] {
+  return [...new Set(items.flatMap((item) => {
+    const metadata = item.block.subjectMetadata;
+    return metadata?.subject === "life_ethics" ? [...(metadata.thinkers ?? []), ...(metadata.comparisonThinkers ?? [])].map(normalizeThinkerName) : [];
+  }))].sort((left, right) => left.localeCompare(right, "ko"));
 }
 
 export function learningHubUnits(items: LearningHubItem[]): string[] {

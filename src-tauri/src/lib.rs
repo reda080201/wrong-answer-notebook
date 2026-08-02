@@ -1118,8 +1118,7 @@ fn generate_import_with_ai(
 #[tauri::command]
 fn rank_similar_questions_with_ai(
     app: tauri::AppHandle,
-    prompt: String,
-    candidates: serde_json::Value,
+    request: serde_json::Value,
 ) -> Result<String, String> {
     let config = load_ai_provider_config(&app);
     if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
@@ -1127,7 +1126,26 @@ fn rank_similar_questions_with_ai(
     }
     let key = ai_provider_key(&app, &config)?;
     let model = gemini_model(&config.provider_type);
-    let body = serde_json::json!({"contents":[{"role":"user","parts":[{"text":format!("{}\n\n후보 데이터(JSON):\n{}", prompt, candidates)}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}});
+    let candidates = request
+        .get("candidates")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "유사 문제 후보 형식이 올바르지 않습니다.".to_string())?;
+    if candidates.is_empty() || candidates.len() > 30 {
+        return Err("유사 문제 후보는 1~30개여야 합니다.".into());
+    }
+    let context = request
+        .get("context")
+        .filter(|value| value.is_object())
+        .ok_or_else(|| "유사 문제 기준 정보가 올바르지 않습니다.".to_string())?;
+    let context_json = serde_json::to_string(context)
+        .map_err(|e| format!("유사 문제 기준 정보를 직렬화하지 못했습니다: {e}"))?;
+    let candidates_json = serde_json::to_string(candidates)
+        .map_err(|e| format!("유사 문제 후보를 직렬화하지 못했습니다: {e}"))?;
+    let prompt = format!(
+        "다음 context와 각 candidate를 개별적으로 비교해 유사도를 평가하세요. candidate끼리 비교하지 마세요. 새 문제나 새로운 candidateId를 생성하지 마세요. 제공된 candidateId만 사용해 JSON {{\"results\":[{{\"candidateId\":string,\"score\":0-100,\"reasons\":[string],\"sharedConcepts\":[string],\"differences\":[string]}}]}}만 반환하세요.\n\ncontext(JSON):\n{}\n\ncandidates(JSON):\n{}",
+        context_json, candidates_json
+    );
+    let body = serde_json::json!({"contents":[{"role":"user","parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}});
     let response = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(90))

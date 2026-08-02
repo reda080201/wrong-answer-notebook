@@ -26,4 +26,11 @@ describe("learning hub utilities", () => {
     const [item] = projectLearningBlocks([{ ...entry, id: "social", subject: "사회" }]);
     expect(item.domain).toBe("general");
   });
+
+  it("filters life ethics thinkers and evidence kinds", () => {
+    const ethics = { ...entry, subject: "생활과 윤리", learningBlocks: [{ id: "ethics", type: "concept" as const, title: "의무론", content: "", subjectDomain: "life_ethics" as const, subjectMetadata: { subject: "life_ethics" as const, knowledgeType: "thinker" as const, thinkers: ["칸트"], passageClues: ["보편화"], rejectedClaims: ["결과만 중시"] }, choiceExamples: [{ id: "choice", text: "결과만 중시", verdict: "incorrect" as const }] }] };
+    const items = projectLearningBlocks([ethics]);
+    expect(filterLearningBlocks(items, { ...DEFAULT_LEARNING_HUB_FILTERS, domain: "life_ethics", thinkers: ["칸트"], lifeEthicsKinds: ["passage_clue"] })).toHaveLength(1);
+    expect(filterLearningBlocks(items, { ...DEFAULT_LEARNING_HUB_FILTERS, domain: "life_ethics", thinkers: ["롤스"], lifeEthicsKinds: ["incorrect_choice"] })).toHaveLength(0);
+  });
 });

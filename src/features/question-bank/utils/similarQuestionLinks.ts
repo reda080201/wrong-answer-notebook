@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import type { LearningBlock, SimilarQuestionLink, WrongAnswerEntry } from "../../../types";
+import type { LearningBlock, SimilarQuestionLink, SubjectLearningMetadata, WrongAnswerEntry } from "../../../types";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 
@@ -14,6 +14,28 @@ export interface SimilarQuestionContext {
   tags: string[];
   keywords: string[];
   text: string;
+  entryTitle?: string;
+  entryKind?: WrongAnswerEntry["entryKind"];
+  sourceType?: string;
+  formulae?: string[];
+  solutionMethods?: string[];
+  passageClues?: string[];
+  thinkers?: string[];
+  choiceCriteria?: string[];
+}
+
+export interface SimilarQuestionCandidatePayload {
+  candidateId: string;
+  questionText: string;
+  subject: string;
+  classification: QuestionBankItem["classification"];
+  hasExplanation: boolean;
+  explanation?: string;
+}
+
+export interface SimilarQuestionRankingRequest {
+  context: SimilarQuestionContext;
+  candidates: SimilarQuestionCandidatePayload[];
 }
 
 export interface LocalSimilarQuestion {
@@ -28,21 +50,51 @@ const clamp = (value: unknown) => Math.max(0, Math.min(100, Number.isFinite(Numb
 const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 const key = (entryId: string, questionNumber: string) => `${entryId}:${normalizeQuestionNumber(questionNumber)}`;
 
+function metadataValues(metadata: SubjectLearningMetadata | undefined) {
+  if (!metadata) return { formulae: [] as string[], solutionMethods: [] as string[], passageClues: [] as string[], thinkers: [] as string[], choiceCriteria: [] as string[] };
+  if (metadata.subject === "math") return { formulae: metadata.formulaLatex ?? [], solutionMethods: [...(metadata.solutionSteps ?? []), ...(metadata.whenToUse ?? [])], passageClues: [], thinkers: [], choiceCriteria: [] };
+  if (metadata.subject === "language_media") return { formulae: [], solutionMethods: metadata.identificationClues ?? [], passageClues: [], thinkers: [], choiceCriteria: metadata.commonWrongClaims ?? [] };
+  if (metadata.subject === "social_culture") return { formulae: [], solutionMethods: metadata.judgementCriteria ?? [], passageClues: metadata.passageClues ?? [], thinkers: [], choiceCriteria: metadata.commonConfusions ?? [] };
+  return { formulae: [], solutionMethods: metadata.keyClaims ?? [], passageClues: metadata.passageClues ?? [], thinkers: [...(metadata.thinkers ?? []), ...(metadata.comparisonThinkers ?? [])], choiceCriteria: [...(metadata.affirmedClaims ?? []), ...(metadata.rejectedClaims ?? [])] };
+}
+
 export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: LearningBlock): SimilarQuestionContext {
   const metadata = block?.subjectMetadata && typeof block.subjectMetadata === "object" ? block.subjectMetadata : undefined;
+  const subjectValues = metadataValues(metadata);
+  const linkedQuestionMeta = block?.sourceQuestionNumber
+    ? normalizeQuestionMeta(entry.questionMeta).find((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber ?? ""))
+    : undefined;
+  const answerText = entry.answerKey?.flatMap((answer) => [answer.explanation, answer.strategy, ...(answer.steps ?? [])]).filter((value): value is string => Boolean(value?.trim())) ?? [];
   return {
     sourceId: entry.id,
     sourceQuestionNumber: block?.sourceQuestionNumber,
     subject: entry.subject,
     unit: block?.unit,
     subunit: block?.subunit,
-    difficultyScore: block?.sourceQuestionNumber
-      ? normalizeQuestionMeta(entry.questionMeta).find((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber ?? ""))?.difficultyScore
-      : undefined,
+    difficultyScore: linkedQuestionMeta?.difficultyScore,
     concepts: unique([...(block?.relatedConcepts ?? []), ...(block?.keywords ?? []), ...Object.values(metadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : [])]),
     tags: unique(entry.tags ?? []),
     keywords: unique(block?.keywords ?? []),
-    text: [block?.title, block?.content, ...(block?.commonTraps ?? [])].filter(Boolean).join("\n"),
+    text: [entry.question, entry.memo, block?.title, block?.content, ...(block?.commonTraps ?? []), ...answerText].filter(Boolean).join("\n"),
+    entryTitle: entry.title,
+    entryKind: entry.entryKind,
+    sourceType: entry.problemSource?.type,
+    formulae: unique(subjectValues.formulae),
+    solutionMethods: unique(subjectValues.solutionMethods),
+    passageClues: unique(subjectValues.passageClues),
+    thinkers: unique(subjectValues.thinkers),
+    choiceCriteria: unique(subjectValues.choiceCriteria),
+  };
+}
+
+export function toSimilarQuestionCandidatePayload(candidate: QuestionBankItem): SimilarQuestionCandidatePayload {
+  return {
+    candidateId: candidate.id,
+    questionText: candidate.questionText,
+    subject: candidate.subject,
+    classification: candidate.classification,
+    hasExplanation: candidate.hasExplanation,
+    explanation: candidate.explanation,
   };
 }
 
@@ -53,13 +105,16 @@ export function rankLocalSimilarQuestions(context: SimilarQuestionContext, items
       (!context.sourceQuestionNumber || key(candidate.entryId, candidate.questionNumber) === key(context.sourceId, context.sourceQuestionNumber));
     if (candidate.subject !== context.subject || isSourceQuestion || excluded.has(key(candidate.entryId, candidate.questionNumber))) return [];
     const sharedConcepts = (candidate.classification.concepts ?? []).filter((concept) => context.concepts.includes(concept));
+    const sharedTags = (candidate.classification.tags ?? []).filter((tag) => context.tags.includes(tag));
+    const sameUnit = Boolean(candidate.classification.unit && candidate.classification.unit === context.unit);
+    const sameSubunit = Boolean(candidate.classification.subunit && candidate.classification.subunit === context.subunit);
+    if (!sameUnit && !sameSubunit && sharedConcepts.length === 0 && sharedTags.length < 2) return [];
     const reasons: string[] = [];
     let score = 0;
-    if (candidate.classification.unit && candidate.classification.unit === context.unit) { score += 25; reasons.push("같은 단원"); }
-    if (candidate.classification.subunit && candidate.classification.subunit === context.subunit) { score += 20; reasons.push("같은 소단원"); }
+    if (sameUnit) { score += 25; reasons.push("같은 단원"); }
+    if (sameSubunit) { score += 20; reasons.push("같은 소단원"); }
     score += sharedConcepts.length * 15;
     if (sharedConcepts.length) reasons.push(`공통 개념 ${sharedConcepts.length}개`);
-    const sharedTags = (candidate.classification.tags ?? []).filter((tag) => context.tags.includes(tag));
     score += sharedTags.length * 5;
     if (sharedTags.length) reasons.push(`공통 태그 ${sharedTags.length}개`);
     if (context.difficultyScore !== undefined && candidate.classification.difficultyScore !== undefined && Math.abs(context.difficultyScore - candidate.classification.difficultyScore) <= 10) {

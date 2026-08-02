@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
 import QuestionBankView from "./QuestionBankView";
@@ -21,5 +21,24 @@ describe("QuestionBankView", () => {
     fireEvent.click(screen.getByRole("button", { name: "필터 초기화" }));
     fireEvent.click(screen.getByRole("button", { name: "기출 시험 1번 열기" }));
     expect(onOpenQuestion).toHaveBeenCalledWith(expect.objectContaining({ entryId: "sheet", questionNumber: "1" }));
+  });
+
+  it("does not persist hydrated preferences and saves a user sort change once", async () => {
+    vi.useFakeTimers();
+    const onPreferencesChange = vi.fn().mockResolvedValue(undefined);
+    const preferences = { recentFilters: { subject: "수학" }, lastSort: "updated" as const };
+    const { rerender } = render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} preferences={preferences} onPreferencesChange={onPreferencesChange} />);
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+    rerender(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} preferences={{ ...preferences, recentFilters: { ...preferences.recentFilters } }} onPreferencesChange={onPreferencesChange} />);
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
+    await act(async () => { vi.advanceTimersByTime(299); });
+    expect(onPreferencesChange).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(1); });
+    expect(onPreferencesChange).toHaveBeenCalledTimes(1);
+    expect(onPreferencesChange).toHaveBeenCalledWith(expect.objectContaining({ lastSort: "difficulty" }));
+    vi.useRealTimers();
   });
 });

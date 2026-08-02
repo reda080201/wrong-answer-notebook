@@ -47,6 +47,8 @@ import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import QuestionBankView from "./features/question-bank/components/QuestionBankView";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
+import { patchQuestionClassification } from "./features/question-bank/utils/patchQuestionClassification";
+import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -97,6 +99,7 @@ export default function App() {
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
   const [showLearningHub, setShowLearningHub] = useState(false);
+  const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
@@ -114,6 +117,8 @@ export default function App() {
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
+  const [generatedExamCloseError, setGeneratedExamCloseError] = useState<string | null>(null);
+  const [generatedExamClosing, setGeneratedExamClosing] = useState(false);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
   const { exams: generatedExams, loading: generatedExamsLoading, loadError: generatedExamsLoadError, reload: reloadGeneratedExams, upsert: upsertGeneratedExam, remove: removeGeneratedExam, retry: retryGeneratedExams, discardFailedChange: discardGeneratedExamFailure, flush: flushGeneratedExams, saving: generatedExamsSaving, error: generatedExamsError, hasRetryableChange: hasGeneratedExamRetry } = useGeneratedExams();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
@@ -577,8 +582,31 @@ export default function App() {
       .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
     : [];
   const availableUpdate = updater.state.status === "available" ? updater.state : null;
+  const closeGeneratedExamModal = useCallback(async () => {
+    if (generatedExamClosing) return;
+    setGeneratedExamClosing(true);
+    setGeneratedExamCloseError(null);
+    try {
+      await flushGeneratedExams();
+      setShowGeneratedExams(false);
+    } catch {
+      setGeneratedExamCloseError("모의고사 변경을 저장하지 못했습니다. 저장이 완료된 뒤 다시 닫아 주세요.");
+    } finally {
+      setGeneratedExamClosing(false);
+    }
+  }, [flushGeneratedExams, generatedExamClosing]);
+  const openConceptLearningBlock = (entryId: string, blockId: string) => {
+    void (async () => {
+      if (await requestNavigation({ entryId: null })) {
+        setShowQuestionBank(false);
+        setShowLearningHub(true);
+        setLearningHubTarget({ entryId, blockId });
+      }
+    })();
+  };
 
   return (
+    <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className="app">
       <AppSidebar
         activeSection={activeSection}
@@ -655,13 +683,7 @@ export default function App() {
               preferences={settings.questionBankPreferences}
               onPreferencesChange={patchQuestionBankPreferences}
               onPatchQuestionClassification={(entryId, questionNumber, classification) => patchEntry(entryId, (current) => ({
-                questionMeta: (() => {
-                  const metas = current.questionMeta ?? [];
-                  const found = metas.some((meta) => meta.questionNumber === questionNumber);
-                  return found
-                    ? metas.map((meta) => meta.questionNumber === questionNumber ? { ...meta, classification } : meta)
-                    : [...metas, { questionNumber, important: false, needsReview: false, classification, updatedAt: new Date().toISOString() }];
-                })(),
+                questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, classification),
               }))}
               onOpenQuestion={(item) => {
                 const entry = entries.find((candidate) => candidate.id === item.entryId);
@@ -676,6 +698,7 @@ export default function App() {
           ) : showLearningHub ? (
             <LearningHubView
               entries={entries}
+              highlightedBlock={learningHubTarget}
               questionBankItems={buildQuestionBankItems(entries)}
               onOpenSource={(entryId, questionNumber) => {
                 const entry = entries.find((item) => item.id === entryId);
@@ -804,6 +827,7 @@ export default function App() {
               existingTargets={linkableTargets}
               allEntries={entries}
               onOpenEntry={openEntryById}
+              onOpenQuestionTarget={openImportantQuestion}
               examSession={savedExamSessions.find((item) => item.entryId === selected.id) ?? null}
               examPrintPreferences={settings.examPrintPreferences}
               onExamPrintPreferencesChange={(patch) => void patchExamPrintPreferences(patch)}
@@ -861,6 +885,8 @@ export default function App() {
                 }
               }}
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
+              questionBankItems={buildQuestionBankItems(entries)}
+              onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
               onActiveContextChange={(context) => syncActiveContext(context)}
              />
             </>
@@ -946,12 +972,13 @@ export default function App() {
           onStart={async (exam) => { await persistGeneratedExam(exam); setShowExamBuilder(false); openGeneratedExam(exam); }}
         />
       )}
-      <Dialog open={showGeneratedExams} onClose={() => { void flushGeneratedExams(); setShowGeneratedExams(false); }} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
-            <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => setShowGeneratedExams(false)}>✕</button>
+      <Dialog open={showGeneratedExams} onClose={() => void closeGeneratedExamModal()} closeDisabled={generatedExamClosing} busy={generatedExamClosing} className="modal-card generated-exams-modal" ariaLabel="내 모의고사">
+            <button type="button" className="btn-icon generated-exams-modal__close" aria-label="내 모의고사 닫기" onClick={() => void closeGeneratedExamModal()} disabled={generatedExamClosing}>✕</button>
             {generatedExamsLoading && <p className="form-hint" role="status">모의고사를 불러오는 중...</p>}
             {generatedExamsLoadError && <div className="form-error" role="alert">{generatedExamsLoadError}<button type="button" className="btn-secondary" onClick={() => void reloadGeneratedExams()}>다시 불러오기</button></div>}
             {generatedExamsSaving && <p className="form-hint" role="status">저장 중...</p>}
             {generatedExamsError && <div className="form-error" role="alert">{generatedExamsError}{hasGeneratedExamRetry && <><button type="button" className="btn-secondary" onClick={() => void retryGeneratedExams()}>실패한 변경 다시 저장</button><button type="button" className="btn-secondary" onClick={discardGeneratedExamFailure}>변경 취소</button></>}</div>}
+            {generatedExamCloseError && <div className="form-error" role="alert">{generatedExamCloseError}<button type="button" className="btn-secondary" onClick={() => void closeGeneratedExamModal()} disabled={generatedExamClosing}>다시 저장 후 닫기</button></div>}
             <GeneratedExamList exams={generatedExams} onOpen={openGeneratedExam} onDelete={(id) => void deleteGeneratedExam(id)} onPrint={(exam) => void printGeneratedExam(exam)} disabled={generatedExamsLoading || Boolean(generatedExamsLoadError)} />
       </Dialog>
       {showSettings && (
@@ -1024,5 +1051,6 @@ export default function App() {
         </footer>
       </Dialog>
     </div>
+    </ConceptLinkProvider>
   );
 }

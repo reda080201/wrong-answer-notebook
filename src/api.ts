@@ -26,6 +26,7 @@ import type {
 } from "./types";
 import type { GeneratedExam } from "./types";
 import type { ImportAssetSessionManifest } from "./features/import-workspace/model/importWorkspace";
+import type { SimilarQuestionRankingRequest } from "./features/question-bank/utils/similarQuestionLinks";
 import { loadGeneratedExams as loadGeneratedExamsFromStorage, saveGeneratedExams as saveGeneratedExamsToStorage } from "./features/exam-builder/storage/generatedExamStorage";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 import {
@@ -758,9 +759,9 @@ export async function generateImportWithAi(
   return invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
 }
 
-export async function rankSimilarQuestionsWithAi(prompt: string, candidates: unknown[]): Promise<string> {
+export async function rankSimilarQuestionsWithAi(request: SimilarQuestionRankingRequest): Promise<string> {
   if (!isTauri()) throw new Error("유사 문제 재정렬은 설치된 데스크톱 앱에서만 사용할 수 있습니다.");
-  return invoke<string>("rank_similar_questions_with_ai", { prompt, candidates });
+  return invoke<string>("rank_similar_questions_with_ai", { request });
 }
 
 export async function pickImages(): Promise<string[]> {
