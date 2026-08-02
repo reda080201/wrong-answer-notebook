@@ -13,7 +13,6 @@ export interface SimilarQuestionContext {
   concepts: string[];
   tags: string[];
   keywords: string[];
-  text: string;
   entryTitle?: string;
   entryKind?: WrongAnswerEntry["entryKind"];
   sourceType?: string;
@@ -28,7 +27,12 @@ export interface SimilarQuestionCandidatePayload {
   candidateId: string;
   questionText: string;
   subject: string;
-  classification: QuestionBankItem["classification"];
+  unit?: string;
+  subunit?: string;
+  concepts?: string[];
+  difficultyScore?: number;
+  importanceScore?: number;
+  qualityScore?: number;
   hasExplanation: boolean;
   explanation?: string;
 }
@@ -64,7 +68,6 @@ export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: Lea
   const linkedQuestionMeta = block?.sourceQuestionNumber
     ? normalizeQuestionMeta(entry.questionMeta).find((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber ?? ""))
     : undefined;
-  const answerText = entry.answerKey?.flatMap((answer) => [answer.explanation, answer.strategy, ...(answer.steps ?? [])]).filter((value): value is string => Boolean(value?.trim())) ?? [];
   return {
     sourceId: entry.id,
     sourceQuestionNumber: block?.sourceQuestionNumber,
@@ -75,7 +78,6 @@ export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: Lea
     concepts: unique([...(block?.relatedConcepts ?? []), ...(block?.keywords ?? []), ...Object.values(metadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : [])]),
     tags: unique(entry.tags ?? []),
     keywords: unique(block?.keywords ?? []),
-    text: [entry.question, entry.memo, block?.title, block?.content, ...(block?.commonTraps ?? []), ...answerText].filter(Boolean).join("\n"),
     entryTitle: entry.title,
     entryKind: entry.entryKind,
     sourceType: entry.problemSource?.type,
@@ -92,7 +94,12 @@ export function toSimilarQuestionCandidatePayload(candidate: QuestionBankItem): 
     candidateId: candidate.id,
     questionText: candidate.questionText,
     subject: candidate.subject,
-    classification: candidate.classification,
+    unit: candidate.classification.unit,
+    subunit: candidate.classification.subunit,
+    concepts: candidate.classification.concepts,
+    difficultyScore: candidate.classification.difficultyScore,
+    importanceScore: candidate.classification.importanceScore,
+    qualityScore: candidate.classification.qualityScore,
     hasExplanation: candidate.hasExplanation,
     explanation: candidate.explanation,
   };

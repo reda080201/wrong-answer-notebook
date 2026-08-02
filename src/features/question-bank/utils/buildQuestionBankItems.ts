@@ -23,7 +23,7 @@ function questionImages(entry: WrongAnswerEntry, number: string): string[] {
   const figures = (entry.figures ?? [])
     .filter((figure) => normalizeQuestionNumber(figure.questionNumber) === key)
     .flatMap((figure) => [figure.image, figure.original?.image, figure.cleaned?.image]);
-  return unique([...entry.questionImages, ...figures]);
+  return unique([...(entry.questionImages ?? []), ...figures]);
 }
 
 function questionText(block: QuestionBlock): string {
@@ -40,7 +40,7 @@ function isWrong(entry: WrongAnswerEntry, meta?: QuestionMeta): boolean {
   return Boolean(
     meta?.mistakeAnalysis?.causes.length ||
     meta?.needsReview ||
-    entry.reviewAttempts?.some((attempt) => attempt.questionNumber === meta?.questionNumber && !attempt.correct),
+    entry.reviewAttempts?.some((attempt) => normalizeQuestionNumber(attempt.questionNumber) === normalizeQuestionNumber(meta?.questionNumber ?? "") && !attempt.correct),
   );
 }
 

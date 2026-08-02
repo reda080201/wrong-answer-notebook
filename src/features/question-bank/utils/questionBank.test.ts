@@ -67,4 +67,11 @@ describe("question bank projection", () => {
     });
     expect(filtered.map((item) => item.id)).toEqual(["sheet-1:1"]);
   });
+
+  it("normalizes review attempt numbers when projecting wrong answers", () => {
+    const entry = sheet();
+    entry.reviewAttempts = [{ id: "attempt", entryId: entry.id, questionNumber: "1번", correct: false, reviewedAt: "2026-01-01T00:00:00.000Z", result: "again" }];
+    entry.questionMeta![0].questionNumber = "01";
+    expect(buildQuestionBankItems([entry])[0].isWrong).toBe(true);
+  });
 });

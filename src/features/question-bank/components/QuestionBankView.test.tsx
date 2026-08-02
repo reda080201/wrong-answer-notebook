@@ -41,4 +41,17 @@ describe("QuestionBankView", () => {
     expect(onPreferencesChange).toHaveBeenCalledWith(expect.objectContaining({ lastSort: "difficulty" }));
     vi.useRealTimers();
   });
+
+  it("flushes a pending preference change when it unmounts", async () => {
+    vi.useFakeTimers();
+    const onPreferencesChange = vi.fn().mockResolvedValue(undefined);
+    const onRegisterPreferenceFlush = vi.fn();
+    const { unmount } = render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} onPreferencesChange={onPreferencesChange} onRegisterPreferenceFlush={onRegisterPreferenceFlush} />);
+    fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
+    unmount();
+    await act(async () => undefined);
+    expect(onPreferencesChange).toHaveBeenCalledWith(expect.objectContaining({ lastSort: "difficulty" }));
+    expect(onRegisterPreferenceFlush).toHaveBeenLastCalledWith(null);
+    vi.useRealTimers();
+  });
 });

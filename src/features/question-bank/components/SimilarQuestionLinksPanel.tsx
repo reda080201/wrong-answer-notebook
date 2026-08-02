@@ -27,6 +27,20 @@ function linkKey(link: SimilarQuestionLink) {
   return `${link.targetEntryId}:${link.targetQuestionNumber}`;
 }
 
+function linksSignature(links: SimilarQuestionLink[]) {
+  return [...links]
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .map((link) => [
+      link.id,
+      link.targetEntryId,
+      link.targetQuestionNumber,
+      link.status,
+      link.score ?? "",
+      link.updatedAt,
+    ].join(":"))
+    .join("|");
+}
+
 export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, items, onOpen, onChange, label = "관련 문제" }: Props) {
   const [open, setOpen] = useState(false);
   const [rankingBusy, setRankingBusy] = useState(false);
@@ -43,7 +57,12 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
   const context = useMemo(() => buildSimilarQuestionContext(sourceEntry, block), [block, sourceEntry]);
   const suggestions = useMemo(() => rankLocalSimilarQuestions(context, items, links), [context, items, links]);
   const displaySuggestions = geminiSuggestions ?? suggestions;
-  const linkSignature = links.map(linkKey).sort().join("|");
+  const linkSignature = linksSignature(links);
+
+  useEffect(() => {
+    requestIdRef.current += 1;
+    setGeminiSuggestions(null);
+  }, [context, suggestions]);
 
   useEffect(() => {
     if (failedBaseRef.current && failedBaseRef.current !== linkSignature) {
@@ -62,12 +81,18 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
       const candidates = suggestions.map((suggestion) => toSimilarQuestionCandidatePayload(suggestion.candidate));
       const raw = await rankSimilarQuestionsWithAi({ context, candidates });
       const ranking = parseGeminiSimilarQuestionRanking(raw, new Set(candidates.map((candidate) => candidate.candidateId)));
-      const byId = new Map(suggestions.map((suggestion) => [suggestion.candidate.id, suggestion]));
       if (mountedRef.current && requestId === requestIdRef.current) {
-        setGeminiSuggestions(ranking.map((result) => {
-          const base = byId.get(result.candidateId);
-          return base ? { ...base, score: result.score ?? base.score, reasons: result.reasons ?? base.reasons, sharedConcepts: result.sharedConcepts ?? base.sharedConcepts, differences: result.differences ?? base.differences } : null;
-        }).filter((item): item is LocalSimilarQuestion => Boolean(item)));
+        if (ranking.length === 0) {
+          setGeminiError("Gemini가 사용할 수 있는 재정렬 결과를 반환하지 않아 기존 추천을 유지합니다.");
+          return;
+        }
+        const rankedById = new Map(ranking.map((result) => [result.candidateId, result]));
+        setGeminiSuggestions(suggestions.map((base) => {
+          const result = rankedById.get(base.candidate.id);
+          return result
+            ? { ...base, score: result.score ?? base.score, reasons: result.reasons ?? base.reasons, sharedConcepts: result.sharedConcepts ?? base.sharedConcepts, differences: result.differences ?? base.differences }
+            : base;
+        }).sort((left, right) => right.score - left.score || left.candidate.id.localeCompare(right.candidate.id)));
       }
     } catch (error) {
       if (mountedRef.current && requestId === requestIdRef.current) setGeminiError(error instanceof Error ? error.message : "Gemini 재정렬에 실패했습니다.");

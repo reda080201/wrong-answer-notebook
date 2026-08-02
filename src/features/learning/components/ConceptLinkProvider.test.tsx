@@ -31,4 +31,12 @@ describe("ConceptLinkProvider", () => {
     render(<ConceptLinkProvider entries={[entry]} preferences={{ conceptLinksEnabled: true, automaticConceptLinksEnabled: true } as never} onOpenEntry={vi.fn()} onOpenLearningBlock={vi.fn()}><LinkifiedText text="도함수는 변화율이다." onLinkClick={vi.fn()} existingTargets={new Set()} /></ConceptLinkProvider>);
     expect(screen.getByRole("button", { name: "도함수" })).toBeInTheDocument();
   });
+
+  it("closes the preview with Escape through the shared dialog behavior", () => {
+    renderText({ conceptLinksEnabled: true, automaticConceptLinksEnabled: false });
+    fireEvent.click(screen.getByRole("button", { name: "도함수" }));
+    expect(screen.getByRole("dialog", { name: "도함수 개념 미리보기" })).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "도함수 개념 미리보기" })).not.toBeInTheDocument();
+  });
 });

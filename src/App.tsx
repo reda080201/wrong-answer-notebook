@@ -114,6 +114,10 @@ export default function App() {
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
   const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
+  const questionBankPreferenceFlushRef = useRef<(() => Promise<void>) | null>(null);
+  const registerQuestionBankPreferenceFlush = useCallback((flush: (() => Promise<void>) | null) => {
+    questionBankPreferenceFlushRef.current = flush;
+  }, []);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
   const [showGeneratedExams, setShowGeneratedExams] = useState(false);
@@ -354,7 +358,10 @@ export default function App() {
     flushEntries,
     flushGeneratedExams,
     flushSettings,
-    flushImportWorkspaceDraft: () => workspaceDraftFlushRef.current?.() ?? Promise.resolve(),
+    flushImportWorkspaceDraft: async () => {
+      await workspaceDraftFlushRef.current?.();
+      await questionBankPreferenceFlushRef.current?.();
+    },
   });
 
   useEffect(() => {
@@ -682,6 +689,7 @@ export default function App() {
               entries={entries}
               preferences={settings.questionBankPreferences}
               onPreferencesChange={patchQuestionBankPreferences}
+              onRegisterPreferenceFlush={registerQuestionBankPreferenceFlush}
               onPatchQuestionClassification={(entryId, questionNumber, classification) => patchEntry(entryId, (current) => ({
                 questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, classification),
               }))}

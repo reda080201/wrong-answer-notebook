@@ -31,19 +31,21 @@ describe("similar question links", () => {
 
   it("excludes only the source question when a question target is known", () => {
     const ranked = rankLocalSimilarQuestions({
-      sourceId: "source", sourceQuestionNumber: "1", subject: "수학", unit: "미분", concepts: [], tags: [], keywords: [], text: "",
+      sourceId: "source", sourceQuestionNumber: "1", subject: "수학", unit: "미분", concepts: [], tags: [], keywords: [],
     }, [item("source", "1", "미분", []), item("source", "2", "미분", []), item("other", "1", "미분", [])]);
     expect(ranked.map((candidate) => candidate.candidate.id)).toEqual(["other:1", "source:2"]);
   });
 
   it("excludes same-subject candidates without a shared classification signal", () => {
-    const ranked = rankLocalSimilarQuestions({ sourceId: "source", subject: "수학", unit: "미분", concepts: [], tags: [], keywords: [], text: "" }, [item("other", "1", "확률", []), item("related", "2", "미분", [])]);
+    const ranked = rankLocalSimilarQuestions({ sourceId: "source", subject: "수학", unit: "미분", concepts: [], tags: [], keywords: [] }, [item("other", "1", "확률", []), item("related", "2", "미분", [])]);
     expect(ranked.map((candidate) => candidate.candidate.id)).toEqual(["related:2"]);
   });
 
   it("keeps source entry and learning metadata in the Gemini request context", () => {
     const context = buildSimilarQuestionContext({ id: "lecture", entryKind: "lecture", title: "합성함수 특강", question: "대표 문제", memo: "조건을 먼저 확인", subject: "수학", tags: ["기출"], questionImages: [], difficult: false, myAnswer: "", correctAnswer: "", explanationParts: [], createdAt: "", updatedAt: "", answerKey: [{ id: "answer", questionNumber: "1", answer: "", explanation: "풀이" }], learningBlocks: [{ id: "block", type: "formula", title: "합성함수", content: "연쇄법칙", sourceQuestionNumber: "1", subjectMetadata: { subject: "math", knowledgeType: "formula", formulaLatex: ["f(g(x))"], solutionSteps: ["안쪽부터 미분"] } }] } as unknown as WrongAnswerEntry, { id: "block", type: "formula", title: "합성함수", content: "연쇄법칙", sourceQuestionNumber: "1", subjectMetadata: { subject: "math", knowledgeType: "formula", formulaLatex: ["f(g(x))"], solutionSteps: ["안쪽부터 미분"] } });
     expect(context).toMatchObject({ entryTitle: "합성함수 특강", entryKind: "lecture", tags: ["기출"], formulae: ["f(g(x))"], solutionMethods: ["안쪽부터 미분"] });
+    expect(context).not.toHaveProperty("text");
+    expect(context).not.toHaveProperty("memo");
     expect(toSimilarQuestionCandidatePayload(item("candidate", "1", "미분", ["연쇄법칙"]))).toMatchObject({ candidateId: "candidate:1", questionText: "문제" });
   });
 });

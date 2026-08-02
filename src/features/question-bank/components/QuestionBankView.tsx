@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { QuestionBankPreferences, QuestionBankSort, WrongAnswerEntry } from "../../../types";
 import { buildQuestionBankItems } from "../utils/buildQuestionBankItems";
@@ -14,10 +14,11 @@ interface QuestionBankViewProps {
   onOpenQuestion: (item: QuestionBankItem) => void;
   preferences?: QuestionBankPreferences;
   onPreferencesChange?: (patch: Partial<QuestionBankPreferences>) => Promise<void> | void;
+  onRegisterPreferenceFlush?: (flush: (() => Promise<void>) | null) => void;
   onPatchQuestionClassification?: (entryId: string, questionNumber: string, patch: NonNullable<NonNullable<WrongAnswerEntry["questionMeta"]>[number]["classification"]>) => Promise<void> | void;
 }
 
-export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onPatchQuestionClassification }: QuestionBankViewProps) {
+export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onRegisterPreferenceFlush, onPatchQuestionClassification }: QuestionBankViewProps) {
   const [filters, setFilters] = useState<QuestionBankFilters>(() => filtersFromPreferences(preferences?.recentFilters));
   const [sort, setSort] = useState<QuestionBankSort>(preferences?.lastSort ?? "updated");
   const [detailItem, setDetailItem] = useState<QuestionBankItem | null>(null);
@@ -40,18 +41,34 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     filtersRef.current = filters;
     sortRef.current = sort;
   }, [filters, sort]);
-  useEffect(() => () => {
-    if (preferenceTimerRef.current !== null) window.clearTimeout(preferenceTimerRef.current);
-  }, []);
+  const flushPendingPreferences = useCallback(async () => {
+    if (preferenceTimerRef.current !== null) {
+      window.clearTimeout(preferenceTimerRef.current);
+      preferenceTimerRef.current = null;
+    }
+    const next = pendingPreferencePatchRef.current;
+    pendingPreferencePatchRef.current = null;
+    if (!next || !onPreferencesChange) return;
+    try {
+      await onPreferencesChange(next);
+      setPreferencesError(null);
+    } catch {
+      setPreferencesError("문제 은행 설정을 저장하지 못했습니다.");
+      throw new Error("문제 은행 설정을 저장하지 못했습니다.");
+    }
+  }, [onPreferencesChange]);
+  useEffect(() => {
+    onRegisterPreferenceFlush?.(flushPendingPreferences);
+    return () => {
+      void flushPendingPreferences().catch(() => undefined);
+      onRegisterPreferenceFlush?.(null);
+    };
+  }, [flushPendingPreferences, onRegisterPreferenceFlush]);
   const savePreferences = (patch: Partial<QuestionBankPreferences>) => {
     pendingPreferencePatchRef.current = { ...pendingPreferencePatchRef.current, ...patch };
     if (preferenceTimerRef.current !== null) window.clearTimeout(preferenceTimerRef.current);
     preferenceTimerRef.current = window.setTimeout(() => {
-      const next = pendingPreferencePatchRef.current;
-      pendingPreferencePatchRef.current = null;
-      preferenceTimerRef.current = null;
-      if (!next || !onPreferencesChange) return;
-      void Promise.resolve(onPreferencesChange(next)).then(() => setPreferencesError(null)).catch(() => setPreferencesError("문제 은행 설정을 저장하지 못했습니다."));
+      void flushPendingPreferences().catch(() => undefined);
     }, 300);
   };
   const applySelection = (nextFilters: QuestionBankFilters, nextSort: QuestionBankSort) => {
@@ -70,7 +87,8 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const savePreset = () => {
     const name = presetName.trim();
     if (!name) return;
-    void Promise.resolve(onPreferencesChange?.({ savedPresets: [...(preferences?.savedPresets ?? []), { id: uuidv4(), name, filters: filtersForPreferences(filters), sort }] })).then(() => setPreferencesError(null)).catch(() => setPreferencesError("문제 은행 프리셋을 저장하지 못했습니다."));
+    const preset = { id: uuidv4(), name, filters: filtersForPreferences(filtersRef.current), sort: sortRef.current };
+    void Promise.resolve(onPreferencesChange?.({ savedPresets: [...(preferences?.savedPresets ?? []), preset] })).then(() => setPreferencesError(null)).catch(() => setPreferencesError("문제 은행 프리셋을 저장하지 못했습니다."));
     setPresetName("");
   };
   return <section className="question-bank-view" aria-label="문제 은행">

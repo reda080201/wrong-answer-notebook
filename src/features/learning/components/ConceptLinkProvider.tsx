@@ -3,6 +3,7 @@ import type { ConceptIndexItem } from "../utils/conceptIndex";
 import { buildConceptIndex } from "../utils/conceptIndex";
 import type { ViewPreferences, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
+import Dialog from "../../../shared/ui/Dialog";
 
 export interface ConceptLinkRuntime {
   enabled: boolean;
@@ -40,7 +41,8 @@ export default function ConceptLinkProvider({ entries, preferences, onOpenEntry,
 
   return <ConceptLinkContext.Provider value={runtime}>
     {children}
-    {active && <aside className="concept-link-popover" role="dialog" aria-label={`${active.title} 개념 미리보기`}>
+    <Dialog open={Boolean(active)} onClose={() => setActive(null)} ariaLabel={active ? `${active.title} 개념 미리보기` : "개념 미리보기"} closeOnBackdrop>
+      {active && <aside className="concept-link-popover">
       <header><strong>{active.title}</strong><button type="button" aria-label="개념 미리보기 닫기" onClick={() => setActive(null)}>✕</button></header>
       {block?.content ? <div><MathText text={block.content} /></div> : active.sourceEntry.question.trim() ? <div><MathText text={active.sourceEntry.question} /></div> : <p>저장된 개념 설명이 없습니다.</p>}
       {block?.subjectMetadata?.subject === "math" && block.subjectMetadata.formulaLatex?.length ? <section><strong>공식</strong><ul>{block.subjectMetadata.formulaLatex.map((formula) => <li key={formula}><MathText text={formula} /></li>)}</ul></section> : null}
@@ -48,6 +50,7 @@ export default function ConceptLinkProvider({ entries, preferences, onOpenEntry,
       {block?.commonTraps?.length ? <section><strong>주의할 점</strong><ul>{block.commonTraps.map((trap) => <li key={trap}>{trap}</li>)}</ul></section> : null}
       {block?.relatedConcepts?.length ? <p>관련 개념: {block.relatedConcepts.join(" · ")}</p> : null}
       <footer><button type="button" onClick={() => { setActive(null); onOpenEntry(active.sourceEntry.id); }}>원본 항목 열기</button>{block ? <button type="button" onClick={() => { setActive(null); onOpenLearningBlock(active.sourceEntry.id, block.id); }}>학습 카드 열기</button> : null}</footer>
-    </aside>}
+      </aside>}
+    </Dialog>
   </ConceptLinkContext.Provider>;
 }
