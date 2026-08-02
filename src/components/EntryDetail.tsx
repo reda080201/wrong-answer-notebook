@@ -8,10 +8,7 @@ import { getRelatedEntries } from "../utils/concepts";
 import { buildConceptAnalytics } from "../utils/conceptAnalytics";
 import { buildLearningBlocksFromEntry } from "../utils/learningContent";
 import {
-  PRACTICE_MODE_LABELS,
-  mistakeCauseLabel,
   recommendedStrategyForAnalysis,
-  summarizeMistakeAnalysis,
 } from "../utils/mistakeAnalysis";
 import { getNextStudyAction, type NextStudyActionId } from "../utils/nextStudyAction";
 import { normalizeDifficultyScore } from "../utils/difficulty";
@@ -26,7 +23,6 @@ import {
 } from "../utils/questionMeta";
 import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 import CollapsibleSection from "./CollapsibleSection";
-import ConceptGraph from "./ConceptGraph";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
 import LearningContentPanel from "./LearningContentPanel";
@@ -48,6 +44,12 @@ import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
 import SimilarQuestionLinksPanel from "../features/question-bank/components/SimilarQuestionLinksPanel";
 import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
+import {
+  ConceptChecklistSection,
+  ConceptConnectionsSection,
+  EntryImportAuditSection,
+  EntryMistakeAnalysisSection,
+} from "./EntryDetailSections";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1783,27 +1785,7 @@ export default function EntryDetail({
           )}
         </section>
 
-        {showPaperSupplementSections && (entry.importAudit || (entry.rejectedNotes?.length ?? 0) > 0) && (
-          <section className={`import-audit-summary detail-import-audit ${entry.importAudit?.missingQuestionNumbers.length || entry.importAudit?.handwritingExcluded === false ? "import-audit-summary--danger" : ""}`}>
-            <strong>AI 가져오기 검토</strong>
-            {entry.importAudit && (
-              <>
-                <span>
-                  예상 {entry.importAudit.expectedQuestionNumbers.length} · 감지 {entry.importAudit.detectedQuestionNumbers.length} · 검토 {entry.importAudit.needsReviewCount}
-                </span>
-                {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
-                {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
-                {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
-              </>
-            )}
-            {(entry.rejectedNotes?.length ?? 0) > 0 && (
-              <div className="import-rejected-notes">
-                <b>제외된 학생 필기</b>
-                <ul>{entry.rejectedNotes?.map((note) => <li key={note}><MathText text={note} /></li>)}</ul>
-              </div>
-            )}
-          </section>
-        )}
+        {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
           <section className="sheet-study-panel sheet-study-panel--answers">
@@ -1888,67 +1870,13 @@ export default function EntryDetail({
         )}
 
         {isConcept && (
-          <CollapsibleSection title="개념 체크리스트" defaultOpen>
-            <div className="concept-checklist">
-              {(entry.checklist ?? []).map((item) => (
-                <label key={item.id} className="concept-checklist-item">
-                  <input
-                    type="checkbox"
-                    checked={item.checked}
-                    onChange={(event) =>
-                      updateChecklist(
-                        (entry.checklist ?? []).map((current) =>
-                          current.id === item.id
-                            ? { ...current, checked: event.target.checked }
-                            : current,
-                        ),
-                      )
-                    }
-                  />
-                  <span>{item.text}</span>
-                  <button
-                    type="button"
-                    className="btn-icon danger"
-                    onClick={() =>
-                      updateChecklist((entry.checklist ?? []).filter((current) => current.id !== item.id))
-                    }
-                  >
-                    삭제
-                  </button>
-                </label>
-              ))}
-              <div className="concept-checklist-add">
-                <input
-                  value={newChecklistText}
-                  onChange={(event) => setNewChecklistText(event.target.value)}
-                  placeholder="체크리스트 항목"
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" && newChecklistText.trim()) {
-                      updateChecklist([
-                        ...(entry.checklist ?? []),
-                        { id: uuidv4(), text: newChecklistText.trim(), checked: false },
-                      ]);
-                      setNewChecklistText("");
-                    }
-                  }}
-                />
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => {
-                    if (!newChecklistText.trim()) return;
-                    updateChecklist([
-                      ...(entry.checklist ?? []),
-                      { id: uuidv4(), text: newChecklistText.trim(), checked: false },
-                    ]);
-                    setNewChecklistText("");
-                  }}
-                >
-                  추가
-                </button>
-              </div>
-            </div>
-          </CollapsibleSection>
+          <ConceptChecklistSection
+            checklist={entry.checklist ?? []}
+            newItemText={newChecklistText}
+            onNewItemTextChange={setNewChecklistText}
+            onChange={updateChecklist}
+            createId={uuidv4}
+          />
         )}
 
         {isSheet && showPaperSupplementSections && sheetAnswerKey.length > 0 && (
@@ -1992,42 +1920,11 @@ export default function EntryDetail({
         )}
 
         {showPaperSupplementSections && !isConcept && (
-          <CollapsibleSection
-            title="오답 원인"
-            badge={hasMistakeAnalysis ? summarizeMistakeAnalysis(entry) : "미분류"}
-            defaultOpen={hasMistakeAnalysis}
-          >
-            {hasMistakeAnalysis ? (
-              <div className="mistake-analysis-detail">
-                <div className="mistake-analysis-cause-list">
-                  {(entry.mistakeAnalysis?.causes ?? []).map((cause) => (
-                    <div key={cause.type} className={`mistake-analysis-cause mistake-analysis-cause--${cause.severity}`}>
-                      <strong>{mistakeCauseLabel(cause.type)}</strong>
-                      <span>
-                        {cause.severity === "high" ? "높음" : cause.severity === "low" ? "낮음" : "보통"}
-                      </span>
-                      {cause.note && <p>{cause.note}</p>}
-                    </div>
-                  ))}
-                </div>
-                {diagnosisStrategy && (
-                  <p className="mistake-analysis-strategy">
-                    추천 복습: {PRACTICE_MODE_LABELS[diagnosisStrategy]}
-                  </p>
-                )}
-                {entry.mistakeAnalysis?.preventionNote && (
-                  <div className="mistake-analysis-prevention">
-                    <strong>다음에 피할 방법</strong>
-                    <p>{entry.mistakeAnalysis.preventionNote}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="concept-graph-empty">
-                아직 오답 원인이 없습니다. 수정 화면에서 계산 실수, 조건 해석 실패, 개념 누락 등을 선택해 주세요.
-              </p>
-            )}
-          </CollapsibleSection>
+          <EntryMistakeAnalysisSection
+            entry={entry}
+            diagnosisStrategy={diagnosisStrategy}
+            hasMistakeAnalysis={hasMistakeAnalysis}
+          />
         )}
 
         {showPaperSupplementSections && hasExplanationContent(entry) && (
@@ -2068,56 +1965,13 @@ export default function EntryDetail({
         )}
 
         {isConcept && (
-          <CollapsibleSection title="연결된 개념과 항목" badge={`${relatedEntries.length}개`} defaultOpen={false}>
-            <ConceptGraph
-              entries={allEntries}
-              focusEntry={entry}
-              onOpenEntry={(entryId) => onOpenEntry?.(entryId)}
-            />
-            {conceptAnalytics && (
-              <div className="concept-analytics-strip">
-                <div>
-                  <strong>{conceptAnalytics.relatedEntries.length}</strong>
-                  <span>연결 오답</span>
-                </div>
-                <div>
-                  <strong>{conceptAnalytics.dueCount}</strong>
-                  <span>복습 필요</span>
-                </div>
-                <div>
-                  <strong>
-                    {conceptAnalytics.reviewSuccessRate === null
-                      ? "-"
-                      : `${Math.round(conceptAnalytics.reviewSuccessRate * 100)}%`}
-                  </strong>
-                  <span>복습 성공률</span>
-                </div>
-                <div>
-                  <strong>
-                    {conceptAnalytics.primaryCauses[0]
-                      ? mistakeCauseLabel(conceptAnalytics.primaryCauses[0].type)
-                      : "-"}
-                  </strong>
-                  <span>주요 원인</span>
-                </div>
-              </div>
-            )}
-            {relatedEntries.length > 0 && (
-              <div className="related-entry-list">
-                {relatedEntries.map((related) => (
-                  <button
-                    key={related.id}
-                    type="button"
-                    className="related-entry"
-                    onClick={() => onOpenEntry?.(related.id)}
-                  >
-                    <span>{related.title || "(제목 없음)"}</span>
-                    <small>{related.subject}</small>
-                  </button>
-                ))}
-              </div>
-            )}
-          </CollapsibleSection>
+          <ConceptConnectionsSection
+            entry={entry}
+            allEntries={allEntries}
+            relatedEntries={relatedEntries}
+            analytics={conceptAnalytics}
+            onOpenEntry={onOpenEntry}
+          />
         )}
       </div>
       {showTextReview && (
