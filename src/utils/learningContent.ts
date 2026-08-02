@@ -1,4 +1,5 @@
-import type { LearningBlock, LearningBlockType, LectureSourceType, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { LearningBlock, LearningBlockType } from "../models/learning";
+import type { LectureSourceType, SheetAnswerItem, WrongAnswerEntry } from "../models/entry";
 import { normalizeDiagramSpec, normalizeLearningDiagramType } from "./entry";
 import {
   isLearningImportance,

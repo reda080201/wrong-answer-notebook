@@ -1,17 +1,15 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { v4 as uuidv4 } from "uuid";
 import type {
-  AiProviderSettings,
-  AiProviderType,
   AppSettings,
   AppUpdatePreferences,
-  McpBridgeSettings,
   MemoTemplate,
   PromptTemplate,
   QuestionBankPreferences,
   QuestionBankSort,
   QuestionBankStoredFilters,
-} from "../../types";
+} from "../../models/settings";
+import type { AiProviderSettings, AiProviderType, McpBridgeSettings } from "../../models/integrations";
 import {
   DEFAULT_CHATGPT_MCP_PREFERENCES,
   DEFAULT_EXAM_PREFERENCES,
