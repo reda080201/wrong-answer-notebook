@@ -44,6 +44,7 @@ import { flushPendingAppWrites } from "./services/flushAppWrites";
 import { createSerialTaskQueue } from "./hooks/useSerialTaskQueue";
 import Dialog from "./shared/ui/Dialog";
 import ErrorNotice from "./shared/ui/ErrorNotice";
+import LearningHubView from "./features/learning/components/LearningHubView";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -91,6 +92,7 @@ export default function App() {
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
+  const [showLearningHub, setShowLearningHub] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
     entryId: string;
@@ -298,6 +300,7 @@ export default function App() {
       }
     }
     if (target.section) setActiveSection(target.section);
+    setShowLearningHub(false);
     if (target.entryId !== undefined) setSelectedId(target.entryId);
     if (target.question) {
       setQuestionTarget({ ...target.question, requestId: Date.now() });
@@ -624,6 +627,15 @@ export default function App() {
         onSubjectSelect={setSubjectFilter}
         onOpenExamBuilder={() => setShowExamBuilder(true)}
         onOpenGeneratedExams={() => setShowGeneratedExams(true)}
+        learningHubOpen={showLearningHub}
+        onOpenLearningHub={() => {
+          void (async () => {
+            if (await requestNavigation({ entryId: null })) {
+              setShowLearningHub(true);
+              setSelectedId(null);
+            }
+          })();
+        }}
       />
 
       <main className="main">
@@ -637,7 +649,7 @@ export default function App() {
             <button type="button" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>이번 버전 건너뛰기</button>
           </div>
         )}
-        <AppToolbar
+        {!showLearningHub && <AppToolbar
           activeSection={activeSection}
           search={search}
           setSearch={setSearch}
@@ -652,9 +664,38 @@ export default function App() {
           todayReviewCount={todayReviewCount}
           startReview={actions.startReview}
           onOpenSettings={() => openSettings()}
-        />
+        />}
 
         <div className="content">
+          {showLearningHub ? (
+            <LearningHubView
+              entries={entries}
+              onOpenSource={(entryId, questionNumber) => {
+                const entry = entries.find((item) => item.id === entryId);
+                if (!entry) return;
+                void requestNavigation({
+                  section: entry.entryKind,
+                  entryId,
+                  question: questionNumber ? { entryId, questionNumber } : undefined,
+                });
+              }}
+              onUpdateBlock={(entryId, blockId, patch) => patchEntry(entryId, (current) => {
+                const index = (current.learningBlocks ?? []).findIndex((block) => block.id === blockId);
+                if (index < 0) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+                return { learningBlocks: (current.learningBlocks ?? []).map((block) => block.id === blockId ? { ...block, ...patch } : block) };
+              })}
+              onDuplicateBlock={(entryId, blockId) => patchEntry(entryId, (current) => {
+                const source = (current.learningBlocks ?? []).find((block) => block.id === blockId);
+                if (!source) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+                return { learningBlocks: [...(current.learningBlocks ?? []), { ...source, id: crypto.randomUUID(), title: `${source.title || "학습 내용"} 복제`, reviewStatus: "draft" }] };
+              })}
+              onDeleteBlock={(entryId, blockId) => patchEntry(entryId, (current) => {
+                const blocks = current.learningBlocks ?? [];
+                if (!blocks.some((block) => block.id === blockId)) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
+                return { learningBlocks: blocks.filter((block) => block.id !== blockId) };
+              })}
+            />
+          ) : <>
           <EntryListPane
             activeSection={activeSection}
             loading={loading}
@@ -824,6 +865,7 @@ export default function App() {
               </p>
             </div>
           )}
+          </>}
         </div>
       </main>
 

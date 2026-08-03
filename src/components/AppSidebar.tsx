@@ -33,6 +33,8 @@ interface AppSidebarProps {
   onSubjectSelect: (subject: string | null) => void;
   onOpenExamBuilder?: () => void;
   onOpenGeneratedExams?: () => void;
+  learningHubOpen?: boolean;
+  onOpenLearningHub?: () => void;
 }
 
 const sectionTabs = [
@@ -61,6 +63,8 @@ export default function AppSidebar({
   onSubjectSelect,
   onOpenExamBuilder,
   onOpenGeneratedExams,
+  learningHubOpen = false,
+  onOpenLearningHub,
 }: AppSidebarProps) {
   const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
   const sidebarStats =
@@ -120,6 +124,16 @@ export default function AppSidebar({
             {label}
           </button>
         ))}
+        {onOpenLearningHub && (
+          <button
+            type="button"
+            className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
+            aria-current={learningHubOpen ? "page" : undefined}
+            onClick={onOpenLearningHub}
+          >
+            학습 허브
+          </button>
+        )}
       </div>
 
       <div className="stats">
