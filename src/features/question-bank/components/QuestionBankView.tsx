@@ -29,14 +29,19 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const pendingPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
   const filtersRef = useRef(filters);
   const sortRef = useRef(sort);
+  const savedPresetsRef = useRef(preferences?.savedPresets ?? []);
   const items = useMemo(() => buildQuestionBankItems(entries), [entries]);
   const filtered = useMemo(() => sortQuestionBankItems(filterQuestionBankItems(items, filters), sort), [items, filters, sort]);
   useEffect(() => {
     const nextFilters = filtersFromPreferences(preferences?.recentFilters);
     const nextSort = preferences?.lastSort ?? "updated";
+    const nextPresets = preferences?.savedPresets ?? [];
+    if (JSON.stringify(savedPresetsRef.current) !== JSON.stringify(nextPresets)) {
+      savedPresetsRef.current = nextPresets;
+    }
     setFilters((current) => JSON.stringify(filtersForPreferences(current)) === JSON.stringify(filtersForPreferences(nextFilters)) ? current : nextFilters);
     setSort((current) => current === nextSort ? current : nextSort);
-  }, [preferences?.lastSort, preferences?.recentFilters]);
+  }, [preferences?.lastSort, preferences?.recentFilters, preferences?.savedPresets]);
   useEffect(() => {
     filtersRef.current = filters;
     sortRef.current = sort;
@@ -88,7 +93,9 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     const name = presetName.trim();
     if (!name) return;
     const preset = { id: uuidv4(), name, filters: filtersForPreferences(filtersRef.current), sort: sortRef.current };
-    void Promise.resolve(onPreferencesChange?.({ savedPresets: [...(preferences?.savedPresets ?? []), preset] })).then(() => setPreferencesError(null)).catch(() => setPreferencesError("문제 은행 프리셋을 저장하지 못했습니다."));
+    const savedPresets = [...savedPresetsRef.current, preset];
+    savedPresetsRef.current = savedPresets;
+    savePreferences({ savedPresets });
     setPresetName("");
   };
   return <section className="question-bank-view" aria-label="문제 은행">
