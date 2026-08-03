@@ -127,6 +127,7 @@ impl NotebookStore {
         }
     }
 
+    #[cfg(test)]
     pub fn entries_path(&self) -> &Path {
         &self.entries_path
     }

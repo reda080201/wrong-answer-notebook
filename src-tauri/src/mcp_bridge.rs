@@ -1,5 +1,7 @@
 //! Loopback-only, authenticated, read-only MCP Streamable HTTP bridge.
 
+mod audit;
+
 use crate::notebook_store::{
     matched_snippet, normalize_question_number, NotebookStore, SearchQuery,
 };
@@ -17,8 +19,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
     collections::HashMap,
-    fs::{self, OpenOptions},
-    io::{Read, Write},
+    fs,
+    io::Read,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Path, PathBuf},
     sync::{Arc, Mutex},
@@ -437,8 +439,8 @@ async fn redeem_pairing(
         })
         .unwrap_or(true);
     if blocked {
-        audit(
-            &state,
+        audit::write(
+            &state.audit_path,
             "pairing/redeem",
             Duration::ZERO,
             false,
@@ -470,8 +472,8 @@ async fn redeem_pairing(
                 }
             }
         }
-        audit(
-            &state,
+        audit::write(
+            &state.audit_path,
             "pairing/redeem",
             Duration::ZERO,
             false,
@@ -501,8 +503,8 @@ async fn redeem_pairing(
     };
     sessions.retain(|_, expires| *expires > now);
     if sessions.len() >= MAX_ACTIVE_SESSIONS {
-        audit(
-            &state,
+        audit::write(
+            &state.audit_path,
             "pairing/redeem",
             Duration::ZERO,
             false,
@@ -516,7 +518,14 @@ async fn redeem_pairing(
             .into_response();
     }
     sessions.insert(token.clone(), now + SESSION_TTL);
-    audit(&state, "pairing/redeem", Duration::ZERO, true, 1, None);
+    audit::write(
+        &state.audit_path,
+        "pairing/redeem",
+        Duration::ZERO,
+        true,
+        1,
+        None,
+    );
     Json(json!({"accessToken":token,"tokenType":"Bearer"})).into_response()
 }
 async fn mcp_get(State(state): State<BridgeHttpState>, headers: HeaderMap) -> Response {
@@ -588,7 +597,14 @@ async fn mcp_post(State(state): State<BridgeHttpState>, request: Request<Body>) 
             Ok((_, count)) => (true, *count, None),
             Err((code, _)) => (false, 0, Some(*code)),
         };
-        audit(&state, &tool_name, started.elapsed(), success, count, code);
+        audit::write(
+            &state.audit_path,
+            &tool_name,
+            started.elapsed(),
+            success,
+            count,
+            code,
+        );
         if !notification {
             any_request = true;
             responses.push(match result {
@@ -1653,41 +1669,6 @@ fn test_bridge_http_state(store: Arc<NotebookStore>, data_dir: PathBuf) -> Bridg
         audit_path: data_dir.join("mcp-audit.jsonl"),
     }
 }
-fn audit(
-    state: &BridgeHttpState,
-    tool: &str,
-    duration: Duration,
-    success: bool,
-    result_count: usize,
-    error_code: Option<i32>,
-) {
-    if let Some(parent) = state.audit_path.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    if state
-        .audit_path
-        .metadata()
-        .map(|meta| meta.len() > 1_000_000)
-        .unwrap_or(false)
-    {
-        let _ = fs::rename(
-            &state.audit_path,
-            state.audit_path.with_extension("jsonl.1"),
-        );
-    }
-    if let Ok(mut file) = OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&state.audit_path)
-    {
-        let _ = writeln!(
-            file,
-            "{}",
-            json!({"time":now_string(),"tool":tool,"durationMs":duration.as_millis() as u64,"success":success,"resultCount":result_count,"errorCode":error_code})
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
