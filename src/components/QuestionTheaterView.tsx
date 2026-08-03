@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { writeUiStorageValue } from "../services/uiStorage";
 import type { Annotation, AnnotationTool, QuestionMeta, ReviewResult, SheetAnswerItem, SheetFigureItem } from "../types";
 import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textLayout";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -86,7 +87,7 @@ export default function QuestionTheaterView({
     const ratio = ((clientX - rect.left) / rect.width) * 100;
     const next = Math.max(45, Math.min(72, Math.round(ratio)));
     setSplitRatio(next);
-    localStorage.setItem(SPLIT_RATIO_KEY, String(next));
+    writeUiStorageValue(SPLIT_RATIO_KEY, String(next));
   };
 
   const startDividerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {

@@ -2,6 +2,7 @@ export type AppErrorCode =
   | "storage_read_failed"
   | "storage_write_failed"
   | "storage_quota_exceeded"
+  | "ui_storage_write_failed"
   | "invalid_stored_data"
   | "unknown";
 

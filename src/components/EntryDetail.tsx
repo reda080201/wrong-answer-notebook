@@ -43,6 +43,7 @@ import LectureReaderView from "./LectureReaderView";
 import ExportHubModal from "../features/export/components/ExportHubModal";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
 import Dialog from "../shared/ui/Dialog";
+import { writeUiStorageValue } from "../services/uiStorage";
 import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
 
@@ -348,31 +349,31 @@ export default function EntryDetail({
   const hasSuspiciousText = suspiciousSegments.length > 0;
 
   useEffect(() => {
-    localStorage.setItem(ANSWER_VIEW_KEY, answerView);
+    writeUiStorageValue(ANSWER_VIEW_KEY, answerView);
   }, [answerView]);
 
   useEffect(() => {
-    localStorage.setItem(FOCUS_PANEL_KEY, activeStudyPanel);
+    writeUiStorageValue(FOCUS_PANEL_KEY, activeStudyPanel);
   }, [activeStudyPanel]);
 
   useEffect(() => {
     if (onViewPreferencesChange) return;
-    localStorage.setItem(SHEET_LAYOUT_KEY, sheetLayout);
+    writeUiStorageValue(SHEET_LAYOUT_KEY, sheetLayout);
   }, [onViewPreferencesChange, sheetLayout]);
 
   useEffect(() => {
     if (onViewPreferencesChange) return;
-    localStorage.setItem(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
+    writeUiStorageValue(ANSWER_HIDE_KEY, hideAnswers ? "true" : "false");
   }, [hideAnswers, onViewPreferencesChange]);
 
   useEffect(() => {
     if (onViewPreferencesChange) return;
-    localStorage.setItem(FOCUS_TEXT_SIZE_KEY, focusTextSize);
+    writeUiStorageValue(FOCUS_TEXT_SIZE_KEY, focusTextSize);
   }, [focusTextSize, onViewPreferencesChange]);
 
   useEffect(() => {
     if (onViewPreferencesChange) return;
-    localStorage.setItem(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
+    writeUiStorageValue(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
   }, [onViewPreferencesChange, studyControlCompact]);
 
   useEffect(() => {

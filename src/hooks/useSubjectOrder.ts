@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { SUBJECTS } from "../types";
+import { readStorageJson } from "../services/storageJson";
+import { writeUiStorageJson } from "../services/uiStorage";
 
 const STORAGE_KEY = "wrong-answer-subject-order";
 
 function loadOrder(): string[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return [...SUBJECTS];
-    const parsed = JSON.parse(raw) as string[];
+    const parsed = readStorageJson(localStorage, STORAGE_KEY, (value): value is string[] => Array.isArray(value) && value.every((item) => typeof item === "string")) ?? [...SUBJECTS];
     const merged = [...parsed];
     for (const s of SUBJECTS) {
       if (!merged.includes(s)) merged.push(s);
@@ -22,7 +22,7 @@ export function useSubjectOrder() {
   const [order, setOrder] = useState<string[]>(loadOrder);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(order));
+    writeUiStorageJson(STORAGE_KEY, order);
   }, [order]);
 
   const moveSubject = useCallback((fromIndex: number, toIndex: number) => {

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { writeUiStorageValue } from "../services/uiStorage";
 
 interface StudyZoomViewportProps {
   storageKey: string;
@@ -30,7 +31,7 @@ export default function StudyZoomViewport({ storageKey, children }: StudyZoomVie
   }, [storageKey]);
 
   useEffect(() => {
-    localStorage.setItem(storageKey, String(zoom));
+    writeUiStorageValue(storageKey, String(zoom));
   }, [storageKey, zoom]);
 
   const scale = useMemo(() => zoom / 100, [zoom]);

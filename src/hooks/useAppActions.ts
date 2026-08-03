@@ -97,6 +97,7 @@ interface UseAppActionsOptions {
   upsertMemoTemplate: (template: MemoTemplate) => Promise<void>;
   removeMemoTemplate: (templateId: string) => Promise<void>;
   setSettings: (settings: AppSettings) => Promise<void>;
+  patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -123,6 +124,7 @@ export function useAppActions({
   upsertMemoTemplate,
   removeMemoTemplate,
   setSettings,
+  patchSettings,
   refreshSettings,
   setActiveSection,
   setSelectedId,
@@ -514,13 +516,7 @@ export function useAppActions({
     const message = await createBackup(entries, settings);
     setSettingsMessage(message);
     if (isTauri()) {
-      await setSettings({
-        ...settings,
-        autoBackup: {
-          ...settings.autoBackup,
-          lastBackupAt: new Date().toISOString(),
-        },
-      });
+      await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
     }
   };
 

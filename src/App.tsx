@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./App.css";
 import AppModals from "./components/AppModals";
 import AppSidebar from "./components/AppSidebar";
@@ -40,10 +39,10 @@ import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
 import { loadImportWorkspaceDraft } from "./features/import-workspace/hooks/useImportWorkspaceAutosave";
-import { flushPendingAppWrites } from "./services/flushAppWrites";
 import { createSerialTaskQueue } from "./hooks/useSerialTaskQueue";
 import Dialog from "./shared/ui/Dialog";
 import ErrorNotice from "./shared/ui/ErrorNotice";
+import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 
@@ -77,6 +76,7 @@ export default function App() {
     patchImagePreferences,
     patchGptMcpPreferences,
     patchChatGptMcpPreferences,
+    patchUpdatePreferences,
     patchExamPrintPreferences,
     upsertTemplate,
     removeTemplate,
@@ -106,8 +106,6 @@ export default function App() {
   const [examStartError, setExamStartError] = useState<{ entryId: string; message: string } | null>(null);
   const [examSaveError, setExamSaveError] = useState<string | null>(null);
   const [examSaving, setExamSaving] = useState(false);
-  const [closeFlushError, setCloseFlushError] = useState<string | null>(null);
-  const [closeFlushSaving, setCloseFlushSaving] = useState(false);
   const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
   const [savedExamSessions, setSavedExamSessions] = useState<ExamSession[]>([]);
   const [showExamBuilder, setShowExamBuilder] = useState(false);
@@ -120,9 +118,6 @@ export default function App() {
   const examSaveTimerRef = useRef<number | null>(null);
   const examSaveQueueRef = useRef(createSerialTaskQueue());
   const examSaveSequenceRef = useRef(0);
-  const allowWindowCloseRef = useRef(false);
-  const windowCloseInFlightRef = useRef(false);
-  const closeRetryRef = useRef<(() => Promise<void>) | null>(null);
 
   const registerWorkspaceDraftFlush = useCallback((flush: (() => Promise<void>) | null) => {
     workspaceDraftFlushRef.current = flush;
@@ -342,46 +337,15 @@ export default function App() {
     };
   }, [flushExamSessionSave]);
 
-  useEffect(() => {
-    if (!isTauri()) return;
-    const windowHandle = getCurrentWindow();
-    let unlisten: (() => void) | undefined;
-    const attemptClose = async () => {
-      if (windowCloseInFlightRef.current) return;
-      windowCloseInFlightRef.current = true;
-      setCloseFlushSaving(true);
-      try {
-        if (examSaveTimerRef.current !== null) {
-          window.clearTimeout(examSaveTimerRef.current);
-          examSaveTimerRef.current = null;
-        }
-        await flushPendingAppWrites({
-          activeExam: examSessionRef.current,
-          flushExamSession: (session) => flushExamSessionSave(session),
-          flushEntries,
-          flushGeneratedExams,
-          flushSettings,
-          flushImportWorkspaceDraft: () => workspaceDraftFlushRef.current?.() ?? Promise.resolve(),
-        });
-        setCloseFlushError(null);
-        allowWindowCloseRef.current = true;
-        await windowHandle.close();
-      } catch (error) {
-        allowWindowCloseRef.current = false;
-        setCloseFlushError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
-      } finally {
-        windowCloseInFlightRef.current = false;
-        setCloseFlushSaving(false);
-      }
-    };
-    closeRetryRef.current = attemptClose;
-    void windowHandle.onCloseRequested(async (event) => {
-      if (allowWindowCloseRef.current) return;
-      event.preventDefault();
-      await attemptClose();
-    }).then((cleanup) => { unlisten = cleanup; });
-    return () => { closeRetryRef.current = null; unlisten?.(); };
-  }, [flushEntries, flushExamSessionSave, flushGeneratedExams, flushSettings]);
+  const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose } = useWindowCloseGuard({
+    activeExam: examSession,
+    examSaveTimerRef,
+    flushExamSession: flushExamSessionSave,
+    flushEntries,
+    flushGeneratedExams,
+    flushSettings,
+    flushImportWorkspaceDraft: () => workspaceDraftFlushRef.current?.() ?? Promise.resolve(),
+  });
 
   useEffect(() => {
     if (!examSession) return;
@@ -420,6 +384,7 @@ export default function App() {
     patchEntryWithImportAssetSession,
     refresh,
     setSettings,
+    patchSettings,
     upsertTemplate,
     removeTemplate,
     upsertPromptTemplate,
@@ -1000,7 +965,7 @@ export default function App() {
           onInstallUpdate={async () => { await updater.installUpdate(); }}
           onRestartAfterUpdate={async () => { await updater.restart(); }}
           onOpenReleasePage={() => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); }}
-          onPatchUpdatePreferences={async (patch) => { await patchSettings({ updatePreferences: { ...settings.updatePreferences, ...patch } }); }}
+          onPatchUpdatePreferences={patchUpdatePreferences}
           initialTab={settingsInitialTab}
           onClose={() => {
             setShowSettings(false);
@@ -1008,12 +973,12 @@ export default function App() {
           }}
         />
       )}
-      <Dialog open={Boolean(closeFlushError)} onClose={() => setCloseFlushError(null)} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
+      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
         <footer className="dialog-actions">
-          <button type="button" className="btn-secondary" onClick={() => setCloseFlushError(null)} disabled={closeFlushSaving}>종료 취소</button>
-          <button type="button" onClick={() => void closeRetryRef.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
+          <button type="button" className="btn-secondary" onClick={clearCloseFlushError} disabled={closeFlushSaving}>종료 취소</button>
+          <button type="button" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
         </footer>
       </Dialog>
     </div>

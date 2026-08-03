@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ThemeMode } from "../types";
+import { writeUiStorageValue } from "../services/uiStorage";
 
 const STORAGE_KEY = "wrong-answer-theme";
 
@@ -24,7 +25,7 @@ export function useTheme() {
 
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode);
-    localStorage.setItem(STORAGE_KEY, mode);
+    writeUiStorageValue(STORAGE_KEY, mode);
     applyTheme(mode);
   }, []);
 
