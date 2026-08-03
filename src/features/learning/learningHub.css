@@ -4,6 +4,8 @@
 .learning-hub-heading h2 { margin: 4px 0; font-size: 24px; }
 .learning-hub-heading p { margin: 0; color: #59636e; }
 .learning-hub-heading strong { min-width: 64px; padding: 9px 12px; border: 1px solid #cbd5dc; background: #fff; text-align: center; }
+.learning-hub-source-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.learning-hub-source-actions button { border: 1px solid #8bb9b1; background: #eef9f6; color: #12695e; padding: 7px 9px; cursor: pointer; }
 .learning-hub-filters, .learning-hub-active-filters { max-width: 1320px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px; }
 .learning-hub-filters { padding: 12px; background: #fff; border: 1px solid #d9e0e5; }
 .learning-hub-filters input, .learning-hub-filters select { min-height: 34px; border: 1px solid #bcc8d0; background: #fff; padding: 6px 8px; }
@@ -32,3 +34,8 @@
 .learning-hub-editor label { display: grid; gap: 4px; font-size: 12px; font-weight: 600; }
 .learning-hub-editor input, .learning-hub-editor textarea { width: 100%; box-sizing: border-box; border: 1px solid #bcc8d0; padding: 7px; font: inherit; }
 .learning-hub-subject-details section { margin-top: 10px; }
+.learning-candidate-list { display: grid; gap: 8px; }
+.learning-candidate-row { display: flex; gap: 10px; padding: 10px; border: 1px solid #d3dde2; background: #f8fafb; }
+.learning-candidate-row span { display: grid; gap: 4px; }
+.learning-candidate-row small { white-space: pre-wrap; }
+.learning-candidate-row em { color: #66737c; font-size: 12px; font-style: normal; }

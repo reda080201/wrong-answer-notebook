@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
+import SubjectLearningDetails from "./SubjectLearningDetails";
 import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
 
 const DOMAIN_LABELS: Record<LearningSubjectDomain | "all", string> = {
@@ -32,22 +33,7 @@ interface LearningHubViewProps {
   onUpdateBlock: (entryId: string, blockId: string, patch: Partial<LearningBlock>) => Promise<void>;
   onDuplicateBlock: (entryId: string, blockId: string) => Promise<void>;
   onDeleteBlock: (entryId: string, blockId: string) => Promise<void>;
-}
-
-function MathDetails({ block }: { block: LearningBlock }) {
-  const metadata = block.subjectMetadata?.subject === "math" ? block.subjectMetadata : null;
-  if (!metadata) return null;
-  const sections: Array<[string, string[] | undefined]> = [
-    ["문제 신호", metadata.problemSignals],
-    ["언제 사용하는가", metadata.whenToUse],
-    ["적용하면 안 되는 경우", metadata.avoidWhen],
-    ["선수 개념", metadata.prerequisites],
-    ["풀이 단계", metadata.solutionSteps],
-  ];
-  return <div className="learning-hub-subject-details">
-    {metadata.formulaLatex?.map((formula) => <MathText key={formula} text={formula} />)}
-    {sections.map(([title, values]) => values?.length ? <section key={title}><h5>{title}</h5><ul>{values.map((value) => <li key={value}><MathText text={value} /></li>)}</ul></section> : null)}
-  </div>;
+  onOpenCandidateReview: (entryId: string) => void;
 }
 
 function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
@@ -92,7 +78,7 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
     <p className="learning-hub-meta">{item.sourceSubject} · {block.unit ?? "단원 미분류"} · {REVIEW_LABELS[block.reviewStatus ?? "draft"]} · {new Date(item.sourceEntry.updatedAt).toLocaleDateString("ko-KR")}</p>
     {editing ? <BlockEditor item={item} onSave={async (patch) => { await onUpdateBlock(item.sourceEntryId, block.id, patch); setEditing(false); }} onCancel={() => setEditing(false)} /> : <>
       {block.content && <div className="learning-hub-content"><MathText text={block.content} /></div>}
-      <MathDetails block={block} />
+      <SubjectLearningDetails block={block} />
       {block.commonTraps?.length ? <section className="learning-hub-warning"><h4>함정 또는 오개념</h4><ul>{block.commonTraps.map((trap) => <li key={trap}>{trap}</li>)}</ul></section> : null}
       {block.relatedConcepts?.length ? <p className="learning-hub-related">관련 개념: {block.relatedConcepts.join(" · ")}</p> : null}
       {block.passageExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 지문 예시" : "지문 예시"}</h4><p>{example.text}</p>{example.explanation && <small>{example.explanation}</small>}</section>)}
@@ -102,14 +88,18 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
   const units = useMemo(() => learningHubUnits(items), [items]);
   const set = <K extends keyof LearningHubFilters>(key: K, value: LearningHubFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
+  const candidateEntries = useMemo(
+    () => entries.filter((entry) => (entry.answerKey?.length ?? 0) > 0),
+    [entries],
+  );
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p></div><strong>{filtered.length}개</strong></header>
+    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><div className="learning-hub-source-actions">{candidateEntries.map((entry) => <button key={entry.id} type="button" onClick={() => onOpenCandidateReview(entry.id)}>답안에서 학습 후보 만들기 · {entry.title}</button>)}</div></div><strong>{filtered.length}개</strong></header>
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
