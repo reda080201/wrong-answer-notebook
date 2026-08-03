@@ -32,12 +32,12 @@ describe("examSessionStorage", () => {
     expect(localStorage.getItem(EXAM_SESSIONS_STORAGE_KEY)).toBe(JSON.stringify(sessions));
   });
 
-  it("returns an empty list for missing or invalid storage payloads", () => {
+  it("returns an empty list when missing and rejects invalid storage payloads", () => {
     expect(loadExamSessions()).toEqual([]);
     localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, "not-json");
-    expect(loadExamSessions()).toEqual([]);
+    expect(() => loadExamSessions()).toThrow("저장된 데이터를 읽을 수 없습니다");
     localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify({ sessions: [] }));
-    expect(loadExamSessions()).toEqual([]);
+    expect(() => loadExamSessions()).toThrow("저장된 데이터 형식이 올바르지 않습니다");
   });
 
   it("replaces an existing session by id when merging", () => {

@@ -13,15 +13,16 @@ import type {
   ViewPreferences,
   AppUpdatePreferences,
 } from "../types";
+import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
 export function useSettings() {
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaveState, setSettingsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const settingsRef = useRef(settings);
-  const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const mutationRef = useRef(0);
   const failedErrorRef = useRef<Error | null>(null);
+  const { enqueue, drain } = useSerialTaskQueue();
 
   useEffect(() => {
     settingsRef.current = settings;
@@ -49,7 +50,7 @@ export function useSettings() {
     setSettingsSaveState("saving");
     failedErrorRef.current = null;
     const mutation = ++mutationRef.current;
-    const operation = saveQueueRef.current.then(async () => {
+    const operation = enqueue(async () => {
       try {
         await saveSettings(next);
       } catch (error) {
@@ -67,15 +68,14 @@ export function useSettings() {
         setSettingsSaveState("saved");
       }
     });
-    saveQueueRef.current = operation.catch(() => undefined);
     return operation;
-  }, []);
+  }, [enqueue]);
 
   const retrySettingsSave = useCallback(() => updateSettings(settingsRef.current), [updateSettings]);
   const flushSettings = useCallback(async () => {
-    await saveQueueRef.current;
+    await drain();
     if (failedErrorRef.current) throw failedErrorRef.current;
-  }, []);
+  }, [drain]);
 
   const patchSettings = useCallback(
     async (patch: Partial<AppSettings>) => {

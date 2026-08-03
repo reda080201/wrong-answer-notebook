@@ -1,4 +1,5 @@
 import type { ExamSession } from "../../../types";
+import { readStorageJson, writeStorageJson } from "../../../services/storageJson";
 
 export const EXAM_SESSIONS_STORAGE_KEY = "wrong-answer-exam-sessions";
 export const EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS = 350;
@@ -8,14 +9,9 @@ export function mergeExamSession(sessions: ExamSession[], session: ExamSession):
 }
 
 export function loadExamSessions(storage: Storage = localStorage): ExamSession[] {
-  try {
-    const value = JSON.parse(storage.getItem(EXAM_SESSIONS_STORAGE_KEY) ?? "[]") as unknown;
-    return Array.isArray(value) ? value as ExamSession[] : [];
-  } catch {
-    return [];
-  }
+  return readStorageJson(storage, EXAM_SESSIONS_STORAGE_KEY, Array.isArray) as ExamSession[] ?? [];
 }
 
 export function saveExamSessions(sessions: ExamSession[], storage: Storage = localStorage): void {
-  storage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify(sessions));
+  writeStorageJson(storage, EXAM_SESSIONS_STORAGE_KEY, sessions);
 }
