@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { AiProviderSettings, AiProviderStatus } from "../../types";
-import type { SimilarQuestionRankingRequest } from "../../features/question-bank/utils/similarQuestionLinks";
+import type { SimilarQuestionRankingRequest, SimilarQuestionRankingResponse } from "../../features/question-bank/utils/similarQuestionLinks";
 import { errorMessage } from "./shared";
 
 export async function getAiProviderStatus(): Promise<AiProviderStatus> {
@@ -56,7 +56,7 @@ export async function generateImportWithAi(
   return invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
 }
 
-export async function rankSimilarQuestionsWithAi(request: SimilarQuestionRankingRequest): Promise<string> {
+export async function rankSimilarQuestionsWithAi(request: SimilarQuestionRankingRequest): Promise<SimilarQuestionRankingResponse> {
   if (!isTauri()) throw new Error("유사 문제 재정렬은 설치된 데스크톱 앱에서만 사용할 수 있습니다.");
-  return invoke<string>("rank_similar_questions_with_ai", { request });
+  return invoke<SimilarQuestionRankingResponse>("rank_similar_questions_with_ai", { request });
 }

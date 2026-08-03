@@ -6,7 +6,7 @@ import type {
 import LearningHubView from "../features/learning/components/LearningHubView";
 import QuestionBankView from "../features/question-bank/components/QuestionBankView";
 import { buildQuestionBankItems } from "../features/question-bank/utils/buildQuestionBankItems";
-import { patchQuestionClassification } from "../features/question-bank/utils/patchQuestionClassification";
+import { patchQuestionClassification, type QuestionMetaPatch } from "../features/question-bank/utils/patchQuestionClassification";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 
@@ -40,8 +40,8 @@ export default function NotebookKnowledgeWorkspace({
         preferences={questionBankPreferences}
         onPreferencesChange={patchQuestionBankPreferences}
         onRegisterPreferenceFlush={registerQuestionBankPreferenceFlush}
-        onPatchQuestionClassification={(entryId, questionNumber, classification) => patchEntry(entryId, (current) => ({
-          questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, classification),
+        onPatchQuestionClassification={(entryId, questionNumber, patch: QuestionMetaPatch) => patchEntry(entryId, (current) => ({
+          questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, patch),
         }))}
         onOpenQuestion={(item) => {
           const entry = entries.find((candidate) => candidate.id === item.entryId);

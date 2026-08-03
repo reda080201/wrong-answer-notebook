@@ -8,6 +8,7 @@ import { DEFAULT_QUESTION_BANK_FILTERS, QUESTION_BANK_SORT_LABELS, type Question
 import QuestionBankCard from "./QuestionBankCard";
 import QuestionBankFilterBar from "./QuestionBankFilterBar";
 import QuestionBankDetail from "./QuestionBankDetail";
+import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
 
 interface QuestionBankViewProps {
   entries: WrongAnswerEntry[];
@@ -15,7 +16,7 @@ interface QuestionBankViewProps {
   preferences?: QuestionBankPreferences;
   onPreferencesChange?: (patch: Partial<QuestionBankPreferences>) => Promise<void> | void;
   onRegisterPreferenceFlush?: (flush: (() => Promise<void>) | null) => void;
-  onPatchQuestionClassification?: (entryId: string, questionNumber: string, patch: NonNullable<NonNullable<WrongAnswerEntry["questionMeta"]>[number]["classification"]>) => Promise<void> | void;
+  onPatchQuestionClassification?: (entryId: string, questionNumber: string, patch: QuestionMetaPatch) => Promise<void> | void;
 }
 
 export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onRegisterPreferenceFlush, onPatchQuestionClassification }: QuestionBankViewProps) {
@@ -27,6 +28,8 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const preferenceTimerRef = useRef<number | null>(null);
   const pendingPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
+  const failedPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
+  const preferenceRevisionRef = useRef(0);
   const filtersRef = useRef(filters);
   const sortRef = useRef(sort);
   const savedPresetsRef = useRef(preferences?.savedPresets ?? []);
@@ -54,11 +57,16 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     const next = pendingPreferencePatchRef.current;
     pendingPreferencePatchRef.current = null;
     if (!next || !onPreferencesChange) return;
+    const revision = ++preferenceRevisionRef.current;
     try {
       await onPreferencesChange(next);
-      setPreferencesError(null);
+      if (revision === preferenceRevisionRef.current) {
+        failedPreferencePatchRef.current = null;
+        setPreferencesError(null);
+      }
     } catch {
-      setPreferencesError("문제 은행 설정을 저장하지 못했습니다.");
+      failedPreferencePatchRef.current = { ...failedPreferencePatchRef.current, ...next };
+      if (revision === preferenceRevisionRef.current) setPreferencesError("문제 은행 설정을 저장하지 못했습니다.");
       throw new Error("문제 은행 설정을 저장하지 못했습니다.");
     }
   }, [onPreferencesChange]);
@@ -107,7 +115,13 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
       <button type="button" className="btn-secondary" disabled={!filtered.length} onClick={() => setPicked(selectQuestionBankItems(filtered, Math.min(10, filtered.length), `${Date.now()}`))}>10개 추출</button>
     </div>
-    {preferencesError && <p className="form-hint" role="alert">{preferencesError}<button type="button" className="btn-secondary" onClick={() => savePreferences({ recentFilters: filtersForPreferences(filters), lastSort: sort })}>다시 저장</button></p>}
+    {preferencesError && <p className="form-hint" role="alert">{preferencesError}<button type="button" className="btn-secondary" onClick={() => {
+      const failed = failedPreferencePatchRef.current;
+      if (failed) {
+        failedPreferencePatchRef.current = null;
+        savePreferences({ ...failed, ...pendingPreferencePatchRef.current });
+      }
+    }}>다시 저장</button></p>}
     <QuestionBankFilterBar items={items} filters={filters} onChange={patchFilters} onReset={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)} />
     {picked.length > 0 && <div className="question-bank-picked" role="status">추출된 문항 {picked.map((item) => `${item.entryTitle} ${item.questionNumber}번`).join(" · ")}</div>}
     {filtered.length ? <div className="question-bank-list">{filtered.map((item) => <QuestionBankCard key={item.id} item={item} onOpen={onOpenQuestion} onInspect={setDetailItem} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 문항이 없습니다.</p><button type="button" className="btn-secondary" onClick={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)}>필터 초기화</button></div>}

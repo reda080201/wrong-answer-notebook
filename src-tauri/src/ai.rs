@@ -13,6 +13,12 @@ pub(crate) const MAX_AI_IMAGE_COUNT: usize = 20;
 pub(crate) const MAX_AI_IMAGE_TOTAL_BYTES: u64 = 14 * 1024 * 1024;
 const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
 const AI_KEYRING_USER: &str = "gemini-api-key";
+const SIMILAR_QUESTION_PROMPT_VERSION: &str = "similar-question-ranking-v1";
+const MAX_SIMILAR_CONTEXT_CONTENT_BYTES: usize = 6_000;
+const MAX_SIMILAR_CANDIDATE_QUESTION_BYTES: usize = 3_000;
+const MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES: usize = 1_500;
+const MAX_SIMILAR_RANKING_REQUEST_BYTES: usize = 96 * 1024;
+const MAX_SIMILAR_QUESTION_CANDIDATES: usize = 30;
 
 fn ai_provider_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir(app)?.join("ai_provider_key.txt"))
@@ -472,6 +478,12 @@ pub(crate) struct SimilarQuestionContextRequest {
     thinkers: Vec<String>,
     #[serde(default)]
     choice_criteria: Vec<String>,
+    #[serde(default)]
+    content: Option<String>,
+    #[serde(default)]
+    units: Vec<String>,
+    #[serde(default)]
+    subunits: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -497,25 +509,71 @@ pub(crate) struct SimilarQuestionCandidateRequest {
     explanation: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(crate) struct SimilarQuestionRankingRequest {
     context: SimilarQuestionContextRequest,
     candidates: Vec<SimilarQuestionCandidateRequest>,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct SimilarQuestionRankingResponse {
+    content: String,
+    model: String,
+    prompt_version: &'static str,
+}
+
+fn validate_similar_question_ranking_request(
+    request: &SimilarQuestionRankingRequest,
+) -> Result<(), String> {
+    if request.candidates.is_empty() || request.candidates.len() > MAX_SIMILAR_QUESTION_CANDIDATES {
+        return Err(format!(
+            "유사 문제 후보는 1~{MAX_SIMILAR_QUESTION_CANDIDATES}개여야 합니다."
+        ));
+    }
+    if request
+        .context
+        .content
+        .as_ref()
+        .is_some_and(|content| content.as_bytes().len() > MAX_SIMILAR_CONTEXT_CONTENT_BYTES)
+    {
+        return Err("유사 문제 기준 본문이 너무 깁니다.".into());
+    }
+    for candidate in &request.candidates {
+        if candidate.question_text.as_bytes().len() > MAX_SIMILAR_CANDIDATE_QUESTION_BYTES {
+            return Err(format!(
+                "후보 문제 본문이 너무 깁니다: {}",
+                candidate.candidate_id
+            ));
+        }
+        if candidate.explanation.as_ref().is_some_and(|explanation| {
+            explanation.as_bytes().len() > MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES
+        }) {
+            return Err(format!(
+                "후보 해설이 너무 깁니다: {}",
+                candidate.candidate_id
+            ));
+        }
+    }
+    let bytes = serde_json::to_vec(request)
+        .map_err(|error| format!("유사 문제 요청을 직렬화하지 못했습니다: {error}"))?;
+    if bytes.len() > MAX_SIMILAR_RANKING_REQUEST_BYTES {
+        return Err("유사 문제 요청이 허용된 크기를 초과했습니다.".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 pub(crate) fn rank_similar_questions_with_ai(
     app: tauri::AppHandle,
     request: SimilarQuestionRankingRequest,
-) -> Result<String, String> {
+) -> Result<SimilarQuestionRankingResponse, String> {
     let config = load_ai_provider_config(&app);
     if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
         return Err("AI provider가 비활성화되어 있습니다.".into());
     }
-    if request.candidates.is_empty() || request.candidates.len() > 30 {
-        return Err("유사 문제 후보는 1~30개여야 합니다.".into());
-    }
+    validate_similar_question_ranking_request(&request)?;
 
     let key = ai_provider_key(&app, &config)?;
     let model = gemini_model(&config.provider_type);
@@ -554,5 +612,10 @@ pub(crate) fn rank_similar_questions_with_ai(
         return Err("Gemini 유사 문제 재정렬에 실패했습니다.".into());
     }
 
-    extract_gemini_text(value)
+    let content = extract_gemini_text(value)?;
+    Ok(SimilarQuestionRankingResponse {
+        content,
+        model: model.to_string(),
+        prompt_version: SIMILAR_QUESTION_PROMPT_VERSION,
+    })
 }

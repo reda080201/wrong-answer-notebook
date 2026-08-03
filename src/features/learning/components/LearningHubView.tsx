@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
@@ -40,7 +40,7 @@ interface LearningHubViewProps {
   highlightedBlock?: { entryId: string; blockId: string } | null;
 }
 
-function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
+function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<boolean>; onCancel: () => void }) {
   const [title, setTitle] = useState(item.block.title);
   const [content, setContent] = useState(item.block.content);
   const [unit, setUnit] = useState(item.block.unit ?? "");
@@ -62,13 +62,31 @@ function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave
 function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, questionBankItems = [], highlighted }: { item: LearningHubItem; highlighted?: boolean } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock" | "questionBankItems">) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const failedTaskRef = useRef<(() => Promise<void>) | null>(null);
   const { block } = item;
   const sourceQuestion = block.sourceQuestionNumber ?? block.sourceReferences?.find((reference) => reference.questionNumber)?.questionNumber;
   const mutate = async (task: () => Promise<void>) => {
+    if (busy) return false;
     setBusy(true);
-    try { await task(); } finally { setBusy(false); }
+    setActionError(null);
+    try {
+      await task();
+      failedTaskRef.current = null;
+      return true;
+    } catch (error) {
+      failedTaskRef.current = task;
+      setActionError(error instanceof Error ? error.message : "학습 카드를 저장하지 못했습니다.");
+      return false;
+    } finally {
+      setBusy(false);
+    }
   };
-  return <article id={`learning-block-${item.sourceEntryId}-${block.id}`} className={`learning-hub-card${highlighted ? " learning-hub-card--highlighted" : ""}`}>
+  const retry = () => {
+    const failedTask = failedTaskRef.current;
+    if (failedTask) void mutate(failedTask);
+  };
+  return <article id={`learning-block-${item.sourceEntryId}-${block.id}`} className={`learning-hub-card${highlighted ? " learning-hub-card--highlighted" : ""}`} aria-busy={busy || undefined}>
     <header>
       <div><span className="learning-hub-chip">{DOMAIN_LABELS[item.domain]}</span><span className="learning-hub-chip">{TYPE_LABELS[block.type]}</span><span className="learning-hub-chip">{IMPORTANCE_LABELS[block.importance ?? "reference"]}</span></div>
       <div className="learning-hub-menu" aria-label={`${block.title || "학습 카드"} 작업`}>
@@ -80,7 +98,12 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
     </header>
     <h3>{block.title || "학습 내용"}</h3>
     <p className="learning-hub-meta">{item.sourceSubject} · {block.unit ?? "단원 미분류"} · {REVIEW_LABELS[block.reviewStatus ?? "draft"]} · {new Date(item.sourceEntry.updatedAt).toLocaleDateString("ko-KR")}</p>
-    {editing ? <BlockEditor item={item} onSave={async (patch) => { await onUpdateBlock(item.sourceEntryId, block.id, patch); setEditing(false); }} onCancel={() => setEditing(false)} /> : <>
+    {actionError && <div className="form-error" role="alert">{actionError}<button type="button" className="btn-secondary" onClick={retry} disabled={busy}>다시 저장</button></div>}
+    {editing ? <BlockEditor item={item} onSave={async (patch) => {
+      const saved = await mutate(() => onUpdateBlock(item.sourceEntryId, block.id, patch));
+      if (saved) setEditing(false);
+      return saved;
+    }} onCancel={() => setEditing(false)} /> : <>
       {block.content && <div className="learning-hub-content"><MathText text={block.content} /></div>}
       <SubjectLearningDetails block={block} />
       {block.commonTraps?.length ? <section className="learning-hub-warning"><h4>함정 또는 오개념</h4><ul>{block.commonTraps.map((trap) => <li key={trap}>{trap}</li>)}</ul></section> : null}
@@ -104,6 +127,17 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     document.getElementById(`learning-block-${highlightedBlock.entryId}-${highlightedBlock.blockId}`)?.scrollIntoView({ block: "center" });
   }, [highlightedBlock]);
   const set = <K extends keyof LearningHubFilters>(key: K, value: LearningHubFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
+  const activeFilterChips = [
+    filters.search ? { key: "search", label: `검색: ${filters.search}`, clear: () => set("search", "") } : null,
+    filters.domain !== "all" ? { key: "domain", label: DOMAIN_LABELS[filters.domain], clear: () => set("domain", "all") } : null,
+    filters.unit !== "all" ? { key: "unit", label: filters.unit, clear: () => set("unit", "all") } : null,
+    filters.type !== "all" ? { key: "type", label: TYPE_LABELS[filters.type], clear: () => set("type", "all") } : null,
+    filters.importance !== "all" ? { key: "importance", label: IMPORTANCE_LABELS[filters.importance], clear: () => set("importance", "all") } : null,
+    filters.reviewStatus !== "all" ? { key: "reviewStatus", label: REVIEW_LABELS[filters.reviewStatus], clear: () => set("reviewStatus", "all") } : null,
+    filters.linkedOnly ? { key: "linkedOnly", label: "연결 문항", clear: () => set("linkedOnly", false) } : null,
+    ...filters.thinkers.map((thinker) => ({ key: `thinker:${thinker}`, label: thinker, clear: () => set("thinkers", filters.thinkers.filter((value) => value !== thinker)) })),
+    ...filters.lifeEthicsKinds.map((kind) => ({ key: `lifeEthics:${kind}`, label: kind === "passage_clue" ? "지문 단서" : "틀린 선지", clear: () => set("lifeEthicsKinds", filters.lifeEthicsKinds.filter((value) => value !== kind)) })),
+  ].filter((chip): chip is { key: string; label: string; clear: () => void } => chip !== null);
   return <section className="learning-hub" aria-label="학습 허브">
     <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><div className="learning-hub-source-actions">{[...new Map(items.filter((item) => item.sourceEntry.answerKey?.length).map((item) => [item.sourceEntryId, item])).values()].map((item) => <button key={item.sourceEntryId} type="button" onClick={() => onOpenCandidateReview(item.sourceEntryId)}>답안에서 학습 후보 만들기 · {item.sourceEntryTitle}</button>)}</div></div><strong>{filtered.length}개</strong></header>
     <div className="learning-hub-filters">
@@ -117,7 +151,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       {filters.domain === "life_ethics" && <><div className="learning-hub-thinker-filter" aria-label="사상가 필터">{thinkers.map((thinker) => <button key={thinker} type="button" className={filters.thinkers.includes(thinker) ? "active" : ""} onClick={() => set("thinkers", filters.thinkers.includes(thinker) ? filters.thinkers.filter((value) => value !== thinker) : [...filters.thinkers, thinker])}>{thinker}</button>)}</div><div className="learning-hub-thinker-filter" aria-label="생활과 윤리 자료 유형 필터">{(["passage_clue", "incorrect_choice"] as const).map((kind) => <button key={kind} type="button" className={filters.lifeEthicsKinds.includes(kind) ? "active" : ""} onClick={() => set("lifeEthicsKinds", filters.lifeEthicsKinds.includes(kind) ? filters.lifeEthicsKinds.filter((value) => value !== kind) : [...filters.lifeEthicsKinds, kind])}>{kind === "passage_clue" ? "지문 단서" : "틀린 선지"}</button>)}</div></>}
       <button type="button" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>
     </div>
-    <div className="learning-hub-active-filters">{Object.entries(filters).filter(([key, value]) => key !== "search" ? value !== "all" && value !== false : Boolean(value)).map(([key, value]) => <span key={key}>{key === "search" ? `검색: ${value}` : key === "linkedOnly" ? "연결 문항" : String(value)}</span>)}</div>
+    <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
     {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;
 }

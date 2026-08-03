@@ -79,4 +79,19 @@ describe("QuestionBankView", () => {
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     vi.useRealTimers();
   });
+
+  it("retries the failed preset snapshot instead of dropping it", async () => {
+    vi.useFakeTimers();
+    const onPreferencesChange = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
+    render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} onPreferencesChange={onPreferencesChange} />);
+    fireEvent.change(screen.getByPlaceholderText("필터 이름"), { target: { value: "함수 모음" } });
+    fireEvent.click(screen.getByRole("button", { name: "현재 필터 저장" }));
+    await act(async () => { vi.advanceTimersByTime(300); await Promise.resolve(); });
+    expect(onPreferencesChange.mock.calls[0][0].savedPresets).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "다시 저장" }));
+    await act(async () => { vi.advanceTimersByTime(300); await Promise.resolve(); });
+    expect(onPreferencesChange.mock.calls[1][0].savedPresets).toHaveLength(1);
+    expect(onPreferencesChange.mock.calls[1][0].savedPresets[0].name).toBe("함수 모음");
+    vi.useRealTimers();
+  });
 });
