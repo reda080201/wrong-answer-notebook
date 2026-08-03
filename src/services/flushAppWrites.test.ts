@@ -29,4 +29,22 @@ describe("flushPendingAppWrites", () => {
     expect(flushGeneratedExams).not.toHaveBeenCalled();
     expect(flushSettings).not.toHaveBeenCalled();
   });
+
+  it("times out a flush that never settles", async () => {
+    vi.useFakeTimers();
+    try {
+      const pending = expect(flushPendingAppWrites({
+        activeExam: null,
+        flushExamSession: vi.fn(),
+        flushEntries: () => new Promise<void>(() => undefined),
+        flushGeneratedExams: async () => undefined,
+        flushSettings: async () => undefined,
+        flushImportWorkspaceDraft: async () => undefined,
+      }, 100)).rejects.toThrow("저장 시간이 초과되었습니다.");
+      await vi.advanceTimersByTimeAsync(100);
+      await pending;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
