@@ -1,5 +1,10 @@
 mod mcp_bridge;
 mod notebook_store;
+mod storage;
+
+pub(crate) use storage::{
+    app_dir, data_file, data_schema_file, settings_file, write_bytes_atomic, write_json_atomic,
+};
 
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -129,20 +134,6 @@ struct StoredEntriesDocument {
 
 fn default_entry_kind() -> String {
     "wrong_answer".to_string()
-}
-
-fn app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    Ok(dir)
-}
-
-fn data_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app_dir(app)?.join("entries.json"))
-}
-
-fn settings_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app_dir(app)?.join("settings.json"))
 }
 
 fn ai_provider_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -535,31 +526,6 @@ fn write_entries_json_atomic(path: &Path, entries: &[WrongAnswerEntry]) -> Resul
     Ok(())
 }
 
-fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), String> {
-    let dir = path
-        .parent()
-        .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_string())?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
-    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
-    tmp.write_all(json.as_bytes()).map_err(|e| e.to_string())?;
-    tmp.flush().map_err(|e| e.to_string())?;
-    tmp.persist(path).map_err(|e| e.error.to_string())?;
-    Ok(())
-}
-
-pub(crate) fn write_bytes_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    let dir = path
-        .parent()
-        .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_string())?;
-    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    let mut tmp = tempfile::NamedTempFile::new_in(dir).map_err(|e| e.to_string())?;
-    tmp.write_all(bytes).map_err(|e| e.to_string())?;
-    tmp.flush().map_err(|e| e.to_string())?;
-    tmp.persist(path).map_err(|e| e.error.to_string())?;
-    Ok(())
-}
-
 fn load_entries_raw(app: &tauri::AppHandle) -> Result<String, String> {
     let path = data_file(app)?;
     if path.exists() {
@@ -818,10 +784,6 @@ fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String
 #[tauri::command]
 fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
     write_json_atomic(&app_dir(&app)?.join("exam-sessions.json"), &sessions)
-}
-
-fn data_schema_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-    Ok(app_dir(app)?.join("data-schema.json"))
 }
 
 fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
