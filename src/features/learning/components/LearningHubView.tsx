@@ -94,8 +94,12 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
   const units = useMemo(() => learningHubUnits(items), [items]);
   const set = <K extends keyof LearningHubFilters>(key: K, value: LearningHubFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
+  const candidateEntries = useMemo(
+    () => entries.filter((entry) => (entry.answerKey?.length ?? 0) > 0),
+    [entries],
+  );
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><div className="learning-hub-source-actions">{[...new Map(items.filter((item) => item.sourceEntry.answerKey?.length).map((item) => [item.sourceEntryId, item])).values()].map((item) => <button key={item.sourceEntryId} type="button" onClick={() => onOpenCandidateReview(item.sourceEntryId)}>답안에서 학습 후보 만들기 · {item.sourceEntryTitle}</button>)}</div></div><strong>{filtered.length}개</strong></header>
+    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><div className="learning-hub-source-actions">{candidateEntries.map((entry) => <button key={entry.id} type="button" onClick={() => onOpenCandidateReview(entry.id)}>답안에서 학습 후보 만들기 · {entry.title}</button>)}</div></div><strong>{filtered.length}개</strong></header>
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
