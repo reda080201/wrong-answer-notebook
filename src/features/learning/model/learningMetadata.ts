@@ -41,7 +41,7 @@ export function normalizeLearningSourceReferences(value: unknown): LearningSourc
   if (!Array.isArray(value)) return undefined;
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
-    .map((item) => ({
+    .map((item): LearningSourceReference => ({
       entryId: typeof item.entryId === "string" ? item.entryId.trim() : "",
       entryTitle: typeof item.entryTitle === "string" ? item.entryTitle.trim() || undefined : undefined,
       questionNumber: typeof item.questionNumber === "string" ? item.questionNumber.trim() || undefined : undefined,
@@ -54,7 +54,7 @@ export function normalizePassageExamples(value: unknown): LearningPassageExample
   if (!Array.isArray(value)) return undefined;
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
-    .map((item, index) => ({
+    .map((item, index): LearningPassageExample => ({
       id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `passage-${index + 1}`,
       text: typeof item.text === "string" ? item.text.trim() : "",
       explanation: typeof item.explanation === "string" ? item.explanation.trim() || undefined : undefined,
@@ -68,7 +68,7 @@ export function normalizeChoiceExamples(value: unknown): LearningChoiceExample[]
   if (!Array.isArray(value)) return undefined;
   return value
     .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
-    .map((item, index) => ({
+    .map((item, index): LearningChoiceExample => ({
       id: typeof item.id === "string" && item.id.trim() ? item.id.trim() : `choice-${index + 1}`,
       text: typeof item.text === "string" ? item.text.trim() : "",
       verdict: item.verdict === "correct" || item.verdict === "incorrect" || item.verdict === "depends" ? item.verdict : undefined,
