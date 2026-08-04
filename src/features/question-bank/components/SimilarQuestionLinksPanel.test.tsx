@@ -42,4 +42,26 @@ describe("SimilarQuestionLinksPanel", () => {
     expect(onChange.mock.calls[0][0][0]).toMatchObject({ source: "local" });
     expect(onChange.mock.calls[0][0][0]).not.toHaveProperty("model");
   });
+
+  it("serializes rapid link saves against the latest optimistic snapshot", async () => {
+    let resolveFirst: (() => void) | undefined;
+    let resolveSecond: (() => void) | undefined;
+    const first = new Promise<void>((resolve) => { resolveFirst = resolve; });
+    const second = new Promise<void>((resolve) => { resolveSecond = resolve; });
+    const onChange = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+    render(<SimilarQuestionLinksPanel sourceEntry={source} block={block} links={[]} items={[item, secondItem]} onOpen={vi.fn()} onChange={onChange} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "유사 문제 찾기" }));
+    const buttons = screen.getAllByRole("button", { name: "연결" });
+    fireEvent.click(buttons[0]);
+    fireEvent.click(buttons[1]);
+
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+    expect(onChange.mock.calls[0][0]).toHaveLength(1);
+    resolveFirst?.();
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+    expect(onChange.mock.calls[1][0]).toHaveLength(2);
+    expect(onChange.mock.calls[1][0].map((link: { targetEntryId: string }) => link.targetEntryId).sort()).toEqual(["other", "target"]);
+    resolveSecond?.();
+  });
 });

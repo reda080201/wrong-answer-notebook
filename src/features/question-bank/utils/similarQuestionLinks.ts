@@ -115,7 +115,7 @@ export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: Lea
   const aggregateMetadataStrings = blocks.flatMap((candidate) => Object.values(candidate.subjectMetadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : []));
   const content = block
     ? [block.title, block.content].filter(Boolean).join("\n")
-    : [entry.title, entry.question, entry.memo, ...blocks.flatMap((candidate) => [candidate.title, candidate.content])].filter(Boolean).join("\n");
+    : [entry.title, entry.question, ...blocks.flatMap((candidate) => [candidate.title, candidate.content])].filter(Boolean).join("\n");
   return {
     sourceId: entry.id,
     sourceQuestionNumber: block?.sourceQuestionNumber,
