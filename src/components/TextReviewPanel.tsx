@@ -44,6 +44,10 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
     }
   };
 
+  const requestClose = () => {
+    if (!saving) onClose();
+  };
+
   const selectSegment = (segment: SuspiciousTextSegment) => {
     setSelectedSegmentId(segment.id);
     const textarea = textareaRef.current;
@@ -71,7 +75,7 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
   };
 
   return (
-    <Dialog open onClose={onClose} className="text-review-panel text-review-panel--drawer" ariaLabel="텍스트 검수" closeDisabled={saving} busy={saving}>
+    <Dialog open onClose={requestClose} className="text-review-panel text-review-panel--drawer" ariaLabel="텍스트 검수" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Text Review</span>
@@ -81,7 +85,7 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
             <button type="button" className="btn-secondary" onClick={handleSave} disabled={saving}>
               {saving ? "저장 중..." : "수정 저장"}
             </button>
-            <button type="button" className="btn-icon" onClick={onClose}>
+            <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
               닫기
             </button>
           </div>
@@ -157,7 +161,7 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
         </div>
 
         <footer className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>
             취소
           </button>
           <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>

@@ -37,6 +37,17 @@ describe("LearningHubView", () => {
     expect(onUpdateBlock).toHaveBeenLastCalledWith("sheet-1", "block-1", { reviewStatus: "reviewed" });
   });
 
+  it("blocks rapid duplicate card mutations before React rerenders", () => {
+    let resolveDuplicate: (() => void) | undefined;
+    const onDuplicateBlock = vi.fn(() => new Promise<void>((resolve) => { resolveDuplicate = resolve; }));
+    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+    const duplicate = screen.getByRole("button", { name: "복제" });
+    fireEvent.click(duplicate);
+    fireEvent.click(duplicate);
+    expect(onDuplicateBlock).toHaveBeenCalledTimes(1);
+    resolveDuplicate?.();
+  });
+
   it("renders life ethics filters as individually removable chips", () => {
     const ethicsEntry: WrongAnswerEntry = {
       ...entry,

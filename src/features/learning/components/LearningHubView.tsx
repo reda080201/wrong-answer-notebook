@@ -63,11 +63,13 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const actionMutexRef = useRef(false);
   const failedTaskRef = useRef<(() => Promise<void>) | null>(null);
   const { block } = item;
   const sourceQuestion = block.sourceQuestionNumber ?? block.sourceReferences?.find((reference) => reference.questionNumber)?.questionNumber;
   const mutate = async (task: () => Promise<void>) => {
-    if (busy) return false;
+    if (actionMutexRef.current) return false;
+    actionMutexRef.current = true;
     setBusy(true);
     setActionError(null);
     try {
@@ -79,6 +81,7 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
       setActionError(error instanceof Error ? error.message : "학습 카드를 저장하지 못했습니다.");
       return false;
     } finally {
+      actionMutexRef.current = false;
       setBusy(false);
     }
   };
