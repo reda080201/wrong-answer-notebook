@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { LearningBlock, LearningReviewStatus, WrongAnswerEntry } from "../../../types";
+import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export interface LearningCandidate {
   id: string;
@@ -45,6 +46,7 @@ export function buildLearningCandidates(entry: WrongAnswerEntry): LearningCandid
 }
 
 export function filterNewLearningCandidates(entry: WrongAnswerEntry, candidates: LearningCandidate[]): LearningCandidate[] {
-  const existing = new Set((entry.learningBlocks ?? []).map((block) => `${block.sourceQuestionNumber ?? ""}|${block.type}|${block.title.trim().toLocaleLowerCase("ko-KR")}`));
-  return candidates.filter((candidateItem) => !existing.has(`${candidateItem.block.sourceQuestionNumber ?? ""}|${candidateItem.block.type}|${candidateItem.block.title.trim().toLocaleLowerCase("ko-KR")}`));
+  const keyFor = (block: LearningBlock) => `${normalizeQuestionNumber(block.sourceQuestionNumber ?? "")}|${block.type}|${block.title.trim().toLocaleLowerCase("ko-KR")}`;
+  const existing = new Set((entry.learningBlocks ?? []).map(keyFor));
+  return candidates.filter((candidateItem) => !existing.has(keyFor(candidateItem.block)));
 }
