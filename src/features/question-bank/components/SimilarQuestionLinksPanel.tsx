@@ -6,10 +6,12 @@ import {
   buildSimilarQuestionContext,
   createSimilarQuestionLink,
   parseGeminiSimilarQuestionRanking,
+  prepareSimilarQuestionRankingRequest,
   rankLocalSimilarQuestions,
   rejectSimilarQuestionLinks,
   toSimilarQuestionCandidatePayload,
   type LocalSimilarQuestion,
+  type SimilarQuestionRankingResponse,
 } from "../utils/similarQuestionLinks";
 import { rankSimilarQuestionsWithAi } from "../../../api";
 
@@ -49,6 +51,9 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasRetryableSave, setHasRetryableSave] = useState(false);
   const [geminiSuggestions, setGeminiSuggestions] = useState<LocalSimilarQuestion[] | null>(null);
+  const [geminiRankedIds, setGeminiRankedIds] = useState<Set<string>>(new Set());
+  const [geminiProvenance, setGeminiProvenance] = useState<Pick<SimilarQuestionRankingResponse, "model" | "promptVersion"> | null>(null);
+  const [payloadTruncated, setPayloadTruncated] = useState(false);
   const failedTargetRef = useRef<SimilarQuestionLink[] | null>(null);
   const failedBaseRef = useRef("");
   const requestIdRef = useRef(0);
@@ -62,6 +67,9 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
   useEffect(() => {
     requestIdRef.current += 1;
     setGeminiSuggestions(null);
+    setGeminiRankedIds(new Set());
+    setGeminiProvenance(null);
+    setPayloadTruncated(false);
   }, [context, suggestions]);
 
   useEffect(() => {
@@ -79,14 +87,22 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     setGeminiError(null);
     try {
       const candidates = suggestions.map((suggestion) => toSimilarQuestionCandidatePayload(suggestion.candidate));
-      const raw = await rankSimilarQuestionsWithAi({ context, candidates });
-      const ranking = parseGeminiSimilarQuestionRanking(raw, new Set(candidates.map((candidate) => candidate.candidateId)));
+      const prepared = prepareSimilarQuestionRankingRequest(context, candidates);
+      if (prepared.blocked) {
+        setGeminiError("후보 정보가 너무 커 Gemini 재정렬을 실행하지 않았습니다. 기존 추천을 유지합니다.");
+        return;
+      }
+      const response = await rankSimilarQuestionsWithAi(prepared.request);
+      const ranking = parseGeminiSimilarQuestionRanking(response.content, new Set(prepared.request.candidates.map((candidate) => candidate.candidateId)));
       if (mountedRef.current && requestId === requestIdRef.current) {
         if (ranking.length === 0) {
           setGeminiError("Gemini가 사용할 수 있는 재정렬 결과를 반환하지 않아 기존 추천을 유지합니다.");
           return;
         }
         const rankedById = new Map(ranking.map((result) => [result.candidateId, result]));
+        setGeminiRankedIds(new Set(ranking.map((result) => result.candidateId)));
+        setGeminiProvenance({ model: response.model, promptVersion: response.promptVersion });
+        setPayloadTruncated(prepared.truncated);
         setGeminiSuggestions(suggestions.map((base) => {
           const result = rankedById.get(base.candidate.id);
           return result
@@ -128,6 +144,6 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     {saveError && <p role="alert" className="form-hint">{saveError}<button type="button" className="btn-secondary" disabled={busy || !hasRetryableSave} onClick={() => { const target = failedTargetRef.current; if (target) void save(target); }}>다시 저장</button><button type="button" className="btn-secondary" disabled={busy} onClick={() => { failedTargetRef.current = null; failedBaseRef.current = ""; setHasRetryableSave(false); setSaveError(null); }}>취소</button></p>}
     {approved.length > 0 && <ul>{approved.map((link) => { const item = items.find((candidate) => candidate.entryId === link.targetEntryId && candidate.questionNumber === link.targetQuestionNumber); return <li key={link.id}>{item ? <button type="button" onClick={() => onOpen(item.entryId, item.questionNumber)}>{item.entryTitle} {item.questionNumber}번 · {link.score ?? 0}점</button> : <span>연결된 문제를 찾을 수 없음 ({link.targetEntryId} {link.targetQuestionNumber}번)</span>}<button type="button" aria-label="관련 문제 연결 해제" onClick={() => void save(links.filter((candidate) => candidate.id !== link.id))} disabled={busy}>해제</button></li>; })}</ul>}
     {rejected.length > 0 && <details><summary>거절한 후보 {rejected.length}개 관리</summary><ul>{rejected.map((link) => <li key={link.id}><span>{link.targetEntryId} {link.targetQuestionNumber}번</span><button type="button" onClick={() => void save(links.filter((candidate) => candidate.id !== link.id))} disabled={busy}>다시 추천</button></li>)}</ul></details>}
-    {open && <div className="similar-question-suggestions"><p>현재 저장된 문제에서만 추천합니다.</p><button type="button" onClick={() => void rerankWithGemini()} disabled={busy || suggestions.length === 0}>Gemini로 기존 후보 재정렬</button>{geminiError && <p role="alert">{geminiError}</p>}{displaySuggestions.map((suggestion) => { const existing = links.find((link) => linkKey(link) === `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`); return <article key={suggestion.candidate.id}><div><strong>{suggestion.candidate.entryTitle} {suggestion.candidate.questionNumber}번</strong><span>{suggestion.score}점 · {suggestion.reasons.join(", ") || "관련 후보"}</span>{suggestion.sharedConcepts.length > 0 && <span>공통 개념: {suggestion.sharedConcepts.join(", ")}</span>}{suggestion.differences.length > 0 && <span>차이: {suggestion.differences.join(", ")}</span>}</div><button type="button" onClick={() => onOpen(suggestion.candidate.entryId, suggestion.candidate.questionNumber)}>열기</button><button type="button" disabled={busy || Boolean(existing)} onClick={() => void save([...links.filter((link) => linkKey(link) !== `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`), ...approveSimilarQuestionLinks([createSimilarQuestionLink(suggestion, geminiSuggestions ? "gemini" : "local")])])}>연결</button><button type="button" disabled={busy || Boolean(existing)} onClick={() => void save([...links, ...rejectSimilarQuestionLinks([createSimilarQuestionLink(suggestion)])])}>거절</button></article>; })}</div>}
+    {open && <div className="similar-question-suggestions"><p>현재 저장된 문제에서만 추천합니다.</p><button type="button" onClick={() => void rerankWithGemini()} disabled={busy || suggestions.length === 0}>Gemini로 기존 후보 재정렬</button>{payloadTruncated && <p className="form-hint">Gemini 재정렬을 위해 일부 후보 본문 또는 해설을 축약했습니다.</p>}{geminiError && <p role="alert">{geminiError}</p>}{displaySuggestions.map((suggestion) => { const existing = links.find((link) => linkKey(link) === `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`); const isGeminiRanked = geminiRankedIds.has(suggestion.candidate.id); const source = isGeminiRanked ? "gemini" : "local"; return <article key={suggestion.candidate.id}><div><strong>{suggestion.candidate.entryTitle} {suggestion.candidate.questionNumber}번</strong><span>{suggestion.score}점 · {suggestion.reasons.join(", ") || "관련 후보"}</span>{suggestion.sharedConcepts.length > 0 && <span>공통 개념: {suggestion.sharedConcepts.join(", ")}</span>}{suggestion.differences.length > 0 && <span>차이: {suggestion.differences.join(", ")}</span>}</div><button type="button" onClick={() => onOpen(suggestion.candidate.entryId, suggestion.candidate.questionNumber)}>열기</button><button type="button" disabled={busy || Boolean(existing)} onClick={() => void save([...links.filter((link) => linkKey(link) !== `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`), ...approveSimilarQuestionLinks([createSimilarQuestionLink(suggestion, source, undefined, source === "gemini" ? geminiProvenance ?? undefined : undefined)])])}>연결</button><button type="button" disabled={busy || Boolean(existing)} onClick={() => void save([...links, ...rejectSimilarQuestionLinks([createSimilarQuestionLink(suggestion)])])}>거절</button></article>; })}</div>}
   </section>;
 }

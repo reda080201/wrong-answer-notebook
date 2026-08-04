@@ -21,6 +21,9 @@ export interface SimilarQuestionContext {
   passageClues?: string[];
   thinkers?: string[];
   choiceCriteria?: string[];
+  content?: string;
+  units?: string[];
+  subunits?: string[];
 }
 
 export interface SimilarQuestionCandidatePayload {
@@ -42,6 +45,18 @@ export interface SimilarQuestionRankingRequest {
   candidates: SimilarQuestionCandidatePayload[];
 }
 
+export interface SimilarQuestionRankingResponse {
+  content: string;
+  model: string;
+  promptVersion: "similar-question-ranking-v1";
+}
+
+export interface PreparedSimilarQuestionRankingRequest {
+  request: SimilarQuestionRankingRequest;
+  truncated: boolean;
+  blocked: boolean;
+}
+
 export interface LocalSimilarQuestion {
   candidate: QuestionBankItem;
   score: number;
@@ -53,6 +68,28 @@ export interface LocalSimilarQuestion {
 const clamp = (value: unknown) => Math.max(0, Math.min(100, Number.isFinite(Number(value)) ? Number(value) : 0));
 const unique = (values: string[]) => [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 const key = (entryId: string, questionNumber: string) => `${entryId}:${normalizeQuestionNumber(questionNumber)}`;
+export const MAX_SIMILAR_QUESTION_CANDIDATES = 30;
+export const MAX_SIMILAR_CONTEXT_CONTENT_BYTES = 6_000;
+export const MAX_SIMILAR_CANDIDATE_QUESTION_BYTES = 3_000;
+export const MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES = 1_500;
+export const MAX_SIMILAR_RANKING_REQUEST_BYTES = 96 * 1024;
+
+const encoder = new TextEncoder();
+const byteLength = (value: string) => encoder.encode(value).byteLength;
+
+function truncateUtf8(value: string, maxBytes: number) {
+  if (byteLength(value) <= maxBytes) return value;
+  let start = 0;
+  let end = value.length;
+  while (start < end) {
+    const middle = Math.ceil((start + end) / 2);
+    if (byteLength(value.slice(0, middle)) <= maxBytes) start = middle;
+    else end = middle - 1;
+  }
+  // Avoid returning a dangling UTF-16 surrogate when the byte limit cuts an emoji.
+  const safeEnd = start > 0 && /[\uD800-\uDBFF]/.test(value[start - 1]) ? start - 1 : start;
+  return value.slice(0, safeEnd).trimEnd();
+}
 
 function metadataValues(metadata: SubjectLearningMetadata | undefined) {
   if (!metadata) return { formulae: [] as string[], solutionMethods: [] as string[], passageClues: [] as string[], thinkers: [] as string[], choiceCriteria: [] as string[] };
@@ -63,29 +100,43 @@ function metadataValues(metadata: SubjectLearningMetadata | undefined) {
 }
 
 export function buildSimilarQuestionContext(entry: WrongAnswerEntry, block?: LearningBlock): SimilarQuestionContext {
+  const blocks = block ? [block] : entry.learningBlocks ?? [];
   const metadata = block?.subjectMetadata && typeof block.subjectMetadata === "object" ? block.subjectMetadata : undefined;
   const subjectValues = metadataValues(metadata);
+  const allSubjectValues = blocks.map((candidate) => metadataValues(candidate.subjectMetadata));
   const linkedQuestionMeta = block?.sourceQuestionNumber
     ? normalizeQuestionMeta(entry.questionMeta).find((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber ?? ""))
     : undefined;
+  const scores = normalizeQuestionMeta(entry.questionMeta)
+    .map((meta) => meta.difficultyScore)
+    .filter((score): score is number => typeof score === "number" && Number.isFinite(score))
+    .sort((left, right) => left - right);
+  const aggregateDifficulty = scores.length ? scores[Math.floor(scores.length / 2)] : undefined;
+  const aggregateMetadataStrings = blocks.flatMap((candidate) => Object.values(candidate.subjectMetadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : []));
+  const content = block
+    ? [block.title, block.content].filter(Boolean).join("\n")
+    : [entry.title, entry.question, entry.memo, ...blocks.flatMap((candidate) => [candidate.title, candidate.content])].filter(Boolean).join("\n");
   return {
     sourceId: entry.id,
     sourceQuestionNumber: block?.sourceQuestionNumber,
     subject: entry.subject,
     unit: block?.unit,
     subunit: block?.subunit,
-    difficultyScore: linkedQuestionMeta?.difficultyScore,
-    concepts: unique([...(block?.relatedConcepts ?? []), ...(block?.keywords ?? []), ...Object.values(metadata ?? {}).flatMap((value) => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : typeof value === "string" ? [value] : [])]),
+    units: unique(block ? [block.unit ?? ""] : blocks.map((candidate) => candidate.unit ?? "")),
+    subunits: unique(block ? [block.subunit ?? ""] : blocks.map((candidate) => candidate.subunit ?? "")),
+    difficultyScore: linkedQuestionMeta?.difficultyScore ?? aggregateDifficulty,
+    concepts: unique([entry.title, ...(entry.concepts ?? []), ...blocks.flatMap((candidate) => [...(candidate.relatedConcepts ?? []), ...(candidate.keywords ?? [])]), ...aggregateMetadataStrings]),
     tags: unique(entry.tags ?? []),
-    keywords: unique(block?.keywords ?? []),
+    keywords: unique(block ? block.keywords ?? [] : blocks.flatMap((candidate) => candidate.keywords ?? [])),
     entryTitle: entry.title,
     entryKind: entry.entryKind,
     sourceType: entry.problemSource?.type,
-    formulae: unique(subjectValues.formulae),
-    solutionMethods: unique(subjectValues.solutionMethods),
-    passageClues: unique(subjectValues.passageClues),
-    thinkers: unique(subjectValues.thinkers),
-    choiceCriteria: unique(subjectValues.choiceCriteria),
+    formulae: unique(block ? subjectValues.formulae : allSubjectValues.flatMap((value) => value.formulae)),
+    solutionMethods: unique(block ? subjectValues.solutionMethods : allSubjectValues.flatMap((value) => value.solutionMethods)),
+    passageClues: unique(block ? subjectValues.passageClues : allSubjectValues.flatMap((value) => value.passageClues)),
+    thinkers: unique(block ? subjectValues.thinkers : allSubjectValues.flatMap((value) => value.thinkers)),
+    choiceCriteria: unique(block ? subjectValues.choiceCriteria : allSubjectValues.flatMap((value) => value.choiceCriteria)),
+    content,
   };
 }
 
@@ -105,6 +156,39 @@ export function toSimilarQuestionCandidatePayload(candidate: QuestionBankItem): 
   };
 }
 
+export function prepareSimilarQuestionRankingRequest(context: SimilarQuestionContext, candidates: SimilarQuestionCandidatePayload[]): PreparedSimilarQuestionRankingRequest {
+  let truncated = false;
+  const trim = (value: string | undefined, maxBytes: number) => {
+    const next = truncateUtf8(value ?? "", maxBytes);
+    truncated ||= next !== (value ?? "");
+    return next;
+  };
+  const request: SimilarQuestionRankingRequest = {
+    context: { ...context, content: trim(context.content, MAX_SIMILAR_CONTEXT_CONTENT_BYTES) },
+    candidates: candidates.slice(0, MAX_SIMILAR_QUESTION_CANDIDATES).map((candidate) => ({
+      ...candidate,
+      questionText: trim(candidate.questionText, MAX_SIMILAR_CANDIDATE_QUESTION_BYTES),
+      explanation: candidate.explanation ? trim(candidate.explanation, MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES) : undefined,
+    })),
+  };
+  truncated ||= candidates.length > request.candidates.length;
+  const size = () => byteLength(JSON.stringify(request));
+  for (let index = request.candidates.length - 1; size() > MAX_SIMILAR_RANKING_REQUEST_BYTES && index >= 0; index -= 1) {
+    if (request.candidates[index].explanation) {
+      request.candidates[index] = { ...request.candidates[index], explanation: undefined };
+      truncated = true;
+    }
+  }
+  for (let index = request.candidates.length - 1; size() > MAX_SIMILAR_RANKING_REQUEST_BYTES && index >= 0; index -= 1) {
+    const candidate = request.candidates[index];
+    if (byteLength(candidate.questionText) > 512) {
+      request.candidates[index] = { ...candidate, questionText: truncateUtf8(candidate.questionText, 512) };
+      truncated = true;
+    }
+  }
+  return { request, truncated, blocked: size() > MAX_SIMILAR_RANKING_REQUEST_BYTES };
+}
+
 export function rankLocalSimilarQuestions(context: SimilarQuestionContext, items: QuestionBankItem[], links: SimilarQuestionLink[] = [], limit = 30): LocalSimilarQuestion[] {
   const excluded = new Set(links.filter((link) => link.status === "approved" || link.status === "rejected").map((link) => key(link.targetEntryId, link.targetQuestionNumber)));
   return items.flatMap((candidate) => {
@@ -113,8 +197,8 @@ export function rankLocalSimilarQuestions(context: SimilarQuestionContext, items
     if (candidate.subject !== context.subject || isSourceQuestion || excluded.has(key(candidate.entryId, candidate.questionNumber))) return [];
     const sharedConcepts = (candidate.classification.concepts ?? []).filter((concept) => context.concepts.includes(concept));
     const sharedTags = (candidate.classification.tags ?? []).filter((tag) => context.tags.includes(tag));
-    const sameUnit = Boolean(candidate.classification.unit && candidate.classification.unit === context.unit);
-    const sameSubunit = Boolean(candidate.classification.subunit && candidate.classification.subunit === context.subunit);
+    const sameUnit = Boolean(candidate.classification.unit && [context.unit, ...(context.units ?? [])].filter(Boolean).includes(candidate.classification.unit));
+    const sameSubunit = Boolean(candidate.classification.subunit && [context.subunit, ...(context.subunits ?? [])].filter(Boolean).includes(candidate.classification.subunit));
     if (!sameUnit && !sameSubunit && sharedConcepts.length === 0 && sharedTags.length < 2) return [];
     const reasons: string[] = [];
     let score = 0;
@@ -162,6 +246,6 @@ export function rejectSimilarQuestionLinks(links: SimilarQuestionLink[], now = n
   return links.map((link) => ({ ...link, status: "rejected" as const, updatedAt: now }));
 }
 
-export function createSimilarQuestionLink(candidate: LocalSimilarQuestion, source: "local" | "manual" | "gemini" = "local", now = new Date().toISOString()): SimilarQuestionLink {
-  return { id: uuidv4(), targetEntryId: candidate.candidate.entryId, targetQuestionNumber: normalizeQuestionNumber(candidate.candidate.questionNumber), score: candidate.score, reasons: candidate.reasons, sharedConcepts: candidate.sharedConcepts, differences: candidate.differences, source, status: "suggested", createdAt: now, updatedAt: now };
+export function createSimilarQuestionLink(candidate: LocalSimilarQuestion, source: "local" | "manual" | "gemini" = "local", now = new Date().toISOString(), provenance?: Pick<SimilarQuestionRankingResponse, "model" | "promptVersion">): SimilarQuestionLink {
+  return { id: uuidv4(), targetEntryId: candidate.candidate.entryId, targetQuestionNumber: normalizeQuestionNumber(candidate.candidate.questionNumber), score: candidate.score, reasons: candidate.reasons, sharedConcepts: candidate.sharedConcepts, differences: candidate.differences, source, ...(source === "gemini" && provenance ? provenance : {}), status: "suggested", createdAt: now, updatedAt: now };
 }

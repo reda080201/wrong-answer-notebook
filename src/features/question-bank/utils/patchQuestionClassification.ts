@@ -1,10 +1,17 @@
-import type { QuestionMeta } from "../../../types";
+import type { QuestionClassification, QuestionMeta } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+
+export interface QuestionMetaPatch {
+  classification: QuestionClassification;
+  difficultyScore?: number;
+  importanceScore?: number;
+  qualityScore?: number;
+}
 
 export function patchQuestionClassification(
   metas: QuestionMeta[] | undefined,
   questionNumber: string,
-  classification: NonNullable<QuestionMeta["classification"]>,
+  patch: QuestionMetaPatch,
   updatedAt = new Date().toISOString(),
 ): QuestionMeta[] {
   const normalized = normalizeQuestionNumber(questionNumber);
@@ -14,6 +21,27 @@ export function patchQuestionClassification(
     if (normalizeQuestionNumber(meta.questionNumber) !== normalized) return [meta];
     if (matched) return [];
     matched = true;
-    return [{ ...meta, classification, updatedAt }];
-  }).concat(matched ? [] : [{ questionNumber: normalized, important: false, needsReview: false, classification, updatedAt }]);
+    return [{
+      ...meta,
+      difficultyScore: patch.difficultyScore ?? meta.difficultyScore,
+      rating: {
+        ...meta.rating,
+        importanceScore: patch.importanceScore ?? meta.rating?.importanceScore,
+        qualityScore: patch.qualityScore ?? meta.rating?.qualityScore,
+      },
+      classification: patch.classification,
+      updatedAt,
+    }];
+  }).concat(matched ? [] : [{
+    questionNumber: normalized,
+    important: false,
+    needsReview: false,
+    difficultyScore: patch.difficultyScore,
+    rating: {
+      importanceScore: patch.importanceScore,
+      qualityScore: patch.qualityScore,
+    },
+    classification: patch.classification,
+    updatedAt,
+  }]);
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import type { WrongAnswerEntry } from "../../../types";
-import { buildSimilarQuestionContext, parseGeminiSimilarQuestionRanking, rankLocalSimilarQuestions, toSimilarQuestionCandidatePayload } from "./similarQuestionLinks";
+import { buildSimilarQuestionContext, parseGeminiSimilarQuestionRanking, prepareSimilarQuestionRankingRequest, rankLocalSimilarQuestions, toSimilarQuestionCandidatePayload } from "./similarQuestionLinks";
 
 const item = (id: string, number: string, unit: string, concepts: string[]): QuestionBankItem => ({
   id: `${id}:${number}`, entryId: id, entryTitle: id, entryKind: "problem_sheet", questionNumber: number,
@@ -47,5 +47,25 @@ describe("similar question links", () => {
     expect(context).not.toHaveProperty("text");
     expect(context).not.toHaveProperty("memo");
     expect(toSimilarQuestionCandidatePayload(item("candidate", "1", "미분", ["연쇄법칙"]))).toMatchObject({ candidateId: "candidate:1", questionText: "문제" });
+  });
+
+  it("aggregates entry-wide learning metadata when no block is selected", () => {
+    const context = buildSimilarQuestionContext({ id: "lecture", entryKind: "lecture", title: "합성함수 특강", question: "대표 문제", memo: "조건을 먼저 확인", subject: "수학", tags: ["기출"], questionImages: [], difficult: false, myAnswer: "", correctAnswer: "", explanationParts: [], createdAt: "", updatedAt: "", concepts: ["합성함수"], learningBlocks: [{ id: "formula", type: "formula", title: "연쇄법칙", content: "안쪽부터 미분", unit: "미적분", subunit: "합성함수", keywords: ["도함수"], subjectMetadata: { subject: "math", knowledgeType: "formula", formulaLatex: ["f(g(x))"], solutionSteps: ["안쪽부터 미분"] } }, { id: "concept", type: "concept", title: "역함수", content: "정의역 확인", unit: "함수", relatedConcepts: ["역함수"] }] } as unknown as WrongAnswerEntry);
+    expect(context).toMatchObject({
+      content: expect.stringContaining("안쪽부터 미분"),
+      units: expect.arrayContaining(["미적분", "함수"]),
+      subunits: ["합성함수"],
+      concepts: expect.arrayContaining(["합성함수", "도함수", "역함수"]),
+      formulae: ["f(g(x))"],
+      solutionMethods: ["안쪽부터 미분"],
+    });
+  });
+
+  it("trims large Gemini payloads before the request boundary", () => {
+    const prepared = prepareSimilarQuestionRankingRequest({ sourceId: "source", subject: "수학", concepts: [], tags: [], keywords: [], content: "가".repeat(10_000) }, Array.from({ length: 31 }, (_, index) => ({ candidateId: `candidate:${index}`, questionText: "나".repeat(10_000), subject: "수학", hasExplanation: true, explanation: "다".repeat(10_000) })));
+    expect(prepared.truncated).toBe(true);
+    expect(prepared.blocked).toBe(false);
+    expect(prepared.request.candidates).toHaveLength(30);
+    expect(new TextEncoder().encode(JSON.stringify(prepared.request)).byteLength).toBeLessThanOrEqual(96 * 1024);
   });
 });
