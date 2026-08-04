@@ -29,4 +29,16 @@ describe("flushPendingAppWrites", () => {
     expect(flushGeneratedExams).not.toHaveBeenCalled();
     expect(flushSettings).not.toHaveBeenCalled();
   });
+
+  it("fails with a bounded timeout when a persistence queue never settles", async () => {
+    await expect(flushPendingAppWrites({
+      activeExam: null,
+      flushExamSession: vi.fn(),
+      flushEntries: () => new Promise<void>(() => {}),
+      flushGeneratedExams: vi.fn(),
+      flushSettings: vi.fn(),
+      flushImportWorkspaceDraft: vi.fn(),
+      timeoutMs: 5,
+    })).rejects.toThrow("저장 시간이 초과되었습니다");
+  });
 });

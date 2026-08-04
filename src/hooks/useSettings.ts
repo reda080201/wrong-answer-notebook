@@ -23,6 +23,7 @@ export function useSettings() {
   const settingsRef = useRef(settings);
   const mutationRef = useRef(0);
   const failedErrorRef = useRef<Error | null>(null);
+  const loadedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
 
   useEffect(() => {
@@ -30,11 +31,25 @@ export function useSettings() {
   }, [settings]);
 
   const refreshSettings = useCallback(async () => {
+    const refreshMutation = mutationRef.current;
+    loadedRef.current = false;
     try {
       setSettingsError(null);
-      setSettings(await loadSettings());
+      const loaded = await loadSettings();
+      if (refreshMutation === mutationRef.current) {
+        settingsRef.current = loaded;
+        setSettings(loaded);
+        loadedRef.current = true;
+      } else {
+        loadedRef.current = true;
+      }
     } catch (error) {
-      setSettingsError(errorMessage(error, "설정을 불러오지 못했습니다."));
+      if (refreshMutation === mutationRef.current) {
+        loadedRef.current = false;
+        setSettingsError(errorMessage(error, "설정을 불러오지 못했습니다."));
+      } else {
+        loadedRef.current = true;
+      }
     }
   }, []);
 
@@ -43,6 +58,9 @@ export function useSettings() {
   }, [refreshSettings]);
 
   const updateSettings = useCallback((next: AppSettings) => {
+    if (!loadedRef.current) {
+      return Promise.reject(new Error("설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
+    }
     // Update the in-memory snapshot before enqueueing so consecutive patches
     // are based on one monotonic state rather than a stale React render.
     settingsRef.current = next;

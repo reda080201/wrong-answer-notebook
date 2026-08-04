@@ -342,6 +342,8 @@ export default function SettingsModal({
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showOriginalPages} onChange={(event) => void patchView({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showLearningVisuals} onChange={(event) => void patchView({ showLearningVisuals: event.target.checked })} /> 학습 시각화 표시</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.compactToolbar} onChange={(event) => void patchView({ compactToolbar: event.target.checked })} /> 컴팩트 도구바</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.conceptLinksEnabled !== false} onChange={(event) => void patchView({ conceptLinksEnabled: event.target.checked })} /> 해설의 개념 링크 사용</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={Boolean(settings.viewPreferences.automaticConceptLinksEnabled)} disabled={settings.viewPreferences.conceptLinksEnabled === false} onChange={(event) => void patchView({ automaticConceptLinksEnabled: event.target.checked })} /> 정확히 일치하는 개념 자동 연결</label>
                 <p className="settings-label">문제지 배치</p>
                 <div className="theme-options">
                   {([["single", "한 단"], ["columns", "2단"]] as const).map(([value, label]) => (

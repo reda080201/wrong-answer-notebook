@@ -19,11 +19,17 @@ export function useEntries() {
   const [error, setError] = useState<string | null>(null);
   const entriesRef = useRef<WrongAnswerEntry[]>([]);
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
+  const mutationRevisionRef = useRef(0);
+  const loadedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
 
   const clearError = useCallback(() => setError(null), []);
 
   const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
+    if (!loadedRef.current) {
+      return Promise.reject(new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
+    }
+    mutationRevisionRef.current += 1;
     const task = enqueue(async () => {
       const { next, value } = mutation(entriesRef.current);
       await saveEntries(next);
@@ -38,13 +44,23 @@ export function useEntries() {
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    loadedRef.current = false;
+    const refreshRevision = mutationRevisionRef.current;
     try {
       await drain();
       const data = await loadEntries();
+      if (refreshRevision !== mutationRevisionRef.current) {
+        loadedRef.current = true;
+        return;
+      }
       entriesRef.current = data;
       setEntries(data);
+      loadedRef.current = true;
     } catch (err) {
-      setError(errorMessage(err, "노트를 불러오지 못했습니다."));
+      loadedRef.current = false;
+      if (refreshRevision === mutationRevisionRef.current) {
+        setError(errorMessage(err, "노트를 불러오지 못했습니다."));
+      }
     } finally {
       setLoading(false);
     }

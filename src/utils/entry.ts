@@ -20,6 +20,7 @@ import type {
   SupplementalAppliedField,
   SupplementalResource,
   SupplementalResourceKind,
+  SimilarQuestionLink,
   WrongAnswerEntry,
 } from "../types";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
@@ -95,6 +96,21 @@ function normalizeSupplementalResources(raw: unknown): SupplementalResource[] {
         appliedFields,
       };
     });
+}
+
+function normalizeSimilarQuestionLinks(raw: unknown): SimilarQuestionLink[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Partial<SimilarQuestionLink>;
+    if (typeof value.targetEntryId !== "string" || typeof value.targetQuestionNumber !== "string") return [];
+    const targetQuestionNumber = normalizeQuestionNumber(value.targetQuestionNumber);
+    const uniqueKey = `${value.targetEntryId}:${targetQuestionNumber}`;
+    if (!targetQuestionNumber || seen.has(uniqueKey)) return [];
+    seen.add(uniqueKey);
+    return [{ ...value, id: typeof value.id === "string" && value.id ? value.id : uuidv4(), targetEntryId: value.targetEntryId, targetQuestionNumber, score: normalizeDifficultyScore(value.score), reasons: Array.isArray(value.reasons) ? value.reasons.filter((item): item is string => typeof item === "string") : [], sharedConcepts: Array.isArray(value.sharedConcepts) ? value.sharedConcepts.filter((item): item is string => typeof item === "string") : [], differences: Array.isArray(value.differences) ? value.differences.filter((item): item is string => typeof item === "string") : [], source: value.source === "gemini" || value.source === "local" ? value.source : "manual", status: value.status === "approved" || value.status === "rejected" ? value.status : "suggested", createdAt: typeof value.createdAt === "string" ? value.createdAt : new Date().toISOString(), updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString() } satisfies SimilarQuestionLink];
+  });
 }
 
 function normalizeAnswerDifficulty(v: unknown): Exclude<Difficulty, "none"> | undefined {
@@ -483,6 +499,7 @@ export function normalizeLearningBlocks(raw: unknown): LearningBlock[] {
           : undefined,
         sourceReferences: normalizeLearningSourceReferences(item.sourceReferences),
         subjectMetadata: normalizeSubjectLearningMetadata(item.subjectMetadata),
+        similarQuestionLinks: normalizeSimilarQuestionLinks(item.similarQuestionLinks),
       };
     })
     .filter((item) => item.title || item.content || item.diagramType || item.diagramSpec || item.images?.length || item.figureIds?.length);
@@ -778,6 +795,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       ? rest.linkedEntryIds.map((id) => `${id}`.trim()).filter(Boolean)
       : [],
     supplementalResources: normalizeSupplementalResources(rest.supplementalResources),
+    similarQuestionLinks: normalizeSimilarQuestionLinks(rest.similarQuestionLinks),
     concepts: normalizeImportantPoints(rest.concepts),
     reviewAttempts: normalizeReviewAttempts(rest.reviewAttempts, rest.id),
     mastered: review?.phase === "archived",

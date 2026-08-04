@@ -46,6 +46,8 @@ import Dialog from "../shared/ui/Dialog";
 import { writeUiStorageValue } from "../services/uiStorage";
 import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
+import SimilarQuestionLinksPanel from "../features/question-bank/components/SimilarQuestionLinksPanel";
+import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -59,6 +61,7 @@ interface EntryDetailProps {
   existingTargets: Set<string>;
   allEntries?: WrongAnswerEntry[];
   onOpenEntry?: (entryId: string) => void;
+  onOpenQuestionTarget?: (entryId: string, questionNumber: string) => void;
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
@@ -103,6 +106,8 @@ interface EntryDetailProps {
   onOpenChatGptSettings?: () => void;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
+  questionBankItems?: QuestionBankItem[];
+  onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
 }
 
 type SheetLayout = "single" | "columns";
@@ -186,6 +191,7 @@ export default function EntryDetail({
   existingTargets,
   allEntries = [],
   onOpenEntry,
+  onOpenQuestionTarget,
   onQuickGptSolution,
   examSession,
   examPrintPreferences,
@@ -209,6 +215,8 @@ export default function EntryDetail({
   onOpenChatGptSettings,
   onCheckLocalMcp,
   remoteMcpConfigured,
+  questionBankItems = [],
+  onSimilarQuestionLinksChange,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
@@ -1545,6 +1553,16 @@ export default function EntryDetail({
               </div>
             </div>
           )}
+          {(isConcept || isLecture) && onSimilarQuestionLinksChange ? (
+            <SimilarQuestionLinksPanel
+              sourceEntry={entry}
+              links={entry.similarQuestionLinks ?? []}
+              items={questionBankItems}
+              onOpen={(entryId, questionNumber) => onOpenQuestionTarget?.(entryId, questionNumber)}
+              onChange={(links) => onSimilarQuestionLinksChange(entry, links)}
+              label="전체 관련 문제"
+            />
+          ) : null}
           {isLecture ? (
             <LectureReaderView
               entry={entry}

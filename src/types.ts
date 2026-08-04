@@ -315,6 +315,26 @@ export interface LearningBlock {
   relatedConcepts?: string[];
   sourceReferences?: LearningSourceReference[];
   subjectMetadata?: SubjectLearningMetadata;
+  similarQuestionLinks?: SimilarQuestionLink[];
+}
+
+export type SimilarQuestionLinkSource = "manual" | "gemini" | "local";
+export type SimilarQuestionLinkStatus = "suggested" | "approved" | "rejected";
+
+export interface SimilarQuestionLink {
+  id: string;
+  targetEntryId: string;
+  targetQuestionNumber: string;
+  score?: number;
+  reasons?: string[];
+  sharedConcepts?: string[];
+  differences?: string[];
+  source: SimilarQuestionLinkSource;
+  model?: string;
+  promptVersion?: string;
+  status: SimilarQuestionLinkStatus;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SheetAnswerItem {
@@ -1043,6 +1063,7 @@ export interface WrongAnswerEntry {
   questionImages: string[];
   sourcePageImages?: string[];
   problemSource?: ProblemSourceInfo;
+  similarQuestionLinks?: SimilarQuestionLink[];
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;
   /** 어려운 문제 표시 (필터용) */

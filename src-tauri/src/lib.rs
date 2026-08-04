@@ -1115,6 +1115,120 @@ fn generate_import_with_ai(
     extract_gemini_text(value)
 }
 
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SimilarQuestionContextRequest {
+    source_id: String,
+    #[serde(default)]
+    source_question_number: Option<String>,
+    #[serde(default)]
+    subject: Option<String>,
+    #[serde(default)]
+    unit: Option<String>,
+    #[serde(default)]
+    subunit: Option<String>,
+    #[serde(default)]
+    difficulty_score: Option<f64>,
+    #[serde(default)]
+    concepts: Vec<String>,
+    #[serde(default)]
+    tags: Vec<String>,
+    #[serde(default)]
+    keywords: Vec<String>,
+    #[serde(default)]
+    entry_title: Option<String>,
+    #[serde(default)]
+    entry_kind: Option<String>,
+    #[serde(default)]
+    source_type: Option<String>,
+    #[serde(default)]
+    formulae: Vec<String>,
+    #[serde(default)]
+    solution_methods: Vec<String>,
+    #[serde(default)]
+    passage_clues: Vec<String>,
+    #[serde(default)]
+    thinkers: Vec<String>,
+    #[serde(default)]
+    choice_criteria: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SimilarQuestionCandidateRequest {
+    candidate_id: String,
+    question_text: String,
+    subject: String,
+    #[serde(default)]
+    unit: Option<String>,
+    #[serde(default)]
+    subunit: Option<String>,
+    #[serde(default)]
+    concepts: Vec<String>,
+    #[serde(default)]
+    difficulty_score: Option<f64>,
+    #[serde(default)]
+    importance_score: Option<f64>,
+    #[serde(default)]
+    quality_score: Option<f64>,
+    has_explanation: bool,
+    #[serde(default)]
+    explanation: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SimilarQuestionRankingRequest {
+    context: SimilarQuestionContextRequest,
+    candidates: Vec<SimilarQuestionCandidateRequest>,
+}
+
+#[tauri::command]
+fn rank_similar_questions_with_ai(
+    app: tauri::AppHandle,
+    request: SimilarQuestionRankingRequest,
+) -> Result<String, String> {
+    let config = load_ai_provider_config(&app);
+    if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
+        return Err("AI provider가 비활성화되어 있습니다.".into());
+    }
+    let key = ai_provider_key(&app, &config)?;
+    let model = gemini_model(&config.provider_type);
+    if request.candidates.is_empty() || request.candidates.len() > 30 {
+        return Err("유사 문제 후보는 1~30개여야 합니다.".into());
+    }
+    let context_json = serde_json::to_string(&request.context)
+        .map_err(|e| format!("유사 문제 기준 정보를 직렬화하지 못했습니다: {e}"))?;
+    let candidates_json = serde_json::to_string(&request.candidates)
+        .map_err(|e| format!("유사 문제 후보를 직렬화하지 못했습니다: {e}"))?;
+    let prompt = format!(
+        "다음 context와 각 candidate를 개별적으로 비교해 유사도를 평가하세요. candidate끼리 비교하지 마세요. 새 문제나 새로운 candidateId를 생성하지 마세요. 제공된 candidateId만 사용해 JSON {{\"results\":[{{\"candidateId\":string,\"score\":0-100,\"reasons\":[string],\"sharedConcepts\":[string],\"differences\":[string]}}]}}만 반환하세요.\n\ncontext(JSON):\n{}\n\ncandidates(JSON):\n{}",
+        context_json, candidates_json
+    );
+    let body = serde_json::json!({"contents":[{"role":"user","parts":[{"text":prompt}]}],"generationConfig":{"temperature":0.1,"responseMimeType":"application/json"}});
+    let response = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(90))
+        .build()
+        .map_err(|e| format!("Gemini HTTP client를 만들지 못했습니다: {e}"))?
+        .post(format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
+            model
+        ))
+        .header("x-goog-api-key", key)
+        .json(&body)
+        .send()
+        .map_err(|e| format!("Gemini 호출에 실패했습니다: {e}"))?;
+    let status = response.status();
+    let value: serde_json::Value = response
+        .json()
+        .map_err(|e| format!("Gemini 응답 JSON을 읽지 못했습니다: {e}"))?;
+    if !status.is_success() {
+        return Err("Gemini 유사 문제 재정렬에 실패했습니다.".into());
+    }
+    extract_gemini_text(value)
+}
+
 #[tauri::command]
 fn save_import_image_bytes(
     app: tauri::AppHandle,
@@ -1991,6 +2105,21 @@ mod tests {
     }
 
     #[test]
+    fn similar_question_request_rejects_unknown_or_sensitive_fields() {
+        let valid = serde_json::json!({
+            "context": { "sourceId": "source", "concepts": [], "tags": [], "keywords": [] },
+            "candidates": [{ "candidateId": "entry:1", "questionText": "문제", "subject": "수학", "hasExplanation": false }]
+        });
+        assert!(serde_json::from_value::<SimilarQuestionRankingRequest>(valid).is_ok());
+
+        let invalid = serde_json::json!({
+            "context": { "sourceId": "source", "concepts": [], "tags": [], "keywords": [], "memo": "사용자 메모" },
+            "candidates": [{ "candidateId": "entry:1", "questionText": "문제", "subject": "수학", "hasExplanation": false }]
+        });
+        assert!(serde_json::from_value::<SimilarQuestionRankingRequest>(invalid).is_err());
+    }
+
+    #[test]
     fn validates_image_filenames() {
         assert!(validate_image_filename("abc.png").is_ok());
         assert!(validate_image_filename("abc.JPG").is_ok());
@@ -2246,6 +2375,7 @@ pub fn run() {
             save_ai_provider_key,
             clear_ai_provider_key,
             generate_import_with_ai,
+            rank_similar_questions_with_ai,
             save_import_image_bytes,
             create_import_asset_session,
             stage_import_asset_bytes,
