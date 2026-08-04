@@ -54,4 +54,29 @@ describe("QuestionBankView", () => {
     expect(onRegisterPreferenceFlush).toHaveBeenLastCalledWith(null);
     vi.useRealTimers();
   });
+
+  it("shows a retry affordance when persisting preferences fails", async () => {
+    vi.useFakeTimers();
+    const onPreferencesChange = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("disk unavailable"))
+      .mockResolvedValueOnce(undefined);
+    render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} onPreferencesChange={onPreferencesChange} />);
+
+    fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+
+    expect(screen.getByRole("alert")).toHaveTextContent("문제 은행 설정을 저장하지 못했습니다.");
+    fireEvent.click(screen.getByRole("button", { name: "다시 저장" }));
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+      await Promise.resolve();
+    });
+    expect(onPreferencesChange).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    vi.useRealTimers();
+  });
 });

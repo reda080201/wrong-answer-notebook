@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { GeneratedExam } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import GeneratedExamList from "./GeneratedExamList";
@@ -22,6 +23,16 @@ interface GeneratedExamsDialogProps {
 }
 
 export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
+  const [actionError, setActionError] = useState<string | null>(null);
+  const runAction = async (action: () => Promise<void>, fallback: string) => {
+    setActionError(null);
+    try {
+      await action();
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : fallback);
+    }
+  };
+
   return (
     <Dialog
       open={props.open}
@@ -65,11 +76,12 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
           <button type="button" className="btn-secondary" onClick={() => void props.onClose()} disabled={props.closing}>다시 저장 후 닫기</button>
         </div>
       )}
+      {actionError && <div className="form-error" role="alert">{actionError}</div>}
       <GeneratedExamList
         exams={props.exams}
         onOpen={props.onOpen}
-        onDelete={(id) => void props.onDelete(id)}
-        onPrint={(exam) => void props.onPrint(exam)}
+        onDelete={(id) => void runAction(() => props.onDelete(id), "모의고사를 삭제하지 못했습니다.")}
+        onPrint={(exam) => void runAction(() => props.onPrint(exam), "모의고사를 출력하지 못했습니다.")}
         disabled={props.loading || Boolean(props.loadError)}
       />
     </Dialog>
