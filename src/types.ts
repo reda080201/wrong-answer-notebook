@@ -29,6 +29,52 @@ export type LectureSourceType = "html" | "md" | "txt" | "json";
 
 export type Difficulty = "high" | "medium" | "low" | "none";
 
+/** 문제 문서 형태와 별개로, 문제의 실제 출처를 분류합니다. */
+export type ProblemSourceType =
+  | "past_exam"
+  | "mock_exam"
+  | "n_series"
+  | "worksheet"
+  | "textbook"
+  | "ebs"
+  | "school_exam"
+  | "self_made"
+  | "ai_generated"
+  | "unknown";
+
+export interface ProblemSourceInfo {
+  type: ProblemSourceType;
+  publisher?: string;
+  seriesName?: string;
+  examName?: string;
+  examYear?: number;
+  examMonth?: number;
+  examRound?: string;
+  organization?: string;
+  teacher?: string;
+  isOfficial?: boolean;
+  sourceLabel?: string;
+}
+
+export type QuestionDifficultySource = "manual" | "imported" | "heuristic" | "gemini";
+export type QuestionAnswerType = "multiple_choice" | "short_answer" | "essay" | "unknown";
+
+/**
+ * 문항 단위의 분류 정보입니다. 점수는 기존 QuestionMeta 위치를 canonical source로 사용합니다.
+ */
+export interface QuestionClassification {
+  subject?: string;
+  curriculum?: string;
+  unit?: string;
+  subunit?: string;
+  concepts?: string[];
+  sourceType?: ProblemSourceType;
+  difficultySource?: QuestionDifficultySource;
+  answerType?: QuestionAnswerType;
+  points?: number;
+  tags?: string[];
+}
+
 export interface ExplanationPart {
   id: string;
   text: string;
@@ -454,6 +500,7 @@ export interface QuestionMeta {
   review?: ReviewState;
   /** User-owned curation ratings. Difficulty remains the existing difficultyScore field. */
   rating?: QuestionRating;
+  classification?: QuestionClassification;
   updatedAt: string;
 }
 
@@ -957,6 +1004,7 @@ export interface WrongAnswerEntry {
   question: string;
   questionImages: string[];
   sourcePageImages?: string[];
+  problemSource?: ProblemSourceInfo;
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;
   /** 어려운 문제 표시 (필터용) */

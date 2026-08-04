@@ -35,6 +35,8 @@ interface AppSidebarProps {
   onOpenGeneratedExams?: () => void;
   learningHubOpen?: boolean;
   onOpenLearningHub?: () => void;
+  questionBankOpen?: boolean;
+  onOpenQuestionBank?: () => void;
 }
 
 const sectionTabs = [
@@ -65,6 +67,8 @@ export default function AppSidebar({
   onOpenGeneratedExams,
   learningHubOpen = false,
   onOpenLearningHub,
+  questionBankOpen = false,
+  onOpenQuestionBank,
 }: AppSidebarProps) {
   const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
   const sidebarStats =
@@ -132,6 +136,16 @@ export default function AppSidebar({
             onClick={onOpenLearningHub}
           >
             학습 허브
+          </button>
+        )}
+        {onOpenQuestionBank && (
+          <button
+            type="button"
+            className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
+            aria-current={questionBankOpen ? "page" : undefined}
+            onClick={onOpenQuestionBank}
+          >
+            문제 은행
           </button>
         )}
       </div>

@@ -29,6 +29,7 @@ import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
+import { normalizeProblemSource } from "./problemSource";
 import {
   isLearningImportance,
   isLearningReviewStatus,
@@ -751,6 +752,10 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     questionImages: rest.questionImages?.length
       ? rest.questionImages
       : legacy,
+    sourcePageImages: Array.isArray(rest.sourcePageImages)
+      ? rest.sourcePageImages.filter((image): image is string => typeof image === "string" && image.trim().length > 0).map((image) => image.trim())
+      : [],
+    problemSource: normalizeProblemSource(rest.problemSource),
     explanationParts,
     memo: rest.memo ?? "",
     annotations: rest.annotations ?? [],
