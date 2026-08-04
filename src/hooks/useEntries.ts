@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { commitImportAssetSessionEntry, deleteImage, errorMessage, loadEntries, saveEntries } from "../api";
+import {
+  commitImportAssetSessionEntries,
+  commitImportAssetSessionEntry,
+  deleteImage,
+  errorMessage,
+  loadEntries,
+  saveEntries,
+} from "../api";
 import type { EntryFormData, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
@@ -169,6 +176,42 @@ export function useEntries() {
     [enqueueMutation],
   );
 
+  const addEntriesWithImportAssetSession = useCallback(
+    async (sessionId: string, forms: EntryFormData[]) => {
+      if (!forms.length) return [];
+      if (maintenanceBlockedRef.current) {
+        throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+      }
+      if (!loadedRef.current) {
+        throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+      }
+      try {
+        setError(null);
+        const now = new Date().toISOString();
+        const added = forms.map((form) => ({
+          id: uuidv4(),
+          ...form,
+          createdAt: now,
+          updatedAt: now,
+        } satisfies WrongAnswerEntry));
+        const task = enqueue(async () => {
+          await commitImportAssetSessionEntries(sessionId, added);
+          const next = [...added, ...entriesRef.current];
+          entriesRef.current = next;
+          setEntries(next);
+          return added.map((entry) => entry.id);
+        });
+        lastOperationRef.current = task;
+        return await task;
+      } catch (err) {
+        const message = errorMessage(err, "가져온 항목을 저장하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
+      }
+    },
+    [enqueue],
+  );
+
   const updateEntry = useCallback(
     async (id: string, form: EntryFormData, removedImages: string[]) => {
       try {
@@ -331,6 +374,7 @@ export function useEntries() {
     clearError,
     addEntry,
     addEntries,
+    addEntriesWithImportAssetSession,
     updateEntry,
     replaceEntries,
     patchEntry,

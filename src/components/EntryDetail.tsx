@@ -1781,6 +1781,7 @@ export default function EntryDetail({
               sheetLayout={isSheet ? sheetLayout : "single"}
               searchQuery={isSheet ? sheetSearch : ""}
               suspiciousSegments={suspiciousSegments}
+              sourceEntry={entry}
             />
           )}
         </section>

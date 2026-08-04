@@ -87,6 +87,20 @@ export async function commitImportAssetSessionEntry(
   return result.filenames;
 }
 
+export async function commitImportAssetSessionEntries(
+  sessionId: string,
+  entries: WrongAnswerEntry[],
+): Promise<string[]> {
+  if (!isTauri()) {
+    throw new Error("staged 가져오기 자산은 데스크톱 앱에서만 저장할 수 있습니다.");
+  }
+  const result = await invoke<{ filenames: string[] }>("commit_import_asset_session_entries", {
+    sessionId,
+    entries,
+  });
+  return result.filenames;
+}
+
 export async function discardImportAssetSession(sessionId: string): Promise<void> {
   if (isTauri()) await invoke("discard_import_asset_session", { sessionId });
 }

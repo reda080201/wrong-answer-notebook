@@ -3,7 +3,6 @@ import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
-  commitImportAssetSession,
   createBackup,
   deleteImage,
   previewOrphanImages,
@@ -72,6 +71,7 @@ interface UseAppActionsOptions {
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
   addEntries: (forms: EntryFormData[]) => Promise<string[]>;
+  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[]) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -118,6 +118,7 @@ export function useAppActions({
   subjectFilter,
   addEntry,
   addEntries,
+  addEntriesWithImportAssetSession,
   updateEntry,
   replaceEntries,
   deleteEntry,
@@ -437,12 +438,12 @@ export function useAppActions({
     assetSession?: ImportAssetSessionManifest,
   ) => {
     if (!importedEntries.length) return;
-    let savedFilenames: string[] = [];
     let sourceToSaved: Record<string, string> = {};
+    let savedFilenames: string[] = [];
     if (assetSession?.mode === "tauri-staged") {
-      savedFilenames = await commitImportAssetSession(assetSession.id);
       sourceToSaved = assetSession.sourceToStaged ?? {};
-    } else if (assetFiles.length) {
+    }
+    if (assetSession?.mode !== "tauri-staged" && assetFiles.length) {
       const importedAssets = await saveImportAssetFiles(assetFiles);
       savedFilenames = importedAssets.savedFilenames;
       sourceToSaved = importedAssets.sourceToSaved;
@@ -499,11 +500,15 @@ export function useAppActions({
         checklist: imported.checklist ?? [],
       };
       });
-      const ids = await addEntries(forms);
+      const ids = assetSession?.mode === "tauri-staged"
+        ? await addEntriesWithImportAssetSession(assetSession.id, forms)
+        : await addEntries(forms);
       setActiveSection(forms[0].entryKind);
       setSelectedId(ids[0] ?? null);
     } catch (error) {
-      await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      if (assetSession?.mode !== "tauri-staged") {
+        await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      }
       throw error;
     }
   };

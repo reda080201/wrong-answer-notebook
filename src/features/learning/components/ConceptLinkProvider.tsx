@@ -1,6 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import type { ConceptIndexItem } from "../utils/conceptIndex";
-import { buildConceptIndex } from "../utils/conceptIndex";
+import type { ConceptIndexItem, ConceptLinkResolveContext } from "../utils/conceptIndex";
+import { buildConceptIndex, resolveConceptIndexItem } from "../utils/conceptIndex";
 import type { ViewPreferences, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import Dialog from "../../../shared/ui/Dialog";
@@ -8,7 +8,7 @@ import Dialog from "../../../shared/ui/Dialog";
 export interface ConceptLinkRuntime {
   enabled: boolean;
   automaticEnabled: boolean;
-  resolve: (target: string) => ConceptIndexItem | undefined;
+  resolve: (target: string, context?: ConceptLinkResolveContext) => ConceptIndexItem | undefined;
   open: (item: ConceptIndexItem) => void;
   aliases: string[];
 }
@@ -33,9 +33,12 @@ export default function ConceptLinkProvider({ entries, preferences, onOpenEntry,
   const runtime = useMemo<ConceptLinkRuntime>(() => ({
     enabled: preferences.conceptLinksEnabled !== false,
     automaticEnabled: preferences.conceptLinksEnabled !== false && Boolean(preferences.automaticConceptLinksEnabled),
-    resolve: (target) => index.get(target.trim().toLocaleLowerCase("ko-KR")),
+    resolve: (target, context) => resolveConceptIndexItem(index, target, context),
     open: setActive,
-    aliases: [...index.keys()].sort((left, right) => right.length - left.length || left.localeCompare(right, "ko")),
+    aliases: [...index.entries()]
+      .filter(([, candidates]) => candidates.length === 1)
+      .map(([alias]) => alias)
+      .sort((left, right) => right.length - left.length || left.localeCompare(right, "ko")),
   }), [index, preferences.automaticConceptLinksEnabled, preferences.conceptLinksEnabled]);
   const block = active?.block;
 

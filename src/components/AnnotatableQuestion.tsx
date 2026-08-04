@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { getImageUrl } from "../api";
-import type { Annotation, AnnotationTool, QuestionMeta, SheetAnswerItem, SheetFigureItem, TextRangeAnnotation } from "../types";
+import type { Annotation, AnnotationTool, QuestionMeta, SheetAnswerItem, SheetFigureItem, TextRangeAnnotation, WrongAnswerEntry } from "../types";
+import type { ConceptLinkResolveContext } from "../features/learning/utils/conceptIndex";
 import {
   createImageAnnotation,
   createTextAnnotation,
@@ -19,6 +20,7 @@ import {
   type QuestionTextBlock,
 } from "../utils/textLayout";
 import { renderWikiLinksInNodes } from "../utils/wikiLinks";
+import { useConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
 import {
   difficultyScoreBand,
   difficultyScoreLabel,
@@ -52,6 +54,7 @@ interface AnnotatableQuestionProps {
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
+  sourceEntry?: WrongAnswerEntry;
 }
 
 interface FocusedQuestionViewProps {
@@ -187,6 +190,7 @@ function StructuredTextSegment({
   existingTargets,
   searchQuery,
   suspiciousSegments = [],
+  conceptContext,
 }: {
   text: string;
   start: number;
@@ -196,7 +200,9 @@ function StructuredTextSegment({
   existingTargets: Set<string>;
   searchQuery?: string;
   suspiciousSegments?: SuspiciousTextSegment[];
+  conceptContext?: ConceptLinkResolveContext;
 }) {
+  const conceptRuntime = useConceptLinkRuntime();
   const suspicious = suspiciousSegments.find((segment) => segment.end > start && segment.start < start + text.length);
   const mergedClassName = [className, suspicious ? "suspicious-text-segment" : ""].filter(Boolean).join(" ");
   const nodes = annotations.length > 0
@@ -212,7 +218,7 @@ function StructuredTextSegment({
             typeof segment === "string" ? (
               <span key={`text-${index}`}>
                 {renderMathInNodes(highlightSearchNodes(
-                  renderWikiLinksInNodes([segment], onWikiLinkClick, existingTargets),
+                  renderWikiLinksInNodes([segment], onWikiLinkClick, existingTargets, conceptRuntime, conceptContext),
                   searchQuery,
                 ))}
               </span>
@@ -228,7 +234,7 @@ function StructuredTextSegment({
   return (
     <span className={mergedClassName} data-text-start={start} title={suspicious?.reason}>
       {renderMathInNodes(highlightSearchNodes(
-        renderWikiLinksInNodes(nodes, onWikiLinkClick, existingTargets),
+        renderWikiLinksInNodes(nodes, onWikiLinkClick, existingTargets, conceptRuntime, conceptContext),
         searchQuery,
       ))}
     </span>
@@ -297,6 +303,7 @@ function StructuredQuestionBlock({
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
+  sourceEntry,
 }: {
   block: QuestionTextBlock;
   textAnnotations: TextRangeAnnotation[];
@@ -314,6 +321,7 @@ function StructuredQuestionBlock({
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
+  sourceEntry?: WrongAnswerEntry;
 }) {
   if (block.kind === "passage" || block.kind === "paragraph") {
     return (
@@ -385,6 +393,7 @@ function StructuredQuestionBlock({
         existingTargets={existingTargets}
         searchQuery={searchQuery}
         suspiciousSegments={suspiciousSegments}
+        conceptContext={sourceEntry ? { sourceEntry } : undefined}
       />
       {block.choices.length > 0 && (
         <ol className="question-choices">
@@ -401,6 +410,7 @@ function StructuredQuestionBlock({
                 existingTargets={existingTargets}
                 searchQuery={searchQuery}
                 suspiciousSegments={suspiciousSegments}
+                conceptContext={sourceEntry ? { sourceEntry } : undefined}
               />
             </li>
           ))}
@@ -428,6 +438,7 @@ function QuestionBodySegments({
   existingTargets,
   searchQuery,
   suspiciousSegments = [],
+  conceptContext,
 }: {
   segments: QuestionBodySegment[];
   textAnnotations: TextRangeAnnotation[];
@@ -435,6 +446,7 @@ function QuestionBodySegments({
   existingTargets: Set<string>;
   searchQuery?: string;
   suspiciousSegments?: SuspiciousTextSegment[];
+  conceptContext?: ConceptLinkResolveContext;
 }) {
   if (!segments.length) return null;
   return (
@@ -459,6 +471,7 @@ function QuestionBodySegments({
             existingTargets={existingTargets}
             searchQuery={searchQuery}
             suspiciousSegments={suspiciousSegments}
+            conceptContext={conceptContext}
           />
         </section>
       ))}
@@ -707,6 +720,7 @@ function StructuredQuestionText({
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
+  sourceEntry,
 }: {
   question: string;
   textAnnotations: TextRangeAnnotation[];
@@ -724,6 +738,7 @@ function StructuredQuestionText({
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
+  sourceEntry?: WrongAnswerEntry;
 }) {
   const blocks = useMemo(() => parseQuestionText(question), [question]);
   const questionIndexes = useMemo(() => {
@@ -760,6 +775,7 @@ function StructuredQuestionText({
             selectionMode={selectionMode}
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}
+            sourceEntry={sourceEntry}
           />
       ))}
     </div>
@@ -945,6 +961,7 @@ export default function AnnotatableQuestion({
   selectionMode,
   selectedQuestionNumbers,
   onToggleQuestionSelected,
+  sourceEntry,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -1002,6 +1019,7 @@ export default function AnnotatableQuestion({
             selectionMode={selectionMode}
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}
+            sourceEntry={sourceEntry}
           />
         </div>
       )}
