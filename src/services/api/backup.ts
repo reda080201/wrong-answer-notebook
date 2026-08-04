@@ -27,7 +27,11 @@ export interface RestoreBackupResult {
   warnings: string[];
 }
 
-export async function createBackup(entries: WrongAnswerEntry[], settings: AppSettings): Promise<string> {
+export async function createBackup(
+  entries: WrongAnswerEntry[],
+  settings: AppSettings,
+  beforeSnapshot?: () => Promise<void>,
+): Promise<string> {
   try {
     if (isTauri()) {
       const backupPath = await save({
@@ -36,10 +40,12 @@ export async function createBackup(entries: WrongAnswerEntry[], settings: AppSet
         filters: [{ name: "ZIP", extensions: ["zip"] }],
       });
       if (!backupPath) return "백업이 취소되었습니다.";
+      await beforeSnapshot?.();
       await invoke("create_backup_zip", { backupPath });
       return `백업을 저장했습니다: ${backupPath}`;
     }
 
+    await beforeSnapshot?.();
     const payload: BackupPayload = {
       meta: {
         version: 1,
@@ -71,7 +77,9 @@ export async function createBackup(entries: WrongAnswerEntry[], settings: AppSet
   }
 }
 
-export async function restoreBackup(): Promise<BackupPayload | RestoreBackupResult | null> {
+export async function restoreBackup(
+  beforeRestore?: () => Promise<void>,
+): Promise<BackupPayload | RestoreBackupResult | null> {
   try {
     if (isTauri()) {
       const selected = await open({
@@ -79,6 +87,7 @@ export async function restoreBackup(): Promise<BackupPayload | RestoreBackupResu
         filters: [{ name: "ZIP", extensions: ["zip"] }],
       });
       if (!selected || Array.isArray(selected)) return null;
+      await beforeRestore?.();
       const restored = await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: selected });
       clearImageUrlCache();
       return restored;
@@ -95,6 +104,7 @@ export async function restoreBackup(): Promise<BackupPayload | RestoreBackupResu
           return;
         }
         try {
+          await beforeRestore?.();
           const payload = JSON.parse(await file.text()) as BackupPayload;
           resolve(payload);
         } catch (error) {

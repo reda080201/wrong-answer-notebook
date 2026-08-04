@@ -21,11 +21,15 @@ export function useEntries() {
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const mutationRevisionRef = useRef(0);
   const loadedRef = useRef(false);
+  const maintenanceBlockedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
 
   const clearError = useCallback(() => setError(null), []);
 
   const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
+    if (maintenanceBlockedRef.current) {
+      return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
+    }
     if (!loadedRef.current) {
       return Promise.reject(new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
     }
@@ -72,6 +76,10 @@ export function useEntries() {
 
   const flushEntries = useCallback(async () => {
     await lastOperationRef.current;
+  }, []);
+
+  const setEntriesMaintenanceBlocked = useCallback((blocked: boolean) => {
+    maintenanceBlockedRef.current = blocked;
   }, []);
 
   const persist = useCallback(
@@ -332,5 +340,6 @@ export function useEntries() {
     toggleDifficult,
     refresh,
     flushEntries,
+    setEntriesMaintenanceBlocked,
   };
 }

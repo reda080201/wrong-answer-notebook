@@ -8,9 +8,25 @@ interface UseAppMaintenanceOptions {
   settings: AppSettings;
   patchSettings(patch: Partial<AppSettings>): Promise<void>;
   report(message: string): void;
+  flushEntries(): Promise<void>;
+  flushSettings(): Promise<void>;
+  flushGeneratedExams(): Promise<void>;
+  setEntriesMaintenanceBlocked(blocked: boolean): void;
+  setSettingsMaintenanceBlocked(blocked: boolean): void;
+  setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
 }
 
-export function useAppMaintenance({ settings, patchSettings, report }: UseAppMaintenanceOptions) {
+export function useAppMaintenance({
+  settings,
+  patchSettings,
+  report,
+  flushEntries,
+  flushSettings,
+  flushGeneratedExams,
+  setEntriesMaintenanceBlocked,
+  setSettingsMaintenanceBlocked,
+  setGeneratedExamsMaintenanceBlocked,
+}: UseAppMaintenanceOptions) {
   useEffect(() => {
     if (!isTauri()) return;
     const draft = loadImportWorkspaceDraft();
@@ -28,7 +44,18 @@ export function useAppMaintenance({ settings, patchSettings, report }: UseAppMai
     if (lastBackup?.toDateString() === new Date().toDateString()) return;
 
     let cancelled = false;
-    void createAutoBackup().then(async () => {
+    void (async () => {
+      await Promise.all([flushEntries(), flushSettings(), flushGeneratedExams()]);
+      setEntriesMaintenanceBlocked(true);
+      setSettingsMaintenanceBlocked(true);
+      setGeneratedExamsMaintenanceBlocked(true);
+      try {
+        await createAutoBackup();
+      } finally {
+        setEntriesMaintenanceBlocked(false);
+        setSettingsMaintenanceBlocked(false);
+        setGeneratedExamsMaintenanceBlocked(false);
+      }
       if (cancelled) return;
       await patchSettings({
         autoBackup: {
@@ -36,9 +63,9 @@ export function useAppMaintenance({ settings, patchSettings, report }: UseAppMai
           lastBackupAt: new Date().toISOString(),
         },
       });
-    }).catch(() => {
+    })().catch(() => {
       if (!cancelled) report("자동 백업에 실패했습니다. 설정에서 수동 백업을 실행해 주세요.");
     });
     return () => { cancelled = true; };
-  }, [patchSettings, report, settings.autoBackup]);
+  }, [flushEntries, flushGeneratedExams, flushSettings, patchSettings, report, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setSettingsMaintenanceBlocked, settings.autoBackup]);
 }

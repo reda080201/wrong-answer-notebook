@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
@@ -99,6 +99,13 @@ interface UseAppActionsOptions {
   setSettings: (settings: AppSettings) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
+  flushEntries?: () => Promise<void>;
+  flushSettings?: () => Promise<void>;
+  flushGeneratedExams?: () => Promise<void>;
+  refreshGeneratedExams?: () => Promise<void>;
+  setEntriesMaintenanceBlocked?: (blocked: boolean) => void;
+  setSettingsMaintenanceBlocked?: (blocked: boolean) => void;
+  setGeneratedExamsMaintenanceBlocked?: (blocked: boolean) => void;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
 }
@@ -126,10 +133,23 @@ export function useAppActions({
   setSettings,
   patchSettings,
   refreshSettings,
+  flushEntries,
+  flushSettings,
+  flushGeneratedExams,
+  refreshGeneratedExams,
+  setEntriesMaintenanceBlocked,
+  setSettingsMaintenanceBlocked,
+  setGeneratedExamsMaintenanceBlocked,
   setActiveSection,
   setSelectedId,
 }: UseAppActionsOptions) {
   const { confirm, prompt } = useAppDialog();
+  const maintenanceRef = useRef<Promise<void> | null>(null);
+  const setMaintenanceBlocked = (blocked: boolean) => {
+    setEntriesMaintenanceBlocked?.(blocked);
+    setSettingsMaintenanceBlocked?.(blocked);
+    setGeneratedExamsMaintenanceBlocked?.(blocked);
+  };
   const [prefilledTitle, setPrefilledTitle] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -513,8 +533,21 @@ export function useAppActions({
   };
 
   const handleBackup = async () => {
-    const message = await createBackup(entries, settings);
-    setSettingsMessage(message);
+    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const operation = (async () => {
+      const message = await createBackup(entries, settings, async () => {
+        await Promise.all([flushEntries?.(), flushSettings?.(), flushGeneratedExams?.()]);
+        if (isTauri()) setMaintenanceBlocked(true);
+      });
+      setSettingsMessage(message);
+    })();
+    maintenanceRef.current = operation;
+    try {
+      await operation;
+    } finally {
+      if (isTauri()) setMaintenanceBlocked(false);
+      maintenanceRef.current = null;
+    }
     if (isTauri()) {
       await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
     }
@@ -522,20 +555,32 @@ export function useAppActions({
 
   const handleRestore = async () => {
     if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
-    const payload = await restoreBackup();
-    if (payload && "entries" in payload) {
-      await replaceEntries(payload.entries);
-      await setSettings(payload.settings);
-      for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
-        localStorage.setItem(key, value);
+    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const operation = (async () => {
+      const payload = await restoreBackup(async () => {
+        await Promise.all([flushEntries?.(), flushSettings?.(), flushGeneratedExams?.()]);
+        if (isTauri()) setMaintenanceBlocked(true);
+      });
+      if (payload && "entries" in payload) {
+        await replaceEntries(payload.entries);
+        await setSettings(payload.settings);
+        for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
+          localStorage.setItem(key, value);
+        }
+      } else {
+        await Promise.all([refresh(), refreshSettings(), refreshGeneratedExams?.()]);
       }
-    } else {
-      await refresh();
-      await refreshSettings();
+      setSettingsMessage(payload && "restored" in payload && payload.warnings.length
+        ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
+        : "백업 복원을 완료했습니다.");
+    })();
+    maintenanceRef.current = operation;
+    try {
+      await operation;
+    } finally {
+      if (isTauri()) setMaintenanceBlocked(false);
+      maintenanceRef.current = null;
     }
-    setSettingsMessage(payload && "restored" in payload && payload.warnings.length
-      ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
-      : "백업 복원을 완료했습니다.");
   };
 
   const handleCleanupOrphans = async () => {

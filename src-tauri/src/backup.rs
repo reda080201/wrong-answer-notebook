@@ -59,6 +59,19 @@ fn unix_time_string() -> String {
         .unwrap_or_else(|_| "0".into())
 }
 
+fn build_backup_meta(included_files: &[String]) -> serde_json::Value {
+    serde_json::json!({
+        "backupFormat": 2,
+        "appVersion": env!("CARGO_PKG_VERSION"),
+        "dataSchemaVersion": CURRENT_DATA_SCHEMA_VERSION,
+        "createdAt": unix_time_string(),
+        "source": "tauri",
+        "includedFiles": included_files,
+        "includesImages": included_files.iter().any(|name| name.starts_with("images/")),
+        "includesImportWorkspaces": included_files.iter().any(|name| name.starts_with("import-workspaces/")),
+    })
+}
+
 fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>, String> {
     if value.is_array() {
         return serde_json::from_value(value).map_err(|e| e.to_string());
@@ -178,7 +191,11 @@ pub(crate) fn create_backup_zip_at(
     zip.write_all(settings.as_bytes())
         .map_err(|e| e.to_string())?;
 
-    let mut included_files = vec!["entries.json", "settings.json", "backup-meta.json"];
+    let mut included_files = vec![
+        "entries.json".to_string(),
+        "settings.json".to_string(),
+        "backup-meta.json".to_string(),
+    ];
     for filename in PERSISTENT_DATA_FILES
         .iter()
         .copied()
@@ -195,35 +212,31 @@ pub(crate) fn create_backup_zip_at(
         zip.start_file(filename, options)
             .map_err(|e| e.to_string())?;
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
-        included_files.push(filename);
+        included_files.push(filename.to_string());
     }
 
     let workspace_root = app_dir(app)?.join("import-workspaces");
     let mut workspace_files = Vec::new();
     collect_workspace_files(&workspace_root, &workspace_root, &mut workspace_files)?;
-    for (archive_name, path) in workspace_files {
+    for (archive_name, path) in &workspace_files {
         let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
         if size > MAX_BACKUP_JSON_BYTES {
             return Err(format!(
                 "{archive_name} 파일이 백업 허용 용량을 초과했습니다."
             ));
         }
-        zip.start_file(&archive_name, options)
+        zip.start_file(archive_name, options)
             .map_err(|e| e.to_string())?;
         let mut source = fs::File::open(path).map_err(|e| e.to_string())?;
         std::io::copy(&mut source, &mut zip).map_err(|e| e.to_string())?;
+        included_files.push(archive_name.clone());
     }
 
-    let meta = serde_json::json!({
-        "backupFormat": 2,
-        "appVersion": env!("CARGO_PKG_VERSION"),
-        "dataSchemaVersion": CURRENT_DATA_SCHEMA_VERSION,
-        "createdAt": unix_time_string(),
-        "source": "tauri",
-        "includedFiles": included_files,
-        "includesImages": true,
-        "includesImportWorkspaces": workspace_root.exists(),
-    });
+    for (filename, _, _) in &images {
+        included_files.push(format!("images/{filename}"));
+    }
+
+    let meta = build_backup_meta(&included_files);
     zip.start_file("backup-meta.json", options)
         .map_err(|e| e.to_string())?;
     zip.write_all(
@@ -316,14 +329,40 @@ fn remove_restore_path(path: &Path) -> Result<(), String> {
     }
 }
 
-fn rollback_restore_paths(moved: &[(PathBuf, PathBuf)]) -> Result<(), String> {
+fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> {
+    let value: serde_json::Value = serde_json::from_slice(bytes)
+        .map_err(|error| format!("백업의 {name} JSON이 올바르지 않습니다: {error}"))?;
+    match name {
+        "exam-sessions.json" | "generated-exams.json" if !value.is_array() => Err(format!(
+            "백업의 {name} 형식이 올바르지 않습니다. 배열이어야 합니다."
+        )),
+        "data-schema.json" => {
+            if value
+                .get("schemaVersion")
+                .and_then(serde_json::Value::as_u64)
+                != Some(CURRENT_DATA_SCHEMA_VERSION as u64)
+            {
+                return Err("백업의 데이터 스키마 버전이 지원되지 않습니다.".into());
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
+}
+
+fn rollback_restore_paths_with_targets(
+    moved: &[(PathBuf, PathBuf)],
+    managed_targets: &[PathBuf],
+) -> Result<(), String> {
+    for target in managed_targets.iter().rev() {
+        remove_restore_path(target)?;
+    }
     for (original, backup) in moved.iter().rev() {
-        remove_restore_path(original)?;
         if backup.exists() {
             if let Some(parent) = original.parent() {
-                fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
             }
-            fs::rename(backup, original).map_err(|e| e.to_string())?;
+            fs::rename(backup, original).map_err(|error| error.to_string())?;
         }
     }
     Ok(())
@@ -379,17 +418,7 @@ pub(crate) fn restore_backup_zip(
             }
             let mut bytes = Vec::new();
             file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
-            if name == "data-schema.json" {
-                let value: serde_json::Value =
-                    serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-                if value
-                    .get("schemaVersion")
-                    .and_then(serde_json::Value::as_u64)
-                    != Some(CURRENT_DATA_SCHEMA_VERSION as u64)
-                {
-                    return Err("백업의 데이터 스키마 버전이 지원되지 않습니다.".into());
-                }
-            }
+            validate_optional_store_json(&name, &bytes)?;
             optional_files.push((name, bytes));
         } else if let Some(filename) = name.strip_prefix("images/") {
             if filename.contains('/') || filename.is_empty() {
@@ -439,6 +468,15 @@ pub(crate) fn restore_backup_zip(
 
     let restored_entries =
         restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
+    let managed_targets = [
+        data_file(&app)?,
+        settings_file(&app)?,
+        app_dir.join("exam-sessions.json"),
+        app_dir.join("generated-exams.json"),
+        app_dir.join("data-schema.json"),
+        image_dir.clone(),
+        app_dir.join("import-workspaces"),
+    ];
     let rollback_dir = app_dir.join(format!(".restore-rollback-{}", Uuid::new_v4()));
     fs::create_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -472,7 +510,7 @@ pub(crate) fn restore_backup_zip(
     })();
     drop(move_target);
     if let Err(error) = move_result {
-        let rollback_error = rollback_restore_paths(&moved).err();
+        let rollback_error = rollback_restore_paths_with_targets(&moved, &managed_targets).err();
         let _ = fs::remove_dir_all(&rollback_dir);
         return Err(match rollback_error {
             Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
@@ -499,7 +537,7 @@ pub(crate) fn restore_backup_zip(
         Ok(())
     })();
     if let Err(error) = commit_result {
-        let rollback_error = rollback_restore_paths(&moved).err();
+        let rollback_error = rollback_restore_paths_with_targets(&moved, &managed_targets).err();
         let _ = fs::remove_dir_all(&rollback_dir);
         return Err(match rollback_error {
             Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
@@ -516,4 +554,80 @@ pub(crate) fn restore_backup_zip(
         restored: true,
         warnings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        build_backup_meta, rollback_restore_paths_with_targets, validate_optional_store_json,
+    };
+
+    #[test]
+    fn validates_optional_json_store_shapes() {
+        assert!(validate_optional_store_json("exam-sessions.json", br#"[]"#).is_ok());
+        assert!(validate_optional_store_json("generated-exams.json", br#"[]"#).is_ok());
+        assert!(validate_optional_store_json("exam-sessions.json", br#"{}"#).is_err());
+        assert!(validate_optional_store_json("generated-exams.json", b"{").is_err());
+        assert!(
+            validate_optional_store_json("data-schema.json", br#"{"schemaVersion":1}"#).is_ok()
+        );
+        assert!(
+            validate_optional_store_json("data-schema.json", br#"{"schemaVersion":2}"#).is_err()
+        );
+    }
+
+    #[test]
+    fn rollback_removes_targets_created_by_failed_restore() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let entries = directory.path().join("entries.json");
+        let rollback = directory.path().join("rollback-entries.json");
+        let generated = directory.path().join("generated-exams.json");
+        let images = directory.path().join("images");
+        std::fs::write(&rollback, b"before").expect("seed rollback file");
+        std::fs::write(&entries, b"restored").expect("seed restored file");
+        std::fs::write(&generated, b"[]").expect("seed new optional store");
+        std::fs::create_dir_all(&images).expect("create images");
+        std::fs::write(images.join("new.png"), b"image").expect("seed image");
+
+        rollback_restore_paths_with_targets(
+            &[(entries.clone(), rollback)],
+            &[entries.clone(), generated.clone(), images.clone()],
+        )
+        .expect("rollback");
+
+        assert_eq!(
+            std::fs::read(&entries).expect("restored original"),
+            b"before"
+        );
+        assert!(!generated.exists());
+        assert!(!images.exists());
+    }
+
+    #[test]
+    fn backup_meta_matches_planned_archive_entries() {
+        let files = vec![
+            "entries.json".to_string(),
+            "settings.json".to_string(),
+            "images/diagram.png".to_string(),
+            "import-workspaces/session/workspace.json".to_string(),
+            "backup-meta.json".to_string(),
+        ];
+        let meta = build_backup_meta(&files);
+        assert_eq!(
+            meta.get("includedFiles")
+                .and_then(serde_json::Value::as_array)
+                .map(Vec::len),
+            Some(files.len())
+        );
+        assert_eq!(
+            meta.get("includesImages")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            meta.get("includesImportWorkspaces")
+                .and_then(serde_json::Value::as_bool),
+            Some(true)
+        );
+    }
 }

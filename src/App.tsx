@@ -56,6 +56,7 @@ export default function App() {
     patchEntry,
     patchEntryWithImportAssetSession,
     flushEntries,
+    setEntriesMaintenanceBlocked,
   } = useEntries();
   const {
     settings,
@@ -82,6 +83,7 @@ export default function App() {
     clearSettingsError,
     retrySettingsSave,
     flushSettings,
+    setSettingsMaintenanceBlocked,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
@@ -137,6 +139,8 @@ export default function App() {
   });
   const {
     flush: flushGeneratedExams,
+    reload: reloadGeneratedExams,
+    setGeneratedExamsMaintenanceBlocked,
     builderOpen: showExamBuilder,
     setBuilderOpen: setShowExamBuilder,
     listOpen: showGeneratedExams,
@@ -260,6 +264,13 @@ export default function App() {
     upsertMemoTemplate,
     removeMemoTemplate,
     refreshSettings,
+    flushEntries,
+    flushSettings,
+    flushGeneratedExams,
+    refreshGeneratedExams: reloadGeneratedExams,
+    setEntriesMaintenanceBlocked,
+    setSettingsMaintenanceBlocked,
+    setGeneratedExamsMaintenanceBlocked,
     setActiveSection,
     setSelectedId,
   });
@@ -286,10 +297,18 @@ export default function App() {
       try {
         const { getVersion } = await import("@tauri-apps/api/app");
         const currentVersion = await getVersion();
+        await Promise.all([flushEntries(), flushSettings(), flushGeneratedExams]);
+        setEntriesMaintenanceBlocked(true);
+        setSettingsMaintenanceBlocked(true);
+        setGeneratedExamsMaintenanceBlocked(true);
         await createPreUpdateBackup(currentVersion, update.latestVersion);
       } catch {
         actions.setSettingsMessage("업데이트 전 백업에 실패했습니다. 데이터를 보호하기 위해 설치를 중단했습니다.");
         return false;
+      } finally {
+        setEntriesMaintenanceBlocked(false);
+        setSettingsMaintenanceBlocked(false);
+        setGeneratedExamsMaintenanceBlocked(false);
       }
     }
     return true;
@@ -325,7 +344,17 @@ export default function App() {
     });
   }, [examSessionRef]);
 
-  useAppMaintenance({ settings, patchSettings, report: setSettingsMessage });
+  useAppMaintenance({
+    settings,
+    patchSettings,
+    report: setSettingsMessage,
+    flushEntries,
+    flushSettings,
+    flushGeneratedExams,
+    setEntriesMaintenanceBlocked,
+    setSettingsMaintenanceBlocked,
+    setGeneratedExamsMaintenanceBlocked,
+  });
 
   const openSettings = (tab?: SettingsTab) => {
     setSettingsInitialTab(tab);

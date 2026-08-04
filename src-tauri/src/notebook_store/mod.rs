@@ -135,6 +135,19 @@ impl NotebookStore {
         &self.images_path
     }
 
+    /// Serializes operations that must observe the entries document and image
+    /// references as one coherent state.
+    pub fn with_write_lock<T>(
+        &self,
+        operation: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
+        operation()
+    }
+
     /// Accepts the historical array format and the current schema-v2 wrapper.
     pub fn load_entries(&self) -> Result<Vec<WrongAnswerEntry>, String> {
         if !self.entries_path.exists() {
