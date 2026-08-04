@@ -19,4 +19,10 @@ describe("buildLearningCandidates", () => {
     const candidates = buildLearningCandidates({ ...entry, learningBlocks: [{ ...buildLearningCandidates(entry)[0].block, reviewStatus: "reviewed" }] });
     expect(filterNewLearningCandidates({ ...entry, learningBlocks: [{ ...candidates[0].block, reviewStatus: "reviewed" }] }, candidates)).toHaveLength(4);
   });
+
+  it("normalizes question numbers when checking existing candidates", () => {
+    const candidates = buildLearningCandidates(entry);
+    const existing = { ...candidates[0].block, sourceQuestionNumber: "01", reviewStatus: "reviewed" as const };
+    expect(filterNewLearningCandidates({ ...entry, learningBlocks: [existing] }, candidates)).toHaveLength(4);
+  });
 });
