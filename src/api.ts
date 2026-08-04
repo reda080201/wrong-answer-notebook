@@ -19,6 +19,9 @@ import type {
   McpBridgePairingSession,
   MemoTemplate,
   PromptTemplate,
+  QuestionBankPreferences,
+  QuestionBankSort,
+  QuestionBankStoredFilters,
   WrongAnswerEntry,
 } from "./types";
 import type { GeneratedExam } from "./types";
@@ -532,7 +535,33 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
     },
     mcpBridge: normalizeMcpBridgeSettings(raw?.mcpBridge),
     updatePreferences: normalizeUpdatePreferences(raw?.updatePreferences),
+    questionBankPreferences: normalizeQuestionBankPreferences(raw?.questionBankPreferences),
   };
+}
+
+function normalizeQuestionBankPreferences(raw: unknown): QuestionBankPreferences | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const value = raw as Record<string, unknown>;
+  const filters = value.recentFilters && typeof value.recentFilters === "object"
+    ? value.recentFilters as QuestionBankStoredFilters
+    : undefined;
+  const savedPresets: NonNullable<QuestionBankPreferences["savedPresets"]> = Array.isArray(value.savedPresets)
+    ? value.savedPresets
+      .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      .flatMap((item) => typeof item.id === "string" && typeof item.name === "string" && item.filters && typeof item.filters === "object"
+        ? [{
+          id: item.id,
+          name: item.name.trim(),
+          filters: item.filters as QuestionBankStoredFilters,
+          sort: (item.sort === "difficulty" || item.sort === "importance" || item.sort === "quality" || item.sort === "review_due" ? item.sort : "updated") as QuestionBankSort,
+        }]
+        : [])
+      .filter((item) => item.name)
+    : [];
+  const lastSort = value.lastSort === "updated" || value.lastSort === "difficulty" || value.lastSort === "importance" || value.lastSort === "quality" || value.lastSort === "review_due"
+    ? value.lastSort
+    : "updated";
+  return { recentFilters: filters, savedPresets, lastSort };
 }
 
 function normalizeUpdatePreferences(raw: unknown): AppUpdatePreferences {

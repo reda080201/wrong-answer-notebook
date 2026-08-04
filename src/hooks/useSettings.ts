@@ -12,6 +12,7 @@ import type {
   PromptTemplate,
   ViewPreferences,
   AppUpdatePreferences,
+  QuestionBankPreferences,
 } from "../types";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
@@ -253,6 +254,14 @@ export function useSettings() {
     await updateSettings({ ...current, updatePreferences: { ...current.updatePreferences, ...patch } });
   }, [updateSettings]);
 
+  const patchQuestionBankPreferences = useCallback(async (patch: Partial<QuestionBankPreferences>) => {
+    const current = settingsRef.current;
+    await updateSettings({
+      ...current,
+      questionBankPreferences: { ...current.questionBankPreferences, ...patch },
+    });
+  }, [updateSettings]);
+
   return {
     settings,
     settingsError,
@@ -273,6 +282,7 @@ export function useSettings() {
     removeMemoTemplate,
     setLastImportTemplate,
     patchUpdatePreferences,
+    patchQuestionBankPreferences,
     refreshSettings,
     retrySettingsSave,
     flushSettings,

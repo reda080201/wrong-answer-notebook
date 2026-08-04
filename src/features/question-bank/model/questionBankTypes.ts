@@ -3,6 +3,7 @@ import type {
   ProblemSourceInfo,
   ProblemSourceType,
   QuestionAnswerType,
+  QuestionBankSort,
 } from "../../../types";
 import type { ResolvedQuestionClassification } from "../../../utils/questionClassification";
 
@@ -44,6 +45,10 @@ export interface QuestionBankFilters {
   wrongOnly: boolean;
   answerState: "all" | "has" | "missing";
   explanationState: "all" | "has" | "missing";
+  hasImages: "all" | "has" | "missing";
+  reviewDueOnly: boolean;
+  year: string;
+  tag: string;
 }
 
 export const DEFAULT_QUESTION_BANK_FILTERS: QuestionBankFilters = {
@@ -60,4 +65,16 @@ export const DEFAULT_QUESTION_BANK_FILTERS: QuestionBankFilters = {
   wrongOnly: false,
   answerState: "all",
   explanationState: "all",
+  hasImages: "all",
+  reviewDueOnly: false,
+  year: "all",
+  tag: "all",
+};
+
+export const QUESTION_BANK_SORT_LABELS: Record<QuestionBankSort, string> = {
+  updated: "최근 수정",
+  difficulty: "난이도 높은 순",
+  importance: "중요도 높은 순",
+  quality: "품질 높은 순",
+  review_due: "복습 예정 순",
 };

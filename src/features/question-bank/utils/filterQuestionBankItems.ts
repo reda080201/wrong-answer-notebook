@@ -22,6 +22,11 @@ export function filterQuestionBankItems(items: QuestionBankItem[], filters: Ques
     if (filters.answerState === "missing" && item.hasAnswer) return false;
     if (filters.explanationState === "has" && !item.hasExplanation) return false;
     if (filters.explanationState === "missing" && item.hasExplanation) return false;
+    if (filters.hasImages === "has" && !item.hasImages) return false;
+    if (filters.hasImages === "missing" && item.hasImages) return false;
+    if (filters.reviewDueOnly && !item.reviewDue) return false;
+    if (filters.year !== "all" && String(item.source.examYear ?? "") !== filters.year) return false;
+    if (filters.tag !== "all" && !(classification.tags ?? []).includes(filters.tag)) return false;
     if (!search) return true;
     return [
       item.entryTitle,

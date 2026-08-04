@@ -26,6 +26,8 @@ export default function QuestionBankFilterBar({ items, filters, onChange, onRese
   const units = values(items, (item) => item.classification.unit);
   const subunits = values(items, (item) => item.classification.subunit);
   const concepts = [...new Set(items.flatMap((item) => item.classification.concepts ?? []))].sort((a, b) => a.localeCompare(b, "ko"));
+  const years = values(items, (item) => item.source.examYear ? String(item.source.examYear) : undefined);
+  const tags = [...new Set(items.flatMap((item) => item.classification.tags ?? []))].sort((a, b) => a.localeCompare(b, "ko"));
   const active = [
     filters.subject !== "all" && { label: filters.subject, patch: { subject: "all" } },
     filters.sourceType !== "all" && { label: PROBLEM_SOURCE_LABELS[filters.sourceType], patch: { sourceType: "all" } },
@@ -39,6 +41,10 @@ export default function QuestionBankFilterBar({ items, filters, onChange, onRese
     filters.wrongOnly && { label: "오답", patch: { wrongOnly: false } },
     filters.answerState !== "all" && { label: filters.answerState === "has" ? "정답 있음" : "정답 없음", patch: { answerState: "all" } },
     filters.explanationState !== "all" && { label: filters.explanationState === "has" ? "해설 있음" : "해설 없음", patch: { explanationState: "all" } },
+    filters.hasImages !== "all" && { label: filters.hasImages === "has" ? "이미지 있음" : "이미지 없음", patch: { hasImages: "all" } },
+    filters.reviewDueOnly && { label: "복습 예정", patch: { reviewDueOnly: false } },
+    filters.year !== "all" && { label: `${filters.year}년`, patch: { year: "all" } },
+    filters.tag !== "all" && { label: filters.tag, patch: { tag: "all" } },
   ].filter(Boolean) as Array<{ label: string; patch: Partial<QuestionBankFilters> }>;
 
   return <section className="question-bank-filters" aria-label="문제 은행 필터">
@@ -55,7 +61,11 @@ export default function QuestionBankFilterBar({ items, filters, onChange, onRese
       <NumberFilter label="최소 품질" value={filters.minQuality} onChange={(minQuality) => onChange({ minQuality })} />
       <Select label="정답" value={filters.answerState} onChange={(answerState) => onChange({ answerState: answerState as QuestionBankFilters["answerState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
       <Select label="해설" value={filters.explanationState} onChange={(explanationState) => onChange({ explanationState: explanationState as QuestionBankFilters["explanationState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
+      <Select label="이미지" value={filters.hasImages} onChange={(hasImages) => onChange({ hasImages: hasImages as QuestionBankFilters["hasImages"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
+      <Select label="출제 연도" value={filters.year} onChange={(year) => onChange({ year })}><option value="all">전체 연도</option>{years.map((year) => <option key={year} value={year}>{year}년</option>)}</Select>
+      <Select label="태그" value={filters.tag} onChange={(tag) => onChange({ tag })}><option value="all">전체 태그</option>{tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</Select>
       <label className="question-bank-filter question-bank-filter--check"><input type="checkbox" checked={filters.wrongOnly} onChange={(event) => onChange({ wrongOnly: event.target.checked })} /> 오답만</label>
+      <label className="question-bank-filter question-bank-filter--check"><input type="checkbox" checked={filters.reviewDueOnly} onChange={(event) => onChange({ reviewDueOnly: event.target.checked })} /> 복습 예정</label>
     </div>
     {active.length > 0 && <div className="question-bank-chips" aria-label="적용된 필터">{active.map((chip) => <button key={chip.label} type="button" onClick={() => onChange(chip.patch)}>{chip.label} <span aria-hidden="true">×</span></button>)}</div>}
   </section>;
