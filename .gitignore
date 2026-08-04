@@ -4,6 +4,7 @@ dist-ssr
 *.local
 .DS_Store
 src-tauri/target
+src-tauri/gen/
 app-icon.png
 *.log
 *.tsbuildinfo
@@ -11,7 +12,27 @@ app-icon.png
 *.key.pub
 updater-private-key*
 private-key.pem
-*.key
-*.key.pub
-updater-private-key*
-private-key.pem
+
+# Local editor and audit artifacts
+/.vscode/
+/.cursor/
+/*AUDIT_REPORT*.md
+/PROJECT_AUDIT_REPORT.md
+
+# One-off Codex scratch artifacts (repository root only)
+/_*.py
+/_*.txt
+/_*.mjs
+/_patch.json
+/patch*.py
+/patch*.mjs
+/build_patch.py
+/write_entry_draft.py
+/vitest-full.json
+/$null
+/normalizeQuestionNumber(item.questionNumber)
+/_ns_b64/
+/-p/
+/echo/
+/ok/
+/tools/
