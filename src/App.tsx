@@ -33,12 +33,10 @@ import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import { useExamSessionController } from "./hooks/useExamSessionController";
 import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
-import LearningHubView from "./features/learning/components/LearningHubView";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
-import QuestionBankView from "./features/question-bank/components/QuestionBankView";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
-import { patchQuestionClassification } from "./features/question-bank/utils/patchQuestionClassification";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
+import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
 
 export default function App() {
   const { confirm } = useAppDialog();
@@ -464,54 +462,36 @@ export default function App() {
 
         <div className="content">
           {showQuestionBank ? (
-            <QuestionBankView
+            <NotebookKnowledgeWorkspace
+              mode="question-bank"
               entries={entries}
-              preferences={settings.questionBankPreferences}
-              onPreferencesChange={patchQuestionBankPreferences}
-              onRegisterPreferenceFlush={registerQuestionBankPreferenceFlush}
-              onPatchQuestionClassification={(entryId, questionNumber, classification) => patchEntry(entryId, (current) => ({
-                questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, classification),
-              }))}
-              onOpenQuestion={(item) => {
-                const entry = entries.find((candidate) => candidate.id === item.entryId);
-                if (!entry) return;
-                void requestNavigation({
+              learningHubTarget={learningHubTarget}
+              questionBankPreferences={settings.questionBankPreferences}
+              patchQuestionBankPreferences={patchQuestionBankPreferences}
+              registerQuestionBankPreferenceFlush={registerQuestionBankPreferenceFlush}
+              patchEntry={patchEntry}
+              openCandidateReview={setLearningCandidateEntryId}
+              openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
-                  question: { entryId: entry.id, questionNumber: item.questionNumber },
-                });
-              }}
+                  question: questionNumber ? { entryId: entry.id, questionNumber } : undefined,
+                })}
             />
           ) : showLearningHub ? (
-            <LearningHubView
+            <NotebookKnowledgeWorkspace
+              mode="learning-hub"
               entries={entries}
-              highlightedBlock={learningHubTarget}
-              questionBankItems={buildQuestionBankItems(entries)}
-              onOpenSource={(entryId, questionNumber) => {
-                const entry = entries.find((item) => item.id === entryId);
-                if (!entry) return;
-                void requestNavigation({
+              learningHubTarget={learningHubTarget}
+              questionBankPreferences={settings.questionBankPreferences}
+              patchQuestionBankPreferences={patchQuestionBankPreferences}
+              registerQuestionBankPreferenceFlush={registerQuestionBankPreferenceFlush}
+              patchEntry={patchEntry}
+              openCandidateReview={setLearningCandidateEntryId}
+              openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
-                  entryId,
-                  question: questionNumber ? { entryId, questionNumber } : undefined,
-                });
-              }}
-              onUpdateBlock={(entryId, blockId, patch) => patchEntry(entryId, (current) => {
-                const index = (current.learningBlocks ?? []).findIndex((block) => block.id === blockId);
-                if (index < 0) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
-                return { learningBlocks: (current.learningBlocks ?? []).map((block) => block.id === blockId ? { ...block, ...patch } : block) };
-              })}
-              onDuplicateBlock={(entryId, blockId) => patchEntry(entryId, (current) => {
-                const source = (current.learningBlocks ?? []).find((block) => block.id === blockId);
-                if (!source) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
-                return { learningBlocks: [...(current.learningBlocks ?? []), { ...source, id: crypto.randomUUID(), title: `${source.title || "학습 내용"} 복제`, reviewStatus: "draft" }] };
-              })}
-              onDeleteBlock={(entryId, blockId) => patchEntry(entryId, (current) => {
-                const blocks = current.learningBlocks ?? [];
-                if (!blocks.some((block) => block.id === blockId)) throw new Error("학습 카드를 찾지 못했습니다. 목록을 새로고침한 뒤 다시 시도해 주세요.");
-                return { learningBlocks: blocks.filter((block) => block.id !== blockId) };
-              })}
-              onOpenCandidateReview={setLearningCandidateEntryId}
+                  entryId: entry.id,
+                  question: questionNumber ? { entryId: entry.id, questionNumber } : undefined,
+                })}
             />
           ) : <>
           <EntryListPane
