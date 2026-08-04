@@ -29,4 +29,39 @@ describe("GeneratedExamsDialog", () => {
     view.rerender(<GeneratedExamsDialog {...props({ onDelete })} />);
     expect(screen.queryByText("삭제 실패")).not.toBeInTheDocument();
   });
+
+  it("does not start the same delete twice while the first action is pending", () => {
+    let resolveDelete: (() => void) | undefined;
+    const onDelete = vi.fn(() => new Promise<void>((resolve) => {
+      resolveDelete = resolve;
+    }));
+    render(<GeneratedExamsDialog {...props({ onDelete })} />);
+
+    const deleteButton = screen.getByRole("button", { name: "삭제" });
+    fireEvent.click(deleteButton);
+    fireEvent.click(deleteButton);
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    resolveDelete?.();
+  });
+
+  it("handles a failed generated-exam retry without leaving a rejected promise", async () => {
+    const onRetry = vi.fn().mockRejectedValueOnce(new Error("재저장 실패")).mockResolvedValueOnce(undefined);
+    render(<GeneratedExamsDialog {...props({ saveError: "저장 실패", hasRetryableChange: true, onRetry })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "실패한 변경 다시 저장" }));
+    expect(await screen.findByText("재저장 실패")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onRetry).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an unexpected close failure in the dialog and allows retry", async () => {
+    const onClose = vi.fn().mockRejectedValueOnce(new Error("닫기 실패")).mockResolvedValueOnce(undefined);
+    render(<GeneratedExamsDialog {...props({ onClose })} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "내 모의고사 닫기" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("닫기 실패");
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    expect(onClose).toHaveBeenCalledTimes(2);
+  });
 });

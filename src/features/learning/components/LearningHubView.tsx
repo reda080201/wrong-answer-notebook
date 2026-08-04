@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
@@ -40,21 +40,35 @@ interface LearningHubViewProps {
   highlightedBlock?: { entryId: string; blockId: string } | null;
 }
 
-function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<boolean>; onCancel: () => void }) {
+function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
   const [title, setTitle] = useState(item.block.title);
   const [content, setContent] = useState(item.block.content);
   const [unit, setUnit] = useState(item.block.unit ?? "");
   const [keywords, setKeywords] = useState((item.block.keywords ?? []).join(", "));
   const [saving, setSaving] = useState(false);
-  return <form className="learning-hub-editor" onSubmit={(event) => {
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveInFlightRef = useRef(false);
+  const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (saveInFlightRef.current) return;
+    saveInFlightRef.current = true;
     setSaving(true);
-    void onSave({ title: title.trim(), content: content.trim(), unit: unit.trim() || undefined, keywords: keywords.split(",").map((value) => value.trim()).filter(Boolean) }).finally(() => setSaving(false));
-  }}>
-    <label>제목<input value={title} onChange={(event) => setTitle(event.target.value)} required /></label>
-    <label>단원<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label>
-    <label>키워드<input value={keywords} onChange={(event) => setKeywords(event.target.value)} placeholder="쉼표로 구분" /></label>
-    <label>핵심 내용<textarea value={content} onChange={(event) => setContent(event.target.value)} rows={5} /></label>
+    setSaveError(null);
+    try {
+      await onSave({ title: title.trim(), content: content.trim(), unit: unit.trim() || undefined, keywords: keywords.split(",").map((value) => value.trim()).filter(Boolean) });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "학습 카드를 저장하지 못했습니다.");
+    } finally {
+      saveInFlightRef.current = false;
+      setSaving(false);
+    }
+  };
+  return <form className="learning-hub-editor" onSubmit={(event) => void submit(event)} aria-busy={saving || undefined}>
+    <label>제목<input value={title} onChange={(event) => { setTitle(event.target.value); setSaveError(null); }} required /></label>
+    <label>단원<input value={unit} onChange={(event) => { setUnit(event.target.value); setSaveError(null); }} /></label>
+    <label>키워드<input value={keywords} onChange={(event) => { setKeywords(event.target.value); setSaveError(null); }} placeholder="쉼표로 구분" /></label>
+    <label>핵심 내용<textarea value={content} onChange={(event) => { setContent(event.target.value); setSaveError(null); }} rows={5} /></label>
+    {saveError && <div className="form-error" role="alert">{saveError}</div>}
     <div className="learning-hub-actions"><button type="submit" disabled={saving}>저장</button><button type="button" onClick={onCancel} disabled={saving}>취소</button></div>
   </form>;
 }
@@ -68,18 +82,19 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   const { block } = item;
   const sourceQuestion = block.sourceQuestionNumber ?? block.sourceReferences?.find((reference) => reference.questionNumber)?.questionNumber;
   const mutate = async (task: () => Promise<void>) => {
-    if (actionMutexRef.current) return false;
+    if (actionMutexRef.current) return { ok: false as const, error: new Error("다른 학습 카드 작업이 진행 중입니다.") };
     actionMutexRef.current = true;
     setBusy(true);
     setActionError(null);
     try {
       await task();
       failedTaskRef.current = null;
-      return true;
+      return { ok: true as const };
     } catch (error) {
       failedTaskRef.current = task;
-      setActionError(error instanceof Error ? error.message : "학습 카드를 저장하지 못했습니다.");
-      return false;
+      const saveError = error instanceof Error ? error : new Error("학습 카드를 저장하지 못했습니다.");
+      setActionError(saveError.message);
+      return { ok: false as const, error: saveError };
     } finally {
       actionMutexRef.current = false;
       setBusy(false);
@@ -101,11 +116,14 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
     </header>
     <h3>{block.title || "학습 내용"}</h3>
     <p className="learning-hub-meta">{item.sourceSubject} · {block.unit ?? "단원 미분류"} · {REVIEW_LABELS[block.reviewStatus ?? "draft"]} · {new Date(item.sourceEntry.updatedAt).toLocaleDateString("ko-KR")}</p>
-    {actionError && <div className="form-error" role="alert">{actionError}<button type="button" className="btn-secondary" onClick={retry} disabled={busy}>다시 저장</button></div>}
+    {actionError && !editing && <div className="form-error" role="alert">{actionError}<button type="button" className="btn-secondary" onClick={retry} disabled={busy}>다시 저장</button></div>}
     {editing ? <BlockEditor item={item} onSave={async (patch) => {
       const saved = await mutate(() => onUpdateBlock(item.sourceEntryId, block.id, patch));
-      if (saved) setEditing(false);
-      return saved;
+      if (saved.ok) {
+        setEditing(false);
+        return;
+      }
+      throw saved.error;
     }} onCancel={() => setEditing(false)} /> : <>
       {block.content && <div className="learning-hub-content"><MathText text={block.content} /></div>}
       <SubjectLearningDetails block={block} />

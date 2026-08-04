@@ -695,6 +695,7 @@ pub fn run() {
             import_assets::stage_import_asset_bytes,
             import_assets::commit_import_asset_session,
             import_assets::commit_import_asset_session_entry,
+            import_assets::commit_import_asset_session_entries,
             import_assets::discard_import_asset_session,
             import_assets::validate_import_asset_session,
             import_assets::cleanup_stale_import_asset_sessions,

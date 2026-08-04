@@ -17,6 +17,9 @@ interface SupplementalMergeModalProps {
   assetFiles: File[];
   assetSession?: ImportWorkspace["assetSession"];
   onClose: () => void;
+  cleanupError?: string | null;
+  cleanupBusy?: boolean;
+  onRetryCleanup?: () => void;
   onSave: (payload: { data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; assetSession?: ImportWorkspace["assetSession"] }) => Promise<void>;
 }
 
@@ -55,7 +58,7 @@ function rowText(value: unknown): string {
   return JSON.stringify(value);
 }
 
-export default function SupplementalMergeModal({ target, imported, mode, assetFiles, assetSession, onClose, onSave }: SupplementalMergeModalProps) {
+export default function SupplementalMergeModal({ target, imported, mode, assetFiles, assetSession, onClose, cleanupError, cleanupBusy = false, onRetryCleanup, onSave }: SupplementalMergeModalProps) {
   const analysis = useMemo(() => analyzeAnswerMerge(target, imported), [imported, target]);
   const [title, setTitle] = useState(`${target.title} · ${supplementalModeLabel(mode)}`);
   const [resolutions, setResolutions] = useState<AnswerMergeResolution[]>(() => analysis.rows.map((row) => ({
@@ -72,7 +75,7 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
     setResolutions((current) => current.map((item) => item.key === key ? { ...item, ...patch } : item));
   };
   const resolutionIssues = getAnswerMergeResolutionIssues(target, analysis, resolutions);
-  const canSave = resolutionIssues.length === 0 && !saving;
+  const canSave = resolutionIssues.length === 0 && !saving && !cleanupBusy;
 
   const save = async () => {
     if (!canSave) {
@@ -91,13 +94,13 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
   };
 
   return (
-    <Dialog open onClose={onClose} className="form-modal form-modal--wide supplemental-merge-modal" ariaLabel="추가 자료 병합 검토" closeDisabled={saving} busy={saving}>
+    <Dialog open onClose={onClose} className="form-modal form-modal--wide supplemental-merge-modal" ariaLabel="추가 자료 병합 검토" closeDisabled={saving || cleanupBusy} busy={saving || cleanupBusy}>
       <div className="form-header">
         <div>
           <h2>추가 자료 병합 검토</h2>
           <p>{target.title} · {target.subject}</p>
         </div>
-        <button type="button" className="btn-icon" onClick={onClose} aria-label="병합 검토 닫기" disabled={saving}>닫기</button>
+        <button type="button" className="btn-icon" onClick={onClose} aria-label="병합 검토 닫기" disabled={saving || cleanupBusy}>닫기</button>
       </div>
       <div className="form-body">
         <label className="form-field">
@@ -159,10 +162,16 @@ export default function SupplementalMergeModal({ target, imported, mode, assetFi
             );
           })}
         </div>
+        {cleanupError && (
+          <div className="app-error-banner" role="alert">
+            <p>{cleanupError}</p>
+            {onRetryCleanup && <button type="button" className="btn-secondary" onClick={onRetryCleanup} disabled={cleanupBusy}>임시 자산 정리 다시 시도</button>}
+          </div>
+        )}
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
       <div className="form-footer">
-        <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>취소</button>
+        <button type="button" className="btn-secondary" onClick={onClose} disabled={saving || cleanupBusy}>취소</button>
         <button type="button" className="btn-primary" onClick={() => void save()} disabled={!canSave}>병합 저장</button>
       </div>
     </Dialog>

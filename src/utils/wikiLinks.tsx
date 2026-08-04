@@ -1,6 +1,8 @@
 import { cloneElement, isValidElement, type ReactNode } from "react";
 import MathText from "../components/MathText";
 import { useConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
+import type { ConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
+import type { ConceptLinkResolveContext } from "../features/learning/utils/conceptIndex";
 
 export interface ParsedWikiPart {
   isLink: boolean;
@@ -40,12 +42,13 @@ interface LinkifiedTextProps {
   text?: string;
   onLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  conceptContext?: ConceptLinkResolveContext;
 }
 
 /**
  * Component that renders text with clickable wiki links.
  */
-export function LinkifiedText({ text = "", onLinkClick, existingTargets }: LinkifiedTextProps) {
+export function LinkifiedText({ text = "", onLinkClick, existingTargets, conceptContext }: LinkifiedTextProps) {
   const conceptRuntime = useConceptLinkRuntime();
   if (!text.trim()) return null;
   const parsed = parseWikiLinks(text);
@@ -65,7 +68,7 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets }: Linki
       const particle = match[3] ?? "";
       const start = index + prefix.length;
       if (start > last) nodes.push(<MathText key={`${key}-text-${last}`} text={raw.slice(last, start)} />);
-      const item = conceptRuntime.resolve(target);
+      const item = conceptRuntime.resolve(target, conceptContext);
       nodes.push(item ? <button key={`${key}-concept-${start}`} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(item)}>{target}</button> : <MathText key={`${key}-fallback-${start}`} text={target} />);
       if (particle) nodes.push(<MathText key={`${key}-particle-${start}`} text={particle} />);
       last = index + match[0].length;
@@ -81,7 +84,7 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets }: Linki
         if (part.isLink) {
           const target = part.target ?? "";
           const label = part.label ?? "";
-          const concept = conceptRuntime?.resolve(target);
+          const concept = conceptRuntime?.resolve(target, conceptContext);
           if (conceptRuntime && !conceptRuntime.enabled) return <MathText key={`wl-${part.index}`} text={label} />;
           if (conceptRuntime?.enabled && concept) return <button key={`wl-${part.index}`} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(concept)}>{label}</button>;
           const exists = existingTargets.has(target.toLowerCase());
@@ -120,8 +123,19 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets }: Linki
 export function renderWikiLinksInNodes(
   nodes: ReactNode[],
   onLinkClick: (target: string) => void,
-  existingTargets: Set<string>
+  existingTargets: Set<string>,
+  conceptRuntime?: ConceptLinkRuntime | null,
+  conceptContext?: ConceptLinkResolveContext,
 ): ReactNode[] {
+  const renderLink = (target: string, label: string, key: string) => {
+    if (conceptRuntime && !conceptRuntime.enabled) return <span key={key}>{label}</span>;
+    const concept = conceptRuntime?.resolve(target, conceptContext);
+    if (conceptRuntime?.enabled && concept) {
+      return <button key={key} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(concept)}>{label}</button>;
+    }
+    const exists = existingTargets.has(target.toLowerCase());
+    return <span key={key} className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`} onClick={(e) => { e.stopPropagation(); onLinkClick(target); }} title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onLinkClick(target); } }}>{label}</span>;
+  };
   return nodes.flatMap((node, idx) => {
     if (typeof node === "string") {
       const parsed = parseWikiLinks(node);
@@ -129,28 +143,7 @@ export function renderWikiLinksInNodes(
         if (part.isLink) {
           const target = part.target ?? "";
           const label = part.label ?? "";
-          const exists = existingTargets.has(target.toLowerCase());
-          return (
-            <span
-              key={`wiki-str-${idx}-${part.index}`}
-              className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onLinkClick(target);
-              }}
-              title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onLinkClick(target);
-                }
-              }}
-            >
-              {label}
-            </span>
-          );
+          return renderLink(target, label, `wiki-str-${idx}-${part.index}`);
         }
         return part.raw;
       });
@@ -165,28 +158,7 @@ export function renderWikiLinksInNodes(
           if (part.isLink) {
             const target = part.target ?? "";
             const label = part.label ?? "";
-            const exists = existingTargets.has(target.toLowerCase());
-            return (
-              <span
-                key={`wiki-mark-child-${idx}-${part.index}`}
-                className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onLinkClick(target);
-                }}
-                title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    onLinkClick(target);
-                  }
-                }}
-              >
-                {label}
-              </span>
-            );
+            return renderLink(target, label, `wiki-mark-child-${idx}-${part.index}`);
           }
           return part.raw;
         });

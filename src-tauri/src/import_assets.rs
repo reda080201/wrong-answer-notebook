@@ -259,6 +259,23 @@ pub(crate) fn commit_import_asset_session_entry(
 }
 
 #[tauri::command]
+pub(crate) fn commit_import_asset_session_entries(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<NotebookStore>>,
+    session_id: String,
+    entries: Vec<WrongAnswerEntry>,
+) -> Result<ImportAssetCommitResult, String> {
+    let root = import_asset_session_root(&app, &session_id)?;
+    let filenames = store.commit_staged_entries_add(&root.join("assets"), entries)?;
+    // Both image promotion and entries persistence succeeded. Cleanup is best effort.
+    let _ = fs::remove_dir_all(&root);
+    Ok(ImportAssetCommitResult {
+        session_id,
+        filenames,
+    })
+}
+
+#[tauri::command]
 pub(crate) fn discard_import_asset_session(
     app: tauri::AppHandle,
     session_id: String,
