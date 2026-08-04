@@ -762,6 +762,9 @@ export interface ViewPreferences {
   showLearningVisuals: boolean;
   compactToolbar: boolean;
   lectureLayout?: LectureLayout;
+  conceptLinksEnabled?: boolean;
+  automaticConceptLinksEnabled?: boolean;
+  conceptLinkPreviewMode?: "popover";
 }
 
 export type LectureLayout = "document" | "cards";

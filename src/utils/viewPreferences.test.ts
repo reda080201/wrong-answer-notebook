@@ -54,6 +54,9 @@ describe("normalizeViewPreferences", () => {
       showLearningVisuals: false,
       compactToolbar: true,
       lectureLayout: "document",
+      conceptLinksEnabled: true,
+      automaticConceptLinksEnabled: false,
+      conceptLinkPreviewMode: "popover",
     });
   });
 });
@@ -99,6 +102,9 @@ describe("migrateViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: true,
       lectureLayout: "document",
+      conceptLinksEnabled: true,
+      automaticConceptLinksEnabled: false,
+      conceptLinkPreviewMode: "popover",
     });
   });
 
@@ -112,6 +118,9 @@ describe("migrateViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       lectureLayout: "document",
+      conceptLinksEnabled: true,
+      automaticConceptLinksEnabled: false,
+      conceptLinkPreviewMode: "popover",
     });
   });
 });
@@ -136,6 +145,9 @@ describe("resolveViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       lectureLayout: "document",
+      conceptLinksEnabled: true,
+      automaticConceptLinksEnabled: false,
+      conceptLinkPreviewMode: "popover",
     });
   });
 
@@ -164,6 +176,15 @@ describe("sibling preference normalizers", () => {
       preserveSourcePages: true,
       showUnlinkedImages: false,
       thumbnailSize: "medium",
+    });
+  });
+
+  it("preserves explicit concept link settings and normalizes invalid preview modes", () => {
+    expect(normalizeViewPreferences({ conceptLinksEnabled: false, automaticConceptLinksEnabled: true, conceptLinkPreviewMode: "panel" })).toEqual({
+      ...DEFAULT_VIEW_PREFERENCES,
+      conceptLinksEnabled: false,
+      automaticConceptLinksEnabled: true,
+      conceptLinkPreviewMode: "popover",
     });
   });
 
@@ -259,6 +280,9 @@ describe("normalizeSettings integration", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       lectureLayout: "document",
+      conceptLinksEnabled: true,
+      automaticConceptLinksEnabled: false,
+      conceptLinkPreviewMode: "popover",
     });
     expect(normalized.answerViewPreferences).toEqual({
       viewMode: "table",
