@@ -335,8 +335,10 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
     let value: serde_json::Value = serde_json::from_slice(bytes)
         .map_err(|error| format!("백업의 {name} JSON이 올바르지 않습니다: {error}"))?;
     match name {
-        "exam-sessions.json" | "generated-exams.json" | "gpt-solution-drafts.json"
-            | "library-folders.json"
+        "exam-sessions.json"
+        | "generated-exams.json"
+        | "gpt-solution-drafts.json"
+        | "library-folders.json"
             if !value.is_array() =>
         {
             Err(format!(

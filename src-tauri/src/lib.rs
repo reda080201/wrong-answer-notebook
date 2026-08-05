@@ -335,7 +335,8 @@ fn load_library_folders(app: tauri::AppHandle) -> Result<Vec<LibraryFolder>, Str
         return Ok(Vec::new());
     }
     let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    let folders: Vec<LibraryFolder> = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    let folders: Vec<LibraryFolder> =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
     validate_library_folders(&folders)?;
     Ok(folders)
 }
