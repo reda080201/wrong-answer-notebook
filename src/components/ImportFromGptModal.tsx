@@ -689,18 +689,26 @@ export default function ImportFromGptModal({
 
   const savePromptTemplate = async () => {
     if (!onSavePromptTemplate || !activePrompt) return;
-    const name = await prompt({
-      title: "프롬프트 템플릿 저장",
-      message: "저장할 프롬프트 템플릿 이름을 입력하세요.",
-      defaultValue: activePrompt.name,
-    });
-    if (!name?.trim()) return;
-    await onSavePromptTemplate({
-      id: uuidv4(),
-      name: name.trim(),
-      content: activePrompt.content,
-    });
-    setCopyMessage("프롬프트 템플릿을 저장했습니다.");
+    try {
+      const name = await prompt({
+        title: "프롬프트 템플릿 저장",
+        message: "저장할 프롬프트 템플릿 이름을 입력하세요.",
+        defaultValue: activePrompt.name,
+      });
+      if (!name?.trim()) return;
+      await onSavePromptTemplate({
+        id: uuidv4(),
+        name: name.trim(),
+        content: activePrompt.content,
+      });
+      setCopyMessage("프롬프트 템플릿을 저장했습니다.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error && saveError.message
+          ? saveError.message
+          : "프롬프트 템플릿을 저장하지 못했습니다.",
+      );
+    }
   };
 
   const updateAnswer = (id: string, patch: Partial<SheetAnswerItem>) => {

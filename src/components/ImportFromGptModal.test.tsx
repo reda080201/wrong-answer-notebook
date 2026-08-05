@@ -6,6 +6,7 @@ import type { WrongAnswerEntry } from "../types";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
+import { AppDialogProvider } from "../shared/ui/AppDialogProvider";
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn(),
@@ -712,6 +713,35 @@ describe("ImportFromGptModal", () => {
       expect(writeText).toHaveBeenCalledWith("JSON으로 정리해줘");
     });
     expect(await screen.findByText("프롬프트를 복사했습니다.")).toBeInTheDocument();
+  });
+
+  it("shows a save error instead of leaking a rejected prompt template request", async () => {
+    const onSavePromptTemplate = vi.fn().mockRejectedValue(new Error("template storage failed"));
+    render(
+      <AppDialogProvider>
+        <ImportFromGptModal
+          fallbackSubject="수학"
+          onClose={vi.fn()}
+          onApply={vi.fn()}
+          onSavePromptTemplate={onSavePromptTemplate}
+          promptTemplates={[
+            {
+              id: "prompt-1",
+              name: "시험지 JSON",
+              content: "JSON으로 정리해줘",
+            },
+          ]}
+        />
+      </AppDialogProvider>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "템플릿 저장" }));
+    fireEvent.click(await screen.findByRole("button", { name: "확인" }));
+
+    await waitFor(() => {
+      expect(onSavePromptTemplate).toHaveBeenCalledTimes(1);
+    });
+    expect(await screen.findByText("template storage failed")).toBeInTheDocument();
   });
 
   it("imports solution JSON from clipboard and applies with fill mode", async () => {
