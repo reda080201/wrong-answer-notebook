@@ -11,24 +11,35 @@ export function useBridgeActiveSync(options: boolean | LegacyBridgeActiveSyncOpt
   const legacy = typeof options === "object" ? options : undefined;
   const enabled = legacy ? legacy.bridgeEnabled && (legacy.bridgeStatus?.status === "listening" || legacy.bridgeStatus?.status === "connected") : Boolean(options);
   const timer = useRef<number | null>(null);
-  const last = useRef<string>("");
+  const lastSuccessful = useRef<string>("");
+  const pending = useRef<{ key: string; context: McpActiveContext } | null>(null);
   const legacySyncEntries = useRef(legacy?.syncEntries);
   legacySyncEntries.current = legacy?.syncEntries;
   const [bridgeSyncState, setBridgeSyncState] = useState<BridgeSyncState>({ active: enabled, syncing: false, lastSyncAt: null, lastSyncError: null, syncedCount: 0 });
 
   const syncActiveContext = useCallback((context: McpActiveContext) => {
     const key = JSON.stringify(context);
-    if (key === last.current) return;
-    last.current = key;
+    if (key === lastSuccessful.current) return;
+    pending.current = { key, context };
     if (timer.current !== null) window.clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       timer.current = null;
-      if (enabled) void syncMcpBridgeActiveContext(context).catch(() => undefined);
+      if (enabled) {
+        void syncMcpBridgeActiveContext(context).then(() => {
+          if (pending.current?.key === key) lastSuccessful.current = key;
+        }).catch(() => undefined);
+      }
     }, 150);
   }, [enabled]);
 
   useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
-  useEffect(() => { if (!enabled) syncActiveContext({ entryId: null, questionNumber: null }); }, [enabled, syncActiveContext]);
+  useEffect(() => {
+    if (!enabled) {
+      syncActiveContext({ entryId: null, questionNumber: null });
+    } else if (pending.current) {
+      syncActiveContext(pending.current.context);
+    }
+  }, [enabled, syncActiveContext]);
   useEffect(() => { setBridgeSyncState((state) => ({ ...state, active: enabled, syncing: enabled ? state.syncing : false })); }, [enabled]);
   const triggerBridgeSync = useCallback(async () => {
     if (!enabled || !legacySyncEntries.current) return;
