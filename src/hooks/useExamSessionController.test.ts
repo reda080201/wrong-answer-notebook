@@ -1,0 +1,120 @@
+import { act, renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { EntryFormData, ExamSession, WrongAnswerEntry } from "../types";
+
+const { loadExamSessions, saveExamSessions, syncMcpBridgeActiveExamContext } = vi.hoisted(() => ({
+  loadExamSessions: vi.fn(),
+  saveExamSessions: vi.fn(),
+  syncMcpBridgeActiveExamContext: vi.fn(),
+}));
+
+vi.mock("../api", () => ({
+  loadExamSessions,
+  saveExamSessions,
+  syncMcpBridgeActiveExamContext,
+}));
+
+import { useExamSessionController } from "./useExamSessionController";
+
+const preferences = {
+  shareUserResponse: false,
+  shareScratchNote: false,
+  shareQuestionImages: false,
+  shareSourcePageImages: false,
+} as never;
+
+const entry = {
+  id: "sheet-1",
+  subject: "수학",
+  title: "시험지",
+  question: "1. 첫 문제\n① 1\n② 2",
+  questionImages: [],
+  entryKind: "problem_sheet",
+  difficult: false,
+  difficulty: "none",
+  myAnswer: "",
+  correctAnswer: "",
+  explanationParts: [],
+  memo: "",
+  annotations: [],
+  tags: [],
+  answerKey: [{ id: "answer-1", questionNumber: "1", answer: "②", explanation: "해설", importantPoints: [] }],
+  figures: [],
+  mastered: false,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+} as unknown as WrongAnswerEntry;
+
+describe("useExamSessionController safety guards", () => {
+  beforeEach(() => {
+    loadExamSessions.mockReset();
+    saveExamSessions.mockReset();
+    syncMcpBridgeActiveExamContext.mockReset().mockResolvedValue(undefined);
+    loadExamSessions.mockResolvedValue([]);
+    saveExamSessions.mockResolvedValue(undefined);
+  });
+
+  it("blocks opening an exam until session loading succeeds", async () => {
+    let resolveLoad!: (sessions: ExamSession[]) => void;
+    loadExamSessions.mockReturnValueOnce(new Promise<ExamSession[]>((resolve) => { resolveLoad = resolve; }));
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences }));
+
+    act(() => result.current.open(entry));
+    expect(result.current.session).toBeNull();
+    expect(result.current.startError?.message).toContain("불러오는 중");
+    expect(saveExamSessions).not.toHaveBeenCalled();
+
+    resolveLoad([]);
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.open(entry));
+    expect(result.current.session?.entryId).toBe(entry.id);
+  });
+
+  it("does not mark a session submitted when atomic wrong-entry persistence fails", async () => {
+    const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockRejectedValue(new Error("entries failed"));
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      addEntries,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.open(entry));
+    const current = result.current.session!;
+    const submittedInput: ExamSession = {
+      ...current,
+      responses: [{ questionNumber: "1", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" }],
+    };
+    act(() => result.current.setSession(submittedInput));
+
+    await act(async () => {
+      await expect(result.current.submit(submittedInput)).rejects.toThrow("entries failed");
+    });
+    expect(addEntries).toHaveBeenCalledTimes(1);
+    expect(saveExamSessions).not.toHaveBeenCalled();
+    expect(result.current.session?.status).toBe("in_progress");
+  });
+
+  it("stores all wrong entries before saving the submitted session and avoids duplicates on retry", async () => {
+    const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockResolvedValue(["wrong-1"]);
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      addEntries,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.open(entry));
+    const current = result.current.session!;
+    const input: ExamSession = {
+      ...current,
+      responses: [{ questionNumber: "1", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" }],
+    };
+
+    await act(async () => { await result.current.submit(input); });
+    expect(addEntries).toHaveBeenCalledTimes(1);
+    expect(saveExamSessions).toHaveBeenCalledTimes(1);
+    expect(saveExamSessions.mock.invocationCallOrder[0]).toBeGreaterThan(addEntries.mock.invocationCallOrder[0]);
+    expect(result.current.session?.status).toBe("submitted");
+    const submitted = result.current.session!;
+
+    await act(async () => { await result.current.submit({ ...submitted, status: "in_progress" }); });
+    expect(addEntries).toHaveBeenCalledTimes(1);
+  });
+});
