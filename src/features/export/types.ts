@@ -34,6 +34,10 @@ export interface ExamPrintModel {
   includePageNumbers: boolean;
   includeSourcePages: boolean;
   extraScratchPages: number;
+  /** Final print choices after applying automatic layout/orientation policy. */
+  resolvedPaperSize: "a4" | "letter";
+  resolvedOrientation: "portrait" | "landscape";
+  resolvedLayout: "single" | "columns";
   filenameBase: string;
   sourceIndex?: Array<{ questionNumber: string; label: string }>;
 }
