@@ -278,6 +278,8 @@ export interface QuestionRating {
 
 export interface WrongAnswerEntry {
   id: string;
+  generatedFromExamSessionId?: string;
+  generatedFromQuestionNumber?: string;
   subject: string;
   title: string;
   question: string;

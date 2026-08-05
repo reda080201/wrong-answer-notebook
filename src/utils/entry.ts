@@ -760,6 +760,15 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
 
   return {
     ...rest,
+    generatedFromExamSessionId:
+      typeof rest.generatedFromExamSessionId === "string" && rest.generatedFromExamSessionId.trim()
+        ? rest.generatedFromExamSessionId.trim()
+        : undefined,
+    generatedFromQuestionNumber: (() => {
+      if (typeof rest.generatedFromQuestionNumber !== "string") return undefined;
+      const normalized = normalizeQuestionNumber(rest.generatedFromQuestionNumber);
+      return normalized || undefined;
+    })(),
     title,
     question,
     entryKind,

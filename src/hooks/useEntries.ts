@@ -195,6 +195,8 @@ export function useEntries() {
           updatedAt: now,
         } satisfies WrongAnswerEntry));
         const task = enqueue(async () => {
+          if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+          if (!loadedRef.current) throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
           await commitImportAssetSessionEntries(sessionId, added);
           const next = [...added, ...entriesRef.current];
           entriesRef.current = next;
@@ -218,6 +220,7 @@ export function useEntries() {
         setError(null);
         const now = new Date().toISOString();
         const unreferenced = await enqueueMutation((current) => {
+          if (!current.some((entry) => entry.id === id)) throw new Error("수정할 항목을 찾을 수 없습니다.");
           const next = current.map((entry) =>
             entry.id === id ? { ...entry, ...form, updatedAt: now } : entry,
           );
@@ -247,7 +250,7 @@ export function useEntries() {
             const patch = typeof partial === "function" ? partial(entry) : partial;
             return { ...entry, ...patch, updatedAt: now };
           }),
-          value: undefined,
+          value: current.some((entry) => entry.id === id) ? undefined : (() => { throw new Error("수정할 항목을 찾을 수 없습니다."); })(),
         }));
       } catch (err) {
         const message = errorMessage(err, "항목을 저장하지 못했습니다.");
@@ -269,6 +272,8 @@ export function useEntries() {
         setError(null);
         const now = new Date().toISOString();
         const task = enqueue(async () => {
+          if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+          if (!loadedRef.current) throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
           const current = entriesRef.current;
           const existing = current.find((entry) => entry.id === id);
           if (!existing) throw new Error("대상 문제지를 찾을 수 없습니다.");
@@ -299,6 +304,7 @@ export function useEntries() {
       try {
         const images = await enqueueMutation((current) => {
           const entry = current.find((item) => item.id === id);
+          if (!entry) throw new Error("삭제할 항목을 찾을 수 없습니다.");
           const next = current.filter((item) => item.id !== id);
           return {
             next,
@@ -321,6 +327,7 @@ export function useEntries() {
         setError(null);
         const now = new Date().toISOString();
         await enqueueMutation((current) => ({
+          ...(current.some((entry) => entry.id === id) ? {} : (() => { throw new Error("복습 상태를 변경할 항목을 찾을 수 없습니다."); })()),
           next: current.map((entry) =>
             entry.id === id
               ? {
@@ -336,7 +343,9 @@ export function useEntries() {
           value: undefined,
         }));
       } catch (err) {
-        setError(errorMessage(err, "복습 상태를 저장하지 못했습니다."));
+        const message = errorMessage(err, "복습 상태를 저장하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
       }
     },
     [enqueueMutation],
@@ -348,6 +357,7 @@ export function useEntries() {
         setError(null);
         const now = new Date().toISOString();
         await enqueueMutation((current) => ({
+          ...(current.some((entry) => entry.id === id) ? {} : (() => { throw new Error("난이도 상태를 변경할 항목을 찾을 수 없습니다."); })()),
           next: current.map((entry) =>
             entry.id === id
               ? {
@@ -361,7 +371,9 @@ export function useEntries() {
           value: undefined,
         }));
       } catch (err) {
-        setError(errorMessage(err, "난이도 상태를 저장하지 못했습니다."));
+        const message = errorMessage(err, "난이도 상태를 저장하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
       }
     },
     [enqueueMutation],

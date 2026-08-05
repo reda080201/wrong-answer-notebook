@@ -108,7 +108,9 @@ export default function App() {
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
+    existingEntries: entries,
     addEntry,
+    addEntries,
   });
   const {
     session: examSession,
@@ -122,6 +124,9 @@ export default function App() {
     setSaveError: setExamSaveError,
     startError: examStartError,
     setStartError: setExamStartError,
+    loading: examSessionsLoading,
+    loadError: examSessionsLoadError,
+    reload: reloadExamSessions,
     savedSessions: savedExamSessions,
     activeGeneratedExam,
     open: openExamSession,
@@ -458,6 +463,14 @@ export default function App() {
 
       <main className="main">
         {error && <ErrorNotice message={error} onRetry={() => void refresh()} onDismiss={clearError} />}
+        {examSessionsLoadError && (
+          <ErrorNotice
+            message={examSessionsLoadError}
+            onRetry={() => void reloadExamSessions()}
+            onDismiss={() => undefined}
+          />
+        )}
+        {examSessionsLoading && <p className="status-message" role="status">시험 기록을 불러오는 중입니다. 시험 시작과 저장은 잠시 차단됩니다.</p>}
         {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && availableUpdate.latestVersion !== dismissedUpdateVersion && !examSession && (
           <div className="app-update-banner" role="status">
             <span>새 버전 {availableUpdate.latestVersion}을 사용할 수 있습니다.</span>

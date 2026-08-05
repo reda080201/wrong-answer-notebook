@@ -62,10 +62,10 @@ interface EntryDetailProps {
   entry: WrongAnswerEntry;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleMastered: () => void;
-  onToggleDifficult: () => void;
-  onAnnotationsChange: (annotations: Annotation[]) => void;
-  onChecklistChange?: (checklist: ChecklistItem[]) => void;
+  onToggleMastered: () => Promise<void>;
+  onToggleDifficult: () => Promise<void>;
+  onAnnotationsChange: (annotations: Annotation[]) => Promise<void>;
+  onChecklistChange?: (checklist: ChecklistItem[]) => Promise<void>;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   allEntries?: WrongAnswerEntry[];
@@ -444,8 +444,12 @@ export default function EntryDetail({
     if (match?.kind === "question") scrollToQuestion(match.start);
   };
 
-  const updateChecklist = (next: ChecklistItem[]) => {
-    onChecklistChange?.(next);
+  const updateChecklist = async (next: ChecklistItem[]) => {
+    try {
+      await onChecklistChange?.(next);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "체크리스트 저장에 실패했습니다.", "error");
+    }
   };
 
   const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
@@ -613,9 +617,13 @@ export default function EntryDetail({
     }
   }, [entry, onLearningBlocksChange, pushToast]);
 
-  const handleToggleDifficultWithToast = () => {
-    onToggleDifficult();
-    pushToast(entry.difficult ? "어려움 표시를 해제했습니다." : "어려움으로 표시했습니다.", "success");
+  const handleToggleDifficultWithToast = async () => {
+    try {
+      await onToggleDifficult();
+      pushToast(entry.difficult ? "어려움 표시를 해제했습니다." : "어려움으로 표시했습니다.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "난이도 상태 저장에 실패했습니다.", "error");
+    }
   };
 
   const handleTitleSave = async () => {
