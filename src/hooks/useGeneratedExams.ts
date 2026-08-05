@@ -59,7 +59,7 @@ export function useGeneratedExams() {
     } finally {
       if (requestId === loadRequestRef.current) setLoading(false);
     }
-  }, []);
+  }, [drain]);
 
   useEffect(() => {
     void reload();

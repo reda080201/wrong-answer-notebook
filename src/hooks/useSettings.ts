@@ -57,7 +57,7 @@ export function useSettings() {
         loadedRef.current = true;
       }
     }
-  }, []);
+  }, [drain]);
 
   useEffect(() => {
     refreshSettings();
