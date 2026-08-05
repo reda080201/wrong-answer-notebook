@@ -4,6 +4,7 @@ mod images;
 mod import_assets;
 mod integrity;
 mod mcp_bridge;
+mod mcp_bridge_contract;
 mod notebook_store;
 mod storage;
 
