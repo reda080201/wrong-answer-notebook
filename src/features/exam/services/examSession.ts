@@ -25,7 +25,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
       question: stripTrailingStimulus(entry.question, block, stimuli),
       choices: (block.choices ?? []).map((choice) => `${choice.marker} ${choice.text}`),
       questionImages: [],
-      sourcePageImages: entry.questionImages ?? [],
+      sourcePageImages: entry.sourcePageImages ?? [],
       figures,
       contentSegments: resolveContentSegments(entry, normalizedNumber, block, figures),
       correctAnswer: answer?.answer,
