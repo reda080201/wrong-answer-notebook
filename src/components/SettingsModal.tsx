@@ -69,6 +69,8 @@ interface SettingsModalProps {
   theme: ThemeMode;
   setTheme: (theme: ThemeMode) => void;
   aiProviderStatus: AiProviderStatus | null;
+  aiProviderStatusLoading?: boolean;
+  aiProviderStatusError?: string | null;
   aiProviderKeyInput: string;
   setAiProviderKeyInput: (value: string) => void;
   updateAiProviderConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<void>;
@@ -126,6 +128,8 @@ export default function SettingsModal({
   theme,
   setTheme,
   aiProviderStatus,
+  aiProviderStatusLoading = false,
+  aiProviderStatusError = null,
   aiProviderKeyInput,
   setAiProviderKeyInput,
   updateAiProviderConfig,
@@ -310,9 +314,17 @@ export default function SettingsModal({
                   ))}
                 </div>
                 <div className="ai-provider-status">
-                  <span>환경변수 키: {aiProviderStatus?.hasEnvKey ? "감지됨" : "없음"}</span>
-                  <span>저장된 키: {aiProviderStatus?.hasStoredKey ? "저장됨" : "없음"}</span>
-                  <span>상태: {aiProviderStatus?.available ? "사용 가능" : "수동 모드 대기"}</span>
+                  {aiProviderStatusLoading ? (
+                    <span>상태: 확인 중</span>
+                  ) : aiProviderStatusError ? (
+                    <span role="alert">상태 확인 실패: {aiProviderStatusError}</span>
+                  ) : aiProviderStatus ? (
+                    <>
+                      <span>환경변수 키: {aiProviderStatus.hasEnvKey ? "감지됨" : "없음"}</span>
+                      <span>저장된 키: {aiProviderStatus.hasStoredKey ? "저장됨" : "없음"}</span>
+                      <span>상태: {aiProviderStatus.available ? "사용 가능" : "수동 모드 대기"}</span>
+                    </>
+                  ) : <span>상태: 확인 대기</span>}
                 </div>
                 {settings.aiProvider.keySource === "tauri-settings" && (
                   <div className="ai-provider-key-row">

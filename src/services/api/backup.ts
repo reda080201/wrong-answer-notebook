@@ -27,6 +27,66 @@ export interface RestoreBackupResult {
   warnings: string[];
 }
 
+export async function selectBackupDestination(): Promise<string | null> {
+  if (!isTauri()) return null;
+  const backupPath = await save({
+    title: "백업 저장",
+    defaultPath: `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+    filters: [{ name: "ZIP", extensions: ["zip"] }],
+  });
+  return typeof backupPath === "string" ? backupPath : null;
+}
+
+export async function selectBackupSource(): Promise<string | File | null> {
+  if (isTauri()) {
+    const selected = await open({ multiple: false, filters: [{ name: "ZIP", extensions: ["zip"] }] });
+    return typeof selected === "string" ? selected : null;
+  }
+  return new Promise((resolve) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.onchange = () => resolve(input.files?.[0] ?? null);
+    input.click();
+  });
+}
+
+export async function createBackupAtDestination(
+  backupPath: string | null,
+  entries: WrongAnswerEntry[],
+  settings: AppSettings,
+): Promise<string> {
+  if (isTauri()) {
+    if (!backupPath) return "백업이 취소되었습니다.";
+    await invoke("create_backup_zip", { backupPath });
+    return `백업을 저장했습니다: ${backupPath}`;
+  }
+  const payload: BackupPayload = {
+    meta: { version: 1, createdAt: new Date().toISOString(), source: "browser" },
+    entries,
+    settings,
+    browserImages: Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""])),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  return "브라우저 백업 파일을 내려받았습니다.";
+}
+
+export async function restoreBackupFromSource(source: string | File): Promise<BackupPayload | RestoreBackupResult> {
+  if (isTauri()) {
+    const restored = await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: source });
+    clearImageUrlCache();
+    return restored;
+  }
+  if (!(source instanceof File)) throw new Error("브라우저 백업 파일을 찾을 수 없습니다.");
+  return JSON.parse(await source.text()) as BackupPayload;
+}
+
 export async function createBackup(
   entries: WrongAnswerEntry[],
   settings: AppSettings,
@@ -34,42 +94,14 @@ export async function createBackup(
 ): Promise<string> {
   try {
     if (isTauri()) {
-      const backupPath = await save({
-        title: "백업 저장",
-        defaultPath: `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.zip`,
-        filters: [{ name: "ZIP", extensions: ["zip"] }],
-      });
+      const backupPath = await selectBackupDestination();
       if (!backupPath) return "백업이 취소되었습니다.";
       await beforeSnapshot?.();
-      await invoke("create_backup_zip", { backupPath });
-      return `백업을 저장했습니다: ${backupPath}`;
+      return createBackupAtDestination(backupPath, entries, settings);
     }
 
     await beforeSnapshot?.();
-    const payload: BackupPayload = {
-      meta: {
-        version: 1,
-        createdAt: new Date().toISOString(),
-        source: "browser",
-      },
-      entries,
-      settings,
-      browserImages: Object.fromEntries(
-        Object.keys(localStorage)
-          .filter((key) => key.startsWith("img_"))
-          .map((key) => [key, localStorage.getItem(key) ?? ""]),
-      ),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-    return "브라우저 백업 파일을 내려받았습니다.";
+    return createBackupAtDestination(null, entries, settings);
   } catch (error) {
     throw new Error(errorMessage(error, "백업을 만들지 못했습니다."), {
       cause: error,
@@ -82,37 +114,16 @@ export async function restoreBackup(
 ): Promise<BackupPayload | RestoreBackupResult | null> {
   try {
     if (isTauri()) {
-      const selected = await open({
-        multiple: false,
-        filters: [{ name: "ZIP", extensions: ["zip"] }],
-      });
+      const selected = await selectBackupSource();
       if (!selected || Array.isArray(selected)) return null;
       await beforeRestore?.();
-      const restored = await invoke<RestoreBackupResult>("restore_backup_zip", { backupPath: selected });
-      clearImageUrlCache();
-      return restored;
+      return restoreBackupFromSource(selected);
     }
 
-    return new Promise((resolve, reject) => {
-      const input = document.createElement("input");
-      input.type = "file";
-      input.accept = "application/json,.json";
-      input.onchange = async () => {
-        const file = input.files?.[0];
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        try {
-          await beforeRestore?.();
-          const payload = JSON.parse(await file.text()) as BackupPayload;
-          resolve(payload);
-        } catch (error) {
-          reject(error);
-        }
-      };
-      input.click();
-    });
+    const selected = await selectBackupSource();
+    if (!selected) return null;
+    await beforeRestore?.();
+    return restoreBackupFromSource(selected);
   } catch (error) {
     throw new Error(errorMessage(error, "백업을 복원하지 못했습니다."), {
       cause: error,

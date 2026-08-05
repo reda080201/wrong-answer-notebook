@@ -33,6 +33,7 @@ import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import { useExamSessionController } from "./hooks/useExamSessionController";
 import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
+import { useMaintenanceCoordinator } from "./hooks/useMaintenanceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
@@ -147,6 +148,14 @@ export default function App() {
     listOpen: showGeneratedExams,
     setListOpen: setShowGeneratedExams,
   } = generatedExamController;
+  const runMaintenanceOperation = useMaintenanceCoordinator({
+    flushEntries,
+    flushSettings,
+    flushGeneratedExams,
+    setEntriesMaintenanceBlocked,
+    setSettingsMaintenanceBlocked,
+    setGeneratedExamsMaintenanceBlocked,
+  });
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -266,19 +275,16 @@ export default function App() {
     upsertMemoTemplate,
     removeMemoTemplate,
     refreshSettings,
-    flushEntries,
-    flushSettings,
-    flushGeneratedExams,
     refreshGeneratedExams: reloadGeneratedExams,
-    setEntriesMaintenanceBlocked,
-    setSettingsMaintenanceBlocked,
-    setGeneratedExamsMaintenanceBlocked,
+    runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
   });
 
   const {
     aiProviderStatus,
+    aiProviderStatusLoading,
+    aiProviderStatusError,
     aiProviderKeyInput,
     setAiProviderKeyInput,
     updateAiProviderConfig,
@@ -299,18 +305,10 @@ export default function App() {
       try {
         const { getVersion } = await import("@tauri-apps/api/app");
         const currentVersion = await getVersion();
-        await Promise.all([flushEntries(), flushSettings(), flushGeneratedExams]);
-        setEntriesMaintenanceBlocked(true);
-        setSettingsMaintenanceBlocked(true);
-        setGeneratedExamsMaintenanceBlocked(true);
-        await createPreUpdateBackup(currentVersion, update.latestVersion);
+        await runMaintenanceOperation(() => createPreUpdateBackup(currentVersion, update.latestVersion));
       } catch {
         actions.setSettingsMessage("업데이트 전 백업에 실패했습니다. 데이터를 보호하기 위해 설치를 중단했습니다.");
         return false;
-      } finally {
-        setEntriesMaintenanceBlocked(false);
-        setSettingsMaintenanceBlocked(false);
-        setGeneratedExamsMaintenanceBlocked(false);
       }
     }
     return true;
@@ -350,12 +348,7 @@ export default function App() {
     settings,
     patchSettings,
     report: setSettingsMessage,
-    flushEntries,
-    flushSettings,
-    flushGeneratedExams,
-    setEntriesMaintenanceBlocked,
-    setSettingsMaintenanceBlocked,
-    setGeneratedExamsMaintenanceBlocked,
+    runMaintenanceOperation,
   });
 
   const openSettings = (tab?: SettingsTab) => {
@@ -809,6 +802,8 @@ export default function App() {
           theme={theme}
           setTheme={setTheme}
           aiProviderStatus={aiProviderStatus}
+          aiProviderStatusLoading={aiProviderStatusLoading}
+          aiProviderStatusError={aiProviderStatusError}
           aiProviderKeyInput={aiProviderKeyInput}
           setAiProviderKeyInput={setAiProviderKeyInput}
           updateAiProviderConfig={updateAiProviderConfig}

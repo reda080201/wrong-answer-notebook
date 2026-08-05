@@ -8,6 +8,7 @@ import { getQuestionMetaForBlock, normalizeQuestionNumber } from "../utils/quest
 import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/difficulty";
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
+import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 
 interface ReviewPanelProps {
   title: string;
@@ -182,6 +183,7 @@ export default function ReviewPanel({
                 text={currentEntry.question}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
+                conceptContext={buildConceptLinkContext(currentEntry)}
               />
             </div>
           )}
@@ -207,6 +209,7 @@ export default function ReviewPanel({
                       text={currentEntry.correctAnswer}
                       onLinkClick={onWikiLinkClick}
                       existingTargets={existingTargets}
+                      conceptContext={buildConceptLinkContext(currentEntry)}
                     />
                   </p>
                 </div>
@@ -222,6 +225,7 @@ export default function ReviewPanel({
                       variant="fill"
                       onWikiLinkClick={onWikiLinkClick}
                       existingTargets={existingTargets}
+                      conceptContext={buildConceptLinkContext(currentEntry)}
                     />
                   ))}
                 </div>
@@ -294,7 +298,7 @@ function SheetQuestionReviewCard({
           오답 원인: {meta.mistakeAnalysis.causes.map((cause) => mistakeCauseLabel(cause.type)).join(", ")}
         </p>
       ) : null}
-      <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+      <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={buildConceptLinkContext(entry, block.numberLabel)} />
       {block.choices.length > 0 && (
         <ol className="review-choice-list">
           {block.choices.map((choice) => (
@@ -332,7 +336,7 @@ function SheetQuestionAnswer({
         .map((text, index) => (
           <div key={`${index}-${text.slice(0, 12)}`}>
             <label>{index === 0 && answer.strategy ? "풀이 전략" : "해설/메모"}</label>
-            <LinkifiedText text={text} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+            <LinkifiedText text={text} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={buildConceptLinkContext(entry, answer.questionNumber)} />
           </div>
         ))}
     </>

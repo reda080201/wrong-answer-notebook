@@ -1,5 +1,6 @@
 import ImageGallery from "./ImageGallery";
 import { LinkifiedText } from "../utils/wikiLinks";
+import type { ConceptLinkResolveContext } from "../features/learning/utils/conceptIndex";
 
 interface ContentBlockProps {
   text?: string;
@@ -8,6 +9,7 @@ interface ContentBlockProps {
   label?: string;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  conceptContext?: ConceptLinkResolveContext;
 }
 
 export default function ContentBlock({
@@ -17,6 +19,7 @@ export default function ContentBlock({
   label,
   onWikiLinkClick,
   existingTargets,
+  conceptContext,
 }: ContentBlockProps) {
   const hasText = Boolean(text?.trim());
   const hasImages = images.length > 0;
@@ -36,6 +39,7 @@ export default function ContentBlock({
             text={text}
             onLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
+            conceptContext={conceptContext}
           />
         </div>
       )}

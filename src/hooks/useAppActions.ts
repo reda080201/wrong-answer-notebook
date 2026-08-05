@@ -3,11 +3,13 @@ import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
-  createBackup,
+  createBackupAtDestination,
   deleteImage,
   previewOrphanImages,
   rewriteImportAssetReferences,
-  restoreBackup,
+  restoreBackupFromSource,
+  selectBackupDestination,
+  selectBackupSource,
   saveImportAssetFiles,
   runNativeIntegrityCheck,
 } from "../api";
@@ -99,13 +101,8 @@ interface UseAppActionsOptions {
   setSettings: (settings: AppSettings) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
-  flushEntries?: () => Promise<void>;
-  flushSettings?: () => Promise<void>;
-  flushGeneratedExams?: () => Promise<void>;
   refreshGeneratedExams?: () => Promise<void>;
-  setEntriesMaintenanceBlocked?: (blocked: boolean) => void;
-  setSettingsMaintenanceBlocked?: (blocked: boolean) => void;
-  setGeneratedExamsMaintenanceBlocked?: (blocked: boolean) => void;
+  runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
 }
@@ -134,23 +131,13 @@ export function useAppActions({
   setSettings,
   patchSettings,
   refreshSettings,
-  flushEntries,
-  flushSettings,
-  flushGeneratedExams,
   refreshGeneratedExams,
-  setEntriesMaintenanceBlocked,
-  setSettingsMaintenanceBlocked,
-  setGeneratedExamsMaintenanceBlocked,
+  runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
 }: UseAppActionsOptions) {
   const { confirm, prompt } = useAppDialog();
   const maintenanceRef = useRef<Promise<void> | null>(null);
-  const setMaintenanceBlocked = (blocked: boolean) => {
-    setEntriesMaintenanceBlocked?.(blocked);
-    setSettingsMaintenanceBlocked?.(blocked);
-    setGeneratedExamsMaintenanceBlocked?.(blocked);
-  };
   const [prefilledTitle, setPrefilledTitle] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -539,18 +526,22 @@ export function useAppActions({
 
   const handleBackup = async () => {
     if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const destination = await selectBackupDestination();
+    if (isTauri() && !destination) {
+      setSettingsMessage("백업이 취소되었습니다.");
+      return;
+    }
     const operation = (async () => {
-      const message = await createBackup(entries, settings, async () => {
-        await Promise.all([flushEntries?.(), flushSettings?.(), flushGeneratedExams?.()]);
-        if (isTauri()) setMaintenanceBlocked(true);
-      });
+      const writeBackup = () => createBackupAtDestination(destination, entries, settings);
+      const message = runMaintenanceOperation
+        ? await runMaintenanceOperation(writeBackup)
+        : await writeBackup();
       setSettingsMessage(message);
     })();
     maintenanceRef.current = operation;
     try {
       await operation;
     } finally {
-      if (isTauri()) setMaintenanceBlocked(false);
       maintenanceRef.current = null;
     }
     if (isTauri()) {
@@ -561,11 +552,13 @@ export function useAppActions({
   const handleRestore = async () => {
     if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
     if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const source = await selectBackupSource();
+    if (!source) return;
     const operation = (async () => {
-      const payload = await restoreBackup(async () => {
-        await Promise.all([flushEntries?.(), flushSettings?.(), flushGeneratedExams?.()]);
-        if (isTauri()) setMaintenanceBlocked(true);
-      });
+      const readBackup = () => restoreBackupFromSource(source);
+      const payload = runMaintenanceOperation
+        ? await runMaintenanceOperation(readBackup)
+        : await readBackup();
       if (payload && "entries" in payload) {
         await replaceEntries(payload.entries);
         await setSettings(payload.settings);
@@ -583,7 +576,6 @@ export function useAppActions({
     try {
       await operation;
     } finally {
-      if (isTauri()) setMaintenanceBlocked(false);
       maintenanceRef.current = null;
     }
   };

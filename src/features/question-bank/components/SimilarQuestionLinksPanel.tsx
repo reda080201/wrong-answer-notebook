@@ -57,7 +57,7 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
   const failedTargetRef = useRef<SimilarQuestionLink[] | null>(null);
   const failedBaseRef = useRef("");
   const linksRef = useRef(links);
-  const latestPropLinksRef = useRef(links);
+  const latestSuccessfulLinksRef = useRef(links);
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
   const pendingSaveCountRef = useRef(0);
   const saveRevisionRef = useRef(0);
@@ -72,8 +72,10 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
   // Prop updates are authoritative once queued saves have drained. Until then the event
   // handlers use the local snapshot so rapid clicks cannot build from stale props.
   useEffect(() => {
-    latestPropLinksRef.current = links;
-    if (pendingSaveCountRef.current === 0) linksRef.current = links;
+    if (pendingSaveCountRef.current === 0) {
+      linksRef.current = links;
+      latestSuccessfulLinksRef.current = links;
+    }
   }, [linkSignature, links]);
 
   useEffect(() => {
@@ -129,9 +131,8 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     }
   };
 
-  const save = (mutate: (current: SimilarQuestionLink[]) => SimilarQuestionLink[]) => {
-    const next = mutate(linksRef.current);
-    if (next === linksRef.current) return Promise.resolve();
+  const persistLinks = (next: SimilarQuestionLink[], options: { force?: boolean } = {}) => {
+    if (!options.force && next === linksRef.current) return Promise.resolve();
     linksRef.current = next;
     const revision = ++saveRevisionRef.current;
     pendingSaveCountRef.current += 1;
@@ -140,6 +141,7 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     const operation = saveQueueRef.current.catch(() => undefined).then(async () => {
       await onChange(next);
       if (revision !== saveRevisionRef.current) return;
+      latestSuccessfulLinksRef.current = next;
       failedTargetRef.current = null;
       failedBaseRef.current = "";
       setHasRetryableSave(false);
@@ -157,13 +159,30 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     return operation;
   };
 
+  const save = (mutate: (current: SimilarQuestionLink[]) => SimilarQuestionLink[]) =>
+    persistLinks(mutate(linksRef.current));
+
+  const retrySave = () => {
+    const target = failedTargetRef.current;
+    if (target) void persistLinks(target, { force: true });
+  };
+
+  const discardFailedSave = () => {
+    saveRevisionRef.current += 1;
+    linksRef.current = latestSuccessfulLinksRef.current;
+    failedTargetRef.current = null;
+    failedBaseRef.current = "";
+    setHasRetryableSave(false);
+    setSaveError(null);
+  };
+
   const approved = links.filter((link) => link.status === "approved");
   const rejected = links.filter((link) => link.status === "rejected");
   const busy = rankingBusy || saveBusy;
 
   return <section className="similar-question-links" aria-label={label}>
     <header><strong>{label} {approved.length}개</strong><button type="button" onClick={() => setOpen((value) => !value)} disabled={busy}>{open ? "추천 닫기" : "유사 문제 찾기"}</button></header>
-    {saveError && <p role="alert" className="form-hint">{saveError}<button type="button" className="btn-secondary" disabled={busy || !hasRetryableSave} onClick={() => { const target = failedTargetRef.current; if (target) void save(() => target); }}>다시 저장</button><button type="button" className="btn-secondary" disabled={busy} onClick={() => { failedTargetRef.current = null; failedBaseRef.current = ""; setHasRetryableSave(false); setSaveError(null); }}>취소</button></p>}
+    {saveError && <p role="alert" className="form-hint">{saveError}<button type="button" className="btn-secondary" disabled={busy || !hasRetryableSave} onClick={retrySave}>다시 저장</button><button type="button" className="btn-secondary" disabled={busy} onClick={discardFailedSave}>취소</button></p>}
     {approved.length > 0 && <ul>{approved.map((link) => { const item = items.find((candidate) => candidate.entryId === link.targetEntryId && candidate.questionNumber === link.targetQuestionNumber); return <li key={link.id}>{item ? <button type="button" onClick={() => onOpen(item.entryId, item.questionNumber)}>{item.entryTitle} {item.questionNumber}번 · {link.score ?? 0}점</button> : <span>연결된 문제를 찾을 수 없음 ({link.targetEntryId} {link.targetQuestionNumber}번)</span>}<button type="button" aria-label="관련 문제 연결 해제" onClick={() => void save((current) => current.filter((candidate) => candidate.id !== link.id))} disabled={rankingBusy}>해제</button></li>; })}</ul>}
     {rejected.length > 0 && <details><summary>거절한 후보 {rejected.length}개 관리</summary><ul>{rejected.map((link) => <li key={link.id}><span>{link.targetEntryId} {link.targetQuestionNumber}번</span><button type="button" onClick={() => void save((current) => current.filter((candidate) => candidate.id !== link.id))} disabled={rankingBusy}>다시 추천</button></li>)}</ul></details>}
     {open && <div className="similar-question-suggestions"><p>현재 저장된 문제에서만 추천합니다.</p><button type="button" onClick={() => void rerankWithGemini()} disabled={busy || suggestions.length === 0}>Gemini로 기존 후보 재정렬</button>{payloadTruncated && <p className="form-hint">Gemini 재정렬을 위해 일부 후보 본문 또는 해설을 축약했습니다.</p>}{geminiError && <p role="alert">{geminiError}</p>}{displaySuggestions.map((suggestion) => { const existing = links.find((link) => linkKey(link) === `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`); const isGeminiRanked = geminiRankedIds.has(suggestion.candidate.id); const source = isGeminiRanked ? "gemini" : "local"; return <article key={suggestion.candidate.id}><div><strong>{suggestion.candidate.entryTitle} {suggestion.candidate.questionNumber}번</strong><span>{suggestion.score}점 · {suggestion.reasons.join(", ") || "관련 후보"}</span>{suggestion.sharedConcepts.length > 0 && <span>공통 개념: {suggestion.sharedConcepts.join(", ")}</span>}{suggestion.differences.length > 0 && <span>차이: {suggestion.differences.join(", ")}</span>}</div><button type="button" onClick={() => onOpen(suggestion.candidate.entryId, suggestion.candidate.questionNumber)}>열기</button><button type="button" disabled={rankingBusy || Boolean(existing)} onClick={() => void save((current) => { const candidateKey = `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`; if (current.some((link) => linkKey(link) === candidateKey)) return current; return [...current, ...approveSimilarQuestionLinks([createSimilarQuestionLink(suggestion, source, undefined, source === "gemini" ? geminiProvenance ?? undefined : undefined)])]; })}>연결</button><button type="button" disabled={rankingBusy || Boolean(existing)} onClick={() => void save((current) => { const candidateKey = `${suggestion.candidate.entryId}:${suggestion.candidate.questionNumber}`; if (current.some((link) => linkKey(link) === candidateKey)) return current; return [...current, ...rejectSimilarQuestionLinks([createSimilarQuestionLink(suggestion)])]; })}>거절</button></article>; })}</div>}

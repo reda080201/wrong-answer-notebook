@@ -1,4 +1,5 @@
 import type { WrongAnswerEntry } from "../../../types";
+import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { projectLearningBlocks, type LearningHubItem } from "./learningHub";
 
 export interface ConceptIndexItem {
@@ -13,6 +14,17 @@ export interface ConceptLinkResolveContext {
   unit?: string;
   /** Explicit source links take precedence over a loose alias match. */
   referencedEntryIds?: string[];
+}
+
+export function buildConceptLinkContext(
+  sourceEntry: WrongAnswerEntry,
+  questionNumber?: string,
+): ConceptLinkResolveContext {
+  const normalizedQuestionNumber = questionNumber ? normalizeQuestionNumber(questionNumber) : "";
+  const questionMeta = normalizedQuestionNumber
+    ? normalizeQuestionMeta(sourceEntry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedQuestionNumber)
+    : undefined;
+  return { sourceEntry, unit: questionMeta?.classification?.unit };
 }
 
 export type ConceptIndex = Map<string, ConceptIndexItem[]>;

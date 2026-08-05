@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import SimilarQuestionLinksPanel from "./SimilarQuestionLinksPanel";
@@ -13,12 +13,30 @@ describe("SimilarQuestionLinksPanel", () => {
   afterEach(() => vi.restoreAllMocks());
 
   it("keeps the existing links and offers retry after a save failure", async () => {
-    const onChange = vi.fn().mockRejectedValue(new Error("disk"));
+    const onChange = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
     render(<SimilarQuestionLinksPanel sourceEntry={source} block={block} links={[]} items={[item]} onOpen={vi.fn()} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "유사 문제 찾기" }));
     fireEvent.click(screen.getByRole("button", { name: "연결" }));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("관련 문제 연결을 저장하지 못했습니다."));
     expect(screen.getByRole("button", { name: "다시 저장" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "다시 저장" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+    expect(onChange.mock.calls[1][0]).toEqual(onChange.mock.calls[0][0]);
+  });
+
+  it("discards a failed optimistic link before the next mutation", async () => {
+    const onChange = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValue(undefined);
+    render(<SimilarQuestionLinksPanel sourceEntry={source} block={block} links={[]} items={[item, secondItem]} onOpen={vi.fn()} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "유사 문제 찾기" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "연결" })[0]);
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "취소" }));
+    const secondCandidate = screen.getByText("다른 기출 2번").closest("article");
+    expect(secondCandidate).not.toBeNull();
+    fireEvent.click(within(secondCandidate!).getByRole("button", { name: "연결" }));
+    await waitFor(() => expect(onChange).toHaveBeenCalledTimes(2));
+    expect(onChange.mock.calls[1][0]).toHaveLength(1);
+    expect(onChange.mock.calls[1][0][0]).toMatchObject({ targetEntryId: "other" });
   });
 
   it("keeps local candidates when Gemini returns no allowed results", async () => {

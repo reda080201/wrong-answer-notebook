@@ -8,24 +8,14 @@ interface UseAppMaintenanceOptions {
   settings: AppSettings;
   patchSettings(patch: Partial<AppSettings>): Promise<void>;
   report(message: string): void;
-  flushEntries(): Promise<void>;
-  flushSettings(): Promise<void>;
-  flushGeneratedExams(): Promise<void>;
-  setEntriesMaintenanceBlocked(blocked: boolean): void;
-  setSettingsMaintenanceBlocked(blocked: boolean): void;
-  setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
+  runMaintenanceOperation<T>(task: () => Promise<T>): Promise<T>;
 }
 
 export function useAppMaintenance({
   settings,
   patchSettings,
   report,
-  flushEntries,
-  flushSettings,
-  flushGeneratedExams,
-  setEntriesMaintenanceBlocked,
-  setSettingsMaintenanceBlocked,
-  setGeneratedExamsMaintenanceBlocked,
+  runMaintenanceOperation,
 }: UseAppMaintenanceOptions) {
   useEffect(() => {
     if (!isTauri()) return;
@@ -45,17 +35,7 @@ export function useAppMaintenance({
 
     let cancelled = false;
     void (async () => {
-      await Promise.all([flushEntries(), flushSettings(), flushGeneratedExams()]);
-      setEntriesMaintenanceBlocked(true);
-      setSettingsMaintenanceBlocked(true);
-      setGeneratedExamsMaintenanceBlocked(true);
-      try {
-        await createAutoBackup();
-      } finally {
-        setEntriesMaintenanceBlocked(false);
-        setSettingsMaintenanceBlocked(false);
-        setGeneratedExamsMaintenanceBlocked(false);
-      }
+      await runMaintenanceOperation(() => createAutoBackup());
       if (cancelled) return;
       await patchSettings({
         autoBackup: {
@@ -67,5 +47,5 @@ export function useAppMaintenance({
       if (!cancelled) report("자동 백업에 실패했습니다. 설정에서 수동 백업을 실행해 주세요.");
     });
     return () => { cancelled = true; };
-  }, [flushEntries, flushGeneratedExams, flushSettings, patchSettings, report, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setSettingsMaintenanceBlocked, settings.autoBackup]);
+  }, [patchSettings, report, runMaintenanceOperation, settings.autoBackup]);
 }

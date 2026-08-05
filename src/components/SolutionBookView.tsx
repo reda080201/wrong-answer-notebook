@@ -3,6 +3,7 @@ import type { ExplanationPart, SheetAnswerItem, WrongAnswerEntry } from "../type
 import { LinkifiedText } from "../utils/wikiLinks";
 import ContentBlock from "./ContentBlock";
 import MathText from "./MathText";
+import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 
 interface SolutionBookViewProps {
   entry: WrongAnswerEntry;
@@ -45,15 +46,18 @@ function SolutionRow({
 
 function SheetSolutionCard({
   item,
+  entry,
   hideAnswers,
   onWikiLinkClick,
   existingTargets,
 }: {
   item: SheetAnswerItem;
+  entry: WrongAnswerEntry;
   hideAnswers: boolean;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }) {
+  const conceptContext = buildConceptLinkContext(entry, item.questionNumber);
   const steps = item.steps?.length ? item.steps : explanationSteps(item.explanation);
   const wrongPoints = item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints;
   return (
@@ -95,7 +99,7 @@ function SheetSolutionCard({
           <ol className="solution-steps">
             {steps.map((step, index) => (
               <li key={`${item.id}-step-${index}`}>
-                <LinkifiedText text={step} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+                <LinkifiedText text={step} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
               </li>
             ))}
           </ol>
@@ -146,6 +150,7 @@ function WrongAnswerSolution({
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }) {
+  const conceptContext = buildConceptLinkContext(entry);
   const parts = entry.explanationParts.filter((part) => part.text.trim() || part.images.length > 0);
   return (
     <div className="solution-book-card">
@@ -154,12 +159,12 @@ function WrongAnswerSolution({
       </header>
       {entry.myAnswer.trim() && (
         <SolutionRow label="내 답">
-          <LinkifiedText text={entry.myAnswer} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          <LinkifiedText text={entry.myAnswer} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
         </SolutionRow>
       )}
       {entry.correctAnswer.trim() && (
         <SolutionRow label="정답">
-          <LinkifiedText text={entry.correctAnswer} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          <LinkifiedText text={entry.correctAnswer} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
         </SolutionRow>
       )}
       {parts.length > 0 && (
@@ -174,6 +179,7 @@ function WrongAnswerSolution({
                   variant="fill"
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
+                  conceptContext={conceptContext}
                 />
               </section>
             ))}
@@ -182,7 +188,7 @@ function WrongAnswerSolution({
       )}
       {entry.memo.trim() && (
         <SolutionRow label="다음 복습">
-          <LinkifiedText text={entry.memo} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          <LinkifiedText text={entry.memo} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
         </SolutionRow>
       )}
     </div>
@@ -218,6 +224,7 @@ export default function SolutionBookView({
               <SheetSolutionCard
                 key={item.id}
                 item={item}
+                entry={entry}
                 hideAnswers={hideAnswers}
                 onWikiLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}

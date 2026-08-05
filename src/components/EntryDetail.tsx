@@ -44,6 +44,7 @@ import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
 import SimilarQuestionLinksPanel from "../features/question-bank/components/SimilarQuestionLinksPanel";
 import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
+import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import {
   ConceptChecklistSection,
   ConceptConnectionsSection,
@@ -1091,6 +1092,7 @@ export default function EntryDetail({
                       text={item.explanation}
                       onLinkClick={onWikiLinkClick}
                       existingTargets={existingTargets}
+                      conceptContext={buildConceptLinkContext(entry, item.questionNumber)}
                     />
                   )}
                 </div>
@@ -1165,6 +1167,7 @@ export default function EntryDetail({
                 text={focusedAnswer.explanation}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
+                conceptContext={buildConceptLinkContext(entry, focusedAnswer.questionNumber)}
               />
             )}
           </div>
@@ -1219,6 +1222,7 @@ export default function EntryDetail({
                 text={entry.memo}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
+                conceptContext={buildConceptLinkContext(entry)}
               />
             </div>
           </section>
@@ -2003,6 +2007,7 @@ export default function EntryDetail({
           }
           answer={theaterAnswer}
           questionMeta={theaterQuestionMeta}
+          sourceEntry={entry}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}

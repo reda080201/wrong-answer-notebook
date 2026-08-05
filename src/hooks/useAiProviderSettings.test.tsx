@@ -54,7 +54,7 @@ describe("useAiProviderSettings", () => {
     const setSettingsMessage = vi.fn();
     getAiProviderStatus.mockRejectedValueOnce(new Error("상태 조회 실패"));
 
-    renderHook(() =>
+    const { result } = renderHook(() =>
       useAiProviderSettings({
         aiProvider: provider,
         refreshSettings: vi.fn().mockResolvedValue(undefined),
@@ -65,6 +65,8 @@ describe("useAiProviderSettings", () => {
     await waitFor(() => {
       expect(setSettingsMessage).toHaveBeenCalledWith("상태 조회 실패");
     });
+    expect(result.current.aiProviderStatus).toBeNull();
+    expect(result.current.aiProviderStatusError).toBe("상태 조회 실패");
   });
 
   it("does not let an older status request overwrite the latest provider status", async () => {
