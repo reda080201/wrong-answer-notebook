@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
@@ -42,6 +42,8 @@ import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace"
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
 import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
 import type { LibraryFolder } from "./types";
+import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
+import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 
 export default function App() {
   const { confirm, prompt } = useAppDialog();
@@ -105,11 +107,11 @@ export default function App() {
     questionNumber: string;
     requestId: number;
   } | null>(null);
-  const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
-  const questionBankPreferenceFlushRef = useRef<(() => Promise<void>) | null>(null);
-  const registerQuestionBankPreferenceFlush = useCallback((flush: (() => Promise<void>) | null) => {
-    questionBankPreferenceFlushRef.current = flush;
-  }, []);
+  const {
+    registerWorkspaceDraftFlush,
+    registerQuestionBankPreferenceFlush,
+    flushTransientWrites,
+  } = useAppWriteRegistrations();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
@@ -140,10 +142,6 @@ export default function App() {
     flush: flushExamSessionSave,
     submit: handleExamSubmit,
   } = exam;
-
-  const registerWorkspaceDraftFlush = useCallback((flush: (() => Promise<void>) | null) => {
-    workspaceDraftFlushRef.current = flush;
-  }, []);
 
   const generatedExamController = useGeneratedExamController({
     examPrintPreferences: settings.examPrintPreferences,
@@ -200,33 +198,19 @@ export default function App() {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
 
-  const requestNavigation = useCallback(async (target: {
-    section?: EntryKind;
-    entryId?: string | null;
-    question?: { entryId: string; questionNumber: string };
-  }): Promise<boolean> => {
-    if (examSubmitting) {
-      setExamSaveError("시험 제출 중에는 이동할 수 없습니다.");
-      return false;
-    }
-    if (examSession) {
-      const isSameEntry = target.entryId === undefined || target.entryId === examSession.entryId;
-      const isSameSection = target.section === undefined || target.section === activeSection;
-      if (!isSameEntry || !isSameSection) {
-        const closed = await closeExamSession();
-        if (!closed) return false;
-      }
-    }
-    if (target.section) setActiveSection(target.section);
-    setShowLearningHub(false);
-    setShowQuestionBank(false);
-    setShowLibraryExplorer(false);
-    if (target.entryId !== undefined) setSelectedId(target.entryId);
-    if (target.question) {
-      setQuestionTarget({ ...target.question, requestId: Date.now() });
-    }
-    return true;
-  }, [activeSection, closeExamSession, examSession, examSubmitting, setActiveSection, setExamSaveError, setSelectedId]);
+  const requestNavigation = useNotebookNavigationController({
+    activeSection,
+    examSubmitting,
+    examSession,
+    closeExamSession,
+    setActiveSection,
+    setSelectedId,
+    setShowLearningHub,
+    setShowQuestionBank,
+    setShowLibraryExplorer,
+    setQuestionTarget,
+    setExamSaveError,
+  });
 
   const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose } = useWindowCloseGuard({
     activeExam: examSession,
@@ -235,10 +219,7 @@ export default function App() {
     flushEntries,
     flushGeneratedExams,
     flushSettings,
-    flushImportWorkspaceDraft: async () => {
-      await workspaceDraftFlushRef.current?.();
-      await questionBankPreferenceFlushRef.current?.();
-    },
+    flushImportWorkspaceDraft: flushTransientWrites,
   });
 
   useEffect(() => {
