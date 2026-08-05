@@ -253,6 +253,32 @@ fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Resu
 }
 
 #[tauri::command]
+fn load_gpt_solution_roundtrip_drafts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("gpt-solution-drafts.json");
+    if !path.exists() {
+        return Ok(serde_json::json!([]));
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let drafts: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    if !drafts.is_array() {
+        return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
+    }
+    Ok(drafts)
+}
+
+#[tauri::command]
+fn save_gpt_solution_roundtrip_drafts(
+    app: tauri::AppHandle,
+    drafts: serde_json::Value,
+) -> Result<(), String> {
+    if !drafts.is_array() {
+        return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
+    }
+    write_json_atomic(&app_dir(&app)?.join("gpt-solution-drafts.json"), &drafts)
+}
+
+#[tauri::command]
 fn get_mcp_bridge_status(
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
 ) -> mcp_bridge::McpBridgeStatus {
@@ -682,6 +708,8 @@ pub fn run() {
             save_exam_sessions,
             load_generated_exams,
             save_generated_exams,
+            load_gpt_solution_roundtrip_drafts,
+            save_gpt_solution_roundtrip_drafts,
             load_settings,
             save_settings,
             ai::get_ai_provider_status,
