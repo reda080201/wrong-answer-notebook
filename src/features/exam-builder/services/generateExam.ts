@@ -84,7 +84,7 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string)
     question: block.body,
     choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`),
     questionImages: [],
-    sourcePageImages: entry.questionImages ?? [],
+    sourcePageImages: entry.sourcePageImages ?? [],
     figures: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number),
     contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => normalizeQuestionNumber(key) === number)?.[1],
     correctAnswer: answer?.answer,
