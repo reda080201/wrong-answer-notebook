@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   clearAiProviderKey,
@@ -22,12 +22,30 @@ export function useAiProviderSettings({
   const [aiProviderStatus, setAiProviderStatus] =
     useState<AiProviderStatus | null>(null);
   const [aiProviderKeyInput, setAiProviderKeyInput] = useState("");
+  const statusRequestRef = useRef(0);
 
   useEffect(() => {
-    void getAiProviderStatus().then(setAiProviderStatus);
-  }, [aiProvider]);
+    const requestId = ++statusRequestRef.current;
+
+    void getAiProviderStatus()
+      .then((status) => {
+        if (statusRequestRef.current === requestId) {
+          setAiProviderStatus(status);
+        }
+      })
+      .catch((statusError: unknown) => {
+        if (statusRequestRef.current === requestId) {
+          setSettingsMessage(
+            statusError instanceof Error
+              ? statusError.message
+              : "AI Provider 상태를 불러오지 못했습니다.",
+          );
+        }
+      });
+  }, [aiProvider, setSettingsMessage]);
 
   const updateAiProviderConfig = async (patch: Partial<AiProviderSettings>) => {
+    const requestId = ++statusRequestRef.current;
     const next: AiProviderSettings = {
       ...aiProvider,
       ...patch,
@@ -35,7 +53,9 @@ export function useAiProviderSettings({
     if (next.type === "manual") next.enabled = false;
     try {
       const status = await saveAiProviderConfig(next);
-      setAiProviderStatus(status);
+      if (statusRequestRef.current === requestId) {
+        setAiProviderStatus(status);
+      }
       await refreshSettings();
       setSettingsMessage("AI Provider 설정을 저장했습니다.");
     } catch (configError) {
@@ -52,10 +72,13 @@ export function useAiProviderSettings({
       setSettingsMessage("저장할 API key를 입력하세요.");
       return;
     }
+    const requestId = ++statusRequestRef.current;
     try {
       const status = await saveAiProviderKey(aiProviderKeyInput.trim());
       setAiProviderKeyInput("");
-      setAiProviderStatus(status);
+      if (statusRequestRef.current === requestId) {
+        setAiProviderStatus(status);
+      }
       await refreshSettings();
       setSettingsMessage("AI Provider key를 저장했습니다.");
     } catch (keyError) {
@@ -66,9 +89,12 @@ export function useAiProviderSettings({
   };
 
   const removeAiProviderKey = async () => {
+    const requestId = ++statusRequestRef.current;
     try {
       const status = await clearAiProviderKey();
-      setAiProviderStatus(status);
+      if (statusRequestRef.current === requestId) {
+        setAiProviderStatus(status);
+      }
       await refreshSettings();
       setSettingsMessage("저장된 AI Provider key를 삭제했습니다.");
     } catch (keyError) {
