@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   getMcpBridgeStatus,
@@ -59,8 +59,11 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   const [connectionTesting, setConnectionTesting] = useState(false);
   const [pairingSession, setPairingSession] = useState<McpBridgePairingSession | null>(null);
   const [pairingPending, setPairingPending] = useState(false);
+  const configRef = useRef(config);
+  const operationRef = useRef(Promise.resolve());
+  const revisionRef = useRef(0);
 
-  useEffect(() => { setConfig(suppliedConfig); }, [suppliedConfig]);
+  useEffect(() => { configRef.current = suppliedConfig; setConfig(suppliedConfig); }, [suppliedConfig]);
 
   const refreshMcpBridgeStatus = useCallback(async () => {
     if (!isTauri()) {
@@ -85,20 +88,35 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   useEffect(() => { void refreshMcpBridgeStatus(); }, [refreshMcpBridgeStatus]);
 
   const updateMcpBridgeConfig = useCallback(async (patch: Partial<McpBridgeSettings>) => {
-    if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
-    const port = patch.port === undefined ? config.port : Math.min(65535, Math.max(1024, Math.round(patch.port)));
-    const next = { ...config, ...patch, port };
-    try {
-      // A live port edit is a server restart operation, not merely a setting write.
-      const shouldApplyRuntime = patch.enabled !== undefined || (patch.port !== undefined && config.enabled);
-      const status = shouldApplyRuntime ? await setMcpBridgeEnabled(Boolean(next.enabled), port) : null;
-      await persistMcpBridge?.(next);
-      setConfig(next);
-      setPortInput(String(port));
-      setRuntimeStatus(status ? toRuntimeStatus(status) : await refreshMcpBridgeStatus());
-      setSettingsMessage("로컬 MCP 브리지 설정을 저장했습니다.");
-    } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "MCP 브리지 설정을 저장하지 못했습니다."); }
-  }, [config, persistMcpBridge, refreshMcpBridgeStatus, setSettingsMessage]);
+    const operation = async () => {
+      if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+      const previous = configRef.current;
+      const port = patch.port === undefined ? previous.port : Math.min(65535, Math.max(1024, Math.round(patch.port)));
+      const next = { ...previous, ...patch, port };
+      const revision = ++revisionRef.current;
+      const shouldApplyRuntime = patch.enabled !== undefined || (patch.port !== undefined && previous.enabled);
+      try {
+        const status = shouldApplyRuntime ? await setMcpBridgeEnabled(Boolean(next.enabled), port) : null;
+        await persistMcpBridge?.(next);
+        if (revision !== revisionRef.current) return;
+        configRef.current = next;
+        setConfig(next);
+        setPortInput(String(port));
+        setRuntimeStatus(status ? toRuntimeStatus(status) : await refreshMcpBridgeStatus());
+        setSettingsMessage("로컬 MCP 브리지 설정을 저장했습니다.");
+      } catch (error) {
+        if (shouldApplyRuntime) {
+          try { await setMcpBridgeEnabled(Boolean(previous.enabled), previous.port); } catch { /* runtime rollback is best effort */ }
+          await refreshMcpBridgeStatus();
+        }
+        if (revision === revisionRef.current) setSettingsMessage(error instanceof Error ? error.message : "MCP 브리지 설정을 저장하지 못했습니다.");
+        throw error;
+      }
+    };
+    const queued = operationRef.current.then(operation, operation);
+    operationRef.current = queued.then(() => undefined, () => undefined);
+    await queued;
+  }, [persistMcpBridge, refreshMcpBridgeStatus, setSettingsMessage]);
 
   const applyMcpBridgePort = useCallback(async () => {
     const port = Number.parseInt(portInput, 10);

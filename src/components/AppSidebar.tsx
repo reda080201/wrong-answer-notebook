@@ -37,6 +37,8 @@ interface AppSidebarProps {
   onOpenLearningHub?: () => void;
   questionBankOpen?: boolean;
   onOpenQuestionBank?: () => void;
+  libraryOpen?: boolean;
+  onOpenLibrary?: () => void;
 }
 
 const sectionTabs = [
@@ -69,6 +71,8 @@ export default function AppSidebar({
   onOpenLearningHub,
   questionBankOpen = false,
   onOpenQuestionBank,
+  libraryOpen = false,
+  onOpenLibrary,
 }: AppSidebarProps) {
   const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
   const sidebarStats =
@@ -146,6 +150,16 @@ export default function AppSidebar({
             onClick={onOpenQuestionBank}
           >
             문제 은행
+          </button>
+        )}
+        {onOpenLibrary && (
+          <button
+            type="button"
+            className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
+            aria-current={libraryOpen ? "page" : undefined}
+            onClick={onOpenLibrary}
+          >
+            보관함
           </button>
         )}
       </div>

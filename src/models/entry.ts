@@ -278,6 +278,9 @@ export interface QuestionRating {
 
 export interface WrongAnswerEntry {
   id: string;
+  /** 사용자가 정리한 보관 위치. sheetGroup과 독립적입니다. */
+  folderId?: string;
+  /** 시험 제출에서 생성된 오답의 중복 방지 provenance입니다. */
   generatedFromExamSessionId?: string;
   generatedFromQuestionNumber?: string;
   subject: string;

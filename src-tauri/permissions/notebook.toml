@@ -8,6 +8,8 @@ commands.allow = [
   "save_settings",
   "load_gpt_solution_roundtrip_drafts",
   "save_gpt_solution_roundtrip_drafts",
+  "load_library_folders",
+  "save_library_folders",
   "get_ai_provider_status",
   "save_ai_provider_config",
   "save_ai_provider_key",

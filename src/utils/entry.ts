@@ -760,6 +760,9 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
 
   return {
     ...rest,
+    folderId: typeof rest.folderId === "string" && rest.folderId.trim()
+      ? rest.folderId.trim()
+      : undefined,
     generatedFromExamSessionId:
       typeof rest.generatedFromExamSessionId === "string" && rest.generatedFromExamSessionId.trim()
         ? rest.generatedFromExamSessionId.trim()

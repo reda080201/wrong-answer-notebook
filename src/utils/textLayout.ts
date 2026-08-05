@@ -207,6 +207,13 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
         start: choiceRange.start,
         end: choiceRange.end,
       });
+    } else if (choices.length > 0 && !isQuestionStart(line.text, lines[lines.indexOf(line) - 1])) {
+      const previous = choices[choices.length - 1];
+      const continuation = line.text.trim();
+      if (continuation) {
+        previous.text = `${previous.text}\n${continuation}`.trim();
+        previous.end = line.end;
+      }
     } else {
       bodyRanges.push({ start: line.start, end: line.end });
     }

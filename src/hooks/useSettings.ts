@@ -36,6 +36,11 @@ export function useSettings() {
     loadedRef.current = false;
     try {
       setSettingsError(null);
+      await drain();
+      if (refreshMutation !== mutationRef.current) {
+        loadedRef.current = true;
+        return;
+      }
       const loaded = await loadSettings();
       if (refreshMutation === mutationRef.current) {
         settingsRef.current = loaded;

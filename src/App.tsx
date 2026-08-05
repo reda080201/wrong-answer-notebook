@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -38,9 +39,12 @@ import LearningCandidateReviewModal from "./features/learning/components/Learnin
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
 import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
+import LibraryExplorer from "./features/library/components/LibraryExplorer";
+import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
+import type { LibraryFolder } from "./types";
 
 export default function App() {
-  const { confirm } = useAppDialog();
+  const { confirm, prompt } = useAppDialog();
   const {
     entries,
     loading,
@@ -93,6 +97,7 @@ export default function App() {
   const [showLearningHub, setShowLearningHub] = useState(false);
   const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
+  const [showLibraryExplorer, setShowLibraryExplorer] = useState(false);
   const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
@@ -161,6 +166,7 @@ export default function App() {
     setSettingsMaintenanceBlocked,
     setGeneratedExamsMaintenanceBlocked,
   });
+  const library = useLibraryFolders();
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -214,6 +220,7 @@ export default function App() {
     if (target.section) setActiveSection(target.section);
     setShowLearningHub(false);
     setShowQuestionBank(false);
+    setShowLibraryExplorer(false);
     if (target.entryId !== undefined) setSelectedId(target.entryId);
     if (target.question) {
       setQuestionTarget({ ...target.question, requestId: Date.now() });
@@ -417,6 +424,49 @@ export default function App() {
       }
     })();
   };
+  const createLibraryFolder = useCallback(async (parentId?: string) => {
+    const name = await prompt({ title: "새 폴더", message: "폴더 이름을 입력하세요." });
+    if (!name?.trim()) return;
+    const now = new Date().toISOString();
+    await library.mutate((current) => [
+      ...current,
+      { id: uuidv4(), name: name.trim(), parentId, sortOrder: current.filter((folder) => folder.parentId === parentId).length, createdAt: now, updatedAt: now },
+    ]);
+  }, [library, prompt]);
+  const renameLibraryFolder = useCallback(async (folder: LibraryFolder) => {
+    const name = await prompt({ title: "폴더 이름 변경", message: "새 폴더 이름을 입력하세요.", defaultValue: folder.name });
+    if (!name?.trim() || name.trim() === folder.name) return;
+    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, name: name.trim(), updatedAt: new Date().toISOString() } : item));
+  }, [library, prompt]);
+  const moveLibraryFolder = useCallback(async (folder: LibraryFolder, parentId?: string) => {
+    if (folder.id === parentId) throw new Error("폴더를 자기 자신으로 이동할 수 없습니다.");
+    const descendants = new Set<string>([folder.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const item of library.folders) if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) { descendants.add(item.id); changed = true; }
+    }
+    if (parentId && descendants.has(parentId)) throw new Error("폴더를 자신의 하위 폴더로 이동할 수 없습니다.");
+    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, parentId, updatedAt: new Date().toISOString() } : item));
+  }, [library]);
+  const moveLibraryEntries = useCallback(async (entryIds: string[], folderId?: string) => {
+    const validFolderId = folderId && library.folders.some((folder) => folder.id === folderId) ? folderId : undefined;
+    await Promise.all(entryIds.map((entryId) => patchEntry(entryId, { folderId: validFolderId })));
+  }, [library.folders, patchEntry]);
+  const deleteLibraryFolder = useCallback(async (folder: LibraryFolder) => {
+    const childFolders = library.folders.filter((item) => item.parentId === folder.id);
+    const childEntries = entries.filter((entry) => entry.folderId === folder.id);
+    const accepted = await confirm({
+      title: "폴더 삭제",
+      message: childFolders.length || childEntries.length
+        ? `이 폴더의 하위 폴더 ${childFolders.length}개와 항목 ${childEntries.length}개를 루트로 이동합니다. 항목은 삭제되지 않습니다.`
+        : "빈 폴더를 삭제합니다.",
+      confirmLabel: "삭제",
+    });
+    if (!accepted) return;
+    await Promise.all(childEntries.map((entry) => patchEntry(entry.id, { folderId: undefined })));
+    await library.mutate((current) => current.filter((item) => item.id !== folder.id).map((item) => item.parentId === folder.id ? { ...item, parentId: undefined, updatedAt: new Date().toISOString() } : item));
+  }, [confirm, entries, library, patchEntry]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -459,6 +509,17 @@ export default function App() {
             }
           })();
         }}
+        libraryOpen={showLibraryExplorer}
+        onOpenLibrary={() => {
+          void (async () => {
+            if (await requestNavigation({ entryId: null })) {
+              setShowLearningHub(false);
+              setShowQuestionBank(false);
+              setShowLibraryExplorer(true);
+              setSelectedId(null);
+            }
+          })();
+        }}
       />
 
       <main className="main">
@@ -480,7 +541,7 @@ export default function App() {
             <button type="button" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>이번 버전 건너뛰기</button>
           </div>
         )}
-        {!showLearningHub && !showQuestionBank && <AppToolbar
+        {!showLearningHub && !showQuestionBank && !showLibraryExplorer && <AppToolbar
           activeSection={activeSection}
           search={search}
           setSearch={setSearch}
@@ -498,7 +559,18 @@ export default function App() {
         />}
 
         <div className="content">
-          {showQuestionBank ? (
+          {showLibraryExplorer ? (
+            <LibraryExplorer
+              folders={library.folders}
+              entries={entries}
+              onOpenEntry={openEntryById}
+              onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
+              onRenameFolder={(folder) => void renameLibraryFolder(folder)}
+              onMoveFolder={(folder, parentId) => void moveLibraryFolder(folder, parentId)}
+              onMoveEntries={(entryIds, folderId) => void moveLibraryEntries(entryIds, folderId)}
+              onDeleteFolder={(folder) => void deleteLibraryFolder(folder)}
+            />
+          ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
               mode="question-bank"
               entries={entries}

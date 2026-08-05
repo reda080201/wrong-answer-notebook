@@ -29,6 +29,11 @@ export function useGeneratedExams() {
     setLoading(true);
     setLoadError(null);
     try {
+      await drain();
+      if (loadMutation !== mutationRef.current || failedErrorRef.current) {
+        loadSucceededRef.current = true;
+        return;
+      }
       const loaded = await loadGeneratedExams();
       if (requestId !== loadRequestRef.current) return;
       if (loadMutation !== mutationRef.current) {

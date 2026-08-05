@@ -26,6 +26,18 @@ function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
 }
 
 describe("normalizeEntry", () => {
+  it("preserves a trimmed optional library folder id without changing sheetGroup", () => {
+    const normalized = normalizeEntry(rawEntry({
+      entryKind: "problem_sheet",
+      folderId: "  library-math  ",
+      sheetGroup: { groupId: "sheet-1", groupTitle: "3월", partTitle: "문제", partOrder: 0 },
+    }));
+
+    expect(normalized.folderId).toBe("library-math");
+    expect(normalized.sheetGroup).toMatchObject({ groupId: "sheet-1" });
+    expect(normalizeEntry(rawEntry({ folderId: "   " })).folderId).toBeUndefined();
+  });
+
   it("normalizes optional supplemental resource history without breaking legacy entries", () => {
     const legacy = normalizeEntry(rawEntry());
     expect(legacy.supplementalResources).toEqual([]);

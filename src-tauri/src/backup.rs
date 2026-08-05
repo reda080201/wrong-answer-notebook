@@ -25,6 +25,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "exam-sessions.json",
     "generated-exams.json",
     "gpt-solution-drafts.json",
+    "library-folders.json",
     "data-schema.json",
 ];
 
@@ -335,6 +336,7 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         .map_err(|error| format!("백업의 {name} JSON이 올바르지 않습니다: {error}"))?;
     match name {
         "exam-sessions.json" | "generated-exams.json" | "gpt-solution-drafts.json"
+            | "library-folders.json"
             if !value.is_array() =>
         {
             Err(format!(
@@ -479,6 +481,7 @@ pub(crate) fn restore_backup_zip(
         app_dir.join("exam-sessions.json"),
         app_dir.join("generated-exams.json"),
         app_dir.join("gpt-solution-drafts.json"),
+        app_dir.join("library-folders.json"),
         app_dir.join("data-schema.json"),
         image_dir.clone(),
         app_dir.join("import-workspaces"),
@@ -573,9 +576,11 @@ mod tests {
         assert!(validate_optional_store_json("exam-sessions.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("generated-exams.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("gpt-solution-drafts.json", br#"[]"#).is_ok());
+        assert!(validate_optional_store_json("library-folders.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("exam-sessions.json", br#"{}"#).is_err());
         assert!(validate_optional_store_json("generated-exams.json", b"{").is_err());
         assert!(validate_optional_store_json("gpt-solution-drafts.json", b"{}").is_err());
+        assert!(validate_optional_store_json("library-folders.json", b"{}").is_err());
         assert!(
             validate_optional_store_json("data-schema.json", br#"{"schemaVersion":1}"#).is_ok()
         );
