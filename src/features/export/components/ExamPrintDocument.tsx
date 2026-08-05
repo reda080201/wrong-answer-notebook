@@ -8,10 +8,11 @@ interface ExamPrintDocumentProps {
 }
 
 export default function ExamPrintDocument({ model, imageUrls }: ExamPrintDocumentProps) {
-  const layoutClass = model.preferences.layout === "columns" ? "exam-print-layout-columns" : "";
+  const layoutClass = model.resolvedLayout === "columns" ? "exam-print-layout-columns" : "";
   return (
     <div className="exam-print-root">
       <section className="exam-print-page">
+        {model.includePageNumbers ? <div className="exam-print-page-number" aria-hidden="true" /> : null}
         {model.includeHeader ? (
           <header className="exam-print-header">
             <h1>{model.title}</h1>
@@ -31,7 +32,7 @@ export default function ExamPrintDocument({ model, imageUrls }: ExamPrintDocumen
           <h2>원본 페이지</h2>
           {model.sourcePageImages.map((filename) => {
             const src = imageUrls[filename] ?? "";
-            return src ? <img key={filename} className="exam-print-img" src={src} alt={`원본 페이지 ${filename}`} /> : <p key={filename}>{filename}</p>;
+            return src ? <img key={filename} data-print-filename={filename} className="exam-print-img" src={src} alt={`원본 페이지 ${filename}`} /> : <p key={filename}>{filename} (불러오지 못함)</p>;
           })}
         </section>
       ) : null}

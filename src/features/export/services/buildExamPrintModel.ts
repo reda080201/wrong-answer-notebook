@@ -9,6 +9,11 @@ import { resolveExamPrintContentOptions } from "./examPrintPresets";
 import { buildExamPrintFilenameBase } from "./exportFilename";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
+const AUTO_COLUMNS_MIN_QUESTIONS = 4;
+const AUTO_COLUMNS_MAX_QUESTION_CHARACTERS = 520;
+const WIDE_TABLE_MIN_COLUMNS = 4;
+const WIDE_TABLE_MAX_CELL_CHARACTERS = 28;
+
 function figuresForQuestion(entry: WrongAnswerEntry, questionNumber: string): SheetFigureItem[] {
   return (entry.figures ?? []).filter(
     (figure) => normalizeQuestionNumber(figure.questionNumber) === questionNumber,
@@ -70,6 +75,52 @@ function applyPreferencesFromPreset(preferences: ExamPrintPreferences, preset: E
   };
 }
 
+function isWideTable(segments: ExamPrintQuestionModel["segments"]): boolean {
+  return segments.some(
+    (segment) =>
+      segment.type === "table" &&
+      (segment.rows.some((row) => row.length >= WIDE_TABLE_MIN_COLUMNS) ||
+        segment.rows.some((row) => row.some((cell) => cell.length > WIDE_TABLE_MAX_CELL_CHARACTERS))),
+  );
+}
+
+function questionCharacterCount(question: ExamPrintQuestionModel): number {
+  return question.segments.reduce((total, segment) => {
+    if (segment.type === "text" || segment.type === "condition") return total + segment.text.length;
+    if (segment.type === "equation") return total + segment.latex.length;
+    if (segment.type === "table") return total + segment.rows.flat().join("").length;
+    return total;
+  }, question.choices.join("").length);
+}
+
+function resolvePrintLayout(
+  preference: ExamPrintPreferences["layout"],
+  questions: ExamPrintQuestionModel[],
+): "single" | "columns" {
+  if (preference !== "auto") return preference;
+  const hasWideVisualContent = questions.some(
+    (question) => question.figures.length > 0 || isWideTable(question.segments),
+  );
+  const allQuestionsShort = questions.every(
+    (question) => questionCharacterCount(question) <= AUTO_COLUMNS_MAX_QUESTION_CHARACTERS,
+  );
+  return questions.length >= AUTO_COLUMNS_MIN_QUESTIONS && allQuestionsShort && !hasWideVisualContent
+    ? "columns"
+    : "single";
+}
+
+function resolvePrintOrientation(
+  preference: ExamPrintPreferences["orientation"],
+  layout: "single" | "columns",
+  questions: ExamPrintQuestionModel[],
+): "portrait" | "landscape" {
+  if (preference !== "auto") return preference;
+  const hasWideVisualContent = questions.some(
+    (question) => question.figures.length > 0 || isWideTable(question.segments),
+  );
+  return layout === "columns" || hasWideVisualContent ? "landscape" : "portrait";
+}
+
 export function buildExamPrintModel(options: {
   entry: WrongAnswerEntry;
   questionNumbers: string[];
@@ -83,7 +134,10 @@ export function buildExamPrintModel(options: {
   const blocks = parseQuestionText(options.entry.question).filter((item): item is QuestionBlock => item.kind === "question");
   const scope = (options.scope ?? "whole") as ExportScopeMode;
   const questions: ExamPrintQuestionModel[] = options.questionNumbers.map((questionNumber) => {
-    const block = blocks.find((item) => normalizeQuestionNumber(String(item.displayNumber || item.numberLabel || "")) === questionNumber);
+    const normalizedQuestionNumber = normalizeQuestionNumber(questionNumber);
+    const block = blocks.find(
+      (item) => normalizeQuestionNumber(String(item.displayNumber || item.numberLabel || "")) === normalizedQuestionNumber,
+    );
     const figures = figuresForQuestion(options.entry, questionNumber).filter((figure) => {
       if (figure.source === "described_only") return Boolean(figure.caption || figure.title);
       return content.includeFigures;
@@ -111,6 +165,8 @@ export function buildExamPrintModel(options: {
       workspaceSize: preferences.workspaceSize,
     };
   });
+  const resolvedLayout = resolvePrintLayout(preferences.layout, questions);
+  const resolvedOrientation = resolvePrintOrientation(preferences.orientation, resolvedLayout, questions);
   const label = scopeLabel(scope, questions.length);
   return {
     title: getEntryTitle(options.entry),
@@ -120,12 +176,15 @@ export function buildExamPrintModel(options: {
     preferences,
     preset,
     questions,
-    sourcePageImages: preferences.includeSourcePages ? [...new Set(options.entry.questionImages ?? [])] : [],
+    sourcePageImages: preferences.includeSourcePages ? [...new Set(options.entry.sourcePageImages ?? [])] : [],
     includeHeader: preferences.includeHeader,
     includeAnswerSheet: preferences.includeAnswerSheet && content.includeBlankAnswerSheet,
     includePageNumbers: preferences.includePageNumbers,
     includeSourcePages: preferences.includeSourcePages && content.includeSourcePages,
     extraScratchPages: preferences.extraScratchPages,
+    resolvedPaperSize: preferences.paperSize,
+    resolvedOrientation,
+    resolvedLayout,
     filenameBase: buildExamPrintFilenameBase({
       title: getEntryTitle(options.entry),
       scope,

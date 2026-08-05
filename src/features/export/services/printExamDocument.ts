@@ -4,6 +4,7 @@ import { getImageUrl } from "../../../api";
 import ExamPrintDocument from "../components/ExamPrintDocument";
 import type { ExamPrintModel } from "../types";
 import examPrintCss from "../styles/examPrint.css?raw";
+import katexCss from "katex/dist/katex.min.css?raw";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 async function collectImageUrls(model: ExamPrintModel): Promise<Record<string, string>> {
@@ -24,13 +25,30 @@ async function collectImageUrls(model: ExamPrintModel): Promise<Record<string, s
   return Object.fromEntries(entries);
 }
 
-function waitForImages(doc: Document): Promise<void> {
+function waitForImages(doc: Document): Promise<string[]> {
   const images = [...doc.images];
-  if (!images.length) return Promise.resolve();
-  return Promise.all(images.map((image) => image.complete ? Promise.resolve() : new Promise<void>((resolve) => { image.onload = () => resolve(); image.onerror = () => resolve(); }))).then(() => undefined);
+  if (!images.length) return Promise.resolve([]);
+  return Promise.all(images.map((image) => image.complete && image.naturalWidth > 0
+    ? Promise.resolve<string | null>(null)
+    : new Promise<string | null>((resolve) => {
+      image.onload = () => resolve(null);
+      image.onerror = () => resolve(image.dataset.printFilename ?? image.alt ?? "알 수 없는 이미지");
+    }))).then((results) => results.filter((value): value is string => Boolean(value)));
 }
 
-export async function printExamDocument(model: ExamPrintModel): Promise<void> {
+export interface PrintDocumentResult {
+  failedImages: string[];
+  printed: boolean;
+}
+
+async function waitForStyles(doc: Document): Promise<void> {
+  const stylesheets = [...doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')];
+  await Promise.all(stylesheets.map((link) => link.sheet
+    ? Promise.resolve()
+    : new Promise<void>((resolve) => { link.onload = () => resolve(); link.onerror = () => resolve(); })));
+}
+
+export async function printExamDocument(model: ExamPrintModel): Promise<PrintDocumentResult> {
   const imageUrls = await collectImageUrls(model);
   // Do not pass "noopener" in features — Chromium then returns null and print always fails.
   const features = "width=960,height=720";
@@ -44,19 +62,21 @@ export async function printExamDocument(model: ExamPrintModel): Promise<void> {
   doc.close();
   doc.title = model.filenameBase;
   const style = doc.createElement("style");
-  style.textContent = examPrintCss;
+  style.textContent = `${examPrintCss}\n@page { size: ${model.resolvedPaperSize.toUpperCase()} ${model.resolvedOrientation}; }`;
   doc.head.appendChild(style);
-  const katexLink = doc.createElement("link");
-  katexLink.rel = "stylesheet";
-  katexLink.href = "https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css";
-  doc.head.appendChild(katexLink);
+  const katexStyle = doc.createElement("style");
+  katexStyle.textContent = katexCss;
+  doc.head.appendChild(katexStyle);
   const mount = doc.getElementById("root");
   if (!mount) throw new Error("인쇄 문서를 준비하지 못했습니다.");
   const root = createRoot(mount);
   root.render(createElement(ExamPrintDocument, { model, imageUrls }));
   await new Promise((resolve) => window.setTimeout(resolve, 50));
-  await waitForImages(doc);
+  await waitForStyles(doc);
+  await doc.fonts?.ready;
+  const failedImages = await waitForImages(doc);
   popup.focus();
   popup.print();
+  return { failedImages, printed: true };
 }
 
