@@ -1,5 +1,6 @@
 import type { LearningBlockType } from "../../models/learning";
 import type { SheetAnswerItem } from "../../models/entry";
+import type { ChatGptSharePayload } from "../export/types";
 
 export type GptSolutionPurpose =
   | "hint"
@@ -99,4 +100,32 @@ export interface GptSolutionApplyResult<Entry> {
   entry: Entry;
   appliedQuestionNumbers: string[];
   appendedLearningBlockIds: string[];
+}
+
+export interface GptSolutionRoundtripDraft {
+  id: string;
+  entryId: string;
+  entryUpdatedAt: string;
+  purpose: GptSolutionPurpose;
+  requestedQuestionNumbers: string[];
+  questionSnapshot: ChatGptSharePayload;
+  importedResponse?: GptSolutionResponse;
+  resolutions?: GptSolutionResolution[];
+  status: "shared" | "reviewing" | "ready" | "failed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function isGptSolutionRoundtripDraftArray(value: unknown): value is GptSolutionRoundtripDraft[] {
+  return Array.isArray(value) && value.every((draft) => {
+    if (!draft || typeof draft !== "object") return false;
+    const item = draft as Record<string, unknown>;
+    return typeof item.id === "string"
+      && typeof item.entryId === "string"
+      && typeof item.entryUpdatedAt === "string"
+      && Array.isArray(item.requestedQuestionNumbers)
+      && typeof item.questionSnapshot === "object"
+      && typeof item.createdAt === "string"
+      && typeof item.updatedAt === "string";
+  });
 }

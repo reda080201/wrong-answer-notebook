@@ -6,6 +6,7 @@ import { buildExamPrintModel } from "../services/buildExamPrintModel";
 import { resolveExportQuestionNumbers } from "../services/resolveExportQuestionNumbers";
 import type { ExportHubView } from "../types";
 import ChatGptSharePanel from "./ChatGptSharePanel";
+import type { GptSolutionPurpose } from "./ChatGptSharePanel";
 import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
@@ -29,6 +30,11 @@ interface ExportHubModalProps {
   initialView?: ExportHubView;
   initialScope?: ExportScopeMode;
   onToast?: (message: string) => void;
+  onStartSolutionRoundtrip?: (input: {
+    purpose: GptSolutionPurpose;
+    questionNumbers: string[];
+    payload: import("../types").ChatGptSharePayload;
+  }) => Promise<void>;
 }
 
 export default function ExportHubModal(props: ExportHubModalProps) {
@@ -50,6 +56,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     initialView = "home",
     initialScope,
     onToast,
+    onStartSolutionRoundtrip,
   } = props;
   const [view, setView] = useState<ExportHubView>(initialView);
   const [scope, setScope] = useState<ExportScopeMode>(initialScope ?? (selectedQuestionNumbers.length ? "selected" : "current"));
@@ -152,6 +159,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
             onCheckLocalMcp={onCheckLocalMcp}
             remoteMcpConfigured={remoteMcpConfigured}
             onOpenSettings={onOpenSettings}
+            onStartSolutionRoundtrip={onStartSolutionRoundtrip}
             onBack={() => setView("home")}
             initialScope={scope}
           />

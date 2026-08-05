@@ -3,6 +3,22 @@ import type { ChatGptMcpPreferences, ExamSession, ExportScopeMode, WrongAnswerEn
 import { buildChatGptPrompt, openChatGpt, recommendedChatGptQuestions } from "../../chatgpt/services/chatGptConnection";
 import { buildChatGptSharePayload } from "../services/buildChatGptSharePayload";
 import { resolveExportQuestionNumbers } from "../services/resolveExportQuestionNumbers";
+import type { ChatGptSharePayload } from "../types";
+
+export type GptSolutionPurpose =
+  | "hint"
+  | "full_solution"
+  | "wrong_answer_analysis"
+  | "lecture"
+  | "solution_and_lecture";
+
+const SOLUTION_PURPOSES: Array<{ id: GptSolutionPurpose; label: string }> = [
+  { id: "hint", label: "힌트" },
+  { id: "full_solution", label: "완전한 해설" },
+  { id: "wrong_answer_analysis", label: "오답 분석" },
+  { id: "lecture", label: "특강형 정리" },
+  { id: "solution_and_lecture", label: "해설과 특강 모두" },
+];
 
 const SCOPES: { id: ExportScopeMode; label: string }[] = [
   { id: "current", label: "현재 문항" },
@@ -32,6 +48,11 @@ interface ChatGptSharePanelProps {
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
   onOpenSettings?: () => void;
+  onStartSolutionRoundtrip?: (input: {
+    purpose: GptSolutionPurpose;
+    questionNumbers: string[];
+    payload: ChatGptSharePayload;
+  }) => Promise<void>;
   onBack: () => void;
   initialScope?: ExportScopeMode;
 }
@@ -48,6 +69,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
     onCheckLocalMcp,
     remoteMcpConfigured = false,
     onOpenSettings,
+    onStartSolutionRoundtrip,
     onBack,
     initialScope = "current",
   } = props;
@@ -55,6 +77,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
   const [manualRange, setManualRange] = useState(selectedQuestionNumbers.join(", "));
   const [status, setStatus] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [purpose, setPurpose] = useState<GptSolutionPurpose>("full_solution");
   const questions = useMemo(() => recommendedChatGptQuestions(examSession?.status === "submitted" ? "submitted" : examSession ? "pre-submit" : "detail"), [examSession]);
   const [selectedQuestion, setSelectedQuestion] = useState(questions[0] ?? "현재 공유된 문제를 읽어 줘.");
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
@@ -87,6 +110,31 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
       setBusy(false);
     }
   };
+
+  const handleSolutionRoundtrip = async () => {
+    if (!onStartSolutionRoundtrip || !scopeResult.questionNumbers.length || scopeResult.disabledReason) return;
+    setBusy(true);
+    setStatus(null);
+    try {
+      await onSyncExportContext({
+        scope,
+        questionNumbers: scopeResult.questionNumbers,
+        submitted,
+        shareOptions: {
+          shareUserResponse: preferences.shareUserResponse,
+          shareScratchNote: preferences.shareScratchNote,
+          shareQuestionImages: preferences.shareQuestionImages,
+          shareSourcePageImages: preferences.shareSourcePageImages,
+        },
+      });
+      await onStartSolutionRoundtrip({ purpose, questionNumbers: scopeResult.questionNumbers, payload });
+      setStatus("선택 문항 snapshot을 저장했습니다. 안내문을 ChatGPT에 보낸 뒤 JSON 응답을 가져와 문항별로 검토하세요.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "GPT 해설 왕복을 시작하지 못했습니다.");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="export-chatgpt-share-panel">
       <header className="export-panel-header">
@@ -108,6 +156,18 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
         {scope === "manual" ? <input className="input" value={manualRange} onChange={(event) => setManualRange(event.target.value)} placeholder="예: 1-5, 8, 10-14" /> : null}
         {scopeResult.disabledReason ? <p className="form-error">{scopeResult.disabledReason}</p> : <p className="muted">공유 문항 {payload.questionNumbers.length}개 · 정답 보호 {payload.answerProtection}</p>}
       </section>
+      {onStartSolutionRoundtrip ? (
+        <section>
+          <h4>선택 문항 해설 왕복</h4>
+          <select aria-label="GPT 해설 요청 목적" value={purpose} onChange={(event) => setPurpose(event.target.value as GptSolutionPurpose)}>
+            {SOLUTION_PURPOSES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </select>
+          <p className="muted">원본은 수정하지 않습니다. 응답 JSON을 가져온 뒤 문항별 차이를 승인해야 저장됩니다.</p>
+          <button type="button" className="btn-secondary" disabled={busy || !scopeResult.questionNumbers.length || Boolean(scopeResult.disabledReason)} onClick={() => void handleSolutionRoundtrip()}>
+            {busy ? "snapshot 저장 중..." : "GPT 해설 왕복 시작"}
+          </button>
+        </section>
+      ) : null}
       <section>
         <h4>공유 내용</h4>
         <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 직접 연결 문제 그림</label>

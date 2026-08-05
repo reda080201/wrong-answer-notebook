@@ -37,6 +37,12 @@ import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
 import ExportHubModal from "../features/export/components/ExportHubModal";
+import type { ChatGptSharePayload } from "../features/export/types";
+import type { GptSolutionPurpose } from "../features/export/components/ChatGptSharePanel";
+import GptSolutionRoundtripModal from "../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
+import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
+import { validateGptSolutionResponse } from "../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
+import { loadGptSolutionRoundtripDrafts, saveGptSolutionRoundtripDrafts } from "../api";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
 import Dialog from "../shared/ui/Dialog";
 import { writeUiStorageValue } from "../services/uiStorage";
@@ -111,6 +117,7 @@ interface EntryDetailProps {
   remoteMcpConfigured?: boolean;
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
+  onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
 }
 
 type SheetLayout = "single" | "columns";
@@ -220,6 +227,7 @@ export default function EntryDetail({
   remoteMcpConfigured,
   questionBankItems = [],
   onSimilarQuestionLinksChange,
+  onApplyGptSolutionRoundtrip,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
@@ -240,6 +248,17 @@ export default function EntryDetail({
   const [showExportHub, setShowExportHub] = useState(false);
   const [exportHubView, setExportHubView] = useState<ExportHubView>("home");
   const [exportHubScope, setExportHubScope] = useState<ExportScopeMode>("current");
+  const [solutionRoundtrip, setSolutionRoundtrip] = useState<{
+    draftId: string;
+    purpose: GptSolutionPurpose;
+    questionNumbers: string[];
+    payload: ChatGptSharePayload;
+  } | null>(null);
+  const solutionDraftsRef = useRef<GptSolutionRoundtripDraft[]>([]);
+
+  useEffect(() => {
+    void loadGptSolutionRoundtripDrafts().then((drafts) => { solutionDraftsRef.current = drafts; }).catch(() => undefined);
+  }, []);
   const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
@@ -2109,8 +2128,56 @@ export default function EntryDetail({
           initialView={exportHubView}
           initialScope={exportHubScope}
           onToast={(message) => pushToast(message, "success")}
+          onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip ? async (input) => {
+            const now = new Date().toISOString();
+            const draft: GptSolutionRoundtripDraft = {
+              id: uuidv4(), entryId: entry.id, entryUpdatedAt: entry.updatedAt, purpose: input.purpose,
+              requestedQuestionNumbers: input.questionNumbers, questionSnapshot: input.payload,
+              status: "shared", createdAt: now, updatedAt: now,
+            };
+            const next = [...solutionDraftsRef.current.filter((item) => item.id !== draft.id), draft];
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+            setSolutionRoundtrip({ ...input, draftId: draft.id });
+            setShowExportHub(false);
+          } : undefined}
         />
       )}
+
+      {solutionRoundtrip && onApplyGptSolutionRoundtrip ? (
+        <GptSolutionRoundtripModal
+          entry={entry}
+          purpose={solutionRoundtrip.purpose}
+          questionNumbers={solutionRoundtrip.questionNumbers}
+          payload={solutionRoundtrip.payload}
+          onClose={() => setSolutionRoundtrip(null)}
+          onApply={(patch) => {
+            const draft = solutionDraftsRef.current.find((item) => item.id === solutionRoundtrip.draftId);
+            if (!draft || draft.entryUpdatedAt !== entry.updatedAt) {
+              return Promise.reject(new Error("검토 시작 뒤 문제지가 수정되었습니다. 최신 내용으로 다시 요청해 주세요."));
+            }
+            return onApplyGptSolutionRoundtrip(entry, patch);
+          }}
+          onImportedResponse={async (raw) => {
+            const parsed: unknown = JSON.parse(raw);
+            const validation = validateGptSolutionResponse(parsed, {
+              entryId: entry.id,
+              requestedQuestionNumbers: solutionRoundtrip.questionNumbers,
+            });
+            if (!validation.valid || !validation.response) throw new Error(validation.errors.join(" "));
+            const next = solutionDraftsRef.current.map((draft) => draft.id === solutionRoundtrip.draftId
+              ? { ...draft, importedResponse: validation.response, status: "reviewing" as const, updatedAt: new Date().toISOString() }
+              : draft);
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+          }}
+          onApplied={async () => {
+            const next = solutionDraftsRef.current.filter((draft) => draft.id !== solutionRoundtrip.draftId);
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+          }}
+        />
+      ) : null}
 
       {toasts.length > 0 && (
         <div className="study-toast-stack" aria-live="polite">

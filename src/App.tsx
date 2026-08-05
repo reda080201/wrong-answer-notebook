@@ -678,6 +678,7 @@ export default function App() {
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               questionBankItems={buildQuestionBankItems(entries)}
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
+              onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
               onActiveContextChange={(context) => syncActiveContext(context)}
              />
             </>
