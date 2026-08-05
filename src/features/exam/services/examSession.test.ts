@@ -26,7 +26,7 @@ describe("exam session foundation", () => {
     const normalizedEntry = {
       ...entry,
       question: "10. 함수의 값은?\n① 1\n② 2",
-      questionImages: ["problem.png"],
+      sourcePageImages: ["problem.png"],
       figures: [{ id: "f1", questionNumber: "10번", title: "도표", caption: "", image: "figure.png", source: "original", needsReview: false }],
       answerKey: [{ id: "a10", questionNumber: "10.", answer: "②", explanation: "해설", importantPoints: [] }],
     } as WrongAnswerEntry;

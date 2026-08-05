@@ -27,6 +27,7 @@ describe("printExamDocument window.open", () => {
         createElement: vi.fn(() => ({ textContent: "", rel: "", href: "" })),
         head: { appendChild: vi.fn() },
         getElementById: vi.fn(() => document.createElement("div")),
+        querySelectorAll: vi.fn(() => []),
         images: [],
         title: "",
       },
@@ -50,7 +51,7 @@ describe("printExamDocument window.open", () => {
         extraScratchPages: 0,
         sourcePageImages: [],
       } as never),
-    ).resolves.toBeUndefined();
+    ).resolves.toEqual({ failedImages: [], printed: true });
 
     expect(open).toHaveBeenCalled();
     const features = String(open.mock.calls[0]?.[2] ?? "");

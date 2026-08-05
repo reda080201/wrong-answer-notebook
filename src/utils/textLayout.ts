@@ -207,13 +207,21 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
         start: choiceRange.start,
         end: choiceRange.end,
       });
-    } else if (choices.length > 0 && !isQuestionStart(line.text, lines[lines.indexOf(line) - 1])) {
+    } else if (
+      choices.length > 0 &&
+      !isQuestionStart(line.text, lines[lines.indexOf(line) - 1]) &&
+      !isChoiceContinuationBoundary(line.text)
+    ) {
       const previous = choices[choices.length - 1];
       const continuation = line.text.trim();
       if (continuation) {
         previous.text = `${previous.text}\n${continuation}`.trim();
         previous.end = line.end;
       }
+    } else if (isChoiceContinuationBoundary(line.text) && hasBlankLineBefore(text, line.start)) {
+      // A separated 자료/표 heading starts the next stimulus group, not the
+      // preceding choice's continuation or question body.
+      continue;
     } else {
       bodyRanges.push({ start: line.start, end: line.end });
     }
@@ -235,6 +243,17 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
     start: numberStart,
     end: blockEnd,
   };
+}
+
+function isChoiceContinuationBoundary(line: string): boolean {
+  const trimmed = line.trim();
+  return /^(?:\[|<)\s*(?:자료|제시문|지문|도표|그래프|그림|표)(?:\s*[A-Za-z가-힣0-9]+)?\s*(?:\]|>)$/.test(trimmed)
+    || /^표\s*(?::|：)\s*$/.test(trimmed)
+    || /^표\s+\d+\b/.test(trimmed);
+}
+
+function hasBlankLineBefore(text: string, start: number): boolean {
+  return /(?:\r\n|\n|\r)[ \t]*(?:\r\n|\n|\r)[ \t]*$/.test(text.slice(0, start));
 }
 
 export function parseQuestionText(text: string): QuestionTextBlock[] {

@@ -62,7 +62,9 @@ export async function printExamDocument(model: ExamPrintModel): Promise<PrintDoc
   doc.close();
   doc.title = model.filenameBase;
   const style = doc.createElement("style");
-  style.textContent = `${examPrintCss}\n@page { size: ${model.resolvedPaperSize.toUpperCase()} ${model.resolvedOrientation}; }`;
+  const paperSize = model.resolvedPaperSize ?? "a4";
+  const orientation = model.resolvedOrientation ?? "portrait";
+  style.textContent = `${examPrintCss}\n@page { size: ${paperSize.toUpperCase()} ${orientation}; }`;
   doc.head.appendChild(style);
   const katexStyle = doc.createElement("style");
   katexStyle.textContent = katexCss;
