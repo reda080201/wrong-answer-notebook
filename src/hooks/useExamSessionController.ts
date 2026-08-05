@@ -26,6 +26,8 @@ import { normalizeQuestionNumber } from "../utils/questionMeta";
 const normalizeExamQuestionNumber = (value: string | number | undefined | null) =>
   normalizeQuestionNumber(value);
 
+const EMPTY_ENTRIES: WrongAnswerEntry[] = [];
+
 interface UseExamSessionControllerOptions {
   chatGptPreferences: ChatGptMcpPreferences;
   existingEntries?: WrongAnswerEntry[];
@@ -35,7 +37,7 @@ interface UseExamSessionControllerOptions {
 
 export function useExamSessionController({
   chatGptPreferences,
-  existingEntries = [],
+  existingEntries = EMPTY_ENTRIES,
   addEntry,
   addEntries,
 }: UseExamSessionControllerOptions) {
