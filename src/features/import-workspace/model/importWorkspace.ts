@@ -58,8 +58,10 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
     return true;
   });
   const metadata = group.entryMetadata ?? {};
+  const { unknownFields, ...knownMetadata } = metadata;
   return {
-    ...metadata,
+    ...unknownFields,
+    ...knownMetadata,
     entryKind: "problem_sheet",
     title: group.title,
     subject: group.subject ?? "기타",
