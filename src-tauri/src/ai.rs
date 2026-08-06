@@ -699,4 +699,19 @@ mod tests {
             .collect();
         assert!(validate_similar_question_ranking_request(&too_many).is_err());
     }
+
+    #[test]
+    fn typescript_fixture_deserializes_into_the_rust_request_dto() {
+        let raw = include_str!("../../tests/fixtures/similar-question-ranking-request.json");
+        let request: SimilarQuestionRankingRequest = serde_json::from_str(raw)
+            .expect("the shared TypeScript payload fixture must match the Rust DTO");
+        assert_eq!(request.context.source_id, "source-entry");
+        assert_eq!(
+            request.context.source_question_number.as_deref(),
+            Some("03")
+        );
+        assert_eq!(request.candidates[0].candidate_id, "candidate:1");
+        assert_eq!(request.candidates[0].has_explanation, true);
+        assert!(validate_similar_question_ranking_request(&request).is_ok());
+    }
 }
