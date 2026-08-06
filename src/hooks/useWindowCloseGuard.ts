@@ -12,6 +12,13 @@ interface UseWindowCloseGuardOptions {
   flushGeneratedExams: () => Promise<void>;
   flushSettings: () => Promise<void>;
   flushImportWorkspaceDraft: () => Promise<void>;
+  confirmCloseWithoutSaving: () => Promise<boolean>;
+}
+
+function getCloseErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
 }
 
 export function useWindowCloseGuard({
@@ -22,6 +29,7 @@ export function useWindowCloseGuard({
   flushGeneratedExams,
   flushSettings,
   flushImportWorkspaceDraft,
+  confirmCloseWithoutSaving,
 }: UseWindowCloseGuardOptions) {
   const [closeError, setCloseError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -56,12 +64,30 @@ export function useWindowCloseGuard({
       await getCurrentWindow().close();
     } catch (error) {
       allowCloseRef.current = false;
-      setCloseError(error instanceof Error ? error.message : "저장 중 오류가 발생했습니다.");
+      setCloseError(getCloseErrorMessage(error, "저장 중 오류가 발생했습니다."));
     } finally {
       inFlightRef.current = false;
       setSaving(false);
     }
   }, [examSaveTimerRef, flushEntries, flushExamSession, flushGeneratedExams, flushImportWorkspaceDraft, flushSettings]);
+
+  const closeWithoutSaving = useCallback(async () => {
+    if (inFlightRef.current || !closeError || !isTauri()) return;
+    inFlightRef.current = true;
+    setSaving(true);
+    try {
+      const confirmed = await confirmCloseWithoutSaving();
+      if (!confirmed) return;
+      allowCloseRef.current = true;
+      await getCurrentWindow().destroy();
+    } catch (error) {
+      allowCloseRef.current = false;
+      setCloseError(getCloseErrorMessage(error, "창을 종료하지 못했습니다."));
+    } finally {
+      inFlightRef.current = false;
+      setSaving(false);
+    }
+  }, [closeError, confirmCloseWithoutSaving]);
 
   useEffect(() => {
     if (!isTauri()) return;
@@ -83,5 +109,6 @@ export function useWindowCloseGuard({
     saving,
     clearCloseError: () => setCloseError(null),
     retryClose: retryRef,
+    closeWithoutSaving,
   };
 }

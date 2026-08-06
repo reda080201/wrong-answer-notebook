@@ -55,6 +55,8 @@ jobs:
           "RELEASE_NOTES_EOF" >> $env:GITHUB_OUTPUT
       - run: npm run lint
       - run: npm run check:debug
+      - run: npm run check:mcp-contract
+      - run: npm run check:tauri-contract
       - run: npm run test
       - run: npm run build
       - run: cargo fmt --check

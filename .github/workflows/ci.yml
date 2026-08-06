@@ -30,6 +30,9 @@ jobs:
       - name: Debug marker check
         run: npm run check:debug
 
+      - name: MCP and Tauri command contract checks
+        run: npm run check:mcp-contract && npm run check:tauri-contract
+
       - name: Version consistency
         run: npm run version:check
 

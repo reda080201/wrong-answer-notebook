@@ -54,6 +54,7 @@ export function useExamSessionController({
   const saveQueueRef = useRef(createSerialTaskQueue());
   const saveSequenceRef = useRef(0);
   const loadRequestRef = useRef(0);
+  const loadInFlightRef = useRef(false);
   const loadedRef = useRef(false);
   const generatedEntryKeysRef = useRef(new Set<string>());
 
@@ -66,6 +67,8 @@ export function useExamSessionController({
   }, [existingEntries]);
 
   const reload = useCallback(async (): Promise<boolean> => {
+    if (loadInFlightRef.current) return false;
+    loadInFlightRef.current = true;
     const request = ++loadRequestRef.current;
     setLoading(true);
     setLoadError(null);
@@ -76,16 +79,19 @@ export function useExamSessionController({
       savedSessionsRef.current = normalized;
       setSavedSessions(normalized);
       loadedRef.current = true;
-      setLoading(false);
       return true;
     } catch (error) {
       if (request !== loadRequestRef.current) return false;
       loadedRef.current = false;
-      setLoading(false);
       setLoadError(error instanceof Error && error.message
         ? error.message
         : "시험 기록을 불러오지 못했습니다.");
       return false;
+    } finally {
+      if (request === loadRequestRef.current) {
+        loadInFlightRef.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
