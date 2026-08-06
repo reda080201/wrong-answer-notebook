@@ -8,3 +8,5 @@ export * from "./services/api/ai";
 export * from "./services/api/images";
 export * from "./services/api/importAssets";
 export * from "./services/api/backup";
+export * from "./services/api/gptSolutionRoundtrips";
+export * from "./services/api/libraryFolders";

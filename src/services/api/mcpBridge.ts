@@ -8,13 +8,15 @@ import type {
 } from "../../types";
 import { errorMessage } from "./shared";
 
+export const MCP_BRIDGE_VERSION = "local-bridge-v2" as const;
+
 const browserMcpBridgeStatus: McpBridgeStatus = {
   enabled: false,
   state: "stopped",
   host: "127.0.0.1",
   port: 43129,
   readOnly: true,
-  bridgeVersion: "local-bridge-v1",
+  bridgeVersion: MCP_BRIDGE_VERSION,
   hasAuthToken: false,
   lastError: "브라우저 모드에서는 로컬 MCP 브리지를 사용할 수 없습니다.",
 };

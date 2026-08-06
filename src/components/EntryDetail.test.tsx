@@ -5,6 +5,8 @@ import EntryDetail from "./EntryDetail";
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
+  loadGptSolutionRoundtripDrafts: vi.fn(async () => []),
+  saveGptSolutionRoundtripDrafts: vi.fn(async () => undefined),
 }));
 
 const { downloadMarkdown, printExamDocument } = vi.hoisted(() => ({
@@ -1103,7 +1105,7 @@ describe("EntryDetail sheet layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /다시 풀기용 시험지 만들기/ }));
     fireEvent.click(screen.getByRole("button", { name: "미리보기" }));
-    fireEvent.click(screen.getByRole("button", { name: "인쇄/PDF 저장" }));
+    fireEvent.click(screen.getByRole("button", { name: "시스템 인쇄창 열기" }));
     await waitFor(() => expect(printExamDocument).toHaveBeenCalledTimes(1));
   });
 });

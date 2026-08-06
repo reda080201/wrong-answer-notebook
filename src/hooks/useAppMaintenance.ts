@@ -8,9 +8,15 @@ interface UseAppMaintenanceOptions {
   settings: AppSettings;
   patchSettings(patch: Partial<AppSettings>): Promise<void>;
   report(message: string): void;
+  runMaintenanceOperation<T>(task: () => Promise<T>): Promise<T>;
 }
 
-export function useAppMaintenance({ settings, patchSettings, report }: UseAppMaintenanceOptions) {
+export function useAppMaintenance({
+  settings,
+  patchSettings,
+  report,
+  runMaintenanceOperation,
+}: UseAppMaintenanceOptions) {
   useEffect(() => {
     if (!isTauri()) return;
     const draft = loadImportWorkspaceDraft();
@@ -28,7 +34,8 @@ export function useAppMaintenance({ settings, patchSettings, report }: UseAppMai
     if (lastBackup?.toDateString() === new Date().toDateString()) return;
 
     let cancelled = false;
-    void createAutoBackup().then(async () => {
+    void (async () => {
+      await runMaintenanceOperation(() => createAutoBackup());
       if (cancelled) return;
       await patchSettings({
         autoBackup: {
@@ -36,9 +43,9 @@ export function useAppMaintenance({ settings, patchSettings, report }: UseAppMai
           lastBackupAt: new Date().toISOString(),
         },
       });
-    }).catch(() => {
+    })().catch(() => {
       if (!cancelled) report("자동 백업에 실패했습니다. 설정에서 수동 백업을 실행해 주세요.");
     });
     return () => { cancelled = true; };
-  }, [patchSettings, report, settings.autoBackup]);
+  }, [patchSettings, report, runMaintenanceOperation, settings.autoBackup]);
 }

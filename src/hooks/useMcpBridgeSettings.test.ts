@@ -17,7 +17,7 @@ vi.mock("../api", () => ({
     host: "127.0.0.1",
     port: 43129,
     readOnly: true,
-    bridgeVersion: "local-bridge-v1",
+  bridgeVersion: "local-bridge-v2",
     hasAuthToken: false,
   })),
   setMcpBridgeEnabled: vi.fn(async (enabled: boolean, port: number) => ({
@@ -26,7 +26,7 @@ vi.mock("../api", () => ({
     host: "127.0.0.1",
     port,
     readOnly: true,
-    bridgeVersion: "local-bridge-v1",
+  bridgeVersion: "local-bridge-v2",
     hasAuthToken: enabled,
   })),
   testMcpBridgeConnection: vi.fn(async () => ({
@@ -35,7 +35,7 @@ vi.mock("../api", () => ({
     host: "127.0.0.1",
     port: 43129,
     readOnly: true,
-    bridgeVersion: "local-bridge-v1",
+  bridgeVersion: "local-bridge-v2",
     hasAuthToken: true,
     lastTestAt: "2026-07-14T09:00:00.000Z",
     lastTestOk: true,
@@ -51,7 +51,7 @@ vi.mock("../api", () => ({
     host: "127.0.0.1",
     port: 43129,
     readOnly: true,
-    bridgeVersion: "local-bridge-v1",
+  bridgeVersion: "local-bridge-v2",
     hasAuthToken: true,
   })),
   disconnectMcpBridgeClients: vi.fn(async () => ({
@@ -60,7 +60,7 @@ vi.mock("../api", () => ({
     host: "127.0.0.1",
     port: 43129,
     readOnly: true,
-    bridgeVersion: "local-bridge-v1",
+  bridgeVersion: "local-bridge-v2",
     hasAuthToken: true,
   })),
 }));

@@ -3,6 +3,7 @@ import type { EntryFormData } from "../../../types";
 import type { ImportQuestionDraft, ImportWorkspace } from "../model/importWorkspace";
 import { commitImportWorkspace } from "../services/commitImportWorkspace";
 import { moveQuestion } from "../services/reorderQuestions";
+import { renameQuestionNumber } from "../services/renameQuestionNumber";
 import { validateImportWorkspace } from "../services/validateImportWorkspace";
 import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft, useImportWorkspaceAutosave } from "../hooks/useImportWorkspaceAutosave";
 import { useImportWorkspaceHistory } from "../hooks/useImportWorkspaceHistory";
@@ -130,15 +131,22 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     await discardRecoveryDraft();
   };
 
-  const updateQuestion = (patch: Partial<ImportQuestionDraft>) => setWorkspace((current) => ({
-    ...current,
-    groups: current.groups.map((group) => group.id !== selectedGroupId ? group : {
-      ...group,
-      questions: group.questions.map((question) => question.id !== selectedQuestionId ? question : {
-        ...question, ...patch, confirmed: { ...question.confirmed, content: true },
+  const updateQuestion = (patch: Partial<ImportQuestionDraft>) => setWorkspace((current) => {
+    const rename = patch.displayQuestionNumber && selectedQuestion && patch.displayQuestionNumber !== selectedQuestion.displayQuestionNumber;
+    return {
+      ...current,
+      groups: current.groups.map((group) => {
+        if (group.id !== selectedGroupId) return group;
+        if (rename) return renameQuestionNumber(group, selectedQuestionId, patch.displayQuestionNumber!);
+        return {
+          ...group,
+          questions: group.questions.map((question) => question.id !== selectedQuestionId ? question : {
+            ...question, ...patch, confirmed: { ...question.confirmed, content: true },
+          }),
+        };
       }),
-    }),
-  }));
+    };
+  });
 
   const moveSelectedQuestion = (targetGroupId: string, targetIndex: number) => {
     if (!selectedQuestion) return;

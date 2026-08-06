@@ -5,6 +5,7 @@ import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textL
 import { LinkifiedText } from "../utils/wikiLinks";
 import MathText from "./MathText";
 import { FocusedQuestionView } from "./AnnotatableQuestion";
+import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import {
   difficultyScoreBand,
   difficultyScoreLabel,
@@ -19,6 +20,7 @@ interface QuestionTheaterViewProps {
   questionCount: number;
   answer?: SheetAnswerItem;
   questionMeta?: QuestionMeta;
+  sourceEntry?: import("../types").WrongAnswerEntry;
   questionImages: string[];
   figures: SheetFigureItem[];
   annotations: Annotation[];
@@ -54,6 +56,7 @@ export default function QuestionTheaterView({
   questionCount,
   answer,
   questionMeta,
+  sourceEntry,
   questionImages,
   figures,
   annotations,
@@ -80,6 +83,7 @@ export default function QuestionTheaterView({
   const [splitRatio, setSplitRatio] = useState(loadSplitRatio);
   const [scoreEditorOpen, setScoreEditorOpen] = useState(false);
   const difficultyScore = normalizeDifficultyScore(questionMeta?.difficultyScore) ?? resolveAnswerDifficultyScore(answer);
+  const conceptContext = sourceEntry ? buildConceptLinkContext(sourceEntry, questionMeta?.questionNumber ?? answer?.questionNumber) : undefined;
   const [draftScore, setDraftScore] = useState(`${difficultyScore ?? ""}`);
 
   const updateSplitRatio = (clientX: number, container: HTMLElement) => {
@@ -290,6 +294,7 @@ export default function QuestionTheaterView({
                     ) : (
                       <TheaterSolutionContent
                         answer={answer}
+                        conceptContext={conceptContext}
                         memo={memo}
                         onWikiLinkClick={onWikiLinkClick}
                         existingTargets={existingTargets}
@@ -316,6 +321,7 @@ export default function QuestionTheaterView({
                 ) : (
                   <TheaterSolutionContent
                     answer={answer}
+                    conceptContext={conceptContext}
                     memo={memo}
                     includeMemo={false}
                     onWikiLinkClick={onWikiLinkClick}
@@ -356,12 +362,14 @@ export default function QuestionTheaterView({
 
 function TheaterSolutionContent({
   answer,
+  conceptContext,
   memo,
   includeMemo = true,
   onWikiLinkClick,
   existingTargets,
 }: {
   answer: SheetAnswerItem;
+  conceptContext?: import("../features/learning/utils/conceptIndex").ConceptLinkResolveContext;
   memo?: string;
   includeMemo?: boolean;
   onWikiLinkClick: (target: string) => void;
@@ -376,7 +384,7 @@ function TheaterSolutionContent({
       {answer.strategy?.trim() && (
         <section>
           <h3>풀이 전략</h3>
-          <LinkifiedText text={answer.strategy} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          <LinkifiedText text={answer.strategy} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
         </section>
       )}
       {(answer.steps?.length ?? 0) > 0 ? (
@@ -384,14 +392,14 @@ function TheaterSolutionContent({
           <h3>단계별 풀이</h3>
           <ol>
             {answer.steps?.map((step, index) => (
-              <li key={`${answer.id}-step-${index}`}><MathText text={step} /></li>
+              <li key={`${answer.id}-step-${index}`}><LinkifiedText text={step} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} /></li>
             ))}
           </ol>
         </section>
       ) : answer.explanation.trim() ? (
         <section>
           <h3>풀이 과정</h3>
-          <LinkifiedText text={answer.explanation} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+          <LinkifiedText text={answer.explanation} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={conceptContext} />
         </section>
       ) : null}
       {(answer.choiceJudgements?.length ?? 0) > 0 && (

@@ -135,6 +135,19 @@ impl NotebookStore {
         &self.images_path
     }
 
+    /// Serializes operations that must observe the entries document and image
+    /// references as one coherent state.
+    pub fn with_write_lock<T>(
+        &self,
+        operation: impl FnOnce() -> Result<T, String>,
+    ) -> Result<T, String> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
+        operation()
+    }
+
     /// Accepts the historical array format and the current schema-v2 wrapper.
     pub fn load_entries(&self) -> Result<Vec<WrongAnswerEntry>, String> {
         if !self.entries_path.exists() {
@@ -204,6 +217,58 @@ impl NotebookStore {
                 moved.push((source, target));
             }
             entries[index] = next_entry;
+            self.write_entries_locked(&entries)
+        })();
+
+        if let Err(error) = result {
+            for (source, target) in moved.iter().rev() {
+                let _ = fs::rename(target, source);
+            }
+            return Err(error);
+        }
+
+        Ok(moved
+            .iter()
+            .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
+            .collect())
+    }
+
+    /// Adds imported entries and promotes their staged assets as one locked operation.
+    /// A failed entries write moves every promoted asset back to the staging directory.
+    pub fn commit_staged_entries_add(
+        &self,
+        assets_dir: &Path,
+        added_entries: Vec<WrongAnswerEntry>,
+    ) -> Result<Vec<String>, String> {
+        let _guard = self
+            .write_lock
+            .lock()
+            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
+        if !assets_dir.exists() {
+            return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
+        }
+
+        let mut entries = self.load_entries()?;
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let result = (|| -> Result<(), String> {
+            for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
+                let source = item.map_err(|error| error.to_string())?.path();
+                if !source.is_file() {
+                    continue;
+                }
+                let filename = source
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
+                    .to_owned();
+                let target = self.images_path.join(&filename);
+                if target.exists() {
+                    return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+                }
+                fs::rename(&source, &target).map_err(|error| error.to_string())?;
+                moved.push((source, target));
+            }
+            entries.splice(0..0, added_entries);
             self.write_entries_locked(&entries)
         })();
 
@@ -769,5 +834,38 @@ mod tests {
         assert!(error.contains("변경"));
         assert!(assets.join("new-image.png").exists());
         assert!(!images.join("new-image.png").exists());
+    }
+
+    #[test]
+    fn staged_entries_add_promotes_assets_and_entries_together() {
+        let existing = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"기존", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false
+        }]))
+        .unwrap()
+        .pop()
+        .unwrap();
+        let added = parse_entries_value(json!([{
+            "id":"e2", "subject":"수학", "question":"가져온 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"c", "updatedAt":"d", "mastered":false
+        }]))
+        .unwrap()
+        .pop()
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let images = directory.path().join("images");
+        std::fs::create_dir_all(&images).unwrap();
+        let store = NotebookStore::new(directory.path().join("entries.json"), images.clone());
+        store.save_entries(&[existing]).unwrap();
+        let assets = directory.path().join("staged-assets");
+        std::fs::create_dir_all(&assets).unwrap();
+        std::fs::write(assets.join("new-image.png"), [1_u8, 2, 3]).unwrap();
+
+        let filenames = store
+            .commit_staged_entries_add(&assets, vec![added])
+            .unwrap();
+
+        assert_eq!(filenames, vec!["new-image.png"]);
+        assert!(images.join("new-image.png").exists());
+        assert!(!assets.join("new-image.png").exists());
+        assert_eq!(store.load_entries().unwrap()[0].id, "e2");
     }
 }

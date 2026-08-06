@@ -4,6 +4,7 @@ mod images;
 mod import_assets;
 mod integrity;
 mod mcp_bridge;
+mod mcp_bridge_contract;
 mod notebook_store;
 mod storage;
 
@@ -250,6 +251,102 @@ fn load_generated_exams(app: tauri::AppHandle) -> Result<serde_json::Value, Stri
 #[tauri::command]
 fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Result<(), String> {
     write_json_atomic(&app_dir(&app)?.join("generated-exams.json"), &exams)
+}
+
+#[tauri::command]
+fn load_gpt_solution_roundtrip_drafts(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("gpt-solution-drafts.json");
+    if !path.exists() {
+        return Ok(serde_json::json!([]));
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let drafts: serde_json::Value =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    if !drafts.is_array() {
+        return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
+    }
+    Ok(drafts)
+}
+
+#[tauri::command]
+fn save_gpt_solution_roundtrip_drafts(
+    app: tauri::AppHandle,
+    drafts: serde_json::Value,
+) -> Result<(), String> {
+    if !drafts.is_array() {
+        return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
+    }
+    write_json_atomic(&app_dir(&app)?.join("gpt-solution-drafts.json"), &drafts)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct LibraryFolder {
+    id: String,
+    name: String,
+    #[serde(default)]
+    parent_id: Option<String>,
+    sort_order: i64,
+    created_at: String,
+    updated_at: String,
+}
+
+fn validate_library_folders(folders: &[LibraryFolder]) -> Result<(), String> {
+    let mut ids = std::collections::HashSet::new();
+    for folder in folders {
+        if folder.id.trim().is_empty()
+            || folder.name.trim().is_empty()
+            || folder.created_at.trim().is_empty()
+            || folder.updated_at.trim().is_empty()
+        {
+            return Err("폴더 데이터의 필수 값이 비어 있습니다.".into());
+        }
+        if !ids.insert(folder.id.trim()) {
+            return Err("폴더 ID가 중복되었습니다.".into());
+        }
+        if folder.parent_id.as_deref().map(str::trim) == Some(folder.id.trim()) {
+            return Err("폴더는 자기 자신을 부모로 가질 수 없습니다.".into());
+        }
+    }
+
+    let by_id: std::collections::HashMap<&str, &LibraryFolder> = folders
+        .iter()
+        .map(|folder| (folder.id.trim(), folder))
+        .collect();
+    for folder in folders {
+        let mut seen = std::collections::HashSet::new();
+        let mut current = folder;
+        while let Some(parent_id) = current.parent_id.as_deref().map(str::trim) {
+            let parent = by_id
+                .get(parent_id)
+                .ok_or_else(|| "존재하지 않는 상위 폴더를 지정할 수 없습니다.".to_string())?;
+            if !seen.insert(parent_id) {
+                return Err("폴더를 자신의 하위 폴더로 이동할 수 없습니다.".into());
+            }
+            current = parent;
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn load_library_folders(app: tauri::AppHandle) -> Result<Vec<LibraryFolder>, String> {
+    let path = app_dir(&app)?.join("library-folders.json");
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let folders: Vec<LibraryFolder> =
+        serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    validate_library_folders(&folders)?;
+    Ok(folders)
+}
+
+#[tauri::command]
+fn save_library_folders(app: tauri::AppHandle, folders: Vec<LibraryFolder>) -> Result<(), String> {
+    validate_library_folders(&folders)?;
+    let value = serde_json::to_value(folders).map_err(|error| error.to_string())?;
+    write_json_atomic(&app_dir(&app)?.join("library-folders.json"), &value)
 }
 
 #[tauri::command]
@@ -682,6 +779,10 @@ pub fn run() {
             save_exam_sessions,
             load_generated_exams,
             save_generated_exams,
+            load_gpt_solution_roundtrip_drafts,
+            save_gpt_solution_roundtrip_drafts,
+            load_library_folders,
+            save_library_folders,
             load_settings,
             save_settings,
             ai::get_ai_provider_status,
@@ -695,6 +796,7 @@ pub fn run() {
             import_assets::stage_import_asset_bytes,
             import_assets::commit_import_asset_session,
             import_assets::commit_import_asset_session_entry,
+            import_assets::commit_import_asset_session_entries,
             import_assets::discard_import_asset_session,
             import_assets::validate_import_asset_session,
             import_assets::cleanup_stale_import_asset_sessions,

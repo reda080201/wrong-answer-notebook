@@ -41,10 +41,10 @@ export function useAppUpdater(settings: AppSettings, patchSettings: (patch: Part
     const update = updateRef.current;
     if (!update || state.status !== "available" || installingRef.current) return;
     installingRef.current = true;
-    if (beforeInstall && !(await beforeInstall(update))) { installingRef.current = false; return; }
-    setState({ status: "downloading", latestVersion: update.latestVersion, downloadedBytes: 0 });
     let phase: "download" | "install" = "download";
     try {
+      if (beforeInstall && !(await beforeInstall(update))) return;
+      setState({ status: "downloading", latestVersion: update.latestVersion, downloadedBytes: 0 });
       await tauriUpdater.download(update, (progress) => {
         setState((current) => current.status === "downloading" ? { ...current, downloadedBytes: progress.downloadedBytes, totalBytes: progress.totalBytes, percent: calculateUpdatePercent(progress.downloadedBytes, progress.totalBytes) } : current);
       });

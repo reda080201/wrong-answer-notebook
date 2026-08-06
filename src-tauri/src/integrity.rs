@@ -80,20 +80,22 @@ pub(crate) fn cleanup_orphan_images(
     app: tauri::AppHandle,
     store: tauri::State<'_, Arc<NotebookStore>>,
 ) -> Result<usize, String> {
-    let referenced = store.referenced_image_filenames()?;
     let image_dir = images_dir(&app)?;
-    let mut removed = 0;
-    for item in fs::read_dir(image_dir).map_err(|error| error.to_string())? {
-        let path = item.map_err(|error| error.to_string())?.path();
-        let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
-            continue;
-        };
-        if !referenced.contains(filename) && validate_image_filename(filename).is_ok() {
-            fs::remove_file(path).map_err(|error| error.to_string())?;
-            removed += 1;
+    store.with_write_lock(|| {
+        let referenced = store.referenced_image_filenames()?;
+        let mut removed = 0;
+        for item in fs::read_dir(&image_dir).map_err(|error| error.to_string())? {
+            let path = item.map_err(|error| error.to_string())?.path();
+            let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !referenced.contains(filename) && validate_image_filename(filename).is_ok() {
+                fs::remove_file(path).map_err(|error| error.to_string())?;
+                removed += 1;
+            }
         }
-    }
-    Ok(removed)
+        Ok(removed)
+    })
 }
 
 #[tauri::command]

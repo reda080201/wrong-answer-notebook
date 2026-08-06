@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
 import LearningHubView from "./LearningHubView";
@@ -35,6 +35,50 @@ describe("LearningHubView", () => {
     fireEvent.click(screen.getByRole("button", { name: "다시 저장" }));
     expect(onUpdateBlock).toHaveBeenCalledTimes(2);
     expect(onUpdateBlock).toHaveBeenLastCalledWith("sheet-1", "block-1", { reviewStatus: "reviewed" });
+  });
+
+  it("blocks rapid duplicate card mutations before React rerenders", () => {
+    let resolveDuplicate: (() => void) | undefined;
+    const onDuplicateBlock = vi.fn(() => new Promise<void>((resolve) => { resolveDuplicate = resolve; }));
+    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+    const duplicate = screen.getByRole("button", { name: "복제" });
+    fireEvent.click(duplicate);
+    fireEvent.click(duplicate);
+    expect(onDuplicateBlock).toHaveBeenCalledTimes(1);
+    resolveDuplicate?.();
+  });
+
+  it("keeps edit input and surfaces a rejected save so the user can submit it again", async () => {
+    const onUpdateBlock = vi.fn().mockRejectedValueOnce(new Error("디스크에 저장하지 못했습니다.")).mockResolvedValueOnce(undefined);
+    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={onUpdateBlock} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    const title = screen.getByRole("textbox", { name: "제목" });
+    fireEvent.change(title, { target: { value: "수정한 합성함수 미분" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("디스크에 저장하지 못했습니다.");
+    expect(title).toHaveValue("수정한 합성함수 미분");
+    expect(screen.getByRole("button", { name: "취소" })).not.toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(onUpdateBlock).toHaveBeenCalledTimes(2));
+    expect(onUpdateBlock).toHaveBeenLastCalledWith("sheet-1", "block-1", expect.objectContaining({ title: "수정한 합성함수 미분" }));
+  });
+
+  it("prevents duplicate edit submissions before the save button rerenders as disabled", () => {
+    let resolveSave: (() => void) | undefined;
+    const onUpdateBlock = vi.fn(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+    render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={onUpdateBlock} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    const form = screen.getByRole("textbox", { name: "제목" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(onUpdateBlock).toHaveBeenCalledTimes(1);
+    resolveSave?.();
   });
 
   it("renders life ethics filters as individually removable chips", () => {

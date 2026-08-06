@@ -32,7 +32,11 @@ export interface ImportQuestionDraft {
   sourceReferences: ImportSourceReference[]; status: ImportQuestionStatus; warnings: string[]; sourceText?: string;
   confirmed?: { groupId?: boolean; order?: boolean; content?: boolean; answer?: boolean; figures?: boolean };
 }
-export interface ImportDraftGroup { id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
+export type ImportEntryMetadata = Partial<Pick<EntryFormData,
+  "problemSource" | "importAudit" | "questionMeta" | "sheetGroup" | "tags" |
+  "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks"
+>> & { unknownFields?: Record<string, unknown> };
+export interface ImportDraftGroup { id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }
 export interface ImportWorkspace { id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
 
@@ -45,5 +49,37 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
   const questions = question ? [question] : group.questions;
   const questionText = questions.map((item) => [`${item.displayQuestionNumber}. ${item.contentSegments.filter((segment) => segment.type !== "figure").map((segment) => "text" in segment ? segment.text : segment.type === "equation" ? segment.latex : "").filter(Boolean).join("\n")}`, ...item.choices.map((choice) => `${choice.marker} ${choice.content}`.trim())].filter(Boolean).join("\n")).join("\n\n");
   const questionContentSegments = Object.fromEntries(questions.map((item) => [item.displayQuestionNumber, item.contentSegments]));
-  return { entryKind: "problem_sheet", title: group.title, subject: group.subject ?? "기타", question: questionText, questionImages: [...new Set(questions.flatMap((item) => item.questionImageAssets))], sourcePageImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))], figures: questions.flatMap((item) => item.figures), questionContentSegments, answerKey: questions.flatMap((item) => item.answer ? [item.answer as SheetAnswerItem] : []), explanationParts: questions.flatMap((item) => item.explanationParts), tags: [], difficult: false, difficulty: "none", myAnswer: "", correctAnswer: "", annotations: [], memo: "", mastered: false };
+  const explanationParts = [...(group.explanationParts ?? []), ...questions.flatMap((item) => item.explanationParts)];
+  const seenExplanations = new Set<string>();
+  const dedupedExplanationParts = explanationParts.filter((part) => {
+    const key = `${part.text.trim()}\u0000${[...part.images].sort().join("\u0000")}`;
+    if (seenExplanations.has(key)) return false;
+    seenExplanations.add(key);
+    return true;
+  });
+  const metadata = group.entryMetadata ?? {};
+  const { unknownFields, ...knownMetadata } = metadata;
+  return {
+    ...unknownFields,
+    ...knownMetadata,
+    entryKind: "problem_sheet",
+    title: group.title,
+    subject: group.subject ?? "기타",
+    question: questionText,
+    questionImages: [...new Set(questions.flatMap((item) => item.questionImageAssets))],
+    sourcePageImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))],
+    figures: questions.flatMap((item) => item.figures),
+    questionContentSegments,
+    answerKey: questions.flatMap((item) => item.answer ? [item.answer as SheetAnswerItem] : []),
+    explanationParts: dedupedExplanationParts,
+    tags: metadata.tags ?? [],
+    difficult: false,
+    difficulty: metadata.difficulty ?? "none",
+    difficultyScore: metadata.difficultyScore,
+    myAnswer: "",
+    correctAnswer: "",
+    annotations: [],
+    memo: "",
+    mastered: false,
+  };
 }

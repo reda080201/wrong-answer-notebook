@@ -15,6 +15,10 @@ export default function Menu({ label, children, className = "", triggerAriaLabel
   const menuRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
+  const getEnabledItems = () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []).filter(
+    (item) => !item.matches("[disabled]") && item.getAttribute("aria-disabled") !== "true",
+  );
+
   const closeMenu = (restoreFocus = false) => {
     if (restoreFocus) {
       const focusTarget = previousFocusRef.current && previousFocusRef.current !== document.body
@@ -38,12 +42,12 @@ export default function Menu({ label, children, className = "", triggerAriaLabel
 
   useEffect(() => {
     if (!open) return;
-    const firstItem = menuRef.current?.querySelector<HTMLElement>("[role=menuitem]");
+    const firstItem = getEnabledItems()[0];
     firstItem?.focus();
   }, [open]);
 
   const handleMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []);
+    const items = getEnabledItems();
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
     if (event.key === "Escape") {
       event.preventDefault();

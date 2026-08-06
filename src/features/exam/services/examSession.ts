@@ -25,7 +25,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
       question: stripTrailingStimulus(entry.question, block, stimuli),
       choices: (block.choices ?? []).map((choice) => `${choice.marker} ${choice.text}`),
       questionImages: [],
-      sourcePageImages: entry.questionImages ?? [],
+      sourcePageImages: entry.sourcePageImages ?? [],
       figures,
       contentSegments: resolveContentSegments(entry, normalizedNumber, block, figures),
       correctAnswer: answer?.answer,
@@ -130,14 +130,9 @@ function isNextGroupStimulusMarker(start: number, text: string, questions: Quest
   const previous = questions.filter((question) => question.start < start).at(-1);
   if (!previous) return true;
 
-  const blockEnd = getQuestionContentEnd(text, previous, questions);
-  if (start <= blockEnd) return false;
-
-  const nextQuestion = questions.find((question) => question.start > previous.start);
-  if (nextQuestion && start >= nextQuestion.start) return false;
-
-  if (start >= previous.end) return true;
-  return hasBlankLineBefore(text, start);
+  const contentEnd = getQuestionContentEnd(text, previous, questions);
+  if (start < contentEnd) return false;
+  return start >= previous.end || hasBlankLineBefore(text, start);
 }
 
 function hasBlankLineBefore(text: string, start: number): boolean {
@@ -146,7 +141,11 @@ function hasBlankLineBefore(text: string, start: number): boolean {
 
 function getQuestionContentEnd(text: string, previous: QuestionBlock, questions: QuestionBlock[]): number {
   if (previous.choices.length > 0) {
-    return previous.choices.at(-1)!.end;
+    const nextQuestion = questions.find((question) => question.start > previous.start);
+    const marker = getExplicitStimulusStarts(text).find(
+      (candidate) => candidate > previous.bodyStart && candidate < (nextQuestion?.start ?? text.length),
+    );
+    return marker ?? previous.choices.at(-1)!.end;
   }
 
   const nextQuestion = questions.find((question) => question.start > previous.start);
@@ -154,7 +153,9 @@ function getQuestionContentEnd(text: string, previous: QuestionBlock, questions:
   const lines = /[^\r\n]*(?:\r\n|\n|\r|$)/g;
   lines.lastIndex = previous.bodyStart;
 
-  let lastContentEnd = previous.bodyEnd;
+  // Re-scan from the question body so a separated stimulus heading that was
+  // included in the parser slice cannot extend the previous question.
+  let lastContentEnd = previous.bodyStart;
   let match: RegExpExecArray | null;
   while ((match = lines.exec(text)) !== null) {
     if (!match[0] && match.index === text.length) break;

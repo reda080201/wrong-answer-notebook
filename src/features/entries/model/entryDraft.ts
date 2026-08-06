@@ -13,6 +13,9 @@ const emptyExplanationPart = () => ({ id: uuidv4(), text: "", images: [] as stri
 export function createEmptyEntryDraft(entryKind: EntryKind = "wrong_answer"): EntryDraft {
   return {
     subject: "수학",
+    folderId: undefined,
+    generatedFromExamSessionId: undefined,
+    generatedFromQuestionNumber: undefined,
     title: "",
     question: "",
     questionImages: [],
@@ -70,10 +73,19 @@ export function normalizeEntryDraftForSave(draft: Partial<EntryFormData>): Entry
   const merged = mergeEntryDraft(draft, createEmptyEntryDraft(draft.entryKind ?? "wrong_answer"));
   return {
     ...merged,
+    generatedFromExamSessionId: typeof merged.generatedFromExamSessionId === "string" && merged.generatedFromExamSessionId.trim()
+      ? merged.generatedFromExamSessionId.trim()
+      : undefined,
+    generatedFromQuestionNumber: typeof merged.generatedFromQuestionNumber === "string" && merged.generatedFromQuestionNumber.trim()
+      ? merged.generatedFromQuestionNumber.trim()
+      : undefined,
     explanationParts: merged.explanationParts.length ? merged.explanationParts : [emptyExplanationPart()],
     tags: [...merged.tags],
     questionImages: [...merged.questionImages],
     sourcePageImages: [...(merged.sourcePageImages ?? [])],
+    folderId: typeof merged.folderId === "string" && merged.folderId.trim()
+      ? merged.folderId.trim()
+      : undefined,
     problemSource: merged.problemSource ? clone(merged.problemSource) : undefined,
     answerKey: clone(merged.answerKey ?? []),
     figures: clone(merged.figures ?? []),

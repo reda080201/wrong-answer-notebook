@@ -37,6 +37,12 @@ import TextReviewPanel from "./TextReviewPanel";
 import QuestionTheaterView from "./QuestionTheaterView";
 import LectureReaderView from "./LectureReaderView";
 import ExportHubModal from "../features/export/components/ExportHubModal";
+import type { ChatGptSharePayload } from "../features/export/types";
+import type { GptSolutionPurpose } from "../features/export/components/ChatGptSharePanel";
+import GptSolutionRoundtripModal from "../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
+import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
+import { validateGptSolutionResponse } from "../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
+import { loadGptSolutionRoundtripDrafts, saveGptSolutionRoundtripDrafts } from "../api";
 import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
 import Dialog from "../shared/ui/Dialog";
 import { writeUiStorageValue } from "../services/uiStorage";
@@ -44,6 +50,7 @@ import Toast from "../shared/ui/Toast";
 import Menu from "../shared/ui/Menu";
 import SimilarQuestionLinksPanel from "../features/question-bank/components/SimilarQuestionLinksPanel";
 import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
+import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import {
   ConceptChecklistSection,
   ConceptConnectionsSection,
@@ -55,10 +62,10 @@ interface EntryDetailProps {
   entry: WrongAnswerEntry;
   onEdit: () => void;
   onDelete: () => void;
-  onToggleMastered: () => void;
-  onToggleDifficult: () => void;
-  onAnnotationsChange: (annotations: Annotation[]) => void;
-  onChecklistChange?: (checklist: ChecklistItem[]) => void;
+  onToggleMastered: () => Promise<void>;
+  onToggleDifficult: () => Promise<void>;
+  onAnnotationsChange: (annotations: Annotation[]) => Promise<void>;
+  onChecklistChange?: (checklist: ChecklistItem[]) => Promise<void>;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   allEntries?: WrongAnswerEntry[];
@@ -110,6 +117,7 @@ interface EntryDetailProps {
   remoteMcpConfigured?: boolean;
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
+  onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
 }
 
 type SheetLayout = "single" | "columns";
@@ -219,6 +227,7 @@ export default function EntryDetail({
   remoteMcpConfigured,
   questionBankItems = [],
   onSimilarQuestionLinksChange,
+  onApplyGptSolutionRoundtrip,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
@@ -239,6 +248,17 @@ export default function EntryDetail({
   const [showExportHub, setShowExportHub] = useState(false);
   const [exportHubView, setExportHubView] = useState<ExportHubView>("home");
   const [exportHubScope, setExportHubScope] = useState<ExportScopeMode>("current");
+  const [solutionRoundtrip, setSolutionRoundtrip] = useState<{
+    draftId: string;
+    purpose: GptSolutionPurpose;
+    questionNumbers: string[];
+    payload: ChatGptSharePayload;
+  } | null>(null);
+  const solutionDraftsRef = useRef<GptSolutionRoundtripDraft[]>([]);
+
+  useEffect(() => {
+    void loadGptSolutionRoundtripDrafts().then((drafts) => { solutionDraftsRef.current = drafts; }).catch(() => undefined);
+  }, []);
   const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
@@ -424,8 +444,12 @@ export default function EntryDetail({
     if (match?.kind === "question") scrollToQuestion(match.start);
   };
 
-  const updateChecklist = (next: ChecklistItem[]) => {
-    onChecklistChange?.(next);
+  const updateChecklist = async (next: ChecklistItem[]) => {
+    try {
+      await onChecklistChange?.(next);
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "체크리스트 저장에 실패했습니다.", "error");
+    }
   };
 
   const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
@@ -593,9 +617,13 @@ export default function EntryDetail({
     }
   }, [entry, onLearningBlocksChange, pushToast]);
 
-  const handleToggleDifficultWithToast = () => {
-    onToggleDifficult();
-    pushToast(entry.difficult ? "어려움 표시를 해제했습니다." : "어려움으로 표시했습니다.", "success");
+  const handleToggleDifficultWithToast = async () => {
+    try {
+      await onToggleDifficult();
+      pushToast(entry.difficult ? "어려움 표시를 해제했습니다." : "어려움으로 표시했습니다.", "success");
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "난이도 상태 저장에 실패했습니다.", "error");
+    }
   };
 
   const handleTitleSave = async () => {
@@ -1091,6 +1119,7 @@ export default function EntryDetail({
                       text={item.explanation}
                       onLinkClick={onWikiLinkClick}
                       existingTargets={existingTargets}
+                      conceptContext={buildConceptLinkContext(entry, item.questionNumber)}
                     />
                   )}
                 </div>
@@ -1165,6 +1194,7 @@ export default function EntryDetail({
                 text={focusedAnswer.explanation}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
+                conceptContext={buildConceptLinkContext(entry, focusedAnswer.questionNumber)}
               />
             )}
           </div>
@@ -1219,6 +1249,7 @@ export default function EntryDetail({
                 text={entry.memo}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
+                conceptContext={buildConceptLinkContext(entry)}
               />
             </div>
           </section>
@@ -1781,6 +1812,7 @@ export default function EntryDetail({
               sheetLayout={isSheet ? sheetLayout : "single"}
               searchQuery={isSheet ? sheetSearch : ""}
               suspiciousSegments={suspiciousSegments}
+              sourceEntry={entry}
             />
           )}
         </section>
@@ -2002,6 +2034,7 @@ export default function EntryDetail({
           }
           answer={theaterAnswer}
           questionMeta={theaterQuestionMeta}
+          sourceEntry={entry}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}
@@ -2103,8 +2136,56 @@ export default function EntryDetail({
           initialView={exportHubView}
           initialScope={exportHubScope}
           onToast={(message) => pushToast(message, "success")}
+          onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip ? async (input) => {
+            const now = new Date().toISOString();
+            const draft: GptSolutionRoundtripDraft = {
+              id: uuidv4(), entryId: entry.id, entryUpdatedAt: entry.updatedAt, purpose: input.purpose,
+              requestedQuestionNumbers: input.questionNumbers, questionSnapshot: input.payload,
+              status: "shared", createdAt: now, updatedAt: now,
+            };
+            const next = [...solutionDraftsRef.current.filter((item) => item.id !== draft.id), draft];
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+            setSolutionRoundtrip({ ...input, draftId: draft.id });
+            setShowExportHub(false);
+          } : undefined}
         />
       )}
+
+      {solutionRoundtrip && onApplyGptSolutionRoundtrip ? (
+        <GptSolutionRoundtripModal
+          entry={entry}
+          purpose={solutionRoundtrip.purpose}
+          questionNumbers={solutionRoundtrip.questionNumbers}
+          payload={solutionRoundtrip.payload}
+          onClose={() => setSolutionRoundtrip(null)}
+          onApply={(patch) => {
+            const draft = solutionDraftsRef.current.find((item) => item.id === solutionRoundtrip.draftId);
+            if (!draft || draft.entryUpdatedAt !== entry.updatedAt) {
+              return Promise.reject(new Error("검토 시작 뒤 문제지가 수정되었습니다. 최신 내용으로 다시 요청해 주세요."));
+            }
+            return onApplyGptSolutionRoundtrip(entry, patch);
+          }}
+          onImportedResponse={async (raw) => {
+            const parsed: unknown = JSON.parse(raw);
+            const validation = validateGptSolutionResponse(parsed, {
+              entryId: entry.id,
+              requestedQuestionNumbers: solutionRoundtrip.questionNumbers,
+            });
+            if (!validation.valid || !validation.response) throw new Error(validation.errors.join(" "));
+            const next = solutionDraftsRef.current.map((draft) => draft.id === solutionRoundtrip.draftId
+              ? { ...draft, importedResponse: validation.response, status: "reviewing" as const, updatedAt: new Date().toISOString() }
+              : draft);
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+          }}
+          onApplied={async () => {
+            const next = solutionDraftsRef.current.filter((draft) => draft.id !== solutionRoundtrip.draftId);
+            await saveGptSolutionRoundtripDrafts(next);
+            solutionDraftsRef.current = next;
+          }}
+        />
+      ) : null}
 
       {toasts.length > 0 && (
         <div className="study-toast-stack" aria-live="polite">

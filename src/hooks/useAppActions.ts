@@ -1,14 +1,15 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
-  commitImportAssetSession,
-  createBackup,
+  createBackupAtDestination,
   deleteImage,
   previewOrphanImages,
   rewriteImportAssetReferences,
-  restoreBackup,
+  restoreBackupFromSource,
+  selectBackupDestination,
+  selectBackupSource,
   saveImportAssetFiles,
   runNativeIntegrityCheck,
 } from "../api";
@@ -72,6 +73,7 @@ interface UseAppActionsOptions {
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
   addEntries: (forms: EntryFormData[]) => Promise<string[]>;
+  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[]) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -99,6 +101,8 @@ interface UseAppActionsOptions {
   setSettings: (settings: AppSettings) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
+  refreshGeneratedExams?: () => Promise<void>;
+  runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
 }
@@ -111,6 +115,7 @@ export function useAppActions({
   subjectFilter,
   addEntry,
   addEntries,
+  addEntriesWithImportAssetSession,
   updateEntry,
   replaceEntries,
   deleteEntry,
@@ -126,10 +131,13 @@ export function useAppActions({
   setSettings,
   patchSettings,
   refreshSettings,
+  refreshGeneratedExams,
+  runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
 }: UseAppActionsOptions) {
   const { confirm, prompt } = useAppDialog();
+  const maintenanceRef = useRef<Promise<void> | null>(null);
   const [prefilledTitle, setPrefilledTitle] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -417,12 +425,12 @@ export function useAppActions({
     assetSession?: ImportAssetSessionManifest,
   ) => {
     if (!importedEntries.length) return;
-    let savedFilenames: string[] = [];
     let sourceToSaved: Record<string, string> = {};
+    let savedFilenames: string[] = [];
     if (assetSession?.mode === "tauri-staged") {
-      savedFilenames = await commitImportAssetSession(assetSession.id);
       sourceToSaved = assetSession.sourceToStaged ?? {};
-    } else if (assetFiles.length) {
+    }
+    if (assetSession?.mode !== "tauri-staged" && assetFiles.length) {
       const importedAssets = await saveImportAssetFiles(assetFiles);
       savedFilenames = importedAssets.savedFilenames;
       sourceToSaved = importedAssets.sourceToSaved;
@@ -479,11 +487,15 @@ export function useAppActions({
         checklist: imported.checklist ?? [],
       };
       });
-      const ids = await addEntries(forms);
+      const ids = assetSession?.mode === "tauri-staged"
+        ? await addEntriesWithImportAssetSession(assetSession.id, forms)
+        : await addEntries(forms);
       setActiveSection(forms[0].entryKind);
       setSelectedId(ids[0] ?? null);
     } catch (error) {
-      await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      if (assetSession?.mode !== "tauri-staged") {
+        await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      }
       throw error;
     }
   };
@@ -513,8 +525,25 @@ export function useAppActions({
   };
 
   const handleBackup = async () => {
-    const message = await createBackup(entries, settings);
-    setSettingsMessage(message);
+    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const destination = await selectBackupDestination();
+    if (isTauri() && !destination) {
+      setSettingsMessage("백업이 취소되었습니다.");
+      return;
+    }
+    const operation = (async () => {
+      const writeBackup = () => createBackupAtDestination(destination, entries, settings);
+      const message = runMaintenanceOperation
+        ? await runMaintenanceOperation(writeBackup)
+        : await writeBackup();
+      setSettingsMessage(message);
+    })();
+    maintenanceRef.current = operation;
+    try {
+      await operation;
+    } finally {
+      maintenanceRef.current = null;
+    }
     if (isTauri()) {
       await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
     }
@@ -522,20 +551,33 @@ export function useAppActions({
 
   const handleRestore = async () => {
     if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
-    const payload = await restoreBackup();
-    if (payload && "entries" in payload) {
-      await replaceEntries(payload.entries);
-      await setSettings(payload.settings);
-      for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
-        localStorage.setItem(key, value);
+    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
+    const source = await selectBackupSource();
+    if (!source) return;
+    const operation = (async () => {
+      const readBackup = () => restoreBackupFromSource(source);
+      const payload = runMaintenanceOperation
+        ? await runMaintenanceOperation(readBackup)
+        : await readBackup();
+      if (payload && "entries" in payload) {
+        await replaceEntries(payload.entries);
+        await setSettings(payload.settings);
+        for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
+          localStorage.setItem(key, value);
+        }
+      } else {
+        await Promise.all([refresh(), refreshSettings(), refreshGeneratedExams?.()]);
       }
-    } else {
-      await refresh();
-      await refreshSettings();
+      setSettingsMessage(payload && "restored" in payload && payload.warnings.length
+        ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
+        : "백업 복원을 완료했습니다.");
+    })();
+    maintenanceRef.current = operation;
+    try {
+      await operation;
+    } finally {
+      maintenanceRef.current = null;
     }
-    setSettingsMessage(payload && "restored" in payload && payload.warnings.length
-      ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
-      : "백업 복원을 완료했습니다.");
   };
 
   const handleCleanupOrphans = async () => {

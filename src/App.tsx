@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -33,13 +34,19 @@ import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
 import { useExamSessionController } from "./hooks/useExamSessionController";
 import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
+import { useMaintenanceCoordinator } from "./hooks/useMaintenanceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
 import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
+import LibraryExplorer from "./features/library/components/LibraryExplorer";
+import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
+import type { LibraryFolder } from "./types";
+import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
+import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 
 export default function App() {
-  const { confirm } = useAppDialog();
+  const { confirm, prompt } = useAppDialog();
   const {
     entries,
     loading,
@@ -48,6 +55,7 @@ export default function App() {
     refresh,
     addEntry,
     addEntries,
+    addEntriesWithImportAssetSession,
     updateEntry,
     replaceEntries,
     deleteEntry,
@@ -56,6 +64,7 @@ export default function App() {
     patchEntry,
     patchEntryWithImportAssetSession,
     flushEntries,
+    setEntriesMaintenanceBlocked,
   } = useEntries();
   const {
     settings,
@@ -82,6 +91,7 @@ export default function App() {
     clearSettingsError,
     retrySettingsSave,
     flushSettings,
+    setSettingsMaintenanceBlocked,
   } = useSettings();
   const { theme, setTheme } = useTheme();
   const { subjectOrder, moveSubject } = useSubjectOrder();
@@ -89,6 +99,7 @@ export default function App() {
   const [showLearningHub, setShowLearningHub] = useState(false);
   const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
+  const [showLibraryExplorer, setShowLibraryExplorer] = useState(false);
   const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
@@ -96,15 +107,16 @@ export default function App() {
     questionNumber: string;
     requestId: number;
   } | null>(null);
-  const workspaceDraftFlushRef = useRef<(() => Promise<void>) | null>(null);
-  const questionBankPreferenceFlushRef = useRef<(() => Promise<void>) | null>(null);
-  const registerQuestionBankPreferenceFlush = useCallback((flush: (() => Promise<void>) | null) => {
-    questionBankPreferenceFlushRef.current = flush;
-  }, []);
+  const {
+    registerWorkspaceDraftFlush,
+    registerQuestionBankPreferenceFlush,
+    flushTransientWrites,
+  } = useAppWriteRegistrations();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
-    addEntry,
+    existingEntries: entries,
+    addEntries,
   });
   const {
     session: examSession,
@@ -118,6 +130,9 @@ export default function App() {
     setSaveError: setExamSaveError,
     startError: examStartError,
     setStartError: setExamStartError,
+    loading: examSessionsLoading,
+    loadError: examSessionsLoadError,
+    reload: reloadExamSessions,
     savedSessions: savedExamSessions,
     activeGeneratedExam,
     open: openExamSession,
@@ -127,21 +142,28 @@ export default function App() {
     submit: handleExamSubmit,
   } = exam;
 
-  const registerWorkspaceDraftFlush = useCallback((flush: (() => Promise<void>) | null) => {
-    workspaceDraftFlushRef.current = flush;
-  }, []);
-
   const generatedExamController = useGeneratedExamController({
     examPrintPreferences: settings.examPrintPreferences,
     onOpenExam: openGeneratedExamSession,
   });
   const {
     flush: flushGeneratedExams,
+    reload: reloadGeneratedExams,
+    setGeneratedExamsMaintenanceBlocked,
     builderOpen: showExamBuilder,
     setBuilderOpen: setShowExamBuilder,
     listOpen: showGeneratedExams,
     setListOpen: setShowGeneratedExams,
   } = generatedExamController;
+  const runMaintenanceOperation = useMaintenanceCoordinator({
+    flushEntries,
+    flushSettings,
+    flushGeneratedExams,
+    setEntriesMaintenanceBlocked,
+    setSettingsMaintenanceBlocked,
+    setGeneratedExamsMaintenanceBlocked,
+  });
+  const library = useLibraryFolders();
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -175,32 +197,19 @@ export default function App() {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
 
-  const requestNavigation = useCallback(async (target: {
-    section?: EntryKind;
-    entryId?: string | null;
-    question?: { entryId: string; questionNumber: string };
-  }): Promise<boolean> => {
-    if (examSubmitting) {
-      setExamSaveError("시험 제출 중에는 이동할 수 없습니다.");
-      return false;
-    }
-    if (examSession) {
-      const isSameEntry = target.entryId === undefined || target.entryId === examSession.entryId;
-      const isSameSection = target.section === undefined || target.section === activeSection;
-      if (!isSameEntry || !isSameSection) {
-        const closed = await closeExamSession();
-        if (!closed) return false;
-      }
-    }
-    if (target.section) setActiveSection(target.section);
-    setShowLearningHub(false);
-    setShowQuestionBank(false);
-    if (target.entryId !== undefined) setSelectedId(target.entryId);
-    if (target.question) {
-      setQuestionTarget({ ...target.question, requestId: Date.now() });
-    }
-    return true;
-  }, [activeSection, closeExamSession, examSession, examSubmitting, setActiveSection, setExamSaveError, setSelectedId]);
+  const requestNavigation = useNotebookNavigationController({
+    activeSection,
+    examSubmitting,
+    examSession,
+    closeExamSession,
+    setActiveSection,
+    setSelectedId,
+    setShowLearningHub,
+    setShowQuestionBank,
+    setShowLibraryExplorer,
+    setQuestionTarget,
+    setExamSaveError,
+  });
 
   const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose } = useWindowCloseGuard({
     activeExam: examSession,
@@ -209,10 +218,7 @@ export default function App() {
     flushEntries,
     flushGeneratedExams,
     flushSettings,
-    flushImportWorkspaceDraft: async () => {
-      await workspaceDraftFlushRef.current?.();
-      await questionBankPreferenceFlushRef.current?.();
-    },
+    flushImportWorkspaceDraft: flushTransientWrites,
   });
 
   useEffect(() => {
@@ -245,6 +251,7 @@ export default function App() {
     subjectFilter,
     addEntry,
     addEntries,
+    addEntriesWithImportAssetSession,
     updateEntry,
     replaceEntries,
     deleteEntry,
@@ -260,12 +267,16 @@ export default function App() {
     upsertMemoTemplate,
     removeMemoTemplate,
     refreshSettings,
+    refreshGeneratedExams: reloadGeneratedExams,
+    runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
   });
 
   const {
     aiProviderStatus,
+    aiProviderStatusLoading,
+    aiProviderStatusError,
     aiProviderKeyInput,
     setAiProviderKeyInput,
     updateAiProviderConfig,
@@ -286,7 +297,7 @@ export default function App() {
       try {
         const { getVersion } = await import("@tauri-apps/api/app");
         const currentVersion = await getVersion();
-        await createPreUpdateBackup(currentVersion, update.latestVersion);
+        await runMaintenanceOperation(() => createPreUpdateBackup(currentVersion, update.latestVersion));
       } catch {
         actions.setSettingsMessage("업데이트 전 백업에 실패했습니다. 데이터를 보호하기 위해 설치를 중단했습니다.");
         return false;
@@ -325,7 +336,12 @@ export default function App() {
     });
   }, [examSessionRef]);
 
-  useAppMaintenance({ settings, patchSettings, report: setSettingsMessage });
+  useAppMaintenance({
+    settings,
+    patchSettings,
+    report: setSettingsMessage,
+    runMaintenanceOperation,
+  });
 
   const openSettings = (tab?: SettingsTab) => {
     setSettingsInitialTab(tab);
@@ -388,6 +404,49 @@ export default function App() {
       }
     })();
   };
+  const createLibraryFolder = useCallback(async (parentId?: string) => {
+    const name = await prompt({ title: "새 폴더", message: "폴더 이름을 입력하세요." });
+    if (!name?.trim()) return;
+    const now = new Date().toISOString();
+    await library.mutate((current) => [
+      ...current,
+      { id: uuidv4(), name: name.trim(), parentId, sortOrder: current.filter((folder) => folder.parentId === parentId).length, createdAt: now, updatedAt: now },
+    ]);
+  }, [library, prompt]);
+  const renameLibraryFolder = useCallback(async (folder: LibraryFolder) => {
+    const name = await prompt({ title: "폴더 이름 변경", message: "새 폴더 이름을 입력하세요.", defaultValue: folder.name });
+    if (!name?.trim() || name.trim() === folder.name) return;
+    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, name: name.trim(), updatedAt: new Date().toISOString() } : item));
+  }, [library, prompt]);
+  const moveLibraryFolder = useCallback(async (folder: LibraryFolder, parentId?: string) => {
+    if (folder.id === parentId) throw new Error("폴더를 자기 자신으로 이동할 수 없습니다.");
+    const descendants = new Set<string>([folder.id]);
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const item of library.folders) if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) { descendants.add(item.id); changed = true; }
+    }
+    if (parentId && descendants.has(parentId)) throw new Error("폴더를 자신의 하위 폴더로 이동할 수 없습니다.");
+    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, parentId, updatedAt: new Date().toISOString() } : item));
+  }, [library]);
+  const moveLibraryEntries = useCallback(async (entryIds: string[], folderId?: string) => {
+    const validFolderId = folderId && library.folders.some((folder) => folder.id === folderId) ? folderId : undefined;
+    await Promise.all(entryIds.map((entryId) => patchEntry(entryId, { folderId: validFolderId })));
+  }, [library.folders, patchEntry]);
+  const deleteLibraryFolder = useCallback(async (folder: LibraryFolder) => {
+    const childFolders = library.folders.filter((item) => item.parentId === folder.id);
+    const childEntries = entries.filter((entry) => entry.folderId === folder.id);
+    const accepted = await confirm({
+      title: "폴더 삭제",
+      message: childFolders.length || childEntries.length
+        ? `이 폴더의 하위 폴더 ${childFolders.length}개와 항목 ${childEntries.length}개를 루트로 이동합니다. 항목은 삭제되지 않습니다.`
+        : "빈 폴더를 삭제합니다.",
+      confirmLabel: "삭제",
+    });
+    if (!accepted) return;
+    await Promise.all(childEntries.map((entry) => patchEntry(entry.id, { folderId: undefined })));
+    await library.mutate((current) => current.filter((item) => item.id !== folder.id).map((item) => item.parentId === folder.id ? { ...item, parentId: undefined, updatedAt: new Date().toISOString() } : item));
+  }, [confirm, entries, library, patchEntry]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -430,10 +489,29 @@ export default function App() {
             }
           })();
         }}
+        libraryOpen={showLibraryExplorer}
+        onOpenLibrary={() => {
+          void (async () => {
+            if (await requestNavigation({ entryId: null })) {
+              setShowLearningHub(false);
+              setShowQuestionBank(false);
+              setShowLibraryExplorer(true);
+              setSelectedId(null);
+            }
+          })();
+        }}
       />
 
       <main className="main">
         {error && <ErrorNotice message={error} onRetry={() => void refresh()} onDismiss={clearError} />}
+        {examSessionsLoadError && (
+          <ErrorNotice
+            message={examSessionsLoadError}
+            onRetry={() => void reloadExamSessions()}
+            onDismiss={() => undefined}
+          />
+        )}
+        {examSessionsLoading && <p className="status-message" role="status">시험 기록을 불러오는 중입니다. 시험 시작과 저장은 잠시 차단됩니다.</p>}
         {availableUpdate && settings.updatePreferences.notificationsEnabled && availableUpdate.latestVersion !== settings.updatePreferences.skippedVersion && availableUpdate.latestVersion !== dismissedUpdateVersion && !examSession && (
           <div className="app-update-banner" role="status">
             <span>새 버전 {availableUpdate.latestVersion}을 사용할 수 있습니다.</span>
@@ -443,7 +521,7 @@ export default function App() {
             <button type="button" onClick={() => void patchSettings({ updatePreferences: { ...settings.updatePreferences, skippedVersion: availableUpdate.latestVersion } })}>이번 버전 건너뛰기</button>
           </div>
         )}
-        {!showLearningHub && !showQuestionBank && <AppToolbar
+        {!showLearningHub && !showQuestionBank && !showLibraryExplorer && <AppToolbar
           activeSection={activeSection}
           search={search}
           setSearch={setSearch}
@@ -461,7 +539,18 @@ export default function App() {
         />}
 
         <div className="content">
-          {showQuestionBank ? (
+          {showLibraryExplorer ? (
+            <LibraryExplorer
+              folders={library.folders}
+              entries={entries}
+              onOpenEntry={openEntryById}
+              onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
+              onRenameFolder={(folder) => void renameLibraryFolder(folder)}
+              onMoveFolder={(folder, parentId) => void moveLibraryFolder(folder, parentId)}
+              onMoveEntries={(entryIds, folderId) => void moveLibraryEntries(entryIds, folderId)}
+              onDeleteFolder={(folder) => void deleteLibraryFolder(folder)}
+            />
+          ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
               mode="question-bank"
               entries={entries}
@@ -654,6 +743,7 @@ export default function App() {
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               questionBankItems={buildQuestionBankItems(entries)}
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
+              onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
               onActiveContextChange={(context) => syncActiveContext(context)}
              />
             </>
@@ -778,6 +868,8 @@ export default function App() {
           theme={theme}
           setTheme={setTheme}
           aiProviderStatus={aiProviderStatus}
+          aiProviderStatusLoading={aiProviderStatusLoading}
+          aiProviderStatusError={aiProviderStatusError}
           aiProviderKeyInput={aiProviderKeyInput}
           setAiProviderKeyInput={setAiProviderKeyInput}
           updateAiProviderConfig={updateAiProviderConfig}

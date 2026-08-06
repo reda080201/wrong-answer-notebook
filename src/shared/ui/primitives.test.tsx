@@ -34,6 +34,17 @@ describe("shared UI primitives", () => {
     expect(items[0]).toHaveFocus();
   });
 
+  it("skips disabled menu items when moving focus", () => {
+    render(<Menu label="도구"><><button type="button" disabled>사용 불가</button><button type="button">실행</button><button type="button" aria-disabled="true">잠김</button><button type="button">다음</button></></Menu>);
+    fireEvent.click(screen.getByRole("button", { name: "도구" }));
+    const enabledFirst = screen.getByRole("menuitem", { name: "실행" });
+    expect(enabledFirst).toHaveFocus();
+    fireEvent.keyDown(enabledFirst, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: "다음" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("menuitem", { name: "다음" }), { key: "ArrowDown" });
+    expect(enabledFirst).toHaveFocus();
+  });
+
   it("names and isolates a menu trigger", () => {
     const parentClick = vi.fn();
     render(<div onClick={parentClick}><Menu label="⋮" triggerAriaLabel="문제지 추가 자료 메뉴" stopPropagation><button type="button">자료 추가</button></Menu></div>);

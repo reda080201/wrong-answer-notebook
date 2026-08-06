@@ -1,0 +1,39 @@
+{
+  "context": {
+    "sourceId": "source-entry",
+    "sourceQuestionNumber": "03",
+    "subject": "수학",
+    "unit": "미적분",
+    "subunit": "미분",
+    "difficultyScore": 72,
+    "concepts": ["도함수"],
+    "tags": ["기출"],
+    "keywords": ["접선"],
+    "entryTitle": "미분 문제지",
+    "entryKind": "problem_sheet",
+    "sourceType": "past_exam",
+    "formulae": ["f'(x)"],
+    "solutionMethods": ["조건을 먼저 확인"],
+    "passageClues": [],
+    "thinkers": [],
+    "choiceCriteria": [],
+    "content": "함수의 접선 문제",
+    "units": ["미적분"],
+    "subunits": ["미분"]
+  },
+  "candidates": [
+    {
+      "candidateId": "candidate:1",
+      "questionText": "접선의 기울기를 구하시오.",
+      "subject": "수학",
+      "unit": "미적분",
+      "subunit": "미분",
+      "concepts": ["도함수"],
+      "difficultyScore": 70,
+      "importanceScore": 80,
+      "qualityScore": 90,
+      "hasExplanation": true,
+      "explanation": "도함수의 정의를 적용한다."
+    }
+  ]
+}

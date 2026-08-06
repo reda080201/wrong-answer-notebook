@@ -24,6 +24,7 @@ export function useSettings() {
   const mutationRef = useRef(0);
   const failedErrorRef = useRef<Error | null>(null);
   const loadedRef = useRef(false);
+  const maintenanceBlockedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
 
   useEffect(() => {
@@ -35,6 +36,11 @@ export function useSettings() {
     loadedRef.current = false;
     try {
       setSettingsError(null);
+      await drain();
+      if (refreshMutation !== mutationRef.current) {
+        loadedRef.current = true;
+        return;
+      }
       const loaded = await loadSettings();
       if (refreshMutation === mutationRef.current) {
         settingsRef.current = loaded;
@@ -51,13 +57,16 @@ export function useSettings() {
         loadedRef.current = true;
       }
     }
-  }, []);
+  }, [drain]);
 
   useEffect(() => {
     refreshSettings();
   }, [refreshSettings]);
 
   const updateSettings = useCallback((next: AppSettings) => {
+    if (maintenanceBlockedRef.current) {
+      return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
+    }
     if (!loadedRef.current) {
       return Promise.reject(new Error("설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
     }
@@ -280,6 +289,10 @@ export function useSettings() {
     });
   }, [updateSettings]);
 
+  const setSettingsMaintenanceBlocked = useCallback((blocked: boolean) => {
+    maintenanceBlockedRef.current = blocked;
+  }, []);
+
   return {
     settings,
     settingsError,
@@ -304,6 +317,7 @@ export function useSettings() {
     refreshSettings,
     retrySettingsSave,
     flushSettings,
+    setSettingsMaintenanceBlocked,
     clearSettingsError: () => setSettingsError(null),
   };
 }

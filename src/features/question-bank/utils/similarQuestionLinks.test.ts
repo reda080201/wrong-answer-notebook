@@ -46,6 +46,7 @@ describe("similar question links", () => {
     expect(context).toMatchObject({ entryTitle: "합성함수 특강", entryKind: "lecture", tags: ["기출"], formulae: ["f(g(x))"], solutionMethods: ["안쪽부터 미분"] });
     expect(context).not.toHaveProperty("text");
     expect(context).not.toHaveProperty("memo");
+    expect(context.content).not.toContain("조건을 먼저 확인");
     expect(toSimilarQuestionCandidatePayload(item("candidate", "1", "미분", ["연쇄법칙"]))).toMatchObject({ candidateId: "candidate:1", questionText: "문제" });
   });
 

@@ -88,14 +88,18 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
     }
   };
 
+  const requestClose = () => {
+    if (!saving) onClose();
+  };
+
   return (
-    <Dialog open onClose={onClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving} busy={saving}>
+    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Learning Import</span>
             <h2>{mode === "lecture" ? "특강자료 가져오기" : "HTML/JSON 특강 가져오기"}</h2>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose}>
+          <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
             닫기
           </button>
         </header>
@@ -151,7 +155,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
         </div>
 
         <footer className="modal-actions">
-          <button type="button" className="btn-secondary" onClick={onClose}>
+          <button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>
             취소
           </button>
           <button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving}>

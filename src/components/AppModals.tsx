@@ -31,6 +31,18 @@ import type { AnswerMergeResolution } from "../features/supplemental-resources/s
 import type { ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
 import { normalizeChoice } from "../features/import-workspace/model/importWorkspace";
 import { parseQuestionText } from "../utils/textLayout";
+import { normalizeQuestionNumber } from "../utils/questionMeta";
+
+type PendingSupplementalImport = {
+  target: WrongAnswerEntry;
+  expectedUpdatedAt: string;
+  mode: SupplementalImportMode;
+  data: Partial<EntryFormData>;
+  assetFiles: File[];
+  savedImageFilenames: string[];
+  sourceFilename?: string;
+  assetSession?: ImportWorkspace["assetSession"];
+};
 
 interface AppModalsProps {
   registerWorkspaceDraftFlush: (flush: (() => Promise<void>) | null) => void;
@@ -139,7 +151,9 @@ export default function AppModals({
 }: AppModalsProps) {
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
-  const [pendingSupplemental, setPendingSupplemental] = useState<{ target: WrongAnswerEntry; expectedUpdatedAt: string; mode: SupplementalImportMode; data: Partial<EntryFormData>; assetFiles: File[]; savedImageFilenames: string[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] } | null>(null);
+  const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
+  const [supplementalCleanupError, setSupplementalCleanupError] = useState<string | null>(null);
+  const [supplementalCleanupBusy, setSupplementalCleanupBusy] = useState(false);
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -147,8 +161,17 @@ export default function AppModals({
       const blocks = parseQuestionText(item.question ?? "").filter((block) => block.kind === "question");
       const questionImageAssets = item.questionImages ?? [];
       const sourcePageAssets = item.sourcePageImages ?? [];
-      const questions: ImportQuestionDraft[] = blocks.length ? blocks.map((block, index) => ({ id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures: (item.figures ?? []).filter((figure) => figure.questionNumber === block.numberLabel), questionImageAssets, sourcePageAssets, answer: item.answerKey?.find((answer) => answer.questionNumber === block.numberLabel) ? { ...item.answerKey.find((answer) => answer.questionNumber === block.numberLabel)!, id: uuidv4(), confirmed: false } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: "ready", warnings: [] })) : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], questionImageAssets, sourcePageAssets, answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: item.explanationParts ?? [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
-      return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
+      const knownEntryKeys = new Set(["entryKind", "subject", "title", "question", "questionImages", "sourcePageImages", "problemSource", "importAudit", "questionMeta", "sheetGroup", "tags", "difficulty", "difficultyScore", "concepts", "checklist", "learningBlocks", "answerKey", "figures", "questionContentSegments", "explanationParts", "memo", "annotations", "myAnswer", "correctAnswer", "difficult", "mastered"]);
+      const findQuestionNumber = (value: string | number | undefined) => normalizeQuestionNumber(String(value ?? ""));
+      const questions: ImportQuestionDraft[] = blocks.length
+        ? blocks.map((block, index) => {
+          const number = findQuestionNumber(block.numberLabel) || String(block.displayNumber);
+          const figures = (item.figures ?? []).filter((figure) => findQuestionNumber(figure.questionNumber) === number);
+          const answer = item.answerKey?.find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
+          return { id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures, questionImageAssets, sourcePageAssets, answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: "ready", warnings: [] };
+        })
+        : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], questionImageAssets, sourcePageAssets, answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
+      return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: assetFiles.length ? { id: staged?.sessionId ?? `memory-${uuidv4()}`, mode: staged ? "tauri-staged" : "memory-only", manifestVersion: staged ? 1 : undefined, createdAt: staged ? now : undefined, sourceToStaged: staged?.sourceToStaged, assets: staged?.assets ?? assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined, groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
@@ -177,14 +200,35 @@ export default function AppModals({
   const discardWorkspaceAssets = async (candidate: ImportWorkspace) => {
     if (candidate.assetSession?.mode === "tauri-staged") await discardImportAssetSession(candidate.assetSession.id);
   };
-  const discardPendingSupplemental = (pending: NonNullable<typeof pendingSupplemental>) => {
-    void Promise.all([
-      pending.assetSession?.mode === "tauri-staged"
-        ? discardImportAssetSession(pending.assetSession.id).catch(() => undefined)
-        : Promise.resolve(),
-      ...pending.savedImageFilenames.map((filename) => deleteImage(filename).catch(() => undefined)),
-    ]);
-    setPendingSupplemental(null);
+  const discardPendingSupplemental = async (pending: PendingSupplementalImport) => {
+    setSupplementalCleanupBusy(true);
+    setSupplementalCleanupError(null);
+    let remainingSession = pending.assetSession;
+    const remainingImages = [...pending.savedImageFilenames];
+    try {
+      if (pending.assetSession?.mode === "tauri-staged") {
+        await discardImportAssetSession(pending.assetSession.id);
+        remainingSession = undefined;
+      }
+      for (const filename of pending.savedImageFilenames) {
+        await deleteImage(filename);
+        remainingImages.splice(remainingImages.indexOf(filename), 1);
+      }
+      setPendingSupplemental(null);
+    } catch (cleanupError) {
+      // Retain only work that still needs cleanup. A failed staged-session discard
+      // keeps its ID, so the user can retry without losing the recoverable assets.
+      setPendingSupplemental((current) => current === pending
+        ? { ...current, assetSession: remainingSession, savedImageFilenames: remainingImages }
+        : current);
+      setSupplementalCleanupError(
+        cleanupError instanceof Error
+          ? `임시 이미지 자산을 정리하지 못했습니다. ${cleanupError.message}`
+          : "임시 이미지 자산을 정리하지 못했습니다. 다시 시도하거나 병합을 저장해 주세요.",
+      );
+    } finally {
+      setSupplementalCleanupBusy(false);
+    }
   };
 
   return (
@@ -249,6 +293,7 @@ export default function AppModals({
               sourceToStaged: staged.sourceToStaged,
               assets: staged.assets,
             } : undefined;
+            setSupplementalCleanupError(null);
             setPendingSupplemental({ target: supplementalTarget.entry, expectedUpdatedAt: supplementalTarget.entry.updatedAt, mode: supplementalTarget.mode, data, assetFiles: staged ? [] : assetFiles, savedImageFilenames, sourceFilename, assetSession });
             onCloseSupplementalImport();
           }}
@@ -262,9 +307,13 @@ export default function AppModals({
           mode={pendingSupplemental.mode}
           assetFiles={pendingSupplemental.assetFiles}
           assetSession={pendingSupplemental.assetSession}
-          onClose={() => discardPendingSupplemental(pendingSupplemental)}
+          cleanupError={supplementalCleanupError}
+          cleanupBusy={supplementalCleanupBusy}
+          onClose={() => void discardPendingSupplemental(pendingSupplemental)}
+          onRetryCleanup={supplementalCleanupError ? () => void discardPendingSupplemental(pendingSupplemental) : undefined}
           onSave={async ({ data, mode, title, resolutions, assetFiles, assetSession }) => {
             await applySupplementalMerge({ entryId: pendingSupplemental.target.id, expectedUpdatedAt: pendingSupplemental.expectedUpdatedAt, data, mode, title, resolutions, assetFiles, sourceFilename: pendingSupplemental.sourceFilename, assetSession: pendingSupplemental.assetSession ?? assetSession });
+            setSupplementalCleanupError(null);
             setPendingSupplemental(null);
           }}
         />

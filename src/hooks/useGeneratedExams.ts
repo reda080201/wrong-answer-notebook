@@ -18,6 +18,7 @@ export function useGeneratedExams() {
   const loadRequestRef = useRef(0);
   const loadSucceededRef = useRef(false);
   const savingCountRef = useRef(0);
+  const maintenanceBlockedRef = useRef(false);
   const [hasRetryableChange, setHasRetryableChange] = useState(false);
   const { enqueue: enqueueTask, drain } = useSerialTaskQueue();
 
@@ -28,6 +29,11 @@ export function useGeneratedExams() {
     setLoading(true);
     setLoadError(null);
     try {
+      await drain();
+      if (loadMutation !== mutationRef.current || failedErrorRef.current) {
+        loadSucceededRef.current = true;
+        return;
+      }
       const loaded = await loadGeneratedExams();
       if (requestId !== loadRequestRef.current) return;
       if (loadMutation !== mutationRef.current) {
@@ -53,13 +59,16 @@ export function useGeneratedExams() {
     } finally {
       if (requestId === loadRequestRef.current) setLoading(false);
     }
-  }, []);
+  }, [drain]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
 
   const enqueue = useCallback((next: GeneratedExam[], retrying = false) => {
+    if (maintenanceBlockedRef.current) {
+      return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
+    }
     if (!loadSucceededRef.current) {
       return Promise.reject(new Error(loadError ?? "생성 모의고사를 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
     }
@@ -120,5 +129,9 @@ export function useGeneratedExams() {
     if (failedErrorRef.current) throw failedErrorRef.current;
   }, [drain]);
 
-  return { exams, loading, loadError, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, clearError: () => setError(null) };
+  const setGeneratedExamsMaintenanceBlocked = useCallback((blocked: boolean) => {
+    maintenanceBlockedRef.current = blocked;
+  }, []);
+
+  return { exams, loading, loadError, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, setGeneratedExamsMaintenanceBlocked, clearError: () => setError(null) };
 }

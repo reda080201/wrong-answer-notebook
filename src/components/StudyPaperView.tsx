@@ -95,6 +95,7 @@ export default function StudyPaperView({
           sheetLayout={sheetLayout}
           searchQuery={searchQuery}
           suspiciousSegments={suspiciousSegments}
+          sourceEntry={entry}
           onOpenQuestionTheater={onOpenQuestionTheater}
           questionMeta={entry.questionMeta ?? []}
           answerKey={entry.answerKey ?? []}

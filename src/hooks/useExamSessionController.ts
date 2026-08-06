@@ -21,15 +21,23 @@ import {
 import { createSessionFromGeneratedExam } from "../features/exam-builder/services/createSessionFromGeneratedExam";
 import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "../features/entries/model/entryDraft";
 import { createSerialTaskQueue } from "./useSerialTaskQueue";
+import { normalizeQuestionNumber } from "../utils/questionMeta";
+
+const normalizeExamQuestionNumber = (value: string | number | undefined | null) =>
+  normalizeQuestionNumber(value);
+
+const EMPTY_ENTRIES: WrongAnswerEntry[] = [];
 
 interface UseExamSessionControllerOptions {
   chatGptPreferences: ChatGptMcpPreferences;
-  addEntry(data: EntryFormData): Promise<unknown>;
+  existingEntries?: WrongAnswerEntry[];
+  addEntries: (data: EntryFormData[]) => Promise<string[]>;
 }
 
 export function useExamSessionController({
   chatGptPreferences,
-  addEntry,
+  existingEntries = EMPTY_ENTRIES,
+  addEntries,
 }: UseExamSessionControllerOptions) {
   const [session, setSession] = useState<ExamSession | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -37,25 +45,53 @@ export function useExamSessionController({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedSessions, setSavedSessions] = useState<ExamSession[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
   const savedSessionsRef = useRef<ExamSession[]>([]);
   const sessionRef = useRef<ExamSession | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveQueueRef = useRef(createSerialTaskQueue());
   const saveSequenceRef = useRef(0);
+  const loadRequestRef = useRef(0);
+  const loadedRef = useRef(false);
+  const generatedEntryKeysRef = useRef(new Set<string>());
 
   useEffect(() => {
-    let cancelled = false;
-    void loadExamSessions().then((items) => {
-      if (cancelled) return;
+    generatedEntryKeysRef.current = new Set(
+      existingEntries
+        .filter((entry) => entry.generatedFromExamSessionId && entry.generatedFromQuestionNumber)
+        .map((entry) => `${entry.generatedFromExamSessionId}:${normalizeExamQuestionNumber(entry.generatedFromQuestionNumber)}`),
+    );
+  }, [existingEntries]);
+
+  const reload = useCallback(async (): Promise<boolean> => {
+    const request = ++loadRequestRef.current;
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const items = await loadExamSessions();
+      if (request !== loadRequestRef.current) return false;
       const normalized = Array.isArray(items) ? items : [];
       savedSessionsRef.current = normalized;
       setSavedSessions(normalized);
-    }).catch(() => {
-      if (!cancelled) setSavedSessions([]);
-    });
-    return () => { cancelled = true; };
+      loadedRef.current = true;
+      setLoading(false);
+      return true;
+    } catch (error) {
+      if (request !== loadRequestRef.current) return false;
+      loadedRef.current = false;
+      setLoading(false);
+      setLoadError(error instanceof Error && error.message
+        ? error.message
+        : "시험 기록을 불러오지 못했습니다.");
+      return false;
+    }
   }, []);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
 
   useEffect(() => {
     if (!session) {
@@ -96,7 +132,12 @@ export function useExamSessionController({
   }, [chatGptPreferences, session]);
 
   const flush = useCallback(async (next: ExamSession, updateUi = true): Promise<boolean> => {
+    if (!loadedRef.current) {
+      if (updateUi) setSaveError(loadError ?? "시험 기록을 불러오는 중이어서 저장할 수 없습니다.");
+      return false;
+    }
     const sequence = ++saveSequenceRef.current;
+    const previousSessions = savedSessionsRef.current;
     const nextSessions = mergeExamSession(savedSessionsRef.current, next);
     savedSessionsRef.current = nextSessions;
     if (updateUi) setSavedSessions(nextSessions);
@@ -106,6 +147,8 @@ export function useExamSessionController({
       return true;
     }).catch((error) => {
       if (sequence === saveSequenceRef.current) {
+        savedSessionsRef.current = previousSessions;
+        if (updateUi) setSavedSessions(previousSessions);
         setSaveError(error instanceof Error && error.message
           ? error.message
           : "모의고사 진행 상태를 저장하지 못했습니다.");
@@ -117,7 +160,7 @@ export function useExamSessionController({
       setSaving(false);
     }
     return saved;
-  }, []);
+  }, [loadError]);
 
   const close = useCallback(async (): Promise<boolean> => {
     if (submitting) {
@@ -138,6 +181,10 @@ export function useExamSessionController({
 
   const open = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
     setStartError(null);
+    if (!loadedRef.current) {
+      setStartError({ entryId: entry.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
+      return;
+    }
     setActiveGeneratedExam(null);
     if (resumable) {
       setSession(resumable);
@@ -156,16 +203,22 @@ export function useExamSessionController({
       return;
     }
     setSession(next);
-  }, []);
+  }, [loadError]);
 
   const openGenerated = useCallback((exam: GeneratedExam) => {
+    if (!loadedRef.current) {
+      setStartError({ entryId: exam.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
+      return;
+    }
     if (!exam.questions.length) return;
     setActiveGeneratedExam(exam);
     setStartError(null);
     setSession(createSessionFromGeneratedExam(exam));
-  }, []);
+  }, [loadError]);
 
   const submit = useCallback(async (current: ExamSession) => {
+    if (!loadedRef.current) throw new Error(loadError ?? "시험 기록을 불러오는 중이어서 제출할 수 없습니다.");
+    if (current.status === "submitted") return;
     const score = scoreExamSession(current);
     const submitted = {
       ...current,
@@ -173,16 +226,20 @@ export function useExamSessionController({
       submittedAt: new Date().toISOString(),
       score,
     };
-    setSession(submitted);
     const wrongQuestions = submitted.questions.filter((question) => {
       const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber);
       return result?.hasResponse && !result.correct;
     });
-    for (const question of wrongQuestions) {
+    const wrongForms = wrongQuestions.filter((question) => {
+      const key = `${submitted.id}:${normalizeExamQuestionNumber(question.questionNumber)}`;
+      return !generatedEntryKeysRef.current.has(key);
+    }).map((question) => {
       const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
       const draft = createEmptyEntryDraft("wrong_answer");
-      await addEntry(normalizeEntryDraftForSave({
+      return normalizeEntryDraftForSave({
         ...draft,
+        generatedFromExamSessionId: submitted.id,
+        generatedFromQuestionNumber: question.questionNumber,
         subject: submitted.subject,
         title: `${submitted.title} · ${question.questionNumber}번 오답`,
         question: [question.question, ...question.choices].filter(Boolean).join("\n"),
@@ -194,9 +251,19 @@ export function useExamSessionController({
           ? [{ id: crypto.randomUUID(), text: question.explanation, images: [] }]
           : draft.explanationParts,
         tags: [submitted.subject, "모의고사", "채점 오답"],
-      }));
+      });
+    });
+    if (wrongForms.length) {
+      await addEntries(wrongForms);
+      wrongForms.forEach((form) => {
+        if (form.generatedFromExamSessionId && form.generatedFromQuestionNumber) {
+          generatedEntryKeysRef.current.add(`${form.generatedFromExamSessionId}:${normalizeExamQuestionNumber(form.generatedFromQuestionNumber)}`);
+        }
+      });
     }
-  }, [addEntry]);
+    if (!(await flush(submitted))) throw new Error("제출 결과를 저장하지 못했습니다.");
+    setSession(submitted);
+  }, [addEntries, flush, loadError]);
 
   useEffect(() => {
     sessionRef.current = session;
@@ -230,6 +297,9 @@ export function useExamSessionController({
     setStartError,
     savedSessions,
     activeGeneratedExam,
+    loading,
+    loadError,
+    reload,
     open,
     openGenerated,
     close,

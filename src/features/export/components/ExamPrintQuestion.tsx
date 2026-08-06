@@ -25,7 +25,7 @@ export default function ExamPrintQuestion({ question, imageUrls, workspaceSize }
       return <aside key={key} className="exam-print-described"><strong>도표 설명</strong><p>{figure.caption || figure.title || "이미지 없이 설명만 제공됩니다."}</p></aside>;
     }
     const url = imageUrls[figure.image] ?? "";
-    return <figure key={key} className="exam-print-figure">{url ? <img className="exam-print-img" src={url} alt={figure.title || figure.caption || figure.image} /> : <figcaption>{figure.caption || figure.title || figure.image}</figcaption>}</figure>;
+    return <figure key={key} className="exam-print-figure">{url ? <img data-print-filename={figure.image} className="exam-print-img" src={url} alt={figure.title || figure.caption || figure.image} /> : <figcaption>{figure.caption || figure.title || figure.image}</figcaption>}</figure>;
   };
   return (
     <section className={`exam-print-question${long ? " is-long" : ""}`}>

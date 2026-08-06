@@ -4,6 +4,7 @@ import type { EntryFormData, WrongAnswerEntry } from "../types";
 
 vi.mock("../api", () => ({
   deleteImage: vi.fn(),
+  commitImportAssetSessionEntries: vi.fn(),
   commitImportAssetSessionEntry: vi.fn(),
   errorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? `${fallback} (${error.message})` : fallback,
@@ -11,7 +12,13 @@ vi.mock("../api", () => ({
   saveEntries: vi.fn(),
 }));
 
-import { commitImportAssetSessionEntry, deleteImage, loadEntries, saveEntries } from "../api";
+import {
+  commitImportAssetSessionEntries,
+  commitImportAssetSessionEntry,
+  deleteImage,
+  loadEntries,
+  saveEntries,
+} from "../api";
 import { useEntries } from "./useEntries";
 
 const entry: WrongAnswerEntry = {
@@ -54,6 +61,7 @@ const form: EntryFormData = {
 describe("useEntries", () => {
   beforeEach(() => {
     vi.mocked(deleteImage).mockReset();
+    vi.mocked(commitImportAssetSessionEntries).mockReset();
     vi.mocked(commitImportAssetSessionEntry).mockReset();
     vi.mocked(loadEntries).mockReset();
     vi.mocked(saveEntries).mockReset();
@@ -61,6 +69,7 @@ describe("useEntries", () => {
     vi.mocked(saveEntries).mockResolvedValue(undefined);
     vi.mocked(deleteImage).mockResolvedValue(undefined);
     vi.mocked(commitImportAssetSessionEntry).mockResolvedValue([]);
+    vi.mocked(commitImportAssetSessionEntries).mockResolvedValue([]);
   });
 
   it("does not delete removed images when saving an update fails", async () => {
@@ -194,5 +203,24 @@ describe("useEntries", () => {
       expect.objectContaining({ memo: "staged 자료 병합" }),
     );
     expect(result.current.entries[0]).toMatchObject({ memo: "staged 자료 병합" });
+  });
+
+  it("adds imported entries through the staged-asset transaction without a separate entries write", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.addEntriesWithImportAssetSession(
+        "11111111-1111-4111-8111-111111111111",
+        [{ ...form, title: "staged 가져오기" }],
+      );
+    });
+
+    expect(saveEntries).not.toHaveBeenCalled();
+    expect(commitImportAssetSessionEntries).toHaveBeenCalledWith(
+      "11111111-1111-4111-8111-111111111111",
+      [expect.objectContaining({ title: "staged 가져오기" })],
+    );
+    expect(result.current.entries[0]).toMatchObject({ title: "staged 가져오기" });
   });
 });

@@ -2,6 +2,7 @@
 
 mod audit;
 
+use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
 use crate::notebook_store::{
     matched_snippet, normalize_question_number, NotebookStore, SearchQuery,
 };
@@ -32,7 +33,6 @@ use uuid::Uuid;
 pub const DEFAULT_MCP_PORT: u16 = 43129;
 const MCP_KEYRING_SERVICE: &str = "wrong-answer-notebook-mcp";
 const MCP_KEYRING_USER: &str = "bridge-token";
-const MCP_BRIDGE_VERSION: &str = "local-bridge-v2";
 const PAIRING_TTL: Duration = Duration::from_secs(5 * 60);
 const MAX_ACTIVE_PAIRING_CODES: usize = 3;
 const PAIRING_WINDOW: Duration = Duration::from_secs(60);

@@ -3,6 +3,8 @@
 .exam-print-root { color: #111; background: #fff; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
 .exam-print-page { width: 180mm; margin: 0 auto 16px; padding: 8mm; border: 1px dashed #ccc; background: #fff; }
 @media print { .exam-print-page { width: auto; margin: 0; padding: 0; border: 0; } }
+.exam-print-page-number { display: none; }
+@media print { .exam-print-page-number { display: block; position: fixed; right: 0; bottom: 0; font-size: 10px; color: #444; } .exam-print-page-number::after { content: counter(page); } }
 .exam-print-header { margin-bottom: 12px; }
 .exam-print-header h1 { font-size: 20px; margin: 0 0 6px; }
 .exam-print-meta { font-size: 12px; color: #333; }
@@ -18,7 +20,7 @@
 .exam-print-workspace.small { min-height: 24px; }
 .exam-print-workspace.normal { min-height: 48px; }
 .exam-print-workspace.large { min-height: 96px; }
-.exam-print-answer-sheet { page-break-before: always; }
+.exam-print-page + .exam-print-page, .exam-print-answer-sheet { break-before: page; page-break-before: always; }
 .exam-print-answer-row { display: flex; gap: 10px; align-items: center; margin: 4px 0; font-size: 13px; }
 .exam-print-bubbles span { display: inline-block; width: 18px; height: 18px; border: 1px solid #333; border-radius: 50%; text-align: center; line-height: 18px; margin-right: 4px; font-size: 10px; }
 .exam-print-blank { display: inline-block; min-width: 120px; border-bottom: 1px solid #333; height: 18px; }
