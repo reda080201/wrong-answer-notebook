@@ -116,7 +116,6 @@ export default function App() {
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
     existingEntries: entries,
-    addEntry,
     addEntries,
   });
   const {
