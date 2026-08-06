@@ -619,3 +619,99 @@ pub(crate) fn rank_similar_questions_with_ai(
         prompt_version: SIMILAR_QUESTION_PROMPT_VERSION,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn request() -> SimilarQuestionRankingRequest {
+        SimilarQuestionRankingRequest {
+            context: SimilarQuestionContextRequest {
+                source_id: "source".into(),
+                source_question_number: Some("03".into()),
+                subject: Some("수학".into()),
+                unit: Some("미적분".into()),
+                subunit: Some("미분".into()),
+                difficulty_score: Some(72.0),
+                concepts: vec!["도함수".into()],
+                tags: vec!["기출".into()],
+                keywords: vec!["접선".into()],
+                entry_title: Some("미분 문제지".into()),
+                entry_kind: Some("problem_sheet".into()),
+                source_type: Some("past_exam".into()),
+                formulae: vec!["f'(x)".into()],
+                solution_methods: vec!["조건을 먼저 확인".into()],
+                passage_clues: vec![],
+                thinkers: vec![],
+                choice_criteria: vec![],
+                content: Some("함수의 접선 문제".into()),
+                units: vec!["미적분".into()],
+                subunits: vec!["미분".into()],
+            },
+            candidates: vec![SimilarQuestionCandidateRequest {
+                candidate_id: "candidate:1".into(),
+                question_text: "접선의 기울기를 구하시오.".into(),
+                subject: "수학".into(),
+                unit: Some("미적분".into()),
+                subunit: Some("미분".into()),
+                concepts: vec!["도함수".into()],
+                difficulty_score: Some(70.0),
+                importance_score: Some(80.0),
+                quality_score: Some(90.0),
+                has_explanation: true,
+                explanation: Some("도함수의 정의를 적용한다.".into()),
+            }],
+        }
+    }
+
+    #[test]
+    fn ranking_contract_serializes_camel_case_and_preserves_context() {
+        let value = serde_json::to_value(request()).expect("request should serialize");
+        assert_eq!(value["context"]["sourceId"], "source");
+        assert_eq!(value["context"]["sourceQuestionNumber"], "03");
+        assert_eq!(value["context"]["solutionMethods"][0], "조건을 먼저 확인");
+        assert_eq!(value["candidates"][0]["candidateId"], "candidate:1");
+        assert_eq!(value["candidates"][0]["hasExplanation"], true);
+        assert!(value["context"].get("source_id").is_none());
+    }
+
+    #[test]
+    fn ranking_contract_rejects_oversized_context_and_candidate_lists() {
+        let mut oversized = request();
+        oversized.context.content = Some("가".repeat(MAX_SIMILAR_CONTEXT_CONTENT_BYTES + 1));
+        assert!(validate_similar_question_ranking_request(&oversized).is_err());
+
+        let mut too_many = request();
+        too_many.candidates = (0..=MAX_SIMILAR_QUESTION_CANDIDATES)
+            .map(|index| SimilarQuestionCandidateRequest {
+                candidate_id: format!("candidate:{index}"),
+                question_text: "문제".into(),
+                subject: "수학".into(),
+                unit: None,
+                subunit: None,
+                concepts: vec![],
+                difficulty_score: None,
+                importance_score: None,
+                quality_score: None,
+                has_explanation: false,
+                explanation: None,
+            })
+            .collect();
+        assert!(validate_similar_question_ranking_request(&too_many).is_err());
+    }
+
+    #[test]
+    fn typescript_fixture_deserializes_into_the_rust_request_dto() {
+        let raw = include_str!("../../tests/fixtures/similar-question-ranking-request.json");
+        let request: SimilarQuestionRankingRequest = serde_json::from_str(raw)
+            .expect("the shared TypeScript payload fixture must match the Rust DTO");
+        assert_eq!(request.context.source_id, "source-entry");
+        assert_eq!(
+            request.context.source_question_number.as_deref(),
+            Some("03")
+        );
+        assert_eq!(request.candidates[0].candidate_id, "candidate:1");
+        assert_eq!(request.candidates[0].has_explanation, true);
+        assert!(validate_similar_question_ranking_request(&request).is_ok());
+    }
+}

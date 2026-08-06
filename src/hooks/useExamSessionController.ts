@@ -31,14 +31,12 @@ const EMPTY_ENTRIES: WrongAnswerEntry[] = [];
 interface UseExamSessionControllerOptions {
   chatGptPreferences: ChatGptMcpPreferences;
   existingEntries?: WrongAnswerEntry[];
-  addEntry?(data: EntryFormData): Promise<unknown>;
-  addEntries?(data: EntryFormData[]): Promise<string[]>;
+  addEntries: (data: EntryFormData[]) => Promise<string[]>;
 }
 
 export function useExamSessionController({
   chatGptPreferences,
   existingEntries = EMPTY_ENTRIES,
-  addEntry,
   addEntries,
 }: UseExamSessionControllerOptions) {
   const [session, setSession] = useState<ExamSession | null>(null);
@@ -256,18 +254,7 @@ export function useExamSessionController({
       });
     });
     if (wrongForms.length) {
-      if (addEntries) {
-        await addEntries(wrongForms);
-      } else if (addEntry) {
-        for (const form of wrongForms) {
-          await addEntry(form);
-          if (form.generatedFromExamSessionId && form.generatedFromQuestionNumber) {
-            generatedEntryKeysRef.current.add(`${form.generatedFromExamSessionId}:${normalizeExamQuestionNumber(form.generatedFromQuestionNumber)}`);
-          }
-        }
-      } else {
-        throw new Error("오답 저장 기능을 사용할 수 없습니다.");
-      }
+      await addEntries(wrongForms);
       wrongForms.forEach((form) => {
         if (form.generatedFromExamSessionId && form.generatedFromQuestionNumber) {
           generatedEntryKeysRef.current.add(`${form.generatedFromExamSessionId}:${normalizeExamQuestionNumber(form.generatedFromQuestionNumber)}`);
@@ -276,7 +263,7 @@ export function useExamSessionController({
     }
     if (!(await flush(submitted))) throw new Error("제출 결과를 저장하지 못했습니다.");
     setSession(submitted);
-  }, [addEntries, addEntry, flush, loadError]);
+  }, [addEntries, flush, loadError]);
 
   useEffect(() => {
     sessionRef.current = session;

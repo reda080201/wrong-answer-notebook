@@ -57,7 +57,7 @@ describe("useExamSessionController safety guards", () => {
   it("blocks opening an exam until session loading succeeds", async () => {
     let resolveLoad!: (sessions: ExamSession[]) => void;
     loadExamSessions.mockReturnValueOnce(new Promise<ExamSession[]>((resolve) => { resolveLoad = resolve; }));
-    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences }));
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
 
     act(() => result.current.open(entry));
     expect(result.current.session).toBeNull();
