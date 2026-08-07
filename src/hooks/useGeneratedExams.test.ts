@@ -69,4 +69,39 @@ describe("useGeneratedExams retry", () => {
     expect(result.current.exams).toEqual([exam]);
     expect(saveGeneratedExams).not.toHaveBeenCalled();
   });
+
+  it("does not save an empty list after load failure and reloads only once", async () => {
+    let resolveReload!: (value: GeneratedExam[]) => void;
+    loadGeneratedExams
+      .mockRejectedValueOnce(new Error("permission denied"))
+      .mockReturnValueOnce(new Promise<GeneratedExam[]>((resolve) => { resolveReload = resolve; }));
+    const { result } = renderHook(() => useGeneratedExams());
+    await waitFor(() => expect(result.current.loadError).toContain("permission denied"));
+
+    await act(async () => {
+      await expect(result.current.remove("exam-1")).rejects.toThrow("permission denied");
+    });
+    expect(saveGeneratedExams).not.toHaveBeenCalled();
+
+    let first!: Promise<void>;
+    await act(async () => {
+      first = result.current.reload();
+      await result.current.reload();
+    });
+    resolveReload([exam]);
+    await act(async () => { await first; });
+    expect(loadGeneratedExams).toHaveBeenCalledTimes(2);
+    expect(result.current.exams).toEqual([exam]);
+  });
+
+  it("treats a valid JSON object payload as a load failure", async () => {
+    loadGeneratedExams.mockResolvedValueOnce({} as never);
+    const { result } = renderHook(() => useGeneratedExams());
+
+    await waitFor(() => expect(result.current.loadError).toContain("배열이어야 합니다"));
+    await act(async () => {
+      await expect(result.current.remove("exam-1")).rejects.toThrow("배열이어야 합니다");
+    });
+    expect(saveGeneratedExams).not.toHaveBeenCalled();
+  });
 });

@@ -70,6 +70,36 @@ describe("useExamSessionController safety guards", () => {
     expect(result.current.session?.entryId).toBe(entry.id);
   });
 
+  it("keeps exam persistence blocked after load failure and recovers with one retry", async () => {
+    loadExamSessions.mockRejectedValueOnce(new Error("permission denied")).mockResolvedValueOnce([]);
+    const addEntries = vi.fn(async () => []);
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries }));
+
+    await waitFor(() => expect(result.current.loadError).toContain("permission denied"));
+    act(() => result.current.open(entry));
+    expect(result.current.session).toBeNull();
+    expect(saveExamSessions).not.toHaveBeenCalled();
+    expect(addEntries).not.toHaveBeenCalled();
+
+    await act(async () => {
+      const first = result.current.reload();
+      const duplicate = result.current.reload();
+      await expect(duplicate).resolves.toBe(false);
+      await expect(first).resolves.toBe(true);
+    });
+    expect(loadExamSessions).toHaveBeenCalledTimes(2);
+    expect(result.current.loadError).toBeNull();
+  });
+
+  it("treats a valid JSON object payload as a load failure", async () => {
+    loadExamSessions.mockResolvedValueOnce({} as never);
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+
+    await waitFor(() => expect(result.current.loadError).toContain("배열이어야 합니다"));
+    expect(result.current.loading).toBe(false);
+    expect(saveExamSessions).not.toHaveBeenCalled();
+  });
+
   it("does not mark a session submitted when atomic wrong-entry persistence fails", async () => {
     const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockRejectedValue(new Error("entries failed"));
     const { result } = renderHook(() => useExamSessionController({

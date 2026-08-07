@@ -16,6 +16,7 @@ export function useGeneratedExams() {
   const failedErrorRef = useRef<Error | null>(null);
   const mutationRef = useRef(0);
   const loadRequestRef = useRef(0);
+  const loadingRef = useRef(false);
   const loadSucceededRef = useRef(false);
   const savingCountRef = useRef(0);
   const maintenanceBlockedRef = useRef(false);
@@ -23,6 +24,8 @@ export function useGeneratedExams() {
   const { enqueue: enqueueTask, drain } = useSerialTaskQueue();
 
   const reload = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     const requestId = ++loadRequestRef.current;
     const loadMutation = mutationRef.current;
     loadSucceededRef.current = false;
@@ -40,7 +43,8 @@ export function useGeneratedExams() {
         loadSucceededRef.current = true;
         return;
       }
-      const next = Array.isArray(loaded) ? loaded : [];
+      if (!Array.isArray(loaded)) throw new Error("생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
+      const next = loaded;
       examsRef.current = next;
       persistedRef.current = next;
       loadSucceededRef.current = true;
@@ -57,7 +61,10 @@ export function useGeneratedExams() {
         setError(message);
       }
     } finally {
-      if (requestId === loadRequestRef.current) setLoading(false);
+      if (requestId === loadRequestRef.current) {
+        loadingRef.current = false;
+        setLoading(false);
+      }
     }
   }, [drain]);
 

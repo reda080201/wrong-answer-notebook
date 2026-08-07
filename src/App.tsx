@@ -211,7 +211,7 @@ export default function App() {
     setExamSaveError,
   });
 
-  const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose } = useWindowCloseGuard({
+  const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose, closeWithoutSaving } = useWindowCloseGuard({
     activeExam: examSession,
     examSaveTimerRef,
     flushExamSession: flushExamSessionSave,
@@ -219,6 +219,12 @@ export default function App() {
     flushGeneratedExams,
     flushSettings,
     flushImportWorkspaceDraft: flushTransientWrites,
+    confirmCloseWithoutSaving: () => confirm({
+      title: "저장하지 않고 종료",
+      message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
+      confirmLabel: "저장하지 않고 종료",
+      cancelLabel: "종료 취소",
+    }),
   });
 
   useEffect(() => {
@@ -509,6 +515,7 @@ export default function App() {
             message={examSessionsLoadError}
             onRetry={() => void reloadExamSessions()}
             onDismiss={() => undefined}
+            busy={examSessionsLoading}
           />
         )}
         {examSessionsLoading && <p className="status-message" role="status">시험 기록을 불러오는 중입니다. 시험 시작과 저장은 잠시 차단됩니다.</p>}
@@ -919,6 +926,7 @@ export default function App() {
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
         <footer className="dialog-actions">
           <button type="button" className="btn-secondary" onClick={clearCloseFlushError} disabled={closeFlushSaving}>종료 취소</button>
+          <button type="button" className="btn-danger" onClick={() => void closeWithoutSaving()} disabled={closeFlushSaving}>저장하지 않고 종료</button>
           <button type="button" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
         </footer>
       </Dialog>

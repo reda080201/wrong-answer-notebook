@@ -18,6 +18,7 @@ pub(crate) use storage::{
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use tauri::Manager;
 
@@ -189,17 +190,19 @@ fn save_entries(
 
 #[tauri::command]
 fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let path = app_dir(&app)?.join("exam-sessions.json");
-    if !path.exists() {
-        return Ok(serde_json::json!([]));
-    }
-    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&raw).map_err(|error| error.to_string())
+    load_array_json_file(
+        &app_dir(&app)?.join("exam-sessions.json"),
+        "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
 }
 
 #[tauri::command]
 fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
-    write_json_atomic(&app_dir(&app)?.join("exam-sessions.json"), &sessions)
+    save_array_json_file(
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &sessions,
+        "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
 }
 
 fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
@@ -240,17 +243,48 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn load_generated_exams(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    let path = app_dir(&app)?.join("generated-exams.json");
-    if !path.exists() {
-        return Ok(serde_json::json!([]));
-    }
-    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
-    serde_json::from_str(&raw).map_err(|error| error.to_string())
+    load_array_json_file(
+        &app_dir(&app)?.join("generated-exams.json"),
+        "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
 }
 
 #[tauri::command]
 fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Result<(), String> {
-    write_json_atomic(&app_dir(&app)?.join("generated-exams.json"), &exams)
+    save_array_json_file(
+        &app_dir(&app)?.join("generated-exams.json"),
+        &exams,
+        "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
+}
+
+fn validate_array_json(
+    value: serde_json::Value,
+    error_message: &str,
+) -> Result<serde_json::Value, String> {
+    if value.is_array() {
+        Ok(value)
+    } else {
+        Err(error_message.to_string())
+    }
+}
+
+fn load_array_json_file(path: &Path, error_message: &str) -> Result<serde_json::Value, String> {
+    if !path.exists() {
+        return Ok(serde_json::json!([]));
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    validate_array_json(value, error_message)
+}
+
+fn save_array_json_file(
+    path: &Path,
+    value: &serde_json::Value,
+    error_message: &str,
+) -> Result<(), String> {
+    validate_array_json(value.clone(), error_message)?;
+    write_json_atomic(path, value)
 }
 
 #[tauri::command]
@@ -526,6 +560,67 @@ mod tests {
             "candidates": [{ "candidateId": "entry:1", "questionText": "문제", "subject": "수학", "hasExplanation": false }]
         });
         assert!(serde_json::from_value::<ai::SimilarQuestionRankingRequest>(invalid).is_err());
+    }
+
+    #[test]
+    fn rejects_non_array_exam_session_and_generated_exam_shapes() {
+        let session_error = "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
+        let generated_error = "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
+        assert_eq!(
+            validate_array_json(serde_json::json!([]), session_error).unwrap(),
+            serde_json::json!([])
+        );
+        assert_eq!(
+            validate_array_json(serde_json::json!([]), generated_error).unwrap(),
+            serde_json::json!([])
+        );
+        assert_eq!(
+            validate_array_json(serde_json::json!({}), session_error).unwrap_err(),
+            session_error
+        );
+        assert_eq!(
+            validate_array_json(serde_json::json!({}), generated_error).unwrap_err(),
+            generated_error
+        );
+    }
+
+    #[test]
+    fn rejects_non_array_save_payload_without_changing_existing_file() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("exam-sessions.json");
+        fs::write(&path, br#"[{"id":"existing"}]"#).expect("write existing payload");
+
+        let error = save_array_json_file(
+            &path,
+            &serde_json::json!({}),
+            "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+        )
+        .expect_err("object payload must be rejected");
+
+        assert!(error.contains("배열이어야 합니다"));
+        assert_eq!(
+            fs::read(&path).expect("read existing payload"),
+            br#"[{"id":"existing"}]"#
+        );
+    }
+
+    #[test]
+    fn rejects_non_array_load_payload_and_accepts_empty_array() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("generated-exams.json");
+        fs::write(&path, b"{}").expect("write malformed shape");
+        let error = load_array_json_file(
+            &path,
+            "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+        )
+        .expect_err("object payload must be rejected");
+        assert!(error.contains("배열이어야 합니다"));
+
+        fs::write(&path, b"[]").expect("write empty array");
+        assert_eq!(
+            load_array_json_file(&path, "shape error").unwrap(),
+            serde_json::json!([])
+        );
     }
 
     #[test]
