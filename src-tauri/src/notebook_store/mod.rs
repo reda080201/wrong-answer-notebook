@@ -470,6 +470,40 @@ pub fn parse_entries_value(value: Value) -> Result<Vec<WrongAnswerEntry>, String
         .collect()
 }
 
+/// Parses the historical array format and the current schema-v2 wrapper used
+/// at startup and during backup restore. Unlike `parse_entries_value`, this
+/// rejects unversioned wrapper objects so those boundaries keep their existing
+/// schema guard.
+pub fn parse_versioned_entries_value(value: Value) -> Result<Vec<WrongAnswerEntry>, String> {
+    parse_versioned_entries_value_with_missing_entries_error(
+        value,
+        "저장 데이터에 entries가 없습니다.",
+    )
+}
+
+pub(crate) fn parse_versioned_entries_value_with_missing_entries_error(
+    value: Value,
+    missing_entries_error: &str,
+) -> Result<Vec<WrongAnswerEntry>, String> {
+    if value.is_array() {
+        return serde_json::from_value(value).map_err(|error| error.to_string());
+    }
+    let version = value
+        .get("schemaVersion")
+        .and_then(Value::as_u64)
+        .ok_or_else(|| "저장 데이터 schemaVersion을 확인할 수 없습니다.".to_string())?;
+    if version != ENTRIES_SCHEMA_VERSION as u64 {
+        return Err(format!(
+            "지원하지 않는 저장 데이터 schemaVersion입니다: {version}"
+        ));
+    }
+    let entries = value
+        .get("entries")
+        .cloned()
+        .ok_or_else(|| missing_entries_error.to_string())?;
+    serde_json::from_value(entries).map_err(|error| error.to_string())
+}
+
 /// The same human forms accepted by the import validator: 01, 1., 1번, 문제 1, #1.
 pub fn normalize_question_number(value: &str) -> String {
     let value = value
@@ -662,7 +696,8 @@ fn is_view_item(value: &str) -> bool {
 mod tests {
     use super::{
         entry_search_text, matched_snippet, normalize_question_number, parse_entries_value,
-        parse_question_blocks, NotebookStore,
+        parse_question_blocks, parse_versioned_entries_value, NotebookStore,
+        ENTRIES_SCHEMA_VERSION,
     };
     use crate::SheetFigureItem;
     use serde_json::json;
@@ -674,6 +709,28 @@ mod tests {
                 if value.contains("10") { "10" } else { "1" }
             );
         }
+    }
+
+    #[test]
+    fn versioned_entry_parser_preserves_startup_and_restore_schema_guard() {
+        assert!(parse_versioned_entries_value(json!([]))
+            .expect("legacy arrays remain valid")
+            .is_empty());
+        assert!(parse_versioned_entries_value(json!({
+            "schemaVersion": ENTRIES_SCHEMA_VERSION,
+            "entries": [],
+        }))
+        .expect("current wrapper remains valid")
+        .is_empty());
+        assert!(parse_versioned_entries_value(json!({ "entries": [] }))
+            .expect_err("unversioned wrapper must be rejected")
+            .contains("schemaVersion"));
+        assert!(parse_versioned_entries_value(json!({
+            "schemaVersion": ENTRIES_SCHEMA_VERSION + 1,
+            "entries": [],
+        }))
+        .expect_err("future schemas must be rejected")
+        .contains("지원하지 않는"));
     }
 
     #[test]

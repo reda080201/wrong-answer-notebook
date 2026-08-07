@@ -1,6 +1,6 @@
 use crate::images::{images_dir, validate_image_filename};
 use crate::notebook_store::{collect_entry_image_filenames, NotebookStore};
-use crate::unix_time_string;
+use crate::storage::unix_time_string;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::sync::Arc;

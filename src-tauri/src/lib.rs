@@ -13,7 +13,8 @@ pub(crate) use images::{
     validate_image_magic,
 };
 pub(crate) use storage::{
-    app_dir, data_file, data_schema_file, settings_file, write_bytes_atomic, write_json_atomic,
+    app_dir, data_file, data_schema_file, load_settings_raw, settings_file, unix_time_string,
+    write_bytes_atomic, write_json_atomic, CURRENT_DATA_SCHEMA_VERSION,
 };
 
 use serde::{Deserialize, Serialize};
@@ -21,9 +22,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 use tauri::Manager;
-
-const ENTRIES_SCHEMA_VERSION: u32 = 2;
-const CURRENT_DATA_SCHEMA_VERSION: u32 = 1;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -115,15 +113,6 @@ fn default_entry_kind() -> String {
     "wrong_answer".to_string()
 }
 
-pub(crate) fn load_settings_raw(app: &tauri::AppHandle) -> Result<String, String> {
-    let path = settings_file(app)?;
-    if path.exists() {
-        fs::read_to_string(path).map_err(|error| error.to_string())
-    } else {
-        Ok(r#"{"templates":[],"autoBackup":{"enabled":false}}"#.into())
-    }
-}
-
 /// MCP active-exam sharing consent parsed from active-exam-context.json.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -146,38 +135,11 @@ impl ActiveExamContext {
     }
 }
 
-fn unix_time_string() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs().to_string())
-        .unwrap_or_else(|_| "0".into())
-}
-
 #[tauri::command]
 fn load_entries(
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
 ) -> Result<Vec<WrongAnswerEntry>, String> {
     store.load_entries()
-}
-
-fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>, String> {
-    if value.is_array() {
-        return serde_json::from_value(value).map_err(|e| e.to_string());
-    }
-    let version = value
-        .get("schemaVersion")
-        .and_then(|value| value.as_u64())
-        .ok_or_else(|| "저장 데이터 schemaVersion을 확인할 수 없습니다.".to_string())?;
-    if version != ENTRIES_SCHEMA_VERSION as u64 {
-        return Err(format!(
-            "지원하지 않는 저장 데이터 schemaVersion입니다: {version}"
-        ));
-    }
-    let entries = value
-        .get("entries")
-        .cloned()
-        .ok_or_else(|| "저장 데이터에 entries가 없습니다.".to_string())?;
-    serde_json::from_value(entries).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -225,7 +187,7 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
         let raw = fs::read_to_string(entries_path).map_err(|e| e.to_string())?;
         let document: serde_json::Value = serde_json::from_str(&raw)
             .map_err(|e| format!("entries.json을 읽지 못했습니다: {e}"))?;
-        parse_entries_value(document)?;
+        notebook_store::parse_versioned_entries_value(document)?;
     }
     let settings_path = settings_file(app)?;
     if settings_path.exists() {
