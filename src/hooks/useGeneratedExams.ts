@@ -43,7 +43,8 @@ export function useGeneratedExams() {
         loadSucceededRef.current = true;
         return;
       }
-      const next = Array.isArray(loaded) ? loaded : [];
+      if (!Array.isArray(loaded)) throw new Error("생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
+      const next = loaded;
       examsRef.current = next;
       persistedRef.current = next;
       loadSucceededRef.current = true;

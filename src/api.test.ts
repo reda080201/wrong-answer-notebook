@@ -12,6 +12,7 @@ import {
   generateImportWithAi,
   getAiProviderStatus,
   loadExamSessions,
+  loadGeneratedExams,
   MAX_IMPORT_IMAGE_BYTES,
   cleanupOrphanImages,
   clearImageUrlCache,
@@ -19,6 +20,7 @@ import {
   IMAGE_URL_CACHE_LIMIT,
   previewOrphanImages,
   saveExamSessions,
+  saveGeneratedExams,
   saveImageFiles,
 } from "./api";
 import { EXAM_SESSIONS_STORAGE_KEY } from "./features/exam/storage/examSessionStorage";
@@ -238,5 +240,16 @@ describe("exam session persistence", () => {
 
     expect(mockedInvoke).toHaveBeenNthCalledWith(1, "load_exam_sessions");
     expect(mockedInvoke).toHaveBeenNthCalledWith(2, "save_exam_sessions", { sessions });
+  });
+
+  it("rejects non-array Tauri persistence payloads without invoking save", async () => {
+    mockedIsTauri.mockReturnValue(true);
+    mockedInvoke.mockResolvedValueOnce({}).mockResolvedValueOnce({});
+
+    await expect(loadExamSessions()).rejects.toThrow("모의고사 세션 저장 형식이 올바르지 않습니다");
+    await expect(loadGeneratedExams()).rejects.toThrow("생성 모의고사 저장 형식이 올바르지 않습니다");
+    await expect(saveExamSessions({} as unknown as ExamSession[])).rejects.toThrow("모의고사 세션 저장 형식이 올바르지 않습니다");
+    await expect(saveGeneratedExams({} as never)).rejects.toThrow("생성 모의고사 저장 형식이 올바르지 않습니다");
+    expect(mockedInvoke).toHaveBeenCalledTimes(2);
   });
 });

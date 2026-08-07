@@ -10,10 +10,18 @@ import {
 } from "../../features/exam-builder/storage/generatedExamStorage";
 import { errorMessage } from "./shared";
 
+const EXAM_SESSION_SHAPE_ERROR = "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
+const GENERATED_EXAM_SHAPE_ERROR = "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
+
+function requireArray<T>(value: unknown, errorMessageText: string): T[] {
+  if (!Array.isArray(value)) throw new Error(errorMessageText);
+  return value as T[];
+}
+
 export async function loadExamSessions(): Promise<ExamSession[]> {
   try {
     if (isTauri()) {
-      return await invoke<ExamSession[]>("load_exam_sessions");
+      return requireArray<ExamSession>(await invoke<unknown>("load_exam_sessions"), EXAM_SESSION_SHAPE_ERROR);
     }
     return loadExamSessionsFromStorage();
   } catch (error) {
@@ -25,6 +33,7 @@ export async function loadExamSessions(): Promise<ExamSession[]> {
 
 export async function saveExamSessions(sessions: ExamSession[]): Promise<void> {
   try {
+    requireArray<ExamSession>(sessions, EXAM_SESSION_SHAPE_ERROR);
     if (isTauri()) {
       await invoke("save_exam_sessions", { sessions });
       return;
@@ -39,7 +48,7 @@ export async function saveExamSessions(sessions: ExamSession[]): Promise<void> {
 
 export async function loadGeneratedExams(): Promise<GeneratedExam[]> {
   try {
-    if (isTauri()) return await invoke<GeneratedExam[]>("load_generated_exams");
+    if (isTauri()) return requireArray<GeneratedExam>(await invoke<unknown>("load_generated_exams"), GENERATED_EXAM_SHAPE_ERROR);
     return loadGeneratedExamsFromStorage();
   } catch (error) {
     throw new Error(errorMessage(error, "생성 모의고사를 불러오지 못했습니다."), { cause: error });
@@ -48,6 +57,7 @@ export async function loadGeneratedExams(): Promise<GeneratedExam[]> {
 
 export async function saveGeneratedExams(exams: GeneratedExam[]): Promise<void> {
   try {
+    requireArray<GeneratedExam>(exams, GENERATED_EXAM_SHAPE_ERROR);
     if (isTauri()) { await invoke("save_generated_exams", { exams }); return; }
     saveGeneratedExamsToStorage(exams);
   } catch (error) {

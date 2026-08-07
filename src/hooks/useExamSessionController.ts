@@ -75,7 +75,8 @@ export function useExamSessionController({
     try {
       const items = await loadExamSessions();
       if (request !== loadRequestRef.current) return false;
-      const normalized = Array.isArray(items) ? items : [];
+      if (!Array.isArray(items)) throw new Error("모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
+      const normalized = items;
       savedSessionsRef.current = normalized;
       setSavedSessions(normalized);
       loadedRef.current = true;

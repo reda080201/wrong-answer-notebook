@@ -91,6 +91,15 @@ describe("useExamSessionController safety guards", () => {
     expect(result.current.loadError).toBeNull();
   });
 
+  it("treats a valid JSON object payload as a load failure", async () => {
+    loadExamSessions.mockResolvedValueOnce({} as never);
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+
+    await waitFor(() => expect(result.current.loadError).toContain("배열이어야 합니다"));
+    expect(result.current.loading).toBe(false);
+    expect(saveExamSessions).not.toHaveBeenCalled();
+  });
+
   it("does not mark a session submitted when atomic wrong-entry persistence fails", async () => {
     const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockRejectedValue(new Error("entries failed"));
     const { result } = renderHook(() => useExamSessionController({
