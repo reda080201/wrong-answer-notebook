@@ -4,6 +4,8 @@ use std::path::{Path, PathBuf};
 
 use tauri::Manager;
 
+pub(crate) const CURRENT_DATA_SCHEMA_VERSION: u32 = 1;
+
 pub(crate) fn app_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -20,6 +22,31 @@ pub(crate) fn settings_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 pub(crate) fn data_schema_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir(app)?.join("data-schema.json"))
+}
+
+pub(crate) fn load_entries_raw(app: &tauri::AppHandle) -> Result<String, String> {
+    let path = data_file(app)?;
+    if path.exists() {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    } else {
+        Ok("[]".into())
+    }
+}
+
+pub(crate) fn load_settings_raw(app: &tauri::AppHandle) -> Result<String, String> {
+    let path = settings_file(app)?;
+    if path.exists() {
+        fs::read_to_string(path).map_err(|error| error.to_string())
+    } else {
+        Ok(r#"{"templates":[],"autoBackup":{"enabled":false}}"#.into())
+    }
+}
+
+pub(crate) fn unix_time_string() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs().to_string())
+        .unwrap_or_else(|_| "0".into())
 }
 
 pub(crate) fn write_json_atomic(path: &Path, value: &serde_json::Value) -> Result<(), String> {

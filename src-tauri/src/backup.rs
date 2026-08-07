@@ -2,8 +2,13 @@ use crate::images::{
     images_dir, validate_image_filename, validate_image_header_bytes, validate_image_magic,
     MAX_IMPORT_IMAGE_BYTES,
 };
-use crate::notebook_store::NotebookStore;
-use crate::storage::{app_dir, data_file, settings_file, write_bytes_atomic, write_json_atomic};
+use crate::notebook_store::{
+    parse_versioned_entries_value_with_missing_entries_error, NotebookStore,
+};
+use crate::storage::{
+    app_dir, data_file, load_entries_raw, load_settings_raw, settings_file, unix_time_string,
+    write_bytes_atomic, write_json_atomic, CURRENT_DATA_SCHEMA_VERSION,
+};
 use crate::WrongAnswerEntry;
 use serde::Serialize;
 use std::fs;
@@ -17,8 +22,6 @@ pub(crate) const MAX_BACKUP_ZIP_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_BACKUP_JSON_BYTES: u64 = 100 * 1024 * 1024;
 const MAX_BACKUP_TOTAL_IMAGE_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_BACKUP_ENTRY_COUNT: usize = 10_000;
-const ENTRIES_SCHEMA_VERSION: u32 = 2;
-const CURRENT_DATA_SCHEMA_VERSION: u32 = 1;
 pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "entries.json",
     "settings.json",
@@ -36,31 +39,6 @@ pub(crate) struct RestoreBackupResult {
     warnings: Vec<String>,
 }
 
-fn load_entries_raw(app: &tauri::AppHandle) -> Result<String, String> {
-    let path = data_file(app)?;
-    if path.exists() {
-        fs::read_to_string(path).map_err(|e| e.to_string())
-    } else {
-        Ok("[]".into())
-    }
-}
-
-fn load_settings_raw(app: &tauri::AppHandle) -> Result<String, String> {
-    let path = settings_file(app)?;
-    if path.exists() {
-        fs::read_to_string(path).map_err(|e| e.to_string())
-    } else {
-        Ok(r#"{"templates":[],"autoBackup":{"enabled":false}}"#.into())
-    }
-}
-
-fn unix_time_string() -> String {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|duration| duration.as_secs().to_string())
-        .unwrap_or_else(|_| "0".into())
-}
-
 fn build_backup_meta(included_files: &[String]) -> serde_json::Value {
     serde_json::json!({
         "backupFormat": 2,
@@ -72,26 +50,6 @@ fn build_backup_meta(included_files: &[String]) -> serde_json::Value {
         "includesImages": included_files.iter().any(|name| name.starts_with("images/")),
         "includesImportWorkspaces": included_files.iter().any(|name| name.starts_with("import-workspaces/")),
     })
-}
-
-fn parse_entries_value(value: serde_json::Value) -> Result<Vec<WrongAnswerEntry>, String> {
-    if value.is_array() {
-        return serde_json::from_value(value).map_err(|e| e.to_string());
-    }
-    let version = value
-        .get("schemaVersion")
-        .and_then(serde_json::Value::as_u64)
-        .ok_or_else(|| "저장 데이터 schemaVersion을 확인할 수 없습니다.".to_string())?;
-    if version != ENTRIES_SCHEMA_VERSION as u64 {
-        return Err(format!(
-            "지원하지 않는 저장 데이터 schemaVersion입니다: {version}"
-        ));
-    }
-    let entries = value
-        .get("entries")
-        .cloned()
-        .ok_or_else(|| "저장 데이터 entries를 확인할 수 없습니다.".to_string())?;
-    serde_json::from_value(entries).map_err(|e| e.to_string())
 }
 
 fn collect_workspace_files(
@@ -417,7 +375,10 @@ pub(crate) fn restore_backup_zip(
             let value: serde_json::Value =
                 serde_json::from_str(&content).map_err(|e| e.to_string())?;
             if name == "entries.json" {
-                restored_entries = Some(parse_entries_value(value)?);
+                restored_entries = Some(parse_versioned_entries_value_with_missing_entries_error(
+                    value,
+                    "저장 데이터 entries를 확인할 수 없습니다.",
+                )?);
             } else {
                 settings_json = Some(value);
             }
