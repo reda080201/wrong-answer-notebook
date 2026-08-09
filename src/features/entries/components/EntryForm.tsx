@@ -1,23 +1,23 @@
 import { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, MistakeCauseType, ReviewStrategy, WrongAnswerEntry } from "../types";
-import { hasEntryContent } from "../utils/entry";
+import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, MistakeCauseType, ReviewStrategy, WrongAnswerEntry } from "../../../types";
+import { hasEntryContent } from "../../../utils/entry";
 import {
   MISTAKE_CAUSE_OPTIONS,
   PRACTICE_MODE_LABELS,
   mistakeCauseLabel,
   recommendedStrategyForCause,
-} from "../utils/mistakeAnalysis";
-import { cleanQuestionText } from "../utils/textCleanup";
-import { normalizeDifficultyScore } from "../utils/difficulty";
-import { SUBJECTS } from "../types";
-import ImageField from "./ImageField";
-import { useAppDialog } from "../shared/ui/AppDialogProvider";
+} from "../../../utils/mistakeAnalysis";
+import { cleanQuestionText } from "../../../utils/textCleanup";
+import { normalizeDifficultyScore } from "../../../utils/difficulty";
+import { SUBJECTS } from "../../../types";
+import ImageField from "../../../components/ImageField";
+import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
 import {
   createEntryDraftFromEntry,
   createEmptyEntryDraft,
   mergeEntryDraft,
-} from "../features/entries/model/entryDraft";
+} from "../model/entryDraft";
 
 interface EntryFormProps {
   entry?: WrongAnswerEntry;

@@ -35,11 +35,12 @@ describe("useWindowCloseGuard", () => {
       flushGeneratedExams: vi.fn(async () => { calls.push("generated"); }),
       flushSettings: vi.fn(async () => { calls.push("settings"); }),
       flushImportWorkspaceDraft: vi.fn(async () => { calls.push("workspace"); }),
+      flushLibraryFolders: vi.fn(async () => { calls.push("library"); }),
       confirmCloseWithoutSaving: vi.fn(async () => true),
     };
     renderHook(() => useWindowCloseGuard(options));
     await act(async () => { await closeRequested?.({ preventDefault: vi.fn() }); });
-    expect(calls.sort()).toEqual(["entries", "generated", "settings", "workspace"]);
+    expect(calls.sort()).toEqual(["entries", "generated", "library", "settings", "workspace"]);
     expect(close).toHaveBeenCalledTimes(1);
   });
 
@@ -58,6 +59,7 @@ describe("useWindowCloseGuard", () => {
       flushGeneratedExams: vi.fn(async () => undefined),
       flushSettings: vi.fn(async () => undefined),
       flushImportWorkspaceDraft: vi.fn(async () => undefined),
+      flushLibraryFolders: vi.fn(async () => undefined),
       confirmCloseWithoutSaving: vi.fn(async () => true),
     };
     const { result } = renderHook(() => useWindowCloseGuard(options));
@@ -81,6 +83,7 @@ describe("useWindowCloseGuard", () => {
       flushGeneratedExams: vi.fn(async () => undefined),
       flushSettings: vi.fn(async () => undefined),
       flushImportWorkspaceDraft: vi.fn(async () => undefined),
+      flushLibraryFolders: vi.fn(async () => undefined),
       confirmCloseWithoutSaving: vi.fn(async () => true),
     }));
     await act(async () => { await closeRequested?.({ preventDefault: vi.fn() }); });
@@ -104,6 +107,7 @@ describe("useWindowCloseGuard", () => {
       flushGeneratedExams: vi.fn(async () => undefined),
       flushSettings: vi.fn(async () => undefined),
       flushImportWorkspaceDraft: vi.fn(async () => undefined),
+      flushLibraryFolders: vi.fn(async () => undefined),
       confirmCloseWithoutSaving,
     }));
     await act(async () => { await closeRequested?.({ preventDefault: vi.fn() }); });
@@ -129,6 +133,7 @@ describe("useWindowCloseGuard", () => {
       flushGeneratedExams: vi.fn(async () => undefined),
       flushSettings: vi.fn(async () => undefined),
       flushImportWorkspaceDraft: vi.fn(async () => undefined),
+      flushLibraryFolders: vi.fn(async () => undefined),
       confirmCloseWithoutSaving: vi.fn(async () => true),
     }));
     await act(async () => { await closeRequested?.({ preventDefault: vi.fn() }); });

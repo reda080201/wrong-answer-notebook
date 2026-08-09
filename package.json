@@ -9,14 +9,16 @@
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest",
-    "check": "npm run lint && npm run check:debug && npm run check:mcp-contract && npm run check:tauri-contract && npm run test && npm run build",
+    "check": "npm run version:check && npm run lint && npm run check:debug && npm run check:mcp-contract && npm run check:tauri-contract && npm run test && npm run build",
     "check:mcp-contract": "node scripts/check-mcp-bridge-contract.mjs",
     "check:tauri-contract": "node --test scripts/tauri-command-contract.node.mjs && node scripts/check-tauri-command-contract.mjs",
     "check:debug": "node scripts/check-no-debug-markers.mjs",
     "version:set": "node scripts/set-version.mjs",
     "version:check": "node scripts/check-version-consistency.mjs",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.4.0",
@@ -32,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.62.1",
     "@tauri-apps/cli": "^2.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
@@ -49,5 +52,9 @@
     "typescript-eslint": "^8.59.4",
     "vite": "^6.3.0",
     "vitest": "^4.1.7"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "npm": ">=10.0.0"
   }
 }

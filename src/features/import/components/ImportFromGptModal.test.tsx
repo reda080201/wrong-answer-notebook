@@ -1,13 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
-import { deleteImage, pickImages, saveImageFiles } from "../api";
-import type { WrongAnswerEntry } from "../types";
-import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
-import { IMPORT_LIMITS } from "../features/import/services/importLimits";
+import { deleteImage, pickImages, saveImageFiles } from "../../../api";
+import type { WrongAnswerEntry } from "../../../types";
+import v2WrapperFixture from "../../../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
+import { IMPORT_LIMITS } from "../services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
 
-vi.mock("../api", () => ({
+vi.mock("../../../api", () => ({
   getImageUrl: vi.fn(),
   pickImages: vi.fn(),
   saveImageFiles: vi.fn().mockResolvedValue(["img_mock.png"]),

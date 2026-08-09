@@ -11,13 +11,15 @@ describe("flushPendingAppWrites", () => {
       flushGeneratedExams: async () => { order.push("generated"); },
       flushSettings: async () => { order.push("settings"); },
       flushImportWorkspaceDraft: async () => { order.push("workspace"); },
+      flushLibraryFolders: async () => { order.push("library"); },
     });
-    expect(order.sort()).toEqual(["entries", "generated", "settings", "workspace"]);
+    expect(order.sort()).toEqual(["entries", "generated", "library", "settings", "workspace"]);
   });
 
   it("stops close when the active exam cannot be flushed", async () => {
     const flushGeneratedExams = vi.fn();
     const flushSettings = vi.fn();
+    const flushLibraryFolders = vi.fn();
     await expect(flushPendingAppWrites({
       activeExam: { id: "session-1" } as never,
       flushExamSession: async () => false,
@@ -25,9 +27,11 @@ describe("flushPendingAppWrites", () => {
       flushGeneratedExams,
       flushSettings,
       flushImportWorkspaceDraft: vi.fn(),
+      flushLibraryFolders,
     })).rejects.toThrow("시험 진행 상태를 저장하지 못했습니다.");
     expect(flushGeneratedExams).not.toHaveBeenCalled();
     expect(flushSettings).not.toHaveBeenCalled();
+    expect(flushLibraryFolders).not.toHaveBeenCalled();
   });
 
   it("fails with a bounded timeout when a persistence queue never settles", async () => {
@@ -38,6 +42,7 @@ describe("flushPendingAppWrites", () => {
       flushGeneratedExams: vi.fn(),
       flushSettings: vi.fn(),
       flushImportWorkspaceDraft: vi.fn(),
+      flushLibraryFolders: vi.fn(),
       timeoutMs: 5,
     })).rejects.toThrow("저장 시간이 초과되었습니다");
   });

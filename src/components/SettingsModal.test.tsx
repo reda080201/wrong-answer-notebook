@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { AppSettings } from "../types";
+import type { SettingsContextValue } from "../contexts/SettingsContext";
 import SettingsModal from "./SettingsModal";
 
 const settings: AppSettings = {
@@ -64,46 +65,110 @@ const settings: AppSettings = {
   updatePreferences: { autoCheckEnabled: true, notificationsEnabled: true, backupBeforeInstall: true, channel: "stable" },
 };
 
+vi.mock("../contexts/SettingsContext", () => ({
+  useSettingsContext: () => mockCtx,
+}));
+
+const patchView = vi.fn().mockResolvedValue(undefined);
+
+const mockCtx = {
+  settings,
+  settingsError: null,
+  settingsSaveState: "idle",
+  settingsMessage: null,
+  setSettingsMessage: vi.fn(),
+  patchSettings: vi.fn(),
+  setSettings: vi.fn(),
+  refreshSettings: vi.fn(),
+  flushSettings: vi.fn(),
+  setSettingsMaintenanceBlocked: vi.fn(),
+  clearSettingsError: vi.fn(),
+  retrySettingsSave: vi.fn(),
+  theme: { current: "system", set: vi.fn() },
+  aiProvider: {
+    status: null,
+    statusLoading: false,
+    statusError: null,
+    keyInput: "",
+    setKeyInput: vi.fn(),
+    updateConfig: vi.fn(),
+    storeKey: vi.fn(),
+    removeKey: vi.fn(),
+  },
+  viewPreferences: { preferences: settings.viewPreferences, patch: patchView },
+  examPreferences: {
+    preferences: settings.examPreferences,
+    printPreferences: settings.examPrintPreferences,
+    patch: vi.fn(),
+    patchPrint: vi.fn(),
+  },
+  imagePreferences: { preferences: settings.imagePreferences, patch: vi.fn() },
+  gptMcpPreferences: { preferences: settings.gptMcpPreferences, patch: vi.fn() },
+  chatGptMcpPreferences: { preferences: settings.chatGptMcpPreferences, patch: vi.fn() },
+  mcpBridge: {
+    settings: { enabled: false, port: 43129 },
+    status: null,
+    portInput: "43129",
+    setPortInput: vi.fn(),
+    pairingSession: null,
+    isPairingPending: false,
+    isConnectionTesting: false,
+    isBrowserBlocked: true,
+    updateConfig: vi.fn(),
+    applyPort: vi.fn(),
+    testConnection: vi.fn(),
+    createPairing: vi.fn(),
+    rotateCredential: vi.fn(),
+    disconnectClients: vi.fn(),
+  },
+  templates: { entries: [], save: vi.fn(), delete: vi.fn() },
+  promptTemplates: { list: [], save: vi.fn(), delete: vi.fn(), setLastUsed: vi.fn() },
+  memoTemplates: { list: [], save: vi.fn(), delete: vi.fn() },
+  data: {
+    integrityReport: null,
+    runIntegrity: vi.fn(),
+    handleBackup: vi.fn(),
+    handleRestore: vi.fn(),
+    handleCleanupOrphans: vi.fn(),
+  },
+  updates: {
+    state: { status: "idle" },
+    preferences: settings.updatePreferences,
+    checkForUpdate: vi.fn(),
+    installUpdate: vi.fn(),
+    restartAfterUpdate: vi.fn(),
+    openReleasePage: vi.fn(),
+    patchPreferences: vi.fn(),
+  },
+  questionBank: { preferences: undefined, patch: vi.fn() },
+} as unknown as SettingsContextValue;
+
 describe("SettingsModal", () => {
   it("opens the requested initial tab and updates view preferences", async () => {
-    const setSettings = vi.fn().mockResolvedValue(undefined);
     render(
       <SettingsModal
         initialTab="view"
-        settings={settings}
-        settingsError={null}
-        settingsMessage={null}
-        clearSettingsError={vi.fn()}
-        setSettingsMessage={vi.fn()}
-        setSettings={setSettings}
-        theme="system"
-        setTheme={vi.fn()}
-        aiProviderStatus={null}
-        aiProviderKeyInput=""
-        setAiProviderKeyInput={vi.fn()}
-        updateAiProviderConfig={vi.fn()}
-        storeAiProviderKey={vi.fn()}
-        removeAiProviderKey={vi.fn()}
-        integrityReport={null}
-        saveTemplate={vi.fn()}
-        deleteTemplate={vi.fn()}
-        savePromptTemplate={vi.fn()}
-        deletePromptTemplate={vi.fn()}
-        deleteMemoTemplate={vi.fn()}
-        handleBackup={vi.fn()}
-        handleRestore={vi.fn()}
-        runIntegrity={vi.fn()}
-        handleCleanupOrphans={vi.fn()}
+        dataActions={{
+          integrityReport: null,
+          backup: vi.fn(),
+          restore: vi.fn(),
+          runIntegrity: vi.fn(),
+          cleanupOrphans: vi.fn(),
+        }}
+        updateActions={{
+          state: { status: "idle" },
+          check: vi.fn(),
+          install: vi.fn(),
+          restart: vi.fn(),
+          openReleasePage: vi.fn(),
+        }}
         onClose={vi.fn()}
       />,
     );
 
     expect(screen.getByRole("button", { name: "보기" })).toHaveClass("active");
     fireEvent.click(screen.getByLabelText("정답 가리기"));
-    expect(setSettings).toHaveBeenCalledWith(expect.objectContaining({
-      viewPreferences: expect.objectContaining({ hideAnswers: true }),
-      answerViewPreferences: expect.objectContaining({ hideAnswers: true }),
-    }));
+    expect(patchView).toHaveBeenCalledWith({ hideAnswers: true });
 
     fireEvent.click(screen.getByRole("button", { name: "시험" }));
     expect(screen.getByText("풀이 메모 표시")).toBeInTheDocument();

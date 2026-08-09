@@ -221,6 +221,95 @@ pub(crate) fn save_import_image_bytes(
 }
 
 #[tauri::command]
+/// Save image from a file selected via native file dialog.
+/// Shows a file picker dialog to the user, then validates and saves the selected image.
+/// This prevents arbitrary path traversal attacks by letting the OS file picker select the file.
+pub(crate) fn save_image_from_dialog(app: tauri::AppHandle) -> Result<String, String> {
+    // Show native file dialog for image selection using rfd
+    let file_path = rfd::FileDialog::new()
+        .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
+        .pick_file()
+        .ok_or("파일을 선택하지 않았습니다.")?;
+
+    // Canonicalize path to prevent directory traversal attacks
+    let canonical_path = file_path
+        .canonicalize()
+        .map_err(|e| format!("파일 경로를 확인할 수 없습니다: {}", e))?;
+
+    // Validate extension from the canonical path
+    let ext = canonical_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .ok_or_else(|| "이미지 확장자를 확인할 수 없습니다.".to_string())?
+        .to_ascii_lowercase();
+
+    if !is_allowed_image_extension(&ext) {
+        return Err("지원하지 않는 이미지 형식입니다.".into());
+    }
+
+    // Validate image header/magic bytes
+    validate_image_magic(&canonical_path, &ext, MAX_IMPORT_IMAGE_BYTES)?;
+
+    // Generate unique filename for storage
+    let filename = format!("{}.{}", Uuid::new_v4(), ext);
+    let dest = image_path(&app, &filename)?;
+
+    // Copy file to images directory
+    fs::copy(&canonical_path, &dest).map_err(|e| e.to_string())?;
+    Ok(filename)
+}
+
+#[tauri::command]
+pub(crate) fn save_images_from_dialog(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    // Show native file dialog for multiple image selection using rfd
+    let file_paths = rfd::FileDialog::new()
+        .add_filter("Images", &["png", "jpg", "jpeg", "gif", "webp"])
+        .pick_files()
+        .ok_or("파일을 선택하지 않았습니다.")?;
+
+    if file_paths.is_empty() {
+        return Err("파일을 선택하지 않았습니다.".into());
+    }
+
+    let mut saved_filenames = Vec::new();
+
+    for file_path in file_paths {
+        // Canonicalize path to prevent directory traversal attacks
+        let canonical_path = file_path
+            .canonicalize()
+            .map_err(|e| format!("파일 경로를 확인할 수 없습니다: {}", e))?;
+
+        // Validate extension from the canonical path
+        let ext = canonical_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .ok_or_else(|| "이미지 확장자를 확인할 수 없습니다.".to_string())?
+            .to_ascii_lowercase();
+
+        if !is_allowed_image_extension(&ext) {
+            return Err("지원하지 않는 이미지 형식입니다.".into());
+        }
+
+        // Validate image header/magic bytes
+        validate_image_magic(&canonical_path, &ext, MAX_IMPORT_IMAGE_BYTES)?;
+
+        // Generate unique filename for storage
+        let filename = format!("{}.{}", Uuid::new_v4(), ext);
+        let dest = image_path(&app, &filename)?;
+
+        // Copy file to images directory
+        fs::copy(&canonical_path, &dest).map_err(|e| e.to_string())?;
+        saved_filenames.push(filename);
+    }
+
+    Ok(saved_filenames)
+}
+
+/// Deprecated: Use save_image_from_dialog instead.
+/// This command accepts an arbitrary path and should not be used in new code.
+/// Kept for backward compatibility only.
+#[tauri::command]
+#[deprecated(since = "1.0.0", note = "Use save_image_from_dialog instead")]
 pub(crate) fn save_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
     let ext = Path::new(&source_path)
         .extension()

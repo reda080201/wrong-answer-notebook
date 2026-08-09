@@ -9,6 +9,7 @@ export async function flushPendingAppWrites(options: {
   flushGeneratedExams: () => Promise<void>;
   flushSettings: () => Promise<void>;
   flushImportWorkspaceDraft: () => Promise<void>;
+  flushLibraryFolders: () => Promise<void>;
   timeoutMs?: number;
 }): Promise<void> {
   const flush = async () => {
@@ -20,6 +21,7 @@ export async function flushPendingAppWrites(options: {
       options.flushGeneratedExams(),
       options.flushSettings(),
       options.flushImportWorkspaceDraft(),
+      options.flushLibraryFolders(),
     ]);
   };
   const timeoutMs = options.timeoutMs ?? APP_CLOSE_FLUSH_TIMEOUT_MS;
