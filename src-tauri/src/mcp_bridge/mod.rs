@@ -1,6 +1,7 @@
 //! Loopback-only, authenticated, read-only MCP Streamable HTTP bridge.
 
 mod audit;
+mod auth;
 mod state;
 
 use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
@@ -16,7 +17,6 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use keyring::Entry as KeyringEntry;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -31,10 +31,11 @@ use std::{
 use tauri::async_runtime::JoinHandle;
 use uuid::Uuid;
 
+use auth::{load_or_create_token, new_token, store_token};
 use state::{
     BridgeHttpState, PairingAttempt, MAX_ACTIVE_PAIRING_CODES, MAX_PAIRING_ATTEMPTS_PER_WINDOW,
-    MAX_RESOURCE_BYTES, MAX_RESOURCE_IMAGES, MCP_KEYRING_SERVICE, MCP_KEYRING_USER,
-    PAIRING_LOCKOUT, PAIRING_TTL, PAIRING_WINDOW, SESSION_TTL,
+    MAX_RESOURCE_BYTES, MAX_RESOURCE_IMAGES, PAIRING_LOCKOUT, PAIRING_TTL, PAIRING_WINDOW,
+    SESSION_TTL,
 };
 
 pub const DEFAULT_MCP_PORT: u16 = 43129;
@@ -344,32 +345,6 @@ fn stopped_status() -> McpBridgeStatus {
         has_auth_token: false,
     }
 }
-fn new_token() -> String {
-    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
-}
-fn keyring_entry() -> Result<KeyringEntry, String> {
-    KeyringEntry::new(MCP_KEYRING_SERVICE, MCP_KEYRING_USER)
-        .map_err(|e| format!("MCP 인증 저장소를 열지 못했습니다: {e}"))
-}
-fn store_token(token: &str) -> Result<(), String> {
-    keyring_entry()?
-        .set_password(token)
-        .map_err(|e| format!("MCP 인증 토큰을 저장하지 못했습니다: {e}"))
-}
-fn load_or_create_token() -> Result<String, String> {
-    let entry = keyring_entry()?;
-    if let Ok(token) = entry.get_password() {
-        if !token.trim().is_empty() {
-            return Ok(token);
-        }
-    }
-    let token = new_token();
-    entry
-        .set_password(&token)
-        .map_err(|e| format!("MCP 인증 토큰을 저장하지 못했습니다: {e}"))?;
-    Ok(token)
-}
-
 fn router(state: BridgeHttpState) -> Router {
     Router::new()
         .route("/mcp", post(mcp_post).get(mcp_get))
