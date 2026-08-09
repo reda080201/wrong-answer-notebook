@@ -1,6 +1,7 @@
 //! Loopback-only, authenticated, read-only MCP Streamable HTTP bridge.
 
 mod audit;
+mod state;
 
 use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
 use crate::notebook_store::{
@@ -30,18 +31,14 @@ use std::{
 use tauri::async_runtime::JoinHandle;
 use uuid::Uuid;
 
+use state::{
+    BridgeHttpState, PairingAttempt, MAX_ACTIVE_PAIRING_CODES, MAX_PAIRING_ATTEMPTS_PER_WINDOW,
+    MAX_RESOURCE_BYTES, MAX_RESOURCE_IMAGES, MCP_KEYRING_SERVICE, MCP_KEYRING_USER,
+    PAIRING_LOCKOUT, PAIRING_TTL, PAIRING_WINDOW, SESSION_TTL,
+};
+
 pub const DEFAULT_MCP_PORT: u16 = 43129;
-const MCP_KEYRING_SERVICE: &str = "wrong-answer-notebook-mcp";
-const MCP_KEYRING_USER: &str = "bridge-token";
-const PAIRING_TTL: Duration = Duration::from_secs(5 * 60);
-const MAX_ACTIVE_PAIRING_CODES: usize = 3;
-const PAIRING_WINDOW: Duration = Duration::from_secs(60);
-const MAX_PAIRING_ATTEMPTS_PER_WINDOW: u32 = 5;
-const PAIRING_LOCKOUT: Duration = Duration::from_secs(60);
-const SESSION_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_ACTIVE_SESSIONS: usize = 5;
-const MAX_RESOURCE_IMAGES: usize = 8;
-const MAX_RESOURCE_BYTES: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,13 +60,6 @@ pub struct McpBridgeStatus {
 pub struct ActiveContext {
     pub entry_id: Option<String>,
     pub question_number: Option<String>,
-}
-
-#[derive(Clone)]
-struct PairingAttempt {
-    window_started: Instant,
-    failures: u32,
-    blocked_until: Option<Instant>,
 }
 
 pub struct McpBridgeManager {
@@ -380,21 +370,6 @@ fn load_or_create_token() -> Result<String, String> {
     Ok(token)
 }
 
-#[derive(Clone)]
-struct BridgeHttpState {
-    store: Arc<NotebookStore>,
-    images_path: PathBuf,
-    exam_sessions_path: PathBuf,
-    active_exam_context_path: PathBuf,
-    active_export_context_path: PathBuf,
-    auth_token: Arc<Mutex<String>>,
-    pairing_codes: Arc<Mutex<HashMap<String, Instant>>>,
-    sessions: Arc<Mutex<HashMap<String, Instant>>>,
-    pairing_attempts: Arc<Mutex<HashMap<IpAddr, PairingAttempt>>>,
-    active_context: Arc<Mutex<ActiveContext>>,
-    status: Arc<Mutex<McpBridgeStatus>>,
-    audit_path: PathBuf,
-}
 fn router(state: BridgeHttpState) -> Router {
     Router::new()
         .route("/mcp", post(mcp_post).get(mcp_get))
