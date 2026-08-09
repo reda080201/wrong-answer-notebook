@@ -22,6 +22,8 @@ export interface MemoTemplate {
   builtIn?: boolean;
 }
 
+export type ProblemSheetDisplayMode = "questions" | "exam";
+
 export interface ViewPreferences {
   sheetLayout: "single" | "columns";
   fontSize: "normal" | "large" | "xlarge";
@@ -30,6 +32,7 @@ export interface ViewPreferences {
   showOriginalPages: boolean;
   showLearningVisuals: boolean;
   compactToolbar: boolean;
+  problemSheetDisplayMode: ProblemSheetDisplayMode;
   lectureLayout?: LectureLayout;
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;

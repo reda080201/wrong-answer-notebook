@@ -48,6 +48,7 @@ const settings: AppSettings = {
     showOriginalPages: true,
     showLearningVisuals: true,
     compactToolbar: false,
+    problemSheetDisplayMode: "questions",
   },
   examPrintPreferences: {
     preset: "real_exam",

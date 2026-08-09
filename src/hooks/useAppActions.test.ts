@@ -154,6 +154,7 @@ const createMockSettings = (overrides?: Partial<AppSettings>): AppSettings => ({
     showOriginalPages: true,
     showLearningVisuals: true,
     compactToolbar: false,
+    problemSheetDisplayMode: "questions",
   },
   examPreferences: {
     showScratchNote: true,

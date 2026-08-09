@@ -21,6 +21,10 @@ interface StudyPaperViewProps {
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
+  displayMode?: "questions" | "exam";
+  revealedAnswerNumbers?: Set<string>;
+  onToggleAnswerReveal?: (questionNumber: string) => void;
+  onOpenQuestionSolution?: (questionNumber: string) => void;
 }
 
 export default function StudyPaperView({
@@ -39,6 +43,10 @@ export default function StudyPaperView({
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
+  displayMode = "questions",
+  revealedAnswerNumbers,
+  onToggleAnswerReveal,
+  onOpenQuestionSolution,
 }: StudyPaperViewProps) {
   const blocks = parseQuestionText(entry.question);
   const questionCount = blocks.filter((block) => block.kind === "question").length;
@@ -63,7 +71,7 @@ export default function StudyPaperView({
   ];
 
   return (
-    <div className="study-paper">
+    <div className={`study-paper study-paper--${displayMode}`}>
       <div className="study-paper-sheet">
         <header className="study-paper-cover">
           <div>
@@ -104,10 +112,14 @@ export default function StudyPaperView({
           selectionMode={selectionMode}
           selectedQuestionNumbers={selectedQuestionNumbers}
           onToggleQuestionSelected={onToggleQuestionSelected}
+          presentation={displayMode}
+          revealedAnswerNumbers={revealedAnswerNumbers}
+          onToggleAnswerReveal={onToggleAnswerReveal}
+          onOpenQuestionSolution={onOpenQuestionSolution}
           zoomableImages
         />
 
-        {diagramItems.length > 0 && (
+        {displayMode === "questions" && diagramItems.length > 0 && (
           <details className="study-paper-diagrams" aria-label="학습 시각화">
             <summary className="study-paper-section-title">
               <span />
@@ -125,7 +137,7 @@ export default function StudyPaperView({
           </details>
         )}
 
-        {figureImages.length > 0 && (
+        {displayMode === "questions" && figureImages.length > 0 && (
           <section className="study-paper-figures" aria-label="문제 삽화 확대 보기">
             <div className="study-paper-section-title">
               <span />

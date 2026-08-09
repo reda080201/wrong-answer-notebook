@@ -4,6 +4,7 @@ import { LinkifiedText } from "../utils/wikiLinks";
 import ContentBlock from "./ContentBlock";
 import MathText from "./MathText";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
+import { normalizeQuestionNumber } from "../utils/questionMeta";
 
 interface SolutionBookViewProps {
   entry: WrongAnswerEntry;
@@ -61,7 +62,10 @@ function SheetSolutionCard({
   const steps = item.steps?.length ? item.steps : explanationSteps(item.explanation);
   const wrongPoints = item.wrongPoint?.trim() ? [item.wrongPoint.trim()] : item.importantPoints;
   return (
-    <article className="solution-book-card">
+    <article
+      id={`solution-question-${normalizeQuestionNumber(item.questionNumber)}`}
+      className="solution-book-card"
+    >
       <header className="solution-book-card-head">
         <span>[해설 {item.questionNumber || "검토"}]</span>
         {item.needsReview && <small className="answer-review-badge">검토 필요</small>}

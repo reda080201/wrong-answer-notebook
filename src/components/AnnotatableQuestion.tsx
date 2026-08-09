@@ -55,6 +55,10 @@ interface AnnotatableQuestionProps {
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   sourceEntry?: WrongAnswerEntry;
+  presentation?: "questions" | "exam";
+  revealedAnswerNumbers?: Set<string>;
+  onToggleAnswerReveal?: (questionNumber: string) => void;
+  onOpenQuestionSolution?: (questionNumber: string) => void;
 }
 
 interface FocusedQuestionViewProps {
@@ -304,6 +308,10 @@ function StructuredQuestionBlock({
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
   sourceEntry,
+  presentation = "questions",
+  revealedAnswerNumbers,
+  onToggleAnswerReveal,
+  onOpenQuestionSolution,
 }: {
   block: QuestionTextBlock;
   textAnnotations: TextRangeAnnotation[];
@@ -322,6 +330,10 @@ function StructuredQuestionBlock({
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   sourceEntry?: WrongAnswerEntry;
+  presentation?: "questions" | "exam";
+  revealedAnswerNumbers?: Set<string>;
+  onToggleAnswerReveal?: (questionNumber: string) => void;
+  onOpenQuestionSolution?: (questionNumber: string) => void;
 }) {
   if (block.kind === "passage" || block.kind === "paragraph") {
     return (
@@ -349,11 +361,18 @@ function StructuredQuestionBlock({
   const questionNumber = String(block.displayNumber);
   const isSelected = selectedQuestionNumbers.includes(questionNumber);
   const difficultyScore = resolveQuestionDifficultyScore(questionMeta, answerKey, block);
+  const answer = answerKey.find((item) =>
+    normalizeNumberLabel(item.questionNumber) === normalizeNumberLabel(questionNumber)
+    || normalizeNumberLabel(item.questionNumber) === normalizeNumberLabel(block.numberLabel),
+  );
+  const answerAvailable = Boolean(answer?.answer.trim());
+  const answerRevealed = Boolean(revealedAnswerNumbers?.has(normalizeNumberLabel(questionNumber)));
+  const answerPopoverId = `exam-answer-${block.start}`;
 
   return (
     <section
       id={`sheet-question-${block.start}`}
-      className="question-text-block question-text-block--question"
+      className={`question-text-block question-text-block--question question-text-block--${presentation}`}
     >
       <div className="question-number">
         {selectionMode && (
@@ -371,7 +390,7 @@ function StructuredQuestionBlock({
           <small>원문 {block.numberLabel}</small>
         )}
       </div>
-      {onToggleQuestionImportant && (
+      {presentation === "questions" && onToggleQuestionImportant && (
         <button
           type="button"
           className={`question-important-btn ${isImportant ? "active" : ""}`}
@@ -381,11 +400,13 @@ function StructuredQuestionBlock({
           {isImportant ? "★ 중요" : "☆ 중요"}
         </button>
       )}
-      <QuestionDifficultyEditor
-        questionNumber={questionNumber}
-        difficultyScore={difficultyScore}
-        onChange={onQuestionDifficultyScoreChange}
-      />
+      {presentation === "questions" && (
+        <QuestionDifficultyEditor
+          questionNumber={questionNumber}
+          difficultyScore={difficultyScore}
+          onChange={onQuestionDifficultyScoreChange}
+        />
+      )}
       <QuestionBodySegments
         segments={bodySegments}
         textAnnotations={textAnnotations}
@@ -417,7 +438,44 @@ function StructuredQuestionBlock({
         </ol>
       )}
       {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
-      {onOpenQuestionTheater && typeof questionIndex === "number" && (
+      {presentation === "exam" && onToggleAnswerReveal && (
+        <div className="exam-question-answer">
+          <button
+            type="button"
+            className="exam-answer-trigger"
+            disabled={!answerAvailable}
+            title={answerAvailable ? "이 문항의 정답 보기" : "연결된 정답이 없습니다."}
+            aria-label={`${questionNumber}번 정답 ${answerRevealed ? "숨기기" : "보기"}`}
+            aria-expanded={answerAvailable ? answerRevealed : undefined}
+            aria-controls={answerAvailable ? answerPopoverId : undefined}
+            onClick={() => onToggleAnswerReveal(questionNumber)}
+          >
+            답
+          </button>
+          {answerRevealed && answer && (
+            <div
+              id={answerPopoverId}
+              className="exam-answer-popover"
+              role="status"
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onToggleAnswerReveal(questionNumber);
+                }
+              }}
+            >
+              <strong>정답</strong>
+              <MathText text={answer.answer} />
+              {onOpenQuestionSolution && (
+                <button type="button" className="exam-answer-solution-link" onClick={() => onOpenQuestionSolution(questionNumber)}>
+                  해설 보기
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      {presentation === "questions" && onOpenQuestionTheater && typeof questionIndex === "number" && (
         <button
           type="button"
           className="question-theater-open"
@@ -721,6 +779,10 @@ function StructuredQuestionText({
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
   sourceEntry,
+  presentation = "questions",
+  revealedAnswerNumbers,
+  onToggleAnswerReveal,
+  onOpenQuestionSolution,
 }: {
   question: string;
   textAnnotations: TextRangeAnnotation[];
@@ -739,6 +801,10 @@ function StructuredQuestionText({
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   sourceEntry?: WrongAnswerEntry;
+  presentation?: "questions" | "exam";
+  revealedAnswerNumbers?: Set<string>;
+  onToggleAnswerReveal?: (questionNumber: string) => void;
+  onOpenQuestionSolution?: (questionNumber: string) => void;
 }) {
   const blocks = useMemo(() => parseQuestionText(question), [question]);
   const questionIndexes = useMemo(() => {
@@ -776,6 +842,10 @@ function StructuredQuestionText({
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}
             sourceEntry={sourceEntry}
+            presentation={presentation}
+            revealedAnswerNumbers={revealedAnswerNumbers}
+            onToggleAnswerReveal={onToggleAnswerReveal}
+            onOpenQuestionSolution={onOpenQuestionSolution}
           />
       ))}
     </div>
@@ -962,6 +1032,10 @@ export default function AnnotatableQuestion({
   selectedQuestionNumbers,
   onToggleQuestionSelected,
   sourceEntry,
+  presentation = "questions",
+  revealedAnswerNumbers,
+  onToggleAnswerReveal,
+  onOpenQuestionSolution,
 }: AnnotatableQuestionProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -994,7 +1068,7 @@ export default function AnnotatableQuestion({
   if (!hasText && !hasImages) return null;
 
   return (
-    <div className={`annotatable-question ${memoMode ? "memo-mode" : ""}`}>
+    <div className={`annotatable-question annotatable-question--${presentation} ${memoMode ? "memo-mode" : ""}`}>
       {hasText && (
         <div
           ref={textRef}
@@ -1020,6 +1094,10 @@ export default function AnnotatableQuestion({
             selectedQuestionNumbers={selectedQuestionNumbers}
             onToggleQuestionSelected={onToggleQuestionSelected}
             sourceEntry={sourceEntry}
+            presentation={presentation}
+            revealedAnswerNumbers={revealedAnswerNumbers}
+            onToggleAnswerReveal={onToggleAnswerReveal}
+            onOpenQuestionSolution={onOpenQuestionSolution}
           />
         </div>
       )}

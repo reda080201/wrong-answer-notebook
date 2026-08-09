@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -239,7 +239,11 @@ export default function EntryDetail({
   const [sheetSearch, setSheetSearch] = useState("");
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
   const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
+  const [problemSheetDisplayMode, setProblemSheetDisplayMode] = useState<ProblemSheetDisplayMode>(
+    viewPreferences?.problemSheetDisplayMode ?? "questions",
+  );
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
+  const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -280,6 +284,7 @@ export default function EntryDetail({
     if (key === "fontSize") setFocusTextSize(value as FocusTextSize);
     if (key === "hideAnswers") setHideAnswers(Boolean(value));
     if (key === "compactToolbar") setStudyControlCompact(Boolean(value));
+    if (key === "problemSheetDisplayMode") setProblemSheetDisplayMode(value as ProblemSheetDisplayMode);
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
 
@@ -289,6 +294,7 @@ export default function EntryDetail({
     setFocusTextSize(viewPreferences.fontSize);
     setHideAnswers(viewPreferences.hideAnswers);
     setStudyControlCompact(viewPreferences.compactToolbar);
+    setProblemSheetDisplayMode(viewPreferences.problemSheetDisplayMode);
   }, [viewPreferences]);
 
   const filledParts = entry.explanationParts
@@ -412,6 +418,9 @@ export default function EntryDetail({
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
+    setSelectionMode(false);
+    setSelectedQuestionNumbers([]);
+    setRevealedAnswerNumbers(new Set());
     setTitleEditing(false);
     setTitleDraft(entry.title);
   }, [entry.id, entry.title]);
@@ -709,6 +718,27 @@ export default function EntryDetail({
         : [...current, normalized],
     );
   };
+
+  const toggleQuestionAnswerReveal = useCallback((questionNumber: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    setRevealedAnswerNumbers((current) => {
+      const next = new Set(current);
+      if (next.has(normalized)) next.delete(normalized);
+      else next.add(normalized);
+      return next;
+    });
+  }, []);
+
+  const openSolutionForQuestion = useCallback((questionNumber: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    setDetailViewMode("solution");
+    window.setTimeout(() => {
+      document.getElementById(`solution-question-${normalized}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }, []);
 
   const markSelectedImportant = async () => {
     if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
@@ -1285,6 +1315,26 @@ export default function EntryDetail({
               })}
             </nav>
           )}
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+            <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
+              <button
+                type="button"
+                className={problemSheetDisplayMode === "questions" ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "questions"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}
+              >
+                문항별
+              </button>
+              <button
+                type="button"
+                className={problemSheetDisplayMode === "exam" ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "exam"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}
+              >
+                시험지
+              </button>
+            </div>
+          )}
         </div>
         <div className="detail-actions">
           <div className="detail-actions-primary">
@@ -1658,6 +1708,10 @@ export default function EntryDetail({
                     selectionMode={selectionMode}
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
+                    displayMode={isSheet ? problemSheetDisplayMode : "questions"}
+                    revealedAnswerNumbers={revealedAnswerNumbers}
+                    onToggleAnswerReveal={toggleQuestionAnswerReveal}
+                    onOpenQuestionSolution={openSolutionForQuestion}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
