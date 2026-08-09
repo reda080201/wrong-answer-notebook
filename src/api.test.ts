@@ -10,6 +10,7 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   builtInPromptTemplates,
   applyBrowserBackupAtomically,
+  createBackupAtDestination,
   defaultSettings,
   generateImportWithAi,
   getAiProviderStatus,
@@ -26,7 +27,7 @@ import {
   saveImageFiles,
 } from "./api";
 import { EXAM_SESSIONS_STORAGE_KEY } from "./features/exam/storage/examSessionStorage";
-import type { ExamSession } from "./types";
+import type { ExamSession, WrongAnswerEntry } from "./types";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 
 const mockedInvoke = vi.mocked(invoke);
@@ -201,6 +202,7 @@ describe("browser ai provider fallback", () => {
 describe("browser backup restore transaction", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     localStorage.clear();
   });
 
@@ -244,6 +246,27 @@ describe("browser backup restore transaction", () => {
     })).toThrow("브라우저 백업을 복원하지 못했습니다");
 
     expect(Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]))).toEqual(before);
+  });
+
+  it("reads the persisted browser snapshot after queues have flushed instead of stale caller props", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ mcpBridge: { enabled: true, port: 45000 } }));
+    let captured: Blob | null = null;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn((blob: Blob) => {
+        captured = blob;
+        return "blob:backup";
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await createBackupAtDestination(null, [{ id: "stale" } as WrongAnswerEntry], defaultSettings);
+
+    expect(captured).not.toBeNull();
+    const payload = JSON.parse(await captured!.text());
+    expect(payload.entries).toEqual([]);
+    expect(payload.settings.mcpBridge.port).toBe(45000);
   });
 });
 

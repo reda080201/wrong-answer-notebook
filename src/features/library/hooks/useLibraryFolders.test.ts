@@ -87,4 +87,22 @@ describe("useLibraryFolders", () => {
     expect(typeof result.current.flush).toBe("function");
     await expect(result.current.flush()).resolves.toBeUndefined();
   });
+
+  it("blocks mutations while a refresh is reading a new folder snapshot", async () => {
+    let resolveRefresh!: (folders: LibraryFolder[]) => void;
+    vi.mocked(api.loadLibraryFolders)
+      .mockResolvedValueOnce(initialFolders)
+      .mockReturnValueOnce(new Promise<LibraryFolder[]>((resolve) => { resolveRefresh = resolve; }));
+    const { result } = renderHook(() => useLibraryFolders());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const refresh = result.current.refresh();
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    await expect(result.current.mutate((current) => current)).rejects.toThrow("불러오는 중");
+    expect(api.saveLibraryFolders).not.toHaveBeenCalled();
+
+    resolveRefresh(initialFolders);
+    await act(async () => { await refresh; });
+    expect(result.current.folders).toEqual(initialFolders);
+  });
 });

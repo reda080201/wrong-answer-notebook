@@ -4,18 +4,26 @@ interface MaintenanceCoordinatorOptions {
   flushEntries(): Promise<void>;
   flushSettings(): Promise<void>;
   flushGeneratedExams(): Promise<void>;
+  flushLibraryFolders?(): Promise<void>;
+  flushGptSolutionDrafts?(): Promise<void>;
   setEntriesMaintenanceBlocked(blocked: boolean): void;
   setSettingsMaintenanceBlocked(blocked: boolean): void;
   setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
+  setLibraryMaintenanceBlocked?(blocked: boolean): void;
+  setGptSolutionDraftsMaintenanceBlocked?(blocked: boolean): void;
 }
 
 export function useMaintenanceCoordinator({
   flushEntries,
   flushSettings,
   flushGeneratedExams,
+  flushLibraryFolders = async () => undefined,
+  flushGptSolutionDrafts = async () => undefined,
   setEntriesMaintenanceBlocked,
   setSettingsMaintenanceBlocked,
   setGeneratedExamsMaintenanceBlocked,
+  setLibraryMaintenanceBlocked = () => undefined,
+  setGptSolutionDraftsMaintenanceBlocked = () => undefined,
 }: MaintenanceCoordinatorOptions) {
   const activeRef = useRef(false);
 
@@ -25,14 +33,24 @@ export function useMaintenanceCoordinator({
     setEntriesMaintenanceBlocked(true);
     setSettingsMaintenanceBlocked(true);
     setGeneratedExamsMaintenanceBlocked(true);
+    setLibraryMaintenanceBlocked(true);
+    setGptSolutionDraftsMaintenanceBlocked(true);
     try {
-      await Promise.all([flushEntries(), flushSettings(), flushGeneratedExams()]);
+      await Promise.all([
+        flushEntries(),
+        flushSettings(),
+        flushGeneratedExams(),
+        flushLibraryFolders(),
+        flushGptSolutionDrafts(),
+      ]);
       return await task();
     } finally {
       setEntriesMaintenanceBlocked(false);
       setSettingsMaintenanceBlocked(false);
       setGeneratedExamsMaintenanceBlocked(false);
+      setLibraryMaintenanceBlocked(false);
+      setGptSolutionDraftsMaintenanceBlocked(false);
       activeRef.current = false;
     }
-  }, [flushEntries, flushGeneratedExams, flushSettings, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setSettingsMaintenanceBlocked]);
+  }, [flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushSettings, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked]);
 }

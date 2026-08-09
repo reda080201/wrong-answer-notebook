@@ -9,17 +9,21 @@ describe("useMaintenanceCoordinator", () => {
       flushEntries: async () => { order.push("flush"); },
       flushSettings: async () => { order.push("flush"); },
       flushGeneratedExams: async () => { order.push("flush"); },
+      flushLibraryFolders: async () => { order.push("flush library"); },
+      flushGptSolutionDrafts: async () => { order.push("flush gpt drafts"); },
       setEntriesMaintenanceBlocked: (value) => { order.push(`entries:${value}`); },
       setSettingsMaintenanceBlocked: (value) => { order.push(`settings:${value}`); },
       setGeneratedExamsMaintenanceBlocked: (value) => { order.push(`generated:${value}`); },
+      setLibraryMaintenanceBlocked: (value) => { order.push(`library:${value}`); },
+      setGptSolutionDraftsMaintenanceBlocked: (value) => { order.push(`gpt:${value}`); },
     }));
 
     await act(async () => {
       await expect(result.current(async () => { order.push("task"); return "ok"; })).resolves.toBe("ok");
     });
-    expect(order.slice(0, 3)).toEqual(["entries:true", "settings:true", "generated:true"]);
+    expect(order.slice(0, 5)).toEqual(["entries:true", "settings:true", "generated:true", "library:true", "gpt:true"]);
     expect(order.indexOf("task")).toBeGreaterThan(order.lastIndexOf("flush"));
-    expect(order.slice(-3)).toEqual(["entries:false", "settings:false", "generated:false"]);
+    expect(order.slice(-5)).toEqual(["entries:false", "settings:false", "generated:false", "library:false", "gpt:false"]);
   });
 
   it("rejects overlapping maintenance work without releasing the first lock", async () => {

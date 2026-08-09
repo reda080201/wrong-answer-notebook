@@ -37,6 +37,7 @@ import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvi
 import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
 import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
+import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDrafts";
 import type { LibraryFolder } from "./types";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
@@ -162,6 +163,8 @@ function AppContent() {
     listOpen: showGeneratedExams,
     setListOpen: setShowGeneratedExams,
   } = generatedExamController;
+  const library = useLibraryFolders();
+  const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
   const runMaintenanceOperation = useMaintenanceCoordinator({
     flushEntries,
     flushSettings,
@@ -169,8 +172,11 @@ function AppContent() {
     setEntriesMaintenanceBlocked,
     setSettingsMaintenanceBlocked,
     setGeneratedExamsMaintenanceBlocked,
+    flushLibraryFolders: library.flush,
+    setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
+    flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
   });
-  const library = useLibraryFolders();
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -227,6 +233,7 @@ function AppContent() {
     flushSettings,
     flushImportWorkspaceDraft: flushTransientWrites,
     flushLibraryFolders: library.flush,
+    flushGptSolutionDrafts: gptSolutionDrafts.flush,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
@@ -744,7 +751,8 @@ function AppContent() {
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               questionBankItems={buildQuestionBankItems(entries)}
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
-              onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
+               onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
+               gptSolutionDraftStore={gptSolutionDrafts}
               onActiveContextChange={(context) => syncActiveContext(context)}
              />
             </>

@@ -989,8 +989,9 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
     screen.queryAllByText(/확인 권장 항목 .* 보기/).forEach((warningSummary) => fireEvent.click(warningSummary));
-    const confirmation = screen.queryByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
-    if (confirmation) fireEvent.click(confirmation);
+    const confirmation = await screen.findByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
+    await waitFor(() => expect(confirmation).not.toBeDisabled());
+    fireEvent.click(confirmation);
     const saveBatchButton = screen.getByRole("button", { name: "2개 항목 저장" });
     expect(saveBatchButton).not.toBeDisabled();
     fireEvent.click(saveBatchButton);

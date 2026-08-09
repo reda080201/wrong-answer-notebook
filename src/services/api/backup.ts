@@ -30,6 +30,27 @@ export interface RestoreBackupResult {
   warnings: string[];
 }
 
+function readBrowserBackupSnapshot(
+  fallbackEntries: WrongAnswerEntry[],
+  fallbackSettings: AppSettings,
+): Pick<BackupPayload, "entries" | "settings" | "browserImages"> {
+  const storedEntries = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
+  const storedSettings = readStorageJson(localStorage, SETTINGS_STORAGE_KEY, isUnknownStorageValue);
+  const entries = storedEntries === null ? fallbackEntries : parseStoredEntries(storedEntries);
+  if (storedSettings !== null && (!storedSettings || typeof storedSettings !== "object" || Array.isArray(storedSettings))) {
+    throw new Error("저장된 설정 형식이 올바르지 않습니다.");
+  }
+  return {
+    entries,
+    settings: storedSettings === null ? fallbackSettings : normalizeSettings(storedSettings as AppSettings),
+    browserImages: Object.fromEntries(
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("img_"))
+        .map((key) => [key, localStorage.getItem(key) ?? ""]),
+    ),
+  };
+}
+
 function isBrowserBackupPayload(value: unknown): value is BackupPayload {
   if (!value || typeof value !== "object") return false;
   const payload = value as Partial<BackupPayload>;
@@ -122,11 +143,10 @@ export async function createBackupAtDestination(
     await invoke("create_backup_zip", { backupPath });
     return `백업을 저장했습니다: ${backupPath}`;
   }
+  const snapshot = readBrowserBackupSnapshot(entries, settings);
   const payload: BackupPayload = {
     meta: { version: 1, createdAt: new Date().toISOString(), source: "browser" },
-    entries,
-    settings,
-    browserImages: Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""])),
+    ...snapshot,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);

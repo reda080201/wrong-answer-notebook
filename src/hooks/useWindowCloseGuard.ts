@@ -13,6 +13,7 @@ interface UseWindowCloseGuardOptions {
   flushSettings: () => Promise<void>;
   flushImportWorkspaceDraft: () => Promise<void>;
   flushLibraryFolders: () => Promise<void>;
+  flushGptSolutionDrafts?: () => Promise<void>;
   confirmCloseWithoutSaving: () => Promise<boolean>;
 }
 
@@ -31,6 +32,7 @@ export function useWindowCloseGuard({
   flushSettings,
   flushImportWorkspaceDraft,
   flushLibraryFolders,
+  flushGptSolutionDrafts = async () => undefined,
   confirmCloseWithoutSaving,
 }: UseWindowCloseGuardOptions) {
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -61,6 +63,7 @@ export function useWindowCloseGuard({
         flushSettings,
         flushImportWorkspaceDraft,
         flushLibraryFolders,
+        flushGptSolutionDrafts,
       });
       setCloseError(null);
       allowCloseRef.current = true;
@@ -72,7 +75,7 @@ export function useWindowCloseGuard({
       inFlightRef.current = false;
       setSaving(false);
     }
-  }, [examSaveTimerRef, flushEntries, flushExamSession, flushGeneratedExams, flushImportWorkspaceDraft, flushLibraryFolders, flushSettings]);
+  }, [examSaveTimerRef, flushEntries, flushExamSession, flushGeneratedExams, flushGptSolutionDrafts, flushImportWorkspaceDraft, flushLibraryFolders, flushSettings]);
 
   const closeWithoutSaving = useCallback(async () => {
     if (inFlightRef.current || !closeError || !isTauri()) return;
