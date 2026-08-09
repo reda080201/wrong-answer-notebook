@@ -149,6 +149,29 @@ describe("useLibraryFolders", () => {
     expect(result.current.folders).toEqual([...initialFolders, folderC]);
   });
 
+  it("keeps a prior successful mutation visible when the next queued mutation fails", async () => {
+    vi.mocked(api.loadLibraryFolders).mockResolvedValue(initialFolders);
+    vi.mocked(api.saveLibraryFolders)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("disk full"));
+    const { result } = renderHook(() => useLibraryFolders());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const folderB = { ...mockFolder, id: "folder-b", name: "B" };
+    const folderC = { ...mockFolder, id: "folder-c", name: "C" };
+
+    let first!: Promise<void>;
+    let second!: Promise<void>;
+    await act(async () => {
+      first = result.current.mutate((current) => [...current, folderB]);
+      second = result.current.mutate((current) => [...current, folderC]);
+      await Promise.allSettled([first, second]);
+    });
+
+    expect(api.saveLibraryFolders).toHaveBeenNthCalledWith(1, [...initialFolders, folderB]);
+    expect(api.saveLibraryFolders).toHaveBeenNthCalledWith(2, [...initialFolders, folderB, folderC]);
+    expect(result.current.folders).toEqual([...initialFolders, folderB]);
+  });
+
   it("flushes an accepted mutation while maintenance rejects only later mutations", async () => {
     vi.mocked(api.loadLibraryFolders).mockResolvedValue(initialFolders);
     let finishSave!: () => void;

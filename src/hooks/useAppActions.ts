@@ -100,6 +100,7 @@ interface UseAppActionsOptions {
   removeMemoTemplate: (templateId: string) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
+  refreshExamSessions?: () => Promise<boolean>;
   refreshGeneratedExams?: () => Promise<void>;
   refreshLibraryFolders?: () => Promise<void>;
   refreshGptSolutionDrafts?: () => Promise<void>;
@@ -130,6 +131,7 @@ export function useAppActions({
   removeMemoTemplate,
   patchSettings,
   refreshSettings,
+  refreshExamSessions,
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
@@ -562,13 +564,17 @@ export function useAppActions({
         if (payload && "entries" in payload) {
           restoreResult = applyBrowserBackupAtomically(payload);
         }
-        await Promise.all([
+        const [, , examSessionsReloaded] = await Promise.all([
           refresh(),
           refreshSettings(),
+          refreshExamSessions?.(),
           refreshGeneratedExams?.(),
           refreshLibraryFolders?.(),
           refreshGptSolutionDrafts?.(),
         ]);
+        if (examSessionsReloaded === false) {
+          throw new Error("백업은 복원됐지만 시험 세션을 다시 불러오지 못했습니다. 시험 기록을 다시 불러온 뒤 계속해 주세요.");
+        }
         return restoreResult;
       };
       const payload = runMaintenanceOperation

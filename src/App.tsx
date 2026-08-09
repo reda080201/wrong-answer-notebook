@@ -165,6 +165,16 @@ function AppContent() {
   } = generatedExamController;
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
+  const flushActiveExamForMaintenance = useCallback(async () => {
+    if (examSaveTimerRef.current !== null) {
+      window.clearTimeout(examSaveTimerRef.current);
+      examSaveTimerRef.current = null;
+    }
+    const current = examSessionRef.current;
+    if (current && !(await flushExamSessionSave(current))) {
+      throw new Error("시험 진행 상태를 저장하지 못했습니다.");
+    }
+  }, [examSaveTimerRef, examSessionRef, flushExamSessionSave]);
   const runMaintenanceOperation = useMaintenanceCoordinator({
     flushEntries,
     flushSettings,
@@ -176,6 +186,8 @@ function AppContent() {
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
+    flushActiveExam: flushActiveExamForMaintenance,
+    flushTransientWrites,
   });
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
@@ -286,6 +298,7 @@ function AppContent() {
     upsertMemoTemplate,
     removeMemoTemplate,
     refreshSettings,
+    refreshExamSessions: reloadExamSessions,
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,

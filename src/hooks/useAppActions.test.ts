@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAppActions } from "./useAppActions";
+import * as api from "../api";
 import type {
   WrongAnswerEntry,
   AppSettings,
@@ -511,6 +512,31 @@ describe("useAppActions", () => {
           expect((error as Error).message).toContain("진행 중");
         }
       });
+    });
+
+    it("reloads exam sessions after a browser backup restore", async () => {
+      const refreshExamSessions = vi.fn(async () => true);
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
+      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      const { result } = createHook({ refreshExamSessions });
+
+      await act(async () => {
+        await result.current.handleRestore();
+      });
+
+      expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not report a restore as complete when exam sessions cannot reload", async () => {
+      const refreshExamSessions = vi.fn(async () => false);
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
+      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      const { result } = createHook({ refreshExamSessions });
+
+      await expect(result.current.handleRestore()).rejects.toThrow("시험 세션을 다시 불러오지 못했습니다");
+      expect(refreshExamSessions).toHaveBeenCalledTimes(1);
     });
   });
 

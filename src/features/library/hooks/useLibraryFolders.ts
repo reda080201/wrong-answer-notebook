@@ -59,8 +59,8 @@ export function useLibraryFolders() {
       const next = recipe(foldersRef.current);
       await saveLibraryFolders(next);
       foldersRef.current = next;
+      setFolders(next);
       if (revision === mutationRevisionRef.current) {
-        setFolders(next);
         setError(null);
       }
       return next;
