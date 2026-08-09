@@ -6,6 +6,7 @@ import type {
   AppSettings,
   EntryFormData,
 } from "../types";
+import type { EntryPatch } from "./useEntries";
 import type { LearningBlock } from "../models/learning";
 
 // Mock all external dependencies
@@ -255,7 +256,9 @@ describe("useAppActions", () => {
     vi.clearAllMocks();
   });
 
-  const createHook = (overrides: any = {}) => {
+  const createHook = (
+    overrides: Partial<Parameters<typeof useAppActions>[0]> = {},
+  ) => {
     return renderHook(() =>
       useAppActions({
         entries: [],
@@ -414,7 +417,7 @@ describe("useAppActions", () => {
       const addEntries = vi.fn(async () => ["id"]);
       const { result } = createHook({ addEntries });
       const importedEntries = [
-        createMockFormData({ subject: "unknown-subject" as any }),
+        createMockFormData({ subject: "unknown-subject" as EntryFormData["subject"] }),
       ];
 
       await act(async () => {
@@ -559,8 +562,8 @@ describe("useAppActions", () => {
 
     it("records review attempts with confidence level", async () => {
       const entry = createMockEntry();
-      let capturedPatch: any = null;
-      const patchEntry = vi.fn(async (_id: string, fn: any) => {
+      let capturedPatch: EntryPatch | null = null;
+      const patchEntry = vi.fn(async (_id: string, fn: EntryPatch) => {
         capturedPatch = fn;
       });
       const { result } = createHook({ entries: [entry], patchEntry });
