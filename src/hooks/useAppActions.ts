@@ -101,6 +101,8 @@ interface UseAppActionsOptions {
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshGeneratedExams?: () => Promise<void>;
+  refreshLibraryFolders?: () => Promise<void>;
+  refreshGptSolutionDrafts?: () => Promise<void>;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -129,6 +131,8 @@ export function useAppActions({
   patchSettings,
   refreshSettings,
   refreshGeneratedExams,
+  refreshLibraryFolders,
+  refreshGptSolutionDrafts,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -554,11 +558,18 @@ export function useAppActions({
     const operation = (async () => {
       const restore = async () => {
         const payload = await restoreBackupFromSource(source);
+        let restoreResult = payload;
         if (payload && "entries" in payload) {
-          applyBrowserBackupAtomically(payload);
+          restoreResult = applyBrowserBackupAtomically(payload);
         }
-        await Promise.all([refresh(), refreshSettings(), refreshGeneratedExams?.()]);
-        return payload;
+        await Promise.all([
+          refresh(),
+          refreshSettings(),
+          refreshGeneratedExams?.(),
+          refreshLibraryFolders?.(),
+          refreshGptSolutionDrafts?.(),
+        ]);
+        return restoreResult;
       };
       const payload = runMaintenanceOperation
         ? await runMaintenanceOperation(restore)

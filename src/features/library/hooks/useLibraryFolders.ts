@@ -13,6 +13,7 @@ export function useLibraryFolders() {
   const [error, setError] = useState<string | null>(null);
   const foldersRef = useRef<LibraryFolder[]>([]);
   const loadedRef = useRef(false);
+  const reloadingRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
   const loadRequestRef = useRef(0);
   const mutationRevisionRef = useRef(0);
@@ -20,25 +21,30 @@ export function useLibraryFolders() {
   const { enqueue, drain } = useSerialTaskQueue();
 
   const refresh = useCallback(async () => {
+    if (reloadingRef.current) return;
+    reloadingRef.current = true;
     const request = ++loadRequestRef.current;
-    const revision = mutationRevisionRef.current;
     setLoading(true);
     setError(null);
-    loadedRef.current = false;
     try {
       await drain();
+      const revision = mutationRevisionRef.current;
+      loadedRef.current = false;
       const next = await loadLibraryFolders();
       if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return;
       foldersRef.current = next;
       setFolders(next);
       loadedRef.current = true;
+      setError(null);
     } catch (caught) {
-      if (request === loadRequestRef.current && revision === mutationRevisionRef.current) {
+      if (request === loadRequestRef.current) {
         setError(message(caught, "폴더 목록을 불러오지 못했습니다."));
-        loadedRef.current = false;
       }
     } finally {
-      if (request === loadRequestRef.current) setLoading(false);
+      if (request === loadRequestRef.current) {
+        reloadingRef.current = false;
+        setLoading(false);
+      }
     }
   }, [drain]);
 
@@ -46,16 +52,17 @@ export function useLibraryFolders() {
 
   const mutate = useCallback(async (recipe: (current: LibraryFolder[]) => LibraryFolder[]) => {
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+    if (reloadingRef.current) throw new Error("폴더 목록을 새로 불러오는 중입니다. 완료된 뒤 다시 시도해 주세요.");
     if (!loadedRef.current) throw new Error("폴더 목록을 불러오는 중입니다.");
     const revision = ++mutationRevisionRef.current;
     const task = enqueue(async () => {
-      if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
-      if (!loadedRef.current) throw new Error("폴더 목록을 불러오는 중입니다.");
       const next = recipe(foldersRef.current);
       await saveLibraryFolders(next);
-      if (revision !== mutationRevisionRef.current) return next;
       foldersRef.current = next;
-      setFolders(next);
+      if (revision === mutationRevisionRef.current) {
+        setFolders(next);
+        setError(null);
+      }
       return next;
     });
     lastOperationRef.current = task;
@@ -64,7 +71,7 @@ export function useLibraryFolders() {
       await task;
     } catch (caught) {
       const nextError = message(caught, "폴더 변경을 저장하지 못했습니다.");
-      setError(nextError);
+      if (revision === mutationRevisionRef.current) setError(nextError);
       throw new Error(nextError, { cause: caught });
     }
   }, [enqueue]);

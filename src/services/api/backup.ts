@@ -1,6 +1,13 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AppSettings, IntegrityReport, OrphanImagePreview, WrongAnswerEntry } from "../../types";
+import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, WrongAnswerEntry } from "../../types";
+import type { ImportWorkspace } from "../../features/import-workspace/model/importWorkspace";
+import { isGptSolutionRoundtripDraftArray, type GptSolutionRoundtripDraft } from "../../features/gpt-solution-roundtrip/model";
+import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
+import { GENERATED_EXAMS_STORAGE_KEY } from "../../features/exam-builder/storage/generatedExamStorage";
+import { isLibraryFolderArray, type LibraryFolder } from "../../models/library";
+import { LIBRARY_FOLDERS_STORAGE_KEY } from "./libraryFolders";
+import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
 import { getAllImageFilenames } from "../../utils/entry";
 import { readStorageJson, writeStorageJson } from "../storageJson";
 import { clearImageUrlCache } from "./images";
@@ -14,16 +21,34 @@ import {
 } from "./shared";
 import { normalizeSettings } from "./settings";
 
-export interface BackupPayload {
-  meta: {
-    version: 1;
-    createdAt: string;
-    source: "browser";
-  };
+const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
+
+interface BrowserBackupMeta<Version extends 1 | 2> {
+  version: Version;
+  createdAt: string;
+  source: "browser";
+}
+
+interface BrowserBackupPayloadBase {
   entries: WrongAnswerEntry[];
   settings: AppSettings;
   browserImages: Record<string, string>;
 }
+
+export interface BrowserBackupPayloadV1 extends BrowserBackupPayloadBase {
+  meta: BrowserBackupMeta<1>;
+}
+
+export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
+  meta: BrowserBackupMeta<2>;
+  examSessions: ExamSession[];
+  generatedExams: GeneratedExam[];
+  libraryFolders: LibraryFolder[];
+  gptSolutionDrafts: GptSolutionRoundtripDraft[];
+  importWorkspaceDraft: ImportWorkspace | null;
+}
+
+export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
 
 export interface RestoreBackupResult {
   restored: true;
@@ -33,13 +58,19 @@ export interface RestoreBackupResult {
 function readBrowserBackupSnapshot(
   fallbackEntries: WrongAnswerEntry[],
   fallbackSettings: AppSettings,
-): Pick<BackupPayload, "entries" | "settings" | "browserImages"> {
+): Omit<BrowserBackupPayloadV2, "meta"> {
   const storedEntries = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   const storedSettings = readStorageJson(localStorage, SETTINGS_STORAGE_KEY, isUnknownStorageValue);
   const entries = storedEntries === null ? fallbackEntries : parseStoredEntries(storedEntries);
   if (storedSettings !== null && (!storedSettings || typeof storedSettings !== "object" || Array.isArray(storedSettings))) {
     throw new Error("저장된 설정 형식이 올바르지 않습니다.");
   }
+  const importWorkspaceDraft = readBrowserValue(
+    IMPORT_WORKSPACE_DRAFT_STORAGE_KEY,
+    isImportWorkspace,
+    "가져오기 작업실 초안",
+    null,
+  );
   return {
     entries,
     settings: storedSettings === null ? fallbackSettings : normalizeSettings(storedSettings as AppSettings),
@@ -48,18 +79,79 @@ function readBrowserBackupSnapshot(
         .filter((key) => key.startsWith("img_"))
         .map((key) => [key, localStorage.getItem(key) ?? ""]),
     ),
+    examSessions: readBrowserArray<ExamSession>(EXAM_SESSIONS_STORAGE_KEY, "모의고사 세션"),
+    generatedExams: readBrowserArray<GeneratedExam>(GENERATED_EXAMS_STORAGE_KEY, "생성 모의고사"),
+    libraryFolders: readBrowserValue(LIBRARY_FOLDERS_STORAGE_KEY, isLibraryFolderArray, "폴더 목록", []),
+    gptSolutionDrafts: readBrowserValue(
+      GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY,
+      isGptSolutionRoundtripDraftArray,
+      "GPT 해설 초안",
+      [],
+    ),
+    importWorkspaceDraft,
   };
+}
+
+function readBrowserValue<T>(
+  key: string,
+  guard: (value: unknown) => value is T,
+  label: string,
+  fallback: T,
+): T {
+  if (localStorage.getItem(key) === null) return fallback;
+  const value = readStorageJson(localStorage, key, guard);
+  if (value === null) throw new Error(`${label} 저장 형식이 올바르지 않습니다.`);
+  return value;
+}
+
+function readBrowserArray<T>(key: string, label: string): T[] {
+  return readBrowserValue(key, Array.isArray as (value: unknown) => value is T[], label, []);
+}
+
+function isImportWorkspace(value: unknown): value is ImportWorkspace {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const workspace = value as Partial<ImportWorkspace>;
+  return typeof workspace.id === "string"
+    && typeof workspace.createdAt === "string"
+    && typeof workspace.updatedAt === "string"
+    && typeof workspace.status === "string"
+    && Array.isArray(workspace.sourceFiles)
+    && Array.isArray(workspace.assets)
+    && Array.isArray(workspace.groups)
+    && Array.isArray(workspace.unassignedBlocks)
+    && Array.isArray(workspace.excludedBlocks)
+    && Array.isArray(workspace.warnings)
+    && Number.isFinite(workspace.revision);
+}
+
+function isIsoDate(value: unknown): value is string {
+  return typeof value === "string"
+    && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value)
+    && !Number.isNaN(Date.parse(value));
+}
+
+function isImageMap(value: unknown): value is Record<string, string> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value))
+    && Object.entries(value as Record<string, unknown>).every(
+      ([key, image]) => key.startsWith("img_") && typeof image === "string",
+    );
 }
 
 function isBrowserBackupPayload(value: unknown): value is BackupPayload {
   if (!value || typeof value !== "object") return false;
   const payload = value as Partial<BackupPayload>;
-  return Array.isArray(payload.entries)
+  if (!payload.meta || payload.meta.source !== "browser" || !isIsoDate(payload.meta.createdAt)) return false;
+  if (payload.meta.version !== 1 && payload.meta.version !== 2) return false;
+  const common = Array.isArray(payload.entries)
     && Boolean(payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings))
-    && Boolean(payload.browserImages && typeof payload.browserImages === "object" && !Array.isArray(payload.browserImages))
-    && Object.entries(payload.browserImages ?? {}).every(
-      ([key, image]) => key.startsWith("img_") && typeof image === "string",
-    );
+    && isImageMap(payload.browserImages);
+  if (!common || payload.meta.version === 1) return common;
+  const v2 = payload as Partial<BrowserBackupPayloadV2>;
+  return Array.isArray(v2.examSessions)
+    && Array.isArray(v2.generatedExams)
+    && isLibraryFolderArray(v2.libraryFolders)
+    && isGptSolutionRoundtripDraftArray(v2.gptSolutionDrafts)
+    && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft));
 }
 
 function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): void {
@@ -73,16 +165,24 @@ function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): vo
  * Browser backups span entries, settings, and image keys. Keep their writes
  * all-or-nothing so quota failures cannot leave a mixed point-in-time state.
  */
-export function applyBrowserBackupAtomically(payload: BackupPayload): void {
+export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBackupResult {
   if (isTauri()) throw new Error("브라우저 백업 복원은 데스크톱 저장소에서 사용할 수 없습니다.");
   if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
 
+  const v2Payload = payload.meta.version === 2 ? payload as BrowserBackupPayloadV2 : null;
   const managedKeys = new Set([
     ENTRIES_STORAGE_KEY,
     SETTINGS_STORAGE_KEY,
     ...Object.keys(localStorage).filter((key) => key.startsWith("img_")),
     ...Object.keys(payload.browserImages),
   ]);
+  if (v2Payload) {
+    managedKeys.add(EXAM_SESSIONS_STORAGE_KEY);
+    managedKeys.add(GENERATED_EXAMS_STORAGE_KEY);
+    managedKeys.add(LIBRARY_FOLDERS_STORAGE_KEY);
+    managedKeys.add(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY);
+    managedKeys.add(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY);
+  }
   const previous = new Map([...managedKeys].map((key) => [key, localStorage.getItem(key)]));
 
   try {
@@ -94,6 +194,15 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): void {
     writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalizeSettings(payload.settings));
     for (const [key, image] of Object.entries(payload.browserImages)) {
       localStorage.setItem(key, image);
+    }
+    if (v2Payload) {
+      writeStorageJson(localStorage, EXAM_SESSIONS_STORAGE_KEY, v2Payload.examSessions);
+      writeStorageJson(localStorage, GENERATED_EXAMS_STORAGE_KEY, v2Payload.generatedExams);
+      writeStorageJson(localStorage, LIBRARY_FOLDERS_STORAGE_KEY, v2Payload.libraryFolders);
+      writeStorageJson(localStorage, GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY, v2Payload.gptSolutionDrafts);
+      if (v2Payload.importWorkspaceDraft) {
+        writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
+      }
     }
     clearImageUrlCache();
   } catch (error) {
@@ -107,6 +216,10 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): void {
     }
     throw new Error(errorMessage(error, "브라우저 백업을 복원하지 못했습니다."), { cause: error });
   }
+  return {
+    restored: true,
+    warnings: v2Payload ? [] : ["이 v1 백업에는 오답·설정·이미지만 포함되어 나머지 브라우저 저장소는 유지했습니다."],
+  };
 }
 
 export async function selectBackupDestination(): Promise<string | null> {
@@ -145,7 +258,7 @@ export async function createBackupAtDestination(
   }
   const snapshot = readBrowserBackupSnapshot(entries, settings);
   const payload: BackupPayload = {
-    meta: { version: 1, createdAt: new Date().toISOString(), source: "browser" },
+    meta: { version: 2, createdAt: new Date().toISOString(), source: "browser" },
     ...snapshot,
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });

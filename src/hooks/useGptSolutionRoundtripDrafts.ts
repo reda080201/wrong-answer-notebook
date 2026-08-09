@@ -22,6 +22,7 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
   const [loadError, setLoadError] = useState<string | null>(null);
   const draftsRef = useRef<GptSolutionRoundtripDraft[]>([]);
   const loadedRef = useRef(false);
+  const reloadingRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
   const loadRequestRef = useRef(0);
   const mutationRevisionRef = useRef(0);
@@ -29,27 +30,32 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
   const { enqueue, drain } = useSerialTaskQueue();
 
   const reload = useCallback(async () => {
+    if (reloadingRef.current) return;
+    reloadingRef.current = true;
     const request = ++loadRequestRef.current;
-    const revision = mutationRevisionRef.current;
-    loadedRef.current = false;
-    setReady(false);
     setLoading(true);
     setLoadError(null);
     try {
       await drain();
+      const revision = mutationRevisionRef.current;
+      loadedRef.current = false;
+      setReady(false);
       const drafts = await loadGptSolutionRoundtripDrafts();
       if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return;
       draftsRef.current = drafts;
       loadedRef.current = true;
       setReady(true);
     } catch (error) {
-      if (request === loadRequestRef.current && revision === mutationRevisionRef.current) {
+      if (request === loadRequestRef.current) {
         loadedRef.current = false;
         setReady(false);
         setLoadError(errorMessage(error, "GPT 해설 초안을 불러오지 못했습니다."));
       }
     } finally {
-      if (request === loadRequestRef.current) setLoading(false);
+      if (request === loadRequestRef.current) {
+        reloadingRef.current = false;
+        setLoading(false);
+      }
     }
   }, [drain]);
 
@@ -59,16 +65,17 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
     if (maintenanceBlockedRef.current) {
       return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
     }
+    if (reloadingRef.current) {
+      return Promise.reject(new Error("GPT 해설 초안을 새로 불러오는 중입니다. 완료된 뒤 다시 시도해 주세요."));
+    }
     if (!loadedRef.current) {
       return Promise.reject(new Error(loadError ?? "GPT 해설 초안을 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
     }
-    const revision = ++mutationRevisionRef.current;
+    mutationRevisionRef.current += 1;
     const operation = enqueue(async () => {
-      if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
-      if (!loadedRef.current) throw new Error("GPT 해설 초안을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
       const next = recipe(draftsRef.current);
       await saveGptSolutionRoundtripDrafts(next);
-      if (revision === mutationRevisionRef.current) draftsRef.current = next;
+      draftsRef.current = next;
     });
     lastOperationRef.current = operation;
     return operation;

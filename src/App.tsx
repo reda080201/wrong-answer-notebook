@@ -287,6 +287,8 @@ function AppContent() {
     removeMemoTemplate,
     refreshSettings,
     refreshGeneratedExams: reloadGeneratedExams,
+    refreshLibraryFolders: library.refresh,
+    refreshGptSolutionDrafts: gptSolutionDrafts.reload,
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
