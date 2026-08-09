@@ -291,7 +291,7 @@ export function useSettings() {
 
   const setSettingsMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
-  }, [drain]);
+  }, []);
 
   return {
     settings,

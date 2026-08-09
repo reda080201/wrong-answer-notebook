@@ -351,6 +351,7 @@ export function SettingsProvider({
     [
       settingsHook,
       theme,
+      setTheme,
       aiProvider,
       mcpBridge,
       settingsMessage,

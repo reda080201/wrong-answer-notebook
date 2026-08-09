@@ -2,14 +2,17 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { AppSettings, IntegrityReport, OrphanImagePreview, WrongAnswerEntry } from "../../types";
 import { getAllImageFilenames } from "../../utils/entry";
-import { readStorageJson } from "../storageJson";
+import { readStorageJson, writeStorageJson } from "../storageJson";
 import { clearImageUrlCache } from "./images";
 import {
   ENTRIES_STORAGE_KEY,
+  ENTRIES_SCHEMA_VERSION,
   errorMessage,
   isUnknownStorageValue,
   parseStoredEntries,
+  SETTINGS_STORAGE_KEY,
 } from "./shared";
+import { normalizeSettings } from "./settings";
 
 export interface BackupPayload {
   meta: {
@@ -25,6 +28,64 @@ export interface BackupPayload {
 export interface RestoreBackupResult {
   restored: true;
   warnings: string[];
+}
+
+function isBrowserBackupPayload(value: unknown): value is BackupPayload {
+  if (!value || typeof value !== "object") return false;
+  const payload = value as Partial<BackupPayload>;
+  return Array.isArray(payload.entries)
+    && Boolean(payload.settings && typeof payload.settings === "object" && !Array.isArray(payload.settings))
+    && Boolean(payload.browserImages && typeof payload.browserImages === "object" && !Array.isArray(payload.browserImages))
+    && Object.entries(payload.browserImages ?? {}).every(
+      ([key, image]) => key.startsWith("img_") && typeof image === "string",
+    );
+}
+
+function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): void {
+  for (const key of snapshot.keys()) localStorage.removeItem(key);
+  for (const [key, value] of snapshot) {
+    if (value !== null) localStorage.setItem(key, value);
+  }
+}
+
+/**
+ * Browser backups span entries, settings, and image keys. Keep their writes
+ * all-or-nothing so quota failures cannot leave a mixed point-in-time state.
+ */
+export function applyBrowserBackupAtomically(payload: BackupPayload): void {
+  if (isTauri()) throw new Error("브라우저 백업 복원은 데스크톱 저장소에서 사용할 수 없습니다.");
+  if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
+
+  const managedKeys = new Set([
+    ENTRIES_STORAGE_KEY,
+    SETTINGS_STORAGE_KEY,
+    ...Object.keys(localStorage).filter((key) => key.startsWith("img_")),
+    ...Object.keys(payload.browserImages),
+  ]);
+  const previous = new Map([...managedKeys].map((key) => [key, localStorage.getItem(key)]));
+
+  try {
+    for (const key of managedKeys) localStorage.removeItem(key);
+    writeStorageJson(localStorage, ENTRIES_STORAGE_KEY, {
+      schemaVersion: ENTRIES_SCHEMA_VERSION,
+      entries: payload.entries,
+    });
+    writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalizeSettings(payload.settings));
+    for (const [key, image] of Object.entries(payload.browserImages)) {
+      localStorage.setItem(key, image);
+    }
+    clearImageUrlCache();
+  } catch (error) {
+    try {
+      restoreBrowserStorageSnapshot(previous);
+      clearImageUrlCache();
+    } catch (rollbackError) {
+      throw new Error("백업 복원과 원래 데이터 복구에 모두 실패했습니다.", {
+        cause: rollbackError,
+      });
+    }
+    throw new Error(errorMessage(error, "브라우저 백업을 복원하지 못했습니다."), { cause: error });
+  }
 }
 
 export async function selectBackupDestination(): Promise<string | null> {
@@ -84,7 +145,9 @@ export async function restoreBackupFromSource(source: string | File): Promise<Ba
     return restored;
   }
   if (!(source instanceof File)) throw new Error("브라우저 백업 파일을 찾을 수 없습니다.");
-  return JSON.parse(await source.text()) as BackupPayload;
+  const payload: unknown = JSON.parse(await source.text());
+  if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
+  return payload;
 }
 
 export async function createBackup(

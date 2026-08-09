@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
+  applyBrowserBackupAtomically,
   createBackupAtDestination,
   deleteImage,
   previewOrphanImages,
@@ -79,7 +80,6 @@ interface UseAppActionsOptions {
     form: EntryFormData,
     removedImages: string[],
   ) => Promise<void>;
-  replaceEntries: (entries: WrongAnswerEntry[]) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   patchEntry: (
     id: string,
@@ -98,7 +98,6 @@ interface UseAppActionsOptions {
   removePromptTemplate: (templateId: string) => Promise<void>;
   upsertMemoTemplate: (template: MemoTemplate) => Promise<void>;
   removeMemoTemplate: (templateId: string) => Promise<void>;
-  setSettings: (settings: AppSettings) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshGeneratedExams?: () => Promise<void>;
@@ -117,7 +116,6 @@ export function useAppActions({
   addEntries,
   addEntriesWithImportAssetSession,
   updateEntry,
-  replaceEntries,
   deleteEntry,
   patchEntry,
   patchEntryWithImportAssetSession,
@@ -128,7 +126,6 @@ export function useAppActions({
   removePromptTemplate,
   upsertMemoTemplate,
   removeMemoTemplate,
-  setSettings,
   patchSettings,
   refreshSettings,
   refreshGeneratedExams,
@@ -555,19 +552,17 @@ export function useAppActions({
     const source = await selectBackupSource();
     if (!source) return;
     const operation = (async () => {
-      const readBackup = () => restoreBackupFromSource(source);
-      const payload = runMaintenanceOperation
-        ? await runMaintenanceOperation(readBackup)
-        : await readBackup();
-      if (payload && "entries" in payload) {
-        await replaceEntries(payload.entries);
-        await setSettings(payload.settings);
-        for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
-          localStorage.setItem(key, value);
+      const restore = async () => {
+        const payload = await restoreBackupFromSource(source);
+        if (payload && "entries" in payload) {
+          applyBrowserBackupAtomically(payload);
         }
-      } else {
         await Promise.all([refresh(), refreshSettings(), refreshGeneratedExams?.()]);
-      }
+        return payload;
+      };
+      const payload = runMaintenanceOperation
+        ? await runMaintenanceOperation(restore)
+        : await restore();
       setSettingsMessage(payload && "restored" in payload && payload.warnings.length
         ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
         : "백업 복원을 완료했습니다.");

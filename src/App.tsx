@@ -16,7 +16,7 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, McpExportContext } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
@@ -41,6 +41,15 @@ import type { LibraryFolder } from "./types";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
+import { normalizeQuestionNumber } from "./utils/questionMeta";
+
+export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
+  return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
+    normalizeQuestionNumber(existing.sourceQuestionNumber) === normalizeQuestionNumber(block.sourceQuestionNumber)
+      && existing.type === block.type
+      && existing.title.trim().toLocaleLowerCase("ko-KR") === block.title.trim().toLocaleLowerCase("ko-KR")
+  )))];
+}
 
 function AppContent() {
   const { confirm, prompt } = useAppDialog();
@@ -54,7 +63,6 @@ function AppContent() {
     addEntries,
     addEntriesWithImportAssetSession,
     updateEntry,
-    replaceEntries,
     deleteEntry,
     toggleMastered,
     toggleDifficult,
@@ -66,7 +74,6 @@ function AppContent() {
   const settingsCtx = useSettingsContext();
   const {
     settings,
-    setSettings,
     patchSettings,
     refreshSettings,
     flushSettings,
@@ -260,12 +267,10 @@ function AppContent() {
     addEntries,
     addEntriesWithImportAssetSession,
     updateEntry,
-    replaceEntries,
     deleteEntry,
     patchEntry,
     patchEntryWithImportAssetSession,
     refresh,
-    setSettings,
     patchSettings,
     upsertTemplate,
     removeTemplate,
@@ -763,7 +768,7 @@ function AppContent() {
           entry={candidateEntry}
           onClose={() => setLearningCandidateEntryId(null)}
           onSave={(blocks) => patchEntry(candidateEntry.id, (current) => ({
-            learningBlocks: [...(current.learningBlocks ?? []), ...blocks.filter((block) => !(current.learningBlocks ?? []).some((existing) => existing.sourceQuestionNumber === block.sourceQuestionNumber && existing.type === block.type && existing.title.trim().toLocaleLowerCase("ko-KR") === block.title.trim().toLocaleLowerCase("ko-KR")))],
+            learningBlocks: appendUniqueLearningBlocks(current.learningBlocks ?? [], blocks),
           }))}
         />;
       })()}

@@ -9,6 +9,8 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   builtInPromptTemplates,
+  applyBrowserBackupAtomically,
+  defaultSettings,
   generateImportWithAi,
   getAiProviderStatus,
   loadExamSessions,
@@ -193,6 +195,55 @@ describe("browser ai provider fallback", () => {
       available: false,
     }));
     await expect(generateImportWithAi("prompt", "", [])).rejects.toThrow("데스크톱 앱");
+  });
+});
+
+describe("browser backup restore transaction", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("replaces entries, settings, and images as one browser snapshot", () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [{ id: "old-entry" }] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ theme: "dark" }));
+    localStorage.setItem("img_old.png", "old-image");
+
+    applyBrowserBackupAtomically({
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: { "img_new.png": "new-image" },
+    });
+
+    expect(JSON.parse(localStorage.getItem("wrong-answer-entries") ?? "{}")).toEqual({ schemaVersion: 2, entries: [] });
+    expect(localStorage.getItem("img_old.png")).toBeNull();
+    expect(localStorage.getItem("img_new.png")).toBe("new-image");
+  });
+
+  it("rolls back every managed key when restoring an image exceeds storage capacity", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [{ id: "old-entry" }] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ theme: "dark" }));
+    localStorage.setItem("img_old.png", "old-image");
+    const before = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
+    let failImageWrite = true;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function setItem(this: Storage, key: string, value: string) {
+      if (key === "img_new.png" && failImageWrite) {
+        failImageWrite = false;
+        throw new DOMException("quota", "QuotaExceededError");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(() => applyBrowserBackupAtomically({
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: { "img_new.png": "new-image" },
+    })).toThrow("브라우저 백업을 복원하지 못했습니다");
+
+    expect(Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]))).toEqual(before);
   });
 });
 

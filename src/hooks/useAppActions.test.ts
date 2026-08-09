@@ -16,6 +16,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../api", () => ({
   cleanupOrphanImages: vi.fn(),
+  applyBrowserBackupAtomically: vi.fn(),
   createBackupAtDestination: vi.fn(async () => "Backup created"),
   deleteImage: vi.fn(),
   previewOrphanImages: vi.fn(),
@@ -270,7 +271,6 @@ describe("useAppActions", () => {
         addEntries: vi.fn(async () => ["entry-1"]),
         addEntriesWithImportAssetSession: vi.fn(async () => ["id"]),
         updateEntry: vi.fn(async () => {}),
-        replaceEntries: vi.fn(async () => {}),
         deleteEntry: vi.fn(async () => {}),
         patchEntry: vi.fn(async () => {}),
         patchEntryWithImportAssetSession: vi.fn(async () => {}),
@@ -281,7 +281,6 @@ describe("useAppActions", () => {
         removePromptTemplate: vi.fn(async () => {}),
         upsertMemoTemplate: vi.fn(async () => {}),
         removeMemoTemplate: vi.fn(async () => {}),
-        setSettings: vi.fn(async () => {}),
         patchSettings: vi.fn(async () => {}),
         refreshSettings: vi.fn(async () => {}),
         setActiveSection: vi.fn(),

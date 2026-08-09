@@ -28,7 +28,6 @@ commands.allow = [
   "discard_import_asset_session",
   "validate_import_asset_session",
   "cleanup_stale_import_asset_sessions",
-  "save_image",
   "save_image_from_dialog",
   "save_images_from_dialog",
   "save_import_image_bytes",

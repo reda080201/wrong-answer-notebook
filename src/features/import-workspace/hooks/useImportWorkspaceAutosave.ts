@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ImportWorkspace } from "../model/importWorkspace";
 import { readStorageJson, writeStorageJson } from "../../../services/storageJson";
 
@@ -30,11 +30,32 @@ export function saveImportWorkspaceDraft(workspace: ImportWorkspace): void {
   writeStorageJson(localStorage, STORAGE_KEY, workspace);
 }
 
-export function useImportWorkspaceAutosave(workspace: ImportWorkspace, enabled = true): void {
+export interface ImportWorkspaceAutosaveCallbacks {
+  onSaving?(): void;
+  onSaved?(): void;
+  onError?(error: unknown): void;
+}
+
+export function useImportWorkspaceAutosave(
+  workspace: ImportWorkspace,
+  enabled = true,
+  callbacks?: ImportWorkspaceAutosaveCallbacks,
+): void {
+  const callbacksRef = useRef(callbacks);
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
+
   useEffect(() => {
     if (!enabled) return;
     const timer = window.setTimeout(() => {
-      try { saveImportWorkspaceDraft(workspace); } catch { /* best effort */ }
+      callbacksRef.current?.onSaving?.();
+      try {
+        saveImportWorkspaceDraft(workspace);
+        callbacksRef.current?.onSaved?.();
+      } catch (error) {
+        callbacksRef.current?.onError?.(error);
+      }
     }, 750);
     return () => window.clearTimeout(timer);
   }, [workspace, enabled]);
