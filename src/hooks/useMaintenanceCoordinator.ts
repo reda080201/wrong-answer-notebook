@@ -8,6 +8,7 @@ interface MaintenanceCoordinatorOptions {
   flushGptSolutionDrafts?(): Promise<void>;
   flushActiveExam?(): Promise<void>;
   flushTransientWrites?(): Promise<void>;
+  setTransientWritesMaintenanceBlocked?(blocked: boolean): void;
   setEntriesMaintenanceBlocked(blocked: boolean): void;
   setSettingsMaintenanceBlocked(blocked: boolean): void;
   setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
@@ -23,6 +24,7 @@ export function useMaintenanceCoordinator({
   flushGptSolutionDrafts = async () => undefined,
   flushActiveExam = async () => undefined,
   flushTransientWrites = async () => undefined,
+  setTransientWritesMaintenanceBlocked = () => undefined,
   setEntriesMaintenanceBlocked,
   setSettingsMaintenanceBlocked,
   setGeneratedExamsMaintenanceBlocked,
@@ -34,6 +36,14 @@ export function useMaintenanceCoordinator({
   return useCallback(async <T,>(task: () => Promise<T>): Promise<T> => {
     if (activeRef.current) throw new Error("백업, 복원 또는 업데이트 준비 작업이 이미 진행 중입니다.");
     activeRef.current = true;
+    setTransientWritesMaintenanceBlocked(true);
+    try {
+      await flushTransientWrites();
+    } catch (error) {
+      setTransientWritesMaintenanceBlocked(false);
+      activeRef.current = false;
+      throw error;
+    }
     setEntriesMaintenanceBlocked(true);
     setSettingsMaintenanceBlocked(true);
     setGeneratedExamsMaintenanceBlocked(true);
@@ -47,7 +57,6 @@ export function useMaintenanceCoordinator({
         flushLibraryFolders(),
         flushGptSolutionDrafts(),
         flushActiveExam(),
-        flushTransientWrites(),
       ]);
       return await task();
     } finally {
@@ -56,7 +65,8 @@ export function useMaintenanceCoordinator({
       setGeneratedExamsMaintenanceBlocked(false);
       setLibraryMaintenanceBlocked(false);
       setGptSolutionDraftsMaintenanceBlocked(false);
+      setTransientWritesMaintenanceBlocked(false);
       activeRef.current = false;
     }
-  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked]);
+  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
 }

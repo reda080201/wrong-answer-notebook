@@ -7,6 +7,7 @@ import LearningHubView from "../features/learning/components/LearningHubView";
 import QuestionBankView from "../features/question-bank/components/QuestionBankView";
 import { buildQuestionBankItems } from "../features/question-bank/utils/buildQuestionBankItems";
 import { patchQuestionClassification, type QuestionMetaPatch } from "../features/question-bank/utils/patchQuestionClassification";
+import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 
@@ -16,7 +17,7 @@ interface NotebookKnowledgeWorkspaceProps {
   learningHubTarget: { entryId: string; blockId: string } | null;
   questionBankPreferences?: QuestionBankPreferences;
   patchQuestionBankPreferences(patch: Partial<QuestionBankPreferences>): Promise<void>;
-  registerQuestionBankPreferenceFlush(flush: (() => Promise<void>) | null): void;
+  registerQuestionBankPreferenceFlush(registration: TransientWriteRegistration): void;
   patchEntry(entryId: string, patch: EntryPatch): Promise<void>;
   openEntry(entry: WrongAnswerEntry, questionNumber?: string): void;
   openCandidateReview(entryId: string): void;

@@ -100,6 +100,24 @@ describe("useExamSessionController safety guards", () => {
     expect(saveExamSessions).not.toHaveBeenCalled();
   });
 
+  it("discards an active session after restore without merging it back into saved sessions", async () => {
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    vi.useFakeTimers();
+    try {
+      act(() => result.current.open(entry));
+      expect(result.current.session).not.toBeNull();
+
+      act(() => result.current.discardActiveSessionAfterRestore());
+      expect(result.current.session).toBeNull();
+      expect(result.current.sessionRef.current).toBeNull();
+      act(() => { vi.advanceTimersByTime(1_000); });
+      expect(saveExamSessions).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not mark a session submitted when atomic wrong-entry persistence fails", async () => {
     const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockRejectedValue(new Error("entries failed"));
     const { result } = renderHook(() => useExamSessionController({

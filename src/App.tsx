@@ -119,6 +119,7 @@ function AppContent() {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
     flushTransientWrites,
+    setTransientWritesMaintenanceBlocked,
   } = useAppWriteRegistrations();
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const exam = useExamSessionController({
@@ -146,6 +147,7 @@ function AppContent() {
     open: openExamSession,
     openGenerated: openGeneratedExamSession,
     close: closeExamSession,
+    discardActiveSessionAfterRestore,
     flush: flushExamSessionSave,
     submit: handleExamSubmit,
   } = exam;
@@ -188,6 +190,7 @@ function AppContent() {
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
     flushActiveExam: flushActiveExamForMaintenance,
     flushTransientWrites,
+    setTransientWritesMaintenanceBlocked,
   });
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
@@ -299,6 +302,7 @@ function AppContent() {
     removeMemoTemplate,
     refreshSettings,
     refreshExamSessions: reloadExamSessions,
+    discardActiveSessionAfterRestore,
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,

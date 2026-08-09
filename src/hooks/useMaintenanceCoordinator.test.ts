@@ -13,6 +13,7 @@ describe("useMaintenanceCoordinator", () => {
       flushGptSolutionDrafts: async () => { order.push("flush gpt drafts"); },
       flushActiveExam: async () => { order.push("flush active exam"); },
       flushTransientWrites: async () => { order.push("flush transient writes"); },
+      setTransientWritesMaintenanceBlocked: (value) => { order.push(`transient:${value}`); },
       setEntriesMaintenanceBlocked: (value) => { order.push(`entries:${value}`); },
       setSettingsMaintenanceBlocked: (value) => { order.push(`settings:${value}`); },
       setGeneratedExamsMaintenanceBlocked: (value) => { order.push(`generated:${value}`); },
@@ -23,11 +24,12 @@ describe("useMaintenanceCoordinator", () => {
     await act(async () => {
       await expect(result.current(async () => { order.push("task"); return "ok"; })).resolves.toBe("ok");
     });
-    expect(order.slice(0, 5)).toEqual(["entries:true", "settings:true", "generated:true", "library:true", "gpt:true"]);
+    expect(order.slice(0, 2)).toEqual(["transient:true", "flush transient writes"]);
+    expect(order.indexOf("entries:true")).toBeGreaterThan(order.indexOf("flush transient writes"));
     expect(order.indexOf("task")).toBeGreaterThan(order.lastIndexOf("flush"));
     expect(order.indexOf("task")).toBeGreaterThan(order.indexOf("flush active exam"));
     expect(order.indexOf("task")).toBeGreaterThan(order.indexOf("flush transient writes"));
-    expect(order.slice(-5)).toEqual(["entries:false", "settings:false", "generated:false", "library:false", "gpt:false"]);
+    expect(order.slice(-6)).toEqual(["entries:false", "settings:false", "generated:false", "library:false", "gpt:false", "transient:false"]);
   });
 
   it("does not run maintenance work when active exam or transient writes fail to flush", async () => {
@@ -52,11 +54,13 @@ describe("useMaintenanceCoordinator", () => {
   it("releases maintenance blocks when transient writes fail to flush", async () => {
     const task = vi.fn(async () => undefined);
     const setBlocked = vi.fn();
+    const setTransientBlocked = vi.fn();
     const { result } = renderHook(() => useMaintenanceCoordinator({
       flushEntries: vi.fn(async () => undefined),
       flushSettings: vi.fn(async () => undefined),
       flushGeneratedExams: vi.fn(async () => undefined),
       flushTransientWrites: vi.fn(async () => { throw new Error("workspace save failed"); }),
+      setTransientWritesMaintenanceBlocked: setTransientBlocked,
       setEntriesMaintenanceBlocked: setBlocked,
       setSettingsMaintenanceBlocked: setBlocked,
       setGeneratedExamsMaintenanceBlocked: setBlocked,
@@ -64,7 +68,8 @@ describe("useMaintenanceCoordinator", () => {
 
     await expect(result.current(task)).rejects.toThrow("workspace save failed");
     expect(task).not.toHaveBeenCalled();
-    expect(setBlocked).toHaveBeenLastCalledWith(false);
+    expect(setBlocked).not.toHaveBeenCalled();
+    expect(setTransientBlocked.mock.calls).toEqual([[true], [false]]);
   });
 
   it("rejects overlapping maintenance work without releasing the first lock", async () => {

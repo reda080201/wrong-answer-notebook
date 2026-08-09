@@ -32,6 +32,7 @@ import type { ImportQuestionDraft, ImportWorkspace } from "../features/import-wo
 import { normalizeChoice } from "../features/import-workspace/model/importWorkspace";
 import { parseQuestionText } from "../utils/textLayout";
 import { normalizeQuestionNumber } from "../utils/questionMeta";
+import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 
 type PendingSupplementalImport = {
   target: WrongAnswerEntry;
@@ -45,7 +46,7 @@ type PendingSupplementalImport = {
 };
 
 interface AppModalsProps {
-  registerWorkspaceDraftFlush: (flush: (() => Promise<void>) | null) => void;
+  registerWorkspaceDraftFlush: (registration: TransientWriteRegistration) => void;
   showForm: boolean;
   editingEntry?: WrongAnswerEntry;
   handleSave: (data: EntryFormData, removedImages: string[]) => Promise<void>;

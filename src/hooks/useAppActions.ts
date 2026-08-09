@@ -101,6 +101,7 @@ interface UseAppActionsOptions {
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
   refreshExamSessions?: () => Promise<boolean>;
+  discardActiveSessionAfterRestore?: () => void;
   refreshGeneratedExams?: () => Promise<void>;
   refreshLibraryFolders?: () => Promise<void>;
   refreshGptSolutionDrafts?: () => Promise<void>;
@@ -132,6 +133,7 @@ export function useAppActions({
   patchSettings,
   refreshSettings,
   refreshExamSessions,
+  discardActiveSessionAfterRestore,
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
@@ -564,6 +566,7 @@ export function useAppActions({
         if (payload && "entries" in payload) {
           restoreResult = applyBrowserBackupAtomically(payload);
         }
+        discardActiveSessionAfterRestore?.();
         const [, , examSessionsReloaded] = await Promise.all([
           refresh(),
           refreshSettings(),

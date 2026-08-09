@@ -516,16 +516,18 @@ describe("useAppActions", () => {
 
     it("reloads exam sessions after a browser backup restore", async () => {
       const refreshExamSessions = vi.fn(async () => true);
+      const discardActiveSessionAfterRestore = vi.fn();
       vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
       vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
       vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
-      const { result } = createHook({ refreshExamSessions });
+      const { result } = createHook({ refreshExamSessions, discardActiveSessionAfterRestore });
 
       await act(async () => {
         await result.current.handleRestore();
       });
 
       expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+      expect(discardActiveSessionAfterRestore).toHaveBeenCalledTimes(1);
     });
 
     it("does not report a restore as complete when exam sessions cannot reload", async () => {
@@ -537,6 +539,16 @@ describe("useAppActions", () => {
 
       await expect(result.current.handleRestore()).rejects.toThrow("시험 세션을 다시 불러오지 못했습니다");
       expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the active session when storage restoration fails", async () => {
+      const discardActiveSessionAfterRestore = vi.fn();
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockRejectedValue(new Error("restore failed"));
+      const { result } = createHook({ discardActiveSessionAfterRestore });
+
+      await expect(result.current.handleRestore()).rejects.toThrow("restore failed");
+      expect(discardActiveSessionAfterRestore).not.toHaveBeenCalled();
     });
   });
 
