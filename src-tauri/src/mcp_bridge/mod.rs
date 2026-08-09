@@ -2,6 +2,7 @@
 
 mod audit;
 mod auth;
+mod protocol;
 mod state;
 
 use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
@@ -13,8 +14,7 @@ use axum::{
     extract::{ConnectInfo, State},
     http::{header, HeaderMap, Request, StatusCode},
     response::{IntoResponse, Response},
-    routing::post,
-    Json, Router,
+    Json,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -273,7 +273,7 @@ impl McpBridgeManager {
             status: Arc::clone(&self.status),
             audit_path: self.data_dir.join("mcp-audit.jsonl"),
         };
-        let app = router(state);
+        let app = protocol::router(state);
         let new_task = tauri::async_runtime::spawn(async move {
             if let Err(error) = axum::serve(
                 listener,
@@ -345,14 +345,6 @@ fn stopped_status() -> McpBridgeStatus {
         has_auth_token: false,
     }
 }
-fn router(state: BridgeHttpState) -> Router {
-    Router::new()
-        .route("/mcp", post(mcp_post).get(mcp_get))
-        .route("/pair", post(redeem_pairing))
-        .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
-        .with_state(state)
-}
-
 async fn redeem_pairing(
     State(state): State<BridgeHttpState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
