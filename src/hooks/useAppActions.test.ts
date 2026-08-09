@@ -562,8 +562,11 @@ describe("useAppActions", () => {
 
     it("records review attempts with confidence level", async () => {
       const entry = createMockEntry();
-      let capturedPatch: EntryPatch | null = null;
+      let capturedPatch: ((current: WrongAnswerEntry) => Partial<WrongAnswerEntry>) | null = null;
       const patchEntry = vi.fn(async (_id: string, fn: EntryPatch) => {
+        if (typeof fn !== "function") {
+          throw new Error("review patch was not functional");
+        }
         capturedPatch = fn;
       });
       const { result } = createHook({ entries: [entry], patchEntry });
@@ -573,8 +576,10 @@ describe("useAppActions", () => {
       });
 
       expect(capturedPatch).toBeTruthy();
-      
-      const updated = capturedPatch(entry);
+      if (!capturedPatch) {
+        throw new Error("review patch was not captured");
+      }
+      const updated = (capturedPatch as (current: WrongAnswerEntry) => Partial<WrongAnswerEntry>)(entry);
       expect(updated.reviewAttempts).toBeDefined();
       if (Array.isArray(updated.reviewAttempts) && updated.reviewAttempts.length > 0) {
         expect(updated.reviewAttempts[0]).toHaveProperty("confidence");
