@@ -62,8 +62,17 @@ export function useAppUpdater(settings: AppSettings, patchSettings: (patch: Part
   useEffect(() => {
     if (!settings.updatePreferences.autoCheckEnabled) return;
     const last = settings.updatePreferences.lastCheckedAt ? Date.parse(settings.updatePreferences.lastCheckedAt) : 0;
-    const timer = window.setTimeout(() => { if (Date.now() - last >= UPDATE_AUTO_CHECK_INTERVAL_MS) void checkForUpdate(); }, UPDATE_STARTUP_DELAY_MS);
-    return () => window.clearTimeout(timer);
+    let active = true;
+    let timer: number | undefined;
+    const schedule = (delay: number) => {
+      timer = window.setTimeout(async () => {
+        if (!active) return;
+        if (Date.now() - last >= UPDATE_AUTO_CHECK_INTERVAL_MS) await checkForUpdate();
+        if (active) schedule(UPDATE_AUTO_CHECK_INTERVAL_MS);
+      }, delay);
+    };
+    schedule(UPDATE_STARTUP_DELAY_MS);
+    return () => { active = false; if (timer !== undefined) window.clearTimeout(timer); };
   }, [checkForUpdate, settings.updatePreferences]);
   return { state, checkForUpdate, installUpdate, restart };
 }
