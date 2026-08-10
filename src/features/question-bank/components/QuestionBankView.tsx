@@ -61,7 +61,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
       window.clearTimeout(preferenceTimerRef.current);
       preferenceTimerRef.current = null;
     }
-    const next = pendingPreferencePatchRef.current;
+    const next = pendingPreferencePatchRef.current ?? failedPreferencePatchRef.current;
     pendingPreferencePatchRef.current = null;
     if (!next || !onPreferencesChange) return;
     const revision = ++preferenceRevisionRef.current;

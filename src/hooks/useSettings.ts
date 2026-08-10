@@ -31,30 +31,35 @@ export function useSettings() {
     settingsRef.current = settings;
   }, [settings]);
 
-  const refreshSettings = useCallback(async () => {
-    const refreshMutation = mutationRef.current;
-    loadedRef.current = false;
+  const refreshSettings = useCallback(async (): Promise<boolean> => {
+    let refreshMutation = mutationRef.current;
     try {
       setSettingsError(null);
       await drain();
+      refreshMutation = mutationRef.current;
+      loadedRef.current = false;
       if (refreshMutation !== mutationRef.current) {
         loadedRef.current = true;
-        return;
+        return false;
       }
       const loaded = await loadSettings();
       if (refreshMutation === mutationRef.current) {
         settingsRef.current = loaded;
         setSettings(loaded);
         loadedRef.current = true;
+        return true;
       } else {
         loadedRef.current = true;
+        return false;
       }
     } catch (error) {
       if (refreshMutation === mutationRef.current) {
         loadedRef.current = false;
         setSettingsError(errorMessage(error, "설정을 불러오지 못했습니다."));
+        return false;
       } else {
         loadedRef.current = true;
+        return false;
       }
     }
   }, [drain]);

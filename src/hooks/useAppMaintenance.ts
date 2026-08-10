@@ -37,12 +37,16 @@ export function useAppMaintenance({
     void (async () => {
       await runMaintenanceOperation(() => createAutoBackup());
       if (cancelled) return;
-      await patchSettings({
-        autoBackup: {
-          ...settings.autoBackup,
-          lastBackupAt: new Date().toISOString(),
-        },
-      });
+      try {
+        await patchSettings({
+          autoBackup: {
+            ...settings.autoBackup,
+            lastBackupAt: new Date().toISOString(),
+          },
+        });
+      } catch {
+        if (!cancelled) report("자동 백업은 완료됐지만 마지막 백업 시각을 저장하지 못했습니다.");
+      }
     })().catch(() => {
       if (!cancelled) report("자동 백업에 실패했습니다. 설정에서 수동 백업을 실행해 주세요.");
     });
