@@ -802,6 +802,27 @@ export default function ImportFromGptModal({
     }
   };
 
+  const quickSave = async () => {
+    if (!draft || !onApplyEntries || isSolutionMode || isSupplementalMode) return;
+    if (!canApply) {
+      setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
+      return;
+    }
+    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(draft));
+    if (finalPolicy.blocking.length || (finalPolicy.confirmable.length && !confirmedValidationErrors)) {
+      setError(finalPolicy.blocking.length
+        ? "차단 항목을 해결한 뒤 저장할 수 있습니다."
+        : "확인이 필요한 항목을 검토한 뒤 체크박스를 선택해 주세요.");
+      return;
+    }
+    try {
+      await onApplyEntries([draft], assetFiles);
+      onClose();
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "가져온 문제지를 저장하지 못했습니다.");
+    }
+  };
+
   const handleClose = () => {
     if (isSupplementalMode && !preserveSupplementalImagesRef.current) {
       void Promise.all(
@@ -1498,8 +1519,13 @@ export default function ImportFromGptModal({
           <button type="button" className="btn-secondary" onClick={handleClose}>
             취소
           </button>
-          <button type="button" className="btn-primary" disabled={!canApply} onClick={() => void apply()}>
-            {isSolutionMode ? "해설 적용하기" : "폼으로 보내기"}
+          {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
+            <button type="button" className="btn-primary" disabled={!canApply} onClick={() => void quickSave()}>
+              바로 저장
+            </button>
+          )}
+          <button type="button" className="btn-secondary" disabled={!canApply} onClick={() => void apply()}>
+            {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
           </button>
         </div>
         {!canApply && applyBlockReason && (
