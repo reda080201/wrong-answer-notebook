@@ -448,6 +448,64 @@
   display: none;
 }
 
+.problem-sheet-primary-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+  width: 100%;
+}
+
+.problem-sheet-primary-title {
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.problem-sheet-primary-controls {
+  align-items: center;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.problem-sheet-display-mode {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.problem-sheet-display-mode button {
+  border: 1px solid var(--border-color, #d7dce4);
+  border-radius: 4px;
+  background: transparent;
+  padding: 5px 9px;
+}
+
+.problem-sheet-display-mode button.active {
+  background: var(--accent-soft, #e8f0ff);
+  border-color: var(--accent, #3167d9);
+  color: var(--accent-strong, #1849aa);
+}
+
+.detail-toolbar--problem-sheet {
+  min-height: 48px;
+}
+
+@media (max-width: 760px) {
+  .problem-sheet-primary-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .problem-sheet-primary-controls {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+}
+
 .detail-panel--sheet-single .detail-more-menu,
 .detail-panel--sheet-columns .detail-more-menu {
   min-width: 5.5rem;
