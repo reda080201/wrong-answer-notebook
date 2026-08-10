@@ -2,10 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   loadExamSessions,
   saveExamSessions,
-  syncMcpBridgeActiveExamContext,
 } from "../api";
 import type {
-  ActiveExamContext,
   ChatGptMcpPreferences,
   EntryFormData,
   ExamSession,
@@ -29,13 +27,13 @@ const normalizeExamQuestionNumber = (value: string | number | undefined | null) 
 const EMPTY_ENTRIES: WrongAnswerEntry[] = [];
 
 interface UseExamSessionControllerOptions {
-  chatGptPreferences: ChatGptMcpPreferences;
+  /** Retained for call-site compatibility; MCP sync is now user initiated. */
+  chatGptPreferences?: ChatGptMcpPreferences;
   existingEntries?: WrongAnswerEntry[];
   addEntries: (data: EntryFormData[]) => Promise<string[]>;
 }
 
 export function useExamSessionController({
-  chatGptPreferences,
   existingEntries = EMPTY_ENTRIES,
   addEntries,
 }: UseExamSessionControllerOptions) {
@@ -99,44 +97,6 @@ export function useExamSessionController({
   useEffect(() => {
     void reload();
   }, [reload]);
-
-  useEffect(() => {
-    if (!session) {
-      void syncMcpBridgeActiveExamContext({
-        sessionId: null,
-        questionId: null,
-        questionIndex: null,
-        userResponse: "",
-        scratchNote: "",
-        markedForReview: false,
-        submitted: false,
-        updatedAt: new Date().toISOString(),
-        contextUpdatedAt: new Date().toISOString(),
-      });
-      return;
-    }
-    const current = session.questions[session.currentQuestionIndex];
-    const response = current
-      ? session.responses.find((item) => item.questionNumber === current.questionNumber)
-      : undefined;
-    const context: ActiveExamContext = {
-      sessionId: session.id,
-      questionId: current?.id ?? null,
-      questionIndex: session.currentQuestionIndex,
-      userResponse: response?.response ?? "",
-      scratchNote: response?.scratchNote ?? "",
-      markedForReview: response?.markedForReview ?? false,
-      submitted: session.status === "submitted",
-      updatedAt: session.updatedAt,
-      shareUserResponse: chatGptPreferences.shareUserResponse,
-      shareScratchNote: chatGptPreferences.shareScratchNote,
-      shareQuestionImages: chatGptPreferences.shareQuestionImages,
-      shareSourcePageImages: chatGptPreferences.shareSourcePageImages,
-      contextUpdatedAt: new Date().toISOString(),
-    };
-    const timer = window.setTimeout(() => { void syncMcpBridgeActiveExamContext(context); }, 350);
-    return () => window.clearTimeout(timer);
-  }, [chatGptPreferences, session]);
 
   const flush = useCallback(async (next: ExamSession, updateUi = true): Promise<boolean> => {
     if (!loadedRef.current) {

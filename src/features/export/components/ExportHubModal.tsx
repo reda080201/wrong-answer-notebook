@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, WrongAnswerEntry } from "../../../types";
+import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { downloadMarkdown } from "../../../utils/exportEntry";
 import { buildGptExportPayload } from "../../../utils/gptExport";
 import { buildExamPrintModel } from "../services/buildExamPrintModel";
@@ -22,7 +22,7 @@ interface ExportHubModalProps {
   onExamPrintPreferencesChange: (patch: Partial<ExamPrintPreferences>) => Promise<void> | void;
   chatGptPreferences: ChatGptMcpPreferences;
   onChatGptPreferencesChange: (patch: Partial<ChatGptMcpPreferences>) => Promise<void> | void;
-  onSyncExportContext: (payload: { scope: ExportScopeMode; questionNumbers: string[]; submitted: boolean; shareOptions: Pick<ChatGptMcpPreferences, "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"> }) => Promise<void>;
+  onSyncExportContext: (payload: { scope: ExportScopeMode; questionNumbers: string[]; submitted: boolean; shareOptions: McpSendOptions }) => Promise<void>;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
   onOpenSettings?: () => void;
@@ -35,6 +35,7 @@ interface ExportHubModalProps {
     questionNumbers: string[];
     payload: import("../types").ChatGptSharePayload;
   }) => Promise<void>;
+  selectionOnly?: boolean;
 }
 
 export default function ExportHubModal(props: ExportHubModalProps) {
@@ -57,6 +58,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     initialScope,
     onToast,
     onStartSolutionRoundtrip,
+    selectionOnly = false,
   } = props;
   const [view, setView] = useState<ExportHubView>(initialView);
   const [scope, setScope] = useState<ExportScopeMode>(initialScope ?? (selectedQuestionNumbers.length ? "selected" : "current"));
@@ -162,6 +164,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
             onStartSolutionRoundtrip={onStartSolutionRoundtrip}
             onBack={() => setView("home")}
             initialScope={scope}
+            selectionOnly={selectionOnly}
           />
         ) : null}
     </Dialog>

@@ -10,8 +10,7 @@ import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
 import { createPreUpdateBackup } from "./api";
-import { syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
-import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
+import { syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
@@ -336,7 +335,6 @@ function AppContent() {
     }
     return true;
   });
-  const { syncActiveContext } = useBridgeActiveSync(settings.mcpBridge.enabled);
 
   const syncExamChatGptContext = useCallback(async (sharing: Pick<
     ChatGptMcpPreferences,
@@ -754,12 +752,6 @@ function AppContent() {
               onOpenSettings={(tab) => openSettings(tab ?? "view")}
               chatGptPreferences={settings.chatGptMcpPreferences}
               onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
-              onSyncChatGptContext={async (context) => {
-                await syncMcpBridgeActiveContext({
-                  entryId: context.entryId,
-                  questionNumber: context.questionNumber,
-                });
-              }}
               onOpenChatGptSettings={() => openSettings("chatgpt")}
               onCheckLocalMcp={async () => {
                 const status = await mcpBridge.testConnection();
@@ -772,7 +764,6 @@ function AppContent() {
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
                onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
                gptSolutionDraftStore={gptSolutionDrafts}
-              onActiveContextChange={(context) => syncActiveContext(context)}
              />
             </>
           ) : (
