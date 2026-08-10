@@ -1917,6 +1917,31 @@ mod tests {
         assert!(!manager.shared_context_status().export_shared);
     }
 
+    #[test]
+    fn contexts_from_another_process_are_not_read() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+
+        for filename in ["active-export-context.json", "active-exam-context.json"] {
+            fs::write(
+                dir.path().join(filename),
+                serde_json::to_vec(&json!({
+                    "entryId": "old-sheet",
+                    "processSessionId": "previous-process",
+                    "questionNumbers": ["3"]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+
+        assert!(load_active_export_context(&state).is_none());
+        assert!(load_active_exam_context(&state).is_none());
+    }
+
     async fn start_test_server() -> (tempfile::TempDir, McpBridgeManager, u16) {
         let dir = tempdir().unwrap();
         let images = dir.path().join("images");
