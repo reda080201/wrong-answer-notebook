@@ -1350,7 +1350,16 @@ export default function EntryDetail({
               onOpenAllSettings={() => onOpenSettings?.("view")}
             />
           </div>
-          <Menu label="도구" className="detail-more-menu">
+          <Menu label="더보기" triggerAriaLabel="도구" className="detail-more-menu">
+              {!isConcept && !isLecture && (
+                <>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("solution")}>해설지</button>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("learning")}>특강</button>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("analysis")}>분석</button>
+                </>
+              )}
+              {isFocusable && <button type="button" className="btn-icon" onClick={openFocusMode}>집중 보기</button>}
+              {isSheet && <button type="button" className="btn-icon" onClick={() => openExportHub()}>공유·내보내기</button>}
               {onQuickGptSolution && (
                 <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
                   GPT 해설

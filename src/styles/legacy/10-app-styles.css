@@ -436,6 +436,23 @@
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
 }
 
+/* Problem sheets keep legacy keyboard hooks in the DOM while presenting
+   low-frequency commands through the secondary menu. */
+.detail-panel--sheet-single .detail-actions-primary,
+.detail-panel--sheet-columns .detail-actions-primary {
+  display: none;
+}
+
+.detail-panel--sheet-single .study-mode-tabs,
+.detail-panel--sheet-columns .study-mode-tabs {
+  display: none;
+}
+
+.detail-panel--sheet-single .detail-more-menu,
+.detail-panel--sheet-columns .detail-more-menu {
+  min-width: 5.5rem;
+}
+
 .sheet-selection-action-bar strong {
   margin-right: auto;
   white-space: nowrap;
