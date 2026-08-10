@@ -1,5 +1,5 @@
-import type { QuestionBlock } from "../../../utils/textLayout";
-import { parseQuestionText } from "../../../utils/textLayout";
+import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveQuestionClassification } from "../../../utils/questionClassification";
 import { resolveProblemSource } from "../../../utils/problemSource";
@@ -24,11 +24,6 @@ function questionImages(entry: WrongAnswerEntry, number: string): string[] {
     .filter((figure) => normalizeQuestionNumber(figure.questionNumber) === key)
     .flatMap((figure) => [figure.image, figure.original?.image, figure.cleaned?.image]);
   return unique([...(entry.questionImages ?? []), ...figures]);
-}
-
-function questionText(block: QuestionBlock): string {
-  const choices = block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim());
-  return [block.body, ...choices].filter(Boolean).join("\n").trim();
 }
 
 function reviewDue(meta: QuestionMeta | undefined, now: Date): boolean {
@@ -87,9 +82,8 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
 export function buildQuestionBankItems(entries: WrongAnswerEntry[], now = new Date()): QuestionBankItem[] {
   return entries.flatMap((entry) => {
     if (entry.entryKind === "problem_sheet") {
-      return parseQuestionText(entry.question)
-        .filter((block): block is QuestionBlock => block.kind === "question")
-        .map((block) => makeItem(entry, block.numberLabel || String(block.displayNumber), questionText(block), block.choices.length, now));
+      return getEntryQuestions(entry)
+        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now));
     }
     if (entry.entryKind !== "wrong_answer" || !entry.question.trim()) return [];
     const number = normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber

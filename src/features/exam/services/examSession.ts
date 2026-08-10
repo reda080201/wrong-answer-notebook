@@ -1,18 +1,21 @@
 import { v4 as uuidv4 } from "uuid";
 import type { ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date()): ExamSession {
   const blocks = parseQuestionText(entry.question);
-  const questions = blocks.filter((block): block is QuestionBlock => block.kind === "question");
-  const stimuli = findStimuli(entry.question, questions);
+  const questions = getEntryQuestions(entry);
+  const legacyQuestions = blocks.filter((item): item is QuestionBlock => item.kind === "question");
+  const stimuli = findStimuli(entry.question, legacyQuestions);
   const snapshots: ExamQuestionSnapshot[] = questions.map((block, index) => {
-    const number = String(block.numberLabel ?? block.displayNumber ?? index + 1);
+    const number = block.questionNumber || String(index + 1);
     const normalizedNumber = normalizeQuestionNumber(number);
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
-    const stimulus = stimuli.filter((item) => item.start < block.start && item.end <= block.start).at(-1);
+    const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
+    const stimulus = legacyBlock ? stimuli.filter((item) => item.start < legacyBlock.start && item.end <= legacyBlock.start).at(-1) : undefined;
     const figures = (entry.figures?.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizedNumber) ?? []).map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
@@ -22,14 +25,16 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
       questionNumber: number,
       passage: stimulus?.text,
       stimulusGroupId: stimulus?.id,
-      question: stripTrailingStimulus(entry.question, block, stimuli),
-      choices: (block.choices ?? []).map((choice) => `${choice.marker} ${choice.text}`),
+      question: block.questionText,
+      choices: block.choices,
       questionImages: [],
       sourcePageImages: entry.sourcePageImages ?? [],
       figures,
-      contentSegments: resolveContentSegments(entry, normalizedNumber, block, figures),
+      contentSegments: block.contentSegments ?? (legacyBlock ? resolveContentSegments(entry, normalizedNumber, legacyBlock, figures) : undefined),
       correctAnswer: answer?.answer,
       explanation: answer?.explanation,
+      points: block.points,
+      sourceWarning: block.warning,
     };
   });
   return {
@@ -197,10 +202,4 @@ function isExplicitStimulusLine(line: string): boolean {
   if (bracketedTable.test(line)) return true;
   if (/^표\s*(?::|：)\s*$/.test(line)) return true;
   return /^표\s+\d+\b/.test(line);
-}
-
-function stripTrailingStimulus(text: string, block: QuestionBlock, stimuli: StimulusRange[]): string {
-  const trailing = stimuli.find((item) => item.start >= block.bodyStart && item.start < block.end);
-  const end = trailing ? trailing.start : block.bodyEnd;
-  return text.slice(block.bodyStart, end).trim();
 }

@@ -1,6 +1,6 @@
 import type { ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
-import { parseQuestionText } from "../../../utils/textLayout";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 import type { ChatGptSharePayload } from "../types";
 
 export function buildChatGptSharePayload(options: {
@@ -12,9 +12,9 @@ export function buildChatGptSharePayload(options: {
 }): ChatGptSharePayload {
   const submitted = options.examSession?.status === "submitted";
   const allowAnswers = options.preferences.shareExistingAnswersAndExplanations;
-  const blocks = parseQuestionText(options.entry.question);
+  const blocks = getEntryQuestions(options.entry);
   const questions = options.questionNumbers.map((questionNumber) => {
-    const block = blocks.find((item): item is Extract<(typeof blocks)[number], { kind: "question" }> => item.kind === "question" && normalizeQuestionNumber(String(item.numberLabel || item.displayNumber || "")) === questionNumber);
+    const block = blocks.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const sessionQuestion = options.examSession?.questions.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const response = options.examSession?.responses.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const answer = options.entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
@@ -30,11 +30,11 @@ export function buildChatGptSharePayload(options: {
     }
     return {
       questionNumber,
-      questionText: options.preferences.shareQuestionText ? block?.body : undefined,
+      questionText: options.preferences.shareQuestionText ? block?.questionText : undefined,
       passage: options.preferences.shareQuestionText ? sessionQuestion?.passage : undefined,
-      contentSegments: options.preferences.shareQuestionText ? options.entry.questionContentSegments?.[questionNumber] : undefined,
+      contentSegments: options.preferences.shareQuestionText ? block?.contentSegments : undefined,
       choices: options.preferences.shareChoices
-        ? sessionQuestion?.choices ?? block?.choices.map((choice) => choice.text) ?? []
+        ? sessionQuestion?.choices ?? block?.choices ?? []
         : [],
       images: [...new Set(images)],
       userResponse: options.preferences.shareUserResponse ? response?.response : undefined,

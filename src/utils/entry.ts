@@ -17,6 +17,7 @@ import type {
   QuestionContentSegment,
   SheetFigureItem,
   SheetAnswerItem,
+  StructuredQuestion,
   SupplementalAppliedField,
   SupplementalResource,
   SupplementalResourceKind,
@@ -617,6 +618,45 @@ export function normalizeQuestionContentSegments(raw: unknown): WrongAnswerEntry
   return normalized.length ? Object.fromEntries(normalized) : undefined;
 }
 
+export function normalizeStructuredQuestions(raw: unknown): StructuredQuestion[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const questions = raw.flatMap((item): StructuredQuestion[] => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
+    const questionText = typeof value.questionText === "string" ? value.questionText.trim() : "";
+    if (!questionNumber || !questionText) return [];
+    const contentSegments = normalizeQuestionContentSegments({ [questionNumber]: value.contentSegments })?.[questionNumber] ?? [];
+    const list = (input: unknown) => Array.isArray(input)
+      ? input.filter((part): part is string => typeof part === "string").map((part) => part.trim()).filter(Boolean)
+      : [];
+    const sourceValue = value.source && typeof value.source === "object" && !Array.isArray(value.source)
+      ? value.source as Record<string, unknown>
+      : undefined;
+    const source = sourceValue ? {
+      title: typeof sourceValue.title === "string" ? sourceValue.title.trim() || undefined : undefined,
+      page: typeof sourceValue.page === "number" && Number.isFinite(sourceValue.page) ? sourceValue.page : undefined,
+      reference: typeof sourceValue.reference === "string" ? sourceValue.reference.trim() || undefined : undefined,
+    } : undefined;
+    return [{
+      questionNumber,
+      section: typeof value.section === "string" ? value.section.trim() || undefined : undefined,
+      questionType: typeof value.questionType === "string" ? value.questionType.trim() || undefined : undefined,
+      points: typeof value.points === "number" && Number.isFinite(value.points) ? value.points : undefined,
+      questionText,
+      conditions: list(value.conditions),
+      equations: list(value.equations),
+      choices: list(value.choices),
+      contentSegments,
+      source: source as StructuredQuestion["source"],
+      needsReview: Boolean(value.needsReview),
+      warning: typeof value.warning === "string" ? value.warning.trim() || undefined : undefined,
+      figureIds: list(value.figureIds),
+    }];
+  });
+  return questions.length ? questions : undefined;
+}
+
 function normalizeReviewAttempts(raw: unknown, entryId: string): ReviewAttempt[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -751,6 +791,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     normalizeDifficultyScore(rest.difficultyScore) ??
     (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
+  const structuredQuestions = normalizeStructuredQuestions(rest.structuredQuestions);
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
   const canonical = canonicalizeQuestionMistakeAnalysis(
     answerKey,
@@ -792,6 +833,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     answerKey: canonical.answerKey,
     figures,
     questionMeta: canonical.questionMeta,
+    structuredQuestions,
     questionContentSegments: normalizeQuestionContentSegments(rest.questionContentSegments),
     sheetGroup: entryKind === "problem_sheet" ? normalizeSheetGroup(rest.sheetGroup) : undefined,
     learningBlocks,

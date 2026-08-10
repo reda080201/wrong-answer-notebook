@@ -51,6 +51,35 @@ describe("importStudyText", () => {
       ]));
     });
 
+    it("preserves structured v2 questions without re-tokenizing math or figure placement", () => {
+      const result = parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [{
+          entryKind: "problem_sheet",
+          title: "구조화 시험지",
+          subject: "수학",
+          questions: [{
+            questionNumber: "10",
+            points: 4,
+            questionText: "f(10, x/y)를 구하시오.",
+            conditions: ["x > 0"],
+            equations: ["\\frac{1}{2}"],
+            choices: ["① 1/2", "② 1"],
+            contentSegments: [{ id: "segment-q10-1", type: "equation", latex: "\\frac{1}{2}", display: true }, { id: "figure-q10", type: "figure", figureId: "fig-10" }],
+            figureIds: ["fig-10"],
+          }],
+          answerKey: [{ questionNumber: "10", answer: "①", explanation: "풀이" }],
+          figures: [{ id: "fig-10", questionNumber: "10", image: "images/q10.png", source: "original", placement: { questionNumber: "10", afterSegmentId: "segment-q10-1" } }],
+        }],
+      }));
+      const entry = result.entries[0];
+      expect(entry.structuredQuestions).toEqual([expect.objectContaining({ questionNumber: "10", points: 4, figureIds: ["fig-10"] })]);
+      expect(entry.question).toContain("f(10, x/y)");
+      expect(entry.questionContentSegments?.["10"]?.[0]).toMatchObject({ id: "segment-q10-1", type: "equation" });
+      expect(entry.figures?.[0]).toMatchObject({ image: "images/q10.png", placement: { afterSegmentId: "segment-q10-1" } });
+    });
+
     it("handles described_only figures without blocking", () => {
       const result = parseImportedStudyText(JSON.stringify(v2WrapperFixture), "test.json", "수학");
       const figures = result.data.figures ?? [];

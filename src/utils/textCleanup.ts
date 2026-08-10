@@ -7,9 +7,11 @@ export function sanitizeControlCharacters(text: string): string {
 }
 
 export function normalizeQuestionLayout(text: string): string {
+  // Markers only start a new line when they occur at a real whitespace boundary.
+  // The former zero-width `\\s*` pattern split 10, 20, function arguments and
+  // LaTex-like expressions in the middle of otherwise valid question text.
   return text
-    .replace(/\s*(?=\n?\s*(?:문제\s*\d+|#\d+|\d{1,2}[.)]))/g, "\n")
-    .replace(/\s*(?=\n?\s*(?:[①②③④⑤⑥⑦⑧⑨⑩]|(?:\(\d+\))|(?:[ㄱ-ㅎA-Ea-e][.)])))/g, "\n")
+    .replace(/[ \t]+(?=(?:문제\s*\d+|#\d+|\d{1,2}[.)]|[①②③④⑤⑥⑦⑧⑨⑩]|\(\d+\)|[ㄱ-ㅎA-Ea-e][.)])(?:\s|$))/g, "\n")
     .split("\n")
     .map((line) => line.trim())
     .join("\n")
