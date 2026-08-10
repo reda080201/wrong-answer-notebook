@@ -42,7 +42,7 @@ export interface SettingsContextValue {
   // ============ Settings Actions ============
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   setSettings: (settings: AppSettings) => Promise<void>;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: () => Promise<boolean>;
   flushSettings: () => Promise<void>;
   setSettingsMaintenanceBlocked: (blocked: boolean) => void;
   clearSettingsError: () => void;

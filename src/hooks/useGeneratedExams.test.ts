@@ -83,7 +83,7 @@ describe("useGeneratedExams retry", () => {
     });
     expect(saveGeneratedExams).not.toHaveBeenCalled();
 
-    let first!: Promise<void>;
+    let first!: Promise<boolean>;
     await act(async () => {
       first = result.current.reload();
       await result.current.reload();

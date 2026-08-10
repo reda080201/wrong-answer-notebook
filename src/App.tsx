@@ -863,7 +863,7 @@ function AppContent() {
         hasRetryableChange={generatedExamController.hasRetryableChange}
         exams={generatedExamController.exams}
         onClose={generatedExamController.closeList}
-        onReload={generatedExamController.reload}
+        onReload={async () => { await generatedExamController.reload(); }}
         onRetry={generatedExamController.retry}
         onDiscardFailure={generatedExamController.discardFailedChange}
         onOpen={generatedExamController.openExam}

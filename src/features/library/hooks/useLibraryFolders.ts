@@ -20,8 +20,8 @@ export function useLibraryFolders() {
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const { enqueue, drain } = useSerialTaskQueue();
 
-  const refresh = useCallback(async () => {
-    if (reloadingRef.current) return;
+  const refresh = useCallback(async (): Promise<boolean> => {
+    if (reloadingRef.current) return false;
     reloadingRef.current = true;
     const request = ++loadRequestRef.current;
     setLoading(true);
@@ -31,15 +31,17 @@ export function useLibraryFolders() {
       const revision = mutationRevisionRef.current;
       loadedRef.current = false;
       const next = await loadLibraryFolders();
-      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return;
+      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return false;
       foldersRef.current = next;
       setFolders(next);
       loadedRef.current = true;
       setError(null);
+      return true;
     } catch (caught) {
       if (request === loadRequestRef.current) {
         setError(message(caught, "폴더 목록을 불러오지 못했습니다."));
       }
+      return false;
     } finally {
       if (request === loadRequestRef.current) {
         reloadingRef.current = false;

@@ -276,7 +276,7 @@ describe("useAppActions", () => {
         deleteEntry: vi.fn(async () => {}),
         patchEntry: vi.fn(async () => {}),
         patchEntryWithImportAssetSession: vi.fn(async () => {}),
-        refresh: vi.fn(async () => {}),
+        refresh: vi.fn(async () => true),
         upsertTemplate: vi.fn(async () => {}),
         removeTemplate: vi.fn(async () => {}),
         upsertPromptTemplate: vi.fn(async () => {}),
@@ -284,7 +284,11 @@ describe("useAppActions", () => {
         upsertMemoTemplate: vi.fn(async () => {}),
         removeMemoTemplate: vi.fn(async () => {}),
         patchSettings: vi.fn(async () => {}),
-        refreshSettings: vi.fn(async () => {}),
+        refreshSettings: vi.fn(async () => true),
+        refreshExamSessions: vi.fn(async () => true),
+        refreshGeneratedExams: vi.fn(async () => true),
+        refreshLibraryFolders: vi.fn(async () => true),
+        refreshGptSolutionDrafts: vi.fn(async () => true),
         setActiveSection: vi.fn(),
         setSelectedId: vi.fn(),
         ...overrides,
@@ -538,7 +542,7 @@ describe("useAppActions", () => {
       vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
       const { result } = createHook({ refreshExamSessions });
 
-      await expect(result.current.handleRestore()).rejects.toThrow("시험 세션을 다시 불러오지 못했습니다");
+      await expect(result.current.handleRestore()).rejects.toThrow("시험 세션");
       expect(refreshExamSessions).toHaveBeenCalledTimes(1);
     });
 

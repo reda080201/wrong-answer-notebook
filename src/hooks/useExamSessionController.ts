@@ -47,6 +47,7 @@ export function useExamSessionController({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [activeGeneratedExam, setActiveGeneratedExam] = useState<GeneratedExam | null>(null);
   const savedSessionsRef = useRef<ExamSession[]>([]);
+  const persistedSessionsRef = useRef<ExamSession[]>([]);
   const sessionRef = useRef<ExamSession | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const saveQueueRef = useRef(createSerialTaskQueue());
@@ -76,6 +77,7 @@ export function useExamSessionController({
       if (!Array.isArray(items)) throw new Error("모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
       const normalized = items;
       savedSessionsRef.current = normalized;
+      persistedSessionsRef.current = normalized;
       setSavedSessions(normalized);
       loadedRef.current = true;
       return true;
@@ -104,18 +106,20 @@ export function useExamSessionController({
       return false;
     }
     const sequence = ++saveSequenceRef.current;
-    const previousSessions = savedSessionsRef.current;
-    const nextSessions = mergeExamSession(savedSessionsRef.current, next);
-    savedSessionsRef.current = nextSessions;
-    if (updateUi) setSavedSessions(nextSessions);
+    const optimisticSessions = mergeExamSession(savedSessionsRef.current, next);
+    savedSessionsRef.current = optimisticSessions;
+    if (updateUi) setSavedSessions(optimisticSessions);
     setSaving(true);
     const saved = await saveQueueRef.current.enqueue(async () => {
+      const nextSessions = mergeExamSession(persistedSessionsRef.current, next);
       await saveExamSessions(nextSessions);
+      persistedSessionsRef.current = nextSessions;
+      savedSessionsRef.current = nextSessions;
       return true;
     }).catch((error) => {
       if (sequence === saveSequenceRef.current) {
-        savedSessionsRef.current = previousSessions;
-        if (updateUi) setSavedSessions(previousSessions);
+        savedSessionsRef.current = persistedSessionsRef.current;
+        if (updateUi) setSavedSessions(persistedSessionsRef.current);
         setSaveError(error instanceof Error && error.message
           ? error.message
           : "모의고사 진행 상태를 저장하지 못했습니다.");
