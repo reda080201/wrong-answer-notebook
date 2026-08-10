@@ -494,6 +494,11 @@
   min-height: 48px;
 }
 
+.detail-title-block--sheet-compact .detail-title-row,
+.detail-title-block--sheet-compact .detail-date {
+  display: none;
+}
+
 @media (max-width: 760px) {
   .problem-sheet-primary-toolbar {
     align-items: flex-start;

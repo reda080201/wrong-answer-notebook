@@ -51,6 +51,16 @@ function openSecondaryAction(name: string) {
   fireEvent.click(screen.getByRole("menuitem", { name }));
 }
 
+function openViewSettings() {
+  const direct = screen.queryByRole("button", { name: "보기 설정" });
+  if (direct) {
+    fireEvent.click(direct);
+    return;
+  }
+  openSecondaryAction("보기 설정");
+  fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+}
+
 describe("EntryDetail sheet layout", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -116,7 +126,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
 
     expect(localStorage.getItem("wrong-answer-sheet-layout")).toBe("columns");
@@ -896,6 +906,7 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.click(screen.getByRole("button", { name: "복습 큐" }));
 
     expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 1");
+    expect(screen.queryByText("2문제 선택됨")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));
 
     await waitFor(() => {
@@ -1189,7 +1200,7 @@ describe("EntryDetail view settings integration", () => {
     expect(meta?.querySelector(".subject-badge")).toHaveTextContent("국어");
     expect(meta?.textContent).toContain("문법");
     expect(meta?.textContent).toContain("난이도");
-    expect(screen.getByRole("button", { name: "보기 설정" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "보기 설정" })).not.toBeInTheDocument();
   });
 
   it("opens the shared view settings tab from quick view and the settings button", () => {
@@ -1208,7 +1219,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "더 많은 보기 설정" }));
     fireEvent.click(screen.getByRole("button", { name: "전체 설정 열기" }));
     expect(onOpenSettings).toHaveBeenCalledWith("view");
@@ -1228,7 +1239,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     expect(screen.queryByLabelText("정답 가리기")).not.toBeInTheDocument();
     expect(screen.queryByText("정답 가리기")).not.toBeInTheDocument();
   });
@@ -1259,7 +1270,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
     expect(onViewPreferencesChange).toHaveBeenCalledWith({ sheetLayout: "columns" });
   });
