@@ -37,10 +37,10 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
   return parseQuestionText(entry.question)
     .filter((block): block is QuestionBlock => block.kind === "question")
     .map((block, index) => {
-      const number = normalizeQuestionNumber(String(block.displayNumber ?? index + 1));
+      const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
       return {
         questionNumber: number || String(index + 1),
-        questionText: block.bodySegments.map((segment) => segment.text).join("\n").trim(),
+        questionText: block.body,
         choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim()),
         contentSegments: number ? entry.questionContentSegments?.[number] : undefined,
         figureIds: [],
