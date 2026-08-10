@@ -49,4 +49,6 @@ commands.allow = [
   "sync_active_context",
   "sync_active_exam_context",
   "sync_active_export_context",
+  "clear_mcp_shared_contexts",
+  "get_mcp_shared_context_status",
 ]

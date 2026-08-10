@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChatGptMcpPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
+import { clearMcpSharedContexts, getMcpSharedContextStatus } from "../../../api";
 import { buildChatGptPrompt, openChatGpt, recommendedChatGptQuestions } from "../../chatgpt/services/chatGptConnection";
 import { buildChatGptSharePayload } from "../services/buildChatGptSharePayload";
 import { resolveExportQuestionNumbers } from "../services/resolveExportQuestionNumbers";
@@ -90,6 +91,29 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
     shareExistingAnswersAndExplanations: false,
   }));
   const [answerDisclosureConfirmed, setAnswerDisclosureConfirmed] = useState(false);
+  const [sharedQuestionCount, setSharedQuestionCount] = useState(0);
+  const [sharedAt, setSharedAt] = useState<string | null>(null);
+  const [sharedError, setSharedError] = useState<string | null>(null);
+  useEffect(() => {
+    let active = true;
+    void getMcpSharedContextStatus().then((status) => {
+      if (active) {
+        setSharedQuestionCount(status.exportShared ? status.questionCount : 0);
+        setSharedAt(status.exportShared ? status.sharedAt ?? null : null);
+      }
+    });
+    return () => { active = false; };
+  }, []);
+  const handleClearSharedContext = async () => {
+    try {
+      await clearMcpSharedContexts();
+      setSharedQuestionCount(0);
+      setSharedAt(null);
+      setSharedError(null);
+    } catch (error) {
+      setSharedError(error instanceof Error ? error.message : "공유 해제에 실패했습니다.");
+    }
+  };
   const questions = useMemo(() => recommendedChatGptQuestions(examSession?.status === "submitted" ? "submitted" : examSession ? "pre-submit" : "detail"), [examSession]);
   const [selectedQuestion, setSelectedQuestion] = useState(questions[0] ?? "현재 공유된 문제를 읽어 줘.");
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
@@ -132,6 +156,9 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
         submitted,
         shareOptions,
       });
+      const sharedStatus = await getMcpSharedContextStatus();
+      setSharedQuestionCount(sharedStatus.questionCount);
+      setSharedAt(sharedStatus.sharedAt ?? new Date().toISOString());
       await onStartSolutionRoundtrip({ purpose, questionNumbers: scopeResult.questionNumbers, payload });
       setStatus("선택 문항 snapshot을 저장했습니다. 안내문을 ChatGPT에 보낸 뒤 JSON 응답을 가져와 문항별로 검토하세요.");
     } catch (error) {
@@ -164,6 +191,11 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
         </div>}
         {!selectionOnly && scope === "manual" ? <input className="input" value={manualRange} onChange={(event) => setManualRange(event.target.value)} placeholder="예: 1-5, 8, 10-14" /> : null}
         {scopeResult.disabledReason ? <p className="form-error">{scopeResult.disabledReason}</p> : <p className="muted">공유 문항 {payload.questionNumbers.length}개 · 정답 보호 {payload.answerProtection}</p>}
+      </section>
+      <section className="mcp-share-receipt" aria-live="polite">
+        <span>{sharedQuestionCount > 0 ? `${sharedQuestionCount}문제 공유됨${sharedAt ? ` · ${new Date(sharedAt).toLocaleTimeString("ko-KR")}` : ""}` : "문제 공유 안 됨"}</span>
+        {sharedQuestionCount > 0 && <button type="button" className="btn-secondary btn-sm" onClick={() => void handleClearSharedContext()}>공유 해제</button>}
+        {sharedError && <span className="form-error">{sharedError}</span>}
       </section>
       {onStartSolutionRoundtrip ? (
         <section>

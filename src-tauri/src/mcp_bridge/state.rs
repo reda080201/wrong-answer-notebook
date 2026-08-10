@@ -33,6 +33,7 @@ pub(super) struct BridgeHttpState {
     pub(super) exam_sessions_path: PathBuf,
     pub(super) active_exam_context_path: PathBuf,
     pub(super) active_export_context_path: PathBuf,
+    pub(super) process_session_id: String,
     pub(super) auth_token: Arc<Mutex<String>>,
     pub(super) pairing_codes: Arc<Mutex<HashMap<String, Instant>>>,
     pub(super) sessions: Arc<Mutex<HashMap<String, Instant>>>,
