@@ -34,7 +34,7 @@ export function buildChatGptSharePayload(options: {
       passage: options.preferences.shareQuestionText ? sessionQuestion?.passage : undefined,
       contentSegments: options.preferences.shareQuestionText ? block?.contentSegments : undefined,
       choices: options.preferences.shareChoices
-        ? sessionQuestion?.choices ?? block?.choices ?? []
+        ? sessionQuestion?.choices ?? (block?.choices ?? []).map((choice) => choice.replace(/^\s*(?:①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[A-Ea-e][.)])\s*/, ""))
         : [],
       images: [...new Set(images)],
       userResponse: options.preferences.shareUserResponse ? response?.response : undefined,
