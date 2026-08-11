@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { X } from "lucide-react";
 import Dialog from "./Dialog";
 
 export interface FullscreenDialogProps {
@@ -28,8 +29,8 @@ export default function FullscreenDialog({
       backdropClassName="fullscreen-dialog-backdrop"
       bodyClassName="fullscreen-dialog-body"
       header={
-        <button type="button" className="fullscreen-dialog-close" onClick={onClose}>
-          닫기
+        <button type="button" className="fullscreen-dialog-close ui-icon-button" aria-label="전체 화면 닫기" onClick={onClose}>
+          <X size={18} aria-hidden="true" />
         </button>
       }
       footer={footer}

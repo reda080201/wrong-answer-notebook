@@ -2,13 +2,57 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import EmptyState from "./EmptyState";
 import Field from "./Field";
+import { Badge } from "./Badge";
+import { Button } from "./Button";
+import { Divider } from "./Divider";
+import { IconButton } from "./IconButton";
 import Menu from "./Menu";
+import { Panel, Surface } from "./Surface";
+import { ScrollArea } from "./ScrollArea";
+import { Toolbar } from "./Toolbar";
 
 describe("shared UI primitives", () => {
   it("renders a labelled field and empty state", () => {
     render(<><Field label="제목" htmlFor="title"><input id="title" /></Field><EmptyState title="비어 있음">내용이 없습니다.</EmptyState></>);
     expect(screen.getByLabelText("제목")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "비어 있음" })).toBeInTheDocument();
+  });
+
+  it("exposes stable classes and accessible button semantics", () => {
+    render(
+      <>
+        <Button variant="primary" size="compact">저장</Button>
+        <IconButton label="닫기">X</IconButton>
+      </>,
+    );
+
+    expect(screen.getByRole("button", { name: "저장" })).toHaveClass(
+      "ui-button",
+      "ui-button--primary",
+      "ui-button--compact",
+    );
+    expect(screen.getByRole("button", { name: "닫기" })).toHaveClass("ui-icon-button");
+    expect(screen.getByRole("button", { name: "저장" })).toHaveAttribute("type", "button");
+  });
+
+  it("provides structural primitives without imposing product behavior", () => {
+    render(
+      <>
+        <Surface data-testid="surface">표면</Surface>
+        <Panel title="패널 제목" actions={<Button>작업</Button>}>내용</Panel>
+        <Toolbar label="문서 도구">도구</Toolbar>
+        <Divider orientation="vertical" />
+        <ScrollArea aria-label="스크롤 영역">스크롤 내용</ScrollArea>
+        <Badge tone="success">완료</Badge>
+      </>,
+    );
+
+    expect(screen.getByTestId("surface")).toHaveClass("ui-surface", "ui-surface--default");
+    expect(screen.getByRole("heading", { name: "패널 제목" })).toBeInTheDocument();
+    expect(screen.getByRole("toolbar", { name: "문서 도구" })).toHaveClass("ui-toolbar");
+    expect(screen.getByRole("separator")).toHaveAttribute("aria-orientation", "vertical");
+    expect(screen.getByRole("region", { name: "스크롤 영역" })).toHaveClass("ui-scroll-area");
+    expect(screen.getByText("완료")).toHaveClass("ui-badge", "ui-badge--success");
   });
 
   it("closes a menu with Escape", () => {

@@ -74,6 +74,8 @@ interface EntryDetailProps {
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
+  onStartExam?: () => void;
+  startExamLabel?: string;
   examSession?: ExamSession | null;
   examPrintPreferences?: ExamPrintPreferences;
   onExamPrintPreferencesChange?: (patch: Partial<ExamPrintPreferences>) => Promise<void> | void;
@@ -196,6 +198,8 @@ export default function EntryDetail({
   onOpenQuestionTarget,
   onQuickGptSolution,
   onOpenPrint,
+  onStartExam,
+  startExamLabel = "문제 풀기",
   examSession,
   examPrintPreferences,
   onExamPrintPreferencesChange,
@@ -1311,6 +1315,7 @@ export default function EntryDetail({
           <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
             <span className="problem-sheet-primary-title">{entry.title.trim() || "제목 없음"}</span>
             <div className="problem-sheet-primary-controls">
+              {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
                 <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
                 <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>

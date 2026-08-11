@@ -22,7 +22,7 @@ describe("FullscreenDialog", () => {
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(screen.getByRole("dialog", { name: "전체 화면 문서" })).toHaveClass("dialog-size-fullscreen");
-    expect(screen.getByRole("button", { name: "닫기" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "전체 화면 닫기" })).toHaveFocus();
 
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.queryByRole("dialog", { name: "전체 화면 문서" })).not.toBeInTheDocument();

@@ -1,17 +1,22 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 
-interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   children: ReactNode;
+  variant?: "primary" | "secondary" | "quiet" | "danger";
+  size?: "default" | "compact";
 }
 
-export function Button({ children, className, type = "button", ...props }: ButtonProps) {
-  return <button {...props} type={type} className={className}>{children}</button>;
-}
+export function Button({
+  children,
+  className = "",
+  type = "button",
+  variant = "secondary",
+  size = "default",
+  ...props
+}: ButtonProps) {
+  const classes = ["ui-button", `ui-button--${variant}`, `ui-button--${size}`, className]
+    .filter(Boolean)
+    .join(" ");
 
-interface IconButtonProps extends ButtonProps {
-  label: string;
-}
-
-export function IconButton({ label, children, className, ...props }: IconButtonProps) {
-  return <Button {...props} className={className} aria-label={props["aria-label"] ?? label}>{children}</Button>;
+  return <button {...props} type={type} className={classes}>{children}</button>;
 }

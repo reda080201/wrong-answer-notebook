@@ -14,6 +14,7 @@ import { difficultyScoreBand, difficultyScoreLabel, resolveEntryDifficultyScore 
 import Menu from "../shared/ui/Menu";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { getSheetResourceStatus } from "../features/supplemental-resources/utils/getSheetResourceStatus";
+import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
 
 interface EntryListPaneProps {
   activeSection: EntryKind;
@@ -32,6 +33,10 @@ interface EntryListPaneProps {
   onEditEntry?: (entryId: string) => void;
   onDeleteEntry?: (entryId: string) => void;
   onLinkLearningEntry?: (entryId: string) => void;
+  collapsed?: boolean;
+  width?: number;
+  onCollapsedChange?: (collapsed: boolean) => void;
+  onWidthChange?: (width: number) => void;
 }
 
 const EXPANDED_GROUPS_KEY = "wrong-answer-expanded-sheet-groups";
@@ -62,6 +67,10 @@ export default function EntryListPane({
   onEditEntry,
   onDeleteEntry,
   onLinkLearningEntry,
+  collapsed = false,
+  width = 300,
+  onCollapsedChange,
+  onWidthChange,
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
@@ -106,6 +115,35 @@ export default function EntryListPane({
       return next;
     });
   };
+
+  const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startWidth = width;
+    const move = (moveEvent: PointerEvent) => onWidthChange?.(startWidth + moveEvent.clientX - startX);
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  };
+
+  if (collapsed) {
+    return (
+      <aside className="entry-pane-restore" aria-label="항목 목록 접힘">
+        <button
+          type="button"
+          className="ui-icon-button"
+          aria-label="항목 목록 펼치기"
+          title="항목 목록 펼치기"
+          onClick={() => onCollapsedChange?.(false)}
+        >
+          <ChevronRight size={17} />
+        </button>
+      </aside>
+    );
+  }
 
   const renderEntryCard = (entry: WrongAnswerEntry) => {
     const difficultyScore = resolveEntryDifficultyScore(entry);
@@ -174,7 +212,18 @@ export default function EntryListPane({
     );
   };
   return (
-    <div className="entry-list">
+    <aside className="entry-list" style={{ width, minWidth: width }} aria-label="항목 목록">
+      <div className="entry-pane-controls">
+        <button
+          type="button"
+          className="ui-icon-button"
+          aria-label="항목 목록 접기"
+          title="항목 목록 접기"
+          onClick={() => onCollapsedChange?.(true)}
+        >
+          <ChevronLeft size={17} />
+        </button>
+      </div>
       {activeSection === "concept" && (
         <QuickConceptPanel
           subject={quickConceptSubject}
@@ -299,6 +348,24 @@ export default function EntryListPane({
       ) : (
         filtered.map((entry) => renderEntryCard(entry))
       )}
-    </div>
+      <div
+        className="entry-pane-resizer"
+        role="separator"
+        aria-label="항목 목록 너비 조절"
+        aria-orientation="vertical"
+        aria-valuemin={240}
+        aria-valuemax={460}
+        aria-valuenow={width}
+        tabIndex={0}
+        onPointerDown={startResize}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          onWidthChange?.(width + (event.key === "ArrowRight" ? 16 : -16));
+        }}
+      >
+        <GripVertical size={14} aria-hidden="true" />
+      </div>
+    </aside>
   );
 }

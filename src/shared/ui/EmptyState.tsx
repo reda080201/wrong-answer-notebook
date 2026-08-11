@@ -1,16 +1,19 @@
-import type { ReactNode } from "react";
+import { useId } from "react";
+import type { HTMLAttributes, ReactNode } from "react";
 
-interface EmptyStateProps {
+export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLElement>, "title"> {
   children: ReactNode;
   title?: ReactNode;
   action?: ReactNode;
-  className?: string;
 }
 
-export default function EmptyState({ children, title, action, className = "" }: EmptyStateProps) {
+export default function EmptyState({ children, title, action, className = "", ...props }: EmptyStateProps) {
+  const titleId = useId();
+  const classes = ["ui-empty-state", "empty-state", className].filter(Boolean).join(" ");
+
   return (
-    <section className={`empty-state ${className}`.trim()} aria-label={typeof title === "string" ? title : undefined}>
-      {title && <h3>{title}</h3>}
+    <section {...props} className={classes} aria-labelledby={title ? titleId : undefined}>
+      {title && <h3 id={titleId}>{title}</h3>}
       <p>{children}</p>
       {action}
     </section>

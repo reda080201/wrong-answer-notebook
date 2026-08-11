@@ -108,7 +108,7 @@ export default function Dialog({
   if (!open) return null;
 
   const resolvedClassName = [className, size && `dialog-size-${size}`].filter(Boolean).join(" ");
-  const titleNode = title ? <h2 id={resolvedTitleId} className={header ? "dialog-visually-hidden" : undefined}>{title}</h2> : null;
+  const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
 
   return (
     <div
