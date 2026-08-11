@@ -1,4 +1,5 @@
 import type { EntryFormData, ExplanationPart, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../../../types";
+import { normalizeStructuredQuestionType } from "../../../utils/structuredQuestionType";
 
 export type ImportWorkspaceStatus = "analyzing" | "review_required" | "ready" | "saving" | "completed" | "failed";
 export type ImportQuestionStatus = "ready" | "needs_review" | "missing_answer" | "duplicate_number" | "unassigned_image" | "invalid";
@@ -89,7 +90,9 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
   const structuredQuestions: StructuredQuestion[] = questions.map((item) => ({
     questionNumber: item.displayQuestionNumber,
     ...(item.section ? { section: item.section } : {}),
-    ...(item.questionType ? { questionType: item.questionType } : {}),
+    ...(normalizeStructuredQuestionType(item.questionType)
+      ? { questionType: normalizeStructuredQuestionType(item.questionType) }
+      : {}),
     ...(item.points !== undefined ? { points: item.points } : {}),
     questionText: draftQuestionText(item),
     conditions: [...(item.conditions ?? [])],

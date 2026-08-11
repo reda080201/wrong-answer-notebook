@@ -8,6 +8,7 @@ import MathText from "../../../components/MathText";
 import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
 import Dialog from "../../../shared/ui/Dialog";
+import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -67,9 +68,8 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
       onSubmittingChange?.(false);
     }
   };
-  const isMultipleChoice = question.questionType
-    ? question.questionType === "multiple_choice"
-    : question.choices.length > 0 && question.choices.every((choice) => Boolean(parseChoice(choice).marker));
+  const isMultipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices)
+    && question.choices.every((choice) => Boolean(parseChoice(choice).marker));
   const questionWarning = question.warning ?? question.sourceWarning;
   const showNavigator = examPreferences?.showNavigator !== false;
   const warnUnanswered = examPreferences?.warnUnansweredOnSubmit !== false;

@@ -8,7 +8,7 @@ export interface ExamQuestionSnapshot {
   passage?: string;
   stimulusGroupId?: string;
   section?: string;
-  questionType?: string;
+  questionType?: StructuredQuestion["questionType"];
   question: string;
   conditions?: string[];
   equations?: string[];

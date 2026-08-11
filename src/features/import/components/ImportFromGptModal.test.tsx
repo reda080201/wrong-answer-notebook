@@ -1097,7 +1097,13 @@ describe("ImportFromGptModal", () => {
       target: { files: [quickSaveFixtureFile()] },
     });
     const editor = await screen.findByLabelText("본문");
-    fireEvent.change(editor, { target: { value: "1. 수정한 문제\n① 3" } });
+    fireEvent.change(editor, {
+      target: {
+        value: (editor as HTMLTextAreaElement).value
+          .replace("문제", "수정한 문제")
+          .replace("① 1", "① 3"),
+      },
+    });
     const quickSave = screen.getByRole("button", { name: "바로 저장" });
     await waitFor(() => expect(quickSave).not.toBeDisabled());
     fireEvent.click(quickSave);
@@ -1163,12 +1169,8 @@ describe("ImportFromGptModal", () => {
         { questionNumber: "1번", questionText: "중복 문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] },
       ])] },
     });
-    await screen.findByDisplayValue("구조화 검증");
-    const quickSave = await screen.findByRole("button", { name: "바로 저장" });
-    expect(quickSave).toBeDisabled();
-    fireEvent.click(quickSave);
+    expect(await screen.findByRole("alert")).toHaveTextContent("duplicates question number 1");
     expect(onApplyEntries).not.toHaveBeenCalled();
-    expect(screen.getByText(/1번 문제가 본문에서 중복 감지/)).toBeInTheDocument();
   });
 
   it("shows malformed structured questions as an indexed import error", async () => {

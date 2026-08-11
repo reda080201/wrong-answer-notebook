@@ -455,6 +455,15 @@
   min-width: 0;
 }
 
+.detail-data-warning {
+  margin: 8px 16px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-border, #b7791f);
+  background: var(--warning-bg, #fff7df);
+  color: var(--warning-text, #6b3f00);
+  font-size: 0.875rem;
+}
+
 .detail-panel--zoom {
   position: fixed;
   inset: 0;

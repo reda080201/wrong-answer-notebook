@@ -1,11 +1,12 @@
 import type { QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionMeta";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
+import { isMultipleChoiceQuestion } from "./structuredQuestionType";
 
 export interface ResolvedEntryQuestion {
   questionNumber: string;
   section?: string;
-  questionType?: string;
+  questionType?: StructuredQuestion["questionType"];
   questionText: string;
   conditions: string[];
   equations: string[];
@@ -66,7 +67,8 @@ function appendMissingSemanticSegments(
 }
 
 function projectStructuredQuestion(question: StructuredQuestion): ResolvedEntryQuestion {
-  const isEmptyMultipleChoice = question.questionType === "multiple_choice" && question.choices.length === 0;
+  const isEmptyMultipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices)
+    && question.choices.length === 0;
   const warning = isEmptyMultipleChoice
     ? [question.warning, EMPTY_MULTIPLE_CHOICE_WARNING].filter((value, index, values) => value && values.indexOf(value) === index).join(" ")
     : question.warning;

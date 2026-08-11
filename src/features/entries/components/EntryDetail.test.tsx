@@ -67,6 +67,30 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("warns while a malformed structured payload is quarantined behind legacy text", () => {
+    render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          structuredQuestionsRecovery: {
+            raw: [{ questionNumber: "1" }],
+            issues: [{ index: 0, questionNumber: "1", code: "missing_text", message: "missing" }],
+          },
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    expect(screen.getByRole("alert")).toHaveTextContent("기존 문제 본문으로 표시");
+    expect(screen.getByText("첫 문제")).toBeInTheDocument();
+  });
+
   it("switches to the exam presentation and reveals only the requested answer", () => {
     const entry: WrongAnswerEntry = {
       ...sheetEntry,

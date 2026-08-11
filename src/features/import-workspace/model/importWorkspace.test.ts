@@ -89,7 +89,7 @@ describe("import workspace image separation", () => {
     });
 
     expect(result.structuredQuestions).toEqual([
-      expect.objectContaining({ questionNumber: "1", questionText: "수정된 첫 문제", section: "대수", questionType: "서술형", conditions: ["x > 0"], equations: ["x + 1 = 2"], points: 4, needsReview: true, warning: "확인 필요", source: { title: "시험지", page: 2 }, figureIds: ["figure-1"] }),
+      expect.objectContaining({ questionNumber: "1", questionText: "수정된 첫 문제", section: "대수", questionType: "essay", conditions: ["x > 0"], equations: ["x + 1 = 2"], points: 4, needsReview: true, warning: "확인 필요", source: { title: "시험지", page: 2 }, figureIds: ["figure-1"] }),
       expect.objectContaining({ questionNumber: "2", questionText: "둘째 문제", points: 2 }),
     ]);
     expect(result.question).toContain("수정된 첫 문제");

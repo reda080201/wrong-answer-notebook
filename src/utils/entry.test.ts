@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../types";
-import { getAllImageFilenames, normalizeDiagramSpec, normalizeEntry, normalizeStructuredQuestions, StructuredQuestionNormalizationError } from "./entry";
+import { getAllImageFilenames, normalizeDiagramSpec, normalizeEntry, normalizeStoredStructuredQuestions, normalizeStructuredQuestions } from "./entry";
 
 function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
   return {
@@ -30,7 +30,7 @@ describe("normalizeEntry", () => {
     expect(() => normalizeStructuredQuestions([
       { questionNumber: "1", questionText: "정상 문항" },
       { questionNumber: "2" },
-    ])).toThrowError(new StructuredQuestionNormalizationError(1, "has an empty questionText"));
+    ])).toThrowError("structuredQuestions[1] has an empty questionText");
   });
 
   it("normalizes multiple-choice questions without choices as needs review", () => {
@@ -44,6 +44,43 @@ describe("normalizeEntry", () => {
       needsReview: true,
       warning: expect.stringContaining("선택지"),
     })]);
+  });
+
+  it.each(["객관식", "multiple-choice", "multiple_choice"])(
+    "canonicalizes the %s question type",
+    (questionType) => {
+      expect(normalizeStructuredQuestions([{
+        questionNumber: "1",
+        questionType,
+        questionText: "고르시오.",
+        choices: ["① 1", "② 2"],
+      }])?.[0].questionType).toBe("multiple_choice");
+    },
+  );
+
+  it("quarantines malformed stored structured data without discarding its raw value", () => {
+    const raw = [{ questionNumber: "12" }];
+    const normalized = normalizeStoredStructuredQuestions(raw);
+
+    expect(normalized.questions).toBeUndefined();
+    expect(normalized.recovery).toEqual({
+      raw,
+      issues: [expect.objectContaining({ index: 0, questionNumber: "12", code: "missing_text" })],
+    });
+    expect(normalized.recovery?.raw).not.toBe(raw);
+  });
+
+  it("loads an entry with malformed structured data through its legacy question fallback", () => {
+    const raw = [{ questionNumber: "12" }];
+    const normalized = normalizeEntry(rawEntry({
+      entryKind: "problem_sheet",
+      question: "12. legacy body",
+      structuredQuestions: raw as never,
+    }));
+
+    expect(normalized.question).toBe("12. legacy body");
+    expect(normalized.structuredQuestions).toBeUndefined();
+    expect(normalized.structuredQuestionsRecovery?.raw).toEqual(raw);
   });
 
   it("preserves a trimmed optional library folder id without changing sheetGroup", () => {

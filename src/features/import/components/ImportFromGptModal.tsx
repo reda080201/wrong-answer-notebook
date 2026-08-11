@@ -59,8 +59,9 @@ import TextReviewSplitView from "./TextReviewSplitView";
 import { renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
 import {
   getStructuredValidationFingerprint,
-  mergeCompatibilityTextIntoStructuredQuestions,
+  mergeStructuredReviewTextIntoQuestions,
   removeFigureFromImportDraft,
+  renderStructuredQuestionsReviewText,
 } from "../services/importDraftCanonical";
 
 interface ImportFromGptModalProps {
@@ -429,7 +430,7 @@ export default function ImportFromGptModal({
     const next = nextDraft ? withExpectedQuestionNumbers(nextDraft, expectedQuestionNumbers) : null;
     setDraft(next);
     setStructuredReviewText(next?.structuredQuestions?.length
-      ? renderStructuredQuestionsCompatibilityText(next.structuredQuestions)
+      ? renderStructuredQuestionsReviewText(next.structuredQuestions)
       : next?.question ?? "");
     setStructuredReviewError(null);
     setConfirmedValidationFingerprint(null);
@@ -890,7 +891,7 @@ export default function ImportFromGptModal({
         setStructuredReviewError(null);
         return { ...current, question: value };
       }
-      const merged = mergeCompatibilityTextIntoStructuredQuestions(current.structuredQuestions, value);
+      const merged = mergeStructuredReviewTextIntoQuestions(current.structuredQuestions, value);
       if (!merged.questions) {
         setStructuredReviewError(merged.error ?? "구조화된 문항을 갱신하지 못했습니다.");
         return current;

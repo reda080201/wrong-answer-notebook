@@ -1,6 +1,7 @@
 import type { EntryFormData, ImportAudit, SheetAnswerItem, SheetFigureItem, StructuredQuestion, QuestionContentSegment } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionNumber } from "./questionMeta";
+import { isMultipleChoiceQuestion, normalizeStructuredQuestionType } from "./structuredQuestionType";
 
 export function normalizeImportQuestionNumber(value: unknown): string {
   if (typeof value !== "string" && typeof value !== "number") return "";
@@ -95,11 +96,6 @@ export function scrubRejectedNotesFromAnswers(answers: SheetAnswerItem[], reject
   }));
 }
 
-function isMultipleChoiceQuestion(questionType: string | undefined): boolean {
-  if (!questionType) return false;
-  return ["multiple_choice", "multiple-choice", "multiple choice", "choice", "객관식"].includes(questionType.trim().toLowerCase());
-}
-
 function missingChoicesWarning(warning: string | undefined): string {
   const message = "객관식 문항의 선택지가 없습니다.";
   if (!warning) return message;
@@ -141,15 +137,15 @@ export function scrubRejectedNotesFromStructuredQuestions(
 ): StructuredQuestion[] | undefined {
   if (!questions) return undefined;
   return questions.map((question) => {
-    const questionType = question.questionType?.trim() || undefined;
+    const questionType = normalizeStructuredQuestionType(question.questionType);
     const choices = question.choices
       .map((choice) => removeRejectedNotes(choice, rejectedNotes))
       .filter(Boolean);
-    const missingChoices = isMultipleChoiceQuestion(questionType) && choices.length === 0;
+    const missingChoices = isMultipleChoiceQuestion(questionType, choices) && choices.length === 0;
     return {
       ...question,
       section: question.section ? removeRejectedNotes(question.section, rejectedNotes) || undefined : undefined,
-      questionType: questionType ? removeRejectedNotes(questionType, rejectedNotes) || undefined : undefined,
+      questionType,
       questionText: removeRejectedNotes(question.questionText, rejectedNotes),
       conditions: question.conditions.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),
       equations: question.equations.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),

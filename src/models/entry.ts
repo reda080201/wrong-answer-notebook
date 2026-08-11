@@ -244,10 +244,28 @@ export interface StructuredQuestionSource {
   reference?: string;
 }
 
+export type StructuredQuestionType =
+  | "multiple_choice"
+  | "short_answer"
+  | "essay"
+  | "unknown";
+
+export interface StructuredQuestionValidationIssue {
+  index: number;
+  questionNumber?: string;
+  code: "invalid_item" | "missing_number" | "missing_text" | "duplicate_number";
+  message: string;
+}
+
+export interface StructuredQuestionsRecovery {
+  raw: unknown;
+  issues: StructuredQuestionValidationIssue[];
+}
+
 export interface StructuredQuestion {
   questionNumber: string;
   section?: string;
-  questionType?: string;
+  questionType?: StructuredQuestionType;
   points?: number;
   questionText: string;
   conditions: string[];
@@ -336,6 +354,8 @@ export interface WrongAnswerEntry {
   questionMeta?: QuestionMeta[];
   /** Authoritative v2 question data. Older entries continue to use `question`. */
   structuredQuestions?: StructuredQuestion[];
+  /** Malformed legacy structured data retained without making it active. */
+  structuredQuestionsRecovery?: StructuredQuestionsRecovery;
   /** 문항 번호별 표시 순서. 기존 question 문자열 데이터와 함께 유지됩니다. */
   questionContentSegments?: Record<string, QuestionContentSegment[]>;
   sheetGroup?: SheetGroup;

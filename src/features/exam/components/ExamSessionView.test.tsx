@@ -49,6 +49,23 @@ describe("parseChoice", () => {
 });
 
 describe("ExamSessionView", () => {
+  it.each(["객관식", "multiple-choice", "multiple_choice"])(
+    "renders %s as a multiple-choice question",
+    (questionType) => {
+      render(<ExamSessionView
+        session={createSession({ questions: [{
+          ...createSession().questions[0],
+          questionType: questionType as never,
+          choices: ["① 1", "② 2"],
+        }] })}
+        onChange={vi.fn()}
+        onSubmit={vi.fn()}
+      />);
+
+      expect(screen.getByRole("group", { name: "선택지" })).toBeInTheDocument();
+      expect(screen.queryByLabelText("내 답")).not.toBeInTheDocument();
+    },
+  );
   it("keeps an empty canonical multiple-choice question as multiple choice and shows its warning", () => {
     render(<ExamSessionView session={createSession({ questions: [{
       ...createSession().questions[0],
