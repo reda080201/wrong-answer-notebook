@@ -1,4 +1,5 @@
 import type { QuestionContentSegment, SheetFigureItem, StructuredQuestion } from "./entry";
+import type { WrongAnswerEntry } from "./entry";
 
 export type ExamSessionStatus = "in_progress" | "submitted";
 
@@ -70,6 +71,17 @@ export interface ExamSession {
   updatedAt: string;
   submittedAt?: string;
   score?: ExamSessionScore;
+}
+
+export interface ExamSubmissionTransactionInput {
+  submittedSession: ExamSession;
+  derivedEntries: WrongAnswerEntry[];
+}
+
+export interface ExamSubmissionTransactionResult {
+  entries: WrongAnswerEntry[];
+  sessions: ExamSession[];
+  addedEntryIds: string[];
 }
 
 export interface ActiveExamContext {

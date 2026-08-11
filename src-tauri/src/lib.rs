@@ -1,5 +1,6 @@
 mod ai;
 mod backup;
+mod exam_submission;
 mod images;
 mod import_assets;
 mod integrity;
@@ -137,21 +138,41 @@ impl ActiveExamContext {
 
 #[tauri::command]
 fn load_entries(
+    app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
 ) -> Result<Vec<WrongAnswerEntry>, String> {
+    exam_submission::reconcile_exam_submission(
+        &store,
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
     store.load_entries()
 }
 
 #[tauri::command]
 fn save_entries(
+    app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
     entries: Vec<WrongAnswerEntry>,
 ) -> Result<(), String> {
+    exam_submission::reconcile_exam_submission(
+        &store,
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
     store.save_entries(&entries)
 }
 
 #[tauri::command]
-fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+fn load_exam_sessions(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+) -> Result<serde_json::Value, String> {
+    exam_submission::reconcile_exam_submission(
+        &store,
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
     load_array_json_file(
         &app_dir(&app)?.join("exam-sessions.json"),
         "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
@@ -159,11 +180,35 @@ fn load_exam_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String
 }
 
 #[tauri::command]
-fn save_exam_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
-    save_array_json_file(
-        &app_dir(&app)?.join("exam-sessions.json"),
-        &sessions,
-        "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+fn save_exam_sessions(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    sessions: serde_json::Value,
+) -> Result<(), String> {
+    let sessions_path = app_dir(&app)?.join("exam-sessions.json");
+    let journal_path = app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE);
+    exam_submission::reconcile_exam_submission(&store, &sessions_path, &journal_path)?;
+    store.with_write_lock(|| {
+        save_array_json_file(
+            &sessions_path,
+            &sessions,
+            "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+        )
+    })
+}
+
+#[tauri::command]
+fn submit_exam_transaction(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    input: exam_submission::ExamSubmissionTransactionInput,
+) -> Result<exam_submission::ExamSubmissionTransactionResult, String> {
+    let directory = app_dir(&app)?;
+    exam_submission::submit_exam_transaction(
+        &store,
+        &directory.join("exam-sessions.json"),
+        &directory.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+        input,
     )
 }
 
@@ -842,6 +887,7 @@ pub fn run() {
             save_entries,
             load_exam_sessions,
             save_exam_sessions,
+            submit_exam_transaction,
             load_generated_exams,
             save_generated_exams,
             load_gpt_solution_roundtrip_drafts,

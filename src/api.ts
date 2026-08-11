@@ -4,6 +4,7 @@ export * from "./services/api/settings";
 export * from "./services/api/entries";
 export * from "./services/api/mcpBridge";
 export * from "./services/api/examStorage";
+export * from "./services/api/examSubmission";
 export * from "./services/api/ai";
 export * from "./services/api/images";
 export * from "./services/api/importAssets";

@@ -4,6 +4,7 @@ import type { EntryFormData, WrongAnswerEntry } from "../types";
 
 vi.mock("../api", () => ({
   deleteImage: vi.fn(),
+  commitExamSubmission: vi.fn(),
   commitImportAssetSessionEntries: vi.fn(),
   commitImportAssetSessionEntry: vi.fn(),
   errorMessage: (error: unknown, fallback: string) =>
@@ -13,6 +14,7 @@ vi.mock("../api", () => ({
 }));
 
 import {
+  commitExamSubmission,
   commitImportAssetSessionEntries,
   commitImportAssetSessionEntry,
   deleteImage,
@@ -61,6 +63,7 @@ const form: EntryFormData = {
 describe("useEntries", () => {
   beforeEach(() => {
     vi.mocked(deleteImage).mockReset();
+    vi.mocked(commitExamSubmission).mockReset();
     vi.mocked(commitImportAssetSessionEntries).mockReset();
     vi.mocked(commitImportAssetSessionEntry).mockReset();
     vi.mocked(loadEntries).mockReset();
@@ -70,6 +73,11 @@ describe("useEntries", () => {
     vi.mocked(deleteImage).mockResolvedValue(undefined);
     vi.mocked(commitImportAssetSessionEntry).mockResolvedValue([]);
     vi.mocked(commitImportAssetSessionEntries).mockResolvedValue([]);
+    vi.mocked(commitExamSubmission).mockResolvedValue({
+      entries: [entry],
+      sessions: [],
+      addedEntryIds: [],
+    });
   });
 
   it("does not delete removed images when saving an update fails", async () => {
@@ -136,6 +144,42 @@ describe("useEntries", () => {
     expect(saveEntries).toHaveBeenCalledTimes(1);
     const saved = vi.mocked(saveEntries).mock.calls[0][0];
     expect(saved.map((item) => item.title)).toEqual(["첫 번째", "두 번째", "제목"]);
+  });
+
+  it("adopts only the authoritative entry result from an exam submission transaction", async () => {
+    vi.mocked(commitExamSubmission).mockResolvedValue({
+      entries: [{ ...entry, id: "derived", title: "시험 오답" }],
+      sessions: [],
+      addedEntryIds: ["derived"],
+    });
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const submittedSession = {
+      id: "exam-1",
+      entryId: entry.id,
+      title: "시험",
+      subject: entry.subject,
+      status: "submitted" as const,
+      questions: [],
+      responses: [],
+      currentQuestionIndex: 0,
+      startedAt: "a",
+      updatedAt: "b",
+      submittedAt: "c",
+    };
+    await act(async () => {
+      await result.current.commitExamSubmission(submittedSession, [
+        { ...form, title: "파생 오답" },
+      ]);
+    });
+
+    expect(commitExamSubmission).toHaveBeenCalledWith(expect.objectContaining({
+      submittedSession,
+      derivedEntries: [expect.objectContaining({ title: "파생 오답" })],
+    }));
+    expect(saveEntries).not.toHaveBeenCalled();
+    expect(result.current.entries).toEqual([{ ...entry, id: "derived", title: "시험 오답" }]);
   });
 
   it("serializes rapid patches against the latest saved state", async () => {

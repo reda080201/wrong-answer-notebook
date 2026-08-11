@@ -6,6 +6,7 @@ commands.allow = [
   "save_entries",
   "load_exam_sessions",
   "save_exam_sessions",
+  "submit_exam_transaction",
   "load_generated_exams",
   "save_generated_exams",
   "load_settings",

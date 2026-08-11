@@ -85,6 +85,9 @@ pub(crate) fn create_backup_zip_at(
     app: &tauri::AppHandle,
     backup_path: &Path,
 ) -> Result<(), String> {
+    crate::exam_submission::ensure_no_pending_exam_submission_journal(
+        &app_dir(app)?.join(crate::exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
     let entries = load_entries_raw(app)?;
     let settings = load_settings_raw(app)?;
     if entries.len() as u64 > MAX_BACKUP_JSON_BYTES || settings.len() as u64 > MAX_BACKUP_JSON_BYTES
