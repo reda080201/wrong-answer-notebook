@@ -119,7 +119,7 @@ fn validate_entries_snapshot(snapshot: &DocumentSnapshot) -> Result<(), String> 
     Ok(())
 }
 
-fn validate_sessions_value(value: &Value) -> Result<(), String> {
+pub(crate) fn validate_sessions_value(value: &Value) -> Result<(), String> {
     let sessions = value.as_array().ok_or_else(|| {
         "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.".to_string()
     })?;

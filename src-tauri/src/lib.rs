@@ -250,14 +250,17 @@ fn ensure_data_schema_manifest(app: &tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn load_generated_exams(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
-    load_array_json_file(
+    let value = load_array_json_file(
         &app_dir(&app)?.join("generated-exams.json"),
         "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
-    )
+    )?;
+    validate_persistent_store_value("generated-exams.json", &value)?;
+    Ok(value)
 }
 
 #[tauri::command]
 fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Result<(), String> {
+    validate_persistent_store_value("generated-exams.json", &exams)?;
     save_array_json_file(
         &app_dir(&app)?.join("generated-exams.json"),
         &exams,
@@ -306,6 +309,7 @@ fn load_gpt_solution_roundtrip_drafts(app: tauri::AppHandle) -> Result<serde_jso
     if !drafts.is_array() {
         return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
     }
+    validate_persistent_store_value("gpt-solution-drafts.json", &drafts)?;
     Ok(drafts)
 }
 
@@ -317,6 +321,7 @@ fn save_gpt_solution_roundtrip_drafts(
     if !drafts.is_array() {
         return Err("GPT 해설 초안 형식이 올바르지 않습니다. 배열이어야 합니다.".into());
     }
+    validate_persistent_store_value("gpt-solution-drafts.json", &drafts)?;
     write_json_atomic(&app_dir(&app)?.join("gpt-solution-drafts.json"), &drafts)
 }
 
@@ -368,6 +373,69 @@ fn validate_library_folders(folders: &[LibraryFolder]) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn validate_persistent_store_value(
+    name: &str,
+    value: &serde_json::Value,
+) -> Result<(), String> {
+    let items = value
+        .as_array()
+        .ok_or_else(|| format!("{name} 형식이 올바르지 않습니다. 배열이어야 합니다."))?;
+    match name {
+        "exam-sessions.json" => exam_submission::validate_sessions_value(value),
+        "generated-exams.json" => {
+            for item in items {
+                let object = item
+                    .as_object()
+                    .ok_or_else(|| "생성 모의고사 항목이 객체가 아닙니다.".to_string())?;
+                if object
+                    .get("id")
+                    .and_then(serde_json::Value::as_str)
+                    .is_none()
+                    || !object
+                        .get("questions")
+                        .is_some_and(serde_json::Value::is_array)
+                {
+                    return Err("생성 모의고사 항목의 필수 값이 올바르지 않습니다.".into());
+                }
+            }
+            Ok(())
+        }
+        "gpt-solution-drafts.json" => {
+            for item in items {
+                let object = item
+                    .as_object()
+                    .ok_or_else(|| "GPT 해설 초안 항목이 객체가 아닙니다.".to_string())?;
+                for key in ["id", "entryId", "status"] {
+                    if object
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .is_none()
+                    {
+                        return Err(format!("GPT 해설 초안의 {key} 값이 올바르지 않습니다."));
+                    }
+                }
+                if !object
+                    .get("requestedQuestionNumbers")
+                    .is_some_and(serde_json::Value::is_array)
+                {
+                    return Err(
+                        "GPT 해설 초안의 requestedQuestionNumbers는 배열이어야 합니다.".into(),
+                    );
+                }
+            }
+            Ok(())
+        }
+        "library-folders.json" => {
+            let folders: Vec<LibraryFolder> =
+                serde_json::from_value(value.clone()).map_err(|error| error.to_string())?;
+            validate_library_folders(&folders)
+        }
+        _ => Ok(()),
+    }
 }
 
 #[tauri::command]

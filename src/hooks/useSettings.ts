@@ -21,7 +21,10 @@ export function useSettings() {
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [settingsSaveState, setSettingsSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const settingsRef = useRef(settings);
+  const persistedSettingsRef = useRef(settings);
+  const pendingRecipesRef = useRef(new Map<number, (current: AppSettings) => AppSettings>());
   const mutationRef = useRef(0);
+  const failedRecipeRef = useRef<((current: AppSettings) => AppSettings) | null>(null);
   const failedErrorRef = useRef<Error | null>(null);
   const loadedRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
@@ -44,6 +47,8 @@ export function useSettings() {
       }
       const loaded = await loadSettings();
       if (refreshMutation === mutationRef.current) {
+        persistedSettingsRef.current = loaded;
+        pendingRecipesRef.current.clear();
         settingsRef.current = loaded;
         setSettings(loaded);
         loadedRef.current = true;
@@ -68,22 +73,27 @@ export function useSettings() {
     refreshSettings();
   }, [refreshSettings]);
 
-  const updateSettings = useCallback((next: AppSettings) => {
+  const refreshVisibleSettings = useCallback(() => {
+    let next = persistedSettingsRef.current;
+    for (const recipe of pendingRecipesRef.current.values()) next = recipe(next);
+    settingsRef.current = next;
+    setSettings(next);
+  }, []);
+
+  const enqueueSettingsRecipe = useCallback((recipe: (current: AppSettings) => AppSettings, retrying = false) => {
     if (maintenanceBlockedRef.current) {
       return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
     }
     if (!loadedRef.current) {
       return Promise.reject(new Error("설정을 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
     }
-    // Update the in-memory snapshot before enqueueing so consecutive patches
-    // are based on one monotonic state rather than a stale React render.
-    settingsRef.current = next;
-    setSettings(next);
+    const mutation = ++mutationRef.current;
+    pendingRecipesRef.current.set(mutation, recipe);
+    refreshVisibleSettings();
     setSettingsError(null);
     setSettingsSaveState("saving");
-    failedErrorRef.current = null;
-    const mutation = ++mutationRef.current;
     const operation = enqueue(async () => {
+      const next = recipe(persistedSettingsRef.current);
       try {
         await saveSettings(next);
       } catch (error) {
@@ -95,16 +105,36 @@ export function useSettings() {
         }
         throw new Error(message, { cause: error });
       }
-      if (mutation === mutationRef.current) {
+      persistedSettingsRef.current = next;
+      pendingRecipesRef.current.delete(mutation);
+      if (retrying) {
         failedErrorRef.current = null;
+        failedRecipeRef.current = null;
+      }
+      if (mutation === mutationRef.current) {
         setSettingsError(null);
         setSettingsSaveState("saved");
       }
+      refreshVisibleSettings();
     });
-    return operation;
-  }, [enqueue]);
+    return operation.catch((error) => {
+      pendingRecipesRef.current.delete(mutation);
+      failedRecipeRef.current = recipe;
+      failedErrorRef.current = error instanceof Error ? error : new Error(String(error));
+      if (mutation === mutationRef.current) {
+        setSettingsSaveState("error");
+      }
+      refreshVisibleSettings();
+      throw error;
+    });
+  }, [enqueue, refreshVisibleSettings]);
 
-  const retrySettingsSave = useCallback(() => updateSettings(settingsRef.current), [updateSettings]);
+  const updateSettings = useCallback((next: AppSettings) => enqueueSettingsRecipe(() => next), [enqueueSettingsRecipe]);
+
+  const retrySettingsSave = useCallback(() => {
+    const recipe = failedRecipeRef.current;
+    return recipe ? enqueueSettingsRecipe(recipe, true) : Promise.resolve();
+  }, [enqueueSettingsRecipe]);
   const flushSettings = useCallback(async () => {
     await drain();
     if (failedErrorRef.current) throw failedErrorRef.current;
@@ -112,187 +142,177 @@ export function useSettings() {
 
   const patchSettings = useCallback(
     async (patch: Partial<AppSettings>) => {
-      await updateSettings({ ...settingsRef.current, ...patch });
+      await enqueueSettingsRecipe((current) => ({ ...current, ...patch }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const upsertTemplate = useCallback(
     async (template: EntryTemplate) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         templates: [
           template,
           ...current.templates.filter((item) => item.id !== template.id),
         ],
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const removeTemplate = useCallback(
     async (templateId: string) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         templates: current.templates.filter((item) => item.id !== templateId),
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const upsertPromptTemplate = useCallback(
     async (template: PromptTemplate) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         promptTemplates: [
           template,
           ...current.promptTemplates.filter((item) => item.id !== template.id),
         ],
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const removePromptTemplate = useCallback(
     async (templateId: string) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         promptTemplates: current.promptTemplates.filter(
           (item) => item.id !== templateId || item.builtIn,
         ),
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const upsertMemoTemplate = useCallback(
     async (template: MemoTemplate) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         memoTemplates: [
           template,
           ...current.memoTemplates.filter((item) => item.id !== template.id),
         ],
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const removeMemoTemplate = useCallback(
     async (templateId: string) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         memoTemplates: current.memoTemplates.filter(
           (item) => item.id !== templateId || item.builtIn,
         ),
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchViewPreferences = useCallback(
     async (patch: Partial<ViewPreferences>) => {
-      const current = settingsRef.current;
-      const nextView = { ...current.viewPreferences, ...patch };
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => {
+        const nextView = { ...current.viewPreferences, ...patch };
+        return {
         ...current,
         viewPreferences: nextView,
         answerViewPreferences: {
           ...current.answerViewPreferences,
           hideAnswers: nextView.hideAnswers,
         },
+      };
       });
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchExamPreferences = useCallback(
     async (patch: Partial<ExamPreferences>) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         examPreferences: { ...current.examPreferences, ...patch },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchExamPrintPreferences = useCallback(
     async (patch: Partial<ExamPrintPreferences>) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         examPrintPreferences: { ...current.examPrintPreferences, ...patch },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchImagePreferences = useCallback(
     async (patch: Partial<ImagePreferences>) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         imagePreferences: { ...current.imagePreferences, ...patch },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchGptMcpPreferences = useCallback(
     async (patch: Partial<GptMcpPreferences>) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         gptMcpPreferences: { ...current.gptMcpPreferences, ...patch },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchChatGptMcpPreferences = useCallback(
     async (patch: Partial<ChatGptMcpPreferences>) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         chatGptMcpPreferences: { ...current.chatGptMcpPreferences, ...patch },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const setLastImportTemplate = useCallback(
     async (templateId: string) => {
-      const current = settingsRef.current;
-      await updateSettings({
+      await enqueueSettingsRecipe((current) => ({
         ...current,
         importPreferences: {
           ...current.importPreferences,
           lastPromptTemplateId: templateId,
         },
-      });
+      }));
     },
-    [updateSettings],
+    [enqueueSettingsRecipe],
   );
 
   const patchUpdatePreferences = useCallback(async (patch: Partial<AppUpdatePreferences>) => {
-    const current = settingsRef.current;
-    await updateSettings({ ...current, updatePreferences: { ...current.updatePreferences, ...patch } });
-  }, [updateSettings]);
+    await enqueueSettingsRecipe((current) => ({
+      ...current,
+      updatePreferences: { ...current.updatePreferences, ...patch },
+    }));
+  }, [enqueueSettingsRecipe]);
 
   const patchQuestionBankPreferences = useCallback(async (patch: Partial<QuestionBankPreferences>) => {
-    const current = settingsRef.current;
-    await updateSettings({
+    await enqueueSettingsRecipe((current) => ({
       ...current,
       questionBankPreferences: { ...current.questionBankPreferences, ...patch },
-    });
-  }, [updateSettings]);
+    }));
+  }, [enqueueSettingsRecipe]);
 
   const setSettingsMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
