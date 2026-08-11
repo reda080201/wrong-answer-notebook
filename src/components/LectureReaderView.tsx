@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 import SemanticFigureView from "../features/figures/components/SemanticFigureView";
@@ -5,6 +6,7 @@ import DiagramCard from "./DiagramCard";
 import ImageGallery from "./ImageGallery";
 import LearningContentPanel from "./LearningContentPanel";
 import MathText from "./MathText";
+import FullscreenDialog from "../shared/ui/FullscreenDialog";
 
 interface LectureReaderViewProps {
   entry: WrongAnswerEntry;
@@ -13,6 +15,11 @@ interface LectureReaderViewProps {
   onOpenLinkedEntry?: (entryId: string) => void;
   layout?: LectureLayout;
   onLayoutChange?: (layout: LectureLayout) => void;
+}
+
+interface LectureReaderContentProps extends LectureReaderViewProps {
+  showFullscreen?: boolean;
+  onRequestFullscreen?: () => void;
 }
 
 function blockLabel(type: string): string {
@@ -41,14 +48,16 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
   );
 }
 
-export default function LectureReaderView({
+function LectureReaderContent({
   entry,
   onWikiLinkClick,
   existingTargets,
   onOpenLinkedEntry,
   layout = "document",
   onLayoutChange,
-}: LectureReaderViewProps) {
+  showFullscreen = true,
+  onRequestFullscreen,
+}: LectureReaderContentProps) {
   const blocks = entry.learningBlocks ?? [];
   const figures = entry.figures ?? [];
   const connectedFigureIds = new Set(blocks.flatMap((block) => block.figureIds ?? []));
@@ -65,6 +74,7 @@ export default function LectureReaderView({
             <button type="button" className={layout === "document" ? "active" : ""} onClick={() => onLayoutChange?.("document")}>문서형</button>
             <button type="button" className={layout === "cards" ? "active" : ""} onClick={() => onLayoutChange?.("cards")}>카드형</button>
           </div>
+          {showFullscreen && <button type="button" onClick={onRequestFullscreen} aria-label="특강 전체 화면">전체 화면</button>}
         </div>
         <h2>{entry.title.trim() || "특강자료"}</h2>
         <p>{entry.subject}{entry.sourceType ? ` · ${entry.sourceType.toUpperCase()}에서 변환` : ""}</p>
@@ -132,5 +142,25 @@ export default function LectureReaderView({
         </section>
       )}
     </article>
+  );
+}
+
+export default function LectureReaderView(props: LectureReaderViewProps) {
+  const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const title = props.entry.title.trim() || "특강자료";
+
+  return (
+    <>
+      <LectureReaderContent {...props} onRequestFullscreen={() => setFullscreenOpen(true)} />
+      <FullscreenDialog
+        open={fullscreenOpen}
+        title={`${title} 전체 화면`}
+        onClose={() => setFullscreenOpen(false)}
+      >
+        <div className="lecture-reader-fullscreen-content">
+          <LectureReaderContent {...props} showFullscreen={false} />
+        </div>
+      </FullscreenDialog>
+    </>
   );
 }

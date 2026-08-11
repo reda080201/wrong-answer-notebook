@@ -61,4 +61,17 @@ describe("LectureReaderView", () => {
     expect(onLayoutChange).toHaveBeenCalledWith("cards");
     await waitFor(() => expect(screen.getAllByRole("img").length).toBeGreaterThan(0));
   });
+
+  it("opens the same lecture content in a fullscreen dialog and restores focus on Escape", async () => {
+    render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+
+    const trigger = screen.getByRole("button", { name: "특강 전체 화면" });
+    trigger.focus();
+    fireEvent.click(trigger);
+    expect(screen.getByRole("dialog", { name: "함수 특강 전체 화면" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "함수 특강 전체 화면" })).toHaveClass("dialog-size-fullscreen");
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(trigger).toHaveFocus());
+  });
 });
