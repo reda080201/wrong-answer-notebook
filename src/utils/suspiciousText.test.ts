@@ -12,4 +12,9 @@ describe("detectSuspiciousTextSegments", () => {
   it("keeps ordinary textbook text quiet", () => {
     expect(detectSuspiciousTextSegments("1. 함수 f(x)=x^2의 최솟값을 구하시오.\n① 0 ② 1")).toHaveLength(0);
   });
+
+  it("does not flag LaTeX and ordinary mathematical unicode as suspicious prose", () => {
+    const segments = detectSuspiciousTextSegments("\\frac{1}{2} + \\sqrt{x} = π\n∑_{k=1}^{n} k ≤ 10");
+    expect(segments.some((segment) => segment.reason === "기호 비율 과다")).toBe(false);
+  });
 });

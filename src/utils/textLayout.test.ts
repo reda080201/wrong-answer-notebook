@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parseQuestionText, splitMarkdownTableSegments } from "./textLayout";
 import { normalizeQuestionNumber } from "./questionMeta";
+import { normalizeQuestionLayout } from "./textCleanup";
 import parserParityCases from "../fixtures/question-parser-parity.json";
 
 describe("parseQuestionText", () => {
@@ -122,6 +123,17 @@ describe("parseQuestionText", () => {
       displayNumber: 20,
       body: "문제 20",
     });
+  });
+
+  it("keeps math tokens intact while recognizing complete 1-999 markers at a whitespace boundary", () => {
+    const normalized = normalizeQuestionLayout("999. 큰 번호 x/y = 1/2 f(10, 20) 1000. 수식 내부가 아님");
+    expect(normalized).toBe("999. 큰 번호 x/y = 1/2 f(10, 20) 1000. 수식 내부가 아님");
+
+    const questions = parseQuestionText("998. 첫 문제\n① x/y = 1/2\n999. 둘째 문제\n① \\frac{1}{2}")
+      .filter((block) => block.kind === "question");
+    expect(questions.map((question) => question.numberLabel)).toEqual(["998", "999"]);
+    expect(questions[0]?.choices[0]?.text).toContain("x/y = 1/2");
+    expect(questions[1]?.choices[0]?.text).toContain("\\frac{1}{2}");
   });
 
   it("detects two digit and bracketed problem labels without confusing choices", () => {
