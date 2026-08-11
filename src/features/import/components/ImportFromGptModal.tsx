@@ -54,6 +54,7 @@ import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 import type { SupplementalImportMode } from "../../../features/supplemental-resources/model/supplementalResource";
 import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
 import ImportPreviewSummary from "../../../components/ImportPreviewSummary";
+import TextReviewSplitView from "./TextReviewSplitView";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -1284,15 +1285,12 @@ export default function ImportFromGptModal({
                     </div>
                   </div>
 
-                  <div className="form-field full">
-                    <label htmlFor="import-question">본문</label>
-                    <textarea
-                      id="import-question"
-                      className="import-preview-edit"
-                      value={draft.question ?? ""}
-                      onChange={(event) => setDraft((current) => ({ ...current, question: event.target.value }))}
-                    />
-                  </div>
+                  <TextReviewSplitView
+                    id="import-question"
+                    label="본문"
+                    value={draft.question ?? ""}
+                    onChange={(question) => setDraft((current) => ({ ...current, question }))}
+                  />
                   <div className="form-field full">
                     <label htmlFor="import-memo">메모</label>
                     <textarea
