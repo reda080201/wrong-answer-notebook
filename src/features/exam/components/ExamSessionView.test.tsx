@@ -49,6 +49,19 @@ describe("parseChoice", () => {
 });
 
 describe("ExamSessionView", () => {
+  it("keeps an empty canonical multiple-choice question as multiple choice and shows its warning", () => {
+    render(<ExamSessionView session={createSession({ questions: [{
+      ...createSession().questions[0],
+      questionType: "multiple_choice",
+      choices: [],
+      warning: "객관식 문항에 선택지가 없어 검토가 필요합니다.",
+    }] })} onChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText("객관식 문항에 선택지가 없어 검토가 필요합니다.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("선택지")).toBeInTheDocument();
+    expect(screen.queryByLabelText("내 답")).not.toBeInTheDocument();
+  });
+
   it("renders choice markers and selects a response when a choice is clicked", () => {
     const onChange = vi.fn();
     const session = createSession();

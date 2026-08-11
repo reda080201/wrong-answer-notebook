@@ -1,4 +1,4 @@
-import type { EntryFormData, ImportAudit, SheetAnswerItem, SheetFigureItem } from "../types";
+import type { EntryFormData, ImportAudit, SheetAnswerItem, SheetFigureItem, StructuredQuestion, QuestionContentSegment } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionNumber } from "./questionMeta";
 
@@ -95,6 +95,82 @@ export function scrubRejectedNotesFromAnswers(answers: SheetAnswerItem[], reject
   }));
 }
 
+function isMultipleChoiceQuestion(questionType: string | undefined): boolean {
+  if (!questionType) return false;
+  return ["multiple_choice", "multiple-choice", "multiple choice", "choice", "객관식"].includes(questionType.trim().toLowerCase());
+}
+
+function missingChoicesWarning(warning: string | undefined): string {
+  const message = "객관식 문항의 선택지가 없습니다.";
+  if (!warning) return message;
+  return warning.includes(message) ? warning : `${warning} ${message}`;
+}
+
+function scrubStructuredSegment(segment: QuestionContentSegment, rejectedNotes: string[]): QuestionContentSegment {
+  if (segment.type === "text" || segment.type === "condition") {
+    return {
+      ...segment,
+      text: removeRejectedNotes(segment.text, rejectedNotes),
+      ...(segment.type === "condition" ? { label: segment.label ? removeRejectedNotes(segment.label, rejectedNotes) || undefined : undefined } : {}),
+    };
+  }
+  if (segment.type === "equation") {
+    return { ...segment, latex: removeRejectedNotes(segment.latex, rejectedNotes) };
+  }
+  if (segment.type === "table") {
+    return { ...segment, rows: segment.rows.map((row) => row.map((cell) => removeRejectedNotes(cell, rejectedNotes))) };
+  }
+  return { ...segment };
+}
+
+export function scrubRejectedNotesFromStructuredQuestions(
+  questions: StructuredQuestion[],
+  rejectedNotes: string[],
+): StructuredQuestion[];
+export function scrubRejectedNotesFromStructuredQuestions(
+  questions: undefined,
+  rejectedNotes: string[],
+): undefined;
+export function scrubRejectedNotesFromStructuredQuestions(
+  questions: StructuredQuestion[] | undefined,
+  rejectedNotes: string[],
+): StructuredQuestion[] | undefined;
+export function scrubRejectedNotesFromStructuredQuestions(
+  questions: StructuredQuestion[] | undefined,
+  rejectedNotes: string[],
+): StructuredQuestion[] | undefined {
+  if (!questions) return undefined;
+  return questions.map((question) => {
+    const questionType = question.questionType?.trim() || undefined;
+    const choices = question.choices
+      .map((choice) => removeRejectedNotes(choice, rejectedNotes))
+      .filter(Boolean);
+    const missingChoices = isMultipleChoiceQuestion(questionType) && choices.length === 0;
+    return {
+      ...question,
+      section: question.section ? removeRejectedNotes(question.section, rejectedNotes) || undefined : undefined,
+      questionType: questionType ? removeRejectedNotes(questionType, rejectedNotes) || undefined : undefined,
+      questionText: removeRejectedNotes(question.questionText, rejectedNotes),
+      conditions: question.conditions.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),
+      equations: question.equations.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),
+      choices,
+      contentSegments: question.contentSegments.map((segment) => scrubStructuredSegment(segment, rejectedNotes)),
+      source: question.source
+        ? {
+            ...question.source,
+            title: question.source.title ? removeRejectedNotes(question.source.title, rejectedNotes) || undefined : undefined,
+            reference: question.source.reference ? removeRejectedNotes(question.source.reference, rejectedNotes) || undefined : undefined,
+          }
+        : undefined,
+      needsReview: Boolean(question.needsReview) || missingChoices,
+      warning: missingChoices
+        ? missingChoicesWarning(question.warning ? removeRejectedNotes(question.warning, rejectedNotes) || undefined : undefined)
+        : question.warning ? removeRejectedNotes(question.warning, rejectedNotes) || undefined : undefined,
+      figureIds: [...question.figureIds],
+    };
+  });
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -130,7 +206,13 @@ function detectedNumbers(question: string, expected: string[] = [], rawDetected:
   return [...new Set(detected)];
 }
 
-function calculateNeedsReviewCount(answers: SheetAnswerItem[], figures: SheetFigureItem[], missing: string[], uncertain: string[]): number {
+function calculateNeedsReviewCount(
+  answers: SheetAnswerItem[],
+  figures: SheetFigureItem[],
+  missing: string[],
+  uncertain: string[],
+  structuredQuestions: StructuredQuestion[] = [],
+): number {
   const reviewKeys = new Set<string>();
   missing.forEach((number) => reviewKeys.add(`question:${number}`));
   uncertain.forEach((number) => reviewKeys.add(`question:${number}`));
@@ -140,16 +222,24 @@ function calculateNeedsReviewCount(answers: SheetAnswerItem[], figures: SheetFig
   figures.forEach((figure, index) => {
     if (figure.needsReview || !figure.image) reviewKeys.add(figure.questionNumber ? `question:${normalizeImportQuestionNumber(figure.questionNumber)}` : `figure:${index}`);
   });
+  structuredQuestions.forEach((item) => {
+    if (item.needsReview) reviewKeys.add(`question:${normalizeImportQuestionNumber(item.questionNumber)}`);
+  });
   return reviewKeys.size;
 }
 
 export function normalizeImportAudit(
   raw: unknown,
-  data: Pick<Partial<EntryFormData>, "question" | "answerKey" | "figures">,
+  data: Pick<Partial<EntryFormData>, "question" | "answerKey" | "figures" | "structuredQuestions">,
 ): ImportAudit {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Partial<ImportAudit> : {};
   const expected = normalizeNumberList(source.expectedQuestionNumbers);
-  const detected = detectedNumbers(data.question ?? "", expected, source.detectedQuestionNumbers);
+  const structuredQuestions = Array.isArray(data.structuredQuestions)
+    ? data.structuredQuestions.filter((item): item is StructuredQuestion => Boolean(item && typeof item === "object" && !Array.isArray(item)))
+    : undefined;
+  const detected = structuredQuestions
+    ? [...new Set(structuredQuestions.map((item) => normalizeImportQuestionNumber(item.questionNumber)).filter(Boolean))]
+    : detectedNumbers(data.question ?? "", expected, source.detectedQuestionNumbers);
   const uncertain = normalizeNumberList(source.uncertainQuestionNumbers);
   const detectedSet = new Set(detected);
   const explicitMissing = normalizeNumberList(source.missingQuestionNumbers);
@@ -163,6 +253,6 @@ export function normalizeImportAudit(
     missingQuestionNumbers: missing,
     uncertainQuestionNumbers: uncertain,
     handwritingExcluded: source.handwritingExcluded === true,
-    needsReviewCount: calculateNeedsReviewCount(answers, figures, missing, uncertain),
+    needsReviewCount: calculateNeedsReviewCount(answers, figures, missing, uncertain, structuredQuestions ?? []),
   };
 }

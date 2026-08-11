@@ -25,7 +25,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
-import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
+import { normalizeImportAudit, normalizeRejectedNotes, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
@@ -618,14 +618,38 @@ export function normalizeQuestionContentSegments(raw: unknown): WrongAnswerEntry
   return normalized.length ? Object.fromEntries(normalized) : undefined;
 }
 
+export class StructuredQuestionNormalizationError extends Error {
+  readonly index: number;
+
+  constructor(index: number, reason: string) {
+    super(`structuredQuestions[${index}] ${reason}`);
+    this.name = "StructuredQuestionNormalizationError";
+    this.index = index;
+  }
+}
+
+function isMultipleChoiceQuestion(questionType: unknown): boolean {
+  if (typeof questionType !== "string") return false;
+  return ["multiple_choice", "multiple-choice", "multiple choice", "choice", "객관식"].includes(questionType.trim().toLowerCase());
+}
+
+function missingChoicesWarning(warning: string | undefined): string {
+  const message = "객관식 문항의 선택지가 없습니다.";
+  if (!warning) return message;
+  return warning.includes(message) ? warning : `${warning} ${message}`;
+}
+
 export function normalizeStructuredQuestions(raw: unknown): StructuredQuestion[] | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const questions = raw.flatMap((item): StructuredQuestion[] => {
-    if (!item || typeof item !== "object") return [];
+  const questions = raw.map((item, index): StructuredQuestion => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new StructuredQuestionNormalizationError(index, "must be an object");
+    }
     const value = item as Record<string, unknown>;
     const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
     const questionText = typeof value.questionText === "string" ? value.questionText.trim() : "";
-    if (!questionNumber || !questionText) return [];
+    if (!questionNumber) throw new StructuredQuestionNormalizationError(index, "has an invalid questionNumber");
+    if (!questionText) throw new StructuredQuestionNormalizationError(index, "has an empty questionText");
     const contentSegments = normalizeQuestionContentSegments({ [questionNumber]: value.contentSegments })?.[questionNumber] ?? [];
     const list = (input: unknown) => Array.isArray(input)
       ? input.filter((part): part is string => typeof part === "string").map((part) => part.trim()).filter(Boolean)
@@ -638,21 +662,25 @@ export function normalizeStructuredQuestions(raw: unknown): StructuredQuestion[]
       page: typeof sourceValue.page === "number" && Number.isFinite(sourceValue.page) ? sourceValue.page : undefined,
       reference: typeof sourceValue.reference === "string" ? sourceValue.reference.trim() || undefined : undefined,
     } : undefined;
-    return [{
+    const questionType = typeof value.questionType === "string" ? value.questionType.trim() || undefined : undefined;
+    const choices = list(value.choices);
+    return {
       questionNumber,
       section: typeof value.section === "string" ? value.section.trim() || undefined : undefined,
-      questionType: typeof value.questionType === "string" ? value.questionType.trim() || undefined : undefined,
+      questionType,
       points: typeof value.points === "number" && Number.isFinite(value.points) ? value.points : undefined,
       questionText,
       conditions: list(value.conditions),
       equations: list(value.equations),
-      choices: list(value.choices),
+      choices,
       contentSegments,
       source: source as StructuredQuestion["source"],
-      needsReview: Boolean(value.needsReview),
-      warning: typeof value.warning === "string" ? value.warning.trim() || undefined : undefined,
+      needsReview: Boolean(value.needsReview) || (isMultipleChoiceQuestion(questionType) && choices.length === 0),
+      warning: isMultipleChoiceQuestion(questionType) && choices.length === 0
+        ? missingChoicesWarning(typeof value.warning === "string" ? value.warning.trim() || undefined : undefined)
+        : typeof value.warning === "string" ? value.warning.trim() || undefined : undefined,
       figureIds: list(value.figureIds),
-    }];
+    };
   });
   return questions.length ? questions : undefined;
 }
@@ -791,7 +819,10 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     normalizeDifficultyScore(rest.difficultyScore) ??
     (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
-  const structuredQuestions = normalizeStructuredQuestions(rest.structuredQuestions);
+  const structuredQuestions = scrubRejectedNotesFromStructuredQuestions(
+    normalizeStructuredQuestions(rest.structuredQuestions),
+    normalizeRejectedNotes(rest.rejectedNotes),
+  );
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
   const canonical = canonicalizeQuestionMistakeAnalysis(
     answerKey,
@@ -838,7 +869,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     sheetGroup: entryKind === "problem_sheet" ? normalizeSheetGroup(rest.sheetGroup) : undefined,
     learningBlocks,
     importAudit: rest.importAudit
-      ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures })
+      ? normalizeImportAudit(rest.importAudit, { question, answerKey, figures, structuredQuestions })
       : undefined,
     rejectedNotes: normalizeRejectedNotes(rest.rejectedNotes),
     mistakeAnalysis: normalizeMistakeAnalysis(rest.mistakeAnalysis),

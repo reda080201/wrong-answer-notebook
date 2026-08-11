@@ -1,4 +1,4 @@
-import type { QuestionContentSegment, SheetFigureItem } from "./entry";
+import type { QuestionContentSegment, SheetFigureItem, StructuredQuestion } from "./entry";
 
 export type ExamSessionStatus = "in_progress" | "submitted";
 
@@ -7,17 +7,25 @@ export interface ExamQuestionSnapshot {
   questionNumber: string;
   passage?: string;
   stimulusGroupId?: string;
+  section?: string;
+  questionType?: string;
   question: string;
+  conditions?: string[];
+  equations?: string[];
   choices: string[];
   questionImages: string[];
   /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
   sourcePageImages?: string[];
   figures: SheetFigureItem[];
   contentSegments?: QuestionContentSegment[];
+  needsReview?: boolean;
   correctAnswer?: string;
   explanation?: string;
   points?: number;
+  warning?: string;
   sourceWarning?: string;
+  figureIds?: string[];
+  source?: StructuredQuestion["source"];
   generatedExamId?: string;
   sourceEntryId?: string;
   sourceQuestionNumber?: string;

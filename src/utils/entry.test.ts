@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../types";
-import { getAllImageFilenames, normalizeDiagramSpec, normalizeEntry } from "./entry";
+import { getAllImageFilenames, normalizeDiagramSpec, normalizeEntry, normalizeStructuredQuestions, StructuredQuestionNormalizationError } from "./entry";
 
 function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
   return {
@@ -26,6 +26,26 @@ function rawEntry(partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry {
 }
 
 describe("normalizeEntry", () => {
+  it("rejects malformed structured question items with their array index", () => {
+    expect(() => normalizeStructuredQuestions([
+      { questionNumber: "1", questionText: "정상 문항" },
+      { questionNumber: "2" },
+    ])).toThrowError(new StructuredQuestionNormalizationError(1, "has an empty questionText"));
+  });
+
+  it("normalizes multiple-choice questions without choices as needs review", () => {
+    expect(normalizeStructuredQuestions([{
+      questionNumber: "01",
+      questionType: "multiple_choice",
+      questionText: "선택지를 고르시오.",
+    }])).toEqual([expect.objectContaining({
+      questionNumber: "1",
+      choices: [],
+      needsReview: true,
+      warning: expect.stringContaining("선택지"),
+    })]);
+  });
+
   it("preserves a trimmed optional library folder id without changing sheetGroup", () => {
     const normalized = normalizeEntry(rawEntry({
       entryKind: "problem_sheet",

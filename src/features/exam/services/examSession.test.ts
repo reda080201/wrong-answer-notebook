@@ -37,6 +37,56 @@ describe("exam session foundation", () => {
     expect(session.questions[0]?.sourcePageImages).toEqual(["problem.png"]);
   });
 
+  it("projects structured question semantics into a detached exam snapshot", () => {
+    const structuredEntry = {
+      ...entry,
+      question: "호환용 본문",
+      structuredQuestions: [{
+        questionNumber: "03",
+        section: "수학 II",
+        questionType: "multiple_choice",
+        points: 4,
+        questionText: "정답을 고르시오.",
+        conditions: ["x > 0"],
+        equations: ["x = 1"],
+        choices: [],
+        contentSegments: [{ id: "text-1", type: "text", text: "정답을 고르시오." }],
+        source: { title: "기출", page: 2, reference: "p. 2" },
+        needsReview: false,
+        warning: "원본 확인 필요",
+        figureIds: ["figure-1"],
+      }],
+    } as WrongAnswerEntry;
+
+    const session = createExamSession(structuredEntry);
+    const snapshot = session.questions[0];
+    expect(snapshot).toMatchObject({
+      questionNumber: "3",
+      section: "수학 II",
+      questionType: "multiple_choice",
+      question: "정답을 고르시오.",
+      conditions: ["x > 0"],
+      equations: ["x = 1"],
+      choices: [],
+      needsReview: true,
+      warning: expect.stringContaining("선택지가 없어"),
+      sourceWarning: expect.stringContaining("선택지가 없어"),
+      points: 4,
+      figureIds: ["figure-1"],
+      source: { title: "기출", page: 2, reference: "p. 2" },
+    });
+    expect(snapshot?.contentSegments).toEqual([
+      { id: "text-1", type: "text", text: "정답을 고르시오." },
+      { id: "condition-1", type: "condition", text: "x > 0" },
+      { id: "equation-1", type: "equation", latex: "x = 1", display: true },
+    ]);
+
+    structuredEntry.structuredQuestions![0].conditions.push("changed");
+    structuredEntry.structuredQuestions![0].contentSegments[0] = { id: "changed", type: "text", text: "changed" };
+    expect(snapshot?.conditions).toEqual(["x > 0"]);
+    expect(snapshot?.contentSegments?.[0]).toEqual({ id: "text-1", type: "text", text: "정답을 고르시오." });
+  });
+
   it("normalizes common objective and numeric answer forms before scoring", () => {
     expect(normalizeExamAnswer("③")).toBe("3");
     expect(normalizeExamAnswer("3번")).toBe("3");
