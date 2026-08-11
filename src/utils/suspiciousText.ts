@@ -33,7 +33,7 @@ function hasOddNonAsciiCharacter(line: string): boolean {
 function isMathOrEquationLine(line: string): boolean {
   const trimmed = line.trim();
   return /\\(?:frac|sqrt|sum|int|left|right|begin|end)\b/.test(trimmed)
-    || /^[\d\s+\-*/=()\[\]{}.,:;<>≤≥±×÷√π∞∑∫^_\\a-zA-Z]+$/u.test(trimmed);
+    || /^[\d\s+\-*/=()[\]{}.,:;<>≤≥±×÷√π∞∑∫^_\\a-zA-Z]+$/u.test(trimmed);
 }
 
 function addSegment(
