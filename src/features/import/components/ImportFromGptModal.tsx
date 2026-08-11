@@ -55,6 +55,7 @@ import type { SupplementalImportMode } from "../../../features/supplemental-reso
 import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
 import ImportPreviewSummary from "../../../components/ImportPreviewSummary";
 import TextReviewSplitView from "./TextReviewSplitView";
+import { applyCompatibilityTextToStructuredQuestions } from "../../../utils/entryQuestions";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -816,8 +817,15 @@ export default function ImportFromGptModal({
         : "확인이 필요한 항목을 검토한 뒤 체크박스를 선택해 주세요.");
       return;
     }
+    const synchronizedStructuredQuestions = draft.structuredQuestions
+      ? applyCompatibilityTextToStructuredQuestions(draft.structuredQuestions, draft.question ?? "")
+      : undefined;
+    if (draft.structuredQuestions && !synchronizedStructuredQuestions) {
+      setError("구조화된 문항의 번호를 변경하거나 누락할 수 없습니다. 각 문항 번호를 원래대로 맞춘 뒤 다시 저장해 주세요.");
+      return;
+    }
     try {
-      await onApplyEntries([draft], assetFiles);
+      await onApplyEntries([{ ...draft, structuredQuestions: synchronizedStructuredQuestions ?? draft.structuredQuestions }], assetFiles);
       onClose();
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "가져온 문제지를 저장하지 못했습니다.");
@@ -1289,7 +1297,13 @@ export default function ImportFromGptModal({
                     id="import-question"
                     label="본문"
                     value={draft.question ?? ""}
-                    onChange={(question) => setDraft((current) => ({ ...current, question }))}
+                    onChange={(question) => setDraft((current) => {
+                      if (!current) return current;
+                      const structuredQuestions = current.structuredQuestions
+                        ? applyCompatibilityTextToStructuredQuestions(current.structuredQuestions, question) ?? current.structuredQuestions
+                        : current.structuredQuestions;
+                      return { ...current, question, structuredQuestions };
+                    })}
                   />
                   <div className="form-field full">
                     <label htmlFor="import-memo">메모</label>

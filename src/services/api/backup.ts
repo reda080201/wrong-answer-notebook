@@ -79,8 +79,18 @@ function readBrowserBackupSnapshot(
         .filter((key) => key.startsWith("img_"))
         .map((key) => [key, localStorage.getItem(key) ?? ""]),
     ),
-    examSessions: readBrowserArray<ExamSession>(EXAM_SESSIONS_STORAGE_KEY, "모의고사 세션"),
-    generatedExams: readBrowserArray<GeneratedExam>(GENERATED_EXAMS_STORAGE_KEY, "생성 모의고사"),
+    examSessions: readBrowserValue(
+      EXAM_SESSIONS_STORAGE_KEY,
+      isExamSessionArray,
+      "모의고사 세션",
+      [],
+    ),
+    generatedExams: readBrowserValue(
+      GENERATED_EXAMS_STORAGE_KEY,
+      isGeneratedExamArray,
+      "생성 모의고사",
+      [],
+    ),
     libraryFolders: readBrowserValue(LIBRARY_FOLDERS_STORAGE_KEY, isLibraryFolderArray, "폴더 목록", []),
     gptSolutionDrafts: readBrowserValue(
       GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY,
@@ -102,10 +112,6 @@ function readBrowserValue<T>(
   const value = readStorageJson(localStorage, key, guard);
   if (value === null) throw new Error(`${label} 저장 형식이 올바르지 않습니다.`);
   return value;
-}
-
-function readBrowserArray<T>(key: string, label: string): T[] {
-  return readBrowserValue(key, Array.isArray as (value: unknown) => value is T[], label, []);
 }
 
 function isImportWorkspace(value: unknown): value is ImportWorkspace {

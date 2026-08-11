@@ -1,5 +1,6 @@
 import type { GeneratedExamQuestion, QuestionSourceReference, QuestionSourceStatus, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 
 export function questionSnapshotHash(question: { question: string; choices: string[] }): string {
   let hash = 2166136261;
@@ -40,7 +41,8 @@ export function normalizeGeneratedExamSources(exam: import("../../../types").Gen
 export function resolveQuestionSourceStatus(source: QuestionSourceReference, entries: WrongAnswerEntry[]): QuestionSourceStatus {
   const entry = entries.find((item) => item.id === source.sourceEntryId);
   if (!entry) return source.sourceEntryId ? "missing" : "unknown";
-  const block = entry.question.includes(source.sourceQuestionNumber) || entry.answerKey?.some((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(source.sourceQuestionNumber));
+  const block = getEntryQuestions(entry).some((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(source.sourceQuestionNumber))
+    || entry.answerKey?.some((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(source.sourceQuestionNumber));
   return block ? "linked" : "snapshot_only";
 }
 

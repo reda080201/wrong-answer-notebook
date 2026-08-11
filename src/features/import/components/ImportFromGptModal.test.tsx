@@ -1074,6 +1074,31 @@ describe("ImportFromGptModal", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
+  it("persists review edits into the canonical structured question", async () => {
+    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        onApplyEntries={onApplyEntries}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [quickSaveFixtureFile()] },
+    });
+    const question = await screen.findByLabelText("본문");
+    fireEvent.change(question, { target: { value: "1. 수정한 문제\n① 3" } });
+    const quickSave = screen.getByRole("button", { name: "바로 저장" });
+    fireEvent.click(quickSave);
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledTimes(1));
+    const saved = onApplyEntries.mock.calls[0][0][0] as Partial<WrongAnswerEntry>;
+    expect(saved.structuredQuestions?.[0]).toEqual(expect.objectContaining({
+      questionText: "수정한 문제",
+      choices: ["① 3"],
+    }));
+  });
+
   it("keeps the quick-save modal and structured draft open after a save failure", async () => {
     const onApplyEntries = vi.fn().mockRejectedValue(new Error("저장 실패"));
     const onClose = vi.fn();

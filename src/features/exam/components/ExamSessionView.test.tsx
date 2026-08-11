@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ExamSession } from "../../../types";
-import ExamSessionView, { parseChoice } from "./ExamSessionView";
+import ExamSessionView, { choiceLayoutClass, parseChoice } from "./ExamSessionView";
 
 function createSession(overrides: Partial<ExamSession> = {}): ExamSession {
   return {
@@ -49,6 +49,11 @@ describe("parseChoice", () => {
 });
 
 describe("ExamSessionView", () => {
+  it("uses deterministic choice density classes", () => {
+    expect(choiceLayoutClass(["① 1", "② 2"])).toBe("five");
+    expect(choiceLayoutClass(["① 이 선택지는 적당한 길이의 설명을 포함합니다"])).toBe("compact");
+    expect(choiceLayoutClass([`① ${"긴 선택지 ".repeat(12)}`])).toBe("single");
+  });
   it("renders choice markers and selects a response when a choice is clicked", () => {
     const onChange = vi.fn();
     const session = createSession();

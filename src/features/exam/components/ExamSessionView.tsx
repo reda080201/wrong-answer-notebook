@@ -30,6 +30,13 @@ export function parseChoice(choice: string) {
   return match ? { marker: match[1], content: match[2] } : { marker: "", content: choice };
 }
 
+export function choiceLayoutClass(choices: string[]): "five" | "compact" | "single" {
+  const longest = Math.max(0, ...choices.map((choice) => parseChoice(choice).content.replace(/\s+/g, " ").trim().length));
+  if (longest <= 10) return "five";
+  if (longest <= 52) return "compact";
+  return "single";
+}
+
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onClose={onClose} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="시험 도움말"><header><h3>시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></Dialog>;
 }
@@ -68,6 +75,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     }
   };
   const isMultipleChoice = question.choices.length > 0 && question.choices.every((choice) => Boolean(parseChoice(choice).marker));
+  const choiceLayout = choiceLayoutClass(question.choices);
   const showNavigator = examPreferences?.showNavigator !== false;
   const warnUnanswered = examPreferences?.warnUnansweredOnSubmit !== false;
   const autoAdvance = examPreferences?.autoAdvanceOnAnswer === true;
@@ -91,12 +99,12 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     : undefined;
   return <section className="exam-session-view" aria-label="모의고사 응시">
     <header className="exam-session-header"><div><p className="exam-eyebrow">모의고사</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button></div></header>
-    <article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{question.sourceWarning && <p className="exam-question-warning">{question.sourceWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
-      {isMultipleChoice ? <div className="exam-choice-list" role="group" aria-label="선택지">{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button type="button" key={choice} className={selected ? "exam-choice is-selected" : "exam-choice"} aria-pressed={selected} disabled={isSubmitted} onClick={() => selectChoice(parsed.marker || parsed.content)}><span className="choice-marker">{parsed.marker}</span><span className="choice-content"><MathText text={parsed.content} /></span></button>; })}</div> : <label className="exam-answer-field">내 답<input value={response?.response ?? ""} onChange={(event) => update({ response: event.target.value })} disabled={isSubmitted} /></label>}
+    <main className="exam-session-body"><article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{question.sourceWarning && <p className="exam-question-warning">{question.sourceWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
+      {isMultipleChoice ? <div className={`exam-choice-list exam-choice-list--${choiceLayout}`} role="group" aria-label="선택지">{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button type="button" key={choice} className={selected ? "exam-choice is-selected" : "exam-choice"} aria-pressed={selected} disabled={isSubmitted} onClick={() => selectChoice(parsed.marker || parsed.content)}><span className="choice-marker">{parsed.marker}</span><span className="choice-content"><MathText text={parsed.content} /></span></button>; })}</div> : <label className="exam-answer-field">내 답<input value={response?.response ?? ""} onChange={(event) => update({ response: event.target.value })} disabled={isSubmitted} /></label>}
       {(examPreferences?.showOriginalPages !== false) && (question.sourcePageImages?.length ?? 0) > 0 && <details className="exam-source-pages"><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
       {examPreferences?.showScratchNote !== false && <label className="exam-note-field">풀이 메모<textarea value={response?.scratchNote ?? ""} onChange={(event) => update({ scratchNote: event.target.value })} disabled={isSubmitted} /></label>}
-    </article>
-    {showNavigator && <nav className="exam-question-navigation" aria-label="문항 이동"><button type="button" disabled={session.currentQuestionIndex === 0} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex - 1 })}>이전</button><button type="button" onClick={() => setNavigatorOpen(true)}>{session.currentQuestionIndex + 1} / {session.questions.length}</button><label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={isSubmitted} /> 검토 표시</label><button type="button" disabled={session.currentQuestionIndex >= session.questions.length - 1} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex + 1 })}>다음</button></nav>}
+    </article></main>
+    <footer className="exam-session-footer">{showNavigator && <nav className="exam-question-navigation" aria-label="문항 이동"><button type="button" disabled={session.currentQuestionIndex === 0} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex - 1 })}>이전</button><button type="button" onClick={() => setNavigatorOpen(true)}>{session.currentQuestionIndex + 1} / {session.questions.length}</button><label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={isSubmitted} /> 검토 표시</label><button type="button" disabled={session.currentQuestionIndex >= session.questions.length - 1} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex + 1 })}>다음</button></nav>}</footer>
     {(examPreferences?.showMcpHelp !== false) && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
       <aside className="exam-gpt-actions">
         <ChatGptHelpLauncher

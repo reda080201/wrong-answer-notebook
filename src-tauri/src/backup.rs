@@ -179,7 +179,7 @@ pub(crate) fn create_backup_zip_at(
     let mut workspace_files = Vec::new();
     collect_workspace_files(&workspace_root, &workspace_root, &mut workspace_files)?;
     for (archive_name, path) in &workspace_files {
-        let size = fs::metadata(&path).map_err(|e| e.to_string())?.len();
+        let size = fs::metadata(path).map_err(|e| e.to_string())?.len();
         if size > MAX_BACKUP_JSON_BYTES {
             return Err(format!(
                 "{archive_name} 파일이 백업 허용 용량을 초과했습니다."
@@ -480,7 +480,6 @@ pub(crate) fn restore_backup_zip(
         move_target(app_dir.join("import-workspaces"), "import-workspaces")?;
         Ok(())
     })();
-    drop(move_target);
     if let Err(error) = move_result {
         let rollback_error = rollback_restore_paths_with_targets(&moved, &managed_targets).err();
         let _ = fs::remove_dir_all(&rollback_dir);

@@ -58,3 +58,10 @@ export function createKangdaeK7SyntheticImport() {
     }],
   };
 }
+
+export function getKangdaeK7SyntheticImagePaths(importData: ReturnType<typeof createKangdaeK7SyntheticImport>): string[] {
+  return importData.entries.flatMap((entry) => entry.figures.flatMap((figure) => [
+    figure.representations.original.image,
+    figure.representations.cleaned.image,
+  ]));
+}

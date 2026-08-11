@@ -30,4 +30,32 @@ describe("generateExam", () => {
     expect(easyHighQuality).toBeGreaterThan(70);
     expect(easyHighQuality).toBeGreaterThan(hardWithoutSolution);
   });
+  it("uses structured questions as the generated-exam source of truth", () => {
+    const structured = sheet("structured", "legacy should not be selected", 70);
+    structured.structuredQuestions = [{
+      questionNumber: "10",
+      questionText: "canonical structured question",
+      conditions: [],
+      equations: [],
+      choices: ["① structured answer"],
+      contentSegments: [{ id: "structured-text", type: "text", text: "canonical structured question" }],
+      points: 4,
+      warning: "확인 필요",
+      figureIds: [],
+    }];
+    const result = generateExam({
+      entries: [structured],
+      title: "구조화 세트",
+      preset: "real_exam",
+      blueprint: defaultBlueprintForPreset("real_exam", 1),
+      seed: "structured",
+    });
+    expect(result.questions[0].snapshot).toEqual(expect.objectContaining({
+      questionNumber: "10",
+      question: "canonical structured question",
+      choices: ["① structured answer"],
+      points: 4,
+      sourceWarning: "확인 필요",
+    }));
+  });
 });

@@ -463,6 +463,7 @@ fn save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)] // Tauri's public run entry point intentionally follows test helpers.
 mod tests {
     use super::*;
     use crate::images::{

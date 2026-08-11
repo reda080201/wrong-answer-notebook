@@ -546,7 +546,7 @@ async fn redeem_pairing(
 }
 async fn mcp_get(State(state): State<BridgeHttpState>, headers: HeaderMap) -> Response {
     if let Err(response) = authorize(&state, &headers) {
-        return response;
+        return *response;
     }
     (
         StatusCode::METHOD_NOT_ALLOWED,
@@ -558,7 +558,7 @@ async fn mcp_get(State(state): State<BridgeHttpState>, headers: HeaderMap) -> Re
 async fn mcp_post(State(state): State<BridgeHttpState>, request: Request<Body>) -> Response {
     let (parts, body) = request.into_parts();
     if let Err(response) = authorize(&state, &parts.headers) {
-        return response;
+        return *response;
     }
     let bytes = match axum::body::to_bytes(body, 1024 * 1024).await {
         Ok(value) => value,
@@ -1465,14 +1465,16 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
         // Session-specific passages and segments are added above, so apply the
         // disclosure boundary only after every source has populated the item.
         if !share_text {
-            item.as_object_mut().map(|object| {
+            if let Some(object) = item.as_object_mut() {
                 object.remove("question");
                 object.remove("passage");
                 object.remove("contentSegments");
-            });
+            }
         }
         if !share_choices {
-            item.as_object_mut().map(|object| object.remove("choices"));
+            if let Some(object) = item.as_object_mut() {
+                object.remove("choices");
+            }
         }
         if include_images {
             let mut images = Value::Array(Vec::new());

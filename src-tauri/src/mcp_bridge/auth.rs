@@ -38,18 +38,24 @@ pub(super) fn load_or_create_token() -> Result<String, String> {
     Ok(token)
 }
 
-pub(super) fn authorize(state: &BridgeHttpState, headers: &HeaderMap) -> Result<(), Response> {
+pub(super) fn authorize(state: &BridgeHttpState, headers: &HeaderMap) -> Result<(), Box<Response>> {
     if !origin_allowed(headers) {
-        return Err((StatusCode::FORBIDDEN, "허용되지 않은 Origin입니다.").into_response());
+        return Err(Box::new(
+            (StatusCode::FORBIDDEN, "허용되지 않은 Origin입니다.").into_response(),
+        ));
     }
     let Some(value) = headers
         .get(header::AUTHORIZATION)
         .and_then(|value| value.to_str().ok())
     else {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
+        return Err(Box::new(
+            (StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response(),
+        ));
     };
     let Some(token) = value.strip_prefix("Bearer ") else {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
+        return Err(Box::new(
+            (StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response(),
+        ));
     };
     let self_test = headers
         .get("x-wan-self-test")
@@ -72,7 +78,9 @@ pub(super) fn authorize(state: &BridgeHttpState, headers: &HeaderMap) -> Result<
             .unwrap_or(false)
     };
     if !authorized {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
+        return Err(Box::new(
+            (StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response(),
+        ));
     }
     if !self_test {
         if let Ok(mut status) = state.status.lock() {

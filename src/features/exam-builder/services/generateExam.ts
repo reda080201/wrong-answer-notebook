@@ -1,8 +1,8 @@
 import { v4 as uuidv4 } from "uuid";
 import type { ExamBlueprint, ExamGenerationReport, ExamQuestionSnapshot, GeneratedExam, GeneratedExamPreset, GeneratedExamQuestion, QuestionMeta, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
-import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
-import { resolveQuestionDifficultyScore } from "../../../utils/difficulty";
+import { resolveAnswerDifficultyScore } from "../../../utils/difficulty";
+import { getEntryQuestions, type ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { createQuestionSource } from "./questionSource";
 
 export interface ExamBuilderFilters {
@@ -34,7 +34,7 @@ export interface GenerateExamInput {
 
 interface Candidate {
   entry: WrongAnswerEntry;
-  block: QuestionBlock;
+  block: ResolvedEntryQuestion;
   number: string;
   meta?: QuestionMeta;
   snapshot: ExamQuestionSnapshot;
@@ -76,19 +76,21 @@ export function questionQualityScore(entry: WrongAnswerEntry, number: string, me
   return clamp(score);
 }
 
-function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string): ExamQuestionSnapshot {
+function snapshot(entry: WrongAnswerEntry, block: ResolvedEntryQuestion, number: string): ExamQuestionSnapshot {
   const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
   return {
     id: `${entry.id}-${number}`,
-    questionNumber: String(block.numberLabel ?? block.displayNumber),
-    question: block.body,
-    choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`),
+    questionNumber: block.questionNumber,
+    question: block.questionText,
+    choices: block.choices,
     questionImages: [],
     sourcePageImages: entry.sourcePageImages ?? [],
     figures: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number),
-    contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => normalizeQuestionNumber(key) === number)?.[1],
+    contentSegments: block.contentSegments,
     correctAnswer: answer?.answer,
     explanation: answer?.explanation,
+    points: block.points,
+    sourceWarning: block.warning,
   };
 }
 
@@ -96,8 +98,8 @@ function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Cand
   const cutoff = filters.excludeRecentDays ? Date.now() - filters.excludeRecentDays * 86_400_000 : 0;
   const candidates: Candidate[] = [];
   for (const entry of entries.filter((item) => item.entryKind === "problem_sheet").filter((item) => !filters.entryIds?.length || filters.entryIds.includes(item.id)).filter((item) => !filters.subject || item.subject === filters.subject)) {
-    for (const block of parseQuestionText(entry.question).filter((item): item is QuestionBlock => item.kind === "question")) {
-      const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber));
+    for (const block of getEntryQuestions(entry)) {
+      const number = normalizeQuestionNumber(block.questionNumber);
       const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
       const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
       const concepts = answer?.concepts ?? entry.concepts ?? entry.tags;
@@ -110,11 +112,11 @@ function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Cand
       if (filters.requireAnswers && !answer?.answer.trim()) continue;
       if (filters.requireExplanations && !answer?.explanation.trim()) continue;
       if (cutoff && meta?.review?.lastReviewedAt && Date.parse(meta.review.lastReviewedAt) > cutoff) continue;
-      const difficulty = resolveQuestionDifficultyScore(entry.questionMeta, entry.answerKey, block) ?? 50;
+      const difficulty = meta?.difficultyScore ?? resolveAnswerDifficultyScore(answer) ?? 50;
       const importance = clamp(meta?.rating?.importanceScore ?? (meta?.important ? 85 : 45));
       const quality = questionQualityScore(entry, number, meta);
       const weakness = clamp((meta?.review?.lapseCount ?? 0) * 15 + (meta?.needsReview ? 25 : 0) + (entry.difficult ? 15 : 0));
-      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number), difficulty, importance, quality, weakness, hash: stringHash(`${block.body}\n${block.choices.map((choice) => choice.text).join("|")}`) });
+      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number), difficulty, importance, quality, weakness, hash: stringHash(`${block.questionText}\n${block.choices.join("|")}`) });
     }
   }
   return candidates;

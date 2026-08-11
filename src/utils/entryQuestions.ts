@@ -57,3 +57,49 @@ export function renderStructuredQuestionsCompatibilityText(questions: Structured
     return [heading, ...conditions, ...equations, ...choices].filter(Boolean).join("\n");
   }).join("\n\n");
 }
+
+/**
+ * Keeps the editable compatibility text and v2's canonical questions in
+ * lockstep. Figure/table segments keep their identity and relative order;
+ * textual segments are rebuilt from the reviewed prose.
+ */
+export function applyCompatibilityTextToStructuredQuestions(
+  questions: StructuredQuestion[],
+  text: string,
+): StructuredQuestion[] | null {
+  const parsed = parseQuestionText(text).filter((block): block is QuestionBlock => block.kind === "question");
+  const byNumber = new Map(parsed.map((block) => [normalizeQuestionNumber(block.numberLabel), block]));
+  if (parsed.length !== questions.length || questions.some((question) => !byNumber.has(normalizeQuestionNumber(question.questionNumber)))) {
+    return null;
+  }
+
+  return questions.map((question) => {
+    const block = byNumber.get(normalizeQuestionNumber(question.questionNumber));
+    if (!block) return question;
+    const bodySegments: QuestionContentSegment[] = block.bodySegments.map((segment, index) => {
+      const id = question.contentSegments.filter((item) => item.type !== "figure" && item.type !== "table")[index]?.id
+        ?? `review-${question.questionNumber}-${index + 1}`;
+      return segment.kind === "condition"
+        ? { id, type: "condition", label: segment.label, text: segment.text }
+        : { id, type: "text", text: segment.text };
+    });
+    let nextBodySegment = 0;
+    const contentSegments: QuestionContentSegment[] = [];
+    for (const segment of question.contentSegments) {
+      if (segment.type === "figure" || segment.type === "table") {
+        contentSegments.push(segment);
+        continue;
+      }
+      const next = bodySegments[nextBodySegment++];
+      if (next) contentSegments.push({ ...next, id: segment.id });
+    }
+    contentSegments.push(...bodySegments.slice(nextBodySegment));
+    return {
+      ...question,
+      questionText: block.body,
+      conditions: block.bodySegments.filter((segment) => segment.kind === "condition").map((segment) => segment.text),
+      choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim()),
+      contentSegments,
+    };
+  });
+}

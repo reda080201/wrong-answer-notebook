@@ -282,6 +282,40 @@ describe("browser backup restore transaction", () => {
     }));
   });
 
+  it.each([
+    [EXAM_SESSIONS_STORAGE_KEY, "모의고사 세션"],
+    [GENERATED_EXAMS_STORAGE_KEY, "생성 모의고사"],
+  ])("rejects malformed %s elements before creating a v2 backup", async (key) => {
+    localStorage.setItem(key, JSON.stringify([{}]));
+    const createObjectURL = vi.fn(() => "blob:invalid-backup");
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await expect(createBackupAtDestination(null, [], defaultSettings)).rejects.toThrow("저장된 데이터 형식이 올바르지 않습니다.");
+    expect(createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("creates a v2 backup when exam session and generated exam stores are valid empty arrays", async () => {
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, "[]");
+    localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, "[]");
+    let captured: Blob | null = null;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn((blob: Blob) => {
+        captured = blob;
+        return "blob:valid-backup";
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await expect(createBackupAtDestination(null, [], defaultSettings)).resolves.toContain("내려받았습니다");
+    expect(captured).not.toBeNull();
+    await expect(captured!.text()).resolves.toContain('"version": 2');
+  });
+
   it("restores every browser persistent store atomically with a v2 payload", () => {
     localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "old-session" }]));
     localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, JSON.stringify([{ id: "old-exam" }]));
