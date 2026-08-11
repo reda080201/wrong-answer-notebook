@@ -56,12 +56,11 @@ import type { SupplementalImportMode } from "../../../features/supplemental-reso
 import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
 import ImportPreviewSummary from "../../../components/ImportPreviewSummary";
 import TextReviewSplitView from "./TextReviewSplitView";
+import StructuredQuestionReviewEditor from "./StructuredQuestionReviewEditor";
 import { renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
 import {
   getStructuredValidationFingerprint,
-  mergeStructuredReviewTextIntoQuestions,
   removeFigureFromImportDraft,
-  renderStructuredQuestionsReviewText,
 } from "../services/importDraftCanonical";
 
 interface ImportFromGptModalProps {
@@ -354,7 +353,6 @@ export default function ImportFromGptModal({
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
   const [confirmedValidationFingerprint, setConfirmedValidationFingerprint] = useState<string | null>(null);
-  const [structuredReviewText, setStructuredReviewText] = useState("");
   const [structuredReviewError, setStructuredReviewError] = useState<string | null>(null);
   const [quickSaving, setQuickSaving] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
@@ -429,9 +427,6 @@ export default function ImportFromGptModal({
     const nextDraft = draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null;
     const next = nextDraft ? withExpectedQuestionNumbers(nextDraft, expectedQuestionNumbers) : null;
     setDraft(next);
-    setStructuredReviewText(next?.structuredQuestions?.length
-      ? renderStructuredQuestionsReviewText(next.structuredQuestions)
-      : next?.question ?? "");
     setStructuredReviewError(null);
     setConfirmedValidationFingerprint(null);
   }, [draftOverride, expectedQuestionNumbers, parsed]);
@@ -883,28 +878,11 @@ export default function ImportFromGptModal({
     }
   };
 
-  const updateQuestionReviewText = (value: string) => {
-    setStructuredReviewText(value);
+  const updateLegacyQuestionText = (value: string) => {
     setConfirmedValidationFingerprint(null);
     setDraft((current) => {
-      if (!current?.structuredQuestions?.length) {
-        setStructuredReviewError(null);
-        return { ...current, question: value };
-      }
-      const merged = mergeStructuredReviewTextIntoQuestions(current.structuredQuestions, value);
-      if (!merged.questions) {
-        setStructuredReviewError(merged.error ?? "구조화된 문항을 갱신하지 못했습니다.");
-        return current;
-      }
       setStructuredReviewError(null);
-      return {
-        ...current,
-        structuredQuestions: merged.questions,
-        question: renderStructuredQuestionsCompatibilityText(merged.questions),
-        questionContentSegments: Object.fromEntries(
-          merged.questions.map((question) => [question.questionNumber, question.contentSegments]),
-        ),
-      };
+      return { ...current, question: value };
     });
   };
 
@@ -1371,12 +1349,31 @@ export default function ImportFromGptModal({
                     </div>
                   </div>
 
-                  <TextReviewSplitView
-                    id="import-question"
-                    label="본문"
-                    value={draft.structuredQuestions?.length ? structuredReviewText : draft.question ?? ""}
-                    onChange={updateQuestionReviewText}
-                  />
+                  {draft.structuredQuestions?.length ? (
+                    <StructuredQuestionReviewEditor
+                      id="import-question"
+                      questions={draft.structuredQuestions}
+                      onChange={(questions) => {
+                        setConfirmedValidationFingerprint(null);
+                        setStructuredReviewError(null);
+                        setDraft((current) => ({
+                          ...current,
+                          structuredQuestions: questions,
+                          question: renderStructuredQuestionsCompatibilityText(questions),
+                          questionContentSegments: Object.fromEntries(
+                            questions.map((question) => [question.questionNumber, question.contentSegments]),
+                          ),
+                        }));
+                      }}
+                    />
+                  ) : (
+                    <TextReviewSplitView
+                      id="import-question"
+                      label="본문"
+                      value={draft.question ?? ""}
+                      onChange={updateLegacyQuestionText}
+                    />
+                  )}
                   {structuredReviewError && <p className="image-field-error" role="alert">{structuredReviewError}</p>}
                   <div className="form-field full">
                     <label htmlFor="import-memo">메모</label>

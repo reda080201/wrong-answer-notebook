@@ -1088,32 +1088,6 @@ describe("ImportFromGptModal", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
-  it("persists reviewed structured text as the canonical question", async () => {
-    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
-    render(
-      <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={onApplyEntries} />,
-    );
-    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
-      target: { files: [quickSaveFixtureFile()] },
-    });
-    const editor = await screen.findByLabelText("본문");
-    fireEvent.change(editor, {
-      target: {
-        value: (editor as HTMLTextAreaElement).value
-          .replace("문제", "수정한 문제")
-          .replace("① 1", "① 3"),
-      },
-    });
-    const quickSave = screen.getByRole("button", { name: "바로 저장" });
-    await waitFor(() => expect(quickSave).not.toBeDisabled());
-    fireEvent.click(quickSave);
-    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledTimes(1));
-    expect(onApplyEntries.mock.calls[0][0][0]).toMatchObject({
-      question: expect.stringContaining("수정한 문제"),
-      structuredQuestions: [{ questionNumber: "1", questionText: "수정한 문제", choices: ["① 3"] }],
-    });
-  });
-
   it("guards a pending quick save synchronously and allows retry after failure", async () => {
     let rejectFirst: ((reason?: unknown) => void) | undefined;
     const first = new Promise<void>((_resolve, reject) => { rejectFirst = reject; });
