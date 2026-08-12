@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parseAllInOneImport, parseImportedStudyText, ImportParseError } from "./importStudyText";
+import {
+  parseAllInOneImport,
+  parseImportedStudyText,
+  ImportParseError,
+  isSafeImportAssetReference,
+} from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { createKangdaeK7SyntheticImport } from "../test/fixtures/kangdaeK7Synthetic";
@@ -9,6 +14,20 @@ import { normalizeEntry } from "./entry";
 import type { WrongAnswerEntry } from "../types";
 
 describe("importStudyText", () => {
+  describe("ZIP asset references", () => {
+    it("accepts safe nested image paths and rejects unsafe paths", () => {
+      expect(isSafeImportAssetReference("images/source_page_001.png")).toBe(true);
+      expect(isSafeImportAssetReference("images/q04_graph01_cleaned.png")).toBe(true);
+
+      expect(isSafeImportAssetReference("/images/source_page_001.png")).toBe(false);
+      expect(isSafeImportAssetReference("C:/images/source_page_001.png")).toBe(false);
+      expect(isSafeImportAssetReference("images\\source_page_001.png")).toBe(false);
+      expect(isSafeImportAssetReference("images//source_page_001.png")).toBe(false);
+      expect(isSafeImportAssetReference("images/./source_page_001.png")).toBe(false);
+      expect(isSafeImportAssetReference("images/../source_page_001.png")).toBe(false);
+    });
+  });
+
   describe("JSON parse enhancements", () => {
     it("removes UTF-8 BOM", () => {
       const jsonWithBom = '\uFEFF{"entryKind": "problem_sheet", "question": "test", "subject": "수학"}';
