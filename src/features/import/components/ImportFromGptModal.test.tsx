@@ -953,12 +953,13 @@ describe("ImportFromGptModal", () => {
 
   it("opens a single v2 wrapper as an editable problem sheet preview", async () => {
     const onApply = vi.fn();
+    const onApplyEntries = vi.fn();
     render(
       <ImportFromGptModal
         fallbackSubject="수학"
         onClose={vi.fn()}
         onApply={onApply}
-        onApplyEntries={vi.fn()}
+        onApplyEntries={onApplyEntries}
       />,
     );
     const file = new File(
@@ -976,15 +977,16 @@ describe("ImportFromGptModal", () => {
     expect(screen.queryByRole("dialog", { name: "개념 자료 JSON 변환" })).not.toBeInTheDocument();
     confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
-    expect(onApply).toHaveBeenCalledWith(
-      expect.objectContaining({
+    expect(onApply).not.toHaveBeenCalled();
+    expect(onApplyEntries).toHaveBeenCalledWith(
+      [expect.objectContaining({
         entryKind: "problem_sheet",
         answerKey: expect.arrayContaining([expect.objectContaining({ questionNumber: "18" })]),
         figures: expect.arrayContaining([expect.objectContaining({ source: "described_only", image: undefined })]),
         questionMeta: expect.arrayContaining([expect.objectContaining({ questionNumber: "7", important: true })]),
         learningBlocks: expect.any(Array),
-      }),
-      undefined,
+      })],
+      expect.any(Array),
     );
   }, 30000);
 

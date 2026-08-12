@@ -76,6 +76,7 @@ interface EntryDetailProps {
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
   onStartExam?: () => void;
+  onStartRealExam?: () => void;
   startExamLabel?: string;
   examSession?: ExamSession | null;
   examPrintPreferences?: ExamPrintPreferences;
@@ -91,6 +92,7 @@ interface EntryDetailProps {
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
   onImportLecture?: () => void;
   onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
+  onStructuredQuestionsChange?: (entry: WrongAnswerEntry, questions: NonNullable<WrongAnswerEntry["structuredQuestions"]>) => Promise<void>;
   onTitleChange?: (entry: WrongAnswerEntry, title: string) => Promise<void>;
   onQuestionMetaChange?: (
     entry: WrongAnswerEntry,
@@ -200,6 +202,7 @@ export default function EntryDetail({
   onQuickGptSolution,
   onOpenPrint,
   onStartExam,
+  onStartRealExam,
   startExamLabel = "문제 풀기",
   examSession,
   examPrintPreferences,
@@ -210,6 +213,7 @@ export default function EntryDetail({
   onLearningBlocksChange,
   onImportLecture,
   onQuestionTextChange,
+  onStructuredQuestionsChange,
   onTitleChange,
   onQuestionMetaChange,
   initialQuestionTarget,
@@ -337,13 +341,13 @@ export default function EntryDetail({
     [questionBlocks],
   );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
-  const questionIdentifier = (question?: QuestionBlock) => {
+  const questionIdentifier = useCallback((question?: QuestionBlock) => {
     if (!question) return null;
     if (entry.structuredQuestions?.length) {
       return question.numberLabel ? normalizeQuestionNumber(String(question.numberLabel)) : null;
     }
     return question.displayNumber ? String(question.displayNumber) : null;
-  };
+  }, [entry.structuredQuestions?.length]);
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
@@ -514,7 +518,7 @@ export default function EntryDetail({
       setFocusedQuestionIndex(next);
       return next;
     });
-  }, [entry.id, questionAnchors, selectedReviewQueue]);
+  }, [entry.id, questionAnchors, questionIdentifier, selectedReviewQueue]);
 
   const moveFocusedQuestion = useCallback((delta: number) => {
     if (!isSheet || questionAnchors.length === 0) return;
@@ -597,7 +601,7 @@ export default function EntryDetail({
     } finally {
       setReviewSaving(null);
     }
-  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
+  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, questionIdentifier, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
 
   const handleQuickMemoSubmit = async () => {
     const text = quickMemoText.trim();
@@ -827,7 +831,7 @@ export default function EntryDetail({
     setSelectedQuestionNumbers([]);
     openTheaterMode(firstIndex >= 0 ? firstIndex : 0);
     pushToast("선택한 문제 복습 큐를 시작합니다.", "success");
-  }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, selectedQuestionNumbers]);
+  }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, questionIdentifier, selectedQuestionNumbers]);
 
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
@@ -843,7 +847,7 @@ export default function EntryDetail({
     } else {
       onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "not-found");
     }
-  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors]);
+  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors, questionIdentifier]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
@@ -1332,6 +1336,7 @@ export default function EntryDetail({
             <span className="problem-sheet-primary-title">{entry.title.trim() || "제목 없음"}</span>
             <div className="problem-sheet-primary-controls">
               {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
+              {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>실전 모드</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
                 <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
                 <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
@@ -2130,6 +2135,11 @@ export default function EntryDetail({
             if (!onQuestionTextChange) return;
             await onQuestionTextChange(entry, text);
             pushToast("검수한 문제 텍스트를 저장했습니다.", "success");
+          }}
+          onStructuredQuestionsChange={async (target, questions) => {
+            if (!onStructuredQuestionsChange) return;
+            await onStructuredQuestionsChange(target, questions);
+            pushToast("구조화 문항을 저장했습니다.", "success");
           }}
         />
       )}

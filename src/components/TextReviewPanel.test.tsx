@@ -35,6 +35,26 @@ describe("TextReviewPanel", () => {
     const structuredEntry: WrongAnswerEntry = {
       ...entry,
       entryKind: "problem_sheet",
+      structuredQuestions: [
+        {
+          questionNumber: "1",
+          questionText: "첫 문항",
+          conditions: [],
+          equations: [],
+          choices: [],
+          contentSegments: [{ id: "segment-1", type: "text", text: "첫 문항" }],
+          figureIds: [],
+        },
+        {
+          questionNumber: "2",
+          questionText: "두 번째 문항",
+          conditions: ["두 번째 문항"],
+          equations: [],
+          choices: [],
+          contentSegments: [{ id: "segment-2", type: "condition", label: "조건", text: "두 번째 문항" }],
+          figureIds: [],
+        },
+      ],
       questionContentSegments: {
         "1": [{ id: "segment-1", type: "text", text: "첫 문항" }],
         "2": [{ id: "segment-2", type: "condition", label: "조건", text: "두 번째 문항" }],
@@ -46,8 +66,6 @@ describe("TextReviewPanel", () => {
         segments={[{ id: "warning-1", start: 0, end: 2, text: "문제", reason: "OCR 의심 조각", severity: "high" }]}
         onClose={vi.fn()}
         onSave={vi.fn()}
-        activeQuestionEditor={<input aria-label="문항 편집기" />}
-        activeSegmentEditor={<input aria-label="segment 편집기" />}
         onActiveQuestionChange={onActiveQuestionChange}
         onActiveSegmentChange={onActiveSegmentChange}
       />,
@@ -62,7 +80,8 @@ describe("TextReviewPanel", () => {
 
     expect(onActiveQuestionChange).toHaveBeenCalledWith("2");
     expect(onActiveSegmentChange).toHaveBeenCalledWith("segment-2");
-    expect(screen.getByRole("textbox", { name: "문항 편집기" })).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "segment 편집기" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /2번 조건/ })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "문항 편집기" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "segment 편집기" })).not.toBeInTheDocument();
   });
 });

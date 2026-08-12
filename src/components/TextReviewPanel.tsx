@@ -1,20 +1,21 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { WrongAnswerEntry } from "../types";
+import type { StructuredQuestion } from "../types";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import Dialog from "../shared/ui/Dialog";
 import "./TextReviewPanel.css";
+import StructuredQuestionReviewEditor from "../features/import/components/StructuredQuestionReviewEditor";
 
 export interface TextReviewPanelProps {
   entry: WrongAnswerEntry;
   segments: SuspiciousTextSegment[];
   onClose: () => void;
   onSave: (text: string) => Promise<void> | void;
+  onStructuredQuestionsChange?: (entry: WrongAnswerEntry, questions: StructuredQuestion[]) => Promise<void>;
   /** Additive extension point for problem-sheet integrations. */
   activeQuestionNumber?: string;
   activeSegmentId?: string;
-  activeQuestionEditor?: ReactNode;
-  activeSegmentEditor?: ReactNode;
   onActiveQuestionChange?: (questionNumber: string) => void;
   onActiveSegmentChange?: (segmentId: string) => void;
 }
@@ -26,16 +27,15 @@ export default function TextReviewPanel({
   onSave,
   activeQuestionNumber: requestedQuestionNumber,
   activeSegmentId: requestedSegmentId,
-  activeQuestionEditor,
-  activeSegmentEditor,
   onActiveQuestionChange,
   onActiveSegmentChange,
+  onStructuredQuestionsChange,
 }: TextReviewPanelProps) {
   const questionNumbers = useMemo(
     () => Object.keys(entry.questionContentSegments ?? {}).filter((number) => number.trim()),
     [entry.questionContentSegments],
   );
-  const isStructured = entry.entryKind === "problem_sheet" && questionNumbers.length > 0;
+  const isStructured = entry.entryKind === "problem_sheet" && (entry.structuredQuestions?.length ?? 0) > 0;
   const [text, setText] = useState(entry.question);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,6 +44,7 @@ export default function TextReviewPanel({
     requestedQuestionNumber ?? questionNumbers[0] ?? null,
   );
   const [selectedStructuredSegmentId, setSelectedStructuredSegmentId] = useState<string | null>(requestedSegmentId ?? null);
+  const [editedStructuredQuestions, setEditedStructuredQuestions] = useState<StructuredQuestion[]>(() => structuredClone(entry.structuredQuestions ?? []));
   const [ignoredSegmentIds, setIgnoredSegmentIds] = useState<Set<string>>(() => new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -52,7 +53,8 @@ export default function TextReviewPanel({
     setError(null);
     setSelectedSegmentId(null);
     setIgnoredSegmentIds(new Set());
-  }, [entry.id, entry.question]);
+    setEditedStructuredQuestions(structuredClone(entry.structuredQuestions ?? []));
+  }, [entry.id, entry.question, entry.structuredQuestions]);
 
   useEffect(() => {
     if (requestedQuestionNumber && questionNumbers.includes(requestedQuestionNumber)) {
@@ -73,7 +75,11 @@ export default function TextReviewPanel({
     setSaving(true);
     setError(null);
     try {
-      await onSave(text);
+      if (isStructured && editedStructuredQuestions.length > 0 && onStructuredQuestionsChange) {
+        await onStructuredQuestionsChange(entry, editedStructuredQuestions);
+      } else {
+        await onSave(text);
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "텍스트 저장에 실패했습니다.");
@@ -131,6 +137,9 @@ export default function TextReviewPanel({
             <h2>텍스트 검수</h2>
           </div>
           <div className="text-review-head-actions">
+            {isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "저장 중..." : "구조화 문항 저장"}
+            </button>}
             {!isStructured && <button type="button" className="btn-secondary" onClick={handleSave} disabled={saving}>
               {saving ? "저장 중..." : "수정 저장"}
             </button>}
@@ -163,7 +172,16 @@ export default function TextReviewPanel({
                 <div><span className="modal-eyebrow">Structured Review</span><h3>{selectedQuestionNumber ? `${selectedQuestionNumber}번 문항` : "문항 선택"}</h3></div>
                 <span className="text-review-slot-status">편집 슬롯 대기 중</span>
               </div>
-              {activeQuestionEditor ? <div className="text-review-slot" aria-label="활성 문항 편집기">{activeQuestionEditor}</div> : <p className="text-review-placeholder">활성 문항 편집기가 연결되면 이 영역에 표시됩니다.</p>}
+              {selectedQuestionNumber ? <StructuredQuestionReviewEditor
+                id="text-review-structured-editor"
+                questions={editedStructuredQuestions.filter((question) => question.questionNumber === selectedQuestionNumber)}
+                disabled={saving}
+                onChange={(questions) => {
+                  const updated = questions[0];
+                  if (!updated) return;
+                  setEditedStructuredQuestions((current) => current.map((question) => question.questionNumber === updated.questionNumber ? updated : question));
+                }}
+              /> : <p>문항을 선택하세요.</p>}
               <div className="text-review-segment-list" aria-label="활성 문항 segment 선택">
                 <strong>문항 구성</strong>
                 <ul>
@@ -176,7 +194,6 @@ export default function TextReviewPanel({
                   ))}
                 </ul>
               </div>
-              {activeSegmentEditor ? <div className="text-review-slot" aria-label="활성 segment 편집기">{activeSegmentEditor}</div> : <p className="text-review-placeholder">활성 segment 편집기가 연결되면 이 영역에 표시됩니다.</p>}
             </section>
           </div>
         ) : (
@@ -241,6 +258,9 @@ export default function TextReviewPanel({
           <button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>
             취소
           </button>
+          {isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? "저장 중..." : "구조화 문항 저장"}
+          </button>}
           {!isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "저장 중..." : "검수한 텍스트 저장"}
           </button>}
