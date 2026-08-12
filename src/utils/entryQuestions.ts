@@ -1,10 +1,13 @@
 import type { QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } from "../types";
-import { normalizeQuestionNumber } from "./questionMeta";
+import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
 import { isMultipleChoiceQuestion } from "./structuredQuestionType";
 
 export interface ResolvedEntryQuestion {
+  /** Stable source identity. Never use position as a persistence key. */
   questionNumber: string;
+  /** One-based order within this entry, for navigation only. */
+  position: number;
   section?: string;
   questionType?: StructuredQuestion["questionType"];
   questionText: string;
@@ -66,7 +69,7 @@ function appendMissingSemanticSegments(
   return segments;
 }
 
-function projectStructuredQuestion(question: StructuredQuestion): ResolvedEntryQuestion {
+function projectStructuredQuestion(question: StructuredQuestion, index: number): ResolvedEntryQuestion {
   const isEmptyMultipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices)
     && question.choices.length === 0;
   const warning = isEmptyMultipleChoice
@@ -74,6 +77,7 @@ function projectStructuredQuestion(question: StructuredQuestion): ResolvedEntryQ
     : question.warning;
   return {
     questionNumber: normalizeQuestionNumber(question.questionNumber) || question.questionNumber,
+    position: index + 1,
     section: question.section,
     questionType: question.questionType,
     questionText: question.questionText,
@@ -100,6 +104,7 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
       return {
         questionNumber: number || String(index + 1),
+        position: index + 1,
         conditions: [],
         equations: [],
         questionText: block.body,
@@ -110,6 +115,48 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
         figureIds: [],
       };
     });
+}
+
+/**
+ * Transitional adapter for legacy consumers that still expect QuestionBlock.
+ * Structured entries retain their source number in both identity fields; the
+ * positional index is deliberately kept only in ResolvedEntryQuestion.position.
+ */
+export function resolvedQuestionToBlock(question: ResolvedEntryQuestion): QuestionBlock {
+  const bodySegments = question.contentSegments
+    ?.filter((segment): segment is Extract<QuestionContentSegment, { type: "text" | "condition" | "equation" }> =>
+      segment.type === "text" || segment.type === "condition" || segment.type === "equation",
+    )
+    .map((segment, index) => ({
+      kind: segment.type === "condition" ? "condition" as const : "body" as const,
+      text: segment.type === "equation" ? segment.latex : segment.text,
+      label: segment.type === "condition" ? segment.label : undefined,
+      start: index,
+      end: index + (segment.type === "equation" ? segment.latex.length : segment.text.length),
+    }))
+    ?? [{ kind: "body" as const, text: question.questionText, start: 0, end: question.questionText.length }];
+  const body = bodySegments.map((segment) => segment.text).filter(Boolean).join("\n") || question.questionText;
+  const base = question.position * 100_000;
+  return {
+    kind: "question",
+    numberLabel: question.questionNumber,
+    displayNumber: Number(question.questionNumber) || question.position,
+    body,
+    bodyStart: base,
+    bodyEnd: base + body.length,
+    start: base,
+    end: base + body.length,
+    bodySegments: bodySegments.map((segment, index) => ({ ...segment, start: base + index, end: base + index + segment.text.length })),
+    choices: question.choices.map((choice, index) => {
+      const match = choice.match(/^\s*([①②③④⑤⑥⑦⑧⑨⑩]|\(?\d{1,2}\)?[.)]?)\s*(.*)$/);
+      return {
+        marker: match?.[1] || String(index + 1),
+        text: match?.[2] || choice,
+        start: base + body.length + index,
+        end: base + body.length + index + choice.length,
+      };
+    }),
+  };
 }
 
 export function renderStructuredQuestionsCompatibilityText(questions: StructuredQuestion[]): string {

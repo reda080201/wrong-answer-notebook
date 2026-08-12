@@ -13,6 +13,7 @@ import {
 import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextStudyAction";
 import { normalizeDifficultyScore } from "../../../utils/difficulty";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
+import { getEntryQuestions, resolvedQuestionToBlock } from "../../../utils/entryQuestions";
 import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
@@ -321,14 +322,28 @@ export default function EntryDetail({
       item.explanation.trim() ||
       item.importantPoints.length,
   );
-  const questionBlocks = useMemo(() => parseQuestionText(entry.question), [entry.question]);
+  const resolvedSheetQuestions = useMemo(
+    () => (entry.structuredQuestions?.length ? getEntryQuestions(entry) : []),
+    [entry],
+  );
+  const questionBlocks = useMemo(
+    () => entry.structuredQuestions?.length
+      ? resolvedSheetQuestions.map(resolvedQuestionToBlock)
+      : parseQuestionText(entry.question),
+    [entry.question, entry.structuredQuestions?.length, resolvedSheetQuestions],
+  );
   const questionAnchors = useMemo(
     () => questionBlocks.filter((block) => block.kind === "question"),
     [questionBlocks],
   );
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
-  const questionIdentifier = (question?: QuestionBlock) =>
-    question?.numberLabel ? String(question.numberLabel) : question?.displayNumber ? String(question.displayNumber) : null;
+  const questionIdentifier = (question?: QuestionBlock) => {
+    if (!question) return null;
+    if (entry.structuredQuestions?.length) {
+      return question.numberLabel ? normalizeQuestionNumber(String(question.numberLabel)) : null;
+    }
+    return question.displayNumber ? String(question.displayNumber) : null;
+  };
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
@@ -342,14 +357,14 @@ export default function EntryDetail({
   const sheetMatches = useMemo(() => {
     const q = sheetSearch.trim().toLowerCase();
     if (!q) return [];
-    return questionBlocks.filter(
-      (block) =>
-        block.kind === "question" &&
-        `${block.displayNumber} ${block.numberLabel} ${block.body} ${block.choices.map((choice) => choice.text).join(" ")}`
-          .toLowerCase()
-          .includes(q),
-    );
-  }, [questionBlocks, sheetSearch]);
+    if (entry.structuredQuestions?.length) {
+      return questionAnchors.filter((_block, index) => {
+        const question = resolvedSheetQuestions[index];
+        return `${question?.questionNumber ?? ""} ${question?.questionText ?? ""} ${question?.conditions.join(" ") ?? ""} ${question?.equations.join(" ") ?? ""} ${question?.choices.join(" ") ?? ""} ${question?.contentSegments?.filter((segment) => segment.type === "table").flatMap((segment) => segment.rows.flat()).join(" ") ?? ""}`.toLowerCase().includes(q);
+      });
+    }
+    return questionAnchors.filter((block) => `${block.numberLabel} ${block.body} ${block.choices.map((choice) => choice.text).join(" ")}`.toLowerCase().includes(q));
+  }, [entry.structuredQuestions?.length, questionAnchors, resolvedSheetQuestions, sheetSearch]);
   const relatedEntries = useMemo(
     () => (isConcept ? getRelatedEntries(entry, allEntries) : []),
     [allEntries, entry, isConcept],
@@ -484,7 +499,7 @@ export default function EntryDetail({
       );
       const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
       const nextQuestionIndex = questionAnchors.findIndex(
-        (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+        (block) => questionIdentifier(block) === normalizeQuestionNumber(nextQuestionNumber),
       );
       if (nextQuestionIndex >= 0) {
         setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
@@ -537,11 +552,11 @@ export default function EntryDetail({
       if (isSheet && currentSheetQuestion && onQuestionMetaChange) {
         await onQuestionMetaChange(entry, (current) => {
           const questionMeta = normalizeQuestionMeta(current).find(
-            (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(currentSheetQuestion.displayNumber),
+            (meta) => normalizeQuestionNumber(meta.questionNumber) === questionIdentifier(currentSheetQuestion),
           );
           return applyQuestionReviewResult(
             current,
-            currentSheetQuestion.displayNumber,
+            questionIdentifier(currentSheetQuestion) ?? String(currentSheetQuestion.displayNumber),
             result,
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
@@ -568,7 +583,7 @@ export default function EntryDetail({
         if (nextQueueIndex !== selectedReviewQueue.currentIndex) {
           const nextQuestionNumber = selectedReviewQueue.questionNumbers[nextQueueIndex];
           const nextQuestionIndex = questionAnchors.findIndex(
-            (block) => normalizeQuestionNumber(block.displayNumber) === normalizeQuestionNumber(nextQuestionNumber),
+            (block) => questionIdentifier(block) === normalizeQuestionNumber(nextQuestionNumber),
           );
           if (nextQuestionIndex >= 0) {
             setSelectedReviewQueue({ ...selectedReviewQueue, currentIndex: nextQueueIndex });
@@ -792,11 +807,15 @@ export default function EntryDetail({
     if (!isSheet || selectedQuestionNumbers.length === 0 || questionAnchors.length === 0) return;
     const selected = new Set(selectedQuestionNumbers.map(normalizeQuestionNumber));
     const ordered = questionAnchors
-      .filter((block) => selected.has(normalizeQuestionNumber(block.displayNumber)))
-      .map((block) => normalizeQuestionNumber(block.displayNumber));
+      .filter((block) => {
+        const id = questionIdentifier(block);
+        return id ? selected.has(id) : false;
+      })
+      .map((block) => questionIdentifier(block))
+      .filter((id): id is string => Boolean(id));
     if (!ordered.length) return;
     const firstIndex = questionAnchors.findIndex(
-      (block) => normalizeQuestionNumber(block.displayNumber) === ordered[0],
+      (block) => questionIdentifier(block) === ordered[0],
     );
     setSelectedReviewQueue({
       entryId: entry.id,
@@ -815,9 +834,7 @@ export default function EntryDetail({
     if (consumedInitialTargetRef.current === initialQuestionTarget.requestId) return;
     const normalized = normalizeQuestionNumber(initialQuestionTarget.questionNumber);
     const index = questionAnchors.findIndex(
-      (block) =>
-        normalizeQuestionNumber(block.displayNumber) === normalized ||
-        normalizeQuestionNumber(block.numberLabel) === normalized,
+      (block) => questionIdentifier(block) === normalized,
     );
     consumedInitialTargetRef.current = initialQuestionTarget.requestId;
     if (index >= 0) {
@@ -876,16 +893,18 @@ export default function EntryDetail({
     return questionAnchors.find(
       (block) =>
         block.kind === "question" &&
-        (normalizeQuestionNumber(block.numberLabel) === normalized ||
-          String(block.displayNumber) === normalized),
+        questionIdentifier(block) === normalized,
     );
   };
 
   const answerMatchesQuestion = (item: SheetAnswerItem, question: QuestionBlock) => {
     const normalized = normalizeQuestionNumber(item.questionNumber);
-    return (
-      normalized === String(question.displayNumber) ||
-      normalized === normalizeQuestionNumber(question.numberLabel)
+    if (normalized === questionIdentifier(question)) return true;
+    // Legacy OCR imports can retain a positional label alongside the printed
+    // number. Preserve both aliases until they have structured canonical data.
+    return !entry.structuredQuestions?.length && (
+      normalized === normalizeQuestionNumber(String(question.numberLabel ?? "")) ||
+      normalized === normalizeQuestionNumber(String(question.displayNumber ?? ""))
     );
   };
 
@@ -918,10 +937,7 @@ export default function EntryDetail({
     ? (entry.figures ?? [])
       .filter((figure) => {
         const normalized = normalizeQuestionNumber(figure.questionNumber);
-        return (
-          normalized === String(focusedQuestion.displayNumber) ||
-          normalized === normalizeQuestionNumber(focusedQuestion.numberLabel)
-        );
+        return normalized === questionIdentifier(focusedQuestion);
       })
       .flatMap((figure) => figure.image ? [figure.image] : [])
     : [];
@@ -1521,8 +1537,8 @@ export default function EntryDetail({
             이전
           </button>
           <strong>
-            문제 {focusedQuestion ? focusedQuestion.displayNumber : 0}
-            <span> / {questionAnchors.length}</span>
+            문제 {questionIdentifier(focusedQuestion) ?? 0}
+            <span>{focusedQuestionIndex + 1} / {questionAnchors.length}</span>
           </strong>
           <button
             type="button"
@@ -1656,7 +1672,7 @@ export default function EntryDetail({
                   {sheetTocOpen && <nav className="sheet-toc" aria-label="문제 번호 목차">
                     {questionAnchors.map((block, index) => (
                       <button key={block.start} type="button" onClick={() => { setFocusedQuestionIndex(index); scrollToQuestion(block.start); }}>
-                        {block.displayNumber}
+                        {questionIdentifier(block) ?? block.displayNumber}
                       </button>
                     ))}
                   </nav>}
@@ -2339,7 +2355,7 @@ export default function EntryDetail({
       {isFocusMini && (isSheet ? focusedQuestion : isWrongAnswer) && (
         <aside className="focus-mini-player" aria-label="축소된 문제 집중 보기">
           <button type="button" className="focus-mini-main" onClick={() => setFocusMode("expanded")}>
-            <strong>{isSheet && focusedQuestion ? `문제 ${focusedQuestion.displayNumber}` : entry.title || "오답 집중 보기"}</strong>
+            <strong>{isSheet && focusedQuestion ? `문제 ${questionIdentifier(focusedQuestion) ?? focusedQuestion.displayNumber}` : entry.title || "오답 집중 보기"}</strong>
             <span>{isSheet && focusedQuestion ? focusedQuestion.body.trim() || entry.title || "현재 문제" : entry.question.trim() || "현재 오답"}</span>
           </button>
           <div className="focus-mini-actions">

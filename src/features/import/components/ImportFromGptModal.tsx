@@ -362,6 +362,7 @@ export default function ImportFromGptModal({
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [reviewWorkspaceOpen, setReviewWorkspaceOpen] = useState(false);
+  const [activeReviewQuestionIndex, setActiveReviewQuestionIndex] = useState(0);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
@@ -431,6 +432,7 @@ export default function ImportFromGptModal({
     const nextDraft = draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null;
     const next = nextDraft ? withExpectedQuestionNumbers(nextDraft, expectedQuestionNumbers) : null;
     setDraft(next);
+    setActiveReviewQuestionIndex(0);
     setStructuredReviewError(null);
     setConfirmedValidationFingerprint(null);
   }, [draftOverride, expectedQuestionNumbers, parsed]);
@@ -480,7 +482,8 @@ export default function ImportFromGptModal({
   const figures = draft?.figures ?? [];
   const hasMemo = Boolean(draft?.memo?.trim());
   const questionBlocks = useMemo(() => parseQuestionText(question), [question]);
-  const questionCount = questionBlocks.filter((block) => block.kind === "question").length;
+  const questionCount = draft?.structuredQuestions?.length
+    ?? questionBlocks.filter((block) => block.kind === "question").length;
   const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft) : null), [draft]);
   const validationPolicy = useMemo(
     () =>
@@ -840,8 +843,11 @@ export default function ImportFromGptModal({
           filename,
         );
         preserveSupplementalImagesRef.current = true;
-      } else if (!isSolutionMode && assetFiles.length > 0) {
-        await onApply(nextData, undefined, assetFiles);
+      } else if (!isSolutionMode && onApplyEntries) {
+        // A reviewed problem sheet is already canonical import data. Sending it
+        // through EntryForm would create a second, competing edit surface.
+        await onApplyEntries([nextData], assetFiles);
+        onClose();
       } else {
         await onApply(nextData, isSolutionMode ? applyMode : undefined);
       }
@@ -960,6 +966,19 @@ export default function ImportFromGptModal({
                       <button type="button" className="btn-secondary btn-sm" onClick={() => zipAbortRef.current?.abort()}>취소</button>
                     </div>
                   )}
+                </section>
+              )}
+              {helpOpen && (
+                <section className="import-inline-help" aria-label="가져오기 도움말">
+                  <header><h3>가져오기 순서</h3><button type="button" className="btn-icon" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>
+                  <ol>
+                    <li>파일을 선택합니다.</li>
+                    <li>자동 검사 결과를 확인합니다.</li>
+                    <li>검토 필요 문항과 원본/정리 그림을 검수합니다.</li>
+                    <li><strong>차단</strong>은 수정하고, <strong>확인 필요</strong>는 확인한 뒤 저장합니다.</li>
+                    <li>저장 가능 상태에서 저장합니다.</li>
+                  </ol>
+                  <details><summary>기술 형식 안내</summary><p>JSON schema와 고급 import 옵션은 파일 형식 안내를 참고하세요.</p></details>
                 </section>
               )}
               {availablePromptTemplates.length > 0 && (
@@ -1371,6 +1390,17 @@ export default function ImportFromGptModal({
                     </div>
                   </div>
 
+                  {!isSolutionMode && !isSupplementalMode && (
+                    <details className="import-advanced-metadata">
+                      <summary>고급 정보</summary>
+                      <label htmlFor="import-memo-compact">시험지 전체 메모</label>
+                      <textarea id="import-memo-compact" value={draft.memo ?? ""} onChange={(event) => setDraft((current) => ({ ...current, memo: event.target.value }))} />
+                      <label htmlFor="import-tags-compact">태그</label>
+                      <input id="import-tags-compact" value={(draft.tags ?? []).join(", ")} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) }))} />
+                    </details>
+                  )}
+
+                  {(isSolutionMode || isSupplementalMode) && <>
                   {draft.structuredQuestions?.length ? (
                     <StructuredQuestionReviewEditor
                       id="import-question"
@@ -1613,6 +1643,7 @@ export default function ImportFromGptModal({
                       </div>
                     </div>
                   )}
+                  </>}
                 </>
               )}
             </section>
@@ -1635,16 +1666,6 @@ export default function ImportFromGptModal({
         {!canApply && applyBlockReason && (
           <p className="import-apply-reason" role="status">{applyBlockReason}</p>
         )}
-        <Dialog open={helpOpen} onClose={() => setHelpOpen(false)} className="import-help-dialog" backdropClassName="import-help-backdrop" ariaLabel="가져오기 도움말">
-              <header><h3 id="import-help-title">가져오기 도움말</h3><button type="button" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>
-              <ul>
-                <li>프롬프트를 복사해 GPT 결과를 JSON으로 받은 뒤 붙여넣습니다.</li>
-                <li>텍스트 파일, JSON, ZIP과 이미지 묶음도 가져올 수 있습니다.</li>
-                <li>AI 판독 감사와 needsReview는 저장 전에 직접 확인해야 하는 항목입니다.</li>
-                <li>손글씨 제외 여부와 원본/정리된 그림 연결 상태를 확인하세요.</li>
-                <li>저장 전 미리보기에서 문제·정답·해설이 섞이지 않았는지 검토하세요.</li>
-              </ul>
-        </Dialog>
       </Dialog>
       <ImportReviewWorkspace
         open={reviewWorkspaceOpen && Boolean(draft)}
@@ -1652,23 +1673,33 @@ export default function ImportFromGptModal({
         onClose={() => setReviewWorkspaceOpen(false)}
         summary={draft ? `${questionCount}문항 · 답안 ${answerKey.length}개 · 그림 ${figures.length}개` : undefined}
         status={hasBlockingValidationIssues ? "수정 필요" : hasConfirmableValidationIssues && !confirmedValidationErrors ? "확인 필요" : "저장 가능"}
-        questionNavigator={draft?.structuredQuestions?.length ? (
-          <div className="import-review-question-nav">
-            <strong>문항</strong>
-            <div>
-              {draft.structuredQuestions.map((questionItem, index) => (
-                <button
-                  key={`${questionItem.questionNumber}-${index}`}
-                  type="button"
-                  className={questionItem.needsReview ? "is-review" : ""}
-                  onClick={() => document.getElementById(`fullscreen-import-question-question-${index}`)?.scrollIntoView({ block: "start" })}
-                >
-                  {questionItem.questionNumber}
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : undefined}
+        structuredQuestions={draft?.structuredQuestions}
+        activeQuestionIndex={activeReviewQuestionIndex}
+        onActiveQuestionChange={setActiveReviewQuestionIndex}
+        renderQuestion={({ question: activeQuestion, index }) => (
+          <StructuredQuestionReviewEditor
+            id={`fullscreen-import-question-${index}`}
+            questions={[activeQuestion]}
+            disabled={quickSaving}
+            onChange={([updatedQuestion]) => {
+              if (!updatedQuestion) return;
+              setConfirmedValidationFingerprint(null);
+              setStructuredReviewError(null);
+              setDraft((current) => {
+                if (!current) return current;
+                const questions = (current.structuredQuestions ?? []).map((item, itemIndex) =>
+                  itemIndex === index ? updatedQuestion : item,
+                );
+                return {
+                  ...current,
+                  structuredQuestions: questions,
+                  question: renderStructuredQuestionsCompatibilityText(questions),
+                  questionContentSegments: Object.fromEntries(questions.map((questionItem) => [questionItem.questionNumber, questionItem.contentSegments])),
+                };
+              });
+            }}
+          />
+        )}
         sidebar={draft ? (
           <div className="import-review-sidebar-status">
             <span>차단 {validationPolicy.blocking.length}</span>
@@ -1692,23 +1723,7 @@ export default function ImportFromGptModal({
         )}
       >
         {error && <p className="form-save-error" role="alert">{error}</p>}
-        {draft?.structuredQuestions?.length ? (
-          <StructuredQuestionReviewEditor
-            id="fullscreen-import-question"
-            questions={draft.structuredQuestions}
-            disabled={quickSaving}
-            onChange={(questions) => {
-              setConfirmedValidationFingerprint(null);
-              setStructuredReviewError(null);
-              setDraft((current) => ({
-                ...current,
-                structuredQuestions: questions,
-                question: renderStructuredQuestionsCompatibilityText(questions),
-                questionContentSegments: Object.fromEntries(questions.map((questionItem) => [questionItem.questionNumber, questionItem.contentSegments])),
-              }));
-            }}
-          />
-        ) : draft ? (
+        {draft ? (
           <TextReviewSplitView id="fullscreen-import-question" label="본문" value={draft.question ?? ""} onChange={updateLegacyQuestionText} />
         ) : null}
         {answerKey.length > 0 && (
