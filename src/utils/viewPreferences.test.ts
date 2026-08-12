@@ -173,10 +173,51 @@ describe("resolveViewPreferences", () => {
 describe("sibling preference normalizers", () => {
   it("normalizes exam preferences with current UX defaults", () => {
     expect(normalizeExamPreferences(undefined)).toEqual(DEFAULT_EXAM_PREFERENCES);
+    expect(normalizeExamPreferences({})).toEqual({
+      ...DEFAULT_EXAM_PREFERENCES,
+      showTimer: true,
+      defaultRealExamMinutes: 50,
+      realExamAnswerSheetOpen: true,
+      warnBeforeEnd: true,
+      autoSubmitOnTimeExpired: false,
+    });
     expect(normalizeExamPreferences({ showTimer: true, autoAdvanceOnAnswer: true })).toEqual({
       ...DEFAULT_EXAM_PREFERENCES,
       showTimer: true,
       autoAdvanceOnAnswer: true,
+    });
+    expect(normalizeExamPreferences({
+      showTimer: false,
+      defaultRealExamMinutes: 80.4,
+      realExamAnswerSheetOpen: false,
+      warnBeforeEnd: false,
+      autoSubmitOnTimeExpired: true,
+    })).toEqual({
+      ...DEFAULT_EXAM_PREFERENCES,
+      showTimer: false,
+      defaultRealExamMinutes: 80,
+      realExamAnswerSheetOpen: false,
+      warnBeforeEnd: false,
+      autoSubmitOnTimeExpired: true,
+    });
+  });
+
+  it("fills real-exam defaults for legacy settings without changing explicit values", () => {
+    expect(normalizeExamPreferences({
+      showScratchNote: false,
+      showOriginalPages: false,
+      showNavigator: false,
+      autoAdvanceOnAnswer: true,
+      warnUnansweredOnSubmit: false,
+      showMcpHelp: false,
+    })).toEqual({
+      ...DEFAULT_EXAM_PREFERENCES,
+      showScratchNote: false,
+      showOriginalPages: false,
+      showNavigator: false,
+      autoAdvanceOnAnswer: true,
+      warnUnansweredOnSubmit: false,
+      showMcpHelp: false,
     });
   });
 
