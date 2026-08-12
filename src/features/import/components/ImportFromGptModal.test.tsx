@@ -649,7 +649,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText(/난이도가 모두 동일합니다/)).toBeInTheDocument();
   });
 
-  it("shows answer key preview and applies memo with answers", () => {
+  it("keeps the base problem-sheet import focused while preserving answer data", () => {
     const onApply = vi.fn();
     render(
       <ImportFromGptModal
@@ -682,14 +682,7 @@ describe("ImportFromGptModal", () => {
       },
     });
 
-    expect(screen.getByText("있음")).toBeInTheDocument();
     expect(screen.getByText("답안지 미리보기")).toBeInTheDocument();
-    expect(screen.getByText("③")).toBeInTheDocument();
-    expect(screen.getByLabelText("1 풀이 전략")).toHaveValue("조건을 식으로 바꾼다");
-    expect(screen.getByLabelText("1 보기별 판단")).toHaveValue("①: 조건 불일치");
-    fireEvent.change(screen.getByLabelText("1 풀이 단계"), {
-      target: { value: "조건 정리\n대입" },
-    });
 
     confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
@@ -702,7 +695,7 @@ describe("ImportFromGptModal", () => {
             questionNumber: "1",
             answer: "③",
             strategy: "조건을 식으로 바꾼다",
-            steps: ["조건 정리", "대입"],
+            steps: ["조건 정리"],
             choiceJudgements: [{ marker: "①", text: "조건 불일치" }],
             wrongPoint: "조건 누락",
             reviewPoint: "조건 표시",
@@ -793,7 +786,7 @@ describe("ImportFromGptModal", () => {
     );
   });
 
-  it("applies edited preview fields and edited answer key values", () => {
+  it("applies edited preview fields and edited answer key values for legacy flat import", () => {
     const onApply = vi.fn();
     render(
       <ImportFromGptModal
@@ -830,12 +823,8 @@ describe("ImportFromGptModal", () => {
     fireEvent.change(screen.getByLabelText("메모"), {
       target: { value: "수정 메모" },
     });
-    fireEvent.change(screen.getByLabelText("1 정답"), {
-      target: { value: "④" },
-    });
-    fireEvent.change(screen.getByLabelText("1 풀이"), {
-      target: { value: "수정 풀이" },
-    });
+    fireEvent.change(screen.getByLabelText("1 정답"), { target: { value: "④" } });
+    fireEvent.change(screen.getByLabelText("1 풀이"), { target: { value: "수정 풀이" } });
 
     confirmDangerousImportIfShown();
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
@@ -1135,6 +1124,8 @@ describe("ImportFromGptModal", () => {
       target: { files: [quickSaveFixtureFile()] },
     });
     const quickSave = await screen.findByRole("button", { name: "바로 저장" });
+    expect(screen.queryByText("답안지 미리보기")).not.toBeInTheDocument();
+    expect(screen.queryByText("도표/그림 미리보기")).not.toBeInTheDocument();
     await waitFor(() => expect(quickSave).not.toBeDisabled());
     fireEvent.click(quickSave);
     fireEvent.click(quickSave);

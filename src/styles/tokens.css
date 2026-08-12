@@ -3,4 +3,25 @@
   --font-content: "Malgun Gothic", "Noto Sans KR", "Segoe UI", sans-serif;
   --font-mono: "Cascadia Mono", Consolas, monospace;
   --font-math: KaTeX_Main, "Cambria Math", "Times New Roman", serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+  --control-height-compact: 32px;
+  --control-height: 38px;
+  --radius-control: 6px;
+  --radius-panel: 8px;
+  --radius-dialog: 12px;
+  --motion-fast: 120ms;
+  --motion-standard: 160ms;
+  --motion-slow: 220ms;
+  --shadow-popover: 0 8px 24px rgb(15 23 42 / 14%);
+  --shadow-dialog: 0 18px 48px rgb(15 23 42 / 18%);
+  --z-popover: 40;
+  --z-dialog: 80;
+  --z-toast: 100;
 }

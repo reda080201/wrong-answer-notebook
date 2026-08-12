@@ -1,38 +1,38 @@
-.real-exam-session { min-height: 100%; background: var(--color-surface, #f6f7f9); }
-.real-exam-header { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; gap: 16px; padding: 14px 20px; background: var(--color-surface-raised, #fff); border-bottom: 1px solid var(--color-border, #ddd); }
+.real-exam-session { min-height: 100%; background: var(--surface-soft); }
+.real-exam-header { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); background: var(--surface); border-bottom: 1px solid var(--border); }
 .real-exam-header h2, .real-exam-header p { margin: 0; }
 .real-exam-header-status { display: flex; align-items: center; gap: 12px; }
 .real-exam-header-status strong { font-variant-numeric: tabular-nums; }
 .real-exam-layout { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 16px; max-width: 1500px; margin: 0 auto; padding: 20px; align-items: start; }
 .real-exam-layout--sheet-collapsed { grid-template-columns: minmax(0, 1fr) 96px; }
 .real-exam-paper { min-width: 0; max-width: 980px; margin: 0 auto; width: 100%; }
-.real-exam-question { margin-bottom: 16px; padding: 24px; background: #fff; border: 1px solid var(--color-border, #ddd); break-inside: avoid; }
-.real-exam-question > header { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--color-border, #ddd); margin-bottom: 16px; }
+.real-exam-question { margin-bottom: var(--space-5); padding: var(--space-6); background: var(--paper-bg); border-bottom: 1px solid var(--paper-border); break-inside: avoid; }
+.real-exam-question > header { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); color: var(--text-muted); }
 .real-exam-question h3 { margin: 0 0 10px; }
 .real-exam-choices { display: grid; gap: 8px; margin-top: 16px; }
-.real-exam-choices button { display: flex; gap: 10px; align-items: baseline; text-align: left; padding: 10px 12px; background: transparent; border: 1px solid var(--color-border, #ddd); }
-.real-exam-choices button.is-selected, .real-exam-choices button[aria-pressed="true"] { border-color: var(--color-accent, #315efb); background: color-mix(in srgb, var(--color-accent, #315efb) 10%, white); }
+.real-exam-choices button { display: flex; gap: var(--space-2); align-items: baseline; text-align: left; padding: var(--space-2) var(--space-3); background: transparent; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.real-exam-choices button.is-selected, .real-exam-choices button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 .real-exam-review { display: inline-flex; gap: 6px; margin-top: 16px; }
-.real-exam-answer-sheet { position: sticky; top: 76px; min-width: 0; padding: 14px; background: #fff; border: 1px solid var(--color-border, #ddd); }
+.real-exam-answer-sheet { position: sticky; top: 76px; min-width: 0; padding: var(--space-3); background: var(--surface); border-left: 1px solid var(--border); }
 .real-exam-answer-sheet > header { display: flex; justify-content: space-between; align-items: center; }
 .real-exam-answer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.real-exam-answer-grid button { display: grid; gap: 2px; padding: 8px 4px; border: 1px solid var(--color-border, #ddd); background: #fff; }
-.real-exam-answer-grid button.is-answered { border-color: #4b7; }
-.real-exam-answer-grid button.is-marked { outline: 2px solid #c98b22; }
-.real-exam-answer-item { display: grid; gap: 6px; padding: 6px; border: 1px solid var(--color-border, #ddd); }
-.real-exam-answer-item.is-answered { border-color: #4b7; }
+.real-exam-answer-grid button { display: grid; gap: 2px; padding: var(--space-2) var(--space-1); border-bottom: 1px solid var(--border); background: transparent; }
+.real-exam-answer-grid button.is-answered { border-color: var(--success); }
+.real-exam-answer-grid button.is-marked { outline: 2px solid var(--warning); }
+.real-exam-answer-item { display: grid; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.real-exam-answer-item.is-answered { border-color: var(--success); }
 .real-exam-answer-jump { display: flex; align-items: center; justify-content: space-between; border: 0 !important; padding: 2px !important; }
 .real-exam-answer-sheet-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
 .real-exam-answer-sheet-choices button { padding: 4px 2px; }
-.real-exam-answer-sheet-choices button[aria-pressed="true"] { background: var(--color-accent, #315efb); color: white; }
+.real-exam-answer-sheet-choices button[aria-pressed="true"] { background: var(--accent); color: white; }
 .real-exam-answer-item input, .real-exam-answer-item textarea { min-width: 0; width: 100%; box-sizing: border-box; }
-.real-exam-passage { margin-bottom: 16px; padding: 16px; background: #f8f4e8; border-left: 4px solid var(--color-accent, #315efb); }
-.real-exam-results { max-width: 980px; margin: 0 auto 24px; padding: 20px; background: #fff; border: 1px solid var(--color-border, #ddd); }
+.real-exam-passage { margin-bottom: var(--space-4); padding: var(--space-4); background: var(--surface-soft); border-left: 3px solid var(--accent); }
+.real-exam-results { max-width: 980px; margin: 0 auto var(--space-6); padding: var(--space-5); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-result-cards { display: flex; flex-wrap: wrap; gap: 12px; }
 .real-exam-result-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 .real-exam-result-grid button { min-width: 52px; padding: 8px; }
-.real-exam-result-detail { margin-top: 16px; padding: 14px; border-top: 1px solid var(--color-border, #ddd); }
+.real-exam-result-detail { margin-top: var(--space-4); padding: var(--space-3) 0; border-top: 1px solid var(--border); }
 .real-exam-result-filters { display: flex; gap: 6px; margin-bottom: 12px; }
-.real-exam-expired, .real-exam-warning { padding: 10px 16px; color: #8a3b00; background: #fff1df; }
+.real-exam-expired, .real-exam-warning { padding: var(--space-2) var(--space-4); color: var(--warning); background: color-mix(in srgb, var(--warning) 12%, var(--surface)); }
 @media (max-width: 1100px) { .real-exam-layout { grid-template-columns: minmax(0, 1fr) 220px; padding: 12px; } .real-exam-question { padding: 18px; } }
 @media (max-width: 820px) { .real-exam-header { align-items: flex-start; flex-direction: column; } .real-exam-layout, .real-exam-layout--sheet-collapsed { grid-template-columns: minmax(0, 1fr); } .real-exam-answer-sheet { position: static; } }

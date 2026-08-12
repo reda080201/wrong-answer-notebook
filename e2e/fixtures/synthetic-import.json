@@ -1,0 +1,54 @@
+{
+  "schemaVersion": "wrong-answer-notebook-import-v2",
+  "importType": "problem_sheet",
+  "title": "E2E 가져오기 시험지",
+  "subject": "수학",
+  "entries": [
+    {
+      "entryKind": "problem_sheet",
+      "title": "E2E 가져오기 시험지",
+      "subject": "수학",
+      "questions": [
+        {
+          "questionNumber": "1",
+          "questionText": "가져온 첫 번째 문제입니다.",
+          "questionType": "multiple_choice",
+          "choices": ["① 1", "② 2"],
+          "conditions": [],
+          "equations": ["x = 1"],
+          "contentSegments": [
+            { "id": "import-text-1", "type": "text", "text": "가져온 첫 번째 문제입니다." },
+            { "id": "import-equation-1", "type": "equation", "latex": "x = 1", "display": true }
+          ],
+          "figureIds": [],
+          "points": 2
+        },
+        {
+          "questionNumber": "2",
+          "questionText": "가져온 두 번째 문제입니다.",
+          "questionType": "short_answer",
+          "choices": [],
+          "conditions": [],
+          "equations": [],
+          "contentSegments": [
+            { "id": "import-text-2", "type": "text", "text": "가져온 두 번째 문제입니다." }
+          ],
+          "figureIds": [],
+          "points": 1
+        }
+      ],
+      "answerKey": [
+        { "questionNumber": "1", "answer": "①", "explanation": "첫 번째 해설" },
+        { "questionNumber": "2", "answer": "2", "explanation": "두 번째 해설" }
+      ],
+      "audit": {
+        "expectedQuestionNumbers": ["1", "2"],
+        "detectedQuestionNumbers": ["1", "2"],
+        "missingQuestionNumbers": [],
+        "uncertainQuestionNumbers": [],
+        "handwritingExcluded": true,
+        "needsReviewCount": 0
+      }
+    }
+  ]
+}
