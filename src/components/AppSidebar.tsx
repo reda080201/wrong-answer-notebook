@@ -7,6 +7,19 @@ import { entryKindName } from "../utils/appUi";
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import { getImportantQuestionCount, getQuestionCount, getReviewNeedCount } from "../utils/questionMeta";
 import { resolveEntryDifficultyScore } from "../utils/difficulty";
+import {
+  Archive,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  GraduationCap,
+  Library,
+  Lightbulb,
+  MoreHorizontal,
+  NotebookPen,
+} from "lucide-react";
+import Menu from "../shared/ui/Menu";
 
 interface AppSidebarProps {
   activeSection: EntryKind;
@@ -39,13 +52,15 @@ interface AppSidebarProps {
   onOpenQuestionBank?: () => void;
   libraryOpen?: boolean;
   onOpenLibrary?: () => void;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
 }
 
 const sectionTabs = [
-  ["wrong_answer", "📕 오답노트"],
-  ["concept", "💡 개념노트"],
-  ["problem_sheet", "📄 시험지함"],
-  ["lecture", "🎓 특강자료"],
+  ["wrong_answer", "오답노트", NotebookPen],
+  ["concept", "개념노트", Lightbulb],
+  ["problem_sheet", "시험지함", FileText],
+  ["lecture", "특강자료", GraduationCap],
 ] as const;
 
 export default function AppSidebar({
@@ -73,6 +88,8 @@ export default function AppSidebar({
   onOpenQuestionBank,
   libraryOpen = false,
   onOpenLibrary,
+  collapsed = false,
+  onCollapsedChange,
 }: AppSidebarProps) {
   const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
   const sidebarStats =
@@ -107,19 +124,30 @@ export default function AppSidebar({
               ["어려움", stats.difficult],
             ];
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
       <div className="logo">
-        <div className="logo-icon">📓</div>
-        <h1>오답노트</h1>
+        <div className="logo-icon" aria-hidden="true"><BookOpen size={18} /></div>
+        {!collapsed && <h1>오답노트</h1>}
+        <button
+          type="button"
+          className="app-sidebar-collapse ui-icon-button"
+          aria-label={collapsed ? "앱 사이드바 펼치기" : "앱 사이드바 접기"}
+          title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
+          onClick={() => onCollapsedChange?.(!collapsed)}
+        >
+          {collapsed ? <ChevronRight size={17} /> : <ChevronLeft size={17} />}
+        </button>
       </div>
 
       <div className="section-tabs">
-        {sectionTabs.map(([key, label]) => (
+        {sectionTabs.map(([key, label, Icon]) => (
           <button
             key={key}
             type="button"
             className={`section-tab-btn ${activeSection === key ? "active" : ""}`}
             aria-current={activeSection === key ? "page" : undefined}
+            aria-label={label}
+            title={collapsed ? label : undefined}
             onClick={() => {
               if (onSectionSelect) {
                 onSectionSelect(key);
@@ -129,7 +157,8 @@ export default function AppSidebar({
               }
             }}
           >
-            {label}
+            <Icon size={18} aria-hidden="true" />
+            {!collapsed && <span>{label}</span>}
           </button>
         ))}
         {onOpenLearningHub && (
@@ -137,9 +166,12 @@ export default function AppSidebar({
             type="button"
             className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
             aria-current={learningHubOpen ? "page" : undefined}
+            aria-label="학습 허브"
+            title={collapsed ? "학습 허브" : undefined}
             onClick={onOpenLearningHub}
           >
-            학습 허브
+            <Library size={18} aria-hidden="true" />
+            {!collapsed && <span>학습 허브</span>}
           </button>
         )}
         {onOpenQuestionBank && (
@@ -147,9 +179,12 @@ export default function AppSidebar({
             type="button"
             className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
             aria-current={questionBankOpen ? "page" : undefined}
+            aria-label="문제 은행"
+            title={collapsed ? "문제 은행" : undefined}
             onClick={onOpenQuestionBank}
           >
-            문제 은행
+            <BookOpen size={18} aria-hidden="true" />
+            {!collapsed && <span>문제 은행</span>}
           </button>
         )}
         {onOpenLibrary && (
@@ -157,23 +192,26 @@ export default function AppSidebar({
             type="button"
             className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
             aria-current={libraryOpen ? "page" : undefined}
+            aria-label="보관함"
+            title={collapsed ? "보관함" : undefined}
             onClick={onOpenLibrary}
           >
-            보관함
+            <Archive size={18} aria-hidden="true" />
+            {!collapsed && <span>보관함</span>}
           </button>
         )}
       </div>
 
-      <div className="stats">
+      {!collapsed && <div className="stats">
         {sidebarStats.slice(0, 5).map(([label, value]) => (
           <div key={label} className="stat-card stat-card--compact">
             <div className="value">{value}</div>
             <div className="label">{label}</div>
           </div>
         ))}
-      </div>
+      </div>}
 
-      {activeSection === "wrong_answer" && <div className="learning-insights">
+      {!collapsed && activeSection === "wrong_answer" && <div className="learning-insights">
         <div className="learning-insight">
           <span>7일 복습</span>
           <strong>{learningStats.recentReviewCount}</strong>
@@ -192,7 +230,7 @@ export default function AppSidebar({
         </div>
       </div>}
 
-      <div className="filter-section">
+      {!collapsed && <div className="filter-section">
         <h3>과목</h3>
         <SubjectList
           subjectOrder={subjectOrder}
@@ -202,23 +240,18 @@ export default function AppSidebar({
           onSelect={onSubjectSelect}
           onReorder={moveSubject}
         />
-      </div>
+      </div>}
 
       <div className="sidebar-footer">
-        {activeSection === "problem_sheet" && onOpenExamBuilder && (
+        {!collapsed && activeSection === "problem_sheet" && onOpenExamBuilder && (
           <button type="button" className="btn-new" onClick={onOpenExamBuilder}>
             모의고사 만들기
           </button>
         )}
-        {activeSection === "problem_sheet" && onOpenGeneratedExams && (
-          <button type="button" className="btn-new btn-new--secondary" onClick={onOpenGeneratedExams}>
-            내 모의고사
-          </button>
-        )}
-        <button type="button" className="btn-new" onClick={openNew}>
+        {!collapsed && <button type="button" className="btn-new" onClick={openNew}>
           + 새 {entryKindName(activeSection)} 추가
-        </button>
-        {(activeSection === "problem_sheet" || activeSection === "concept") && (
+        </button>}
+        {!collapsed && (activeSection === "problem_sheet" || activeSection === "concept") && (
           <button
             type="button"
             className="btn-new btn-new--secondary"
@@ -227,7 +260,7 @@ export default function AppSidebar({
             GPT 결과 가져오기
           </button>
         )}
-        {activeSection === "lecture" && (
+        {!collapsed && activeSection === "lecture" && (
           <button
             type="button"
             className="btn-new btn-new--secondary"
@@ -235,6 +268,11 @@ export default function AppSidebar({
           >
             HTML/MD/JSON 가져오기
           </button>
+        )}
+        {!collapsed && activeSection === "problem_sheet" && onOpenGeneratedExams && (
+          <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="시험지함 더보기">
+            <button type="button" onClick={onOpenGeneratedExams}>내 모의고사</button>
+          </Menu>
         )}
       </div>
     </aside>

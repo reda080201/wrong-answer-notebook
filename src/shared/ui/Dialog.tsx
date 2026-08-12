@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import "../../styles/dialog-shell.css";
 
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
@@ -9,7 +10,9 @@ const FOCUSABLE_SELECTOR = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
 
-interface DialogProps {
+export type DialogSize = "sm" | "md" | "lg" | "xl" | "fullscreen";
+
+export interface DialogProps {
   open: boolean;
   onClose: () => void;
   children: ReactNode;
@@ -21,6 +24,10 @@ interface DialogProps {
   closeOnBackdrop?: boolean;
   closeDisabled?: boolean;
   busy?: boolean;
+  size?: DialogSize;
+  header?: ReactNode;
+  footer?: ReactNode;
+  bodyClassName?: string;
 }
 
 export default function Dialog({
@@ -35,6 +42,10 @@ export default function Dialog({
   closeOnBackdrop = true,
   closeDisabled = false,
   busy = false,
+  size,
+  header,
+  footer,
+  bodyClassName,
 }: DialogProps) {
   const generatedTitleId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
@@ -96,6 +107,9 @@ export default function Dialog({
 
   if (!open) return null;
 
+  const resolvedClassName = [className, size && `dialog-size-${size}`].filter(Boolean).join(" ");
+  const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
+
   return (
     <div
       className={backdropClassName}
@@ -106,7 +120,7 @@ export default function Dialog({
     >
       <div
         ref={dialogRef}
-        className={className}
+        className={resolvedClassName}
         role="dialog"
         aria-modal="true"
         aria-label={resolvedTitleId ? undefined : ariaLabel}
@@ -114,8 +128,9 @@ export default function Dialog({
         aria-busy={busy || undefined}
         tabIndex={-1}
       >
-        {title && <h2 id={resolvedTitleId}>{title}</h2>}
-        {children}
+        {(header || titleNode) && <header className="dialog-header">{titleNode}{header}</header>}
+        <div className={["dialog-body", bodyClassName].filter(Boolean).join(" ")}>{children}</div>
+        {footer && <footer className="dialog-footer">{footer}</footer>}
       </div>
     </div>
   );

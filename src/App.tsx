@@ -42,6 +42,7 @@ import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
+import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -104,6 +105,7 @@ function AppContent() {
   const { status: aiProviderStatus } = aiProvider;
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
+  const shell = useUiShellPreferences();
   const [showLearningHub, setShowLearningHub] = useState(false);
   const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
@@ -475,7 +477,7 @@ function AppContent() {
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
-    <div className="app">
+    <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
         activeSection={activeSection}
         entries={entries}
@@ -525,6 +527,8 @@ function AppContent() {
             }
           })();
         }}
+        collapsed={shell.appSidebarCollapsed}
+        onCollapsedChange={shell.setAppSidebarCollapsed}
       />
 
       <main className="main">
@@ -626,6 +630,10 @@ function AppContent() {
             onEditEntry={actions.openEditEntry}
             onDeleteEntry={(entryId) => void actions.deleteEntryById(entryId)}
             onLinkLearningEntry={actions.openLearningEntryLink}
+            collapsed={shell.entryPaneCollapsed}
+            width={shell.entryPaneWidth}
+            onCollapsedChange={shell.setEntryPaneCollapsed}
+            onWidthChange={shell.setEntryPaneWidth}
           />
 
           {examSession ? (
@@ -659,21 +667,7 @@ function AppContent() {
             />
           ) : selected ? (
             <>
-              {selected.entryKind === "problem_sheet" && !examSession && (() => {
-                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
-                return <>
-                  <button
-                    type="button"
-                    className="exam-start-button"
-                    onClick={() => openExamSession(selected, resumable)}
-                  >
-                    {resumable ? "모의고사 이어서 보기" : "모의고사 시작"}
-                  </button>
-                  {examStartError?.entryId === selected.id && (
-                    <p className="form-error" role="alert">{examStartError.message}</p>
-                  )}
-                </>;
-              })()}
+              {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
               {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && (
                 <section className="exam-session-history" aria-label="모의고사 결과 이력">
                   <header><strong>모의고사 결과 이력</strong><span>{selectedExamHistory.length}회</span></header>
@@ -690,6 +684,11 @@ function AppContent() {
               )}
               <EntryDetail
               entry={selected}
+              onStartExam={selected.entryKind === "problem_sheet" ? () => {
+                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
+                openExamSession(selected, resumable);
+              } : undefined}
+              startExamLabel={savedExamSessions.some((item) => item.entryId === selected.id && item.status === "in_progress") ? "이어서 풀기" : "문제 풀기"}
               onEdit={actions.openEdit}
               onQuickGptSolution={
                 selected.entryKind !== "concept"

@@ -49,7 +49,7 @@ function transactionResult(submitted: ExamSession, entries: WrongAnswerEntry[] =
   return { entries, sessions: [submitted], addedEntryIds: [] };
 }
 
-function successfulCommit(submitted: ExamSession, _forms: unknown[]): Promise<ExamSubmissionTransactionResult> {
+function successfulCommit(submitted: ExamSession): Promise<ExamSubmissionTransactionResult> {
   return Promise.resolve(transactionResult(submitted));
 }
 

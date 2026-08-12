@@ -5,6 +5,8 @@ dist-ssr
 .DS_Store
 src-tauri/target
 src-tauri/gen/
+/test-results/
+/playwright-report/
 app-icon.png
 *.log
 *.tsbuildinfo

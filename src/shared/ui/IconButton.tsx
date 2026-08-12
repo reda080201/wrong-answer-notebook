@@ -1,5 +1,21 @@
-import type { ButtonHTMLAttributes, PropsWithChildren } from "react";
+import type { ButtonHTMLAttributes, PropsWithChildren, ReactNode } from "react";
 
-export function IconButton({ children, className = "", "aria-label": ariaLabel, ...props }: PropsWithChildren<ButtonHTMLAttributes<HTMLButtonElement>>) {
-  return <button className={`ui-icon-button ${className}`.trim()} aria-label={ariaLabel} {...props}>{children}</button>;
+export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  children: ReactNode;
+  label: string;
+  size?: "default" | "compact";
+}
+
+export function IconButton({
+  children,
+  className = "",
+  label,
+  size = "default",
+  ...props
+}: PropsWithChildren<IconButtonProps>) {
+  const classes = ["ui-icon-button", `ui-icon-button--${size}`, className]
+    .filter(Boolean)
+    .join(" ");
+
+  return <button {...props} type={props.type ?? "button"} className={classes} aria-label={props["aria-label"] ?? label}>{children}</button>;
 }

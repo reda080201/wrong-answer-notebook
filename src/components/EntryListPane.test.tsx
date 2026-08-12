@@ -225,4 +225,52 @@ describe("EntryListPane", () => {
     expect(onAddSupplemental).toHaveBeenCalledWith("sheet", "answer_and_solution");
     expect(setSelectedId).not.toHaveBeenCalled();
   });
+
+  it("collapses independently and restores the pane", () => {
+    const onCollapsedChange = vi.fn();
+    const props = {
+      activeSection: "wrong_answer" as const,
+      loading: false,
+      entries: [entry("wrong", "wrong_answer", "오답")],
+      filtered: [entry("wrong", "wrong_answer", "오답")],
+      selectedId: "wrong",
+      setSelectedId: vi.fn(),
+      quickConceptSubject: "수학" as const,
+      onQuickConceptCreate: vi.fn(),
+      onCollapsedChange,
+    };
+    const { rerender } = render(<EntryListPane {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "항목 목록 접기" }));
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
+
+    rerender(<EntryListPane {...props} collapsed />);
+    fireEvent.click(screen.getByRole("button", { name: "항목 목록 펼치기" }));
+    expect(onCollapsedChange).toHaveBeenLastCalledWith(false);
+    expect(props.setSelectedId).not.toHaveBeenCalled();
+  });
+
+  it("adjusts the entry pane width from the keyboard", () => {
+    const onWidthChange = vi.fn();
+    render(
+      <EntryListPane
+        activeSection="wrong_answer"
+        loading={false}
+        entries={[]}
+        filtered={[]}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+        width={300}
+        onWidthChange={onWidthChange}
+      />,
+    );
+
+    const separator = screen.getByRole("separator", { name: "항목 목록 너비 조절" });
+    fireEvent.keyDown(separator, { key: "ArrowRight" });
+    fireEvent.keyDown(separator, { key: "ArrowLeft" });
+    expect(onWidthChange).toHaveBeenNthCalledWith(1, 316);
+    expect(onWidthChange).toHaveBeenNthCalledWith(2, 284);
+  });
 });

@@ -56,4 +56,25 @@ describe("Dialog", () => {
     expect(childClose).toHaveBeenCalledOnce();
     expect(parentClose).not.toHaveBeenCalled();
   });
+
+  it("supports size variants and header/body/footer slots", () => {
+    render(
+      <Dialog
+        open
+        onClose={vi.fn()}
+        title="슬롯 dialog"
+        size="xl"
+        header={<span>추가 헤더</span>}
+        footer={<button type="button">저장</button>}
+      >
+        <p>내용</p>
+      </Dialog>,
+    );
+
+    const dialog = screen.getByRole("dialog", { name: "슬롯 dialog" });
+    expect(dialog).toHaveClass("dialog-size-xl");
+    expect(screen.getByText("추가 헤더")).toBeInTheDocument();
+    expect(screen.getByText("내용")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
+  });
 });

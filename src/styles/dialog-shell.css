@@ -1,0 +1,120 @@
+.dialog-header,
+.dialog-footer {
+  flex: 0 0 auto;
+}
+
+.dialog-body {
+  min-width: 0;
+}
+
+.dialog-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dialog-size-sm { width: min(100%, 360px); }
+.dialog-size-md { width: min(100%, 520px); }
+.dialog-size-lg { width: min(100%, 720px); }
+.dialog-size-xl { width: min(100%, 960px); }
+
+.fullscreen-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  padding: 0;
+  background: var(--backdrop, rgba(0, 0, 0, 0.6));
+}
+
+.fullscreen-dialog-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: var(--surface, #fff);
+  color: var(--text, #111827);
+}
+
+.fullscreen-dialog-card > .dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 56px;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--border, #d1d5db);
+}
+
+.fullscreen-dialog-card > .dialog-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.fullscreen-dialog-card > .dialog-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 0;
+}
+
+.fullscreen-dialog-layout {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.fullscreen-dialog-sidebar {
+  flex: 0 0 min(280px, 28vw);
+  overflow: auto;
+  border-right: 1px solid var(--border, #d1d5db);
+}
+
+.fullscreen-dialog-content {
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 1.5rem;
+}
+
+.fullscreen-dialog-card > .dialog-footer {
+  flex: 0 0 auto;
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid var(--border, #d1d5db);
+}
+
+.fullscreen-dialog-close {
+  margin-left: auto;
+}
+
+.lecture-reader-fullscreen-content {
+  width: min(960px, 100%);
+  margin: 0 auto;
+}
+
+.lecture-reader-fullscreen-content .lecture-reader {
+  width: 100%;
+}
+
+@media (max-width: 640px) {
+  .fullscreen-dialog-content {
+    padding: 1rem;
+  }
+
+  .fullscreen-dialog-sidebar {
+    flex-basis: 220px;
+  }
+}

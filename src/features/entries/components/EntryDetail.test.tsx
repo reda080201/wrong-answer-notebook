@@ -67,6 +67,27 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("uses the compact problem-sheet action to call the existing exam callback", () => {
+    const onStartExam = vi.fn();
+    render(
+      <EntryDetail
+        entry={sheetEntry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onStartExam={onStartExam}
+        startExamLabel="이어서 풀기"
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "이어서 풀기" }));
+    expect(onStartExam).toHaveBeenCalledTimes(1);
+  });
+
   it("warns while a malformed structured payload is quarantined behind legacy text", () => {
     render(
       <EntryDetail
