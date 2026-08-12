@@ -305,27 +305,6 @@ pub(crate) fn save_images_from_dialog(app: tauri::AppHandle) -> Result<Vec<Strin
     Ok(saved_filenames)
 }
 
-/// Deprecated: Use save_image_from_dialog instead.
-/// This command accepts an arbitrary path and should not be used in new code.
-/// Kept for backward compatibility only.
-#[tauri::command]
-#[deprecated(since = "1.0.0", note = "Use save_image_from_dialog instead")]
-pub(crate) fn save_image(app: tauri::AppHandle, source_path: String) -> Result<String, String> {
-    let ext = Path::new(&source_path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .ok_or_else(|| "이미지 확장자를 확인할 수 없습니다.".to_string())?
-        .to_ascii_lowercase();
-    if !is_allowed_image_extension(&ext) {
-        return Err("지원하지 않는 이미지 형식입니다.".into());
-    }
-    validate_image_magic(Path::new(&source_path), &ext, MAX_IMPORT_IMAGE_BYTES)?;
-    let filename = format!("{}.{}", Uuid::new_v4(), ext);
-    let dest = image_path(&app, &filename)?;
-    fs::copy(&source_path, &dest).map_err(|e| e.to_string())?;
-    Ok(filename)
-}
-
 #[tauri::command]
 pub(crate) fn get_image_file_path(
     app: tauri::AppHandle,

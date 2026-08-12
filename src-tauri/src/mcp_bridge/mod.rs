@@ -842,6 +842,50 @@ fn image_resources_for_entry(
     let mut total = 0u64;
     Value::Array(names.into_iter().filter_map(|filename|{if namesafe_image(&state.images_path,&filename).ok()?{let size=fs::metadata(state.images_path.join(&filename)).ok()?.len();if total.checked_add(size)? > MAX_RESOURCE_BYTES{return None;}total+=size;Some(json!({"uri":resource_uri(&entry.id,&filename),"name":filename,"mimeType":mime_for(&filename).ok()?}))}else{None}}).take(MAX_RESOURCE_IMAGES).collect())
 }
+
+fn source_page_image_filenames(entry: &crate::WrongAnswerEntry) -> Vec<String> {
+    entry
+        .extra
+        .get("sourcePageImages")
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn active_export_context_allows_source_page(
+    state: &BridgeHttpState,
+    entry_id: &str,
+    filename: &str,
+) -> bool {
+    let Some(context) = load_active_export_context(state) else {
+        return false;
+    };
+    if context.get("entryId").and_then(Value::as_str) != Some(entry_id)
+        || !context
+            .get("shareOptions")
+            .and_then(|options| options.get("shareSourcePageImages"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false)
+    {
+        return false;
+    }
+    state
+        .store
+        .get_entry(entry_id)
+        .ok()
+        .flatten()
+        .is_some_and(|entry| {
+            source_page_image_filenames(&entry)
+                .iter()
+                .any(|item| item == filename)
+        })
+}
 fn active_question_payload(state: &BridgeHttpState, args: &Value) -> Result<Value, (i32, String)> {
     let context = state
         .active_context
@@ -1326,10 +1370,11 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
                         images,
                         exam_image_resources(state, sess, q, false, true),
                     );
-                } else if !entry.question_images.is_empty() {
+                } else {
+                    let source_pages = source_page_image_filenames(&entry);
                     images = merge_image_resources(
                         images,
-                        export_image_entries(state, &entry.id, &entry.question_images),
+                        export_image_entries(state, &entry.id, &source_pages),
                     );
                 }
             }
@@ -1443,6 +1488,7 @@ fn resource_read(state: &BridgeHttpState, args: &Value) -> Result<(Value, usize)
         .map_err(store_error)?
         .ok_or((-32004, "항목을 찾지 못했습니다.".to_owned()))?;
     let listed = entry.question_images.iter().any(|item| item == filename)
+        || active_export_context_allows_source_page(state, entry_id, filename)
         || entry
             .figures
             .iter()
@@ -1601,14 +1647,73 @@ mod tests {
             created_at: "1".into(),
             updated_at: "2".into(),
             mastered: false,
-            extra: serde_json::Map::from_iter([(
-                String::from("questionMeta"),
-                json!([{ "questionNumber":"1","review":{"phase":"learning"}}]),
-            )]),
+            extra: serde_json::Map::from_iter([
+                (
+                    String::from("questionMeta"),
+                    json!([{ "questionNumber":"1","review":{"phase":"learning"}}]),
+                ),
+                (String::from("sourcePageImages"), json!(["page1.png"])),
+            ]),
         }
     }
     fn png() -> Vec<u8> {
         vec![0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]
+    }
+
+    #[test]
+    fn export_context_source_page_sharing_does_not_substitute_question_images() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        fs::write(images.join("q1.png"), png()).unwrap();
+        fs::write(images.join("page1.png"), png()).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        store.save_entries(&[sample_entry()]).unwrap();
+        fs::write(
+            dir.path().join("active-export-context.json"),
+            serde_json::to_vec(&json!({
+                "entryId": "sheet-1",
+                "questionNumbers": ["1"],
+                "shareOptions": {
+                    "shareQuestionImages": false,
+                    "shareSourcePageImages": true
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+
+        let payload = export_context_payload(&state, &json!({ "includeImages": true })).unwrap();
+        let names = payload["questions"][0]["images"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|image| image.get("name").and_then(Value::as_str))
+            .collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["page1.png"]);
+        assert!(resource_read(
+            &state,
+            &json!({ "uri": resource_uri("sheet-1", "page1.png") }),
+        )
+        .is_ok());
+
+        fs::write(
+            dir.path().join("active-export-context.json"),
+            serde_json::to_vec(&json!({
+                "entryId": "sheet-1",
+                "questionNumbers": ["1"],
+                "shareOptions": { "shareSourcePageImages": false }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        assert!(resource_read(
+            &state,
+            &json!({ "uri": resource_uri("sheet-1", "page1.png") }),
+        )
+        .is_err());
     }
     async fn start_test_server() -> (tempfile::TempDir, McpBridgeManager, u16) {
         let dir = tempdir().unwrap();

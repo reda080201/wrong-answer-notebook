@@ -12,8 +12,9 @@ describe("flushPendingAppWrites", () => {
       flushSettings: async () => { order.push("settings"); },
       flushImportWorkspaceDraft: async () => { order.push("workspace"); },
       flushLibraryFolders: async () => { order.push("library"); },
+      flushGptSolutionDrafts: async () => { order.push("gpt-drafts"); },
     });
-    expect(order.sort()).toEqual(["entries", "generated", "library", "settings", "workspace"]);
+    expect(order.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "settings", "workspace"]);
   });
 
   it("stops close when the active exam cannot be flushed", async () => {

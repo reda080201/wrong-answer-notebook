@@ -9,6 +9,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
   builtInPromptTemplates,
+  applyBrowserBackupAtomically,
+  createBackupAtDestination,
+  defaultSettings,
   generateImportWithAi,
   getAiProviderStatus,
   loadExamSessions,
@@ -24,7 +27,10 @@ import {
   saveImageFiles,
 } from "./api";
 import { EXAM_SESSIONS_STORAGE_KEY } from "./features/exam/storage/examSessionStorage";
-import type { ExamSession } from "./types";
+import { GENERATED_EXAMS_STORAGE_KEY } from "./features/exam-builder/storage/generatedExamStorage";
+import { LIBRARY_FOLDERS_STORAGE_KEY } from "./services/api/libraryFolders";
+import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "./features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
+import type { ExamSession, WrongAnswerEntry } from "./types";
 import { IMPORT_LIMITS } from "./features/import/services/importLimits";
 
 const mockedInvoke = vi.mocked(invoke);
@@ -193,6 +199,166 @@ describe("browser ai provider fallback", () => {
       available: false,
     }));
     await expect(generateImportWithAi("prompt", "", [])).rejects.toThrow("데스크톱 앱");
+  });
+});
+
+describe("browser backup restore transaction", () => {
+  const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+    localStorage.clear();
+  });
+
+  it("replaces entries, settings, and images as one browser snapshot", () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [{ id: "old-entry" }] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ theme: "dark" }));
+    localStorage.setItem("img_old.png", "old-image");
+
+    applyBrowserBackupAtomically({
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: { "img_new.png": "new-image" },
+    });
+
+    expect(JSON.parse(localStorage.getItem("wrong-answer-entries") ?? "{}")).toEqual({ schemaVersion: 2, entries: [] });
+    expect(localStorage.getItem("img_old.png")).toBeNull();
+    expect(localStorage.getItem("img_new.png")).toBe("new-image");
+  });
+
+  it("rolls back every managed key when restoring an image exceeds storage capacity", () => {
+    const originalSetItem = Storage.prototype.setItem;
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [{ id: "old-entry" }] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ theme: "dark" }));
+    localStorage.setItem("img_old.png", "old-image");
+    const before = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
+    let failImageWrite = true;
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(function setItem(this: Storage, key: string, value: string) {
+      if (key === "img_new.png" && failImageWrite) {
+        failImageWrite = false;
+        throw new DOMException("quota", "QuotaExceededError");
+      }
+      return originalSetItem.call(this, key, value);
+    });
+
+    expect(() => applyBrowserBackupAtomically({
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: { "img_new.png": "new-image" },
+    })).toThrow("브라우저 백업을 복원하지 못했습니다");
+
+    expect(Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]))).toEqual(before);
+  });
+
+  it("reads the persisted browser snapshot after queues have flushed instead of stale caller props", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem("wrong-answer-settings", JSON.stringify({ mcpBridge: { enabled: true, port: 45000 } }));
+    let captured: Blob | null = null;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn((blob: Blob) => {
+        captured = blob;
+        return "blob:backup";
+      }),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await createBackupAtDestination(null, [{ id: "stale" } as WrongAnswerEntry], defaultSettings);
+
+    expect(captured).not.toBeNull();
+    const payload = JSON.parse(await captured!.text());
+    expect(payload.entries).toEqual([]);
+    expect(payload.settings.mcpBridge.port).toBe(45000);
+    expect(payload.meta).toEqual(expect.objectContaining({ version: 2, source: "browser" }));
+    expect(payload).toEqual(expect.objectContaining({
+      examSessions: [],
+      generatedExams: [],
+      libraryFolders: [],
+      gptSolutionDrafts: [],
+      importWorkspaceDraft: null,
+    }));
+  });
+
+  it("restores every browser persistent store atomically with a v2 payload", () => {
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "old-session" }]));
+    localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, JSON.stringify([{ id: "old-exam" }]));
+    localStorage.setItem(LIBRARY_FOLDERS_STORAGE_KEY, JSON.stringify([{ id: "old-folder" }]));
+    localStorage.setItem(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY, JSON.stringify([{ id: "old-draft" }]));
+    localStorage.setItem(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, JSON.stringify({ id: "old-workspace" }));
+
+    const result = applyBrowserBackupAtomically({
+      meta: { version: 2, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: {},
+      examSessions: [],
+      generatedExams: [],
+      libraryFolders: [],
+      gptSolutionDrafts: [],
+      importWorkspaceDraft: null,
+    });
+
+    expect(result).toEqual({ restored: true, warnings: [] });
+    expect(localStorage.getItem(EXAM_SESSIONS_STORAGE_KEY)).toBe("[]");
+    expect(localStorage.getItem(GENERATED_EXAMS_STORAGE_KEY)).toBe("[]");
+    expect(localStorage.getItem(LIBRARY_FOLDERS_STORAGE_KEY)).toBe("[]");
+    expect(localStorage.getItem(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY)).toBe("[]");
+    expect(localStorage.getItem(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY)).toBeNull();
+  });
+
+  it("keeps newer browser stores when applying a valid legacy v1 backup and reports a warning", () => {
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "keep-session" }]));
+    localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, JSON.stringify([{ id: "keep-exam" }]));
+
+    const result = applyBrowserBackupAtomically({
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: {},
+    });
+
+    expect(result.warnings).toHaveLength(1);
+    expect(localStorage.getItem(EXAM_SESSIONS_STORAGE_KEY)).toContain("keep-session");
+    expect(localStorage.getItem(GENERATED_EXAMS_STORAGE_KEY)).toContain("keep-exam");
+  });
+
+  it("strictly rejects invalid v2 metadata and store shapes before changing storage", () => {
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "keep" }]));
+    const before = Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]));
+
+    expect(() => applyBrowserBackupAtomically({
+      meta: { version: 2, createdAt: "not-a-date", source: "browser" },
+      entries: [],
+      settings: defaultSettings,
+      browserImages: {},
+      examSessions: {} as never,
+      generatedExams: [],
+      libraryFolders: [],
+      gptSolutionDrafts: [],
+      importWorkspaceDraft: null,
+    })).toThrow("브라우저 백업 형식이 올바르지 않습니다");
+
+    expect(Object.fromEntries(Object.keys(localStorage).map((key) => [key, localStorage.getItem(key)]))).toEqual(before);
+  });
+
+  it("rejects backups from an unsupported browser backup source or version", () => {
+    const basePayload = {
+      entries: [],
+      settings: defaultSettings,
+      browserImages: {},
+    };
+
+    expect(() => applyBrowserBackupAtomically({
+      ...basePayload,
+      meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "tauri" as never },
+    })).toThrow("브라우저 백업 형식이 올바르지 않습니다");
+    expect(() => applyBrowserBackupAtomically({
+      ...basePayload,
+      meta: { version: 3 as never, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+    })).toThrow("브라우저 백업 형식이 올바르지 않습니다");
   });
 });
 

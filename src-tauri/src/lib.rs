@@ -354,7 +354,6 @@ fn get_mcp_bridge_status(
 
 #[tauri::command]
 async fn set_mcp_bridge_enabled(
-    app: tauri::AppHandle,
     bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
     enabled: bool,
     port: Option<u16>,
@@ -363,18 +362,10 @@ async fn set_mcp_bridge_enabled(
     if requested_port < 1024 {
         return Err("MCP 포트는 1024 이상이어야 합니다.".into());
     }
-    let status = bridge.set_enabled(enabled, requested_port).await?;
-    let mut settings: serde_json::Value =
-        serde_json::from_str(&load_settings_raw(&app)?).unwrap_or_else(|_| serde_json::json!({}));
-    let root = settings
-        .as_object_mut()
-        .ok_or_else(|| "설정 형식이 올바르지 않습니다.".to_string())?;
-    root.insert(
-        "mcpBridge".into(),
-        serde_json::json!({ "enabled": enabled, "port": requested_port }),
-    );
-    write_json_atomic(&settings_file(&app)?, &settings)?;
-    Ok(status)
+    // Settings persistence stays in the settings queue on the frontend. This
+    // command owns only the live bridge so a runtime change cannot race a
+    // separate full-settings write with an older snapshot.
+    bridge.set_enabled(enabled, requested_port).await
 }
 
 #[tauri::command]
@@ -859,7 +850,6 @@ pub fn run() {
             import_assets::cleanup_stale_import_asset_sessions,
             images::save_image_from_dialog,
             images::save_images_from_dialog,
-            images::save_image,
             images::get_image_file_path,
             images::delete_image,
             backup::create_backup_zip,

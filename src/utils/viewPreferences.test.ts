@@ -53,11 +53,18 @@ describe("normalizeViewPreferences", () => {
       showOriginalPages: false,
       showLearningVisuals: false,
       compactToolbar: true,
+      problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
     });
+  });
+
+  it("uses questions by default and preserves the exam problem-sheet display mode", () => {
+    expect(normalizeViewPreferences({}).problemSheetDisplayMode).toBe("questions");
+    expect(normalizeViewPreferences({ problemSheetDisplayMode: "exam" }).problemSheetDisplayMode).toBe("exam");
+    expect(normalizeViewPreferences({ problemSheetDisplayMode: "cards" }).problemSheetDisplayMode).toBe("questions");
   });
 });
 
@@ -101,6 +108,7 @@ describe("migrateViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: true,
+      problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -117,6 +125,7 @@ describe("migrateViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -144,6 +153,7 @@ describe("resolveViewPreferences", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -279,6 +289,7 @@ describe("normalizeSettings integration", () => {
       showOriginalPages: true,
       showLearningVisuals: true,
       compactToolbar: false,
+      problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -42,7 +42,7 @@ import type { GptSolutionPurpose } from "../../../features/export/components/Cha
 import GptSolutionRoundtripModal from "../../../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
 import type { GptSolutionRoundtripDraft } from "../../../features/gpt-solution-roundtrip/model";
 import { validateGptSolutionResponse } from "../../../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
-import { loadGptSolutionRoundtripDrafts, saveGptSolutionRoundtripDrafts } from "../../../api";
+import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSolutionRoundtripDrafts";
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
 import Dialog from "../../../shared/ui/Dialog";
 import { writeUiStorageValue } from "../../../services/uiStorage";
@@ -118,6 +118,7 @@ interface EntryDetailProps {
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
   onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
+  gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
 type SheetLayout = "single" | "columns";
@@ -228,6 +229,7 @@ export default function EntryDetail({
   questionBankItems = [],
   onSimilarQuestionLinksChange,
   onApplyGptSolutionRoundtrip,
+  gptSolutionDraftStore,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
@@ -237,7 +239,11 @@ export default function EntryDetail({
   const [sheetSearch, setSheetSearch] = useState("");
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
   const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
+  const [problemSheetDisplayMode, setProblemSheetDisplayMode] = useState<ProblemSheetDisplayMode>(
+    viewPreferences?.problemSheetDisplayMode ?? "questions",
+  );
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
+  const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
@@ -254,11 +260,6 @@ export default function EntryDetail({
     questionNumbers: string[];
     payload: ChatGptSharePayload;
   } | null>(null);
-  const solutionDraftsRef = useRef<GptSolutionRoundtripDraft[]>([]);
-
-  useEffect(() => {
-    void loadGptSolutionRoundtripDrafts().then((drafts) => { solutionDraftsRef.current = drafts; }).catch(() => undefined);
-  }, []);
   const [viewHelpOpen, setViewHelpOpen] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedQuestionNumbers, setSelectedQuestionNumbers] = useState<string[]>([]);
@@ -283,6 +284,7 @@ export default function EntryDetail({
     if (key === "fontSize") setFocusTextSize(value as FocusTextSize);
     if (key === "hideAnswers") setHideAnswers(Boolean(value));
     if (key === "compactToolbar") setStudyControlCompact(Boolean(value));
+    if (key === "problemSheetDisplayMode") setProblemSheetDisplayMode(value as ProblemSheetDisplayMode);
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
 
@@ -292,6 +294,7 @@ export default function EntryDetail({
     setFocusTextSize(viewPreferences.fontSize);
     setHideAnswers(viewPreferences.hideAnswers);
     setStudyControlCompact(viewPreferences.compactToolbar);
+    setProblemSheetDisplayMode(viewPreferences.problemSheetDisplayMode);
   }, [viewPreferences]);
 
   const filledParts = entry.explanationParts
@@ -415,6 +418,9 @@ export default function EntryDetail({
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
+    setSelectionMode(false);
+    setSelectedQuestionNumbers([]);
+    setRevealedAnswerNumbers(new Set());
     setTitleEditing(false);
     setTitleDraft(entry.title);
   }, [entry.id, entry.title]);
@@ -712,6 +718,27 @@ export default function EntryDetail({
         : [...current, normalized],
     );
   };
+
+  const toggleQuestionAnswerReveal = useCallback((questionNumber: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    setRevealedAnswerNumbers((current) => {
+      const next = new Set(current);
+      if (next.has(normalized)) next.delete(normalized);
+      else next.add(normalized);
+      return next;
+    });
+  }, []);
+
+  const openSolutionForQuestion = useCallback((questionNumber: string) => {
+    const normalized = normalizeQuestionNumber(questionNumber);
+    setDetailViewMode("solution");
+    window.setTimeout(() => {
+      document.getElementById(`solution-question-${normalized}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }, []);
 
   const markSelectedImportant = async () => {
     if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
@@ -1288,6 +1315,26 @@ export default function EntryDetail({
               })}
             </nav>
           )}
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+            <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
+              <button
+                type="button"
+                className={problemSheetDisplayMode === "questions" ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "questions"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}
+              >
+                문항별
+              </button>
+              <button
+                type="button"
+                className={problemSheetDisplayMode === "exam" ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "exam"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}
+              >
+                시험지
+              </button>
+            </div>
+          )}
         </div>
         <div className="detail-actions">
           <div className="detail-actions-primary">
@@ -1661,6 +1708,10 @@ export default function EntryDetail({
                     selectionMode={selectionMode}
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
+                    displayMode={isSheet ? problemSheetDisplayMode : "questions"}
+                    revealedAnswerNumbers={revealedAnswerNumbers}
+                    onToggleAnswerReveal={toggleQuestionAnswerReveal}
+                    onOpenQuestionSolution={openSolutionForQuestion}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
@@ -2136,16 +2187,14 @@ export default function EntryDetail({
           initialView={exportHubView}
           initialScope={exportHubScope}
           onToast={(message) => pushToast(message, "success")}
-          onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip ? async (input) => {
+          onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip && gptSolutionDraftStore?.ready ? async (input) => {
             const now = new Date().toISOString();
             const draft: GptSolutionRoundtripDraft = {
               id: uuidv4(), entryId: entry.id, entryUpdatedAt: entry.updatedAt, purpose: input.purpose,
               requestedQuestionNumbers: input.questionNumbers, questionSnapshot: input.payload,
               status: "shared", createdAt: now, updatedAt: now,
             };
-            const next = [...solutionDraftsRef.current.filter((item) => item.id !== draft.id), draft];
-            await saveGptSolutionRoundtripDrafts(next);
-            solutionDraftsRef.current = next;
+            await gptSolutionDraftStore.upsertDraft(draft);
             setSolutionRoundtrip({ ...input, draftId: draft.id });
             setShowExportHub(false);
           } : undefined}
@@ -2160,7 +2209,7 @@ export default function EntryDetail({
           payload={solutionRoundtrip.payload}
           onClose={() => setSolutionRoundtrip(null)}
           onApply={(patch) => {
-            const draft = solutionDraftsRef.current.find((item) => item.id === solutionRoundtrip.draftId);
+            const draft = gptSolutionDraftStore?.getDraft(solutionRoundtrip.draftId);
             if (!draft || draft.entryUpdatedAt !== entry.updatedAt) {
               return Promise.reject(new Error("검토 시작 뒤 문제지가 수정되었습니다. 최신 내용으로 다시 요청해 주세요."));
             }
@@ -2173,16 +2222,17 @@ export default function EntryDetail({
               requestedQuestionNumbers: solutionRoundtrip.questionNumbers,
             });
             if (!validation.valid || !validation.response) throw new Error(validation.errors.join(" "));
-            const next = solutionDraftsRef.current.map((draft) => draft.id === solutionRoundtrip.draftId
-              ? { ...draft, importedResponse: validation.response, status: "reviewing" as const, updatedAt: new Date().toISOString() }
-              : draft);
-            await saveGptSolutionRoundtripDrafts(next);
-            solutionDraftsRef.current = next;
+            if (!gptSolutionDraftStore) throw new Error("GPT 해설 초안 저장소를 사용할 수 없습니다.");
+            await gptSolutionDraftStore.updateDraft(solutionRoundtrip.draftId, (draft) => ({
+              ...draft,
+              importedResponse: validation.response,
+              status: "reviewing" as const,
+              updatedAt: new Date().toISOString(),
+            }));
           }}
           onApplied={async () => {
-            const next = solutionDraftsRef.current.filter((draft) => draft.id !== solutionRoundtrip.draftId);
-            await saveGptSolutionRoundtripDrafts(next);
-            solutionDraftsRef.current = next;
+            if (!gptSolutionDraftStore) throw new Error("GPT 해설 초안 저장소를 사용할 수 없습니다.");
+            await gptSolutionDraftStore.removeDraft(solutionRoundtrip.draftId);
           }}
         />
       ) : null}

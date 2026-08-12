@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   cleanupOrphanImages,
+  applyBrowserBackupAtomically,
   createBackupAtDestination,
   deleteImage,
   previewOrphanImages,
@@ -79,7 +80,6 @@ interface UseAppActionsOptions {
     form: EntryFormData,
     removedImages: string[],
   ) => Promise<void>;
-  replaceEntries: (entries: WrongAnswerEntry[]) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   patchEntry: (
     id: string,
@@ -98,10 +98,13 @@ interface UseAppActionsOptions {
   removePromptTemplate: (templateId: string) => Promise<void>;
   upsertMemoTemplate: (template: MemoTemplate) => Promise<void>;
   removeMemoTemplate: (templateId: string) => Promise<void>;
-  setSettings: (settings: AppSettings) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<void>;
+  refreshExamSessions?: () => Promise<boolean>;
+  discardActiveSessionAfterRestore?: () => void;
   refreshGeneratedExams?: () => Promise<void>;
+  refreshLibraryFolders?: () => Promise<void>;
+  refreshGptSolutionDrafts?: () => Promise<void>;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -117,7 +120,6 @@ export function useAppActions({
   addEntries,
   addEntriesWithImportAssetSession,
   updateEntry,
-  replaceEntries,
   deleteEntry,
   patchEntry,
   patchEntryWithImportAssetSession,
@@ -128,10 +130,13 @@ export function useAppActions({
   removePromptTemplate,
   upsertMemoTemplate,
   removeMemoTemplate,
-  setSettings,
   patchSettings,
   refreshSettings,
+  refreshExamSessions,
+  discardActiveSessionAfterRestore,
   refreshGeneratedExams,
+  refreshLibraryFolders,
+  refreshGptSolutionDrafts,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -555,19 +560,29 @@ export function useAppActions({
     const source = await selectBackupSource();
     if (!source) return;
     const operation = (async () => {
-      const readBackup = () => restoreBackupFromSource(source);
-      const payload = runMaintenanceOperation
-        ? await runMaintenanceOperation(readBackup)
-        : await readBackup();
-      if (payload && "entries" in payload) {
-        await replaceEntries(payload.entries);
-        await setSettings(payload.settings);
-        for (const [key, value] of Object.entries(payload.browserImages ?? {})) {
-          localStorage.setItem(key, value);
+      const restore = async () => {
+        const payload = await restoreBackupFromSource(source);
+        let restoreResult = payload;
+        if (payload && "entries" in payload) {
+          restoreResult = applyBrowserBackupAtomically(payload);
         }
-      } else {
-        await Promise.all([refresh(), refreshSettings(), refreshGeneratedExams?.()]);
-      }
+        discardActiveSessionAfterRestore?.();
+        const [, , examSessionsReloaded] = await Promise.all([
+          refresh(),
+          refreshSettings(),
+          refreshExamSessions?.(),
+          refreshGeneratedExams?.(),
+          refreshLibraryFolders?.(),
+          refreshGptSolutionDrafts?.(),
+        ]);
+        if (examSessionsReloaded === false) {
+          throw new Error("백업은 복원됐지만 시험 세션을 다시 불러오지 못했습니다. 시험 기록을 다시 불러온 뒤 계속해 주세요.");
+        }
+        return restoreResult;
+      };
+      const payload = runMaintenanceOperation
+        ? await runMaintenanceOperation(restore)
+        : await restore();
       setSettingsMessage(payload && "restored" in payload && payload.warnings.length
         ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
         : "백업 복원을 완료했습니다.");

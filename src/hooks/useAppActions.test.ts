@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useAppActions } from "./useAppActions";
+import * as api from "../api";
 import type {
   WrongAnswerEntry,
   AppSettings,
@@ -16,6 +17,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("../api", () => ({
   cleanupOrphanImages: vi.fn(),
+  applyBrowserBackupAtomically: vi.fn(),
   createBackupAtDestination: vi.fn(async () => "Backup created"),
   deleteImage: vi.fn(),
   previewOrphanImages: vi.fn(),
@@ -152,6 +154,7 @@ const createMockSettings = (overrides?: Partial<AppSettings>): AppSettings => ({
     showOriginalPages: true,
     showLearningVisuals: true,
     compactToolbar: false,
+    problemSheetDisplayMode: "questions",
   },
   examPreferences: {
     showScratchNote: true,
@@ -270,7 +273,6 @@ describe("useAppActions", () => {
         addEntries: vi.fn(async () => ["entry-1"]),
         addEntriesWithImportAssetSession: vi.fn(async () => ["id"]),
         updateEntry: vi.fn(async () => {}),
-        replaceEntries: vi.fn(async () => {}),
         deleteEntry: vi.fn(async () => {}),
         patchEntry: vi.fn(async () => {}),
         patchEntryWithImportAssetSession: vi.fn(async () => {}),
@@ -281,7 +283,6 @@ describe("useAppActions", () => {
         removePromptTemplate: vi.fn(async () => {}),
         upsertMemoTemplate: vi.fn(async () => {}),
         removeMemoTemplate: vi.fn(async () => {}),
-        setSettings: vi.fn(async () => {}),
         patchSettings: vi.fn(async () => {}),
         refreshSettings: vi.fn(async () => {}),
         setActiveSection: vi.fn(),
@@ -512,6 +513,43 @@ describe("useAppActions", () => {
           expect((error as Error).message).toContain("진행 중");
         }
       });
+    });
+
+    it("reloads exam sessions after a browser backup restore", async () => {
+      const refreshExamSessions = vi.fn(async () => true);
+      const discardActiveSessionAfterRestore = vi.fn();
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
+      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      const { result } = createHook({ refreshExamSessions, discardActiveSessionAfterRestore });
+
+      await act(async () => {
+        await result.current.handleRestore();
+      });
+
+      expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+      expect(discardActiveSessionAfterRestore).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not report a restore as complete when exam sessions cannot reload", async () => {
+      const refreshExamSessions = vi.fn(async () => false);
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
+      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      const { result } = createHook({ refreshExamSessions });
+
+      await expect(result.current.handleRestore()).rejects.toThrow("시험 세션을 다시 불러오지 못했습니다");
+      expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+    });
+
+    it("keeps the active session when storage restoration fails", async () => {
+      const discardActiveSessionAfterRestore = vi.fn();
+      vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
+      vi.mocked(api.restoreBackupFromSource).mockRejectedValue(new Error("restore failed"));
+      const { result } = createHook({ discardActiveSessionAfterRestore });
+
+      await expect(result.current.handleRestore()).rejects.toThrow("restore failed");
+      expect(discardActiveSessionAfterRestore).not.toHaveBeenCalled();
     });
   });
 

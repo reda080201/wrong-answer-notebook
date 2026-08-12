@@ -177,6 +177,110 @@
   font-weight: 900;
 }
 
+.study-paper--exam .study-paper-sheet {
+  max-width: 860px;
+  border-color: #d9d6cc;
+  border-radius: 2px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.1);
+}
+
+.study-paper--exam .study-paper-cover {
+  margin-bottom: 32px;
+  border-bottom: 2px solid #1f2937;
+}
+
+.study-paper--exam .question-text-block--question {
+  position: relative;
+  padding: 0 0 28px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  break-inside: auto;
+}
+
+.study-paper--exam .question-number {
+  margin-bottom: 14px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #111827;
+}
+
+.study-paper--exam .question-number-main::before {
+  content: attr(data-number) ".";
+  font-size: 1.08rem;
+}
+
+.study-paper--exam .question-body {
+  padding: 0 38px 0 0;
+  font-size: 1rem;
+  line-height: 1.88;
+}
+
+.study-paper--exam .question-choices {
+  display: block;
+  margin: 16px 38px 0 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.study-paper--exam .question-choice {
+  padding: 3px 0;
+}
+
+.exam-question-answer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+}
+
+.exam-answer-trigger {
+  min-width: 32px;
+  height: 28px;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.exam-answer-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.exam-answer-popover {
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  padding: 8px 10px;
+  border: 1px solid #94a3b8;
+  border-radius: 4px;
+  background: #fff;
+  color: #0f172a;
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.16);
+  font-size: 0.84rem;
+}
+
+.exam-answer-solution-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-align: left;
+  text-decoration: underline;
+}
+
 .study-paper .sheet-figure-list,
 .study-paper-figures,
 .study-paper-diagrams {

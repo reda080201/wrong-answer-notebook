@@ -94,4 +94,29 @@ describe("QuestionBankView", () => {
     expect(onPreferencesChange.mock.calls[1][0].savedPresets[0].name).toBe("함수 모음");
     vi.useRealTimers();
   });
+
+  it("flushes an accepted preference before maintenance and blocks new persisted changes", async () => {
+    vi.useFakeTimers();
+    const onPreferencesChange = vi.fn().mockResolvedValue(undefined);
+    let registration: { flush: () => Promise<void>; setMaintenanceBlocked?: (blocked: boolean) => void } | null = null;
+    render(<QuestionBankView
+      entries={[entry]}
+      onOpenQuestion={vi.fn()}
+      onPreferencesChange={onPreferencesChange}
+      onRegisterPreferenceFlush={(next) => { if (next) registration = next; }}
+    />);
+
+    fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
+    await act(async () => { await registration!.flush(); });
+    expect(onPreferencesChange).toHaveBeenCalledTimes(1);
+
+    act(() => registration?.setMaintenanceBlocked?.(true));
+    expect(screen.getByLabelText("정렬")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "현재 필터 저장" })).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("문제 은행 검색"), { target: { value: "함수" } });
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(onPreferencesChange).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("status")).toHaveTextContent("백업 또는 복원 중");
+    vi.useRealTimers();
+  });
 });

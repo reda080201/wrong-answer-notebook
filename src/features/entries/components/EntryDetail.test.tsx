@@ -50,6 +50,51 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("switches to the exam presentation and reveals only the requested answer", () => {
+    const entry: WrongAnswerEntry = {
+      ...sheetEntry,
+      question: "1. 첫 문제\n① 답\n2. 둘째 문제\n① 답",
+      answerKey: [
+        { id: "answer-1", questionNumber: "1", answer: "①", explanation: "첫 해설", importantPoints: [] },
+      ],
+    };
+    const preferences = {
+      sheetLayout: "single" as const,
+      fontSize: "normal" as const,
+      hideAnswers: false,
+      showDifficulty: true,
+      showOriginalPages: true,
+      showLearningVisuals: true,
+      compactToolbar: false,
+      problemSheetDisplayMode: "questions" as const,
+    };
+    render(
+      <EntryDetail
+        entry={entry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        viewPreferences={preferences}
+        onViewPreferencesChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "시험지" }));
+    expect(document.querySelector(".study-paper--exam")).toBeTruthy();
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "1번 정답 보기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("①");
+    expect(screen.getByRole("button", { name: "2번 정답 보기" })).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "1번 정답 숨기기" }));
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
   it("persists the selected two-column sheet layout", () => {
     render(
       <EntryDetail
@@ -1202,6 +1247,7 @@ describe("EntryDetail view settings integration", () => {
           showOriginalPages: true,
           showLearningVisuals: true,
           compactToolbar: false,
+          problemSheetDisplayMode: "questions",
         }}
         onViewPreferencesChange={onViewPreferencesChange}
       />,

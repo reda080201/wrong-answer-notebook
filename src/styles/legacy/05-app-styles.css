@@ -763,6 +763,33 @@
   background: var(--paper-label-bg);
   color: var(--paper-label-text);
 }
+
+.problem-sheet-display-mode {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--control-border);
+  border-radius: 6px;
+}
+
+.problem-sheet-display-mode button {
+  min-width: 58px;
+  padding: 0.38rem 0.65rem;
+  border: 0;
+  border-right: 1px solid var(--control-border);
+  background: var(--control-bg);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.problem-sheet-display-mode button:last-child {
+  border-right: 0;
+}
+
+.problem-sheet-display-mode button.active {
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 800;
+}
 .study-paper,
 .solution-book,
 .study-analysis {

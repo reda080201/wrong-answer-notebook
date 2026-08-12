@@ -186,6 +186,18 @@ export function useExamSessionController({
     return true;
   }, [flush, submitting]);
 
+  const discardActiveSessionAfterRestore = useCallback(() => {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    sessionRef.current = null;
+    setSession(null);
+    setActiveGeneratedExam(null);
+    setSubmitting(false);
+    setSaveError(null);
+  }, []);
+
   const open = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
     setStartError(null);
     if (!loadedRef.current) {
@@ -310,6 +322,7 @@ export function useExamSessionController({
     open,
     openGenerated,
     close,
+    discardActiveSessionAfterRestore,
     flush,
     submit,
   };
