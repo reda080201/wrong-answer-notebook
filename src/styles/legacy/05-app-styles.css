@@ -33,6 +33,7 @@
 .exam-dialog-backdrop { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 1rem; background: rgba(0,0,0,.45); }.exam-dialog { width: min(100%, 560px); max-height: min(80vh, 680px); overflow: auto; padding: 1.25rem; background: var(--panel-bg); color: var(--text); border: 1px solid var(--border); }.exam-dialog header, .exam-dialog footer { display: flex; justify-content: space-between; gap: .75rem; }
 
 @media (max-width: 1399px) { .import-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) { .exam-choice-list { grid-template-columns: 1fr; }.exam-result-grid { grid-template-columns: repeat(6, minmax(2.25rem, 1fr)); }.exam-question-navigation { justify-content: space-between; } }
 @media (max-width: 680px) { .exam-session-header, .exam-question-navigation { flex-wrap: wrap; }.exam-header-actions { width: 100%; }.exam-question-navigation { justify-content: space-between; }.import-modal { width: 100vw; height: 100vh; } }
 
 .import-textarea {
