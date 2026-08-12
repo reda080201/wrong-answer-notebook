@@ -1,3 +1,4 @@
+import { hasAmbiguousLegacySourceText } from "../model/importWorkspace";
 import type { ImportWorkspace, ImportWorkspaceWarning } from "../model/importWorkspace";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 export function validateImportWorkspace(workspace: ImportWorkspace): ImportWorkspaceWarning[] {
@@ -16,6 +17,7 @@ export function validateImportWorkspace(workspace: ImportWorkspace): ImportWorks
       if (sourceNumbers.has(sourceNumber)) warnings.push({ id: `duplicate-source-${group.id}-${sourceNumber}`, severity: "warning", message: `원본 문항 번호가 중복되었습니다: ${question.sourceQuestionNumber ?? question.displayQuestionNumber}`, questionId: question.id, groupId: group.id });
       sourceNumbers.add(sourceNumber);
       if (question.groupId !== group.id) warnings.push({ id: `group-${question.id}`, severity: "error", message: "문항이 존재하지 않거나 다른 group을 참조합니다.", questionId: question.id, groupId: group.id });
+      if (hasAmbiguousLegacySourceText(question)) warnings.push({ id: `legacy-source-text-${question.id}`, severity: "error", message: "기존 본문이 여러 text segment와 일치하지 않아 자동 병합할 수 없습니다. 문항별 본문을 다시 검토해 주세요.", questionId: question.id, groupId: group.id });
       for (const segment of question.contentSegments) if (!segment.id.trim()) warnings.push({ id: `segment-${question.id}`, severity: "error", message: "문항 segment ID가 비어 있습니다.", questionId: question.id, groupId: group.id });
       if (question.answer && normalizeQuestionNumber(question.answer.questionNumber ?? "") !== displayNumber && normalizeQuestionNumber(question.answer.questionNumber ?? "") !== sourceNumber) warnings.push({ id: `answer-number-${question.id}`, severity: "error", message: "정답 문항 번호가 문항과 일치하지 않습니다.", questionId: question.id, groupId: group.id });
       if (question.figures.some((figure) => normalizeQuestionNumber(figure.questionNumber ?? "") && normalizeQuestionNumber(figure.questionNumber ?? "") !== displayNumber && normalizeQuestionNumber(figure.questionNumber ?? "") !== sourceNumber)) warnings.push({ id: `figure-number-${question.id}`, severity: "error", message: "도형 문항 번호가 문항과 일치하지 않습니다.", questionId: question.id, groupId: group.id });

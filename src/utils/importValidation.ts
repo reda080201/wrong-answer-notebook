@@ -1,6 +1,5 @@
 import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
-import { getEntryQuestions } from "./entryQuestions";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionNumber } from "./questionMeta";
 
@@ -32,7 +31,11 @@ export function classifyImportValidationIssues(report: ImportValidationReport): 
   const other: ImportValidationIssue[] = [];
 
   for (const issue of report.issues) {
-    if (issue.id.startsWith("audit-missing-question-")) {
+    if (
+      issue.id.startsWith("audit-missing-question-") ||
+      issue.id.startsWith("structured-question-") ||
+      (issue.id.startsWith("duplicate-question-") && issue.severity === "error")
+    ) {
       blocking.push(issue);
     } else if (
       issue.id === "audit-handwriting-not-excluded" ||
@@ -100,6 +103,48 @@ function hasRejectedNoteLeak(note: string, fields: string[]): boolean {
   return false;
 }
 
+function structuredQuestionFields(questions: EntryFormData["structuredQuestions"]): string[] {
+  return (questions ?? []).flatMap((question) => {
+    if (!question || typeof question !== "object" || Array.isArray(question)) return [];
+    const contentSegments = Array.isArray(question.contentSegments) ? question.contentSegments : [];
+    return [
+      question.questionNumber,
+      question.section ?? "",
+      question.questionType ?? "",
+      question.questionText,
+      ...(Array.isArray(question.conditions) ? question.conditions : []),
+      ...(Array.isArray(question.equations) ? question.equations : []),
+      ...(Array.isArray(question.choices) ? question.choices : []),
+      question.warning ?? "",
+      ...(question.source ? [question.source.title ?? "", question.source.reference ?? ""] : []),
+      ...(Array.isArray(question.figureIds) ? question.figureIds : []),
+      ...contentSegments.flatMap((segment) => {
+      if (segment.type === "text" || segment.type === "condition") return [segment.text, segment.type === "condition" ? segment.label ?? "" : ""];
+      if (segment.type === "equation") return [segment.latex];
+      if (segment.type === "table") return segment.rows.flat();
+      return [segment.figureId];
+      }),
+    ];
+  });
+}
+
+function malformedStructuredQuestionIssues(raw: unknown): ImportValidationIssue[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item, index) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      return [{ id: `structured-question-${index}-malformed`, severity: "error", message: `structuredQuestions[${index}] 항목이 객체가 아닙니다.` } satisfies ImportValidationIssue];
+    }
+    const value = item as Record<string, unknown>;
+    if (!normalizeQuestionNumber(`${value.questionNumber ?? ""}`)) {
+      return [{ id: `structured-question-${index}-malformed`, severity: "error", message: `structuredQuestions[${index}]의 문제 번호가 올바르지 않습니다.` } satisfies ImportValidationIssue];
+    }
+    if (typeof value.questionText !== "string" || !value.questionText.trim()) {
+      return [{ id: `structured-question-${index}-malformed`, severity: "error", message: `structuredQuestions[${index}]의 문제 본문이 비어 있습니다.` } satisfies ImportValidationIssue];
+    }
+    return [];
+  });
+}
+
 function hasDiagramForQuestion(data: Partial<EntryFormData>, questionNumber: string): boolean {
   const normalized = normalizeQuestionNumber(questionNumber);
   if (!normalized) return false;
@@ -122,15 +167,14 @@ export function getQuestionNumbers(question: string): string[] {
 
 export function validateImportedStudyData(data: Partial<EntryFormData>): ImportValidationReport {
   const questionBlocks = parseQuestionText(data.question ?? "").filter((block) => block.kind === "question");
-  const resolvedQuestions = getEntryQuestions({
-    question: data.question ?? "",
-    structuredQuestions: data.structuredQuestions,
-    questionContentSegments: data.questionContentSegments,
-  });
-  const questionNumbers = data.structuredQuestions?.length
-    ? resolvedQuestions.map((block) => normalizeQuestionNumber(block.questionNumber))
+  const hasStructuredQuestions = Array.isArray(data.structuredQuestions) && data.structuredQuestions.length > 0;
+  const structuredQuestionIssues = malformedStructuredQuestionIssues(data.structuredQuestions);
+  const structuredQuestionEntries = (Array.isArray(data.structuredQuestions) ? data.structuredQuestions : [])
+    .filter((item): item is NonNullable<EntryFormData["structuredQuestions"]>[number] => Boolean(item && typeof item === "object" && !Array.isArray(item)));
+  const questionNumbers = hasStructuredQuestions
+    ? structuredQuestionEntries.map((item) => normalizeQuestionNumber(item.questionNumber)).filter(Boolean)
     : questionBlocks.map((block) => normalizeQuestionNumber(block.displayNumber));
-  const connectableQuestionNumbers = data.structuredQuestions?.length
+  const connectableQuestionNumbers = hasStructuredQuestions
     ? questionNumbers
     : questionBlocks.flatMap((block) => [normalizeQuestionNumber(block.displayNumber), normalizeQuestionNumber(block.numberLabel)]);
   const answerNumbers = (data.answerKey ?? [])
@@ -143,6 +187,7 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     ? normalizeImportAudit(data.importAudit, data)
     : undefined;
   const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
+  issues.push(...structuredQuestionIssues);
 
   for (const number of audit?.missingQuestionNumbers ?? []) {
     issues.push({
@@ -174,6 +219,7 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     const learningFields = [
       data.question ?? "",
       data.memo ?? "",
+      ...structuredQuestionFields(data.structuredQuestions),
       ...(data.answerKey ?? []).flatMap((item) => [
         item.answer,
         item.explanation,
@@ -227,7 +273,7 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   for (const number of duplicates(questionNumbers)) {
     issues.push({
       id: `duplicate-question-${number}`,
-      severity: "warning",
+      severity: hasStructuredQuestions ? "error" : "warning",
       message: `${number}번 문제가 본문에서 중복 감지되었습니다.`,
     });
   }
@@ -240,11 +286,13 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     });
   }
 
-  const missingQuestionEntries = data.structuredQuestions?.length
-    ? resolvedQuestions.map((block) => ({ displayNumber: block.questionNumber, sourceNumber: block.questionNumber }))
+  const missingQuestionEntries = hasStructuredQuestions
+    ? structuredQuestionEntries.map((item) => ({ displayNumber: normalizeQuestionNumber(item.questionNumber), sourceNumber: normalizeQuestionNumber(item.questionNumber) }))
     : questionBlocks.map((block) => ({ displayNumber: normalizeQuestionNumber(block.displayNumber), sourceNumber: normalizeQuestionNumber(block.numberLabel) }));
+  const reportedMissingAnswers = new Set<string>();
   for (const { displayNumber, sourceNumber } of missingQuestionEntries) {
-    if (!answerNumberSet.has(displayNumber) && !answerNumberSet.has(sourceNumber)) {
+    if (!reportedMissingAnswers.has(displayNumber) && !answerNumberSet.has(displayNumber) && !answerNumberSet.has(sourceNumber)) {
+      reportedMissingAnswers.add(displayNumber);
       issues.push({
         id: `missing-answer-${displayNumber}`,
         severity: "warning",

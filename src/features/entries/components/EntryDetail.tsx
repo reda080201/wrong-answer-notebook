@@ -1468,6 +1468,12 @@ export default function EntryDetail({
       </div>
       )}
 
+      {entry.structuredQuestionsRecovery && (
+        <p className="detail-data-warning" role="alert">
+          구조화된 문항 데이터 일부를 읽지 못해 기존 문제 본문으로 표시합니다. 수정 화면에서 내용을 확인해 주세요.
+        </p>
+      )}
+
       {memoMode && (
         <div className="memo-toolbar">
           <span className="memo-toolbar-label">도구</span>

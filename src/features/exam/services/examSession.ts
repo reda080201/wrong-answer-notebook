@@ -25,16 +25,26 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
       questionNumber: number,
       passage: stimulus?.text,
       stimulusGroupId: stimulus?.id,
+      section: block.section,
+      questionType: block.questionType,
       question: block.questionText,
-      choices: block.choices,
+      conditions: structuredClone(block.conditions),
+      equations: structuredClone(block.equations),
+      choices: structuredClone(block.choices),
       questionImages: [],
-      sourcePageImages: entry.sourcePageImages ?? [],
-      figures,
-      contentSegments: block.contentSegments ?? (legacyBlock ? resolveContentSegments(entry, normalizedNumber, legacyBlock, figures) : undefined),
+      sourcePageImages: structuredClone(entry.sourcePageImages ?? []),
+      figures: structuredClone(figures),
+      contentSegments: block.contentSegments
+        ? structuredClone(block.contentSegments)
+        : (legacyBlock ? resolveContentSegments(entry, normalizedNumber, legacyBlock, figures) : undefined),
+      needsReview: block.needsReview,
       correctAnswer: answer?.answer,
       explanation: answer?.explanation,
       points: block.points,
+      warning: block.warning,
       sourceWarning: block.warning,
+      figureIds: structuredClone(block.figureIds),
+      source: block.source ? structuredClone(block.source) : undefined,
     };
   });
   return {

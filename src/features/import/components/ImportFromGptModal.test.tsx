@@ -34,6 +34,20 @@ function quickSaveFixtureFile(): File {
   })], "import.json", { type: "application/json" });
 }
 
+function structuredFixtureFile(questions: unknown[]): File {
+  return new File([JSON.stringify({
+    schemaVersion: "wrong-answer-notebook-import-v2",
+    importType: "problem_sheet",
+    entries: [{
+      entryKind: "problem_sheet",
+      subject: "수학",
+      title: "구조화 검증",
+      questions,
+      audit: { expectedQuestionNumbers: ["1"], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 },
+    }],
+  })], "import.json", { type: "application/json" });
+}
+
 describe("ImportFromGptModal", () => {
   it("uses the matching label for every automatically inferred entry kind", () => {
     expect(entryKindAutoLabel("problem_sheet")).toBe("문제지로 자동 판정됨");
@@ -1074,6 +1088,33 @@ describe("ImportFromGptModal", () => {
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 
+  it("guards a pending quick save synchronously and allows retry after failure", async () => {
+    let rejectFirst: ((reason?: unknown) => void) | undefined;
+    const first = new Promise<void>((_resolve, reject) => { rejectFirst = reject; });
+    const onApplyEntries = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce(undefined);
+    const onClose = vi.fn();
+    render(
+      <ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} />,
+    );
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [quickSaveFixtureFile()] },
+    });
+    const quickSave = await screen.findByRole("button", { name: "바로 저장" });
+    await waitFor(() => expect(quickSave).not.toBeDisabled());
+    fireEvent.click(quickSave);
+    fireEvent.click(quickSave);
+    expect(onApplyEntries).toHaveBeenCalledTimes(1);
+    rejectFirst?.(new Error("저장 실패"));
+    expect(await screen.findByText("저장 실패")).toBeInTheDocument();
+    const retry = screen.getByRole("button", { name: "바로 저장" });
+    await waitFor(() => expect(retry).not.toBeDisabled());
+    fireEvent.click(retry);
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
   it("keeps the quick-save modal and structured draft open after a save failure", async () => {
     const onApplyEntries = vi.fn().mockRejectedValue(new Error("저장 실패"));
     const onClose = vi.fn();
@@ -1089,6 +1130,53 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByText("저장 실패")).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "바로 저장" })).toBeInTheDocument();
+  });
+
+  it("blocks duplicate canonical question numbers before quick save", async () => {
+    const onApplyEntries = vi.fn();
+    render(
+      <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={onApplyEntries} />,
+    );
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [structuredFixtureFile([
+        { questionNumber: "01", questionText: "첫 문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] },
+        { questionNumber: "1번", questionText: "중복 문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] },
+      ])] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("duplicates question number 1");
+    expect(onApplyEntries).not.toHaveBeenCalled();
+  });
+
+  it("shows malformed structured questions as an indexed import error", async () => {
+    const onApplyEntries = vi.fn();
+    render(
+      <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={onApplyEntries} />,
+    );
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [structuredFixtureFile([{}])] },
+    });
+    expect(await screen.findByRole("alert")).toHaveTextContent("structuredQuestions[0]");
+    expect(onApplyEntries).not.toHaveBeenCalled();
+  });
+
+  it("invalidates warning confirmation when the confirmable issue fingerprint changes", async () => {
+    render(
+      <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} />,
+    );
+    fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
+      target: { value: JSON.stringify({
+        question: "1. 문제",
+        rejectedNotes: ["학생 필기"],
+        audit: { expectedQuestionNumbers: ["1"], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: false, needsReviewCount: 0 },
+        figures: [{ questionNumber: "1", title: "그래프", caption: "확인 필요" }],
+      }) },
+    });
+    const confirmation = await screen.findByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/);
+    fireEvent.click(confirmation);
+    expect(confirmation).toBeChecked();
+    fireEvent.change(screen.getByLabelText("본문"), { target: { value: "1. 문제 학생 필기" } });
+    await waitFor(() => expect(confirmation).not.toBeChecked());
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
   });
 
   it("opens GPT MCP settings from the import modal", () => {
