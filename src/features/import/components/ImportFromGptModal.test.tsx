@@ -8,7 +8,7 @@ import { IMPORT_LIMITS } from "../services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
 
 vi.mock("../../../api", () => ({
-  getImageUrl: vi.fn(),
+  getImageUrl: vi.fn().mockResolvedValue("blob:fixture"),
   pickImages: vi.fn(),
   saveImageFiles: vi.fn().mockResolvedValue(["img_mock.png"]),
   deleteImage: vi.fn().mockResolvedValue(undefined),
@@ -17,6 +17,21 @@ vi.mock("../../../api", () => ({
 function confirmDangerousImportIfShown() {
   const checkbox = screen.queryByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/);
   if (checkbox) fireEvent.click(checkbox);
+}
+
+function quickSaveFixtureFile(): File {
+  return new File([JSON.stringify({
+    schemaVersion: "wrong-answer-notebook-import-v2",
+    importType: "problem_sheet",
+    entries: [{
+      entryKind: "problem_sheet",
+      subject: "수학",
+      title: "빠른 저장 시험지",
+      questions: [{ questionNumber: "1", questionText: "문제", choices: ["① 1"], conditions: [], equations: [], contentSegments: [], figureIds: [], points: 2 }],
+      answerKey: [{ questionNumber: "1", answer: "①", explanation: "해설" }],
+      audit: { expectedQuestionNumbers: ["1"], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 },
+    }],
+  })], "import.json", { type: "application/json" });
 }
 
 describe("ImportFromGptModal", () => {
@@ -95,8 +110,8 @@ describe("ImportFromGptModal", () => {
     fireEvent.change(screen.getByLabelText("GPT 답변 붙여넣기"), {
       target: { value: JSON.stringify({ answerKey: [{ questionNumber: "1", answer: "③" }] }) },
     });
-    await waitFor(() => expect(screen.getByRole("button", { name: "폼으로 보내기" })).not.toBeDisabled());
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "수정 후 저장" })).not.toBeDisabled());
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
     expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ answerKey: [expect.objectContaining({ questionNumber: "1", answer: "③" })], question: "" }), undefined, [], [], undefined);
   });
 
@@ -277,9 +292,9 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText(/2번 문제가 이미지에서 예상됐지만/)).toBeInTheDocument();
     expect(screen.getByText("적용 불가")).toBeInTheDocument();
     expect(screen.queryByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).not.toHaveBeenCalled();
   });
@@ -315,9 +330,9 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText("사용자 기준")).toBeInTheDocument();
     expect(screen.getByText("사용자 입력 기준 누락이 감지되었습니다.")).toBeInTheDocument();
     expect(screen.getByText(/2번 문제가 이미지에서 예상됐지만/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
 
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
     expect(onApply).not.toHaveBeenCalled();
   });
 
@@ -349,8 +364,8 @@ describe("ImportFromGptModal", () => {
     });
 
     expect(screen.getByText(/A-2 문제가 이미지에서 예상됐지만/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).not.toHaveBeenCalled();
   });
@@ -385,7 +400,7 @@ describe("ImportFromGptModal", () => {
 
     expect(screen.queryByText("사용자 기준")).not.toBeInTheDocument();
     expect(screen.queryByText(/2번 문제가 이미지에서 예상됐지만/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -424,10 +439,10 @@ describe("ImportFromGptModal", () => {
     });
 
     expect(screen.getByText("확인 후 적용 가능")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
 
     fireEvent.click(screen.getByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/));
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -474,7 +489,7 @@ describe("ImportFromGptModal", () => {
 
     expect(screen.getByText("설명 도표")).toBeInTheDocument();
     expect(screen.queryByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/)).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -526,10 +541,10 @@ describe("ImportFromGptModal", () => {
     expect(screen.getAllByText("이미지 나중에 연결").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "설명 도표로 유지" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "도표 항목 제외" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "도표 항목 제외" }));
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -557,7 +572,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.getByText("1개")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("JSON이 아닌 텍스트로 감지되었습니다");
 
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -663,7 +678,7 @@ describe("ImportFromGptModal", () => {
     });
 
     confirmDangerousImportIfShown();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -809,7 +824,7 @@ describe("ImportFromGptModal", () => {
     });
 
     confirmDangerousImportIfShown();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -849,7 +864,7 @@ describe("ImportFromGptModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "태그 전체 삭제" }));
     confirmDangerousImportIfShown();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -913,7 +928,7 @@ describe("ImportFromGptModal", () => {
 
     expect(await screen.findByDisplayValue("ZIP 시험지")).toBeInTheDocument();
     expect(saveImageFiles).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     await waitFor(() => expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({ entryKind: "problem_sheet", questionImages: ["q1.png"] }),
@@ -946,7 +961,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.queryByText(/순수 JSON 결과가 필요합니다/)).not.toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "개념 자료 JSON 변환" })).not.toBeInTheDocument();
     confirmDangerousImportIfShown();
-    fireEvent.click(screen.getByRole("button", { name: "폼으로 보내기" }));
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
     expect(onApply).toHaveBeenCalledWith(
       expect.objectContaining({
         entryKind: "problem_sheet",
@@ -1029,7 +1044,51 @@ describe("ImportFromGptModal", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: "폼으로 보내기" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+  });
+
+  it("quick-saves a validated structured draft once and closes only after success", async () => {
+    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    const onClose = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={onClose}
+        onApply={vi.fn()}
+        onApplyEntries={onApplyEntries}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [quickSaveFixtureFile()] },
+    });
+
+    const quickSave = await screen.findByRole("button", { name: "바로 저장" });
+    await waitFor(() => expect(quickSave).not.toBeDisabled());
+    fireEvent.click(quickSave);
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledTimes(1));
+    expect(onApplyEntries).toHaveBeenCalledWith(
+      [expect.objectContaining({ structuredQuestions: expect.any(Array) })],
+      [],
+    );
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps the quick-save modal and structured draft open after a save failure", async () => {
+    const onApplyEntries = vi.fn().mockRejectedValue(new Error("저장 실패"));
+    const onClose = vi.fn();
+    render(
+      <ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} />,
+    );
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [quickSaveFixtureFile()] },
+    });
+    const quickSave = await screen.findByRole("button", { name: "바로 저장" });
+    await waitFor(() => expect(quickSave).not.toBeDisabled());
+    fireEvent.click(quickSave);
+    expect(await screen.findByText("저장 실패")).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "바로 저장" })).toBeInTheDocument();
   });
 
   it("opens GPT MCP settings from the import modal", () => {

@@ -479,6 +479,7 @@ export function useAppActions({
         answerKey: imported.answerKey ?? [],
         figures: imported.figures ?? [],
         questionMeta: imported.questionMeta ?? [],
+        structuredQuestions: imported.structuredQuestions,
         sheetGroup: imported.sheetGroup,
         importAudit: imported.importAudit,
         rejectedNotes: imported.rejectedNotes ?? [],
