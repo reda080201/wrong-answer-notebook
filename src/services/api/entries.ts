@@ -10,6 +10,7 @@ import {
   parseStoredEntries,
   type StoredEntriesDocument,
 } from "./shared";
+import { reconcileBrowserExamSubmissionJournal } from "./examSubmission";
 
 export async function loadEntries(): Promise<WrongAnswerEntry[]> {
   try {
@@ -17,6 +18,7 @@ export async function loadEntries(): Promise<WrongAnswerEntry[]> {
     if (isTauri()) {
       data = await invoke<WrongAnswerEntry[]>("load_entries");
     } else {
+      reconcileBrowserExamSubmissionJournal();
       const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
       data = stored === null ? [] : parseStoredEntries(stored);
     }

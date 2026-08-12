@@ -3,12 +3,13 @@ import { v4 as uuidv4 } from "uuid";
 import {
   commitImportAssetSessionEntries,
   commitImportAssetSessionEntry,
+  commitExamSubmission as commitExamSubmissionTransaction,
   deleteImage,
   errorMessage,
   loadEntries,
   saveEntries,
 } from "../api";
-import type { EntryFormData, WrongAnswerEntry } from "../types";
+import type { EntryFormData, ExamSession, ExamSubmissionTransactionResult, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
@@ -181,6 +182,40 @@ export function useEntries() {
       }
     },
     [enqueueMutation],
+  );
+
+  const commitExamSubmission = useCallback(
+    async (submittedSession: ExamSession, forms: EntryFormData[]): Promise<ExamSubmissionTransactionResult> => {
+      if (maintenanceBlockedRef.current) {
+        throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+      }
+      if (reloadingRef.current || !loadedRef.current) {
+        throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
+      }
+      const now = new Date().toISOString();
+      const derivedEntries = forms.map((form) => ({
+        id: uuidv4(),
+        ...form,
+        createdAt: now,
+        updatedAt: now,
+      } satisfies WrongAnswerEntry));
+      try {
+        setError(null);
+        const task = enqueue(async () => {
+          const result = await commitExamSubmissionTransaction({ submittedSession, derivedEntries });
+          entriesRef.current = result.entries;
+          setEntries(result.entries);
+          return result;
+        });
+        lastOperationRef.current = task;
+        return await task;
+      } catch (err) {
+        const message = errorMessage(err, "시험 제출과 오답 항목 저장을 완료하지 못했습니다.");
+        setError(message);
+        throw new Error(message, { cause: err });
+      }
+    },
+    [enqueue],
   );
 
   const addEntriesWithImportAssetSession = useCallback(
@@ -393,6 +428,7 @@ export function useEntries() {
     clearError,
     addEntry,
     addEntries,
+    commitExamSubmission,
     addEntriesWithImportAssetSession,
     updateEntry,
     replaceEntries,

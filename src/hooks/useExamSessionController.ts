@@ -7,6 +7,7 @@ import type {
   ChatGptMcpPreferences,
   EntryFormData,
   ExamSession,
+  ExamSubmissionTransactionResult,
   GeneratedExam,
   WrongAnswerEntry,
 } from "../types";
@@ -30,12 +31,15 @@ interface UseExamSessionControllerOptions {
   /** Retained for call-site compatibility; MCP sync is now user initiated. */
   chatGptPreferences?: ChatGptMcpPreferences;
   existingEntries?: WrongAnswerEntry[];
-  addEntries: (data: EntryFormData[]) => Promise<string[]>;
+  commitExamSubmission: (
+    submittedSession: ExamSession,
+    data: EntryFormData[],
+  ) => Promise<ExamSubmissionTransactionResult>;
 }
 
 export function useExamSessionController({
   existingEntries = EMPTY_ENTRIES,
-  addEntries,
+  commitExamSubmission,
 }: UseExamSessionControllerOptions) {
   const [session, setSession] = useState<ExamSession | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -236,17 +240,22 @@ export function useExamSessionController({
         tags: [submitted.subject, "모의고사", "채점 오답"],
       });
     });
-    if (wrongForms.length) {
-      await addEntries(wrongForms);
-      wrongForms.forEach((form) => {
-        if (form.generatedFromExamSessionId && form.generatedFromQuestionNumber) {
-          generatedEntryKeysRef.current.add(`${form.generatedFromExamSessionId}:${normalizeExamQuestionNumber(form.generatedFromQuestionNumber)}`);
-        }
-      });
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
     }
-    if (!(await flush(submitted))) throw new Error("제출 결과를 저장하지 못했습니다.");
+    await saveQueueRef.current.drain();
+    const result = await saveQueueRef.current.enqueue(() => commitExamSubmission(submitted, wrongForms));
+    persistedSessionsRef.current = result.sessions;
+    savedSessionsRef.current = result.sessions;
+    setSavedSessions(result.sessions);
+    generatedEntryKeysRef.current = new Set(
+      result.entries
+        .filter((entry) => entry.generatedFromExamSessionId && entry.generatedFromQuestionNumber)
+        .map((entry) => `${entry.generatedFromExamSessionId}:${normalizeExamQuestionNumber(entry.generatedFromQuestionNumber)}`),
+    );
     setSession(submitted);
-  }, [addEntries, flush, loadError]);
+  }, [commitExamSubmission, loadError]);
 
   useEffect(() => {
     sessionRef.current = session;

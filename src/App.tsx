@@ -61,6 +61,7 @@ function AppContent() {
     refresh,
     addEntry,
     addEntries,
+    commitExamSubmission,
     addEntriesWithImportAssetSession,
     updateEntry,
     deleteEntry,
@@ -124,7 +125,7 @@ function AppContent() {
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
     existingEntries: entries,
-    addEntries,
+    commitExamSubmission,
   });
   const {
     session: examSession,

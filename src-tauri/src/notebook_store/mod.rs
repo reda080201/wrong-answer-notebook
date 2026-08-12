@@ -127,8 +127,7 @@ impl NotebookStore {
         }
     }
 
-    #[cfg(test)]
-    pub fn entries_path(&self) -> &Path {
+    pub(crate) fn entries_path(&self) -> &Path {
         &self.entries_path
     }
     pub fn images_path(&self) -> &Path {
@@ -375,7 +374,7 @@ impl NotebookStore {
         Ok(self.referenced_image_filenames()?.contains(filename))
     }
 
-    fn write_entries_locked(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
+    pub(crate) fn write_entries_locked(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
         if let Some(parent) = self.entries_path.parent() {
             fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }

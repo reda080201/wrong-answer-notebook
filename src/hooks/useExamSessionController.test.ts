@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { EntryFormData, ExamSession, WrongAnswerEntry } from "../types";
+import type { ExamSession, ExamSubmissionTransactionResult, WrongAnswerEntry } from "../types";
 
 const { loadExamSessions, saveExamSessions, syncMcpBridgeActiveExamContext } = vi.hoisted(() => ({
   loadExamSessions: vi.fn(),
@@ -45,6 +45,14 @@ const entry = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 } as unknown as WrongAnswerEntry;
 
+function transactionResult(submitted: ExamSession, entries: WrongAnswerEntry[] = []): ExamSubmissionTransactionResult {
+  return { entries, sessions: [submitted], addedEntryIds: [] };
+}
+
+function successfulCommit(submitted: ExamSession, _forms: unknown[]): Promise<ExamSubmissionTransactionResult> {
+  return Promise.resolve(transactionResult(submitted));
+}
+
 describe("useExamSessionController safety guards", () => {
   beforeEach(() => {
     loadExamSessions.mockReset();
@@ -57,7 +65,7 @@ describe("useExamSessionController safety guards", () => {
   it("blocks opening an exam until session loading succeeds", async () => {
     let resolveLoad!: (sessions: ExamSession[]) => void;
     loadExamSessions.mockReturnValueOnce(new Promise<ExamSession[]>((resolve) => { resolveLoad = resolve; }));
-    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, commitExamSubmission: successfulCommit }));
 
     act(() => result.current.open(entry));
     expect(result.current.session).toBeNull();
@@ -73,7 +81,7 @@ describe("useExamSessionController safety guards", () => {
   it("does not share an exam context merely by opening or moving through questions", async () => {
     const { result } = renderHook(() => useExamSessionController({
       chatGptPreferences: preferences,
-      addEntries: vi.fn(async () => []),
+      commitExamSubmission: successfulCommit,
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -89,14 +97,14 @@ describe("useExamSessionController safety guards", () => {
 
   it("keeps exam persistence blocked after load failure and recovers with one retry", async () => {
     loadExamSessions.mockRejectedValueOnce(new Error("permission denied")).mockResolvedValueOnce([]);
-    const addEntries = vi.fn(async () => []);
-    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries }));
+    const commitExamSubmission = vi.fn(successfulCommit);
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, commitExamSubmission }));
 
     await waitFor(() => expect(result.current.loadError).toContain("permission denied"));
     act(() => result.current.open(entry));
     expect(result.current.session).toBeNull();
     expect(saveExamSessions).not.toHaveBeenCalled();
-    expect(addEntries).not.toHaveBeenCalled();
+    expect(commitExamSubmission).not.toHaveBeenCalled();
 
     await act(async () => {
       const first = result.current.reload();
@@ -110,7 +118,7 @@ describe("useExamSessionController safety guards", () => {
 
   it("treats a valid JSON object payload as a load failure", async () => {
     loadExamSessions.mockResolvedValueOnce({} as never);
-    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, commitExamSubmission: successfulCommit }));
 
     await waitFor(() => expect(result.current.loadError).toContain("배열이어야 합니다"));
     expect(result.current.loading).toBe(false);
@@ -118,7 +126,7 @@ describe("useExamSessionController safety guards", () => {
   });
 
   it("discards an active session after restore without merging it back into saved sessions", async () => {
-    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, addEntries: vi.fn(async () => []) }));
+    const { result } = renderHook(() => useExamSessionController({ chatGptPreferences: preferences, commitExamSubmission: successfulCommit }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     vi.useFakeTimers();
     try {
@@ -135,11 +143,11 @@ describe("useExamSessionController safety guards", () => {
     }
   });
 
-  it("does not mark a session submitted when atomic wrong-entry persistence fails", async () => {
-    const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockRejectedValue(new Error("entries failed"));
+  it("does not mark a session submitted when the transaction fails", async () => {
+    const commitExamSubmission = vi.fn().mockRejectedValue(new Error("transaction failed"));
     const { result } = renderHook(() => useExamSessionController({
       chatGptPreferences: preferences,
-      addEntries,
+      commitExamSubmission,
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.open(entry));
@@ -151,18 +159,25 @@ describe("useExamSessionController safety guards", () => {
     act(() => result.current.setSession(submittedInput));
 
     await act(async () => {
-      await expect(result.current.submit(submittedInput)).rejects.toThrow("entries failed");
+      await expect(result.current.submit(submittedInput)).rejects.toThrow("transaction failed");
     });
-    expect(addEntries).toHaveBeenCalledTimes(1);
+    expect(commitExamSubmission).toHaveBeenCalledTimes(1);
     expect(saveExamSessions).not.toHaveBeenCalled();
     expect(result.current.session?.status).toBe("in_progress");
   });
 
-  it("stores all wrong entries before saving the submitted session and avoids duplicates on retry", async () => {
-    const addEntries = vi.fn<(forms: EntryFormData[]) => Promise<string[]>>().mockResolvedValue(["wrong-1"]);
+  it("commits submitted sessions and derived entries through one transaction", async () => {
+    const commitExamSubmission = vi.fn((submitted: ExamSession, forms: unknown[]) =>
+      Promise.resolve(transactionResult(submitted, forms.map((form, index) => ({
+        id: `wrong-${index}`,
+        ...(form as object),
+        createdAt: "a",
+        updatedAt: "a",
+      } as WrongAnswerEntry)))),
+    );
     const { result } = renderHook(() => useExamSessionController({
       chatGptPreferences: preferences,
-      addEntries,
+      commitExamSubmission,
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.open(entry));
@@ -173,13 +188,13 @@ describe("useExamSessionController safety guards", () => {
     };
 
     await act(async () => { await result.current.submit(input); });
-    expect(addEntries).toHaveBeenCalledTimes(1);
-    expect(saveExamSessions).toHaveBeenCalledTimes(1);
-    expect(saveExamSessions.mock.invocationCallOrder[0]).toBeGreaterThan(addEntries.mock.invocationCallOrder[0]);
+    expect(commitExamSubmission).toHaveBeenCalledTimes(1);
+    expect(saveExamSessions).not.toHaveBeenCalled();
     expect(result.current.session?.status).toBe("submitted");
     const submitted = result.current.session!;
 
     await act(async () => { await result.current.submit({ ...submitted, status: "in_progress" }); });
-    expect(addEntries).toHaveBeenCalledTimes(1);
+    expect(commitExamSubmission).toHaveBeenCalledTimes(2);
+    expect(commitExamSubmission.mock.calls[1][1]).toEqual([]);
   });
 });
