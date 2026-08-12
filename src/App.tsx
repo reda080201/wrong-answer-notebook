@@ -44,6 +44,7 @@ import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext
 import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
+import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -424,6 +425,12 @@ function AppContent() {
       .filter((item) => item.entryId === selected.id && item.status === "submitted")
       .sort((a, b) => (b.submittedAt ?? b.updatedAt).localeCompare(a.submittedAt ?? a.updatedAt))
     : [];
+  const selectedPracticeSession = selected
+    ? savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && (item.mode ?? "practice") === "practice")
+    : undefined;
+  const selectedRealSession = selected
+    ? savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode === "real")
+    : undefined;
   const availableUpdate = updater.state.status === "available" ? updater.state : null;
   const openConceptLearningBlock = (entryId: string, blockId: string) => {
     void (async () => {
@@ -688,14 +695,14 @@ function AppContent() {
               <EntryDetail
               entry={selected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {
-                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode !== "real");
-                openExamSession(selected, { mode: "practice", resumable });
+                openExamSession(selected, { mode: "practice", resumable: selectedPracticeSession });
               } : undefined}
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
                 setRealExamStartEntry(selected);
                 setRealExamMinutes(settings.examPreferences.defaultRealExamMinutes ?? 50);
               } : undefined}
-              startExamLabel={savedExamSessions.some((item) => item.entryId === selected.id && item.status === "in_progress") ? "이어서 풀기" : "문제 풀기"}
+              startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
+              startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
               onEdit={actions.openEdit}
               onQuickGptSolution={
                 selected.entryKind !== "concept"
@@ -919,9 +926,14 @@ function AppContent() {
           <div className="real-exam-start-dialog">
             <p className="form-hint">{realExamStartEntry.title}</p>
             <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            {selectedRealSession?.deadlineAt && (
+              <p className="form-hint" role="status">
+                진행 중인 실전 모의고사 · 남은 시간 {Math.floor(getRemainingExamSeconds(selectedRealSession.deadlineAt) / 60).toString().padStart(2, "0")}:{(getRemainingExamSeconds(selectedRealSession.deadlineAt) % 60).toString().padStart(2, "0")}
+              </p>
+            )}
             <label className="form-field">
               제한 시간
-              <select value={realExamMinutes} onChange={(event) => setRealExamMinutes(Number(event.target.value))}>
+              <select value={selectedRealSession?.timeLimitMinutes ?? realExamMinutes} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamMinutes(Number(event.target.value))}>
                 {[30, 50, 80, 100].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
               </select>
             </label>
@@ -933,12 +945,11 @@ function AppContent() {
                 className="btn-primary"
                 onClick={() => {
                   const entry = realExamStartEntry;
-                  const resumable = savedExamSessions.find((item) => item.entryId === entry.id && item.status === "in_progress" && item.mode === "real");
                   setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable, timeLimitMinutes: realExamMinutes, showTimer: settings.examPreferences.showTimer, answerSheetOpen: settings.examPreferences.realExamAnswerSheetOpen });
+                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? realExamMinutes, showTimer: settings.examPreferences.showTimer, answerSheetOpen: settings.examPreferences.realExamAnswerSheetOpen });
                 }}
               >
-                실전 모드 시작
+                {selectedRealSession ? "이어서 풀기" : "실전 모드 시작"}
               </button>
             </div>
           </div>

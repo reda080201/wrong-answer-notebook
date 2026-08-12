@@ -78,6 +78,7 @@ interface EntryDetailProps {
   onStartExam?: () => void;
   onStartRealExam?: () => void;
   startExamLabel?: string;
+  startRealExamLabel?: string;
   examSession?: ExamSession | null;
   examPrintPreferences?: ExamPrintPreferences;
   onExamPrintPreferencesChange?: (patch: Partial<ExamPrintPreferences>) => Promise<void> | void;
@@ -204,6 +205,7 @@ export default function EntryDetail({
   onStartExam,
   onStartRealExam,
   startExamLabel = "문제 풀기",
+  startRealExamLabel = "실전 모드",
   examSession,
   examPrintPreferences,
   onExamPrintPreferencesChange,
@@ -1336,7 +1338,7 @@ export default function EntryDetail({
             <span className="problem-sheet-primary-title">{entry.title.trim() || "제목 없음"}</span>
             <div className="problem-sheet-primary-controls">
               {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
-              {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>실전 모드</button>}
+              {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
                 <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
                 <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
