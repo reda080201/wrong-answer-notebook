@@ -44,6 +44,23 @@ const sheetEntry: WrongAnswerEntry = {
   mastered: false,
 };
 
+function openSecondaryAction(name: string) {
+  const trigger = screen.queryByRole("button", { name: "문제지 더보기" })
+    ?? screen.getByRole("button", { name: "도구" });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole("menuitem", { name }));
+}
+
+function openViewSettings() {
+  const direct = screen.queryByRole("button", { name: "보기 설정" });
+  if (direct) {
+    fireEvent.click(direct);
+    return;
+  }
+  openSecondaryAction("보기 설정");
+  fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+}
+
 describe("EntryDetail sheet layout", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -109,7 +126,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
 
     expect(localStorage.getItem("wrong-answer-sheet-layout")).toBe("columns");
@@ -151,10 +168,12 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole("button", { name: "검색" }));
     fireEvent.change(screen.getByPlaceholderText("시험지 안에서 검색"), {
       target: { value: "둘째" },
     });
     fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(screen.getByRole("button", { name: "문항 목록" }));
 
     expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "2" })).toBeInTheDocument();
@@ -178,8 +197,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "도구" }));
-    fireEvent.click(screen.getByRole("menuitem", { name: "이름 변경" }));
+    openSecondaryAction("이름 변경");
     fireEvent.change(screen.getByLabelText("시험지 이름"), {
       target: { value: "기말고사" },
     });
@@ -279,12 +297,12 @@ describe("EntryDetail sheet layout", () => {
     );
 
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "문제지" })).toHaveClass("active");
+    expect(screen.getByRole("button", { name: "문항별" })).toBeInTheDocument();
     expect(screen.getByText("접선 시각화")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /학습 내용/ }));
     expect(screen.getByText("개념·루틴·주의점")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "해설지" }));
+    openSecondaryAction("해설지");
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
     expect(screen.getByRole("complementary", { name: "학습 내용" })).toBeInTheDocument();
     expect(screen.getByText("[해설 1]")).toBeInTheDocument();
@@ -301,7 +319,7 @@ describe("EntryDetail sheet layout", () => {
     expect(within(solutionBook as HTMLElement).queryByText("교점 조건 불만족")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "정답 보이기" }));
 
-    fireEvent.click(screen.getByRole("tab", { name: "분석" }));
+    openSecondaryAction("분석");
     expect(screen.getByText("학습 분석")).toBeInTheDocument();
     expect(screen.getByText("누락 문제: 2")).toBeInTheDocument();
     expect(screen.getByText("연필 표시")).toBeInTheDocument();
@@ -496,7 +514,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     fireEvent.click(screen.getByRole("button", { name: "답지" }));
     expect(screen.getByText("③")).toBeInTheDocument();
 
@@ -523,7 +541,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
 
     expect(screen.getAllByText("문제 1").length).toBeGreaterThan(0);
     expect(screen.getByText("원문 31")).toBeInTheDocument();
@@ -572,7 +590,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     fireEvent.click(screen.getByRole("button", { name: "답지" }));
     expect(screen.getByText("첫 문제 풀이")).toBeInTheDocument();
     expect(screen.queryByText("둘째 문제 풀이")).not.toBeInTheDocument();
@@ -599,7 +617,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     fireEvent.click(screen.getByRole("button", { name: "축소" }));
 
     const mini = screen.getByLabelText("축소된 문제 집중 보기");
@@ -626,7 +644,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     fireEvent.click(screen.getByRole("button", { name: "글자 +" }));
 
     expect(localStorage.getItem("wrong-answer-focus-text-size")).toBe("large");
@@ -649,7 +667,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "문제" })).toHaveClass("active");
@@ -673,7 +691,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "문제" })).toHaveClass("active");
@@ -707,7 +725,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     const imageButton = screen.getByRole("button", { name: "이미지" });
 
     expect(imageButton).not.toBeDisabled();
@@ -741,7 +759,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     expect(screen.getByText("x + 1 = 2를 풀어라.")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "정답" }));
@@ -786,25 +804,23 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).getByRole("button", { name: "하단 어려움" })).toHaveTextContent("★ 어려움");
     expect(within(bar).getByRole("button", { name: "하단 어려움 표시" })).toHaveTextContent("☆ 어려움");
     expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "문제지" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "해설지" })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "특강" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문제지 더보기" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toHaveTextContent("메모");
     expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "해설지" }));
+    openSecondaryAction("해설지");
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "분석" }));
+    openSecondaryAction("분석");
     expect(screen.getByText("학습 분석")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "특강" }));
+    openSecondaryAction("특강");
     expect(screen.getAllByText("특강 노트").length).toBeGreaterThan(0);
 
-    fireEvent.click(screen.getByRole("tab", { name: "문제지" }));
+    openSecondaryAction("문제로 돌아가기");
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
     expect(within(bar).getByRole("button", { name: "하단 해설지 모드" })).toHaveTextContent("해설");
     expect(within(bar).getByRole("button", { name: "하단 특강 모드" })).toHaveTextContent("특강");
@@ -883,13 +899,14 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "문제 선택" }));
+    fireEvent.click(screen.getByRole("button", { name: "선택" }));
     const checks = screen.getAllByLabelText("선택");
     fireEvent.click(checks[0]);
     fireEvent.click(checks[2]);
     fireEvent.click(screen.getByRole("button", { name: "복습 큐" }));
 
     expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 1");
+    expect(screen.queryByText("2문제 선택됨")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));
 
     await waitFor(() => {
@@ -936,7 +953,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
 
     const hints = screen.getByLabelText("집중 보기 학습 힌트");
     expect(hints).toHaveTextContent("이 문제를 맞음으로 기록할 수 있습니다.");
@@ -963,7 +980,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
 
     const hints = screen.getByLabelText("집중 보기 학습 힌트");
     expect(hints).toHaveTextContent("이 문제를 맞음으로 기록할 수 있습니다.");
@@ -1002,7 +1019,7 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
-    fireEvent.click(screen.getByRole("button", { name: "집중 보기" }));
+    openSecondaryAction("집중 보기");
     fireEvent.keyDown(window, { key: "1" });
     await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function)));
     expect(onReview).not.toHaveBeenCalled();
@@ -1142,7 +1159,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "공유·내보내기" }));
+    openSecondaryAction("공유·내보내기");
     expect(screen.getByRole("dialog", { name: "공유·내보내기" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("기타 내보내기"));
     fireEvent.click(screen.getByRole("button", { name: "Markdown 내보내기" }));
@@ -1175,7 +1192,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    const toolbar = container.querySelector(".detail-toolbar-left");
+    const toolbar = container.querySelector(".problem-sheet-primary-toolbar");
     const meta = container.querySelector(".detail-meta-row");
     expect(toolbar).not.toBeNull();
     expect(meta).not.toBeNull();
@@ -1183,7 +1200,7 @@ describe("EntryDetail view settings integration", () => {
     expect(meta?.querySelector(".subject-badge")).toHaveTextContent("국어");
     expect(meta?.textContent).toContain("문법");
     expect(meta?.textContent).toContain("난이도");
-    expect(screen.getByRole("button", { name: "보기 설정" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "보기 설정" })).not.toBeInTheDocument();
   });
 
   it("opens the shared view settings tab from quick view and the settings button", () => {
@@ -1202,7 +1219,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "더 많은 보기 설정" }));
     fireEvent.click(screen.getByRole("button", { name: "전체 설정 열기" }));
     expect(onOpenSettings).toHaveBeenCalledWith("view");
@@ -1222,7 +1239,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     expect(screen.queryByLabelText("정답 가리기")).not.toBeInTheDocument();
     expect(screen.queryByText("정답 가리기")).not.toBeInTheDocument();
   });
@@ -1253,7 +1270,7 @@ describe("EntryDetail view settings integration", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "보기 설정" }));
+    openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
     expect(onViewPreferencesChange).toHaveBeenCalledWith({ sheetLayout: "columns" });
   });

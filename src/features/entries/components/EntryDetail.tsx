@@ -195,6 +195,7 @@ export default function EntryDetail({
   onOpenEntry,
   onOpenQuestionTarget,
   onQuickGptSolution,
+  onOpenPrint,
   examSession,
   examPrintPreferences,
   onExamPrintPreferencesChange,
@@ -227,6 +228,9 @@ export default function EntryDetail({
   const [memoMode, setMemoMode] = useState(false);
   const [sheetLayout, setSheetLayout] = useState<SheetLayout>(viewPreferences?.sheetLayout ?? loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
+  const [sheetSearchOpen, setSheetSearchOpen] = useState(false);
+  const [sheetTocOpen, setSheetTocOpen] = useState(false);
+  const [quickViewSettingsRequested, setQuickViewSettingsRequested] = useState(false);
   const [answerView, setAnswerView] = useState<AnswerViewMode>(loadAnswerView);
   const [detailViewMode, setDetailViewMode] = useState<DetailViewMode>("paper");
   const [problemSheetDisplayMode, setProblemSheetDisplayMode] = useState<ProblemSheetDisplayMode>(
@@ -269,6 +273,7 @@ export default function EntryDetail({
     "highlight",
   );
   const consumedInitialTargetRef = useRef<number | null>(null);
+  const sheetSearchTriggerRef = useRef<HTMLButtonElement>(null);
 
   const updateViewPreference = useCallback(<K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K]) => {
     if (key === "sheetLayout") setSheetLayout(value as SheetLayout);
@@ -396,6 +401,18 @@ export default function EntryDetail({
   }, [sheetSearch, entry.id]);
 
   useEffect(() => {
+    if (!sheetSearchOpen) return undefined;
+    const closeSearch = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSheetSearchOpen(false);
+        sheetSearchTriggerRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", closeSearch);
+    return () => document.removeEventListener("keydown", closeSearch);
+  }, [sheetSearchOpen]);
+
+  useEffect(() => {
     setFocusedQuestionIndex(0);
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
@@ -450,10 +467,10 @@ export default function EntryDetail({
 
   const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode, selectionOnly = false) => {
     setExportHubView(view);
-    setExportHubScope(scope ?? (selectedQuestionNumbers.length > 0 ? "selected" : "current"));
+    setExportHubScope(scope ?? (selectionMode && selectedQuestionNumbers.length > 0 ? "selected" : "current"));
     setExportSelectionOnly(selectionOnly);
     setShowExportHub(true);
-  }, [selectedQuestionNumbers.length]);
+  }, [selectedQuestionNumbers.length, selectionMode]);
 
   const moveTheaterQuestion = useCallback((delta: number) => {
     if (selectedReviewQueue && selectedReviewQueue.entryId === entry.id) {
@@ -784,6 +801,7 @@ export default function EntryDetail({
       mode: "selected",
     });
     setSelectionMode(false);
+    setSelectedQuestionNumbers([]);
     openTheaterMode(firstIndex >= 0 ? firstIndex : 0);
     pushToast("선택한 문제 복습 큐를 시작합니다.", "success");
   }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, selectedQuestionNumbers]);
@@ -1288,7 +1306,55 @@ export default function EntryDetail({
       className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
     >
       {!isFocusExpanded && (
-      <div className="detail-toolbar">
+      <div className={`detail-toolbar ${isSheet && detailViewMode === "paper" ? "detail-toolbar--problem-sheet" : ""}`}>
+        {isSheet && detailViewMode === "paper" ? (
+          <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
+            <span className="problem-sheet-primary-title">{entry.title.trim() || "제목 없음"}</span>
+            <div className="problem-sheet-primary-controls">
+              <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
+                <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
+                <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
+              </div>
+              <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
+                const next = !value;
+                if (!next) {
+                  setSelectedQuestionNumbers([]);
+                  setShowExportHub(false);
+                }
+                return next;
+              })}>선택</button>
+              <button ref={sheetSearchTriggerRef} type="button" className="btn-icon" aria-expanded={sheetSearchOpen} aria-controls="problem-sheet-search" onClick={() => setSheetSearchOpen((value) => !value)}>검색</button>
+              <Menu label="더보기" triggerAriaLabel="문제지 더보기" className="detail-more-menu">
+                <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("paper")}>문제로 돌아가기</button>
+                <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("solution")}>해설지</button>
+                <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("learning")}>특강</button>
+                <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("analysis")}>분석</button>
+                {isFocusable && <button type="button" className="btn-icon" onClick={openFocusMode}>집중 보기</button>}
+                <button type="button" className="btn-icon" onClick={() => openExportHub()}>공유·내보내기</button>
+                <button type="button" className="btn-icon" onClick={() => onOpenPrint ? onOpenPrint() : openExportHub("exam-pdf")}>인쇄</button>
+                {onQuickGptSolution && <button type="button" className="btn-icon" onClick={onQuickGptSolution}>GPT 해설</button>}
+                <button type="button" className="btn-icon" onClick={onEdit}>수정</button>
+                <button type="button" className="btn-icon" onClick={() => setQuickViewSettingsRequested(true)}>보기 설정</button>
+                {onTitleChange && <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>이름 변경</button>}
+                <button type="button" className={`btn-icon ${memoMode ? "active" : ""}`} onClick={() => setMemoMode((value) => !value)}>메모</button>
+                <button type="button" className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`} onClick={handleToggleDifficultWithToast}>어려움 표시</button>
+                <button type="button" className={`btn-icon ${entry.mastered ? "success" : ""}`} onClick={onToggleMastered}>{entry.mastered ? "완료 해제" : "복습 완료"}</button>
+                <button type="button" className="btn-icon danger" onClick={onDelete}>삭제</button>
+              </Menu>
+              {quickViewSettingsRequested && <QuickViewSettingsMenu
+                layout={sheetLayout}
+                onLayoutChange={(layout) => updateViewPreference("sheetLayout", layout)}
+                fontSize={focusTextSize}
+                onFontSizeChange={(size) => updateViewPreference("fontSize", size)}
+                hideAnswers={hideAnswers}
+                onHideAnswersChange={(hidden) => updateViewPreference("hideAnswers", hidden)}
+                onOpenHelp={() => setViewHelpOpen(true)}
+                onOpenAllSettings={() => onOpenSettings?.("view")}
+              />}
+            </div>
+          </div>
+        ) : (
+        <>
         <div className="detail-toolbar-left">
           {!isConcept && !isLecture && (
             <nav className="study-mode-tabs" aria-label="학습 보기 모드" role="tablist">
@@ -1350,7 +1416,17 @@ export default function EntryDetail({
               onOpenAllSettings={() => onOpenSettings?.("view")}
             />
           </div>
-          <Menu label="도구" className="detail-more-menu">
+          <Menu label="더보기" triggerAriaLabel="도구" className="detail-more-menu">
+              {!isConcept && !isLecture && (
+                <>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("paper")}>문제로 돌아가기</button>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("solution")}>해설지</button>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("learning")}>특강</button>
+                  <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("analysis")}>분석</button>
+                </>
+              )}
+              {isFocusable && <button type="button" className="btn-icon" onClick={openFocusMode}>집중 보기</button>}
+              {isSheet && <button type="button" className="btn-icon" onClick={() => openExportHub()}>공유·내보내기</button>}
               {onQuickGptSolution && (
                 <button type="button" className="btn-icon" onClick={onQuickGptSolution}>
                   GPT 해설
@@ -1387,6 +1463,8 @@ export default function EntryDetail({
               </button>
           </Menu>
         </div>
+        </>
+        )}
       </div>
       )}
 
@@ -1458,7 +1536,7 @@ export default function EntryDetail({
       )}
 
       <div className="detail-scroll">
-        <header className="detail-title-block">
+        <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
               <input
@@ -1531,7 +1609,7 @@ export default function EntryDetail({
         </header>
 
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
-          {!isConcept && !isFocusExpanded && (
+          {!isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
             <StudyFlowStrip
               entry={entry}
               focusAvailable={isFocusable}
@@ -1557,41 +1635,23 @@ export default function EntryDetail({
           {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
             <div className="sheet-reading-tools">
               <div className="sheet-selection-tools">
-                <button
-                  type="button"
-                  className={`btn-secondary btn-sm ${selectionMode ? "active" : ""}`}
-                  onClick={() => setSelectionMode((value) => {
-                    const next = !value;
-                    if (!next) {
-                      setSelectedQuestionNumbers([]);
-                      setShowExportHub(false);
-                    }
-                    return next;
-                  })}
-                >
-                  문제 선택
-                </button>
                 {selectionMode && (
                   <span className="sheet-selection-hint">문항을 선택하세요.</span>
                 )}
               </div>
               {questionAnchors.length > 0 && (
-                <nav className="sheet-toc" aria-label="문제 번호 목차">
-                  {questionAnchors.map((block, index) => (
-                    <button
-                      key={block.start}
-                      type="button"
-                      onClick={() => {
-                        setFocusedQuestionIndex(index);
-                        scrollToQuestion(block.start);
-                      }}
-                    >
-                      {block.displayNumber}
-                    </button>
-                  ))}
-                </nav>
+                <>
+                  <button type="button" className="btn-secondary btn-sm" aria-expanded={sheetTocOpen} onClick={() => setSheetTocOpen((value) => !value)}>문항 목록</button>
+                  {sheetTocOpen && <nav className="sheet-toc" aria-label="문제 번호 목차">
+                    {questionAnchors.map((block, index) => (
+                      <button key={block.start} type="button" onClick={() => { setFocusedQuestionIndex(index); scrollToQuestion(block.start); }}>
+                        {block.displayNumber}
+                      </button>
+                    ))}
+                  </nav>}
+                </>
               )}
-              <div className="sheet-search">
+              {sheetSearchOpen && <div id="problem-sheet-search" className="sheet-search">
                 <input
                   type="search"
                   value={sheetSearch}
@@ -1607,7 +1667,7 @@ export default function EntryDetail({
                 <button type="button" onClick={() => moveSearch(1)} disabled={sheetMatches.length === 0}>
                   다음
                 </button>
-              </div>
+              </div>}
             </div>
           )}
           {(isConcept || isLecture) && onSimilarQuestionLinksChange ? (
