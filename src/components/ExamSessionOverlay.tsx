@@ -1,6 +1,7 @@
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../types";
 import type { SettingsTab } from "./SettingsModal";
 import ExamSessionView from "../features/exam/components/ExamSessionView";
+import RealExamSessionView from "../features/exam/components/RealExamSessionView";
 
 interface ExamSessionOverlayProps {
   session: ExamSession;
@@ -52,7 +53,13 @@ export default function ExamSessionOverlay({
         </div>
       )}
       <button type="button" onClick={() => void onClose()} disabled={submitting || saving}>시험 닫기</button>
-      <ExamSessionView
+      {session.mode === "real" ? <RealExamSessionView
+        session={session}
+        onChange={onChange}
+        onSubmittingChange={onSubmittingChange}
+        onSubmit={onSubmit}
+        examPreferences={examPreferences}
+      /> : <ExamSessionView
         session={session}
         examPreferences={examPreferences}
         onOpenSettings={onOpenSettings}
@@ -65,7 +72,7 @@ export default function ExamSessionOverlay({
         onChange={onChange}
         onSubmittingChange={onSubmittingChange}
         onSubmit={onSubmit}
-      />
+      />}
     </div>
   );
 }

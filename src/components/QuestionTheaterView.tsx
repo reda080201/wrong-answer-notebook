@@ -160,8 +160,8 @@ export default function QuestionTheaterView({
             이전
           </button>
           <strong>
-            문제 {questionBlock.displayNumber}
-            <span> / {questionCount}</span>
+            문제 {questionBlock.numberLabel || questionBlock.displayNumber}
+            <span>{questionIndex + 1} / {questionCount}</span>
           </strong>
           <button type="button" onClick={onNext} disabled={questionIndex >= questionCount - 1}>
             다음
@@ -295,7 +295,6 @@ export default function QuestionTheaterView({
                       <TheaterSolutionContent
                         answer={answer}
                         conceptContext={conceptContext}
-                        memo={memo}
                         onWikiLinkClick={onWikiLinkClick}
                         existingTargets={existingTargets}
                       />
@@ -322,7 +321,6 @@ export default function QuestionTheaterView({
                   <TheaterSolutionContent
                     answer={answer}
                     conceptContext={conceptContext}
-                    memo={memo}
                     includeMemo={false}
                     onWikiLinkClick={onWikiLinkClick}
                     existingTargets={existingTargets}
@@ -334,10 +332,10 @@ export default function QuestionTheaterView({
             )}
           </article>
           <article>
-            <h3>메모</h3>
-            {answer?.notes || answer?.reviewPoint || answer?.wrongPoint || memo ? (
+            <h3>현재 문제 메모</h3>
+            {answer?.notes || answer?.reviewPoint || answer?.wrongPoint ? (
               <div className="memo-content">
-                {[answer?.notes, answer?.wrongPoint, answer?.reviewPoint, memo].filter(Boolean).join("\n")}
+                {[answer?.notes, answer?.wrongPoint, answer?.reviewPoint].filter(Boolean).join("\n")}
               </div>
             ) : (
               <p>현재 문제에 표시할 메모가 없습니다.</p>
@@ -354,6 +352,10 @@ export default function QuestionTheaterView({
               </button>
             </div>
           </article>
+          {memo?.trim() && <article>
+            <h3>시험지 전체 메모</h3>
+            <div className="memo-content"><MathText text={memo} /></div>
+          </article>}
         </section>}
       </div>
     </div>
@@ -363,14 +365,12 @@ export default function QuestionTheaterView({
 function TheaterSolutionContent({
   answer,
   conceptContext,
-  memo,
   includeMemo = true,
   onWikiLinkClick,
   existingTargets,
 }: {
   answer: SheetAnswerItem;
   conceptContext?: import("../features/learning/utils/conceptIndex").ConceptLinkResolveContext;
-  memo?: string;
   includeMemo?: boolean;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
@@ -426,10 +426,10 @@ function TheaterSolutionContent({
           <MathText text={answer.reviewPoint} />
         </section>
       )}
-      {includeMemo && [answer.notes, memo].filter(Boolean).length > 0 && (
+      {includeMemo && answer.notes?.trim() && (
         <section>
-          <h3>메모</h3>
-          <MathText text={[answer.notes, memo].filter(Boolean).join("\n")} />
+          <h3>문제별 메모</h3>
+          <MathText text={answer.notes} />
         </section>
       )}
     </div>

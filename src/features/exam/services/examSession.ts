@@ -1,11 +1,17 @@
 import { v4 as uuidv4 } from "uuid";
-import type { ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
+import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
-export function createExamSession(entry: WrongAnswerEntry, now = new Date()): ExamSession {
+export interface ExamSessionCreationOptions {
+  mode?: ExamMode;
+  timeLimitMinutes?: number;
+  showTimer?: boolean;
+}
+
+export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
   const blocks = parseQuestionText(entry.question);
   const questions = getEntryQuestions(entry);
   const legacyQuestions = blocks.filter((item): item is QuestionBlock => item.kind === "question");
@@ -47,17 +53,25 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date()): Ex
       source: block.source ? structuredClone(block.source) : undefined,
     };
   });
+  const mode = options.mode === "real" ? "real" : "practice";
+  const startedAt = now.toISOString();
+  const timeLimitMinutes = mode === "real" && Number.isFinite(options.timeLimitMinutes) && (options.timeLimitMinutes ?? 0) > 0
+    ? options.timeLimitMinutes
+    : undefined;
   return {
     id: uuidv4(),
     entryId: entry.id,
     title: entry.title,
     subject: entry.subject,
     status: "in_progress",
+    mode,
+    timeLimitMinutes,
+    deadlineAt: timeLimitMinutes ? new Date(now.getTime() + timeLimitMinutes * 60_000).toISOString() : undefined,
     questions: snapshots,
     responses: [],
     currentQuestionIndex: 0,
-    startedAt: now.toISOString(),
-    updatedAt: now.toISOString(),
+    startedAt,
+    updatedAt: startedAt,
   };
 }
 

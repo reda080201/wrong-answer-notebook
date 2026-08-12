@@ -74,4 +74,23 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.needsReview).toBe(true);
     expect(resolved.warning).toContain("선택지가 없어");
   });
+
+  it("keeps non-contiguous source numbers separate from navigation positions", () => {
+    const questions = getEntryQuestions({
+      question: "1. legacy projection must not win",
+      structuredQuestions: ["9", "10", "20", "30"].map((questionNumber) => ({
+        questionNumber,
+        questionText: `${questionNumber}번 본문`,
+        conditions: [],
+        equations: [],
+        choices: [],
+        contentSegments: [{ id: `text-${questionNumber}`, type: "text" as const, text: `${questionNumber}번 본문` }],
+        figureIds: [],
+      })),
+      questionContentSegments: undefined,
+    });
+
+    expect(questions.map((item) => item.questionNumber)).toEqual(["9", "10", "20", "30"]);
+    expect(questions.map((item) => item.position)).toEqual([1, 2, 3, 4]);
+  });
 });

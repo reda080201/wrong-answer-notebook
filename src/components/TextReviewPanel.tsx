@@ -1,21 +1,50 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { WrongAnswerEntry } from "../types";
+import type { StructuredQuestion } from "../types";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import Dialog from "../shared/ui/Dialog";
+import "./TextReviewPanel.css";
+import StructuredQuestionReviewEditor from "../features/import/components/StructuredQuestionReviewEditor";
 
-interface TextReviewPanelProps {
+export interface TextReviewPanelProps {
   entry: WrongAnswerEntry;
   segments: SuspiciousTextSegment[];
   onClose: () => void;
   onSave: (text: string) => Promise<void> | void;
+  onStructuredQuestionsChange?: (entry: WrongAnswerEntry, questions: StructuredQuestion[]) => Promise<void>;
+  /** Additive extension point for problem-sheet integrations. */
+  activeQuestionNumber?: string;
+  activeSegmentId?: string;
+  onActiveQuestionChange?: (questionNumber: string) => void;
+  onActiveSegmentChange?: (segmentId: string) => void;
 }
 
-export default function TextReviewPanel({ entry, segments, onClose, onSave }: TextReviewPanelProps) {
+export default function TextReviewPanel({
+  entry,
+  segments,
+  onClose,
+  onSave,
+  activeQuestionNumber: requestedQuestionNumber,
+  activeSegmentId: requestedSegmentId,
+  onActiveQuestionChange,
+  onActiveSegmentChange,
+  onStructuredQuestionsChange,
+}: TextReviewPanelProps) {
+  const questionNumbers = useMemo(
+    () => Object.keys(entry.questionContentSegments ?? {}).filter((number) => number.trim()),
+    [entry.questionContentSegments],
+  );
+  const isStructured = entry.entryKind === "problem_sheet" && (entry.structuredQuestions?.length ?? 0) > 0;
   const [text, setText] = useState(entry.question);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedSegmentId, setSelectedSegmentId] = useState<string | null>(null);
+  const [selectedQuestionNumber, setSelectedQuestionNumber] = useState(
+    requestedQuestionNumber ?? questionNumbers[0] ?? null,
+  );
+  const [selectedStructuredSegmentId, setSelectedStructuredSegmentId] = useState<string | null>(requestedSegmentId ?? null);
+  const [editedStructuredQuestions, setEditedStructuredQuestions] = useState<StructuredQuestion[]>(() => structuredClone(entry.structuredQuestions ?? []));
   const [ignoredSegmentIds, setIgnoredSegmentIds] = useState<Set<string>>(() => new Set());
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -24,7 +53,18 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
     setError(null);
     setSelectedSegmentId(null);
     setIgnoredSegmentIds(new Set());
-  }, [entry.id, entry.question]);
+    setEditedStructuredQuestions(structuredClone(entry.structuredQuestions ?? []));
+  }, [entry.id, entry.question, entry.structuredQuestions]);
+
+  useEffect(() => {
+    if (requestedQuestionNumber && questionNumbers.includes(requestedQuestionNumber)) {
+      setSelectedQuestionNumber(requestedQuestionNumber);
+    }
+  }, [questionNumbers, requestedQuestionNumber]);
+
+  useEffect(() => {
+    if (requestedSegmentId) setSelectedStructuredSegmentId(requestedSegmentId);
+  }, [requestedSegmentId]);
 
   const visibleSegments = useMemo(
     () => segments.filter((segment) => !ignoredSegmentIds.has(segment.id)),
@@ -35,7 +75,11 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
     setSaving(true);
     setError(null);
     try {
-      await onSave(text);
+      if (isStructured && editedStructuredQuestions.length > 0 && onStructuredQuestionsChange) {
+        await onStructuredQuestionsChange(entry, editedStructuredQuestions);
+      } else {
+        await onSave(text);
+      }
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "텍스트 저장에 실패했습니다.");
@@ -53,6 +97,17 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
     const textarea = textareaRef.current;
     textarea?.focus();
     textarea?.setSelectionRange(segment.start, segment.end);
+  };
+
+  const selectQuestion = (questionNumber: string) => {
+    setSelectedQuestionNumber(questionNumber);
+    setSelectedStructuredSegmentId(null);
+    onActiveQuestionChange?.(questionNumber);
+  };
+
+  const selectStructuredSegment = (segmentId: string) => {
+    setSelectedStructuredSegmentId(segmentId);
+    onActiveSegmentChange?.(segmentId);
   };
 
   const copyForGptCorrection = async () => {
@@ -75,38 +130,79 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
   };
 
   return (
-    <Dialog open onClose={requestClose} className="text-review-panel text-review-panel--drawer" ariaLabel="텍스트 검수" closeDisabled={saving} busy={saving}>
+    <Dialog open onClose={requestClose} className={`text-review-panel ${isStructured ? "text-review-panel--structured" : "text-review-panel--drawer"}`} ariaLabel="텍스트 검수" closeDisabled={saving} busy={saving}>
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">Text Review</span>
             <h2>텍스트 검수</h2>
           </div>
           <div className="text-review-head-actions">
-            <button type="button" className="btn-secondary" onClick={handleSave} disabled={saving}>
+            {isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+              {saving ? "저장 중..." : "구조화 문항 저장"}
+            </button>}
+            {!isStructured && <button type="button" className="btn-secondary" onClick={handleSave} disabled={saving}>
               {saving ? "저장 중..." : "수정 저장"}
-            </button>
+            </button>}
             <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
               닫기
             </button>
           </div>
         </header>
 
-        <div className="text-review-warning">
+        <div className="text-review-warning" role="status" tabIndex={0}>
           자동으로 고치지 않습니다. 원본 이미지를 기준으로 의심 문장을 직접 확인한 뒤 저장하세요.
         </div>
 
-        <div className="text-review-grid">
-          <section className="text-review-editor" aria-label="문제 텍스트 수정">
-            <h3>문제 본문 편집</h3>
-            <textarea
-              ref={textareaRef}
-              id="text-review-question"
-              value={text}
-              onChange={(event) => setText(event.target.value)}
-              aria-label="검수할 문제 텍스트"
-            />
-            {error && <div className="form-error">{error}</div>}
-          </section>
+        {isStructured ? (
+          <div className="text-review-structured-layout">
+            <nav className="text-review-question-nav" aria-label="문항 선택">
+              <h3>문항</h3>
+              <ol>
+                {questionNumbers.map((questionNumber) => (
+                  <li key={questionNumber}>
+                    <button type="button" className={selectedQuestionNumber === questionNumber ? "is-active" : ""} aria-current={selectedQuestionNumber === questionNumber ? "true" : undefined} onClick={() => selectQuestion(questionNumber)}>
+                      {questionNumber}번
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+            <section className="text-review-structured-editor" aria-label="구조화된 문제 편집 영역">
+              <div className="text-review-structured-heading">
+                <div><span className="modal-eyebrow">Structured Review</span><h3>{selectedQuestionNumber ? `${selectedQuestionNumber}번 문항` : "문항 선택"}</h3></div>
+                <span className="text-review-slot-status">편집 슬롯 대기 중</span>
+              </div>
+              {selectedQuestionNumber ? <StructuredQuestionReviewEditor
+                id="text-review-structured-editor"
+                questions={editedStructuredQuestions.filter((question) => question.questionNumber === selectedQuestionNumber)}
+                disabled={saving}
+                onChange={(questions) => {
+                  const updated = questions[0];
+                  if (!updated) return;
+                  setEditedStructuredQuestions((current) => current.map((question) => question.questionNumber === updated.questionNumber ? updated : question));
+                }}
+              /> : <p>문항을 선택하세요.</p>}
+              <div className="text-review-segment-list" aria-label="활성 문항 segment 선택">
+                <strong>문항 구성</strong>
+                <ul>
+                  {(entry.questionContentSegments?.[selectedQuestionNumber ?? ""] ?? []).map((segment) => (
+                    <li key={segment.id}>
+                      <button type="button" className={selectedStructuredSegmentId === segment.id ? "is-active" : ""} aria-current={selectedStructuredSegmentId === segment.id ? "true" : undefined} onClick={() => selectStructuredSegment(segment.id)}>
+                        <span>{segment.type}</span>{segment.type === "text" || segment.type === "condition" ? segment.text.slice(0, 64) : segment.id}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <div className="text-review-grid">
+            <section className="text-review-editor" aria-label="문제 텍스트 수정">
+              <h3>문제 본문 편집</h3>
+              <textarea ref={textareaRef} id="text-review-question" value={text} onChange={(event) => setText(event.target.value)} aria-label="검수할 문제 텍스트" />
+              {error && <div className="form-error">{error}</div>}
+            </section>
 
           <aside className="text-review-segments" aria-label="의심 구간 목록">
             <div className="text-review-segments">
@@ -116,10 +212,7 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
                   {visibleSegments.map((segment) => (
                     <li key={segment.id} className={selectedSegmentId === segment.id ? "active" : ""}>
                       <span>{segment.reason}</span>
-                      <button
-                        type="button"
-                        onClick={() => selectSegment(segment)}
-                      >
+                      <button type="button" aria-label={`${segment.reason}: ${segment.text}`} onClick={() => selectSegment(segment)}>
                         {segment.text.slice(0, 36)}
                       </button>
                       <button
@@ -158,15 +251,19 @@ export default function TextReviewPanel({ entry, segments, onClose, onSave }: Te
               </p>
             )}
           </section>
-        </div>
+          </div>
+        )}
 
         <footer className="modal-actions">
           <button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>
             취소
           </button>
-          <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+          {isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? "저장 중..." : "구조화 문항 저장"}
+          </button>}
+          {!isStructured && <button type="button" className="btn-primary" onClick={handleSave} disabled={saving}>
             {saving ? "저장 중..." : "검수한 텍스트 저장"}
-          </button>
+          </button>}
         </footer>
     </Dialog>
   );

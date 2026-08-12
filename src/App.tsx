@@ -15,7 +15,7 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, WrongAnswerEntry } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
@@ -42,6 +42,7 @@ import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
+import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
@@ -117,6 +118,8 @@ function AppContent() {
     questionNumber: string;
     requestId: number;
   } | null>(null);
+  const [realExamStartEntry, setRealExamStartEntry] = useState<WrongAnswerEntry | null>(null);
+  const [realExamMinutes, setRealExamMinutes] = useState(50);
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -685,8 +688,12 @@ function AppContent() {
               <EntryDetail
               entry={selected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {
-                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress");
-                openExamSession(selected, resumable);
+                const resumable = savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode !== "real");
+                openExamSession(selected, { mode: "practice", resumable });
+              } : undefined}
+              onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
+                setRealExamStartEntry(selected);
+                setRealExamMinutes(50);
               } : undefined}
               startExamLabel={savedExamSessions.some((item) => item.entryId === selected.id && item.status === "in_progress") ? "이어서 풀기" : "문제 풀기"}
               onEdit={actions.openEdit}
@@ -732,6 +739,15 @@ function AppContent() {
               onImportLecture={() => actions.setShowLearningImportModal(true)}
               onQuestionTextChange={(entry, text) =>
                 patchEntry(entry.id, { question: text })
+              }
+              onStructuredQuestionsChange={(entry, questions) =>
+                patchEntry(entry.id, {
+                  structuredQuestions: questions,
+                  question: renderStructuredQuestionsCompatibilityText(questions),
+                  questionContentSegments: Object.fromEntries(
+                    questions.map((question) => [question.questionNumber, question.contentSegments]),
+                  ),
+                })
               }
               onTitleChange={(entry, title) =>
                 patchEntry(entry.id, { title })
@@ -893,6 +909,41 @@ function AppContent() {
           }}
         />
       )}
+      <Dialog
+        open={Boolean(realExamStartEntry)}
+        onClose={() => setRealExamStartEntry(null)}
+        title="실전 모의고사 시작"
+        ariaLabel="실전 모의고사 시작"
+      >
+        {realExamStartEntry && (
+          <div className="real-exam-start-dialog">
+            <p className="form-hint">{realExamStartEntry.title}</p>
+            <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            <label className="form-field">
+              제한 시간
+              <select value={realExamMinutes} onChange={(event) => setRealExamMinutes(Number(event.target.value))}>
+                {[30, 50, 80, 100].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+              </select>
+            </label>
+            <p className="form-hint">타이머와 답안지를 함께 엽니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
+            <div className="dialog-actions">
+              <button type="button" className="btn-secondary" onClick={() => setRealExamStartEntry(null)}>취소</button>
+              <button
+                type="button"
+                className="btn-primary"
+                onClick={() => {
+                  const entry = realExamStartEntry;
+                  const resumable = savedExamSessions.find((item) => item.entryId === entry.id && item.status === "in_progress" && item.mode === "real");
+                  setRealExamStartEntry(null);
+                  openExamSession(entry, { mode: "real", resumable, timeLimitMinutes: realExamMinutes, showTimer: true, answerSheetOpen: true });
+                }}
+              >
+                실전 모드 시작
+              </button>
+            </div>
+          </div>
+        )}
+      </Dialog>
       <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>

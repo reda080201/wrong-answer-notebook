@@ -18,6 +18,7 @@ const sampleSession = (id: string, entryId = "entry-1"): ExamSession => ({
   currentQuestionIndex: 0,
   startedAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
+  mode: "practice",
 });
 
 describe("examSessionStorage", () => {

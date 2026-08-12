@@ -1,0 +1,19 @@
+.structured-problem-sheet { display: grid; gap: 1rem; }
+.structured-problem-sheet-question { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface); }
+.structured-problem-sheet-question > header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.875rem; }
+.structured-problem-sheet-question > header > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.structured-problem-sheet-question > header span { font-weight: 700; }
+.structured-problem-sheet-question > header small { color: var(--text-muted); }
+.structured-problem-sheet-actions { justify-content: flex-end; }
+.structured-question-renderer { display: grid; gap: 0.75rem; min-width: 0; }
+.structured-question-segment--condition { display: grid; gap: 0.3rem; padding: 0.75rem; border-left: 3px solid var(--accent); background: var(--surface-soft); }
+.structured-question-segment--equation { overflow-x: auto; padding: 0.5rem 0; }
+.structured-question-segment--table { overflow-x: auto; }
+.structured-question-segment--table table { border-collapse: collapse; min-width: min(100%, 24rem); }
+.structured-question-segment--table td { padding: 0.45rem 0.6rem; border: 1px solid var(--border); }
+.structured-question-figure { margin: 0; }
+.structured-question-figure figcaption { margin-bottom: 0.5rem; color: var(--text-muted); font-size: 0.875rem; }
+.structured-question-described-figure, .structured-question-missing-figure, .structured-problem-sheet-warning { padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--surface-soft); }
+.structured-question-equation-fallback { white-space: pre-wrap; color: var(--danger); }
+.structured-problem-sheet-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; padding: 0.75rem; background: var(--surface-soft); }
+@media (max-width: 760px) { .structured-problem-sheet-question { padding: 0.75rem; } .structured-problem-sheet-question > header { align-items: flex-start; flex-direction: column; } .structured-problem-sheet-actions { justify-content: flex-start; } }

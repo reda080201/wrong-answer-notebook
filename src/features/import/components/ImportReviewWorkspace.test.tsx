@@ -1,6 +1,20 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
+import type { StructuredQuestion } from "../../../types";
+
+function question(questionNumber: string, needsReview = false): StructuredQuestion {
+  return {
+    questionNumber,
+    questionText: `본문 ${questionNumber}`,
+    conditions: [],
+    equations: [],
+    choices: [],
+    contentSegments: [],
+    figureIds: [],
+    needsReview,
+  };
+}
 
 describe("ImportReviewWorkspace", () => {
   it("renders summary, navigator, scrollable body, and fixed footer slots", async () => {
@@ -43,5 +57,50 @@ describe("ImportReviewWorkspace", () => {
     );
 
     expect(screen.getByRole("region", { name: "검수 도구" })).toHaveTextContent("검수 도구");
+  });
+
+  it("shows one active structured question and exposes navigation state", () => {
+    const onActiveQuestionChange = vi.fn();
+    const questions = [question("1"), question("2", true), question("3")];
+
+    render(
+      <ImportReviewWorkspace
+        open
+        title="문항 검수"
+        onClose={vi.fn()}
+        structuredQuestions={questions}
+        defaultActiveQuestionIndex={1}
+        onActiveQuestionChange={onActiveQuestionChange}
+        renderQuestion={({ question: current }) => <p>{current.questionText}</p>}
+        sourcePane={({ question: current }) => <p>원본 {current.questionNumber}</p>}
+        warnings={({ question: current }) => current.needsReview ? <p role="alert">검토 필요</p> : null}
+      />,
+    );
+
+    expect(screen.getByText("본문 2")).toBeInTheDocument();
+    expect(screen.queryByText("본문 1")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2번 문항, 검토 필요" })).toHaveAttribute("aria-current", "page");
+    expect(screen.getByRole("alert")).toHaveTextContent("검토 필요");
+    expect(screen.getByText("원본 2")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "3번 문항" }));
+    expect(onActiveQuestionChange).toHaveBeenCalledWith(2);
+  });
+
+  it("supports previous and next footer actions in uncontrolled mode", () => {
+    render(
+      <ImportReviewWorkspace
+        open
+        title="문항 검수"
+        onClose={vi.fn()}
+        structuredQuestions={[question("1"), question("2")]}
+        renderQuestion={({ question: current }) => <p>{current.questionText}</p>}
+      />,
+    );
+
+    expect(screen.getByRole("button", { name: "이전" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    expect(screen.getByText("본문 2")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "이전" })).toBeEnabled();
   });
 });

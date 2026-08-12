@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 import type { QuestionBlock } from "./textLayout";
-import { parseQuestionText } from "./textLayout";
+import { getEntryQuestions } from "./entryQuestions";
 import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
 import { normalizeDifficultyScore } from "./difficulty";
 import { calculateNextReview } from "./reviewSchedule";
@@ -64,7 +64,7 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
 
 export function getQuestionCount(entry: WrongAnswerEntry): number {
   if (entry.entryKind !== "problem_sheet") return 0;
-  return parseQuestionText(entry.question).filter((block) => block.kind === "question").length;
+  return getEntryQuestions(entry).length;
 }
 
 export function getImportantQuestionCount(entry: WrongAnswerEntry): number {

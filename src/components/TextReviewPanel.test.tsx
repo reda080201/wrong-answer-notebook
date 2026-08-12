@@ -20,4 +20,68 @@ describe("TextReviewPanel", () => {
     expect(onClose).not.toHaveBeenCalled();
     resolveSave?.();
   });
+
+  it("keeps the legacy flat text editor for ordinary entries", () => {
+    render(<TextReviewPanel entry={entry} segments={[]} onClose={vi.fn()} onSave={vi.fn()} />);
+
+    expect(screen.getByRole("textbox", { name: "검수할 문제 텍스트" })).toHaveValue("문제 본문");
+    expect(screen.getByRole("button", { name: "수정 저장" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "문항 선택" })).not.toBeInTheDocument();
+  });
+
+  it("provides keyboard-navigable warnings and structured question/segment slots", () => {
+    const onActiveQuestionChange = vi.fn();
+    const onActiveSegmentChange = vi.fn();
+    const structuredEntry: WrongAnswerEntry = {
+      ...entry,
+      entryKind: "problem_sheet",
+      structuredQuestions: [
+        {
+          questionNumber: "1",
+          questionText: "첫 문항",
+          conditions: [],
+          equations: [],
+          choices: [],
+          contentSegments: [{ id: "segment-1", type: "text", text: "첫 문항" }],
+          figureIds: [],
+        },
+        {
+          questionNumber: "2",
+          questionText: "두 번째 문항",
+          conditions: ["두 번째 문항"],
+          equations: [],
+          choices: [],
+          contentSegments: [{ id: "segment-2", type: "condition", label: "조건", text: "두 번째 문항" }],
+          figureIds: [],
+        },
+      ],
+      questionContentSegments: {
+        "1": [{ id: "segment-1", type: "text", text: "첫 문항" }],
+        "2": [{ id: "segment-2", type: "condition", label: "조건", text: "두 번째 문항" }],
+      },
+    };
+    render(
+      <TextReviewPanel
+        entry={structuredEntry}
+        segments={[{ id: "warning-1", start: 0, end: 2, text: "문제", reason: "OCR 의심 조각", severity: "high" }]}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        onActiveQuestionChange={onActiveQuestionChange}
+        onActiveSegmentChange={onActiveSegmentChange}
+      />,
+    );
+
+    const warning = screen.getByRole("status");
+    warning.focus();
+    expect(warning).toHaveFocus();
+    expect(screen.queryByRole("textbox", { name: "검수할 문제 텍스트" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "2번" }));
+    fireEvent.click(screen.getByRole("button", { name: /condition.*두 번째 문항/ }));
+
+    expect(onActiveQuestionChange).toHaveBeenCalledWith("2");
+    expect(onActiveSegmentChange).toHaveBeenCalledWith("segment-2");
+    expect(screen.getByRole("textbox", { name: /2번 조건/ })).toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "문항 편집기" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("textbox", { name: "segment 편집기" })).not.toBeInTheDocument();
+  });
 });
