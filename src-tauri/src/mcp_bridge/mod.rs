@@ -2,6 +2,7 @@
 
 mod audit;
 mod auth;
+mod protocol;
 mod state;
 
 use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
@@ -13,8 +14,7 @@ use axum::{
     extract::{ConnectInfo, State},
     http::{header, HeaderMap, Request, StatusCode},
     response::{IntoResponse, Response},
-    routing::post,
-    Json, Router,
+    Json,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
 use serde::{Deserialize, Serialize};
@@ -31,7 +31,7 @@ use std::{
 use tauri::async_runtime::JoinHandle;
 use uuid::Uuid;
 
-use auth::{load_or_create_token, new_token, store_token};
+use auth::{authorize, load_or_create_token, new_token, origin_allowed, store_token};
 use state::{
     BridgeHttpState, PairingAttempt, MAX_ACTIVE_PAIRING_CODES, MAX_PAIRING_ATTEMPTS_PER_WINDOW,
     MAX_RESOURCE_BYTES, MAX_RESOURCE_IMAGES, PAIRING_LOCKOUT, PAIRING_TTL, PAIRING_WINDOW,
@@ -273,7 +273,7 @@ impl McpBridgeManager {
             status: Arc::clone(&self.status),
             audit_path: self.data_dir.join("mcp-audit.jsonl"),
         };
-        let app = router(state);
+        let app = protocol::router(state);
         let new_task = tauri::async_runtime::spawn(async move {
             if let Err(error) = axum::serve(
                 listener,
@@ -345,14 +345,6 @@ fn stopped_status() -> McpBridgeStatus {
         has_auth_token: false,
     }
 }
-fn router(state: BridgeHttpState) -> Router {
-    Router::new()
-        .route("/mcp", post(mcp_post).get(mcp_get))
-        .route("/pair", post(redeem_pairing))
-        .layer(axum::extract::DefaultBodyLimit::max(1024 * 1024))
-        .with_state(state)
-}
-
 async fn redeem_pairing(
     State(state): State<BridgeHttpState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -572,61 +564,6 @@ async fn mcp_post(State(state): State<BridgeHttpState>, request: Request<Body>) 
         Value::Array(responses)
     };
     Json(output).into_response()
-}
-fn authorize(state: &BridgeHttpState, headers: &HeaderMap) -> Result<(), Response> {
-    if !origin_allowed(headers) {
-        return Err((StatusCode::FORBIDDEN, "허용되지 않은 Origin입니다.").into_response());
-    }
-    let Some(value) = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok())
-    else {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
-    };
-    let Some(token) = value.strip_prefix("Bearer ") else {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
-    };
-    let self_test = headers
-        .get("x-wan-self-test")
-        .and_then(|value| value.to_str().ok())
-        == Some("1");
-    let authorized = if self_test {
-        state
-            .auth_token
-            .lock()
-            .map(|value| value.as_str() == token)
-            .unwrap_or(false)
-    } else {
-        state
-            .sessions
-            .lock()
-            .map(|mut sessions| {
-                sessions.retain(|_, expires| *expires > Instant::now());
-                sessions.contains_key(token)
-            })
-            .unwrap_or(false)
-    };
-    if !authorized {
-        return Err((StatusCode::UNAUTHORIZED, "인증이 필요합니다.").into_response());
-    }
-    if !self_test {
-        if let Ok(mut status) = state.status.lock() {
-            status.last_client_connected_at = Some(now_string());
-        }
-    }
-    Ok(())
-}
-fn origin_allowed(headers: &HeaderMap) -> bool {
-    let Some(origin) = headers
-        .get(header::ORIGIN)
-        .and_then(|value| value.to_str().ok())
-    else {
-        return true;
-    };
-    let Ok(url) = reqwest::Url::parse(origin) else {
-        return false;
-    };
-    url.scheme() == "http" && matches!(url.host_str(), Some("127.0.0.1" | "localhost" | "::1"))
 }
 #[derive(Deserialize)]
 struct RpcRequest {
