@@ -17,7 +17,7 @@ React + Tauri로 만든 로컬 학습·오답노트 앱입니다. 단일 오답,
 
 ## 요구 사항
 
-- Node.js 18 이상
+- Node.js 24 이상, npm 10 이상 (`package.json` engines 필드 참고)
 - 브라우저 모드만 사용할 때는 Node.js만 필요합니다.
 - Tauri 데스크톱 앱에는 Rust와 Windows Visual Studio Build Tools(C++ 워크로드)가 필요합니다.
 
@@ -147,7 +147,14 @@ Inspector는 앱 전용 `/pair` 교환을 자동으로 수행하지 않습니다
 
 ## CI
 
-GitHub Actions는 Windows 환경에서 frontend lint/test/build와 Rust fmt/check/test를 실행합니다. Tauri 컴파일 smoke job을 required status check로 설정하면 merge 전에 데스크톱 컴파일 회귀도 함께 확인할 수 있습니다. 브라우저 E2E smoke test는 Playwright 도입 후 별도 job으로 추가할 수 있습니다.
+GitHub Actions는 Windows 환경에서 frontend lint/test/build, Rust fmt/check/clippy/test를 실행합니다. Tauri 컴파일 smoke job을 required status check로 설정하면 merge 전에 데스크톱 컴파일 회귀도 함께 확인할 수 있습니다.
+
+브라우저 E2E smoke는 Playwright로 실행합니다:
+
+```bash
+npx playwright install chromium
+npm run test:e2e
+```
 
 서명 인증서가 필요한 설치 파일 배포와 release automation은 별도의 release workflow에서 관리합니다.
 

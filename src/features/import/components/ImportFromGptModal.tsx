@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { deleteImage, saveImageFiles } from "../api";
+import { deleteImage, saveImageFiles } from "../../../api";
 import type {
   AiProviderSettings,
   AiProviderStatus,
@@ -11,9 +11,9 @@ import type {
   SheetFigureItem,
   Subject,
   WrongAnswerEntry,
-} from "../types";
-import { SUBJECTS } from "../types";
-import type { SettingsTab } from "./SettingsModal";
+} from "../../../types";
+import { SUBJECTS } from "../../../types";
+import type { SettingsTab } from "../../../components/SettingsModal";
 import {
   parseAllInOneImport,
   parseImportedStudyText,
@@ -22,38 +22,38 @@ import {
   type ImportedStudyDocument,
   type ImportedStudyText,
   type EntryKindResolution,
-} from "../utils/importStudyText";
+} from "../../../utils/importStudyText";
 import {
   isAppCompatibleEntriesJson,
   isConceptKnowledgeJson,
   tryParseConceptKnowledgeText,
-} from "../utils/conceptKnowledgeImport";
-import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
+} from "../../../utils/conceptKnowledgeImport";
+import { classifyImportValidationIssues, validateImportedStudyData } from "../../../utils/importValidation";
 import {
   normalizeImportAudit,
   parseExpectedQuestionNumbers,
   normalizeRejectedNotes,
   removeRejectedNotes,
   scrubRejectedNotesFromAnswers,
-} from "../utils/importAudit";
-import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../utils/gptSolution";
-import { cleanQuestionText } from "../utils/textCleanup";
-import { parseQuestionText } from "../utils/textLayout";
-import ImageField from "./ImageField";
-import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
-import ImportEntriesPreviewModal from "./ImportEntriesPreviewModal";
-import { cloneEntryDraft, mergeEntryDraft } from "../features/entries/model/entryDraft";
-import { IMPORT_LIMITS } from "../features/import/services/importLimits";
-import { readZipImport } from "../features/import/services/zipImport";
-import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
-import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../utils/importImageReferences";
-import Dialog from "../shared/ui/Dialog";
-import { useAppDialog } from "../shared/ui/AppDialogProvider";
-import FigureComparisonPanel from "../features/figures/components/FigureComparisonPanel";
-import { normalizeImportImageKey } from "../utils/importImageReferences";
-import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
-import { supplementalModeLabel } from "../features/supplemental-resources/model/supplementalResource";
-import ImportPreviewSummary from "./ImportPreviewSummary";
+} from "../../../utils/importAudit";
+import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../../../utils/gptSolution";
+import { cleanQuestionText } from "../../../utils/textCleanup";
+import { parseQuestionText } from "../../../utils/textLayout";
+import ImageField from "../../../components/ImageField";
+import ConceptImportPreviewModal from "../../../components/ConceptImportPreviewModal";
+import ImportEntriesPreviewModal from "../../../components/ImportEntriesPreviewModal";
+import { cloneEntryDraft, mergeEntryDraft } from "../../../features/entries/model/entryDraft";
+import { IMPORT_LIMITS } from "../../../features/import/services/importLimits";
+import { readZipImport } from "../../../features/import/services/zipImport";
+import { applyAutomaticFigurePreference } from "../../../features/figures/services/figureRepresentation";
+import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../../../utils/importImageReferences";
+import Dialog from "../../../shared/ui/Dialog";
+import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
+import FigureComparisonPanel from "../../../features/figures/components/FigureComparisonPanel";
+import { normalizeImportImageKey } from "../../../utils/importImageReferences";
+import type { SupplementalImportMode } from "../../../features/supplemental-resources/model/supplementalResource";
+import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
+import ImportPreviewSummary from "../../../components/ImportPreviewSummary";
 
 interface ImportFromGptModalProps {
   onClose: () => void;

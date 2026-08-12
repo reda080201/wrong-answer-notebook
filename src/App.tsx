@@ -5,21 +5,17 @@ import "./App.css";
 import AppModals from "./components/AppModals";
 import AppSidebar from "./components/AppSidebar";
 import AppToolbar from "./components/AppToolbar";
-import EntryDetail from "./components/EntryDetail";
+import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
 import { createPreUpdateBackup } from "./api";
 import { syncMcpBridgeActiveContext, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useBridgeActiveSync } from "./hooks/useBridgeActiveSync";
-import { useMcpBridgeSettings } from "./hooks/useMcpBridgeSettings";
-import { useAiProviderSettings } from "./hooks/useAiProviderSettings";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
-import { useSettings } from "./hooks/useSettings";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import { useTheme } from "./hooks/useTheme";
 import type { ChatGptMcpPreferences, EntryKind, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
@@ -44,8 +40,9 @@ import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
 import type { LibraryFolder } from "./types";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
+import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 
-export default function App() {
+function AppContent() {
   const { confirm, prompt } = useAppDialog();
   const {
     entries,
@@ -66,34 +63,37 @@ export default function App() {
     flushEntries,
     setEntriesMaintenanceBlocked,
   } = useEntries();
+  const settingsCtx = useSettingsContext();
   const {
     settings,
-    settingsError,
-    settingsSaveState,
     setSettings,
     patchSettings,
-    patchViewPreferences,
-    patchExamPreferences,
-    patchImagePreferences,
-    patchGptMcpPreferences,
-    patchChatGptMcpPreferences,
-    patchUpdatePreferences,
-    patchQuestionBankPreferences,
-    patchExamPrintPreferences,
-    upsertTemplate,
-    removeTemplate,
-    upsertPromptTemplate,
-    removePromptTemplate,
-    upsertMemoTemplate,
-    removeMemoTemplate,
-    setLastImportTemplate,
     refreshSettings,
-    clearSettingsError,
-    retrySettingsSave,
     flushSettings,
     setSettingsMaintenanceBlocked,
-  } = useSettings();
-  const { theme, setTheme } = useTheme();
+    setSettingsMessage: setContextSettingsMessage,
+    aiProvider,
+    mcpBridge,
+    viewPreferences,
+    examPreferences,
+    chatGptMcpPreferences,
+    questionBank,
+    templates,
+    promptTemplates,
+    memoTemplates,
+  } = settingsCtx;
+  const patchViewPreferences = viewPreferences.patch;
+  const patchChatGptMcpPreferences = chatGptMcpPreferences.patch;
+  const patchQuestionBankPreferences = questionBank.patch;
+  const patchExamPrintPreferences = examPreferences.patchPrint;
+  const upsertTemplate = templates.save;
+  const removeTemplate = templates.delete;
+  const upsertPromptTemplate = promptTemplates.save;
+  const removePromptTemplate = promptTemplates.delete;
+  const upsertMemoTemplate = memoTemplates.save;
+  const removeMemoTemplate = memoTemplates.delete;
+  const setLastImportTemplate = promptTemplates.setLastUsed;
+  const { status: aiProviderStatus } = aiProvider;
   const { subjectOrder, moveSubject } = useSubjectOrder();
   const [showSettings, setShowSettings] = useState(false);
   const [showLearningHub, setShowLearningHub] = useState(false);
@@ -219,6 +219,7 @@ export default function App() {
     flushGeneratedExams,
     flushSettings,
     flushImportWorkspaceDraft: flushTransientWrites,
+    flushLibraryFolders: library.flush,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
@@ -279,21 +280,14 @@ export default function App() {
     setSelectedId,
   });
 
-  const {
-    aiProviderStatus,
-    aiProviderStatusLoading,
-    aiProviderStatusError,
-    aiProviderKeyInput,
-    setAiProviderKeyInput,
-    updateAiProviderConfig,
-    storeAiProviderKey,
-    removeAiProviderKey,
-  } = useAiProviderSettings({
-    aiProvider: settings.aiProvider,
-    refreshSettings,
-    setSettingsMessage: actions.setSettingsMessage,
-  });
-  const setSettingsMessage = actions.setSettingsMessage;
+  useEffect(() => {
+    setContextSettingsMessage(actions.settingsMessage);
+  }, [actions.settingsMessage, setContextSettingsMessage]);
+  const setSettingsMessage = (message: string | null) => {
+    actions.setSettingsMessage(message);
+    setContextSettingsMessage(message);
+  };
+
   const updater = useAppUpdater(settings, patchSettings, async (update) => {
     if (examSubmitting || examSaving || actions.showForm || actions.showImportModal || showExamBuilder) {
       actions.setSettingsMessage("시험 또는 저장 중에는 업데이트를 설치할 수 없습니다. 작업을 마친 뒤 다시 시도해 주세요.");
@@ -310,11 +304,6 @@ export default function App() {
       }
     }
     return true;
-  });
-  const mcpBridge = useMcpBridgeSettings({
-    mcpBridge: settings.mcpBridge,
-    persistMcpBridge: async (next) => patchSettings({ mcpBridge: next }),
-    setSettingsMessage,
   });
   const { syncActiveContext } = useBridgeActiveSync(settings.mcpBridge.enabled);
 
@@ -620,7 +609,7 @@ export default function App() {
               onSyncChatGptContext={syncExamChatGptContext}
               onOpenChatGptSettings={() => openSettings("chatgpt")}
               onCheckLocalMcp={async () => {
-                const status = await mcpBridge.testMcpBridgeConnection();
+                const status = await mcpBridge.testConnection();
                 if (status.status !== "listening" && status.status !== "connected") {
                   throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
                 }
@@ -742,7 +731,7 @@ export default function App() {
               }}
               onOpenChatGptSettings={() => openSettings("chatgpt")}
               onCheckLocalMcp={async () => {
-                const status = await mcpBridge.testMcpBridgeConnection();
+                const status = await mcpBridge.testConnection();
                 if (status.status !== "listening" && status.status !== "connected") {
                   throw new Error("로컬 MCP 브리지 연결 테스트에 실패했습니다.");
                 }
@@ -860,61 +849,21 @@ export default function App() {
       />
       {showSettings && (
         <SettingsModal
-          settings={settings}
-          settingsError={settingsError}
-          settingsSaveState={settingsSaveState}
-          retrySettingsSave={retrySettingsSave}
-          settingsMessage={actions.settingsMessage}
-          clearSettingsError={clearSettingsError}
-          setSettingsMessage={actions.setSettingsMessage}
-          patchSettings={patchSettings}
-          patchViewPreferences={patchViewPreferences}
-          patchExamPreferences={patchExamPreferences}
-          patchImagePreferences={patchImagePreferences}
-          patchGptMcpPreferences={patchGptMcpPreferences}
-          theme={theme}
-          setTheme={setTheme}
-          aiProviderStatus={aiProviderStatus}
-          aiProviderStatusLoading={aiProviderStatusLoading}
-          aiProviderStatusError={aiProviderStatusError}
-          aiProviderKeyInput={aiProviderKeyInput}
-          setAiProviderKeyInput={setAiProviderKeyInput}
-          updateAiProviderConfig={updateAiProviderConfig}
-          storeAiProviderKey={storeAiProviderKey}
-          removeAiProviderKey={removeAiProviderKey}
-          integrityReport={actions.integrityReport}
-          saveTemplate={actions.saveTemplate}
-          deleteTemplate={actions.deleteTemplate}
-          savePromptTemplate={actions.savePromptTemplate}
-          saveMemoTemplate={actions.saveMemoTemplate}
-          deletePromptTemplate={actions.deletePromptTemplate}
-          deleteMemoTemplate={actions.deleteMemoTemplate}
-          handleBackup={actions.handleBackup}
-          handleRestore={actions.handleRestore}
-          runIntegrity={actions.runIntegrity}
-          handleCleanupOrphans={actions.handleCleanupOrphans}
-          mcpBridgeSettings={mcpBridge.mcpBridgeSettings}
-          mcpBridgeStatus={mcpBridge.mcpBridgeStatus}
-          mcpBridgePortInput={mcpBridge.mcpBridgePortInput}
-          setMcpBridgePortInput={mcpBridge.setMcpBridgePortInput}
-          updateMcpBridgeConfig={mcpBridge.updateMcpBridgeConfig}
-          applyMcpBridgePort={mcpBridge.applyMcpBridgePort}
-          testMcpBridgeConnection={async () => { await mcpBridge.testMcpBridgeConnection(); }}
-          createMcpBridgePairing={mcpBridge.createPairing}
-          rotateMcpBridgeCredential={mcpBridge.rotateCredential}
-          disconnectMcpBridgeClients={mcpBridge.disconnectClients}
-          mcpBridgePairingSession={mcpBridge.pairingSession}
-          isMcpBridgePairingPending={mcpBridge.isMcpBridgePairingPending}
-          isMcpBridgeConnectionTesting={mcpBridge.isMcpBridgeConnectionTesting}
-          isMcpBridgeBrowserBlocked={mcpBridge.isMcpBridgeBrowserBlocked}
-          onPatchChatGptMcpPreferences={patchChatGptMcpPreferences}
-          updateState={updater.state}
-          onCheckForUpdate={async () => { await updater.checkForUpdate({ ignoreSkipped: true }); }}
-          onInstallUpdate={async () => { await updater.installUpdate(); }}
-          onRestartAfterUpdate={async () => { await updater.restart(); }}
-          onOpenReleasePage={() => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); }}
-          onPatchUpdatePreferences={patchUpdatePreferences}
           initialTab={settingsInitialTab}
+          dataActions={{
+            integrityReport: actions.integrityReport,
+            backup: actions.handleBackup,
+            restore: actions.handleRestore,
+            runIntegrity: actions.runIntegrity,
+            cleanupOrphans: actions.handleCleanupOrphans,
+          }}
+          updateActions={{
+            state: updater.state,
+            check: async () => { await updater.checkForUpdate({ ignoreSkipped: true }); },
+            install: async () => { await updater.installUpdate(); },
+            restart: async () => { await updater.restart(); },
+            openReleasePage: () => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); },
+          }}
           onClose={() => {
             setShowSettings(false);
             setSettingsInitialTab(undefined);
@@ -932,5 +881,16 @@ export default function App() {
       </Dialog>
     </div>
     </ConceptLinkProvider>
+  );
+}
+
+/**
+ * App component wrapped with SettingsProvider for context-based settings management
+ */
+export default function App() {
+  return (
+    <SettingsProvider>
+      <AppContent />
+    </SettingsProvider>
   );
 }

@@ -1,62 +1,62 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../types";
-import type { ExportHubView } from "../features/export/types";
-import type { SettingsTab } from "./SettingsModal";
-import { hasExplanationContent } from "../utils/entry";
-import { getRelatedEntries } from "../utils/concepts";
-import { buildConceptAnalytics } from "../utils/conceptAnalytics";
-import { buildLearningBlocksFromEntry } from "../utils/learningContent";
+import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { ExportHubView } from "../../../features/export/types";
+import type { SettingsTab } from "../../../components/SettingsModal";
+import { hasExplanationContent } from "../../../utils/entry";
+import { getRelatedEntries } from "../../../utils/concepts";
+import { buildConceptAnalytics } from "../../../utils/conceptAnalytics";
+import { buildLearningBlocksFromEntry } from "../../../utils/learningContent";
 import {
   recommendedStrategyForAnalysis,
-} from "../utils/mistakeAnalysis";
-import { getNextStudyAction, type NextStudyActionId } from "../utils/nextStudyAction";
-import { normalizeDifficultyScore } from "../utils/difficulty";
-import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
-import { detectSuspiciousTextSegments } from "../utils/suspiciousText";
+} from "../../../utils/mistakeAnalysis";
+import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextStudyAction";
+import { normalizeDifficultyScore } from "../../../utils/difficulty";
+import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
+import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
   normalizeQuestionMeta,
   normalizeQuestionNumber,
   applyQuestionReviewResult,
   toggleQuestionImportant,
-} from "../utils/questionMeta";
-import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
-import CollapsibleSection from "./CollapsibleSection";
-import ContentBlock from "./ContentBlock";
-import { LinkifiedText } from "../utils/wikiLinks";
-import LearningContentPanel from "./LearningContentPanel";
-import MathText from "./MathText";
-import SolutionBookView from "./SolutionBookView";
-import StudyAnalysisView from "./StudyAnalysisView";
-import StudyControlBar from "./StudyControlBar";
-import StudyPaperView from "./StudyPaperView";
-import StudyFlowStrip from "./StudyFlowStrip";
-import StudyZoomViewport, { getQuestionZoomStorageKey } from "./StudyZoomViewport";
-import TextReviewPanel from "./TextReviewPanel";
-import QuestionTheaterView from "./QuestionTheaterView";
-import LectureReaderView from "./LectureReaderView";
-import ExportHubModal from "../features/export/components/ExportHubModal";
-import type { ChatGptSharePayload } from "../features/export/types";
-import type { GptSolutionPurpose } from "../features/export/components/ChatGptSharePanel";
-import GptSolutionRoundtripModal from "../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
-import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
-import { validateGptSolutionResponse } from "../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
-import { loadGptSolutionRoundtripDrafts, saveGptSolutionRoundtripDrafts } from "../api";
-import QuickViewSettingsMenu from "./QuickViewSettingsMenu";
-import Dialog from "../shared/ui/Dialog";
-import { writeUiStorageValue } from "../services/uiStorage";
-import Toast from "../shared/ui/Toast";
-import Menu from "../shared/ui/Menu";
-import SimilarQuestionLinksPanel from "../features/question-bank/components/SimilarQuestionLinksPanel";
-import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
-import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
+} from "../../../utils/questionMeta";
+import AnnotatableQuestion, { FocusedQuestionView } from "../../../components/AnnotatableQuestion";
+import CollapsibleSection from "../../../components/CollapsibleSection";
+import ContentBlock from "../../../components/ContentBlock";
+import { LinkifiedText } from "../../../utils/wikiLinks";
+import LearningContentPanel from "../../../components/LearningContentPanel";
+import MathText from "../../../components/MathText";
+import SolutionBookView from "../../../components/SolutionBookView";
+import StudyAnalysisView from "../../../components/StudyAnalysisView";
+import StudyControlBar from "../../../components/StudyControlBar";
+import StudyPaperView from "../../../components/StudyPaperView";
+import StudyFlowStrip from "../../../components/StudyFlowStrip";
+import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
+import TextReviewPanel from "../../../components/TextReviewPanel";
+import QuestionTheaterView from "../../../components/QuestionTheaterView";
+import LectureReaderView from "../../../components/LectureReaderView";
+import ExportHubModal from "../../../features/export/components/ExportHubModal";
+import type { ChatGptSharePayload } from "../../../features/export/types";
+import type { GptSolutionPurpose } from "../../../features/export/components/ChatGptSharePanel";
+import GptSolutionRoundtripModal from "../../../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
+import type { GptSolutionRoundtripDraft } from "../../../features/gpt-solution-roundtrip/model";
+import { validateGptSolutionResponse } from "../../../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
+import { loadGptSolutionRoundtripDrafts, saveGptSolutionRoundtripDrafts } from "../../../api";
+import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
+import Dialog from "../../../shared/ui/Dialog";
+import { writeUiStorageValue } from "../../../services/uiStorage";
+import Toast from "../../../shared/ui/Toast";
+import Menu from "../../../shared/ui/Menu";
+import SimilarQuestionLinksPanel from "../../../features/question-bank/components/SimilarQuestionLinksPanel";
+import type { QuestionBankItem } from "../../../features/question-bank/model/questionBankTypes";
+import { buildConceptLinkContext } from "../../../features/learning/utils/conceptIndex";
 import {
   ConceptChecklistSection,
   ConceptConnectionsSection,
   EntryImportAuditSection,
   EntryMistakeAnalysisSection,
-} from "./EntryDetailSections";
+} from "../../../components/EntryDetailSections";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;

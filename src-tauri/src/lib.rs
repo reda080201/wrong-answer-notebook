@@ -857,6 +857,8 @@ pub fn run() {
             import_assets::discard_import_asset_session,
             import_assets::validate_import_asset_session,
             import_assets::cleanup_stale_import_asset_sessions,
+            images::save_image_from_dialog,
+            images::save_images_from_dialog,
             images::save_image,
             images::get_image_file_path,
             images::delete_image,

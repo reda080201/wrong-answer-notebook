@@ -1,6 +1,8 @@
 //! Loopback-only, authenticated, read-only MCP Streamable HTTP bridge.
 
 mod audit;
+mod auth;
+mod state;
 
 use crate::mcp_bridge_contract::MCP_BRIDGE_VERSION;
 use crate::notebook_store::{
@@ -15,7 +17,6 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64_STANDARD, Engine as _};
-use keyring::Entry as KeyringEntry;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::{
@@ -30,18 +31,15 @@ use std::{
 use tauri::async_runtime::JoinHandle;
 use uuid::Uuid;
 
+use auth::{load_or_create_token, new_token, store_token};
+use state::{
+    BridgeHttpState, PairingAttempt, MAX_ACTIVE_PAIRING_CODES, MAX_PAIRING_ATTEMPTS_PER_WINDOW,
+    MAX_RESOURCE_BYTES, MAX_RESOURCE_IMAGES, PAIRING_LOCKOUT, PAIRING_TTL, PAIRING_WINDOW,
+    SESSION_TTL,
+};
+
 pub const DEFAULT_MCP_PORT: u16 = 43129;
-const MCP_KEYRING_SERVICE: &str = "wrong-answer-notebook-mcp";
-const MCP_KEYRING_USER: &str = "bridge-token";
-const PAIRING_TTL: Duration = Duration::from_secs(5 * 60);
-const MAX_ACTIVE_PAIRING_CODES: usize = 3;
-const PAIRING_WINDOW: Duration = Duration::from_secs(60);
-const MAX_PAIRING_ATTEMPTS_PER_WINDOW: u32 = 5;
-const PAIRING_LOCKOUT: Duration = Duration::from_secs(60);
-const SESSION_TTL: Duration = Duration::from_secs(15 * 60);
 const MAX_ACTIVE_SESSIONS: usize = 5;
-const MAX_RESOURCE_IMAGES: usize = 8;
-const MAX_RESOURCE_BYTES: u64 = 10 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -63,13 +61,6 @@ pub struct McpBridgeStatus {
 pub struct ActiveContext {
     pub entry_id: Option<String>,
     pub question_number: Option<String>,
-}
-
-#[derive(Clone)]
-struct PairingAttempt {
-    window_started: Instant,
-    failures: u32,
-    blocked_until: Option<Instant>,
 }
 
 pub struct McpBridgeManager {
@@ -353,47 +344,6 @@ fn stopped_status() -> McpBridgeStatus {
         last_error: None,
         has_auth_token: false,
     }
-}
-fn new_token() -> String {
-    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
-}
-fn keyring_entry() -> Result<KeyringEntry, String> {
-    KeyringEntry::new(MCP_KEYRING_SERVICE, MCP_KEYRING_USER)
-        .map_err(|e| format!("MCP 인증 저장소를 열지 못했습니다: {e}"))
-}
-fn store_token(token: &str) -> Result<(), String> {
-    keyring_entry()?
-        .set_password(token)
-        .map_err(|e| format!("MCP 인증 토큰을 저장하지 못했습니다: {e}"))
-}
-fn load_or_create_token() -> Result<String, String> {
-    let entry = keyring_entry()?;
-    if let Ok(token) = entry.get_password() {
-        if !token.trim().is_empty() {
-            return Ok(token);
-        }
-    }
-    let token = new_token();
-    entry
-        .set_password(&token)
-        .map_err(|e| format!("MCP 인증 토큰을 저장하지 못했습니다: {e}"))?;
-    Ok(token)
-}
-
-#[derive(Clone)]
-struct BridgeHttpState {
-    store: Arc<NotebookStore>,
-    images_path: PathBuf,
-    exam_sessions_path: PathBuf,
-    active_exam_context_path: PathBuf,
-    active_export_context_path: PathBuf,
-    auth_token: Arc<Mutex<String>>,
-    pairing_codes: Arc<Mutex<HashMap<String, Instant>>>,
-    sessions: Arc<Mutex<HashMap<String, Instant>>>,
-    pairing_attempts: Arc<Mutex<HashMap<IpAddr, PairingAttempt>>>,
-    active_context: Arc<Mutex<ActiveContext>>,
-    status: Arc<Mutex<McpBridgeStatus>>,
-    audit_path: PathBuf,
 }
 fn router(state: BridgeHttpState) -> Router {
     Router::new()

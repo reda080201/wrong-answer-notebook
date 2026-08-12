@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import EntryForm from "./EntryForm";
 
-vi.mock("../api", () => ({
+vi.mock("../../../api", () => ({
   getImageUrl: vi.fn(),
   pickImages: vi.fn(),
   saveImageFiles: vi.fn(),

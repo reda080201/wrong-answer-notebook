@@ -1,5 +1,5 @@
-import EntryForm from "./EntryForm";
-import ImportFromGptModal from "./ImportFromGptModal";
+import EntryForm from "../features/entries/components/EntryForm";
+import ImportFromGptModal from "../features/import/components/ImportFromGptModal";
 import LearningImportModal from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";

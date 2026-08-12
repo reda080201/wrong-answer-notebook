@@ -1,9 +1,9 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { WrongAnswerEntry } from "../types";
+import type { WrongAnswerEntry } from "../../../types";
 import EntryDetail from "./EntryDetail";
 
-vi.mock("../api", () => ({
+vi.mock("../../../api", () => ({
   getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
   loadGptSolutionRoundtripDrafts: vi.fn(async () => []),
   saveGptSolutionRoundtripDrafts: vi.fn(async () => undefined),
@@ -14,15 +14,15 @@ const { downloadMarkdown, printExamDocument } = vi.hoisted(() => ({
   printExamDocument: vi.fn(async () => undefined),
 }));
 
-vi.mock("../utils/exportEntry", () => ({
+vi.mock("../../../utils/exportEntry", () => ({
   downloadMarkdown,
 }));
 
-vi.mock("../features/export/services/printExamDocument", () => ({
+vi.mock("../../../features/export/services/printExamDocument", () => ({
   printExamDocument,
 }));
 
-import { DEFAULT_CHATGPT_MCP_PREFERENCES, DEFAULT_EXAM_PRINT_PREFERENCES } from "../utils/viewPreferences";
+import { DEFAULT_CHATGPT_MCP_PREFERENCES, DEFAULT_EXAM_PRINT_PREFERENCES } from "../../../utils/viewPreferences";
 
 const sheetEntry: WrongAnswerEntry = {
   id: "sheet-1",

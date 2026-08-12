@@ -1,16 +1,13 @@
 import { useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
-  DEFAULT_MCP_BRIDGE_SETTINGS,
   MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
   type McpBridgeRuntimeStatus,
   type McpBridgeSettings,
 } from "../hooks/useMcpBridgeSettings";
 import { normalizeRemoteMcpBaseUrl } from "../features/chatgpt/services/chatGptConnection";
 import type {
-  AiProviderStatus,
   AiProviderType,
-  AppSettings,
   EntryKind,
   EntryTemplate,
   ExamPreferences,
@@ -22,7 +19,9 @@ import type {
   ThemeMode,
   ViewPreferences,
 } from "../types";
+import type { AppUpdateState } from "../features/updater/model/appUpdate";
 import Dialog from "../shared/ui/Dialog";
+import { useSettingsContext } from "../contexts/SettingsContext";
 
 export type SettingsTab =
   | "theme"
@@ -52,124 +51,81 @@ const SETTINGS_TABS: Array<[SettingsTab, string]> = [
 ];
 
 interface SettingsModalProps {
-  initialTab?: SettingsTab;
-  settings: AppSettings;
-  settingsError: string | null;
-  settingsSaveState?: "idle" | "saving" | "saved" | "error";
-  retrySettingsSave?: () => Promise<void>;
-  settingsMessage: string | null;
-  clearSettingsError: () => void;
-  setSettingsMessage: (message: string | null) => void;
-  patchSettings?: (patch: Partial<AppSettings>) => Promise<void>;
-  patchViewPreferences?: (patch: Partial<ViewPreferences>) => Promise<void>;
-  patchExamPreferences?: (patch: Partial<ExamPreferences>) => Promise<void>;
-  patchImagePreferences?: (patch: Partial<ImagePreferences>) => Promise<void>;
-  patchGptMcpPreferences?: (patch: Partial<GptMcpPreferences>) => Promise<void>;
-  setSettings?: (settings: AppSettings) => Promise<void>;
-  theme: ThemeMode;
-  setTheme: (theme: ThemeMode) => void;
-  aiProviderStatus: AiProviderStatus | null;
-  aiProviderStatusLoading?: boolean;
-  aiProviderStatusError?: string | null;
-  aiProviderKeyInput: string;
-  setAiProviderKeyInput: (value: string) => void;
-  updateAiProviderConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<void>;
-  storeAiProviderKey: () => Promise<void>;
-  removeAiProviderKey: () => Promise<void>;
-  integrityReport: IntegrityReport | null;
-  saveTemplate: (template: EntryTemplate) => Promise<void>;
-  deleteTemplate: (templateId: string) => Promise<void>;
-  savePromptTemplate: (template: { id: string; name: string; content: string }) => Promise<void>;
-  saveMemoTemplate?: (template: { id: string; name: string; content: string }) => Promise<void>;
-  deletePromptTemplate: (templateId: string) => Promise<void>;
-  deleteMemoTemplate: (templateId: string) => Promise<void>;
-  handleBackup: () => Promise<void>;
-  handleRestore: () => Promise<void>;
-  runIntegrity: () => Promise<void>;
-  handleCleanupOrphans: () => Promise<void>;
   onClose: () => void;
-  mcpBridgeSettings?: McpBridgeSettings;
-  mcpBridgeStatus?: McpBridgeRuntimeStatus | null;
-  mcpBridgePortInput?: string;
-  setMcpBridgePortInput?: (value: string) => void;
-  updateMcpBridgeConfig?: (patch: Partial<McpBridgeSettings>) => Promise<void>;
-  applyMcpBridgePort?: () => Promise<void>;
-  testMcpBridgeConnection?: () => Promise<void>;
-  createMcpBridgePairing?: () => Promise<void>;
-  rotateMcpBridgeCredential?: () => Promise<void>;
-  disconnectMcpBridgeClients?: () => Promise<void>;
-  mcpBridgePairingSession?: McpBridgePairingSession | null;
-  isMcpBridgePairingPending?: boolean;
-  isMcpBridgeConnectionTesting?: boolean;
-  isMcpBridgeBrowserBlocked?: boolean;
-  onPatchChatGptMcpPreferences?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void>;
-  updateState?: import("../features/updater/model/appUpdate").AppUpdateState;
-  onCheckForUpdate?: () => Promise<void>;
-  onInstallUpdate?: () => Promise<void>;
-  onRestartAfterUpdate?: () => Promise<void>;
-  onOpenReleasePage?: () => void;
-  onPatchUpdatePreferences?: (patch: Partial<import("../types").AppUpdatePreferences>) => Promise<void>;
+  initialTab?: SettingsTab;
+  dataActions: {
+    integrityReport: IntegrityReport | null;
+    backup: () => Promise<void>;
+    restore: () => Promise<void>;
+    runIntegrity: () => Promise<void>;
+    cleanupOrphans: () => Promise<void>;
+  };
+  updateActions: {
+    state: AppUpdateState;
+    check: () => Promise<void>;
+    install: () => Promise<void>;
+    restart: () => Promise<void>;
+    openReleasePage: () => void;
+  };
 }
 
 export default function SettingsModal({
-  settings,
-  settingsError,
-  settingsSaveState = "idle",
-  retrySettingsSave,
-  settingsMessage,
-  clearSettingsError,
-  setSettingsMessage,
-  patchSettings = async () => undefined,
-  patchViewPreferences = async () => undefined,
-  patchExamPreferences = async () => undefined,
-  patchImagePreferences = async () => undefined,
-  patchGptMcpPreferences = async () => undefined,
-  setSettings: legacySetSettings,
-  theme,
-  setTheme,
-  aiProviderStatus,
-  aiProviderStatusLoading = false,
-  aiProviderStatusError = null,
-  aiProviderKeyInput,
-  setAiProviderKeyInput,
-  updateAiProviderConfig,
-  storeAiProviderKey,
-  removeAiProviderKey,
-  integrityReport,
-  saveTemplate,
-  deleteTemplate,
-  savePromptTemplate,
-  saveMemoTemplate = async () => undefined,
-  deletePromptTemplate,
-  deleteMemoTemplate,
-  handleBackup,
-  handleRestore,
-  runIntegrity,
-  handleCleanupOrphans,
   onClose,
   initialTab,
-  mcpBridgeSettings = DEFAULT_MCP_BRIDGE_SETTINGS,
-  mcpBridgeStatus = null,
-  mcpBridgePortInput,
-  setMcpBridgePortInput,
-  updateMcpBridgeConfig,
-  applyMcpBridgePort,
-  testMcpBridgeConnection,
-  createMcpBridgePairing,
-  rotateMcpBridgeCredential,
-  disconnectMcpBridgeClients,
-  mcpBridgePairingSession = null,
-  isMcpBridgePairingPending = false,
-  isMcpBridgeConnectionTesting = false,
-  isMcpBridgeBrowserBlocked = !isTauri(),
-  onPatchChatGptMcpPreferences,
-  updateState = { status: "idle" },
-  onCheckForUpdate,
-  onInstallUpdate,
-  onRestartAfterUpdate,
-  onOpenReleasePage,
-  onPatchUpdatePreferences,
+  dataActions,
+  updateActions,
 }: SettingsModalProps) {
+  const ctx = useSettingsContext();
+  const settings = ctx.settings;
+  const settingsError = ctx.settingsError;
+  const settingsSaveState = ctx.settingsSaveState;
+  const retrySettingsSave = ctx.retrySettingsSave;
+  const settingsMessage = ctx.settingsMessage;
+  const clearSettingsError = ctx.clearSettingsError;
+  const setSettingsMessage = ctx.setSettingsMessage;
+  const patchSettings = ctx.patchSettings;
+  const theme = ctx.theme.current;
+  const setTheme = ctx.theme.set;
+  const aiProviderStatus = ctx.aiProvider.status;
+  const aiProviderStatusLoading = ctx.aiProvider.statusLoading;
+  const aiProviderStatusError = ctx.aiProvider.statusError;
+  const aiProviderKeyInput = ctx.aiProvider.keyInput;
+  const setAiProviderKeyInput = ctx.aiProvider.setKeyInput;
+  const updateAiProviderConfig = ctx.aiProvider.updateConfig;
+  const storeAiProviderKey = ctx.aiProvider.storeKey;
+  const removeAiProviderKey = ctx.aiProvider.removeKey;
+  const saveTemplate = ctx.templates.save;
+  const deleteTemplate = ctx.templates.delete;
+  const savePromptTemplate = ctx.promptTemplates.save;
+  const saveMemoTemplate = ctx.memoTemplates.save;
+  const deletePromptTemplate = ctx.promptTemplates.delete;
+  const deleteMemoTemplate = ctx.memoTemplates.delete;
+  const integrityReport = dataActions.integrityReport;
+  const handleBackup = dataActions.backup;
+  const handleRestore = dataActions.restore;
+  const runIntegrity = dataActions.runIntegrity;
+  const handleCleanupOrphans = dataActions.cleanupOrphans;
+  const mcpBridgeSettings = ctx.mcpBridge.settings;
+  const mcpBridgeStatus = ctx.mcpBridge.status;
+  const mcpBridgePortInput = ctx.mcpBridge.portInput;
+  const setMcpBridgePortInput = ctx.mcpBridge.setPortInput;
+  const updateMcpBridgeConfig = ctx.mcpBridge.updateConfig;
+  const applyMcpBridgePort = ctx.mcpBridge.applyPort;
+  const testMcpBridgeConnection = async () => { await ctx.mcpBridge.testConnection(); };
+  const createMcpBridgePairing = ctx.mcpBridge.createPairing;
+  const rotateMcpBridgeCredential = ctx.mcpBridge.rotateCredential;
+  const disconnectMcpBridgeClients = ctx.mcpBridge.disconnectClients;
+  const mcpBridgePairingSession = ctx.mcpBridge.pairingSession;
+  const isMcpBridgePairingPending = ctx.mcpBridge.isPairingPending;
+  const isMcpBridgeConnectionTesting = ctx.mcpBridge.isConnectionTesting;
+  const isMcpBridgeBrowserBlocked = ctx.mcpBridge.isBrowserBlocked;
+  const updateState = updateActions.state;
+  const onCheckForUpdate = updateActions.check;
+  const onInstallUpdate = updateActions.install;
+  const onRestartAfterUpdate = updateActions.restart;
+  const onOpenReleasePage = updateActions.openReleasePage;
+  const onPatchUpdatePreferences = ctx.updates.patchPreferences;
+
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
   const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? "theme");
@@ -177,27 +133,21 @@ export default function SettingsModal({
     if (initialTab) setActiveTab(initialTab);
   }, [initialTab]);
   const patchView = async (patch: Partial<ViewPreferences>) => {
-    if (legacySetSettings) {
-      const nextView = { ...settings.viewPreferences, ...patch };
-      await legacySetSettings({ ...settings, viewPreferences: nextView, answerViewPreferences: { ...settings.answerViewPreferences, hideAnswers: nextView.hideAnswers } });
-      return;
-    }
-    await patchViewPreferences(patch);
+    await ctx.viewPreferences.patch(patch);
   };
   const patchExam = async (patch: Partial<ExamPreferences>) => {
-    await patchExamPreferences(patch);
+    await ctx.examPreferences.patch(patch);
   };
   const patchImages = async (patch: Partial<ImagePreferences>) => {
-    await patchImagePreferences(patch);
+    await ctx.imagePreferences.patch(patch);
   };
   const patchGptMcp = async (patch: Partial<GptMcpPreferences>) => {
-    await patchGptMcpPreferences(patch);
+    await ctx.gptMcpPreferences.patch(patch);
   };
   const patchChatGpt = async (patch: Partial<ChatGptMcpPreferences>) => {
-    if (onPatchChatGptMcpPreferences) {
-      await onPatchChatGptMcpPreferences(patch);
-    }
+    await ctx.chatGptMcpPreferences.patch(patch);
   };
+
   const saveRemoteBaseUrl = async (raw: string) => {
     if (!raw.trim()) {
       await patchChatGpt({ remoteBaseUrl: undefined });
@@ -417,7 +367,7 @@ export default function SettingsModal({
                   connectionTesting={isMcpBridgeConnectionTesting}
                   onPortInputChange={setMcpBridgePortInput}
                   onApplyPort={applyMcpBridgePort}
-                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
+                  onToggleEnabled={(enabled) => updateMcpBridgeConfig({ enabled })}
                   onTestConnection={testMcpBridgeConnection}
                   onCreatePairing={createMcpBridgePairing}
                   onRotateCredential={rotateMcpBridgeCredential}
@@ -460,7 +410,7 @@ export default function SettingsModal({
                   connectionTesting={isMcpBridgeConnectionTesting}
                   onPortInputChange={setMcpBridgePortInput}
                   onApplyPort={applyMcpBridgePort}
-                  onToggleEnabled={(enabled) => updateMcpBridgeConfig?.({ enabled })}
+                  onToggleEnabled={(enabled) => updateMcpBridgeConfig({ enabled })}
                   onTestConnection={testMcpBridgeConnection}
                   onCreatePairing={createMcpBridgePairing}
                   onRotateCredential={rotateMcpBridgeCredential}
@@ -605,15 +555,15 @@ export default function SettingsModal({
               <div className="settings-pref-panel updater-settings-panel">
                 <p className="settings-label">앱 업데이트</p>
                 <p>현재 버전: {updateState.status === "available" ? updateState.currentVersion : updateState.status === "up_to_date" ? updateState.currentVersion : "설치된 데스크톱 앱에서 확인"}</p>
-                {updateState.status === "available" && <><p>최신 버전: {updateState.latestVersion}</p><div className="update-notes"><pre>{updateState.notes || "변경사항이 없습니다."}</pre></div><button type="button" className="theme-btn" onClick={() => void onInstallUpdate?.()}>다운로드 및 설치</button></>}
+                {updateState.status === "available" && <><p>최신 버전: {updateState.latestVersion}</p><div className="update-notes"><pre>{updateState.notes || "변경사항이 없습니다."}</pre></div><button type="button" className="theme-btn" onClick={() => void onInstallUpdate()}>다운로드 및 설치</button></>}
                 {updateState.status === "downloading" && <p>업데이트 다운로드 중… {updateState.percent === undefined ? `${Math.round(updateState.downloadedBytes / 1024 / 1024)}MB` : `${updateState.percent}%`}</p>}
-                {updateState.status === "restart_required" && <button type="button" className="theme-btn" onClick={() => void onRestartAfterUpdate?.()}>지금 다시 시작</button>}
+                {updateState.status === "restart_required" && <button type="button" className="theme-btn" onClick={() => void onRestartAfterUpdate()}>지금 다시 시작</button>}
                 {updateState.status === "up_to_date" && <p>최신 버전입니다.</p>}
                 {updateState.status === "offline" && <p>{updateState.message}</p>}
-                <div className="settings-actions"><button type="button" className="theme-btn" onClick={() => void onCheckForUpdate?.()}>업데이트 확인</button><button type="button" className="theme-btn" onClick={onOpenReleasePage}>GitHub Releases 열기</button></div>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.autoCheckEnabled} onChange={(event) => void onPatchUpdatePreferences?.({ autoCheckEnabled: event.target.checked })} /> 앱 시작 시 업데이트 확인</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.notificationsEnabled} onChange={(event) => void onPatchUpdatePreferences?.({ notificationsEnabled: event.target.checked })} /> 업데이트 알림 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.backupBeforeInstall} onChange={(event) => void onPatchUpdatePreferences?.({ backupBeforeInstall: event.target.checked })} /> 설치 전 자동 백업</label>
+                <div className="settings-actions"><button type="button" className="theme-btn" onClick={() => void onCheckForUpdate()}>업데이트 확인</button><button type="button" className="theme-btn" onClick={onOpenReleasePage}>GitHub Releases 열기</button></div>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.autoCheckEnabled} onChange={(event) => void onPatchUpdatePreferences({ autoCheckEnabled: event.target.checked })} /> 앱 시작 시 업데이트 확인</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.notificationsEnabled} onChange={(event) => void onPatchUpdatePreferences({ notificationsEnabled: event.target.checked })} /> 업데이트 알림 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.backupBeforeInstall} onChange={(event) => void onPatchUpdatePreferences({ backupBeforeInstall: event.target.checked })} /> 설치 전 자동 백업</label>
               </div>
             )}
           </section>

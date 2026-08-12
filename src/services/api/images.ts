@@ -1,5 +1,4 @@
 import { convertFileSrc, invoke, isTauri } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
 import { v4 as uuidv4 } from "uuid";
 import type { EntryFormData } from "../../types";
 import { IMPORT_LIMITS } from "../../features/import/services/importLimits";
@@ -16,28 +15,20 @@ export async function pickImages(): Promise<string[]> {
     return pickImagesBrowser();
   }
 
-  const selected = await open({
-    multiple: true,
-    filters: [{ name: "이미지", extensions: ["png", "jpg", "jpeg", "gif", "webp"] }],
-  });
-
-  if (!selected) return [];
-
-  const paths = Array.isArray(selected) ? selected : [selected];
-  const saved: string[] = [];
-
-  for (const path of paths) {
-    try {
-      const filename = await invoke<string>("save_image", { sourcePath: path });
-      saved.push(filename);
-    } catch (error) {
-      throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), {
-        cause: error,
-      });
+  // Use the new dialog-based command which handles file selection internally
+  // This prevents path injection attacks by using Tauri's native dialog
+  try {
+    const filenames = await invoke<string[]>("save_images_from_dialog");
+    return filenames || [];
+  } catch (error) {
+    // User cancelled dialog is not an error
+    if (String(error).includes("파일을 선택하지 않았습니다")) {
+      return [];
     }
+    throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), {
+      cause: error,
+    });
   }
-
-  return saved;
 }
 
 export function createBrowserImageKey(filename: string): string {

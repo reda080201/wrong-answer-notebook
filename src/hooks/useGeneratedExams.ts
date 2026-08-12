@@ -138,7 +138,7 @@ export function useGeneratedExams() {
 
   const setGeneratedExamsMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
-  }, []);
+  }, [drain]);
 
   return { exams, loading, loadError, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, setGeneratedExamsMaintenanceBlocked, clearError: () => setError(null) };
 }
