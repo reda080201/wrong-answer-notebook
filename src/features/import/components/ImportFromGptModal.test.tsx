@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 import { deleteImage, pickImages, saveImageFiles } from "../../../api";
@@ -1086,6 +1086,37 @@ describe("ImportFromGptModal", () => {
       [],
     );
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it("edits the canonical structured draft in the fullscreen review workspace", async () => {
+    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={vi.fn()}
+        onApply={vi.fn()}
+        onApplyEntries={onApplyEntries}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), {
+      target: { files: [quickSaveFixtureFile()] },
+    });
+    const openReview = await screen.findByRole("button", { name: "전체 화면 검수" });
+    await waitFor(() => expect(openReview).not.toBeDisabled());
+    fireEvent.click(openReview);
+
+    const workspace = screen.getByRole("dialog", { name: /검수$/ });
+    const questionText = within(workspace).getByLabelText("1번 본문");
+    fireEvent.change(questionText, { target: { value: "수정된 canonical 본문" } });
+    fireEvent.click(within(workspace).getByRole("button", { name: "바로 저장" }));
+
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledTimes(1));
+    expect(onApplyEntries).toHaveBeenCalledWith([
+      expect.objectContaining({
+        structuredQuestions: [expect.objectContaining({ questionText: "수정된 canonical 본문" })],
+      }),
+    ], []);
   });
 
   it("guards a pending quick save synchronously and allows retry after failure", async () => {

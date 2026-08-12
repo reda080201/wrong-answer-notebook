@@ -62,6 +62,9 @@ import {
   getStructuredValidationFingerprint,
   removeFigureFromImportDraft,
 } from "../services/importDraftCanonical";
+import ImportReviewWorkspace from "./ImportReviewWorkspace";
+import ImportAnswerReviewList from "./ImportAnswerReviewList";
+import { FileUp, Maximize2 } from "lucide-react";
 
 interface ImportFromGptModalProps {
   onClose: () => void;
@@ -358,6 +361,7 @@ export default function ImportFromGptModal({
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
+  const [reviewWorkspaceOpen, setReviewWorkspaceOpen] = useState(false);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
@@ -920,6 +924,44 @@ export default function ImportFromGptModal({
         <div className="form-body import-modal-body">
           <div className="import-grid">
             <section className="import-pane">
+              {!isSolutionMode && (
+                <section className="import-source-launcher" aria-labelledby="import-source-title">
+                  <div className="import-source-launcher-heading">
+                    <FileUp size={20} aria-hidden="true" />
+                    <div>
+                      <h3 id="import-source-title">파일에서 시작</h3>
+                      <p>ZIP 하나 또는 JSON과 이미지 묶음을 선택하면 연결 상태까지 먼저 검사합니다.</p>
+                    </div>
+                  </div>
+                  <div className="import-source-actions">
+                    <label className="ui-button ui-button--primary" htmlFor="gpt-all-in-one-file">ZIP·JSON·이미지 선택</label>
+                    <input
+                      id="gpt-all-in-one-file"
+                      className="import-source-file-input"
+                      aria-label="올인원 가져오기"
+                      type="file"
+                      multiple
+                      accept=".zip,.json,.png,.jpg,.jpeg,.webp,application/zip,application/json,image/png,image/jpeg,image/webp"
+                      onChange={(event) => handleAllInOneFiles(event.target.files)}
+                    />
+                    <label className="ui-button ui-button--secondary" htmlFor="gpt-import-file">텍스트·JSON 파일</label>
+                    <input
+                      id="gpt-import-file"
+                      className="import-source-file-input"
+                      aria-label="텍스트 파일 업로드"
+                      type="file"
+                      accept=".txt,.md,.json,text/plain,text/markdown,application/json"
+                      onChange={(event) => handleFile(event.target.files?.[0])}
+                    />
+                  </div>
+                  {zipProgress && (
+                    <div className="import-zip-progress" role="status" aria-live="polite">
+                      <span>{zipProgress.phase === "inspect" ? "ZIP 검사 중…" : `이미지 확인 중 ${zipProgress.completed} / ${zipProgress.total}`}</span>
+                      <button type="button" className="btn-secondary btn-sm" onClick={() => zipAbortRef.current?.abort()}>취소</button>
+                    </div>
+                  )}
+                </section>
+              )}
               {availablePromptTemplates.length > 0 && (
                 <div className="prompt-template-box">
                   <div className="form-row form-row--2">
@@ -1071,40 +1113,15 @@ export default function ImportFromGptModal({
                 </div>
               )}
 
-              <div className="form-field full">
-                <label htmlFor="gpt-import-file">텍스트 파일 업로드</label>
-                <input
-                  id="gpt-import-file"
-                  type="file"
-                  accept=".txt,.md,.json,text/plain,text/markdown,application/json"
-                  onChange={(event) => handleFile(event.target.files?.[0])}
-                />
-              </div>
-
-              {!isSolutionMode && (
-                <div className="form-field full all-in-one-import">
-                  <label htmlFor="gpt-all-in-one-file">올인원 가져오기</label>
-                  <input
-                    id="gpt-all-in-one-file"
-                    type="file"
-                    multiple
-                    accept=".zip,.json,.png,.jpg,.jpeg,.webp,application/zip,application/json,image/png,image/jpeg,image/webp"
-                    onChange={(event) => handleAllInOneFiles(event.target.files)}
-                  />
-                  <p className="form-hint">
-                    ZIP 하나 또는 import.json과 PNG/JPG/WebP 파일들을 함께 선택하세요. JSON의 figures[].image 파일명과 실제 이미지 파일명이 연결됩니다.
-                  </p>
-                  {zipProgress && (
-                    <div className="import-zip-progress" role="status" aria-live="polite">
-                      <span>{zipProgress.phase === "inspect" ? "ZIP 검사 중…" : `이미지 확인 중 ${zipProgress.completed} / ${zipProgress.total}`}</span>
-                      <button type="button" className="btn-secondary btn-sm" onClick={() => zipAbortRef.current?.abort()}>취소</button>
-                    </div>
-                  )}
+              {isSolutionMode && (
+                <div className="form-field full">
+                  <label htmlFor="gpt-import-file">해설 JSON 파일</label>
+                  <input id="gpt-import-file" type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" onChange={(event) => handleFile(event.target.files?.[0])} />
                 </div>
               )}
 
-              <div className="import-json-example">
-                <span>권장 JSON 예시</span>
+              <details className="import-json-example">
+                <summary>권장 JSON 예시</summary>
                 <p className="form-hint">
                   answerKey의 concepts, strategy, steps, wrongPoint, reviewPoint와 diagramSpec, learningBlocks는 학습 내용칸 카드에 바로 반영됩니다. 도표 문항은 figures 설명만 쓰지 말고 가능한 경우 learningBlocks[].type을 "diagram"으로 만들며, raw SVG/HTML/Canvas/base64는 넣지 마세요.
                   개념 자료는 가능하면 entries 배열 또는 lecture JSON으로 출력하고, nested units 구조를 쓸 때는 schemaVersion: "concept-knowledge-v1", sourceType: "concept_knowledge_base"를 포함하세요.
@@ -1226,7 +1243,7 @@ export default function ImportFromGptModal({
   ],
   "memo": "전체 학습 메모"
 }`}</pre>
-              </div>
+              </details>
 
               {!isSolutionMode && (
                 <>
@@ -1251,7 +1268,12 @@ export default function ImportFromGptModal({
             </section>
 
             <section className="import-pane import-preview" aria-live="polite">
-              <h3>미리보기 · 수정</h3>
+                  <div className="import-preview-heading">
+                    <h3>미리보기 · 수정</h3>
+                    <button type="button" className="ui-button ui-button--secondary ui-button--compact" disabled={!draft} onClick={() => setReviewWorkspaceOpen(true)}>
+                      <Maximize2 size={16} aria-hidden="true" /> 전체 화면 검수
+                    </button>
+                  </div>
               {error && (
                 <p className="form-save-error" role="alert">
                   {error}
@@ -1624,6 +1646,83 @@ export default function ImportFromGptModal({
               </ul>
         </Dialog>
       </Dialog>
+      <ImportReviewWorkspace
+        open={reviewWorkspaceOpen && Boolean(draft)}
+        title={`${draft?.title?.trim() || "가져온 자료"} 검수`}
+        onClose={() => setReviewWorkspaceOpen(false)}
+        summary={draft ? `${questionCount}문항 · 답안 ${answerKey.length}개 · 그림 ${figures.length}개` : undefined}
+        status={hasBlockingValidationIssues ? "수정 필요" : hasConfirmableValidationIssues && !confirmedValidationErrors ? "확인 필요" : "저장 가능"}
+        questionNavigator={draft?.structuredQuestions?.length ? (
+          <div className="import-review-question-nav">
+            <strong>문항</strong>
+            <div>
+              {draft.structuredQuestions.map((questionItem, index) => (
+                <button
+                  key={`${questionItem.questionNumber}-${index}`}
+                  type="button"
+                  className={questionItem.needsReview ? "is-review" : ""}
+                  onClick={() => document.getElementById(`fullscreen-import-question-question-${index}`)?.scrollIntoView({ block: "start" })}
+                >
+                  {questionItem.questionNumber}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : undefined}
+        sidebar={draft ? (
+          <div className="import-review-sidebar-status">
+            <span>차단 {validationPolicy.blocking.length}</span>
+            <span>확인 {validationPolicy.confirmable.length}</span>
+            <span>기타 {validationPolicy.other.length}</span>
+            {applyBlockReason && <p>{applyBlockReason}</p>}
+          </div>
+        ) : undefined}
+        footer={(
+          <div className="import-review-footer-actions">
+            <button type="button" className="ui-button ui-button--secondary" onClick={() => setReviewWorkspaceOpen(false)}>검수 닫기</button>
+            {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
+              <button type="button" className="ui-button ui-button--primary" disabled={!canApply || quickSaving} onClick={() => void quickSave()}>
+                {quickSaving ? "저장 중..." : "바로 저장"}
+              </button>
+            )}
+            <button type="button" className="ui-button ui-button--secondary" disabled={!canApply || quickSaving} onClick={() => void apply()}>
+              {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
+            </button>
+          </div>
+        )}
+      >
+        {error && <p className="form-save-error" role="alert">{error}</p>}
+        {draft?.structuredQuestions?.length ? (
+          <StructuredQuestionReviewEditor
+            id="fullscreen-import-question"
+            questions={draft.structuredQuestions}
+            disabled={quickSaving}
+            onChange={(questions) => {
+              setConfirmedValidationFingerprint(null);
+              setStructuredReviewError(null);
+              setDraft((current) => ({
+                ...current,
+                structuredQuestions: questions,
+                question: renderStructuredQuestionsCompatibilityText(questions),
+                questionContentSegments: Object.fromEntries(questions.map((questionItem) => [questionItem.questionNumber, questionItem.contentSegments])),
+              }));
+            }}
+          />
+        ) : draft ? (
+          <TextReviewSplitView id="fullscreen-import-question" label="본문" value={draft.question ?? ""} onChange={updateLegacyQuestionText} />
+        ) : null}
+        {answerKey.length > 0 && (
+          <section className="import-review-answer-section" aria-labelledby="fullscreen-answer-review-title">
+            <h2 id="fullscreen-answer-review-title">답안 검수</h2>
+            <ImportAnswerReviewList
+              items={answerKey}
+              defaultDetailsOpen={importDetailOpen}
+              onUpdate={updateAnswer}
+              onRemove={removeAnswer}
+            />
+          </section>
+        )}
+      </ImportReviewWorkspace>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}

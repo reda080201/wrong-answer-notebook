@@ -63,10 +63,15 @@ export default function StructuredQuestionReviewEditor({
         <span>본문·조건·수식은 원래 순서대로 편집하고 그림과 표 배치는 유지됩니다.</span>
       </div>
       <div className="structured-question-review-list">
-        {renderedQuestions.map(({ question, segments }) => {
+        {renderedQuestions.map(({ question, segments }, questionIndex) => {
           let semanticIndex = 0;
           return (
-            <article key={question.questionNumber} className="structured-question-review-card">
+            <article
+              id={`${id}-question-${questionIndex}`}
+              key={question.questionNumber}
+              className="structured-question-review-card"
+              data-question-number={question.questionNumber}
+            >
               <header className="structured-question-review-card-header">
                 <h3>{question.questionNumber}번</h3>
                 {question.needsReview && <span className="answer-review-badge">검토 필요</span>}
