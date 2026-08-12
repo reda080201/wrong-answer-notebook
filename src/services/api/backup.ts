@@ -137,6 +137,27 @@ function isImageMap(value: unknown): value is Record<string, string> {
     );
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isExamSessionArray(value: unknown): value is ExamSession[] {
+  return Array.isArray(value) && value.every((item) => isRecord(item)
+    && typeof item.id === "string" && typeof item.entryId === "string"
+    && typeof item.title === "string" && typeof item.subject === "string"
+    && Array.isArray(item.questions) && Array.isArray(item.responses)
+    && typeof item.currentQuestionIndex === "number"
+    && typeof item.startedAt === "string" && typeof item.updatedAt === "string");
+}
+
+function isGeneratedExamArray(value: unknown): value is GeneratedExam[] {
+  return Array.isArray(value) && value.every((item) => isRecord(item)
+    && typeof item.id === "string" && typeof item.title === "string"
+    && typeof item.subject === "string" && typeof item.preset === "string"
+    && typeof item.seed === "string" && Array.isArray(item.questions)
+    && isRecord(item.generationReport));
+}
+
 function isBrowserBackupPayload(value: unknown): value is BackupPayload {
   if (!value || typeof value !== "object") return false;
   const payload = value as Partial<BackupPayload>;
@@ -147,8 +168,8 @@ function isBrowserBackupPayload(value: unknown): value is BackupPayload {
     && isImageMap(payload.browserImages);
   if (!common || payload.meta.version === 1) return common;
   const v2 = payload as Partial<BrowserBackupPayloadV2>;
-  return Array.isArray(v2.examSessions)
-    && Array.isArray(v2.generatedExams)
+  return isExamSessionArray(v2.examSessions)
+    && isGeneratedExamArray(v2.generatedExams)
     && isLibraryFolderArray(v2.libraryFolders)
     && isGptSolutionRoundtripDraftArray(v2.gptSolutionDrafts)
     && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft));

@@ -140,8 +140,10 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     setSaveError(null);
     const operation = saveQueueRef.current.catch(() => undefined).then(async () => {
       await onChange(next);
-      if (revision !== saveRevisionRef.current) return;
       latestSuccessfulLinksRef.current = next;
+      // The next queued mutation must always start from the last persisted state.
+      // Revision only decides which operation may update visible status.
+      if (revision !== saveRevisionRef.current) return;
       failedTargetRef.current = null;
       failedBaseRef.current = "";
       setHasRetryableSave(false);

@@ -28,6 +28,7 @@ export function useEntries() {
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const mutationRevisionRef = useRef(0);
   const loadedRef = useRef(false);
+  const reloadingRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
 
@@ -36,6 +37,9 @@ export function useEntries() {
   const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
     if (maintenanceBlockedRef.current) {
       return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
+    }
+    if (reloadingRef.current) {
+      return Promise.reject(new Error("노트를 새로 불러오는 중입니다. 완료된 뒤 다시 시도해 주세요."));
     }
     if (!loadedRef.current) {
       return Promise.reject(new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요."));
@@ -52,27 +56,30 @@ export function useEntries() {
     return task;
   }, [enqueue]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<boolean> => {
+    if (reloadingRef.current) return false;
+    reloadingRef.current = true;
     setLoading(true);
     setError(null);
-    loadedRef.current = false;
-    const refreshRevision = mutationRevisionRef.current;
     try {
       await drain();
+      const refreshRevision = mutationRevisionRef.current;
+      loadedRef.current = false;
       const data = await loadEntries();
       if (refreshRevision !== mutationRevisionRef.current) {
         loadedRef.current = true;
-        return;
+        return false;
       }
       entriesRef.current = data;
       setEntries(data);
       loadedRef.current = true;
+      return true;
     } catch (err) {
       loadedRef.current = false;
-      if (refreshRevision === mutationRevisionRef.current) {
-        setError(errorMessage(err, "노트를 불러오지 못했습니다."));
-      }
+      setError(errorMessage(err, "노트를 불러오지 못했습니다."));
+      return false;
     } finally {
+      reloadingRef.current = false;
       setLoading(false);
     }
   }, [drain]);

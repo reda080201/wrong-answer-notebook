@@ -11,7 +11,7 @@ export interface GptSolutionRoundtripDraftStore {
   upsertDraft(draft: GptSolutionRoundtripDraft): Promise<void>;
   updateDraft(id: string, update: (draft: GptSolutionRoundtripDraft) => GptSolutionRoundtripDraft): Promise<void>;
   removeDraft(id: string): Promise<void>;
-  reload(): Promise<void>;
+  reload(): Promise<boolean>;
   flush(): Promise<void>;
   setMaintenanceBlocked(blocked: boolean): void;
 }
@@ -29,8 +29,8 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const { enqueue, drain } = useSerialTaskQueue();
 
-  const reload = useCallback(async () => {
-    if (reloadingRef.current) return;
+  const reload = useCallback(async (): Promise<boolean> => {
+    if (reloadingRef.current) return false;
     reloadingRef.current = true;
     const request = ++loadRequestRef.current;
     setLoading(true);
@@ -41,16 +41,18 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
       loadedRef.current = false;
       setReady(false);
       const drafts = await loadGptSolutionRoundtripDrafts();
-      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return;
+      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return false;
       draftsRef.current = drafts;
       loadedRef.current = true;
       setReady(true);
+      return true;
     } catch (error) {
       if (request === loadRequestRef.current) {
         loadedRef.current = false;
         setReady(false);
         setLoadError(errorMessage(error, "GPT 해설 초안을 불러오지 못했습니다."));
       }
+      return false;
     } finally {
       if (request === loadRequestRef.current) {
         reloadingRef.current = false;

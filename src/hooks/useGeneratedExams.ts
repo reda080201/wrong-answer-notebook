@@ -23,8 +23,8 @@ export function useGeneratedExams() {
   const [hasRetryableChange, setHasRetryableChange] = useState(false);
   const { enqueue: enqueueTask, drain } = useSerialTaskQueue();
 
-  const reload = useCallback(async () => {
-    if (loadingRef.current) return;
+  const reload = useCallback(async (): Promise<boolean> => {
+    if (loadingRef.current) return false;
     loadingRef.current = true;
     const requestId = ++loadRequestRef.current;
     const loadMutation = mutationRef.current;
@@ -35,13 +35,13 @@ export function useGeneratedExams() {
       await drain();
       if (loadMutation !== mutationRef.current || failedErrorRef.current) {
         loadSucceededRef.current = true;
-        return;
+        return false;
       }
       const loaded = await loadGeneratedExams();
-      if (requestId !== loadRequestRef.current) return;
+      if (requestId !== loadRequestRef.current) return false;
       if (loadMutation !== mutationRef.current) {
         loadSucceededRef.current = true;
-        return;
+        return false;
       }
       if (!Array.isArray(loaded)) throw new Error("생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
       const next = loaded;
@@ -50,16 +50,18 @@ export function useGeneratedExams() {
       loadSucceededRef.current = true;
       setExams(next);
       setError(null);
+      return true;
     } catch (cause) {
       if (requestId === loadRequestRef.current) {
         if (loadMutation !== mutationRef.current) {
           loadSucceededRef.current = true;
-          return;
+          return false;
         }
         const message = errorMessage(cause, "생성 모의고사를 불러오지 못했습니다.");
         setLoadError(message);
         setError(message);
       }
+      return false;
     } finally {
       if (requestId === loadRequestRef.current) {
         loadingRef.current = false;

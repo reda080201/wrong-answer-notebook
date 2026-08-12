@@ -10,7 +10,7 @@ import type { AiProviderSettings, AiProviderStatus } from "../types";
 
 interface UseAiProviderSettingsOptions {
   aiProvider: AiProviderSettings;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: () => Promise<boolean>;
   setSettingsMessage: (message: string | null) => void;
 }
 

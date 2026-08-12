@@ -91,7 +91,7 @@ interface UseAppActionsOptions {
     sessionId: string,
     partial: EntryPatch,
   ) => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<boolean>;
   upsertTemplate: (template: EntryTemplate) => Promise<void>;
   removeTemplate: (templateId: string) => Promise<void>;
   upsertPromptTemplate: (template: PromptTemplate) => Promise<void>;
@@ -99,12 +99,12 @@ interface UseAppActionsOptions {
   upsertMemoTemplate: (template: MemoTemplate) => Promise<void>;
   removeMemoTemplate: (templateId: string) => Promise<void>;
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
-  refreshSettings: () => Promise<void>;
+  refreshSettings: () => Promise<boolean>;
   refreshExamSessions?: () => Promise<boolean>;
   discardActiveSessionAfterRestore?: () => void;
-  refreshGeneratedExams?: () => Promise<void>;
-  refreshLibraryFolders?: () => Promise<void>;
-  refreshGptSolutionDrafts?: () => Promise<void>;
+  refreshGeneratedExams?: () => Promise<boolean>;
+  refreshLibraryFolders?: () => Promise<boolean>;
+  refreshGptSolutionDrafts?: () => Promise<boolean>;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -567,7 +567,7 @@ export function useAppActions({
           restoreResult = applyBrowserBackupAtomically(payload);
         }
         discardActiveSessionAfterRestore?.();
-        const [, , examSessionsReloaded] = await Promise.all([
+        const reloads = await Promise.all([
           refresh(),
           refreshSettings(),
           refreshExamSessions?.(),
@@ -575,8 +575,12 @@ export function useAppActions({
           refreshLibraryFolders?.(),
           refreshGptSolutionDrafts?.(),
         ]);
-        if (examSessionsReloaded === false) {
-          throw new Error("백업은 복원됐지만 시험 세션을 다시 불러오지 못했습니다. 시험 기록을 다시 불러온 뒤 계속해 주세요.");
+        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안"];
+        const failedReloads = reloads
+          .map((success, index) => success !== true ? reloadNames[index] : null)
+          .filter((name): name is string => name !== null);
+        if (failedReloads.length) {
+          throw new Error(`백업은 복원됐지만 ${failedReloads.join(", ")}을(를) 다시 불러오지 못했습니다. 해당 데이터를 다시 불러온 뒤 계속해 주세요.`);
         }
         return restoreResult;
       };
