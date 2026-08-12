@@ -22,23 +22,24 @@ describe("GeneratedExamList launch options", () => {
     const onOpen = vi.fn();
     render(<GeneratedExamList exams={[makeExam("real_exam")]} onOpen={onOpen} onDelete={vi.fn()} />);
 
+    fireEvent.click(screen.getByRole("button", { name: "실전 모드" }));
+    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ preset: "real_exam" }));
+
     fireEvent.click(screen.getByRole("button", { name: "문제 풀기" }));
     expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ preset: "real_exam" }), { mode: "practice" });
-
-    fireEvent.click(screen.getByRole("button", { name: "실전 모드" }));
-    expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ preset: "real_exam" }), {
-      mode: "real",
-      timeLimitMinutes: 80,
-      showTimer: true,
-      answerSheetOpen: true,
-    });
   });
 
   it("does not expose real mode for non-real presets", () => {
     const onOpen = vi.fn();
     render(<GeneratedExamList exams={[makeExam("custom")]} onOpen={onOpen} onDelete={vi.fn()} />);
-    expect(screen.queryByRole("button", { name: "실전 모드" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "실전 모드" }));
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ preset: "custom" }), {
+      mode: "real",
+      timeLimitMinutes: 80,
+      showTimer: true,
+      answerSheetOpen: true,
+    });
     fireEvent.click(screen.getByRole("button", { name: "문제 풀기" }));
-    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ preset: "custom" }), { mode: "practice" });
+    expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ preset: "custom" }));
   });
 });

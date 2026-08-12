@@ -19,8 +19,9 @@ export default function GeneratedExamList({ exams, onOpen, onDelete, onPrint, di
           <article key={exam.id}>
             <div><strong>{exam.title}</strong><p>{exam.questions.length}문항 · {exam.preset} · {new Date(exam.createdAt).toLocaleDateString("ko-KR")}</p><small>평균 선택 점수 {exam.questions.length ? Math.round(exam.questions.reduce((sum, question) => sum + question.selectionScore, 0) / exam.questions.length) : 0}</small><div className="generated-exam-source-list">{exam.questions.slice(0, 3).map((question) => <small key={question.position}>{question.position}번 · {formatQuestionSourceLabel(question.source)}</small>)}</div></div>
             <div>
-              <button type="button" onClick={() => onOpen(exam, { mode: "practice" })} disabled={disabled}>{exam.status === "ready" ? "문제 풀기" : "검토"}</button>
-              {exam.status === "ready" && <button type="button" className="btn-secondary" onClick={() => onOpen(exam, { mode: "real", timeLimitMinutes: exam.timeLimitMinutes ?? 50, showTimer: true, answerSheetOpen: true })} disabled={disabled}>실전 모드</button>}
+              <button type="button" onClick={() => onOpen(exam)} disabled={disabled}>{exam.status === "ready" ? exam.preset === "real_exam" ? "실전 모드" : "문제 풀기" : "검토"}</button>
+              {exam.status === "ready" && exam.preset === "real_exam" && <button type="button" className="btn-secondary" onClick={() => onOpen(exam, { mode: "practice" })} disabled={disabled}>문제 풀기</button>}
+              {exam.status === "ready" && exam.preset !== "real_exam" && <button type="button" className="btn-secondary" onClick={() => onOpen(exam, { mode: "real", timeLimitMinutes: exam.timeLimitMinutes ?? 50, showTimer: true, answerSheetOpen: true })} disabled={disabled}>실전 모드</button>}
               {onPrint && <button type="button" className="btn-secondary" onClick={() => onPrint(exam)} disabled={disabled}>PDF 만들기</button>}
               <button type="button" className="btn-secondary" onClick={() => onDelete(exam.id)} disabled={disabled}>삭제</button>
             </div>
