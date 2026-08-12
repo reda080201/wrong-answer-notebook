@@ -29,7 +29,7 @@ describe("GeneratedExamList launch options", () => {
     expect(onOpen).toHaveBeenLastCalledWith(expect.objectContaining({ preset: "real_exam" }), { mode: "practice" });
   });
 
-  it("does not expose real mode for non-real presets", () => {
+  it("offers real mode explicitly for non-real presets", () => {
     const onOpen = vi.fn();
     render(<GeneratedExamList exams={[makeExam("custom")]} onOpen={onOpen} onDelete={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "실전 모드" }));

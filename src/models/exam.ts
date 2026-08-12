@@ -81,6 +81,8 @@ export interface ExamSession {
   timeLimitMinutes?: number;
   /** Absolute deadline for real exam sessions. */
   deadlineAt?: string;
+  showTimer?: boolean;
+  answerSheetOpen?: boolean;
   submittedAt?: string;
   score?: ExamSessionScore;
 }

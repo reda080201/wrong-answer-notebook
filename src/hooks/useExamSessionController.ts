@@ -17,6 +17,7 @@ import { scoreExamSession } from "../features/exam/services/examScoring";
 import {
   EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS,
   mergeExamSession,
+  normalizeExamSession,
 } from "../features/exam/storage/examSessionStorage";
 import { createSessionFromGeneratedExam } from "../features/exam-builder/services/createSessionFromGeneratedExam";
 import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "../features/entries/model/entryDraft";
@@ -69,6 +70,7 @@ export function useExamSessionController({
   const loadInFlightRef = useRef(false);
   const loadedRef = useRef(false);
   const generatedEntryKeysRef = useRef(new Set<string>());
+  const submissionInFlightRef = useRef(false);
 
   useEffect(() => {
     generatedEntryKeysRef.current = new Set(
@@ -210,14 +212,25 @@ export function useExamSessionController({
       return;
     }
     if (!exam.questions.length) return;
+    const mode = options.mode ?? (exam.preset === "real_exam" ? "real" : "practice");
+    const resumable = options.resumable ?? savedSessionsRef.current
+      .filter((item) => item.entryId === `generated:${exam.id}` && item.status === "in_progress" && (item.mode ?? "practice") === mode)
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
     setActiveGeneratedExam(exam);
     setStartError(null);
-    setSession(createSessionFromGeneratedExam(exam, new Date(), options));
+    if (resumable) {
+      setSession(normalizeExamSession(resumable));
+      return;
+    }
+    setSession(createSessionFromGeneratedExam(exam, new Date(), { ...options, mode }));
   }, [loadError]);
 
   const submit = useCallback(async (current: ExamSession) => {
+    if (submissionInFlightRef.current) return;
     if (!loadedRef.current) throw new Error(loadError ?? "시험 기록을 불러오는 중이어서 제출할 수 없습니다.");
     if (current.status === "submitted") return;
+    submissionInFlightRef.current = true;
+    try {
     const score = scoreExamSession(current);
     const submitted = {
       ...current,
@@ -267,6 +280,9 @@ export function useExamSessionController({
         .map((entry) => `${entry.generatedFromExamSessionId}:${normalizeExamQuestionNumber(entry.generatedFromQuestionNumber)}`),
     );
     setSession(submitted);
+    } finally {
+      submissionInFlightRef.current = false;
+    }
   }, [commitExamSubmission, loadError]);
 
   useEffect(() => {
