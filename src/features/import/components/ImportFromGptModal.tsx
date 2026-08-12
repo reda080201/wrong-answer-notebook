@@ -1525,7 +1525,7 @@ export default function ImportFromGptModal({
                     </div>
                   </div>
 
-                  {answerKey.length > 0 && (
+                  {(isSolutionMode || isSupplementalMode || !(draft.structuredQuestions?.length)) && answerKey.length > 0 && (
                     <div className="import-answer-preview">
                       <h4>답안지 미리보기</h4>
                       <div className="import-answer-table">
@@ -1633,7 +1633,7 @@ export default function ImportFromGptModal({
                     </div>
                   )}
 
-                  {figures.length > 0 && (
+                  {(isSolutionMode || isSupplementalMode || !(draft.structuredQuestions?.length)) && figures.length > 0 && (
                     <div className="import-answer-preview">
                       <h4>도표/그림 미리보기</h4>
                       <div className="import-figure-list">
@@ -1742,13 +1742,35 @@ export default function ImportFromGptModal({
         activeQuestionIndex={activeReviewQuestionIndex}
         onActiveQuestionChange={setActiveReviewQuestionIndex}
         sourcePane={({ question: activeQuestion }) => {
-          const sourceImages = draft?.sourcePageImages ?? [];
           const linkedFigures = figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber));
-          return sourceImages.length || linkedFigures.length ? (
+          const figureImages = linkedFigures.flatMap((figure) => [
+            figure.image,
+            figure.original?.image,
+            figure.original?.sourcePageImage,
+            figure.cleaned?.image,
+          ]).filter((image): image is string => Boolean(image));
+          const availableSourceImages = draft?.sourcePageImages ?? [];
+          const availableQuestionImages = draft?.questionImages ?? [];
+          const sourceReference = activeQuestion.source?.reference
+            ? normalizeImportImageKey(activeQuestion.source.reference)
+            : null;
+          const referencedImages = sourceReference
+            ? [...availableSourceImages, ...availableQuestionImages].filter(
+                (image) => normalizeImportImageKey(image) === sourceReference,
+              )
+            : [];
+          const pageImage = activeQuestion.source?.page
+            ? availableSourceImages[activeQuestion.source.page - 1]
+            : undefined;
+          const sourceImages = [...new Set([
+            ...figureImages,
+            ...referencedImages,
+            ...(pageImage ? [pageImage] : []),
+          ])];
+          return sourceImages.length ? (
             <div className="import-review-source-content">
               <strong>{activeQuestion.questionNumber}번 원본</strong>
               {sourceImages.length > 0 && <ImageGallery filenames={sourceImages} variant="fill" />}
-              {linkedFigures.map((figure) => figure.image && <ImageGallery key={figure.id} filenames={[figure.image]} variant="fill" />)}
             </div>
           ) : <p>연결된 원본이 없습니다.</p>;
         }}

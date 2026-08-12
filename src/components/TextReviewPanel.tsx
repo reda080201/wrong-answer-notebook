@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { WrongAnswerEntry } from "../types";
-import type { StructuredQuestion } from "../types";
+import type { StructuredQuestion, WrongAnswerEntry } from "../types";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import Dialog from "../shared/ui/Dialog";
 import "./TextReviewPanel.css";
 import StructuredQuestionReviewEditor from "../features/import/components/StructuredQuestionReviewEditor";
+import { normalizeImportImageKey } from "../utils/importImageReferences";
 
 function stableIdPart(value: string): string {
   const normalized = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-");
@@ -90,6 +90,40 @@ export default function TextReviewPanel({
     () => segments.filter((segment) => !ignoredSegmentIds.has(segment.id)),
     [ignoredSegmentIds, segments],
   );
+  const activeStructuredQuestion = useMemo(
+    () => editedStructuredQuestions.find((question) => question.questionNumber === selectedQuestionNumber),
+    [editedStructuredQuestions, selectedQuestionNumber],
+  );
+  const structuredSourceImages = useMemo(() => {
+    if (!activeStructuredQuestion) return [];
+    const questionNumber = activeStructuredQuestion.questionNumber;
+    const linkedFigures = (entry.figures ?? []).filter((figure) =>
+      activeStructuredQuestion.figureIds.includes(figure.id) ||
+      figure.questionNumber === questionNumber,
+    );
+    const figureImages = linkedFigures.flatMap((figure) => [
+      figure.image,
+      figure.original?.image,
+      figure.original?.sourcePageImage,
+      figure.cleaned?.image,
+    ]).filter((image): image is string => Boolean(image));
+    const reference = activeStructuredQuestion.source?.reference
+      ? normalizeImportImageKey(activeStructuredQuestion.source.reference)
+      : null;
+    const referencedImages = reference
+      ? [...entry.questionImages, ...(entry.sourcePageImages ?? [])].filter(
+          (image) => normalizeImportImageKey(image) === reference,
+        )
+      : [];
+    const pageImage = activeStructuredQuestion.source?.page
+      ? entry.sourcePageImages?.[activeStructuredQuestion.source.page - 1]
+      : undefined;
+    return [...new Set([
+      ...figureImages,
+      ...referencedImages,
+      ...(pageImage ? [pageImage] : []),
+    ])];
+  }, [activeStructuredQuestion, entry.figures, entry.questionImages, entry.sourcePageImages]);
 
   const handleSave = async () => {
     setSaving(true);
@@ -186,7 +220,7 @@ export default function TextReviewPanel({
         </div>
 
         {isStructured ? (
-          <div className="text-review-structured-layout">
+          <div className={`text-review-structured-layout${structuredSourceImages.length ? " has-source" : ""}`}>
             <nav className="text-review-question-nav" aria-label="문항 선택">
               <h3>문항</h3>
               <ol>
@@ -210,6 +244,11 @@ export default function TextReviewPanel({
                 <div><span className="modal-eyebrow">Structured Review</span><h3>{selectedQuestionNumber ? `${selectedQuestionNumber}번 문항` : "문항 선택"}</h3></div>
                 <span className="text-review-structured-status">문항별 segment를 직접 검수합니다.</span>
               </div>
+              {activeStructuredQuestion?.warning && (
+                <p className="text-review-structured-warning" role="alert">
+                  {activeStructuredQuestion.warning}
+                </p>
+              )}
               {selectedQuestionNumber ? <StructuredQuestionReviewEditor
                 id="text-review-structured-editor"
                 questions={editedStructuredQuestions.filter((question) => question.questionNumber === selectedQuestionNumber)}
@@ -250,6 +289,13 @@ export default function TextReviewPanel({
                 </ul>
               </div>
             </section>
+            {structuredSourceImages.length > 0 && (
+              <aside className="text-review-structured-source" aria-label="현재 문항 원본">
+                <h3>현재 문항 원본</h3>
+                <p>연결 근거가 확인된 자료만 표시합니다.</p>
+                <ImageGallery filenames={structuredSourceImages} variant="fill" />
+              </aside>
+            )}
           </div>
         ) : (
           <div className="text-review-grid">
@@ -310,6 +356,35 @@ export default function TextReviewPanel({
         )}
 
         <footer className="modal-actions">
+          {isStructured && (
+            <div className="text-review-question-actions" aria-label="문항 이동">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={questionNumbers.indexOf(selectedQuestionNumber ?? "") <= 0 || saving}
+                onClick={() => {
+                  const index = questionNumbers.indexOf(selectedQuestionNumber ?? "");
+                  if (index > 0) selectQuestion(questionNumbers[index - 1]);
+                }}
+              >
+                이전
+              </button>
+              <span aria-live="polite">
+                {Math.max(questionNumbers.indexOf(selectedQuestionNumber ?? "") + 1, 1)} / {questionNumbers.length}
+              </span>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={questionNumbers.indexOf(selectedQuestionNumber ?? "") >= questionNumbers.length - 1 || saving}
+                onClick={() => {
+                  const index = questionNumbers.indexOf(selectedQuestionNumber ?? "");
+                  if (index >= 0 && index < questionNumbers.length - 1) selectQuestion(questionNumbers[index + 1]);
+                }}
+              >
+                다음
+              </button>
+            </div>
+          )}
           <button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>
             취소
           </button>
