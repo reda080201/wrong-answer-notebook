@@ -30,6 +30,12 @@ function hasOddNonAsciiCharacter(line: string): boolean {
   });
 }
 
+function isMathOrEquationLine(line: string): boolean {
+  const trimmed = line.trim();
+  return /\\(?:frac|sqrt|sum|int|left|right|begin|end)\b/.test(trimmed)
+    || /^[\d\s+\-*/=()[\]{}.,:;<>≤≥±×÷√π∞∑∫^_\\a-zA-Z]+$/u.test(trimmed);
+}
+
 function addSegment(
   segments: SuspiciousTextSegment[],
   source: string,
@@ -97,7 +103,7 @@ export function detectSuspiciousTextSegments(question: string): SuspiciousTextSe
     if (lineMatch[0] === "" && lineMatch.index === question.length) break;
     const raw = lineMatch[0];
     const line = raw.replace(/\r?\n|\r$/, "");
-    if (line.trim().length >= 8 && symbolRatio(line) > 0.34) {
+    if (!isMathOrEquationLine(line) && line.trim().length >= 8 && symbolRatio(line) > 0.34) {
       addSegment(
         segments,
         question,

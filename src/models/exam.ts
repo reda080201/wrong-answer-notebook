@@ -16,6 +16,8 @@ export interface ExamQuestionSnapshot {
   contentSegments?: QuestionContentSegment[];
   correctAnswer?: string;
   explanation?: string;
+  points?: number;
+  sourceWarning?: string;
   generatedExamId?: string;
   sourceEntryId?: string;
   sourceQuestionNumber?: string;

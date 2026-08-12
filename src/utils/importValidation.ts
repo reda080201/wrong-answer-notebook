@@ -1,5 +1,6 @@
 import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
+import { getEntryQuestions } from "./entryQuestions";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionNumber } from "./questionMeta";
 
@@ -121,11 +122,17 @@ export function getQuestionNumbers(question: string): string[] {
 
 export function validateImportedStudyData(data: Partial<EntryFormData>): ImportValidationReport {
   const questionBlocks = parseQuestionText(data.question ?? "").filter((block) => block.kind === "question");
-  const questionNumbers = questionBlocks.map((block) => normalizeQuestionNumber(block.displayNumber));
-  const connectableQuestionNumbers = questionBlocks.flatMap((block) => [
-    normalizeQuestionNumber(block.displayNumber),
-    normalizeQuestionNumber(block.numberLabel),
-  ]);
+  const resolvedQuestions = getEntryQuestions({
+    question: data.question ?? "",
+    structuredQuestions: data.structuredQuestions,
+    questionContentSegments: data.questionContentSegments,
+  });
+  const questionNumbers = data.structuredQuestions?.length
+    ? resolvedQuestions.map((block) => normalizeQuestionNumber(block.questionNumber))
+    : questionBlocks.map((block) => normalizeQuestionNumber(block.displayNumber));
+  const connectableQuestionNumbers = data.structuredQuestions?.length
+    ? questionNumbers
+    : questionBlocks.flatMap((block) => [normalizeQuestionNumber(block.displayNumber), normalizeQuestionNumber(block.numberLabel)]);
   const answerNumbers = (data.answerKey ?? [])
     .map((item) => normalizeQuestionNumber(item.questionNumber))
     .filter(Boolean);
@@ -233,9 +240,11 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     });
   }
 
-  for (const block of questionBlocks) {
-    const displayNumber = normalizeQuestionNumber(block.displayNumber);
-    if (!answerNumberSet.has(displayNumber) && !answerNumberSet.has(normalizeQuestionNumber(block.numberLabel))) {
+  const missingQuestionEntries = data.structuredQuestions?.length
+    ? resolvedQuestions.map((block) => ({ displayNumber: block.questionNumber, sourceNumber: block.questionNumber }))
+    : questionBlocks.map((block) => ({ displayNumber: normalizeQuestionNumber(block.displayNumber), sourceNumber: normalizeQuestionNumber(block.numberLabel) }));
+  for (const { displayNumber, sourceNumber } of missingQuestionEntries) {
+    if (!answerNumberSet.has(displayNumber) && !answerNumberSet.has(sourceNumber)) {
       issues.push({
         id: `missing-answer-${displayNumber}`,
         severity: "warning",

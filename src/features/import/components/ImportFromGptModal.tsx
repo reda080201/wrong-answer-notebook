@@ -17,7 +17,7 @@ import type { SettingsTab } from "../../../components/SettingsModal";
 import {
   parseAllInOneImport,
   parseImportedStudyText,
-  isSafeImportImageFilename,
+  isSafeImportAssetReference,
   readImportFile,
   type ImportedStudyDocument,
   type ImportedStudyText,
@@ -44,7 +44,7 @@ import ConceptImportPreviewModal from "../../../components/ConceptImportPreviewM
 import ImportEntriesPreviewModal from "../../../components/ImportEntriesPreviewModal";
 import { cloneEntryDraft, mergeEntryDraft } from "../../../features/entries/model/entryDraft";
 import { IMPORT_LIMITS } from "../../../features/import/services/importLimits";
-import { readZipImport } from "../../../features/import/services/zipImport";
+import { readZipImport, type ZipImportAsset } from "../../../features/import/services/zipImport";
 import { applyAutomaticFigurePreference } from "../../../features/figures/services/figureRepresentation";
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../../../utils/importImageReferences";
 import Dialog from "../../../shared/ui/Dialog";
@@ -599,6 +599,7 @@ export default function ImportFromGptModal({
       jsonText: await jsonFiles[0].text(),
       jsonName: jsonFiles[0].name,
       imageFiles,
+      imageAssets: imageFiles.map((file) => ({ sourcePath: file.name, file })),
     };
   };
 
@@ -606,19 +607,20 @@ export default function ImportFromGptModal({
     jsonText: string,
     jsonName: string,
     imageFiles: File[],
+    imageAssets: ZipImportAsset[] = imageFiles.map((file) => ({ sourcePath: file.name, file })),
   ): Promise<ImportedStudyDocument> => {
     const imported = parseAllInOneImport(jsonText, jsonName, fallbackSubject);
     const imageKeys = imageFiles.map((file) => imageFileKey(file.name));
     const duplicateKey = imageKeys.find((key, index) => imageKeys.indexOf(key) !== index);
     if (duplicateKey) throw new Error(`중복된 이미지 파일명이 있습니다: ${duplicateKey}`);
-    const imageByName = new Map(imageFiles.map((file) => [imageFileKey(file.name), file]));
+    const imageByName = new Map(imageAssets.map((asset) => [imageFileKey(asset.sourcePath), asset.file]));
     const filesToSave: File[] = [];
     const fileIndexByKey = new Map<string, number>();
     const warnings: string[] = [];
 
     for (const [entryIndex, entry] of imported.entries.entries()) {
       const allReferenced = collectEntryImportImageReferences(entry);
-      const unsafeReference = allReferenced.find((image) => !isSafeImportImageFilename(image));
+      const unsafeReference = allReferenced.find((image) => !isSafeImportAssetReference(image));
       if (unsafeReference) throw new Error(`JSON의 이미지 참조 \`${unsafeReference}\`가 안전한 파일명이 아닙니다.`);
       const referenced = allReferenced;
       for (const image of referenced) {
@@ -644,7 +646,7 @@ export default function ImportFromGptModal({
       entries: imported.entries.map((entry) => ({
         ...entry,
         ...mapEntryImportImageReferences(entry, (image) => {
-          if (!isSafeImportImageFilename(image)) return undefined;
+          if (!isSafeImportAssetReference(image)) return undefined;
           return fileIndexByKey.has(imageFileKey(image)) ? image : undefined;
         }, { removeUnmapped: true }),
       })),
@@ -657,8 +659,8 @@ export default function ImportFromGptModal({
     setError(null);
     setZipProgress({ phase: "inspect", completed: 0, total: 0 });
     try {
-      const { jsonText, jsonName, imageFiles } = await collectAllInOneFiles(files);
-      const linkedDocument = await buildAllInOneDocument(jsonText, jsonName, imageFiles);
+      const { jsonText, jsonName, imageFiles, imageAssets } = await collectAllInOneFiles(files);
+      const linkedDocument = await buildAllInOneDocument(jsonText, jsonName, imageFiles, imageAssets);
       setRawText(jsonText);
       setFilename(jsonName);
       if (linkedDocument.entries.length === 1) {

@@ -2,6 +2,11 @@ import { describe, expect, it } from "vitest";
 import { parseAllInOneImport, parseImportedStudyText, ImportParseError } from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
+import { createKangdaeK7SyntheticImport } from "../test/fixtures/kangdaeK7Synthetic";
+import { getEntryQuestions } from "./entryQuestions";
+import { createExamSession } from "../features/exam/services/examSession";
+import { normalizeEntry } from "./entry";
+import type { WrongAnswerEntry } from "../types";
 
 describe("importStudyText", () => {
   describe("JSON parse enhancements", () => {
@@ -49,6 +54,61 @@ describe("importStudyText", () => {
       expect(result.data.questionMeta).toEqual(expect.arrayContaining([
         expect.objectContaining({ questionNumber: "7", important: true, difficultyScore: 72 }),
       ]));
+    });
+
+    it("preserves structured v2 questions without re-tokenizing math or figure placement", () => {
+      const result = parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [{
+          entryKind: "problem_sheet",
+          title: "구조화 시험지",
+          subject: "수학",
+          questions: [{
+            questionNumber: "10",
+            points: 4,
+            questionText: "f(10, x/y)를 구하시오.",
+            conditions: ["x > 0"],
+            equations: ["\\frac{1}{2}"],
+            choices: ["① 1/2", "② 1"],
+            contentSegments: [{ id: "segment-q10-1", type: "equation", latex: "\\frac{1}{2}", display: true }, { id: "figure-q10", type: "figure", figureId: "fig-10" }],
+            figureIds: ["fig-10"],
+          }],
+          answerKey: [{ questionNumber: "10", answer: "①", explanation: "풀이" }],
+          figures: [{ id: "fig-10", questionNumber: "10", image: "images/q10.png", source: "original", placement: { questionNumber: "10", afterSegmentId: "segment-q10-1" } }],
+        }],
+      }));
+      const entry = result.entries[0];
+      expect(entry.structuredQuestions).toEqual([expect.objectContaining({ questionNumber: "10", points: 4, figureIds: ["fig-10"] })]);
+      expect(entry.question).toContain("f(10, x/y)");
+      expect(entry.questionContentSegments?.["10"]?.[0]).toMatchObject({ id: "segment-q10-1", type: "equation" });
+      expect(entry.figures?.[0]).toMatchObject({ image: "images/q10.png", placement: { afterSegmentId: "segment-q10-1" } });
+    });
+
+    it("keeps the synthetic K7 contract through parse, normalize, reload and exam projection", () => {
+      const parsed = parseAllInOneImport(JSON.stringify(createKangdaeK7SyntheticImport()));
+      const form = parsed.entries[0];
+      expect(form.structuredQuestions).toHaveLength(30);
+      expect(form.answerKey).toHaveLength(30);
+      expect(form.figures).toHaveLength(11);
+
+      const reloaded = normalizeEntry({
+        ...form,
+        id: "synthetic-k7",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      } as WrongAnswerEntry);
+      const questions = getEntryQuestions(reloaded);
+      expect(questions.map((question) => question.questionNumber)).toEqual(Array.from({ length: 30 }, (_, index) => String(index + 1)));
+      expect(questions.filter((question) => question.warning)).toHaveLength(4);
+      expect(questions.find((question) => question.questionNumber === "4")?.contentSegments).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "segment-q4-1" }),
+      ]));
+
+      const exam = createExamSession(reloaded);
+      expect(exam.questions).toHaveLength(30);
+      expect(exam.questions[3]?.figures).toHaveLength(1);
+      expect(exam.questions[10]?.sourceWarning).toContain("선택지와 배점");
     });
 
     it("handles described_only figures without blocking", () => {

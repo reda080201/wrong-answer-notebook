@@ -234,6 +234,32 @@ export type QuestionContentSegment =
   | { id: string; type: "table"; rows: string[][] }
   | { id: string; type: "figure"; figureId: string };
 
+/**
+ * Import v2 keeps the source question structure intact. `question` remains a
+ * compatibility projection for older readers, never the canonical v2 input.
+ */
+export interface StructuredQuestionSource {
+  title?: string;
+  page?: number;
+  reference?: string;
+}
+
+export interface StructuredQuestion {
+  questionNumber: string;
+  section?: string;
+  questionType?: string;
+  points?: number;
+  questionText: string;
+  conditions: string[];
+  equations: string[];
+  choices: string[];
+  contentSegments: QuestionContentSegment[];
+  source?: StructuredQuestionSource;
+  needsReview?: boolean;
+  warning?: string;
+  figureIds: string[];
+}
+
 export interface QuestionMeta {
   questionNumber: string;
   important: boolean;
@@ -308,6 +334,8 @@ export interface WrongAnswerEntry {
   answerKey?: SheetAnswerItem[];
   figures?: SheetFigureItem[];
   questionMeta?: QuestionMeta[];
+  /** Authoritative v2 question data. Older entries continue to use `question`. */
+  structuredQuestions?: StructuredQuestion[];
   /** 문항 번호별 표시 순서. 기존 question 문자열 데이터와 함께 유지됩니다. */
   questionContentSegments?: Record<string, QuestionContentSegment[]>;
   sheetGroup?: SheetGroup;

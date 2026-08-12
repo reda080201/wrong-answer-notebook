@@ -2,7 +2,7 @@ import type { ExamSession, WrongAnswerEntry } from "../../../types";
 import type { ExportScopeMode } from "../../../types";
 import { parseQuestionSelectionRange } from "../../../utils/gptExport";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
-import { parseQuestionText } from "../../../utils/textLayout";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 
 export interface ResolveExportQuestionNumbersInput {
   entry: WrongAnswerEntry;
@@ -20,9 +20,8 @@ export interface ResolveExportQuestionNumbersResult {
 }
 
 function sheetOrder(entry: WrongAnswerEntry): string[] {
-  return parseQuestionText(entry.question)
-    .filter((block): block is Extract<ReturnType<typeof parseQuestionText>[number], { kind: "question" }> => block.kind === "question")
-    .map((block) => normalizeQuestionNumber(String(block.displayNumber || block.numberLabel || "")))
+  return getEntryQuestions(entry)
+    .map((block) => normalizeQuestionNumber(block.questionNumber))
     .filter(Boolean);
 }
 

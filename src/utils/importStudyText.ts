@@ -1,6 +1,7 @@
 import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
 import { SUBJECTS } from "../types";
-import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments } from "./entry";
+import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments, normalizeStructuredQuestions } from "./entry";
+import { renderStructuredQuestionsCompatibilityText } from "./entryQuestions";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import {
   normalizeImportAudit,
@@ -48,6 +49,7 @@ interface ImportJsonShape {
   title?: unknown;
   subject?: unknown;
   question?: unknown;
+  questions?: unknown;
   questionImages?: unknown;
   sourcePageImages?: unknown;
   summary?: unknown;
@@ -207,7 +209,10 @@ export function parseImportedStudyText(
       }
     }
 
-    const rawQuestion = getString(parsed.question);
+    const structuredQuestions = normalizeStructuredQuestions(parsed.questions);
+    const rawQuestion = getString(parsed.question) || (structuredQuestions?.length
+      ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
+      : "");
     const answerOnlyKey = scrubRejectedNotesFromAnswers(normalizeAnswerKey(parsed.answerKey), normalizeRejectedNotes(parsed.rejectedNotes));
     const answerOnlyBlocks = normalizeLearningBlocks(parsed.learningBlocks);
     const answerOnlyFigures = normalizeImportFigures(parsed.figures, answerOnlyKey, answerOnlyBlocks);
@@ -253,6 +258,9 @@ export function parseImportedStudyText(
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
       const question = removeFigureTokens(removeRejectedNotes(rawQuestion, rejectedNotes));
       const questionContentSegments = normalizeQuestionContentSegments(parsed.questionContentSegments ?? parsed.contentSegments)
+        ?? (structuredQuestions?.length
+          ? Object.fromEntries(structuredQuestions.map((item) => [item.questionNumber, item.contentSegments]))
+          : undefined)
         ?? contentSegmentsFromQuestionTokens(rawQuestion);
       const importantNotes = splitImportantNotes(parsed.importantNotes);
       const answerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
@@ -290,6 +298,7 @@ export function parseImportedStudyText(
           figures,
           learningBlocks,
           questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
+          structuredQuestions,
           questionContentSegments,
           importAudit,
           rejectedNotes,
@@ -475,6 +484,17 @@ export function isSafeImportImageFilename(value: string): boolean {
     !trimmed.startsWith(".") &&
     /\.(png|jpe?g|webp)$/i.test(trimmed)
   );
+}
+
+/** Safe relative references are accepted while a ZIP is being staged. */
+export function isSafeImportAssetReference(value: string): boolean {
+  const trimmed = value.trim();
+  return Boolean(trimmed)
+    && !trimmed.startsWith("/")
+    && !/^[A-Za-z]:/.test(trimmed)
+    && !trimmed.includes("\\")
+    && !trimmed.split("/").some((part) => !part || part === "." || part === "..")
+    && /\.(png|jpe?g|webp)$/i.test(trimmed);
 }
 
 function importJsonCandidates(input: string): string[] {
@@ -706,8 +726,34 @@ function normalizeImportFigures(
   answerKey: SheetAnswerItem[] = [],
   learningBlocks: NonNullable<EntryFormData["learningBlocks"]> = [],
 ): SheetFigureItem[] {
-  return normalizeFigures(value).map((figure) => {
-    const safe = (filename: string | undefined) => filename && isSafeImportImageFilename(filename) ? filename : undefined;
+  const adapted = Array.isArray(value) ? value.map((item) => {
+    if (!item || typeof item !== "object") return item;
+    const raw = item as Record<string, unknown>;
+    const representations = raw.representations && typeof raw.representations === "object"
+      ? raw.representations as Record<string, unknown>
+      : undefined;
+    const semantic = raw.semanticSpec && typeof raw.semanticSpec === "object"
+      ? raw.semanticSpec as Record<string, unknown>
+      : undefined;
+    const cleaned = representations?.cleaned && typeof representations.cleaned === "object"
+      ? representations.cleaned as Record<string, unknown>
+      : raw.cleaned;
+    return {
+      ...raw,
+      image: raw.image ?? (cleaned && typeof cleaned === "object" ? (cleaned as Record<string, unknown>).image : undefined),
+      original: raw.original ?? representations?.original,
+      cleaned: raw.cleaned ?? (cleaned && typeof cleaned === "object" ? {
+        ...cleaned,
+        // v2 sources may not provide internal generation provenance. Keep the
+        // image while forcing a review rather than discarding the asset.
+        sourceImageHash: (cleaned as Record<string, unknown>).sourceImageHash ?? "imported-v2",
+        promptVersion: (cleaned as Record<string, unknown>).promptVersion ?? "import-v2",
+      } : undefined),
+      semanticSpec: semantic ? { ...semantic, type: semantic.type ?? semantic.kind } : raw.semanticSpec,
+    };
+  }) : value;
+  return normalizeFigures(adapted).map((figure) => {
+    const safe = (filename: string | undefined) => filename && isSafeImportAssetReference(filename) ? filename : undefined;
     const image = safe(figure.image);
     const originalImage = safe(figure.original?.image);
     const sourcePageImage = safe(figure.original?.sourcePageImage);
