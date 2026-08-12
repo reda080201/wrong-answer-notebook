@@ -1,0 +1,81 @@
+.text-review-panel--structured {
+  width: min(1280px, calc(100vw - 2rem));
+  height: min(900px, calc(100vh - 2rem));
+  max-height: none;
+  padding: 1.25rem;
+}
+
+.text-review-structured-layout {
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 11rem minmax(0, 1fr);
+  gap: 1rem;
+  overflow: hidden;
+}
+
+.text-review-question-nav,
+.text-review-structured-editor {
+  min-height: 0;
+  overflow: auto;
+  padding: 1rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.text-review-question-nav ol,
+.text-review-segment-list ul {
+  display: grid;
+  gap: .4rem;
+  margin: .75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.text-review-question-nav button,
+.text-review-segment-list button {
+  width: 100%;
+  padding: .55rem .65rem;
+  border: 1px solid var(--paper-border);
+  border-radius: 6px;
+  background: var(--surface-soft);
+  color: var(--text);
+  text-align: left;
+}
+
+.text-review-question-nav button.is-active,
+.text-review-segment-list button.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.text-review-structured-heading,
+.text-review-slot-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.text-review-structured-heading h3 { margin: .15rem 0 0; }
+.text-review-slot-status { color: var(--text-muted); font-size: .8rem; }
+.text-review-slot,
+.text-review-placeholder { margin-top: 1rem; }
+.text-review-placeholder { color: var(--text-muted); }
+.text-review-segment-list { margin-top: 1.25rem; }
+.text-review-segment-list button span { display: block; color: var(--text-muted); font-size: .75rem; font-weight: 800; }
+
+.text-review-warning:focus-visible,
+.text-review-question-nav button:focus-visible,
+.text-review-segment-list button:focus-visible,
+.text-review-segments button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 720px) {
+  .text-review-panel--structured { width: calc(100vw - 1rem); height: calc(100vh - 1rem); }
+  .text-review-structured-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .text-review-question-nav ol { display: flex; overflow-x: auto; }
+  .text-review-question-nav li { min-width: 5rem; }
+}
