@@ -3,6 +3,8 @@ import type { WrongAnswerEntry } from "./entry";
 
 export type ExamSessionStatus = "in_progress" | "submitted";
 
+export type ExamMode = "practice" | "real";
+
 export interface ExamQuestionSnapshot {
   id: string;
   questionNumber: string;
@@ -69,6 +71,10 @@ export interface ExamSession {
   currentQuestionIndex: number;
   startedAt: string;
   updatedAt: string;
+  /** Omitted by legacy sessions, which are treated as practice sessions. */
+  mode?: ExamMode;
+  /** Absolute deadline for real exam sessions. */
+  deadlineAt?: string;
   submittedAt?: string;
   score?: ExamSessionScore;
 }
