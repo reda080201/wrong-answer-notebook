@@ -56,6 +56,43 @@ describe("useGeneratedExams retry", () => {
     await waitFor(() => expect(result.current.hasRetryableChange).toBe(false));
   });
 
+  it("does not persist a failed upsert through a later queued mutation", async () => {
+    const first = { ...exam, id: "exam-a", title: "A" };
+    const second = { ...exam, id: "exam-b", title: "B" };
+    saveGeneratedExams.mockRejectedValueOnce(new Error("A 실패")).mockResolvedValueOnce(undefined);
+    const { result } = renderHook(() => useGeneratedExams());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    let firstTask!: Promise<void>;
+    let secondTask!: Promise<void>;
+    await act(async () => {
+      firstTask = result.current.upsert(first);
+      secondTask = result.current.upsert(second);
+      await expect(firstTask).rejects.toThrow("A 실패");
+      await secondTask;
+    });
+
+    expect(saveGeneratedExams).toHaveBeenNthCalledWith(1, [exam, first]);
+    expect(saveGeneratedExams).toHaveBeenNthCalledWith(2, [exam, second]);
+    expect(result.current.exams.map((item) => item.id)).toEqual(["exam-1", "exam-b"]);
+  });
+
+  it("keeps a prior successful mutation visible when a later mutation fails", async () => {
+    const first = { ...exam, id: "exam-a", title: "A" };
+    saveGeneratedExams.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("B 실패"));
+    const { result } = renderHook(() => useGeneratedExams());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    const firstTask = result.current.upsert(first);
+    const secondTask = result.current.remove("exam-1");
+    await act(async () => {
+      await firstTask;
+      await expect(secondTask).rejects.toThrow("B 실패");
+    });
+
+    expect(result.current.exams.map((item) => item.id)).toEqual(["exam-1", "exam-a"]);
+  });
+
   it("does not allow a mutation before the initial load has completed", async () => {
     let resolveLoad!: (value: GeneratedExam[]) => void;
     loadGeneratedExams.mockReturnValueOnce(new Promise<GeneratedExam[]>((resolve) => { resolveLoad = resolve; }));

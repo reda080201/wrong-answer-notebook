@@ -107,4 +107,37 @@ describe("useSettings", () => {
     expect(result.current.settingsError).toBeNull();
     expect(result.current.settingsSaveState).toBe("saved");
   });
+
+  it("does not carry a failed nested patch into a later queued patch", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(mockedLoadSettings).toHaveBeenCalled());
+    mockedSaveSettings.mockRejectedValueOnce(new Error("첫 저장 실패")).mockResolvedValueOnce(undefined);
+
+    const first = result.current.patchViewPreferences({ hideAnswers: true });
+    const second = result.current.patchExamPreferences({ showNavigator: false });
+    await act(async () => {
+      await expect(first).rejects.toThrow("첫 저장 실패");
+      await second;
+    });
+
+    const persisted = mockedSaveSettings.mock.calls[1][0];
+    expect(persisted.viewPreferences.hideAnswers).toBe(defaultSettings.viewPreferences.hideAnswers);
+    expect(persisted.examPreferences.showNavigator).toBe(false);
+  });
+
+  it("retries the exact failed recipe against the latest persisted settings", async () => {
+    const { result } = renderHook(() => useSettings());
+    await waitFor(() => expect(mockedLoadSettings).toHaveBeenCalled());
+    mockedSaveSettings.mockRejectedValueOnce(new Error("첫 저장 실패")).mockResolvedValue(undefined);
+
+    await act(async () => {
+      await expect(result.current.patchExamPreferences({ showNavigator: false })).rejects.toThrow("첫 저장 실패");
+      await result.current.patchViewPreferences({ hideAnswers: true });
+      await result.current.retrySettingsSave();
+    });
+
+    const retried = mockedSaveSettings.mock.calls[2][0];
+    expect(retried.examPreferences.showNavigator).toBe(false);
+    expect(retried.viewPreferences.hideAnswers).toBe(true);
+  });
 });
