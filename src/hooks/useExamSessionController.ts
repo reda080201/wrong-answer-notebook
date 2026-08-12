@@ -6,6 +6,7 @@ import {
 import type {
   ChatGptMcpPreferences,
   EntryFormData,
+  ExamMode,
   ExamSession,
   ExamSubmissionTransactionResult,
   GeneratedExam,
@@ -35,6 +36,14 @@ interface UseExamSessionControllerOptions {
     submittedSession: ExamSession,
     data: EntryFormData[],
   ) => Promise<ExamSubmissionTransactionResult>;
+}
+
+export interface ExamOpenOptions {
+  mode?: ExamMode;
+  resumable?: ExamSession;
+  timeLimitMinutes?: number;
+  showTimer?: boolean;
+  answerSheetOpen?: boolean;
 }
 
 export function useExamSessionController({
@@ -166,18 +175,21 @@ export function useExamSessionController({
     setSaveError(null);
   }, []);
 
-  const open = useCallback((entry: WrongAnswerEntry, resumable?: ExamSession) => {
+  const open = useCallback((entry: WrongAnswerEntry, options: ExamOpenOptions | ExamSession = {}) => {
+    const normalizedOptions: ExamOpenOptions = "status" in options
+      ? { mode: options.mode ?? "practice", resumable: options }
+      : options;
     setStartError(null);
     if (!loadedRef.current) {
       setStartError({ entryId: entry.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
       return;
     }
     setActiveGeneratedExam(null);
-    if (resumable) {
-      setSession(resumable);
+    if (normalizedOptions.resumable) {
+      setSession(normalizedOptions.resumable);
       return;
     }
-    const next = createExamSession(entry);
+    const next = createExamSession(entry, new Date(), normalizedOptions);
     if (!next.questions.length) {
       setStartError({ entryId: entry.id, message: "감지된 문항이 없어 모의고사를 시작할 수 없습니다. 문제 번호 형식을 확인해 주세요." });
       return;
@@ -192,7 +204,7 @@ export function useExamSessionController({
     setSession(next);
   }, [loadError]);
 
-  const openGenerated = useCallback((exam: GeneratedExam) => {
+  const openGenerated = useCallback((exam: GeneratedExam, options: ExamOpenOptions = {}) => {
     if (!loadedRef.current) {
       setStartError({ entryId: exam.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
       return;
@@ -200,7 +212,7 @@ export function useExamSessionController({
     if (!exam.questions.length) return;
     setActiveGeneratedExam(exam);
     setStartError(null);
-    setSession(createSessionFromGeneratedExam(exam));
+    setSession(createSessionFromGeneratedExam(exam, new Date(), options));
   }, [loadError]);
 
   const submit = useCallback(async (current: ExamSession) => {

@@ -54,6 +54,11 @@ export interface ExamSessionScore {
   totalQuestions: number;
   answeredCount: number;
   correctCount: number;
+  wrongCount: number;
+  unansweredCount: number;
+  pointsComplete: boolean;
+  earnedPoints?: number;
+  maxPoints?: number;
   markedForReviewCount: number;
   percentCorrect: number;
   questionResults: ExamQuestionResult[];
@@ -73,6 +78,7 @@ export interface ExamSession {
   updatedAt: string;
   /** Omitted by legacy sessions, which are treated as practice sessions. */
   mode?: ExamMode;
+  timeLimitMinutes?: number;
   /** Absolute deadline for real exam sessions. */
   deadlineAt?: string;
   submittedAt?: string;

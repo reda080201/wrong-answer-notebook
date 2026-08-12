@@ -33,10 +33,20 @@ export function scoreExamSession(session: ExamSession, scoredAt = new Date()): E
   });
   const answeredCount = questionResults.filter((item) => item.hasResponse).length;
   const correctCount = questionResults.filter((item) => item.correct).length;
+  const wrongCount = questionResults.filter((item) => item.hasResponse && !item.correct).length;
+  const unansweredCount = questionResults.filter((item) => !item.hasResponse).length;
+  const pointsComplete = session.questions.every((item) => typeof item.points === "number" && Number.isFinite(item.points));
+  const maxPoints = pointsComplete ? session.questions.reduce((sum, item) => sum + (item.points ?? 0), 0) : undefined;
+  const earnedPoints = pointsComplete ? questionResults.reduce((sum, item, index) => sum + (item.correct ? session.questions[index]?.points ?? 0 : 0), 0) : undefined;
   return {
     totalQuestions: questionResults.length,
     answeredCount,
     correctCount,
+    wrongCount,
+    unansweredCount,
+    pointsComplete,
+    earnedPoints,
+    maxPoints,
     markedForReviewCount: questionResults.filter((item) => item.markedForReview).length,
     percentCorrect: questionResults.length ? Math.round((correctCount / questionResults.length) * 100) : 0,
     questionResults,
