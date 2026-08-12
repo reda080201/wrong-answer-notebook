@@ -7,6 +7,7 @@ import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType"
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
+import { sanitizeExamQuestionDomId } from "../services/examDom";
 import { parseChoice } from "./ExamSessionView";
 import "./RealExamSessionView.css";
 
@@ -98,7 +99,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
 
   const navigateToQuestion = (index: number, questionNumber: string) => {
     onChange({ ...session, currentQuestionIndex: index });
-    document.getElementById(`real-exam-question-${questionNumber}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    document.getElementById(sanitizeExamQuestionDomId(questionNumber))?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const toggleAnswerSheet = () => {
@@ -142,7 +143,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
             const response = responses.get(question.questionNumber);
             const multipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices);
             return (
-              <article key={question.id} id={`real-exam-question-${question.questionNumber}`} className="real-exam-question">
+              <article key={question.id} id={sanitizeExamQuestionDomId(question.questionNumber)} className="real-exam-question">
                 <header><h3>문제 {question.questionNumber}</h3><span>{index + 1} / {session.questions.length}</span></header>
                 {question.warning && <p className="real-exam-warning">{question.warning}</p>}
                 {question.passage && (!question.stimulusGroupId || session.questions.findIndex((item) => item.stimulusGroupId === question.stimulusGroupId) === index) && (
