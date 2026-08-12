@@ -1,4 +1,4 @@
-import type { ChatGptMcpPreferences, ExportScopeMode } from "./settings";
+import type { ExportScopeMode } from "./settings";
 
 export type AiProviderType = "manual" | "gemini-flash-lite" | "gemini-3.5-flash";
 
@@ -58,6 +58,17 @@ export interface McpActiveContext {
   questionNumber: string | null;
 }
 
+/** Per-send MCP disclosure choices. Answer material is never persisted as a default. */
+export interface McpSendOptions {
+  shareQuestionText: boolean;
+  shareChoices: boolean;
+  shareQuestionImages: boolean;
+  shareSourcePageImages: boolean;
+  shareUserResponse: boolean;
+  shareScratchNote: boolean;
+  shareExistingAnswersAndExplanations: boolean;
+}
+
 /** App-owned export context read by MCP */
 export interface McpExportContext {
   entryId: string | null;
@@ -65,10 +76,7 @@ export interface McpExportContext {
   scope: ExportScopeMode;
   questionNumbers: string[];
   submitted: boolean;
-  shareOptions: Pick<
-    ChatGptMcpPreferences,
-    "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
-  >;
+  shareOptions: McpSendOptions;
   updatedAt: string;
   generatedExamId?: string | null;
   includeSourceReferences?: boolean;

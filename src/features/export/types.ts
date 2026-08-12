@@ -49,12 +49,15 @@ export interface AnswerProtectionContext {
 
 export interface ChatGptSharePayloadQuestion {
   questionNumber: string;
+  questionText?: string;
   passage?: string;
   contentSegments?: QuestionContentSegment[];
   choices: string[];
   images: string[];
   userResponse?: string;
   scratchNote?: string;
+  answer?: string;
+  explanation?: string;
 }
 
 export interface ChatGptSharePayload {

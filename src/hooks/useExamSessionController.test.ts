@@ -70,6 +70,23 @@ describe("useExamSessionController safety guards", () => {
     expect(result.current.session?.entryId).toBe(entry.id);
   });
 
+  it("does not share an exam context merely by opening or moving through questions", async () => {
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      addEntries: vi.fn(async () => []),
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.open(entry));
+    act(() => result.current.setSession({
+      ...result.current.session!,
+      currentQuestionIndex: 0,
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    }));
+
+    expect(syncMcpBridgeActiveExamContext).not.toHaveBeenCalled();
+  });
+
   it("keeps exam persistence blocked after load failure and recovers with one retry", async () => {
     loadExamSessions.mockRejectedValueOnce(new Error("permission denied")).mockResolvedValueOnce([]);
     const addEntries = vi.fn(async () => []);

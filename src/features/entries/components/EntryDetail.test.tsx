@@ -887,7 +887,7 @@ describe("EntryDetail sheet layout", () => {
     const checks = screen.getAllByLabelText("선택");
     fireEvent.click(checks[0]);
     fireEvent.click(checks[2]);
-    fireEvent.click(screen.getByRole("button", { name: "복습 큐 만들기" }));
+    fireEvent.click(screen.getByRole("button", { name: "복습 큐" }));
 
     expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 1");
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));

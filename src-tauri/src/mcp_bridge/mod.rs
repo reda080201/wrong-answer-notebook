@@ -1243,6 +1243,18 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
         .get("shareUserResponse")
         .and_then(Value::as_bool)
         .unwrap_or(true);
+    let share_text = share
+        .get("shareQuestionText")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let share_choices = share
+        .get("shareChoices")
+        .and_then(Value::as_bool)
+        .unwrap_or(true);
+    let share_existing_answers = share
+        .get("shareExistingAnswersAndExplanations")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
     let share_note = share
         .get("shareScratchNote")
         .and_then(Value::as_bool)
@@ -1355,6 +1367,34 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
                 }
             }
         }
+        if share_existing_answers {
+            if let Some(question) = state
+                .store
+                .get_question(entry_id, number)
+                .map_err(store_error)?
+            {
+                if let Some(answer_key) = question.answer_key {
+                    if let Some(answer) = answer_key.get("answer") {
+                        item["answer"] = answer.clone();
+                    }
+                    if let Some(explanation) = answer_key.get("explanation") {
+                        item["explanation"] = explanation.clone();
+                    }
+                }
+            }
+        }
+        // Session-specific passages and segments are added above, so apply the
+        // disclosure boundary only after every source has populated the item.
+        if !share_text {
+            item.as_object_mut().map(|object| {
+                object.remove("question");
+                object.remove("passage");
+                object.remove("contentSegments");
+            });
+        }
+        if !share_choices {
+            item.as_object_mut().map(|object| object.remove("choices"));
+        }
         if include_images {
             let mut images = Value::Array(Vec::new());
             if share_images {
@@ -1385,7 +1425,7 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
         questions.push(item);
     }
     Ok(
-        json!({"active":true,"entryId":entry.id,"title":entry.title,"subject":entry.subject,"scope":context.get("scope"),"questionNumbers":context.get("questionNumbers"),"submitted":submitted,"answerProtection":if submitted{"released"}else{"active"},"sessionId":session_id,"updatedAt":context.get("updatedAt"),"questions":questions}),
+        json!({"active":true,"entryId":entry.id,"title":entry.title,"subject":entry.subject,"scope":context.get("scope"),"questionNumbers":context.get("questionNumbers"),"submitted":submitted,"answerProtection":if share_existing_answers{"released"}else{"active"},"sessionId":session_id,"updatedAt":context.get("updatedAt"),"questions":questions}),
     )
 }
 fn image_resources(
@@ -1715,6 +1755,59 @@ mod tests {
         )
         .is_err());
     }
+
+    #[test]
+    fn export_context_applies_explicit_text_choice_and_answer_disclosure_options() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        store.save_entries(&[sample_entry()]).unwrap();
+        fs::write(
+            dir.path().join("active-export-context.json"),
+            serde_json::to_vec(&json!({
+                "entryId": "sheet-1",
+                "questionNumbers": ["1"],
+                "shareOptions": {
+                    "shareQuestionText": false,
+                    "shareChoices": false,
+                    "shareExistingAnswersAndExplanations": false
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        let state = test_bridge_http_state(store.clone(), dir.path().to_path_buf());
+
+        let protected = export_context_payload(&state, &json!({})).unwrap();
+        let protected_question = &protected["questions"][0];
+        assert!(protected_question.get("question").is_none());
+        assert!(protected_question.get("choices").is_none());
+        assert!(protected_question.get("answer").is_none());
+        assert_eq!(protected["answerProtection"], "active");
+
+        fs::write(
+            dir.path().join("active-export-context.json"),
+            serde_json::to_vec(&json!({
+                "entryId": "sheet-1",
+                "questionNumbers": ["1"],
+                "shareOptions": {
+                    "shareQuestionText": true,
+                    "shareChoices": true,
+                    "shareExistingAnswersAndExplanations": true
+                }
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+
+        let disclosed = export_context_payload(&state, &json!({})).unwrap();
+        let disclosed_question = &disclosed["questions"][0];
+        assert_eq!(disclosed_question["answer"], "1");
+        assert_eq!(disclosed_question["explanation"], "해설");
+        assert_eq!(disclosed["answerProtection"], "released");
+    }
+
     async fn start_test_server() -> (tempfile::TempDir, McpBridgeManager, u16) {
         let dir = tempdir().unwrap();
         let images = dir.path().join("images");
