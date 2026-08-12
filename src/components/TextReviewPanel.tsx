@@ -7,6 +7,19 @@ import Dialog from "../shared/ui/Dialog";
 import "./TextReviewPanel.css";
 import StructuredQuestionReviewEditor from "../features/import/components/StructuredQuestionReviewEditor";
 
+function stableIdPart(value: string): string {
+  const normalized = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-");
+  return normalized || "unknown";
+}
+
+function structuredTargetId(questionNumber: string, segmentId: string): string {
+  return `text-review-structured-editor-${stableIdPart(questionNumber)}-${stableIdPart(segmentId)}`;
+}
+
+function legacyStructuredTargetId(questionNumber: string, segmentId: string): string {
+  return `text-review-structured-editor-${questionNumber}-${segmentId}`;
+}
+
 export interface TextReviewPanelProps {
   entry: WrongAnswerEntry;
   segments: SuspiciousTextSegment[];
@@ -31,11 +44,18 @@ export default function TextReviewPanel({
   onActiveSegmentChange,
   onStructuredQuestionsChange,
 }: TextReviewPanelProps) {
+  const hasStructuredQuestions = (entry.structuredQuestions?.length ?? 0) > 0;
+  const isStructured = entry.entryKind === "problem_sheet" && hasStructuredQuestions;
   const questionNumbers = useMemo(
-    () => Object.keys(entry.questionContentSegments ?? {}).filter((number) => number.trim()),
-    [entry.questionContentSegments],
+    () => {
+      const canonicalNumbers = (entry.structuredQuestions ?? [])
+        .map((question) => question.questionNumber.trim())
+        .filter(Boolean);
+      if (canonicalNumbers.length > 0) return [...new Set(canonicalNumbers)];
+      return Object.keys(entry.questionContentSegments ?? {}).filter((number) => number.trim());
+    },
+    [entry.questionContentSegments, entry.structuredQuestions],
   );
-  const isStructured = entry.entryKind === "problem_sheet" && (entry.structuredQuestions?.length ?? 0) > 0;
   const [text, setText] = useState(entry.question);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +128,18 @@ export default function TextReviewPanel({
   const selectStructuredSegment = (segmentId: string) => {
     setSelectedStructuredSegmentId(segmentId);
     onActiveSegmentChange?.(segmentId);
+    if (!selectedQuestionNumber) return;
+    const targetIds = [
+      structuredTargetId(selectedQuestionNumber, segmentId),
+      legacyStructuredTargetId(selectedQuestionNumber, segmentId),
+    ];
+    const target = targetIds.map((targetId) => document.getElementById(targetId)).find(Boolean);
+    if (target instanceof HTMLElement) {
+      target.focus();
+      target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    } else {
+      document.getElementById(`text-review-segment-trigger-${selectedQuestionNumber}-${segmentId}`)?.focus();
+    }
   };
 
   const copyForGptCorrection = async () => {
@@ -160,7 +192,13 @@ export default function TextReviewPanel({
               <ol>
                 {questionNumbers.map((questionNumber) => (
                   <li key={questionNumber}>
-                    <button type="button" className={selectedQuestionNumber === questionNumber ? "is-active" : ""} aria-current={selectedQuestionNumber === questionNumber ? "true" : undefined} onClick={() => selectQuestion(questionNumber)}>
+                    <button
+                      id={`text-review-question-${stableIdPart(questionNumber)}`}
+                      type="button"
+                      className={selectedQuestionNumber === questionNumber ? "is-active" : ""}
+                      aria-current={selectedQuestionNumber === questionNumber ? "true" : undefined}
+                      onClick={() => selectQuestion(questionNumber)}
+                    >
                       {questionNumber}번
                     </button>
                   </li>
@@ -170,7 +208,7 @@ export default function TextReviewPanel({
             <section className="text-review-structured-editor" aria-label="구조화된 문제 편집 영역">
               <div className="text-review-structured-heading">
                 <div><span className="modal-eyebrow">Structured Review</span><h3>{selectedQuestionNumber ? `${selectedQuestionNumber}번 문항` : "문항 선택"}</h3></div>
-                <span className="text-review-slot-status">편집 슬롯 대기 중</span>
+                <span className="text-review-structured-status">문항별 segment를 직접 검수합니다.</span>
               </div>
               {selectedQuestionNumber ? <StructuredQuestionReviewEditor
                 id="text-review-structured-editor"
@@ -185,13 +223,30 @@ export default function TextReviewPanel({
               <div className="text-review-segment-list" aria-label="활성 문항 segment 선택">
                 <strong>문항 구성</strong>
                 <ul>
-                  {(entry.questionContentSegments?.[selectedQuestionNumber ?? ""] ?? []).map((segment) => (
+                  {(
+                    (editedStructuredQuestions.find((question) => question.questionNumber === selectedQuestionNumber)?.contentSegments
+                      ?? entry.questionContentSegments?.[selectedQuestionNumber ?? ""]
+                      ?? [])
+                  ).map((segment) => {
+                    const isEditableSegment = segment.type === "text" || segment.type === "condition" || segment.type === "equation";
+                    const targetId = isEditableSegment
+                      ? structuredTargetId(selectedQuestionNumber ?? "", segment.id)
+                      : "text-review-structured-editor";
+                    return (
                     <li key={segment.id}>
-                      <button type="button" className={selectedStructuredSegmentId === segment.id ? "is-active" : ""} aria-current={selectedStructuredSegmentId === segment.id ? "true" : undefined} onClick={() => selectStructuredSegment(segment.id)}>
+                      <button
+                        id={`text-review-segment-trigger-${selectedQuestionNumber}-${segment.id}`}
+                        type="button"
+                        className={selectedStructuredSegmentId === segment.id ? "is-active" : ""}
+                        aria-current={selectedStructuredSegmentId === segment.id ? "true" : undefined}
+                        aria-controls={targetId}
+                        onClick={() => selectStructuredSegment(segment.id)}
+                      >
                         <span>{segment.type}</span>{segment.type === "text" || segment.type === "condition" ? segment.text.slice(0, 64) : segment.id}
                       </button>
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               </div>
             </section>
