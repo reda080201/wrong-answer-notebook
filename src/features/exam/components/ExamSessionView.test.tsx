@@ -143,4 +143,41 @@ describe("ExamSessionView", () => {
     fireEvent.click(screen.getByRole("button", { name: "설정" }));
     expect(onOpenSettings).toHaveBeenCalledWith("exam");
   });
+
+  it("uses the direct navigator to move question 22 to zero-based index 21", () => {
+    const onChange = vi.fn();
+    const questions = Array.from({ length: 30 }, (_, index) => ({
+      ...createSession().questions[0],
+      id: `q-${index + 1}`,
+      questionNumber: String(index + 1),
+    }));
+    render(<ExamSessionView session={createSession({ questions })} onChange={onChange} onSubmit={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "1 / 30" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "문항 이동" })).getByRole("button", { name: "22" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ currentQuestionIndex: 21 }));
+  });
+
+  it("renders each submitted result number once and reports incomplete point data", () => {
+    const questions = Array.from({ length: 30 }, (_, index) => ({
+      ...createSession().questions[0],
+      id: `q-${index + 1}`,
+      questionNumber: String(index + 1),
+      correctAnswer: "①",
+      points: index === 29 ? undefined : 2,
+      sourceWarning: index === 10 ? "원본 확인 필요" : undefined,
+    }));
+    const session = createSession({
+      status: "submitted",
+      questions,
+      submittedAt: "2026-01-02T00:00:00.000Z",
+      responses: questions.map((question) => ({ questionNumber: question.questionNumber, response: "①", scratchNote: "", markedForReview: false, updatedAt: "2026-01-02T00:00:00.000Z" })),
+    });
+    render(<ExamSessionView session={session} onChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    expect(screen.getByText("배점 정보 일부 미확인")).toBeInTheDocument();
+    const grid = screen.getByLabelText("문항별 결과");
+    expect(within(grid).getAllByRole("button")).toHaveLength(30);
+    expect(within(grid).getByRole("button", { name: "30" })).toBeInTheDocument();
+  });
 });
