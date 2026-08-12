@@ -693,7 +693,7 @@ function AppContent() {
               } : undefined}
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
                 setRealExamStartEntry(selected);
-                setRealExamMinutes(50);
+                setRealExamMinutes(settings.examPreferences.defaultRealExamMinutes ?? 50);
               } : undefined}
               startExamLabel={savedExamSessions.some((item) => item.entryId === selected.id && item.status === "in_progress") ? "이어서 풀기" : "문제 풀기"}
               onEdit={actions.openEdit}
@@ -935,7 +935,7 @@ function AppContent() {
                   const entry = realExamStartEntry;
                   const resumable = savedExamSessions.find((item) => item.entryId === entry.id && item.status === "in_progress" && item.mode === "real");
                   setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable, timeLimitMinutes: realExamMinutes, showTimer: true, answerSheetOpen: true });
+                  openExamSession(entry, { mode: "real", resumable, timeLimitMinutes: realExamMinutes, showTimer: settings.examPreferences.showTimer, answerSheetOpen: settings.examPreferences.realExamAnswerSheetOpen });
                 }}
               >
                 실전 모드 시작

@@ -324,12 +324,18 @@ export default function SettingsModal({
             {activeTab === "exam" && (
               <div className="settings-pref-panel">
                 <p className="settings-label">시험</p>
+                <p className="settings-label">연습 모드</p>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showScratchNote} onChange={(event) => void patchExam({ showScratchNote: event.target.checked })} /> 풀이 메모 표시</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showOriginalPages} onChange={(event) => void patchExam({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showNavigator} onChange={(event) => void patchExam({ showNavigator: event.target.checked })} /> 문항 navigator 표시</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.autoAdvanceOnAnswer} onChange={(event) => void patchExam({ autoAdvanceOnAnswer: event.target.checked })} /> 답 선택 후 자동 이동</label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.warnUnansweredOnSubmit} onChange={(event) => void patchExam({ warnUnansweredOnSubmit: event.target.checked })} /> 미응답 제출 경고</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showTimer} onChange={(event) => void patchExam({ showTimer: event.target.checked })} /> 타이머 표시</label>
+                <p className="settings-label">실전 모드</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showTimer !== false} onChange={(event) => void patchExam({ showTimer: event.target.checked })} /> 타이머 표시</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.realExamAnswerSheetOpen !== false} onChange={(event) => void patchExam({ realExamAnswerSheetOpen: event.target.checked })} /> 답안지 처음 열기</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.warnBeforeEnd !== false} onChange={(event) => void patchExam({ warnBeforeEnd: event.target.checked })} /> 종료 전 경고</label>
+                <label className="settings-checkbox"><input type="checkbox" checked={Boolean(settings.examPreferences.autoSubmitOnTimeExpired)} onChange={(event) => void patchExam({ autoSubmitOnTimeExpired: event.target.checked })} /> 시간 만료 시 자동 제출</label>
+                <label className="settings-field">기본 제한 시간(분)<input type="number" min={1} step={1} value={settings.examPreferences.defaultRealExamMinutes ?? 50} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value > 0) void patchExam({ defaultRealExamMinutes: Math.round(value) }); }} /></label>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showMcpHelp} onChange={(event) => void patchExam({ showMcpHelp: event.target.checked })} /> MCP 도움 표시</label>
               </div>
             )}

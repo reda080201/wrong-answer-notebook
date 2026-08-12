@@ -9,6 +9,7 @@ export interface ExamSessionCreationOptions {
   mode?: ExamMode;
   timeLimitMinutes?: number;
   showTimer?: boolean;
+  answerSheetOpen?: boolean;
 }
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
@@ -67,6 +68,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     mode,
     timeLimitMinutes,
     deadlineAt: timeLimitMinutes ? new Date(now.getTime() + timeLimitMinutes * 60_000).toISOString() : undefined,
+    showTimer: mode === "real" ? options.showTimer !== false : undefined,
+    answerSheetOpen: mode === "real" ? options.answerSheetOpen !== false : undefined,
     questions: snapshots,
     responses: [],
     currentQuestionIndex: 0,

@@ -29,7 +29,7 @@ describe("TextReviewPanel", () => {
     expect(screen.queryByRole("navigation", { name: "문항 선택" })).not.toBeInTheDocument();
   });
 
-  it("provides keyboard-navigable warnings and structured question/segment slots", () => {
+  it("uses canonical question numbers and exposes stable structured segment targets", () => {
     const onActiveQuestionChange = vi.fn();
     const onActiveSegmentChange = vi.fn();
     const structuredEntry: WrongAnswerEntry = {
@@ -56,8 +56,7 @@ describe("TextReviewPanel", () => {
         },
       ],
       questionContentSegments: {
-        "1": [{ id: "segment-1", type: "text", text: "첫 문항" }],
-        "2": [{ id: "segment-2", type: "condition", label: "조건", text: "두 번째 문항" }],
+        "99": [{ id: "legacy-segment", type: "text", text: "구형 segment" }],
       },
     };
     render(
@@ -75,13 +74,61 @@ describe("TextReviewPanel", () => {
     warning.focus();
     expect(warning).toHaveFocus();
     expect(screen.queryByRole("textbox", { name: "검수할 문제 텍스트" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "1번" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "2번" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "99번" })).not.toBeInTheDocument();
+    expect(screen.queryByText("편집 슬롯 대기 중")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "2번" }));
-    fireEvent.click(screen.getByRole("button", { name: /condition.*두 번째 문항/ }));
+    const segmentButton = screen.getByRole("button", { name: /condition.*두 번째 문항/ });
+    expect(segmentButton).toHaveAttribute("id", "text-review-segment-trigger-2-segment-2");
+    expect(segmentButton).toHaveAttribute("aria-controls", "text-review-structured-editor-2-segment-2");
+    fireEvent.click(segmentButton);
 
     expect(onActiveQuestionChange).toHaveBeenCalledWith("2");
     expect(onActiveSegmentChange).toHaveBeenCalledWith("segment-2");
     expect(screen.getByRole("textbox", { name: /2번 조건/ })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /2번 조건/ })).toHaveFocus();
     expect(screen.queryByRole("textbox", { name: "문항 편집기" })).not.toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "segment 편집기" })).not.toBeInTheDocument();
+  });
+
+  it("falls back to compatibility segment question numbers when canonical questions are unavailable", () => {
+    const compatibilityEntry: WrongAnswerEntry = {
+      ...entry,
+      entryKind: "problem_sheet",
+      structuredQuestions: [],
+      questionContentSegments: {
+        "3": [{ id: "segment-3", type: "text", text: "구형 문항" }],
+      },
+    };
+
+    render(<TextReviewPanel entry={compatibilityEntry} segments={[]} onClose={vi.fn()} onSave={vi.fn()} />);
+
+    expect(screen.getByRole("textbox", { name: "검수할 문제 텍스트" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "문항 선택" })).not.toBeInTheDocument();
+  });
+
+  it("keeps canonical question numbers authoritative over compatibility keys", () => {
+    const structuredEntry: WrongAnswerEntry = {
+      ...entry,
+      entryKind: "problem_sheet",
+      structuredQuestions: [{
+        questionNumber: "12",
+        questionText: "정규 문항",
+        conditions: [],
+        equations: [],
+        choices: [],
+        contentSegments: [{ id: "segment-12", type: "text", text: "정규 문항" }],
+        figureIds: [],
+      }],
+      questionContentSegments: {
+        "1": [{ id: "legacy-1", type: "text", text: "오래된 키" }],
+      },
+    };
+
+    render(<TextReviewPanel entry={structuredEntry} segments={[]} onClose={vi.fn()} onSave={vi.fn()} />);
+
+    expect(screen.getByRole("button", { name: "12번" })).toHaveAttribute("id", "text-review-question-12");
+    expect(screen.queryByRole("button", { name: "1번" })).not.toBeInTheDocument();
   });
 });

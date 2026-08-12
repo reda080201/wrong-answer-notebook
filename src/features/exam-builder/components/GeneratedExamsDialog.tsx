@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { GeneratedExam } from "../../../types";
+import type { ExamOpenOptions } from "../../../hooks/useExamSessionController";
 import Dialog from "../../../shared/ui/Dialog";
 import GeneratedExamList from "./GeneratedExamList";
 
@@ -17,7 +18,7 @@ interface GeneratedExamsDialogProps {
   onReload(): Promise<void>;
   onRetry(): Promise<void>;
   onDiscardFailure(): void;
-  onOpen(exam: GeneratedExam): void;
+  onOpen(exam: GeneratedExam, options?: ExamOpenOptions): void;
   onDelete(id: string): Promise<void>;
   onPrint(exam: GeneratedExam): Promise<void>;
 }

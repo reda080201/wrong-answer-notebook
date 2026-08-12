@@ -6,7 +6,13 @@ export const EXAM_SESSION_AUTOSAVE_DEBOUNCE_MS = 350;
 
 export function normalizeExamSession(session: ExamSession): ExamSession {
   const mode: ExamMode = session.mode === "real" ? "real" : "practice";
-  return { ...session, mode };
+  if (mode === "practice") return { ...session, mode };
+  return {
+    ...session,
+    mode,
+    showTimer: session.showTimer !== false,
+    answerSheetOpen: session.answerSheetOpen !== false,
+  };
 }
 
 export function mergeExamSession(sessions: ExamSession[], session: ExamSession): ExamSession[] {

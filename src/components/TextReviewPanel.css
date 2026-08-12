@@ -50,7 +50,7 @@
 }
 
 .text-review-structured-heading,
-.text-review-slot-status {
+.text-review-structured-status {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -58,10 +58,7 @@
 }
 
 .text-review-structured-heading h3 { margin: .15rem 0 0; }
-.text-review-slot-status { color: var(--text-muted); font-size: .8rem; }
-.text-review-slot,
-.text-review-placeholder { margin-top: 1rem; }
-.text-review-placeholder { color: var(--text-muted); }
+.text-review-structured-status { color: var(--text-muted); font-size: .8rem; }
 .text-review-segment-list { margin-top: 1.25rem; }
 .text-review-segment-list button span { display: block; color: var(--text-muted); font-size: .75rem; font-weight: 800; }
 

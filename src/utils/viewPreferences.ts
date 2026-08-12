@@ -43,8 +43,12 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   showNavigator: true,
   autoAdvanceOnAnswer: false,
   warnUnansweredOnSubmit: true,
-  showTimer: false,
+  showTimer: true,
   showMcpHelp: true,
+  defaultRealExamMinutes: 50,
+  realExamAnswerSheetOpen: true,
+  warnBeforeEnd: true,
+  autoSubmitOnTimeExpired: false,
 };
 
 export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = {
@@ -124,14 +128,31 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
 export function normalizeExamPreferences(raw: unknown): ExamPreferences {
   const value = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const showOriginalPages = value.showOriginalPages ?? value.showSourcePages;
+  const defaultRealExamMinutes =
+    typeof value.defaultRealExamMinutes === "number" && Number.isFinite(value.defaultRealExamMinutes)
+      ? Math.max(1, Math.round(value.defaultRealExamMinutes))
+      : DEFAULT_EXAM_PREFERENCES.defaultRealExamMinutes;
   return {
     showScratchNote: value.showScratchNote !== false,
     showOriginalPages: showOriginalPages !== false,
     showNavigator: value.showNavigator !== false,
     autoAdvanceOnAnswer: Boolean(value.autoAdvanceOnAnswer),
     warnUnansweredOnSubmit: value.warnUnansweredOnSubmit !== false,
-    showTimer: Boolean(value.showTimer),
+    showTimer: value.showTimer === undefined ? DEFAULT_EXAM_PREFERENCES.showTimer : Boolean(value.showTimer),
     showMcpHelp: value.showMcpHelp !== false,
+    defaultRealExamMinutes,
+    realExamAnswerSheetOpen:
+      value.realExamAnswerSheetOpen === undefined
+        ? DEFAULT_EXAM_PREFERENCES.realExamAnswerSheetOpen
+        : Boolean(value.realExamAnswerSheetOpen),
+    warnBeforeEnd:
+      value.warnBeforeEnd === undefined
+        ? DEFAULT_EXAM_PREFERENCES.warnBeforeEnd
+        : Boolean(value.warnBeforeEnd),
+    autoSubmitOnTimeExpired:
+      value.autoSubmitOnTimeExpired === undefined
+        ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
+        : Boolean(value.autoSubmitOnTimeExpired),
   };
 }
 

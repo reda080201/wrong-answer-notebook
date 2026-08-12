@@ -3,10 +3,11 @@ import type { ExamPrintPreferences, GeneratedExam } from "../types";
 import { buildGeneratedExamPrintModel } from "../features/exam-builder/services/buildGeneratedExamPrintModel";
 import { printExamDocument } from "../features/export/services/printExamDocument";
 import { useGeneratedExams } from "./useGeneratedExams";
+import type { ExamOpenOptions } from "./useExamSessionController";
 
 interface UseGeneratedExamControllerOptions {
   examPrintPreferences: ExamPrintPreferences;
-  onOpenExam(exam: GeneratedExam): void;
+  onOpenExam(exam: GeneratedExam, options?: ExamOpenOptions): void;
 }
 
 export function useGeneratedExamController({
@@ -28,8 +29,15 @@ export function useGeneratedExamController({
     await removeStored(id);
   }, [removeStored]);
 
-  const openExam = useCallback((exam: GeneratedExam) => {
-    onOpenExam(exam);
+  const openExam = useCallback((exam: GeneratedExam, options?: ExamOpenOptions) => {
+    const mode = options?.mode ?? (exam.preset === "real_exam" ? "real" : "practice");
+    onOpenExam(exam, {
+      ...options,
+      mode,
+      timeLimitMinutes: mode === "real" ? options?.timeLimitMinutes ?? exam.timeLimitMinutes ?? 50 : undefined,
+      showTimer: mode === "real" ? options?.showTimer ?? true : options?.showTimer,
+      answerSheetOpen: mode === "real" ? options?.answerSheetOpen ?? true : options?.answerSheetOpen,
+    });
     setListOpen(false);
   }, [onOpenExam]);
 

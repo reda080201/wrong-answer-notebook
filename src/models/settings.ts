@@ -49,6 +49,10 @@ export interface ExamPreferences {
   warnUnansweredOnSubmit: boolean;
   showTimer: boolean;
   showMcpHelp: boolean;
+  defaultRealExamMinutes?: number;
+  realExamAnswerSheetOpen?: boolean;
+  warnBeforeEnd?: boolean;
+  autoSubmitOnTimeExpired?: boolean;
 }
 
 export interface ImagePreferences {

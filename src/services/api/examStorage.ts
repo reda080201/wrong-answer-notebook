@@ -10,6 +10,7 @@ import {
 } from "../../features/exam-builder/storage/generatedExamStorage";
 import { errorMessage } from "./shared";
 import { reconcileBrowserExamSubmissionJournal } from "./examSubmission";
+import { normalizeExamSession } from "../../features/exam/storage/examSessionStorage";
 
 const EXAM_SESSION_SHAPE_ERROR = "모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
 const GENERATED_EXAM_SHAPE_ERROR = "생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.";
@@ -22,7 +23,7 @@ function requireArray<T>(value: unknown, errorMessageText: string): T[] {
 export async function loadExamSessions(): Promise<ExamSession[]> {
   try {
     if (isTauri()) {
-      return requireArray<ExamSession>(await invoke<unknown>("load_exam_sessions"), EXAM_SESSION_SHAPE_ERROR);
+      return requireArray<ExamSession>(await invoke<unknown>("load_exam_sessions"), EXAM_SESSION_SHAPE_ERROR).map(normalizeExamSession);
     }
     reconcileBrowserExamSubmissionJournal();
     return loadExamSessionsFromStorage();
