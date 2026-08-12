@@ -1560,7 +1560,14 @@ export default function EntryDetail({
                 <button
                   type="button"
                   className={`btn-secondary btn-sm ${selectionMode ? "active" : ""}`}
-                  onClick={() => setSelectionMode((value) => !value)}
+                  onClick={() => setSelectionMode((value) => {
+                    const next = !value;
+                    if (!next) {
+                      setSelectedQuestionNumbers([]);
+                      setShowExportHub(false);
+                    }
+                    return next;
+                  })}
                 >
                   문제 선택
                 </button>

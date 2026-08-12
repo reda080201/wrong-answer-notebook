@@ -5,6 +5,7 @@ import type {
   McpBridgePairingSession,
   McpBridgeStatus,
   McpExportContext,
+  McpSharedContextStatus,
 } from "../../types";
 import { errorMessage } from "./shared";
 
@@ -78,4 +79,14 @@ export async function syncMcpBridgeActiveExamContext(context: ActiveExamContext)
 export async function syncMcpBridgeExportContext(context: McpExportContext): Promise<void> {
   if (!isTauri()) return;
   await invoke("sync_active_export_context", { context });
+}
+
+export async function clearMcpSharedContexts(): Promise<void> {
+  if (!isTauri()) return;
+  await invoke("clear_mcp_shared_contexts");
+}
+
+export async function getMcpSharedContextStatus(): Promise<McpSharedContextStatus> {
+  if (!isTauri()) return { exportShared: false, examShared: false, questionCount: 0 };
+  return invoke<McpSharedContextStatus>("get_mcp_shared_context_status");
 }

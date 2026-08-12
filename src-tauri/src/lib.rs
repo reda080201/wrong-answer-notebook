@@ -439,6 +439,20 @@ fn sync_active_export_context(
 }
 
 #[tauri::command]
+fn clear_mcp_shared_contexts(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> Result<(), String> {
+    bridge.clear_shared_contexts()
+}
+
+#[tauri::command]
+fn get_mcp_shared_context_status(
+    bridge: tauri::State<'_, Arc<mcp_bridge::McpBridgeManager>>,
+) -> mcp_bridge::McpSharedContextStatus {
+    bridge.shared_context_status()
+}
+
+#[tauri::command]
 fn load_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     serde_json::from_str(&load_settings_raw(&app)?).map_err(|e| e.to_string())
 }
@@ -787,6 +801,9 @@ pub fn run() {
                 Arc::clone(&store),
                 app_dir(&handle).map_err(std::io::Error::other)?,
             ));
+            if let Err(error) = bridge.clear_shared_contexts() {
+                eprintln!("MCP shared context cleanup deferred: {error}");
+            }
             // A saved enabled flag is honored only in the desktop process. The
             // bridge still binds exclusively to 127.0.0.1 and requires keyring auth.
             let should_start = load_settings_raw(&handle)
@@ -868,6 +885,8 @@ pub fn run() {
             sync_active_context,
             sync_active_exam_context,
             sync_active_export_context,
+            clear_mcp_shared_contexts,
+            get_mcp_shared_context_status,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

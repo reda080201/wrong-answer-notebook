@@ -38,6 +38,17 @@ use state::{
     SESSION_TTL,
 };
 
+fn annotate_shared_context(context: &mut Value, process_session_id: &str) {
+    if let Some(object) = context.as_object_mut() {
+        object.insert("shareId".into(), Value::String(Uuid::new_v4().to_string()));
+        object.insert("sharedAt".into(), Value::String(now_string()));
+        object.insert(
+            "processSessionId".into(),
+            Value::String(process_session_id.into()),
+        );
+    }
+}
+
 pub const DEFAULT_MCP_PORT: u16 = 43129;
 const MAX_ACTIVE_SESSIONS: usize = 5;
 
@@ -57,6 +68,16 @@ pub struct McpBridgeStatus {
     pub has_auth_token: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpSharedContextStatus {
+    pub export_shared: bool,
+    pub exam_shared: bool,
+    pub share_id: Option<String>,
+    pub shared_at: Option<String>,
+    pub question_count: usize,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ActiveContext {
     pub entry_id: Option<String>,
@@ -66,6 +87,7 @@ pub struct ActiveContext {
 pub struct McpBridgeManager {
     store: Arc<NotebookStore>,
     data_dir: PathBuf,
+    process_session_id: String,
     active_context: Arc<Mutex<ActiveContext>>,
     status: Arc<Mutex<McpBridgeStatus>>,
     auth_token: Arc<Mutex<String>>,
@@ -80,6 +102,7 @@ impl McpBridgeManager {
         Self {
             store,
             data_dir,
+            process_session_id: Uuid::new_v4().to_string(),
             active_context: Arc::new(Mutex::new(ActiveContext::default())),
             status: Arc::new(Mutex::new(stopped_status())),
             auth_token: Arc::new(Mutex::new(String::new())),
@@ -108,16 +131,66 @@ impl McpBridgeManager {
             }
         }
         let path = self.data_dir.join("active-exam-context.json");
+        let mut context = context;
+        annotate_shared_context(&mut context, &self.process_session_id);
         let bytes = serde_json::to_vec(&context).map_err(|error| error.to_string())?;
         crate::write_bytes_atomic(&path, &bytes)
     }
     pub fn sync_active_export_context(&self, context: Value) -> Result<(), String> {
         let path = self.data_dir.join("active-export-context.json");
+        let mut context = context;
+        annotate_shared_context(&mut context, &self.process_session_id);
         let bytes = serde_json::to_vec(&context).map_err(|error| error.to_string())?;
         crate::write_bytes_atomic(&path, &bytes)
     }
+    pub fn clear_shared_contexts(&self) -> Result<(), String> {
+        for name in ["active-exam-context.json", "active-export-context.json"] {
+            let path = self.data_dir.join(name);
+            match fs::remove_file(path) {
+                Ok(()) => {}
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.to_string()),
+            }
+        }
+        self.sync_active_context(None, None);
+        Ok(())
+    }
+    pub fn shared_context_status(&self) -> McpSharedContextStatus {
+        let read = |name: &str| -> Option<Value> {
+            fs::read(self.data_dir.join(name))
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+        };
+        let export = read("active-export-context.json").filter(|value| {
+            value.get("processSessionId").and_then(Value::as_str)
+                == Some(self.process_session_id.as_str())
+        });
+        let exam = read("active-exam-context.json").filter(|value| {
+            value.get("processSessionId").and_then(Value::as_str)
+                == Some(self.process_session_id.as_str())
+        });
+        let source = export.as_ref().or(exam.as_ref());
+        McpSharedContextStatus {
+            export_shared: export.is_some(),
+            exam_shared: exam.is_some(),
+            share_id: source
+                .and_then(|value| value.get("shareId"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            shared_at: source
+                .and_then(|value| value.get("sharedAt"))
+                .and_then(Value::as_str)
+                .map(str::to_owned),
+            question_count: export
+                .as_ref()
+                .and_then(|value| value.get("questionNumbers"))
+                .and_then(Value::as_array)
+                .map_or(0, Vec::len),
+        }
+    }
     pub async fn set_enabled(&self, enabled: bool, port: u16) -> Result<McpBridgeStatus, String> {
         if enabled {
+            self.clear_shared_contexts()?;
             self.start(port).await?;
         } else {
             self.stop();
@@ -265,6 +338,7 @@ impl McpBridgeManager {
             exam_sessions_path: self.data_dir.join("exam-sessions.json"),
             active_exam_context_path: self.data_dir.join("active-exam-context.json"),
             active_export_context_path: self.data_dir.join("active-export-context.json"),
+            process_session_id: self.process_session_id.clone(),
             auth_token: Arc::clone(&self.auth_token),
             pairing_codes: Arc::clone(&self.pairing_codes),
             sessions: Arc::clone(&self.sessions),
@@ -927,6 +1001,10 @@ fn load_active_exam_context(state: &BridgeHttpState) -> Option<Value> {
     fs::read(&state.active_exam_context_path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|value| shared_context_is_current(value, state))
+}
+fn shared_context_is_current(value: &Value, state: &BridgeHttpState) -> bool {
+    value.get("processSessionId").and_then(Value::as_str) == Some(state.process_session_id.as_str())
 }
 fn active_exam_session_for_context(
     state: &BridgeHttpState,
@@ -1191,6 +1269,7 @@ fn load_active_export_context(state: &BridgeHttpState) -> Option<Value> {
     fs::read(&state.active_export_context_path)
         .ok()
         .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+        .filter(|value| shared_context_is_current(value, state))
 }
 fn export_image_entries(state: &BridgeHttpState, entry_id: &str, filenames: &[String]) -> Value {
     let mut total = 0u64;
@@ -1633,6 +1712,7 @@ fn test_bridge_http_state(store: Arc<NotebookStore>, data_dir: PathBuf) -> Bridg
         exam_sessions_path: data_dir.join("exam-sessions.json"),
         active_exam_context_path: data_dir.join("active-exam-context.json"),
         active_export_context_path: data_dir.join("active-export-context.json"),
+        process_session_id: "test-process".into(),
         auth_token: Arc::new(Mutex::new(String::new())),
         pairing_codes: Arc::new(Mutex::new(HashMap::new())),
         sessions: Arc::new(Mutex::new(HashMap::new())),
@@ -1713,6 +1793,7 @@ mod tests {
             dir.path().join("active-export-context.json"),
             serde_json::to_vec(&json!({
                 "entryId": "sheet-1",
+                "processSessionId": "test-process",
                 "questionNumbers": ["1"],
                 "shareOptions": {
                     "shareQuestionImages": false,
@@ -1743,6 +1824,7 @@ mod tests {
             dir.path().join("active-export-context.json"),
             serde_json::to_vec(&json!({
                 "entryId": "sheet-1",
+                "processSessionId": "test-process",
                 "questionNumbers": ["1"],
                 "shareOptions": { "shareSourcePageImages": false }
             }))
@@ -1767,6 +1849,7 @@ mod tests {
             dir.path().join("active-export-context.json"),
             serde_json::to_vec(&json!({
                 "entryId": "sheet-1",
+                "processSessionId": "test-process",
                 "questionNumbers": ["1"],
                 "shareOptions": {
                     "shareQuestionText": false,
@@ -1790,6 +1873,7 @@ mod tests {
             dir.path().join("active-export-context.json"),
             serde_json::to_vec(&json!({
                 "entryId": "sheet-1",
+                "processSessionId": "test-process",
                 "questionNumbers": ["1"],
                 "shareOptions": {
                     "shareQuestionText": true,
@@ -1806,6 +1890,56 @@ mod tests {
         assert_eq!(disclosed_question["answer"], "1");
         assert_eq!(disclosed_question["explanation"], "해설");
         assert_eq!(disclosed["answerProtection"], "released");
+    }
+
+    #[test]
+    fn shared_contexts_are_annotated_and_clearable() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        let manager = McpBridgeManager::new(store, dir.path().to_path_buf());
+        manager
+            .sync_active_export_context(json!({ "entryId": "sheet-1", "questionNumbers": ["3"] }))
+            .unwrap();
+        let saved: Value = serde_json::from_slice(
+            &fs::read(dir.path().join("active-export-context.json")).unwrap(),
+        )
+        .unwrap();
+        assert!(saved.get("shareId").and_then(Value::as_str).is_some());
+        assert!(saved
+            .get("processSessionId")
+            .and_then(Value::as_str)
+            .is_some());
+        assert_eq!(manager.shared_context_status().question_count, 1);
+        manager.clear_shared_contexts().unwrap();
+        assert!(!dir.path().join("active-export-context.json").exists());
+        assert!(!manager.shared_context_status().export_shared);
+    }
+
+    #[test]
+    fn contexts_from_another_process_are_not_read() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+
+        for filename in ["active-export-context.json", "active-exam-context.json"] {
+            fs::write(
+                dir.path().join(filename),
+                serde_json::to_vec(&json!({
+                    "entryId": "old-sheet",
+                    "processSessionId": "previous-process",
+                    "questionNumbers": ["3"]
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        }
+
+        assert!(load_active_export_context(&state).is_none());
+        assert!(load_active_exam_context(&state).is_none());
     }
 
     async fn start_test_server() -> (tempfile::TempDir, McpBridgeManager, u16) {
@@ -2000,6 +2134,8 @@ mod tests {
             }],
             "responses": []
         }]);
+        let mut context = context;
+        annotate_shared_context(&mut context, "test-process");
         fs::write(
             dir.join("exam-sessions.json"),
             serde_json::to_vec(&sessions).unwrap(),

@@ -81,3 +81,11 @@ export interface McpExportContext {
   generatedExamId?: string | null;
   includeSourceReferences?: boolean;
 }
+
+export interface McpSharedContextStatus {
+  exportShared: boolean;
+  examShared: boolean;
+  shareId?: string;
+  sharedAt?: string;
+  questionCount: number;
+}
