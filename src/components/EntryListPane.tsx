@@ -14,7 +14,8 @@ import { difficultyScoreBand, difficultyScoreLabel, resolveEntryDifficultyScore 
 import Menu from "../shared/ui/Menu";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { getSheetResourceStatus } from "../features/supplemental-resources/utils/getSheetResourceStatus";
-import { ChevronLeft, ChevronRight, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
+import Dialog from "../shared/ui/Dialog";
 
 interface EntryListPaneProps {
   activeSection: EntryKind;
@@ -74,6 +75,7 @@ export default function EntryListPane({
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
+  const [conceptCreateOpen, setConceptCreateOpen] = useState(false);
   const importantQuestions = useMemo(
     () =>
       entries
@@ -214,6 +216,7 @@ export default function EntryListPane({
   return (
     <aside className="entry-list" style={{ width, minWidth: width }} aria-label="항목 목록">
       <div className="entry-pane-controls">
+        {activeSection === "concept" && <button type="button" className="ui-icon-button" aria-label="새 개념" title="새 개념" onClick={() => setConceptCreateOpen(true)}><Plus size={17} /></button>}
         <button
           type="button"
           className="ui-icon-button"
@@ -224,12 +227,7 @@ export default function EntryListPane({
           <ChevronLeft size={17} />
         </button>
       </div>
-      {activeSection === "concept" && (
-        <QuickConceptPanel
-          subject={quickConceptSubject}
-          onCreate={onQuickConceptCreate}
-        />
-      )}
+      {conceptCreateOpen && <Dialog open size="sm" ariaLabel="새 개념" onClose={() => setConceptCreateOpen(false)}><QuickConceptPanel subject={quickConceptSubject} onCreate={async (data) => { await onQuickConceptCreate(data); setConceptCreateOpen(false); }} /></Dialog>}
       {activeSection === "problem_sheet" && importantQuestions.length > 0 && (
         <section className="important-question-panel" aria-label="중요 문제 모아보기">
           <header>

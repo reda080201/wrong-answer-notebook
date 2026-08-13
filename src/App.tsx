@@ -112,6 +112,7 @@ function AppContent() {
   const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
   const [showQuestionBank, setShowQuestionBank] = useState(false);
   const [showLibraryExplorer, setShowLibraryExplorer] = useState(false);
+  const [examHistoryOpen, setExamHistoryOpen] = useState(false);
   const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
   const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
   const [questionTarget, setQuestionTarget] = useState<{
@@ -678,20 +679,8 @@ function AppContent() {
           ) : selected ? (
             <>
               {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
-              {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && (
-                <section className="exam-session-history" aria-label="모의고사 결과 이력">
-                  <header><strong>모의고사 결과 이력</strong><span>{selectedExamHistory.length}회</span></header>
-                  <div className="exam-session-history-list">
-                    {selectedExamHistory.slice(0, 5).map((item) => (
-                      <button type="button" key={item.id} onClick={() => setExamSession(item)}>
-                        <span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span>
-                        <strong>{item.score?.percentCorrect ?? 0}%</strong>
-                        <small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small>
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              )}
+              {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && <button type="button" className="exam-history-trigger btn-secondary" onClick={() => setExamHistoryOpen(true)}>이력 <span>{selectedExamHistory.length}</span></button>}
+              {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
               <EntryDetail
               entry={selected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {

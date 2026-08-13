@@ -35,6 +35,8 @@ import { applyAutomaticFigurePreference } from "../features/figures/services/fig
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { normalizeSheetGroup } from "./sheetGroup";
 import { normalizeProblemSource } from "./problemSource";
+import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
+import { reconcileEntryQuestions } from "./questionCanonical";
 import {
   isLearningImportance,
   isLearningReviewStatus,
@@ -677,7 +679,7 @@ export function normalizeStructuredQuestionsStrict(raw: unknown): StructuredQues
       reference: typeof sourceValue.reference === "string" ? sourceValue.reference.trim() || undefined : undefined,
     } : undefined;
     const questionType = normalizeStructuredQuestionType(value.questionType);
-    const choices = list(value.choices);
+    const choices = list(value.choices).map(stripLegacyChoiceSeparator);
     return {
       questionNumber,
       section: typeof value.section === "string" ? value.section.trim() || undefined : undefined,
@@ -881,7 +883,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
   );
   const review = normalizeReview(rest.review, Boolean(rest.mastered));
 
-  return {
+  const normalized: WrongAnswerEntry = {
     ...rest,
     folderId: typeof rest.folderId === "string" && rest.folderId.trim()
       ? rest.folderId.trim()
@@ -939,6 +941,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     reviewAttempts: normalizeReviewAttempts(rest.reviewAttempts, rest.id),
     mastered: review?.phase === "archived",
   };
+  return reconcileEntryQuestions(normalized).entry;
 }
 
 export function getEntryTitle(entry: WrongAnswerEntry): string {
