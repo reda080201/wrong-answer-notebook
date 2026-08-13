@@ -202,14 +202,10 @@ export default function AppSidebar({
         )}
       </div>
 
-      {!collapsed && <div className="stats">
-        {sidebarStats.slice(0, 5).map(([label, value]) => (
-          <div key={label} className="stat-card stat-card--compact">
-            <div className="value">{value}</div>
-            <div className="label">{label}</div>
-          </div>
-        ))}
-      </div>}
+      {!collapsed && <details className="sidebar-summary">
+        <summary>요약</summary>
+        <dl>{sidebarStats.slice(0, 5).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </details>}
 
       {!collapsed && activeSection === "wrong_answer" && <div className="learning-insights">
         <div className="learning-insight">
@@ -230,7 +226,7 @@ export default function AppSidebar({
         </div>
       </div>}
 
-      {!collapsed && <div className="filter-section">
+      {!collapsed && <div className="filter-section app-sidebar-scroll-region">
         <h3>과목</h3>
         <SubjectList
           subjectOrder={subjectOrder}

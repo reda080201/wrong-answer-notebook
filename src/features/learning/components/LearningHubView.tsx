@@ -5,6 +5,7 @@ import SubjectLearningDetails from "./SubjectLearningDetails";
 import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, learningHubThinkers, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
 import type { QuestionBankItem } from "../../question-bank/model/questionBankTypes";
 import SimilarQuestionLinksPanel from "../../question-bank/components/SimilarQuestionLinksPanel";
+import Dialog from "../../../shared/ui/Dialog";
 
 const DOMAIN_LABELS: Record<LearningSubjectDomain | "all", string> = {
   all: "모든 과목",
@@ -163,8 +164,12 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     () => entries.filter((entry) => (entry.answerKey?.length ?? 0) > 0),
     [entries],
   );
+  const [candidatePickerOpen, setCandidatePickerOpen] = useState(false);
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const visibleCandidates = candidateEntries.filter((entry) => entry.title.toLocaleLowerCase("ko").includes(candidateSearch.toLocaleLowerCase("ko")));
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><div className="learning-hub-source-actions">{candidateEntries.map((entry) => <button key={entry.id} type="button" onClick={() => onOpenCandidateReview(entry.id)}>답안에서 학습 후보 만들기 · {entry.title}</button>)}</div></div><strong>{filtered.length}개</strong></header>
+    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong>{filtered.length}개</strong></header>
+    {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="시험지 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}</div></Dialog>}
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>

@@ -16,6 +16,7 @@ describe("QuestionBankView", () => {
     const onOpenQuestion = vi.fn();
     render(<QuestionBankView entries={[entry]} onOpenQuestion={onOpenQuestion} />);
     expect(screen.getByText("기출 시험 1번")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
     fireEvent.change(screen.getByLabelText("문제 은행 검색"), { target: { value: "없는 개념" } });
     expect(screen.getByText("조건에 맞는 문항이 없습니다.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "필터 초기화" }));
@@ -62,6 +63,8 @@ describe("QuestionBankView", () => {
       .mockRejectedValueOnce(new Error("disk unavailable"))
       .mockResolvedValueOnce(undefined);
     render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} onPreferencesChange={onPreferencesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.click(screen.getByText("프리셋과 일괄 추출"));
 
     fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
     await act(async () => {
@@ -84,6 +87,8 @@ describe("QuestionBankView", () => {
     vi.useFakeTimers();
     const onPreferencesChange = vi.fn().mockRejectedValueOnce(new Error("disk")).mockResolvedValueOnce(undefined);
     render(<QuestionBankView entries={[entry]} onOpenQuestion={vi.fn()} onPreferencesChange={onPreferencesChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.click(screen.getByText("프리셋과 일괄 추출"));
     fireEvent.change(screen.getByPlaceholderText("필터 이름"), { target: { value: "함수 모음" } });
     fireEvent.click(screen.getByRole("button", { name: "현재 필터 저장" }));
     await act(async () => { vi.advanceTimersByTime(300); await Promise.resolve(); });
@@ -105,6 +110,8 @@ describe("QuestionBankView", () => {
       onPreferencesChange={onPreferencesChange}
       onRegisterPreferenceFlush={(next) => { if (next) registration = next; }}
     />);
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.click(screen.getByText("프리셋과 일괄 추출"));
 
     fireEvent.change(screen.getByLabelText("정렬"), { target: { value: "difficulty" } });
     await act(async () => { await registration!.flush(); });

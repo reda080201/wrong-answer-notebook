@@ -10,6 +10,7 @@ import QuestionBankFilterBar from "./QuestionBankFilterBar";
 import QuestionBankDetail from "./QuestionBankDetail";
 import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
 import type { TransientWriteRegistration } from "../../../hooks/useAppWriteRegistrations";
+import Dialog from "../../../shared/ui/Dialog";
 
 interface QuestionBankViewProps {
   entries: WrongAnswerEntry[];
@@ -28,6 +29,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const [presetName, setPresetName] = useState("");
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [maintenanceBlocked, setMaintenanceBlocked] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const preferenceTimerRef = useRef<number | null>(null);
   const pendingPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
   const failedPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
@@ -134,10 +136,8 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     <header className="question-bank-view__header"><div><h2>문제 은행</h2><p>문제지의 문항과 단일 오답을 한곳에서 찾습니다.</p></div><strong>{filtered.length} / {items.length}</strong></header>
     <div className="question-bank-actions">
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label>프리셋 이름 <input value={presetName} disabled={maintenanceBlocked} onChange={(event) => setPresetName(event.target.value)} placeholder="필터 이름" /></label><button type="button" className="btn-secondary" disabled={maintenanceBlocked || !presetName.trim()} onClick={savePreset}>현재 필터 저장</button>
-      {(preferences?.savedPresets ?? []).map((preset) => <button type="button" key={preset.id} className="btn-secondary" disabled={maintenanceBlocked} onClick={() => applySelection(filtersFromPreferences(preset.filters), preset.sort)}>{preset.name}</button>)}
+      <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
-      <button type="button" className="btn-secondary" disabled={!filtered.length} onClick={() => setPicked(selectQuestionBankItems(filtered, Math.min(10, filtered.length), `${Date.now()}`))}>10개 추출</button>
     </div>
     {maintenanceBlocked && <p className="form-hint" role="status">백업 또는 복원 중에는 저장되는 문제 은행 설정을 변경할 수 없습니다.</p>}
     {preferencesError && <p className="form-hint" role="alert">{preferencesError}{!maintenanceBlocked && <button type="button" className="btn-secondary" onClick={() => {
@@ -147,7 +147,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
         savePreferences({ ...failed, ...pendingPreferencePatchRef.current });
       }
     }}>다시 저장</button>}</p>}
-    <QuestionBankFilterBar items={items} filters={filters} onChange={patchFilters} onReset={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)} disabled={maintenanceBlocked} />
+    {filtersOpen && <Dialog open size="lg" ariaLabel="문제 은행 필터" onClose={() => setFiltersOpen(false)}><header className="modal-head"><h2>문제 필터</h2></header><QuestionBankFilterBar items={items} filters={filters} onChange={patchFilters} onReset={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)} disabled={maintenanceBlocked} /><details className="question-bank-presets"><summary>프리셋과 일괄 추출</summary><label>프리셋 이름 <input value={presetName} disabled={maintenanceBlocked} onChange={(event) => setPresetName(event.target.value)} placeholder="필터 이름" /></label><button type="button" className="btn-secondary" disabled={maintenanceBlocked || !presetName.trim()} onClick={savePreset}>현재 필터 저장</button>{(preferences?.savedPresets ?? []).map((preset) => <button type="button" key={preset.id} className="btn-secondary" disabled={maintenanceBlocked} onClick={() => applySelection(filtersFromPreferences(preset.filters), preset.sort)}>{preset.name}</button>)}<button type="button" className="btn-secondary" disabled={!filtered.length} onClick={() => setPicked(selectQuestionBankItems(filtered, Math.min(10, filtered.length), `${Date.now()}`))}>10개 추출</button></details></Dialog>}
     {picked.length > 0 && <div className="question-bank-picked" role="status">추출된 문항 {picked.map((item) => `${item.entryTitle} ${item.questionNumber}번`).join(" · ")}</div>}
     {filtered.length ? <div className="question-bank-list">{filtered.map((item) => <QuestionBankCard key={item.id} item={item} onOpen={onOpenQuestion} onInspect={setDetailItem} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 문항이 없습니다.</p><button type="button" className="btn-secondary" onClick={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)}>필터 초기화</button></div>}
     <QuestionBankDetail item={detailItem} onClose={() => setDetailItem(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />

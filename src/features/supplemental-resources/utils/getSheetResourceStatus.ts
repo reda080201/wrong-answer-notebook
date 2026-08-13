@@ -1,6 +1,6 @@
 import type { SheetAnswerItem, WrongAnswerEntry } from "../../../types";
-import { getQuestionNumbers } from "../../../utils/importValidation";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 
 export type SheetResourceCompleteness = "none" | "partial" | "complete";
 
@@ -14,12 +14,7 @@ export interface SheetResourceStatus {
 }
 
 function questionNumbers(entry: WrongAnswerEntry): Set<string> {
-  const numbers = [
-    ...getQuestionNumbers(entry.question),
-    ...(entry.questionMeta ?? []).map((item) => normalizeQuestionNumber(item.questionNumber)),
-    ...(entry.answerKey ?? []).map((item) => normalizeQuestionNumber(item.questionNumber)),
-  ].filter(Boolean);
-  return new Set(numbers);
+  return new Set(getEntryQuestions(entry).map((question) => normalizeQuestionNumber(question.questionNumber)).filter(Boolean));
 }
 
 function hasExplanation(item: SheetAnswerItem): boolean {

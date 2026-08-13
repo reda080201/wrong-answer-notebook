@@ -1,5 +1,6 @@
 import type { EntryFormData, ExplanationPart, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../../../types";
 import { normalizeStructuredQuestionType } from "../../../utils/structuredQuestionType";
+import { stripLegacyChoiceSeparator } from "../../../utils/legacyChoiceSeparator";
 
 export type ImportWorkspaceStatus = "analyzing" | "review_required" | "ready" | "saving" | "completed" | "failed";
 export type ImportQuestionStatus = "ready" | "needs_review" | "missing_answer" | "duplicate_number" | "unassigned_image" | "invalid";
@@ -45,7 +46,7 @@ export interface ImportWorkspace { id: string; createdAt: string; updatedAt: str
 
 export function normalizeChoice(value: string, index: number): { id: string; marker: string; content: string } {
   const match = value.trim().match(/^(①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[ㄱ-ㅎA-Ea-e][.)])\s*(.*)$/);
-  return { id: `choice-${index + 1}`, marker: match?.[1] ?? "", content: (match?.[2] ?? value).trim() };
+  return { id: `choice-${index + 1}`, marker: match?.[1] ?? "", content: stripLegacyChoiceSeparator((match?.[2] ?? value).trim()) };
 }
 
 function cloneContentSegment(segment: QuestionContentSegment): QuestionContentSegment {

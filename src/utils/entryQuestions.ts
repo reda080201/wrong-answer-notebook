@@ -2,6 +2,8 @@ import type { QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } fro
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
 import { isMultipleChoiceQuestion } from "./structuredQuestionType";
+import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
+import { reconcileEntryQuestions } from "./questionCanonical";
 
 export interface ResolvedEntryQuestion {
   /** Stable source identity. Never use position as a persistence key. */
@@ -93,12 +95,13 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number):
   };
 }
 
-export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments">): ResolvedEntryQuestion[] {
-  if (entry.structuredQuestions?.length) {
-    return entry.structuredQuestions.map(projectStructuredQuestion);
+export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures">>): ResolvedEntryQuestion[] {
+  const canonical = reconcileEntryQuestions(entry).entry;
+  if (canonical.structuredQuestions?.length) {
+    return canonical.structuredQuestions.map((question, index) => projectStructuredQuestion({ ...question, choices: question.choices.map(stripLegacyChoiceSeparator) }, index));
   }
 
-  return parseQuestionText(entry.question)
+  return parseQuestionText(canonical.question)
     .filter((block): block is QuestionBlock => block.kind === "question")
     .map((block, index) => {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
@@ -108,9 +111,9 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
         conditions: [],
         equations: [],
         questionText: block.body,
-        choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`.trim()),
-        contentSegments: number && entry.questionContentSegments?.[number]
-          ? cloneSegments(entry.questionContentSegments[number])
+        choices: block.choices.map((choice) => stripLegacyChoiceSeparator(`${choice.marker} ${choice.text}`.trim())),
+        contentSegments: number && canonical.questionContentSegments?.[number]
+          ? cloneSegments(canonical.questionContentSegments[number])
           : undefined,
         figureIds: [],
       };

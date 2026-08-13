@@ -4,6 +4,7 @@ import App from "./App";
 import AppErrorBoundary from "./components/AppErrorBoundary";
 import { AppDialogProvider } from "./shared/ui/AppDialogProvider";
 import "./index.css";
+import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "katex/dist/katex.min.css";
 
 createRoot(document.getElementById("root")!).render(
