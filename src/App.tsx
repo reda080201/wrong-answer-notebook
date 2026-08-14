@@ -548,7 +548,6 @@ function AppContent() {
           <ErrorNotice
             message={examSessionsLoadError}
             onRetry={() => void reloadExamSessions()}
-            onDismiss={() => undefined}
             busy={examSessionsLoading}
           />
         )}

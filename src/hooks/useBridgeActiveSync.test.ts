@@ -75,4 +75,23 @@ describe("useBridgeActiveSync", () => {
 
     expect(result.current.bridgeSyncState.lastSyncError).toBe("동기화 실패");
   });
+
+  it("uses the latest legacy callback after a rerender", async () => {
+    const first = vi.fn().mockResolvedValue(1);
+    const second = vi.fn().mockResolvedValue(2);
+    const { result, rerender } = renderHook(
+      ({ syncEntries }) => useBridgeActiveSync({
+        bridgeEnabled: true,
+        bridgeStatus: liveStatus,
+        syncEntries,
+      }),
+      { initialProps: { syncEntries: first } },
+    );
+
+    await waitFor(() => expect(first).toHaveBeenCalled());
+    rerender({ syncEntries: second });
+    await act(async () => { await result.current.triggerBridgeSync(); });
+
+    expect(second).toHaveBeenCalledOnce();
+  });
 });

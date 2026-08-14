@@ -17,7 +17,7 @@ describe("flushPendingAppWrites", () => {
     expect(order.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "settings", "workspace"]);
   });
 
-  it("stops close when the active exam cannot be flushed", async () => {
+  it("flushes every store before reporting an active-exam failure", async () => {
     const flushGeneratedExams = vi.fn();
     const flushSettings = vi.fn();
     const flushLibraryFolders = vi.fn();
@@ -29,10 +29,27 @@ describe("flushPendingAppWrites", () => {
       flushSettings,
       flushImportWorkspaceDraft: vi.fn(),
       flushLibraryFolders,
-    })).rejects.toThrow("시험 진행 상태를 저장하지 못했습니다.");
-    expect(flushGeneratedExams).not.toHaveBeenCalled();
-    expect(flushSettings).not.toHaveBeenCalled();
-    expect(flushLibraryFolders).not.toHaveBeenCalled();
+    })).rejects.toThrow("시험 진행 상태");
+    expect(flushGeneratedExams).toHaveBeenCalledOnce();
+    expect(flushSettings).toHaveBeenCalledOnce();
+    expect(flushLibraryFolders).toHaveBeenCalledOnce();
+  });
+
+  it("reports failures only after every persistence queue has been flushed", async () => {
+    const flushEntries = vi.fn().mockRejectedValue(new Error("entries failed"));
+    const flushSettings = vi.fn().mockResolvedValue(undefined);
+    const flushLibraryFolders = vi.fn().mockResolvedValue(undefined);
+    await expect(flushPendingAppWrites({
+      activeExam: null,
+      flushExamSession: vi.fn(),
+      flushEntries,
+      flushGeneratedExams: vi.fn().mockResolvedValue(undefined),
+      flushSettings,
+      flushImportWorkspaceDraft: vi.fn().mockResolvedValue(undefined),
+      flushLibraryFolders,
+    })).rejects.toThrow("오답노트");
+    expect(flushSettings).toHaveBeenCalledOnce();
+    expect(flushLibraryFolders).toHaveBeenCalledOnce();
   });
 
   it("fails with a bounded timeout when a persistence queue never settles", async () => {

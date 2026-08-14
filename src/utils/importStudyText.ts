@@ -434,9 +434,10 @@ export function parseAllInOneImport(
   }
 
   const rawImportType = getString((parsed as ImportV2Wrapper).importType);
+  const inferredResolutions = rawImportType ? undefined : inferEntryKindResolutions(rawEntries);
   const importType = rawImportType
     ? validateImportType(rawImportType)
-    : inferImportType(rawEntries);
+    : inferImportType(inferredResolutions ?? []);
   if (!SUPPORTED_V2_IMPORT_TYPES.has(importType)) {
     throw new ImportParseError("지원하지 않는 importType입니다.");
   }
@@ -446,7 +447,7 @@ export function parseAllInOneImport(
   const entryKindResolutions: EntryKindResolution[] = [];
   const entries = rawEntries.map((rawEntry, index) => {
     if (!isImportJson(rawEntry)) throw new ImportParseError(`entries[${index}]의 형식이 올바르지 않습니다.`);
-    const resolution = resolveEntryKind(rawEntry, importType, index);
+    const resolution = inferredResolutions?.[index] ?? resolveEntryKind(rawEntry, importType, index);
     entryKindResolutions.push(resolution);
     const entryKind = resolution.entryKind;
     assertImportTypeMatches(importType, entryKind);
@@ -602,11 +603,15 @@ function resolveEntryKind(
   return { entryKind: inferSingleEntryKind(value), source: "heuristic" };
 }
 
-function inferImportType(entries: unknown[]): ImportV2Type {
-  const kinds = entries.map((entry, index) => {
+function inferEntryKindResolutions(entries: unknown[]): EntryKindResolution[] {
+  return entries.map((entry, index) => {
     if (!isImportJson(entry)) throw new ImportParseError(`entries[${index}]의 형식이 올바르지 않습니다.`);
-    return resolveEntryKind(entry, undefined, index).entryKind;
+    return resolveEntryKind(entry, undefined, index);
   });
+}
+
+function inferImportType(resolutions: EntryKindResolution[]): ImportV2Type {
+  const kinds = resolutions.map(({ entryKind }) => entryKind);
   if (kinds.every((kind) => kind === "problem_sheet")) return "problem_sheet";
   if (kinds.every((kind) => kind === "concept")) return "concept_entries";
   if (kinds.every((kind) => kind === "lecture")) return "lecture";
@@ -807,6 +812,7 @@ function mergeQuestionMetaWithAnswerAnalysis(
   for (const answer of answerKey) {
     if (!answer.mistakeAnalysis?.causes.length) continue;
     const normalized = normalizeQuestionNumber(answer.questionNumber);
+    if (!normalized) continue;
     const index = next.findIndex((meta) => normalizeQuestionNumber(meta.questionNumber) === normalized);
     if (index >= 0) {
       if (!next[index].mistakeAnalysis?.causes.length) {

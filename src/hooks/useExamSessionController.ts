@@ -124,7 +124,7 @@ export function useExamSessionController({
     const optimisticSessions = mergeExamSession(savedSessionsRef.current, next);
     savedSessionsRef.current = optimisticSessions;
     if (updateUi) setSavedSessions(optimisticSessions);
-    setSaving(true);
+    if (updateUi) setSaving(true);
     const saved = await saveQueueRef.current.enqueue(async () => {
       const nextSessions = mergeExamSession(persistedSessionsRef.current, next);
       await saveExamSessions(nextSessions);
@@ -135,13 +135,15 @@ export function useExamSessionController({
       if (sequence === saveSequenceRef.current) {
         savedSessionsRef.current = persistedSessionsRef.current;
         if (updateUi) setSavedSessions(persistedSessionsRef.current);
-        setSaveError(error instanceof Error && error.message
-          ? error.message
-          : "모의고사 진행 상태를 저장하지 못했습니다.");
+        if (updateUi) {
+          setSaveError(error instanceof Error && error.message
+            ? error.message
+            : "모의고사 진행 상태를 저장하지 못했습니다.");
+        }
       }
       return false;
     });
-    if (sequence === saveSequenceRef.current) {
+    if (updateUi && sequence === saveSequenceRef.current) {
       if (saved) setSaveError(null);
       setSaving(false);
     }

@@ -14,8 +14,11 @@ export function useBridgeActiveSync(options: boolean | LegacyBridgeActiveSyncOpt
   const lastSuccessful = useRef<string>("");
   const pending = useRef<{ key: string; context: McpActiveContext } | null>(null);
   const legacySyncEntries = useRef(legacy?.syncEntries);
-  legacySyncEntries.current = legacy?.syncEntries;
   const [bridgeSyncState, setBridgeSyncState] = useState<BridgeSyncState>({ active: enabled, syncing: false, lastSyncAt: null, lastSyncError: null, syncedCount: 0 });
+
+  useEffect(() => {
+    legacySyncEntries.current = legacy?.syncEntries;
+  }, [legacy?.syncEntries]);
 
   const syncActiveContext = useCallback((context: McpActiveContext) => {
     const key = JSON.stringify(context);
