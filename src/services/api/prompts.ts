@@ -81,6 +81,7 @@ figure 예시:
 - 기존 image/source/needsReview 필드는 유지하되 실제 파일이 없으면 image는 생략하고 source는 described_only로 둔다.
 - 설명문, Markdown, 코드블록, \`\`\`json, 파일 첨부 안내 문구는 절대 넣지 마.
 - 문제 원문은 question에 줄바꿈을 살려 넣어줘.
+- 수식은 일반 텍스트로 흉내 내지 말고 MathText가 해석할 수 있도록 인라인은 $...$, 별도 줄 수식은 $$...$$ LaTeX 구문으로 작성해줘.
 - 도표/그래프/표는 빠뜨리지 말고 Markdown 표, 축·범례·값 설명, 또는 [도표/그래프 설명] 블록으로 옮겨줘.
 - 손글씨, 밑줄, 별표, 동그라미, 여백 메모, 학생 풀이 흔적은 question, memo, importantNotes, answerKey 어디에도 넣지 말고 rejectedNotes에만 기록해줘.
 - audit에는 이미지에서 예상되는 문제 번호, 실제 감지 번호, 누락 번호, 불확실 번호, 손글씨 제외 여부, 검토 필요 개수를 반드시 기록해줘.
@@ -91,6 +92,7 @@ figure 예시:
 - 해설에서 특강 카드로 쓸 수 있는 answerKey[].strategy, steps, wrongPoint, reviewPoint, concepts를 가능한 한 구체적으로 채워줘.
 - 시각화가 실제 이해에 도움이 되는 경우에만 answerKey[].diagramSpec 또는 learningBlocks[].diagramSpec을 넣어줘. 단순 계산 문제에는 만들지 말고, 한 문항당 최대 1개, 전체 learningBlocks diagram은 최대 3개까지만 허용해.
 - raw HTML, raw SVG, base64 이미지, script, iframe 문자열은 절대 넣지 마.
+- 수식은 일반 텍스트로 흉내 내지 말고 MathText가 해석할 수 있도록 인라인은 $...$, 별도 줄 수식은 $$...$$ LaTeX 구문으로 작성해줘.
 - 왜 틀리기 쉬운지 판단 가능한 경우 mistakeAnalysis.causes에 오답 원인을 넣어줘. 허용 type은 calculation, condition_misread, concept_gap, strategy_gap, time_pressure, choice_trap, careless, unknown 이야.
 - 오답 원인은 추측이 약하면 unknown만 쓰거나 causes를 비워둬.
 - 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -107,6 +107,7 @@ interface EntryDetailProps {
   viewPreferences?: ViewPreferences;
   onViewPreferencesChange?: (patch: Partial<ViewPreferences>) => void;
   onOpenSettings?: (tab?: SettingsTab) => void;
+  aiProviderStatus?: AiProviderStatus | null;
   chatGptPreferences?: ChatGptMcpPreferences;
   onChatGptPreferencesChange?: (patch: Partial<ChatGptMcpPreferences>) => Promise<void> | void;
   onOpenChatGptSettings?: () => void;
@@ -223,6 +224,7 @@ export default function EntryDetail({
   viewPreferences,
   onViewPreferencesChange,
   onOpenSettings,
+  aiProviderStatus,
   chatGptPreferences,
   onChatGptPreferencesChange,
   onOpenChatGptSettings,
@@ -285,6 +287,7 @@ export default function EntryDetail({
   );
   const consumedInitialTargetRef = useRef<number | null>(null);
   const sheetSearchTriggerRef = useRef<HTMLButtonElement>(null);
+  const sheetSearchInputRef = useRef<HTMLInputElement>(null);
 
   const updateViewPreference = useCallback(<K extends keyof ViewPreferences>(key: K, value: ViewPreferences[K]) => {
     if (key === "sheetLayout") setSheetLayout(value as SheetLayout);
@@ -427,6 +430,7 @@ export default function EntryDetail({
 
   useEffect(() => {
     if (!sheetSearchOpen) return undefined;
+    const frame = window.requestAnimationFrame(() => sheetSearchInputRef.current?.focus());
     const closeSearch = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setSheetSearchOpen(false);
@@ -434,8 +438,23 @@ export default function EntryDetail({
       }
     };
     document.addEventListener("keydown", closeSearch);
-    return () => document.removeEventListener("keydown", closeSearch);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", closeSearch);
+    };
   }, [sheetSearchOpen]);
+
+  useEffect(() => {
+    if (!isSheet || detailViewMode !== "paper") return undefined;
+    const openSearch = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") {
+        event.preventDefault();
+        setSheetSearchOpen(true);
+      }
+    };
+    document.addEventListener("keydown", openSearch);
+    return () => document.removeEventListener("keydown", openSearch);
+  }, [detailViewMode, isSheet]);
 
   useEffect(() => {
     setFocusedQuestionIndex(0);
@@ -1351,7 +1370,29 @@ export default function EntryDetail({
                 }
                 return next;
               })}>선택</button>
-              <button ref={sheetSearchTriggerRef} type="button" className="btn-icon" aria-expanded={sheetSearchOpen} aria-controls="problem-sheet-search" onClick={() => setSheetSearchOpen((value) => !value)}>검색</button>
+              {sheetSearchOpen ? (
+                <div id="problem-sheet-search" className="sheet-search sheet-search--inline">
+                  <input
+                    ref={sheetSearchInputRef}
+                    type="search"
+                    value={sheetSearch}
+                    onChange={(event) => setSheetSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        moveSearch(event.shiftKey ? -1 : 1);
+                      }
+                    }}
+                    placeholder="시험지 안에서 검색"
+                    aria-label="시험지 안에서 검색"
+                  />
+                  <span aria-live="polite">{sheetSearch.trim() ? `${sheetMatches.length}개` : "검색"}</span>
+                  <button type="button" className="btn-icon" onClick={() => moveSearch(-1)} disabled={sheetMatches.length === 0} aria-label="이전 검색 결과">이전</button>
+                  <button type="button" className="btn-icon" onClick={() => moveSearch(1)} disabled={sheetMatches.length === 0} aria-label="다음 검색 결과">다음</button>
+                </div>
+              ) : (
+                <button ref={sheetSearchTriggerRef} type="button" className="btn-icon" aria-expanded={false} aria-controls="problem-sheet-search" onClick={() => setSheetSearchOpen(true)}>검색</button>
+              )}
               <Menu label="더보기" triggerAriaLabel="문제지 더보기" className="detail-more-menu">
                 <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("paper")}>문제로 돌아가기</button>
                 <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("solution")}>해설지</button>
@@ -1685,23 +1726,6 @@ export default function EntryDetail({
                   </nav>}
                 </>
               )}
-              {sheetSearchOpen && <div id="problem-sheet-search" className="sheet-search">
-                <input
-                  type="search"
-                  value={sheetSearch}
-                  onChange={(event) => setSheetSearch(event.target.value)}
-                  placeholder="시험지 안에서 검색"
-                />
-                <span>
-                  {sheetSearch.trim() ? `${sheetMatches.length}개` : "검색"}
-                </span>
-                <button type="button" onClick={() => moveSearch(-1)} disabled={sheetMatches.length === 0}>
-                  이전
-                </button>
-                <button type="button" onClick={() => moveSearch(1)} disabled={sheetMatches.length === 0}>
-                  다음
-                </button>
-              </div>}
             </div>
           )}
           {(isConcept || isLecture) && onSimilarQuestionLinksChange ? (
@@ -1712,6 +1736,8 @@ export default function EntryDetail({
               onOpen={(entryId, questionNumber) => onOpenQuestionTarget?.(entryId, questionNumber)}
               onChange={(links) => onSimilarQuestionLinksChange(entry, links)}
               label="전체 관련 문제"
+              aiProviderStatus={aiProviderStatus}
+              onOpenAiSettings={() => onOpenSettings?.("gpt-mcp")}
             />
           ) : null}
           {isLecture ? (
@@ -1722,6 +1748,7 @@ export default function EntryDetail({
               onOpenLinkedEntry={onOpenEntry}
               layout={viewPreferences?.lectureLayout ?? "document"}
               onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
+              blockDefaultState={viewPreferences?.lectureBlockDefaultState ?? "first"}
             />
           ) : !isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
@@ -2185,6 +2212,7 @@ export default function EntryDetail({
           }}
           onReview={(result) => void handleReviewResult(result, theaterQuestion)}
           reviewSaving={reviewSaving !== null}
+          solutionPresentation={viewPreferences?.questionSolutionPresentation ?? "split"}
           onClose={closeTheaterMode}
         />
       )}

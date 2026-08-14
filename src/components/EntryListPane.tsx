@@ -4,13 +4,11 @@ import QuickConceptPanel from "./QuickConceptPanel";
 import type { EntryFormData, EntryKind, Subject, WrongAnswerEntry } from "../types";
 import {
   entryKindName,
-  getEntryCardPreview,
-  imageCount,
 } from "../utils/appUi";
 import { getEntryTitle } from "../utils/entry";
 import { normalizeQuestionMeta } from "../utils/questionMeta";
 import { buildSheetGroups } from "../utils/sheetGroup";
-import { difficultyScoreBand, difficultyScoreLabel, resolveEntryDifficultyScore } from "../utils/difficulty";
+import { difficultyScoreLabel } from "../utils/difficulty";
 import Menu from "../shared/ui/Menu";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { getSheetResourceStatus } from "../features/supplemental-resources/utils/getSheetResourceStatus";
@@ -150,9 +148,6 @@ export default function EntryListPane({
   }
 
   const renderEntryCard = (entry: WrongAnswerEntry) => {
-    const difficultyScore = resolveEntryDifficultyScore(entry);
-    const preview = getEntryCardPreview(entry);
-    const attachedImageCount = imageCount(entry);
     const resourceStatus = entry.entryKind === "problem_sheet" ? getSheetResourceStatus(entry) : null;
     return (
       <div
@@ -169,22 +164,6 @@ export default function EntryListPane({
         }}
       >
         <div className="entry-card-header">
-          <span className="subject-badge">{entry.subject}</span>
-          {entry.entryKind === "problem_sheet" && <span className="entry-mini-badge entry-mini-badge--sheet">문제지</span>}
-          {entry.entryKind === "concept" && <span className="entry-mini-badge entry-mini-badge--concept">개념</span>}
-          {entry.entryKind === "lecture" && <span className="entry-mini-badge entry-mini-badge--lecture">특강</span>}
-          {entry.sheetGroup && <span className="entry-mini-badge">{entry.sheetGroup.partTitle}</span>}
-          {entry.difficulty && entry.difficulty !== "none" && (
-            <span className={`entry-mini-badge entry-mini-badge--difficulty entry-mini-badge--difficulty-${entry.difficulty}`}>
-              {entry.difficulty === "high" ? "상" : entry.difficulty === "medium" ? "중" : "하"}
-            </span>
-          )}
-          {difficultyScore > 0 && (
-            <span className={`entry-mini-badge difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(difficultyScore)}`}>
-              {difficultyScoreLabel(difficultyScore)}
-            </span>
-          )}
-          {entry.mastered && <span className="mastered-badge">✓ 완료</span>}
           {entry.entryKind === "problem_sheet" && (
             <Menu label="⋮" triggerAriaLabel={`${getEntryTitle(entry)} 추가 자료 및 관리`} stopPropagation>
               <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_key")}>답지만 추가</button>
@@ -198,17 +177,16 @@ export default function EntryListPane({
               <button type="button" onClick={() => onDeleteEntry?.(entry.id)}>문제지 삭제</button>
             </Menu>
           )}
+          <span className="entry-card-subject">{entry.subject}</span>
+          <span className="entry-mini-badge">{entryKindName(entry.entryKind)}</span>
+          {entry.mastered ? <span className="entry-mini-badge">복습 완료</span> : entry.difficult ? <span className="entry-mini-badge">어려움</span> : null}
         </div>
         <p className="entry-card-question">{getEntryTitle(entry)}</p>
-        {preview && <p className="entry-card-preview">{preview}</p>}
         <div className="entry-card-meta">
           <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
-          {attachedImageCount > 0 && <span className="image-indicator">📷 {attachedImageCount}</span>}
-          {entry.tags.length > 0 && <span>#{entry.tags[0]}</span>}
           {resourceStatus && (
             <span className="entry-resource-status">
-              문항 {resourceStatus.questionCount}개 · 정답 {resourceStatus.answerCount}/{resourceStatus.questionCount} · 해설 {resourceStatus.explanationCount}/{resourceStatus.questionCount}
-              {resourceStatus.supplementalCount > 0 && ` · 추가 자료 ${resourceStatus.supplementalCount}개`}
+              문항 {resourceStatus.questionCount}개
             </span>
           )}
         </div>
