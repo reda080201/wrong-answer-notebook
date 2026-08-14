@@ -11,7 +11,7 @@
     "lint": "eslint src --ext .ts,.tsx",
     "test": "vitest run --config vitest.config.ts",
     "test:watch": "vitest",
-    "check": "npm run version:check && npm run lint && npm run check:debug && npm run check:mcp-contract && npm run check:tauri-contract && npm run test && npm run build",
+    "check": "npm run version:check && npm run lint && npm run check:debug && npm run check:mcp-contract && npm run check:tauri-contract && npm run test:startup && npm run test && npm run build",
     "check:mcp-contract": "node scripts/check-mcp-bridge-contract.mjs",
     "check:tauri-contract": "node --test scripts/tauri-command-contract.node.mjs && node scripts/check-tauri-command-contract.mjs",
     "check:debug": "node scripts/check-no-debug-markers.mjs",
