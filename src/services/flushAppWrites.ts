@@ -2,6 +2,18 @@ import type { ExamSession } from "../types";
 
 export const APP_CLOSE_FLUSH_TIMEOUT_MS = 15_000;
 
+function normalizeFlushFailureReason(reason: unknown): string {
+  if (reason instanceof Error) {
+    const message = reason.message.trim();
+    return message || "알 수 없는 저장 오류";
+  }
+  if (typeof reason === "string") {
+    const message = reason.trim();
+    return message || "알 수 없는 저장 오류";
+  }
+  return "알 수 없는 저장 오류";
+}
+
 export async function flushPendingAppWrites(options: {
   activeExam: ExamSession | null;
   flushExamSession: (session: ExamSession) => Promise<boolean>;
@@ -14,17 +26,43 @@ export async function flushPendingAppWrites(options: {
   timeoutMs?: number;
 }): Promise<void> {
   const flush = async () => {
-    if (options.activeExam && !(await options.flushExamSession(options.activeExam))) {
-      throw new Error("시험 진행 상태를 저장하지 못했습니다.");
+    const operations: Array<{ name: string; run: () => Promise<void> }> = [
+      ...(options.activeExam
+        ? [{
+          name: "시험 진행 상태",
+          run: async () => {
+            if (!(await options.flushExamSession(options.activeExam!))) {
+              throw new Error("시험 진행 상태를 저장하지 못했습니다.");
+            }
+          },
+        }]
+        : []),
+      { name: "오답노트", run: options.flushEntries },
+      { name: "생성 모의고사", run: options.flushGeneratedExams },
+      { name: "설정", run: options.flushSettings },
+      { name: "가져오기 작업", run: options.flushImportWorkspaceDraft },
+      { name: "보관함 폴더", run: options.flushLibraryFolders },
+      ...(options.flushGptSolutionDrafts
+        ? [{ name: "GPT 해설 초안", run: options.flushGptSolutionDrafts }]
+        : []),
+    ];
+    const results = await Promise.allSettled(
+      operations.map(({ run }) => Promise.resolve().then(run)),
+    );
+    const failures = results.flatMap((result, index) => result.status === "rejected"
+      ? [{
+        storeName: operations[index].name,
+        reason: normalizeFlushFailureReason(result.reason),
+      }]
+      : []);
+    if (failures.length === 1) {
+      const failure = failures[0];
+      throw new Error(`저장하지 못한 항목: ${failure.storeName}: ${failure.reason}`);
     }
-    await Promise.all([
-      options.flushEntries(),
-      options.flushGeneratedExams(),
-      options.flushSettings(),
-      options.flushImportWorkspaceDraft(),
-      options.flushLibraryFolders(),
-      options.flushGptSolutionDrafts?.(),
-    ]);
+    if (failures.length > 1) {
+      const details = failures.map(({ storeName, reason }) => `- ${storeName}: ${reason}`).join("\n");
+      throw new Error(`저장하지 못한 항목:\n${details}`);
+    }
   };
   const timeoutMs = options.timeoutMs ?? APP_CLOSE_FLUSH_TIMEOUT_MS;
   let timer: ReturnType<typeof setTimeout> | undefined;

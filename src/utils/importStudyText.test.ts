@@ -159,6 +159,28 @@ describe("importStudyText", () => {
       expect(result.entries.every((entry) => entry.entryKind === "problem_sheet")).toBe(true);
     });
 
+    it("preserves inferred entry kinds when a wrapper resolves to mixed", () => {
+      const result = parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        entries: [
+          { title: "문제", question: "1. 문제", subject: "수학" },
+          {
+            title: "특강",
+            subject: "수학",
+            sourceType: "md",
+            learningBlocks: [{ type: "concept", title: "극한", content: "정의" }],
+          },
+        ],
+      }));
+
+      expect(result.importType).toBe("mixed");
+      expect(result.entries.map((entry) => entry.entryKind)).toEqual(["problem_sheet", "lecture"]);
+      expect(result.entryKindResolutions).toEqual([
+        { entryKind: "problem_sheet", source: "heuristic" },
+        { entryKind: "lecture", source: "heuristic" },
+      ]);
+    });
+
     it.each([
       ["concept_entries", [{ entryKind: "concept", title: "극한", question: "정의", subject: "수학" }]],
       ["lecture", [{ entryKind: "lecture", title: "극한 특강", subject: "수학", learningBlocks: [{ type: "concept", title: "극한", content: "정의" }] }]],
@@ -223,6 +245,16 @@ describe("importStudyText", () => {
         importType: "mixed",
         entries: [{ question: "Q1", subject: "수학" }],
       }))).toThrow("entries[0]");
+    });
+
+    it("does not create blank question metadata from answer analysis", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "problem_sheet",
+        title: "빈 번호 답안",
+        question: "1. 문제",
+        answerKey: [{ questionNumber: "", answer: "①", mistakeAnalysis: { causes: ["계산 실수"] } }],
+      }));
+      expect(result.data.questionMeta).toEqual([]);
     });
 
     it("uses an explicit lecture importType before attempting inference", () => {

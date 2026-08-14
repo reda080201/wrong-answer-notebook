@@ -273,4 +273,28 @@ describe("EntryListPane", () => {
     expect(onWidthChange).toHaveBeenNthCalledWith(1, 316);
     expect(onWidthChange).toHaveBeenNthCalledWith(2, 284);
   });
+
+  it("cleans up a pointer resize when the pointer is cancelled", () => {
+    const removeListener = vi.spyOn(window, "removeEventListener");
+    render(
+      <EntryListPane
+        activeSection="wrong_answer"
+        loading={false}
+        entries={[]}
+        filtered={[]}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+        width={300}
+        onWidthChange={vi.fn()}
+      />,
+    );
+
+    fireEvent.pointerDown(screen.getByRole("separator", { name: "항목 목록 너비 조절" }), { clientX: 300 });
+    fireEvent.pointerCancel(window);
+
+    expect(removeListener).toHaveBeenCalledWith("pointermove", expect.any(Function));
+    expect(removeListener).toHaveBeenCalledWith("pointercancel", expect.any(Function));
+  });
 });
