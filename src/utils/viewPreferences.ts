@@ -5,6 +5,8 @@ import type {
   ChatGptMcpPreferences,
   GptMcpPreferences,
   ImagePreferences,
+  LectureBlockDefaultState,
+  QuestionSolutionPresentation,
   ViewPreferences,
 } from "../types";
 
@@ -31,6 +33,8 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   showLearningVisuals: true,
   compactToolbar: false,
   problemSheetDisplayMode: "questions",
+  questionSolutionPresentation: "split",
+  lectureBlockDefaultState: "first",
   lectureLayout: "document",
   conceptLinksEnabled: true,
   automaticConceptLinksEnabled: false,
@@ -96,6 +100,14 @@ function normalizeFontSize(value: unknown): ViewPreferences["fontSize"] {
   return value === "large" || value === "xlarge" ? value : "normal";
 }
 
+export function normalizeQuestionSolutionPresentation(value: unknown): QuestionSolutionPresentation {
+  return value === "dialog" || value === "split" ? value : "split";
+}
+
+export function normalizeLectureBlockDefaultState(value: unknown): LectureBlockDefaultState {
+  return value === "all" || value === "none" || value === "first" ? value : "first";
+}
+
 function normalizeThumbnailSize(value: unknown): ImagePreferences["thumbnailSize"] {
   return value === "small" || value === "large" ? value : "medium";
 }
@@ -118,6 +130,8 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     showLearningVisuals: value.showLearningVisuals !== false,
     compactToolbar: Boolean(value.compactToolbar),
     problemSheetDisplayMode: value.problemSheetDisplayMode === "exam" ? "exam" : "questions",
+    questionSolutionPresentation: normalizeQuestionSolutionPresentation(value.questionSolutionPresentation),
+    lectureBlockDefaultState: normalizeLectureBlockDefaultState(value.lectureBlockDefaultState),
     lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",
     conceptLinksEnabled: value.conceptLinksEnabled !== false,
     automaticConceptLinksEnabled: Boolean(value.automaticConceptLinksEnabled),

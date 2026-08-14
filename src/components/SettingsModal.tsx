@@ -318,6 +318,18 @@ export default function SettingsModal({
                     <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.fontSize === value ? "active" : ""}`} onClick={() => void patchView({ fontSize: value })}>{label}</button>
                   ))}
                 </div>
+                <p className="settings-label">문제 크게 보기 해설</p>
+                <div className="theme-options" role="group" aria-label="문제 크게 보기 해설 방식">
+                  {([["split", "나란히"], ["dialog", "별도 창"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.questionSolutionPresentation === value ? "active" : ""}`} aria-pressed={settings.viewPreferences.questionSolutionPresentation === value} onClick={() => void patchView({ questionSolutionPresentation: value })}>{label}</button>
+                  ))}
+                </div>
+                <p className="settings-label">특강 항목 기본 상태</p>
+                <div className="theme-options" role="group" aria-label="특강 항목 기본 상태">
+                  {([["first", "첫 항목만 펼침"], ["all", "모두 펼침"], ["none", "모두 접힘"]] as const).map(([value, label]) => (
+                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.lectureBlockDefaultState === value ? "active" : ""}`} aria-pressed={settings.viewPreferences.lectureBlockDefaultState === value} onClick={() => void patchView({ lectureBlockDefaultState: value })}>{label}</button>
+                  ))}
+                </div>
               </div>
             )}
 
