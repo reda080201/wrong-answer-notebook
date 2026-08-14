@@ -48,6 +48,38 @@ describe("SimilarQuestionLinksPanel", () => {
     expect(screen.getByText("기출 1번")).toBeInTheDocument();
   });
 
+  it("explains unavailable provider state and opens AI settings", () => {
+    const onOpenAiSettings = vi.fn();
+    render(<SimilarQuestionLinksPanel
+      sourceEntry={source}
+      block={block}
+      links={[]}
+      items={[item]}
+      onOpen={vi.fn()}
+      onChange={vi.fn().mockResolvedValue(undefined)}
+      aiProviderStatus={{ type: "manual", enabled: false, keySource: "env", hasStoredKey: false, hasEnvKey: false, available: false, message: "API 키가 없습니다." }}
+      onOpenAiSettings={onOpenAiSettings}
+    />);
+    fireEvent.click(screen.getByRole("button", { name: "유사 문제 찾기" }));
+    expect(screen.getByRole("status")).toHaveTextContent("Gemini 재정렬 준비 필요");
+    expect(screen.getByRole("button", { name: "Gemini로 기존 후보 재정렬" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "AI 설정 열기" }));
+    expect(onOpenAiSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries a failed Gemini ranking only after an explicit click", async () => {
+    const ranking = vi.spyOn(api, "rankSimilarQuestionsWithAi")
+      .mockRejectedValueOnce(new Error("network down"))
+      .mockResolvedValueOnce({ content: JSON.stringify({ results: [{ candidateId: "target:1", score: 90 }] }), model: "gemini-3.5-flash", promptVersion: "similar-question-ranking-v1" });
+    render(<SimilarQuestionLinksPanel sourceEntry={source} block={block} links={[]} items={[item]} onOpen={vi.fn()} onChange={vi.fn().mockResolvedValue(undefined)} />);
+    fireEvent.click(screen.getByRole("button", { name: "유사 문제 찾기" }));
+    expect(ranking).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Gemini로 기존 후보 재정렬" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("network down"));
+    fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(ranking).toHaveBeenCalledTimes(2));
+  });
+
   it("records Gemini provenance only for candidates returned by Gemini", async () => {
     vi.spyOn(api, "rankSimilarQuestionsWithAi").mockResolvedValue({ content: JSON.stringify({ results: [{ candidateId: "target:1", score: 90 }] }), model: "gemini-3.5-flash", promptVersion: "similar-question-ranking-v1" });
     const onChange = vi.fn().mockResolvedValue(undefined);

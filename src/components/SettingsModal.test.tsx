@@ -19,6 +19,8 @@ const settings: AppSettings = {
     showLearningVisuals: true,
     compactToolbar: false,
     problemSheetDisplayMode: "questions",
+    questionSolutionPresentation: "split",
+    lectureBlockDefaultState: "first",
   },
   examPrintPreferences: {
     preset: "real_exam",

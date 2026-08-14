@@ -1,4 +1,5 @@
 import type {
+  AiProviderStatus,
   LearningBlock,
   QuestionBankPreferences,
   WrongAnswerEntry,
@@ -21,6 +22,8 @@ interface NotebookKnowledgeWorkspaceProps {
   patchEntry(entryId: string, patch: EntryPatch): Promise<void>;
   openEntry(entry: WrongAnswerEntry, questionNumber?: string): void;
   openCandidateReview(entryId: string): void;
+  aiProviderStatus?: AiProviderStatus | null;
+  onOpenAiSettings?: () => void;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -33,6 +36,8 @@ export default function NotebookKnowledgeWorkspace({
   patchEntry,
   openEntry,
   openCandidateReview,
+  aiProviderStatus,
+  onOpenAiSettings,
 }: NotebookKnowledgeWorkspaceProps) {
   if (mode === "question-bank") {
     return (
@@ -89,6 +94,8 @@ export default function NotebookKnowledgeWorkspace({
         return { learningBlocks: blocks.filter((block) => block.id !== blockId) };
       })}
       onOpenCandidateReview={openCandidateReview}
+      aiProviderStatus={aiProviderStatus}
+      onOpenAiSettings={onOpenAiSettings}
     />
   );
 }

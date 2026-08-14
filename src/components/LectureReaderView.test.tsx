@@ -62,6 +62,17 @@ describe("LectureReaderView", () => {
     await waitFor(() => expect(screen.getAllByRole("img").length).toBeGreaterThan(0));
   });
 
+  it("uses the configured block default and supports expand or collapse all", () => {
+    const { container, rerender } = render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} blockDefaultState="first" />);
+    expect(Array.from(container.querySelectorAll("details")).map((item) => item.open)).toEqual([true, false]);
+    fireEvent.click(screen.getByRole("button", { name: "모두 펼치기" }));
+    expect(Array.from(container.querySelectorAll("details")).every((item) => item.open)).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "모두 접기" }));
+    expect(Array.from(container.querySelectorAll("details")).every((item) => !item.open)).toBe(true);
+    rerender(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} blockDefaultState="all" />);
+    expect(Array.from(container.querySelectorAll("details")).every((item) => item.open)).toBe(true);
+  });
+
   it("opens the same lecture content in a fullscreen dialog and restores focus on Escape", async () => {
     render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
 

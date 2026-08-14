@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import type { LectureBlockDefaultState, LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 import SemanticFigureView from "../features/figures/components/SemanticFigureView";
 import DiagramCard from "./DiagramCard";
@@ -7,6 +7,7 @@ import ImageGallery from "./ImageGallery";
 import LearningContentPanel from "./LearningContentPanel";
 import MathText from "./MathText";
 import FullscreenDialog from "../shared/ui/FullscreenDialog";
+import { normalizeLegacyLectureMathForDisplay } from "../utils/legacyLectureMath";
 
 interface LectureReaderViewProps {
   entry: WrongAnswerEntry;
@@ -15,6 +16,7 @@ interface LectureReaderViewProps {
   onOpenLinkedEntry?: (entryId: string) => void;
   layout?: LectureLayout;
   onLayoutChange?: (layout: LectureLayout) => void;
+  blockDefaultState?: LectureBlockDefaultState;
 }
 
 interface LectureReaderContentProps extends LectureReaderViewProps {
@@ -57,13 +59,19 @@ function LectureReaderContent({
   onLayoutChange,
   showFullscreen = true,
   onRequestFullscreen,
+  blockDefaultState = "first",
 }: LectureReaderContentProps) {
-  const blocks = entry.learningBlocks ?? [];
+  const blocks = useMemo(() => entry.learningBlocks ?? [], [entry.learningBlocks]);
+  const [openBlockIds, setOpenBlockIds] = useState<Set<string>>(() => defaultOpenBlockIds(blocks, blockDefaultState));
   const figures = entry.figures ?? [];
   const connectedFigureIds = new Set(blocks.flatMap((block) => block.figureIds ?? []));
   const unlinkedFigures = figures.filter((figure) => !connectedFigureIds.has(figure.id));
   const overview = entry.question.trim();
   const memo = entry.memo.trim();
+
+  useEffect(() => {
+    setOpenBlockIds(defaultOpenBlockIds(blocks, blockDefaultState));
+  }, [blockDefaultState, blocks, entry.id]);
 
   return (
     <article className={`lecture-reader lecture-reader--${layout}`}>
@@ -83,19 +91,23 @@ function LectureReaderContent({
       {overview && (
         <section className="lecture-overview" id="lecture-overview">
           <h3>특강 개요</h3>
-          <MathText text={overview} />
+          <MathText text={normalizeLegacyLectureMathForDisplay(overview)} />
         </section>
       )}
       {memo && (
         <section className="lecture-support-section" id="lecture-memo">
           <h3>복습 메모</h3>
-          <MathText text={memo} />
+          <MathText text={normalizeLegacyLectureMathForDisplay(memo)} />
         </section>
       )}
 
       {blocks.length > 0 && (
         <nav className="lecture-toc" aria-label="특강 목차">
           <strong>목차</strong>
+          <div className="lecture-reader-actions">
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setOpenBlockIds(new Set(blocks.map((block) => block.id)))}>모두 펼치기</button>
+            <button type="button" className="btn-secondary btn-sm" onClick={() => setOpenBlockIds(new Set())}>모두 접기</button>
+          </div>
           <ol>{blocks.map((block, index) => <li key={block.id}><a href={`#lecture-block-${block.id}`}>{index + 1}. {block.title || blockLabel(block.type)}</a></li>)}</ol>
         </nav>
       )}
@@ -105,13 +117,26 @@ function LectureReaderContent({
           {blocks.map((block, index) => {
             const connectedFigures = figures.filter((figure) => (block.figureIds ?? []).includes(figure.id));
             return (
-              <details key={block.id} id={`lecture-block-${block.id}`} className={`lecture-block lecture-block--${block.type}`} open>
+              <details
+                key={block.id}
+                id={`lecture-block-${block.id}`}
+                className={`lecture-block lecture-block--${block.type}`}
+                open={openBlockIds.has(block.id)}
+                onToggle={(event) => {
+                  const open = event.currentTarget.open;
+                  setOpenBlockIds((current) => {
+                    const next = new Set(current);
+                    if (open) next.add(block.id); else next.delete(block.id);
+                    return next;
+                  });
+                }}
+              >
                 <summary>
                   <span className="formula-chip">{blockLabel(block.type)}</span>
                   {block.sourceQuestionNumber && <span className="formula-chip">{block.sourceQuestionNumber}번</span>}
                   <h3>{index + 1}. {block.title || "학습 내용"}</h3>
                 </summary>
-                {block.content.trim() && <MathText text={block.content} />}
+                {block.content.trim() && <MathText text={normalizeLegacyLectureMathForDisplay(block.content)} />}
                 {block.images?.length ? <ImageGallery filenames={block.images} variant="fill" /> : null}
                 {connectedFigures.map((figure) => <FigureContent key={figure.id} figure={figure} />)}
                 <DiagramCard diagramType={block.diagramType} diagramSpec={block.diagramSpec} />
@@ -143,6 +168,15 @@ function LectureReaderContent({
       )}
     </article>
   );
+}
+
+function defaultOpenBlockIds(
+  blocks: NonNullable<WrongAnswerEntry["learningBlocks"]>,
+  state: LectureBlockDefaultState,
+) {
+  if (state === "all") return new Set(blocks.map((block) => block.id));
+  if (state === "first" && blocks[0]) return new Set([blocks[0].id]);
+  return new Set<string>();
 }
 
 export default function LectureReaderView(props: LectureReaderViewProps) {

@@ -406,6 +406,7 @@ export default function ImportFromGptModal({
   const [images, setImages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const [promptViewerOpen, setPromptViewerOpen] = useState(false);
   const [watchClipboard, setWatchClipboard] = useState(false);
   const [applyMode, setApplyMode] = useState<GptSolutionApplyMode>("fill");
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -1046,6 +1047,8 @@ export default function ImportFromGptModal({
                   <details><summary>기술 형식 안내</summary><p>JSON schema와 고급 import 옵션은 파일 형식 안내를 참고하세요.</p></details>
                 </section>
               )}
+              <details className="import-advanced-settings">
+                <summary>고급 가져오기 설정</summary>
               {availablePromptTemplates.length > 0 && (
                 <div className="prompt-template-box">
                   <div className="form-row form-row--2">
@@ -1108,21 +1111,23 @@ export default function ImportFromGptModal({
                       </div>
                     </div>
                   </div>
-                  <pre>{activePromptContent}</pre>
-                  <p className="form-hint">
-                    Provider: {aiProvider?.type ?? "manual"}
+                  <pre className="import-prompt-preview" aria-label="프롬프트 미리보기">{activePromptContent}</pre>
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => setPromptViewerOpen(true)}>
+                    프롬프트 전체 보기
+                  </button>
+                  <p className="import-provider-status" role="status">
                     {aiProvider?.type === "manual" || !aiProvider?.enabled
-                      ? " · manual 붙여넣기 모드"
+                      ? "AI 자동 정리 꺼짐 · 직접 붙여넣기"
                       : aiProviderStatus?.available
-                        ? " · API 사용 가능"
-                        : " · API key 또는 설정 확인 필요"}
+                        ? `AI 자동 정리 사용 가능 · ${aiProvider.type}`
+                        : "AI 자동 정리 준비 필요 · 설정에서 API 키를 확인하세요"}
+                    {aiProviderStatus?.message ? ` · ${aiProviderStatus.message}` : ""}
                   </p>
                   {canUseAiProvider && !hasAiVisionImages && (
                     <p className="form-hint import-vision-warning">
                       Gemini Vision을 쓰려면 먼저 문제/답안지 이미지를 첨부하거나, 기존 항목에 이미지를 추가해 주세요.
                     </p>
                   )}
-                  {copyMessage && <p className="form-hint">{copyMessage}</p>}
                 </div>
               )}
 
@@ -1145,6 +1150,8 @@ export default function ImportFromGptModal({
                       : "비워두면 GPT/Gemini가 만든 audit 기준을 사용합니다."}
                 </p>
               </div>
+              </details>
+              {copyMessage && <p className="form-hint" role="status">{copyMessage}</p>}
 
               <div className="form-field full">
                 <label htmlFor="gpt-import-text">GPT 답변 붙여넣기</label>
@@ -1731,6 +1738,15 @@ export default function ImportFromGptModal({
         {!canApply && applyBlockReason && (
           <p className="import-apply-reason" role="status">{applyBlockReason}</p>
         )}
+      </Dialog>
+      <Dialog
+        open={promptViewerOpen}
+        onClose={() => setPromptViewerOpen(false)}
+        size="lg"
+        title="GPT 프롬프트 전체 보기"
+        footer={<button type="button" className="ui-button ui-button--primary" onClick={() => setPromptViewerOpen(false)}>닫기</button>}
+      >
+        <pre className="import-prompt-full" tabIndex={0}>{activePromptContent}</pre>
       </Dialog>
       <ImportReviewWorkspace
         open={reviewWorkspaceOpen && Boolean(draft)}

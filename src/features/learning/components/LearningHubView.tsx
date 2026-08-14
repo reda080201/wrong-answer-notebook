@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import type { LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
 import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, learningHubThinkers, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
@@ -39,6 +39,8 @@ interface LearningHubViewProps {
   onOpenCandidateReview: (entryId: string) => void;
   questionBankItems?: QuestionBankItem[];
   highlightedBlock?: { entryId: string; blockId: string } | null;
+  aiProviderStatus?: AiProviderStatus | null;
+  onOpenAiSettings?: () => void;
 }
 
 function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
@@ -74,7 +76,7 @@ function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave
   </form>;
 }
 
-function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, questionBankItems = [], highlighted }: { item: LearningHubItem; highlighted?: boolean } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock" | "questionBankItems">) {
+function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, questionBankItems = [], highlighted, aiProviderStatus, onOpenAiSettings }: { item: LearningHubItem; highlighted?: boolean } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock" | "questionBankItems" | "aiProviderStatus" | "onOpenAiSettings">) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -133,12 +135,12 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
       {block.passageExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 지문 예시" : "지문 예시"}</h4><p>{example.text}</p>{example.explanation && <small>{example.explanation}</small>}</section>)}
       {block.choiceExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 선지 예시" : "선지 예시"}{example.verdict ? ` · ${example.verdict === "correct" ? "옳음" : example.verdict === "incorrect" ? "틀림" : "조건부"}` : ""}</h4><p>{example.text}</p>{example.reason && <small>{example.reason}</small>}</section>)}
       <footer><button type="button" onClick={() => onOpenSource(item.sourceEntryId, sourceQuestion)}>연결 문제 열기</button><span>{item.sourceEntryTitle}</span></footer>
-      <SimilarQuestionLinksPanel sourceEntry={item.sourceEntry} block={block} links={block.similarQuestionLinks ?? []} items={questionBankItems} onOpen={onOpenSource} onChange={(links) => onUpdateBlock(item.sourceEntryId, block.id, { similarQuestionLinks: links })} label="이 학습 카드의 관련 문제" />
+      <SimilarQuestionLinksPanel sourceEntry={item.sourceEntry} block={block} links={block.similarQuestionLinks ?? []} items={questionBankItems} onOpen={onOpenSource} onChange={(links) => onUpdateBlock(item.sourceEntryId, block.id, { similarQuestionLinks: links })} label="이 학습 카드의 관련 문제" aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />
     </>}
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
@@ -182,6 +184,6 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       <button type="button" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>
     </div>
     <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
-    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
+    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;
 }

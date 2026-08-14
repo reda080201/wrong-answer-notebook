@@ -23,6 +23,8 @@ export interface MemoTemplate {
 }
 
 export type ProblemSheetDisplayMode = "questions" | "exam";
+export type QuestionSolutionPresentation = "dialog" | "split";
+export type LectureBlockDefaultState = "first" | "all" | "none";
 
 export interface ViewPreferences {
   sheetLayout: "single" | "columns";
@@ -33,6 +35,8 @@ export interface ViewPreferences {
   showLearningVisuals: boolean;
   compactToolbar: boolean;
   problemSheetDisplayMode: ProblemSheetDisplayMode;
+  questionSolutionPresentation: QuestionSolutionPresentation;
+  lectureBlockDefaultState: LectureBlockDefaultState;
   lectureLayout?: LectureLayout;
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;

@@ -600,6 +600,8 @@ function AppContent() {
               registerQuestionBankPreferenceFlush={registerQuestionBankPreferenceFlush}
               patchEntry={patchEntry}
               openCandidateReview={setLearningCandidateEntryId}
+              aiProviderStatus={aiProviderStatus}
+              onOpenAiSettings={() => openSettings("gpt-mcp")}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -616,6 +618,8 @@ function AppContent() {
               registerQuestionBankPreferenceFlush={registerQuestionBankPreferenceFlush}
               patchEntry={patchEntry}
               openCandidateReview={setLearningCandidateEntryId}
+              aiProviderStatus={aiProviderStatus}
+              onOpenAiSettings={() => openSettings("gpt-mcp")}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -761,6 +765,7 @@ function AppContent() {
               viewPreferences={settings.viewPreferences}
               onViewPreferencesChange={(patch) => void patchViewPreferences(patch)}
               onOpenSettings={(tab) => openSettings(tab ?? "view")}
+              aiProviderStatus={aiProviderStatus}
               chatGptPreferences={settings.chatGptMcpPreferences}
               onChatGptPreferencesChange={(patch) => patchChatGptMcpPreferences(patch)}
               onOpenChatGptSettings={() => openSettings("chatgpt")}

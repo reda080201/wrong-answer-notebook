@@ -129,6 +129,8 @@ describe("EntryDetail sheet layout", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       problemSheetDisplayMode: "questions" as const,
+      questionSolutionPresentation: "split" as const,
+      lectureBlockDefaultState: "first" as const,
     };
     render(
       <EntryDetail
@@ -217,7 +219,7 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.change(screen.getByPlaceholderText("시험지 안에서 검색"), {
       target: { value: "둘째" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(screen.getByRole("button", { name: "다음 검색 결과" }));
     fireEvent.click(screen.getByRole("button", { name: "문항 목록" }));
 
     expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
@@ -952,7 +954,8 @@ describe("EntryDetail sheet layout", () => {
 
     expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toHaveTextContent("문제 1");
     expect(screen.queryByText("2문제 선택됨")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "어려움" }));
+    fireEvent.click(screen.getByRole("button", { name: "문제 크게 보기 추가 작업" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "어려움" }));
 
     await waitFor(() => {
       expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function));
@@ -1310,6 +1313,8 @@ describe("EntryDetail view settings integration", () => {
           showLearningVisuals: true,
           compactToolbar: false,
           problemSheetDisplayMode: "questions",
+          questionSolutionPresentation: "split",
+          lectureBlockDefaultState: "first",
         }}
         onViewPreferencesChange={onViewPreferencesChange}
       />,

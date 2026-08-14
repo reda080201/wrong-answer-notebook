@@ -53,6 +53,8 @@ describe("normalizeViewPreferences", () => {
       showOriginalPages: false,
       showLearningVisuals: false,
       compactToolbar: true,
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
       problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
@@ -65,6 +67,34 @@ describe("normalizeViewPreferences", () => {
     expect(normalizeViewPreferences({}).problemSheetDisplayMode).toBe("questions");
     expect(normalizeViewPreferences({ problemSheetDisplayMode: "exam" }).problemSheetDisplayMode).toBe("exam");
     expect(normalizeViewPreferences({ problemSheetDisplayMode: "cards" }).problemSheetDisplayMode).toBe("questions");
+  });
+
+  it("uses split and first as defaults for the new presentation preferences", () => {
+    expect(normalizeViewPreferences({})).toMatchObject({
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
+    });
+  });
+
+  it("preserves valid presentation preference values", () => {
+    expect(normalizeViewPreferences({
+      questionSolutionPresentation: "dialog",
+      lectureBlockDefaultState: "all",
+    })).toMatchObject({
+      questionSolutionPresentation: "dialog",
+      lectureBlockDefaultState: "all",
+    });
+    expect(normalizeViewPreferences({ lectureBlockDefaultState: "none" }).lectureBlockDefaultState).toBe("none");
+  });
+
+  it("falls back for invalid or legacy presentation preference values", () => {
+    expect(normalizeViewPreferences({
+      questionSolutionPresentation: "popup",
+      lectureBlockDefaultState: "expanded",
+    })).toMatchObject({
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
+    });
   });
 });
 
@@ -109,6 +139,8 @@ describe("migrateViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: true,
       problemSheetDisplayMode: "questions",
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -126,6 +158,8 @@ describe("migrateViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       problemSheetDisplayMode: "questions",
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -154,6 +188,8 @@ describe("resolveViewPreferences", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       problemSheetDisplayMode: "questions",
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -331,6 +367,8 @@ describe("normalizeSettings integration", () => {
       showLearningVisuals: true,
       compactToolbar: false,
       problemSheetDisplayMode: "questions",
+      questionSolutionPresentation: "split",
+      lectureBlockDefaultState: "first",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,

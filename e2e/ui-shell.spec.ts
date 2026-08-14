@@ -51,7 +51,13 @@ async function seedEntries(page: Page) {
   }, entries);
 }
 
-for (const viewport of [{ width: 1100, height: 750 }, { width: 1536, height: 864 }]) {
+for (const viewport of [
+  { width: 1100, height: 750 },
+  { width: 1280, height: 720 },
+  { width: 1366, height: 768 },
+  { width: 1536, height: 864 },
+  { width: 1920, height: 1080 },
+]) {
   test(`shell panes stay usable at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     await seedEntries(page);
@@ -72,6 +78,13 @@ for (const viewport of [{ width: 1100, height: 750 }, { width: 1536, height: 864
     await expect(page.getByRole("button", { name: "앱 사이드바 펼치기" })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(1);
+
+    const toolbar = page.locator(".problem-sheet-primary-toolbar").first();
+    if (await toolbar.isVisible()) {
+      const toolbarBox = await toolbar.boundingBox();
+      expect(toolbarBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+      expect((toolbarBox?.x ?? 0) + (toolbarBox?.width ?? 0)).toBeLessThanOrEqual(viewport.width + 1);
+    }
 
     await page.screenshot({ path: testInfo.outputPath(`ui-shell-${viewport.width}x${viewport.height}.png`), fullPage: true });
   });

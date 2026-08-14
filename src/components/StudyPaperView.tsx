@@ -7,6 +7,7 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
+import { Maximize2 } from "lucide-react";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -114,7 +115,7 @@ export default function StudyPaperView({
                     </div>
                     <div className="structured-problem-sheet-actions">
                       {selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}
-                      {onOpenQuestionTheater && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionTheater(index)}>크게 보기</button>}
+                      {onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}
                       {onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}
                       {answer ? <button type="button" className="btn-secondary btn-sm" aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" disabled title="연결된 정답이 없습니다.">답</button>}
                     </div>

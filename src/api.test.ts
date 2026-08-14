@@ -46,6 +46,7 @@ describe("builtInPromptTemplates", () => {
     expect(prompt?.content).toContain("expectedQuestionNumbers");
     expect(prompt?.content).toContain("needsReview");
     expect(prompt?.content).toContain("모든 문항에 같은 difficulty를 반복해서 채우지 마");
+    expect(prompt?.content).toContain("인라인은 $...$, 별도 줄 수식은 $$...$$");
     expect(prompt?.content).toContain("한 문항당 최대 1개");
     expect(prompt?.content).toContain("전체 learningBlocks diagram은 최대 3개");
     expect(prompt?.content).not.toContain('"tags"');

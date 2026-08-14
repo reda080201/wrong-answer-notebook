@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Maximize2 } from "lucide-react";
 import { getImageUrl } from "../api";
 import type { Annotation, AnnotationTool, QuestionMeta, SheetAnswerItem, SheetFigureItem, TextRangeAnnotation, WrongAnswerEntry } from "../types";
 import type { ConceptLinkResolveContext } from "../features/learning/utils/conceptIndex";
@@ -482,7 +483,7 @@ function StructuredQuestionBlock({
           onClick={() => onOpenQuestionTheater(questionIndex)}
           aria-label={`문제 ${block.displayNumber} 크게 보기`}
         >
-          크게 보기
+          <Maximize2 size={16} aria-hidden="true" />
         </button>
       )}
     </section>

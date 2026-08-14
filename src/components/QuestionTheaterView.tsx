@@ -4,6 +4,8 @@ import type { Annotation, AnnotationTool, QuestionMeta, ReviewResult, SheetAnswe
 import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textLayout";
 import { LinkifiedText } from "../utils/wikiLinks";
 import MathText from "./MathText";
+import Dialog from "../shared/ui/Dialog";
+import Menu from "../shared/ui/Menu";
 import { FocusedQuestionView } from "./AnnotatableQuestion";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import {
@@ -39,6 +41,7 @@ interface QuestionTheaterViewProps {
   onOpenGptExport?: () => void;
   onReview: (result: ReviewResult) => void;
   reviewSaving?: boolean;
+  solutionPresentation?: "dialog" | "split";
   onClose: () => void;
 }
 
@@ -75,13 +78,15 @@ export default function QuestionTheaterView({
   onOpenGptExport,
   onReview,
   reviewSaving = false,
+  solutionPresentation = "split",
   onClose,
 }: QuestionTheaterViewProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
-  const [solutionSplitOpen, setSolutionSplitOpen] = useState(false);
+  const [solutionOpen, setSolutionOpen] = useState(false);
   const [splitRatio, setSplitRatio] = useState(loadSplitRatio);
   const [scoreEditorOpen, setScoreEditorOpen] = useState(false);
+  const [memoOpen, setMemoOpen] = useState(false);
   const difficultyScore = normalizeDifficultyScore(questionMeta?.difficultyScore) ?? resolveAnswerDifficultyScore(answer);
   const conceptContext = sourceEntry ? buildConceptLinkContext(sourceEntry, questionMeta?.questionNumber ?? answer?.questionNumber) : undefined;
   const [draftScore, setDraftScore] = useState(`${difficultyScore ?? ""}`);
@@ -125,6 +130,8 @@ export default function QuestionTheaterView({
     );
     const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'));
+      if (dialogs.at(-1) !== dialogRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
         onClose();
@@ -156,46 +163,15 @@ export default function QuestionTheaterView({
     <div ref={dialogRef} className="question-theater" role="dialog" aria-modal="true" aria-label="문제 크게 보기" tabIndex={-1}>
       <div className="question-theater-shell">
         <header className="question-theater-toolbar">
-          <button type="button" onClick={onPrevious} disabled={questionIndex <= 0}>
-            이전
-          </button>
-          <strong>
-            문제 {questionBlock.numberLabel || questionBlock.displayNumber}
-            <span>{questionIndex + 1} / {questionCount}</span>
-          </strong>
-          <button type="button" onClick={onNext} disabled={questionIndex >= questionCount - 1}>
-            다음
-          </button>
-          {onToggleImportant && (
-            <button
-              type="button"
-              className={`question-theater-important ${questionMeta?.important ? "active" : ""}`}
-              onClick={onToggleImportant}
-              aria-pressed={Boolean(questionMeta?.important)}
-            >
-              {questionMeta?.important ? "★ 중요" : "☆ 중요"}
-            </button>
-          )}
+          <div className="question-theater-identity">
+            <strong>문제 {questionBlock.numberLabel || questionBlock.displayNumber}</strong>
+            <span className="question-theater-position">{questionIndex + 1} / {questionCount}</span>
+          </div>
           {difficultyScore && (
             <span className={`difficulty-score-pill difficulty-score-pill--${difficultyScoreBand(difficultyScore)}`}>
               {difficultyScoreLabel(difficultyScore)}
             </span>
           )}
-          {onDifficultyScoreChange && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={() => {
-                setDraftScore(`${difficultyScore ?? ""}`);
-                setScoreEditorOpen((value) => !value);
-              }}
-            >
-              난이도 수정
-            </button>
-          )}
-          <button type="button" className="btn-secondary" onClick={() => setSolutionSplitOpen((value) => !value)}>
-            {solutionSplitOpen ? "문제만 보기" : "해설 보기"}
-          </button>
           <button type="button" className="btn-icon" onClick={onClose} aria-label="문제 크게 보기 닫기">
             나가기
           </button>
@@ -243,8 +219,8 @@ export default function QuestionTheaterView({
         )}
 
         <main
-          className={`question-theater-main ${solutionSplitOpen ? "question-theater-main--split" : ""}`}
-          style={solutionSplitOpen ? { ["--question-split-ratio" as string]: `${splitRatio}%` } : undefined}
+          className={`question-theater-main ${solutionOpen && solutionPresentation === "split" ? "question-theater-main--split" : ""}`}
+          style={solutionOpen && solutionPresentation === "split" ? { ["--question-split-ratio" as string]: `${splitRatio}%` } : undefined}
         >
           <section className="question-theater-question-pane">
             {questionMeta?.important && (
@@ -268,7 +244,7 @@ export default function QuestionTheaterView({
               showImages
             />
           </section>
-          {solutionSplitOpen && (
+          {solutionOpen && solutionPresentation === "split" && (
             <>
               <button
                 type="button"
@@ -307,57 +283,51 @@ export default function QuestionTheaterView({
             </>
           )}
         </main>
-
-        {!solutionSplitOpen && <section className="question-theater-panels">
-          <article>
-            <button type="button" className="btn-secondary" onClick={onToggleAnswers}>
-              {hideAnswers ? "정답 보기" : "정답 가리기"}
+        <footer className="question-theater-dock">
+          <div className="question-theater-dock__primary">
+            <button type="button" onClick={onPrevious} disabled={questionIndex <= 0}>이전</button>
+            <button type="button" className="btn-primary" aria-expanded={solutionOpen} onClick={() => setSolutionOpen((value) => !value)}>
+              {solutionOpen ? "해설 닫기" : "해설 보기"}
             </button>
-            {answer ? (
-              <div className={hideAnswers ? "answer-hidden" : ""}>
-                {hideAnswers ? (
-                  <p>정답이 가려져 있습니다.</p>
-                ) : (
-                  <TheaterSolutionContent
-                    answer={answer}
-                    conceptContext={conceptContext}
-                    includeMemo={false}
-                    onWikiLinkClick={onWikiLinkClick}
-                    existingTargets={existingTargets}
-                  />
-                )}
-              </div>
-            ) : (
-              <p>연결된 답안지가 없습니다.</p>
-            )}
-          </article>
-          <article>
-            <h3>현재 문제 메모</h3>
-            {answer?.notes || answer?.reviewPoint || answer?.wrongPoint ? (
-              <div className="memo-content">
-                {[answer?.notes, answer?.wrongPoint, answer?.reviewPoint].filter(Boolean).join("\n")}
-              </div>
-            ) : (
-              <p>현재 문제에 표시할 메모가 없습니다.</p>
-            )}
-            <div className="review-actions">
-              <button type="button" className="review-result review-result--again" disabled={reviewSaving} onClick={() => onReview("again")}>
-                다시
-              </button>
-              <button type="button" className="review-result review-result--hard" disabled={reviewSaving} onClick={() => onReview("hard")}>
-                어려움
-              </button>
-              <button type="button" className="review-result review-result--good" disabled={reviewSaving} onClick={() => onReview("good")}>
-                맞음
-              </button>
-            </div>
-          </article>
-          {memo?.trim() && <article>
-            <h3>시험지 전체 메모</h3>
-            <div className="memo-content"><MathText text={memo} /></div>
-          </article>}
-        </section>}
+            <button type="button" onClick={onNext} disabled={questionIndex >= questionCount - 1}>다음</button>
+          </div>
+          <div className="question-theater-dock__secondary">
+            <Menu label="더보기" triggerAriaLabel="문제 크게 보기 추가 작업">
+              {onToggleImportant && <button type="button" onClick={onToggleImportant}>{questionMeta?.important ? "중요 해제" : "중요 표시"}</button>}
+              {onDifficultyScoreChange && <button type="button" onClick={() => { setDraftScore(`${difficultyScore ?? ""}`); setScoreEditorOpen(true); }}>난이도 수정</button>}
+              {onOpenGptExport && <button type="button" onClick={onOpenGptExport}>GPT에게 이 문제 보내기</button>}
+              {memo?.trim() && <button type="button" onClick={() => setMemoOpen(true)}>시험지 메모</button>}
+              <button type="button" disabled={reviewSaving} onClick={() => onReview("again")}>다시 학습</button>
+              <button type="button" disabled={reviewSaving} onClick={() => onReview("hard")}>어려움</button>
+              <button type="button" disabled={reviewSaving} onClick={() => onReview("good")}>맞음</button>
+            </Menu>
+            {memo?.trim() && <span className="question-theater-position">시험지 메모 있음</span>}
+          </div>
+        </footer>
       </div>
+      <Dialog
+        open={solutionOpen && solutionPresentation === "dialog"}
+        onClose={() => setSolutionOpen(false)}
+        size="lg"
+        title={`문제 ${questionBlock.numberLabel || questionBlock.displayNumber} 해설`}
+        footer={<button type="button" className="ui-button ui-button--primary" onClick={() => setSolutionOpen(false)}>문제로 돌아가기</button>}
+      >
+        <div className="question-theater-solution-actions">
+          <button type="button" className="btn-secondary" onClick={onToggleAnswers}>{hideAnswers ? "정답 보기" : "정답 가리기"}</button>
+        </div>
+        {answer ? hideAnswers ? <p>정답과 해설이 가려져 있습니다.</p> : (
+          <TheaterSolutionContent answer={answer} conceptContext={conceptContext} onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+        ) : <p>연결된 답안지가 없습니다.</p>}
+      </Dialog>
+      <Dialog
+        open={memoOpen}
+        onClose={() => setMemoOpen(false)}
+        size="sm"
+        title="시험지 전체 메모"
+        footer={<button type="button" className="ui-button ui-button--primary" onClick={() => setMemoOpen(false)}>닫기</button>}
+      >
+        <div className="memo-content"><MathText text={memo ?? ""} /></div>
+      </Dialog>
     </div>
   );
 }

@@ -37,7 +37,7 @@ describe("EntryListPane", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders badges and previews for lecture/problem/concept/wrong_answer entries", () => {
+  it("renders compact type and title metadata for every entry kind", () => {
     const entries = [
       entry("sheet", "problem_sheet", "시험지"),
       entry("concept", "concept", "개념", { question: "개념 요약" }),
@@ -60,11 +60,11 @@ describe("EntryListPane", () => {
       />,
     );
 
-    expect(screen.getByText("문제지")).toBeInTheDocument();
+    expect(screen.getAllByText("시험지").length).toBeGreaterThan(0);
     expect(screen.getAllByText("개념").length).toBeGreaterThan(0);
     expect(screen.getAllByText("특강").length).toBeGreaterThan(0);
-    expect(screen.getByText("함수 그래프")).toBeInTheDocument();
-    expect(screen.getByText("오답")).toBeInTheDocument();
+    expect(screen.queryByText("함수 그래프")).not.toBeInTheDocument();
+    expect(screen.getAllByText("오답").length).toBeGreaterThan(0);
   });
 
   it("selects an entry from click and keyboard", () => {
