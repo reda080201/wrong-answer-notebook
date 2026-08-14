@@ -16,7 +16,7 @@ const questionBlock: QuestionBlock = {
   end: 8,
 };
 
-function renderTheater(steps = ["조건 정리", "계산"]) {
+function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation: "dialog" | "split" = "split") {
   return render(
     <QuestionTheaterView
       questionBlock={questionBlock}
@@ -51,6 +51,7 @@ function renderTheater(steps = ["조건 정리", "계산"]) {
       onToggleImportant={vi.fn()}
       onReview={vi.fn()}
       onClose={vi.fn()}
+      solutionPresentation={solutionPresentation}
     />,
   );
 }
@@ -72,8 +73,18 @@ describe("QuestionTheaterView", () => {
     expect(within(solutionPane).getByText("오답 포인트")).toBeInTheDocument();
     expect(within(solutionPane).getByText("복습 포인트")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "문제만 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "해설 닫기" }));
     expect(container.querySelector(".question-theater-main--split")).not.toBeInTheDocument();
+    expect(screen.queryByText("풀이 전략")).not.toBeInTheDocument();
+  });
+
+  it("opens solution in a nested dialog when configured", () => {
+    renderTheater(undefined, "dialog");
+    expect(screen.queryByRole("dialog", { name: "문제 7 해설" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "해설 보기" }));
+    expect(screen.getByRole("dialog", { name: "문제 7 해설" })).toHaveTextContent("풀이 전략");
+    fireEvent.click(screen.getByRole("button", { name: "문제로 돌아가기" }));
+    expect(screen.queryByRole("dialog", { name: "문제 7 해설" })).not.toBeInTheDocument();
   });
 
   it("renders repeated solution steps without collapsing list items", () => {
