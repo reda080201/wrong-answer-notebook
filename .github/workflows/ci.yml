@@ -36,6 +36,9 @@ jobs:
       - name: Version consistency
         run: npm run version:check
 
+      - name: Startup contract tests
+        run: npm run test:startup
+
       - name: Test
         run: npm run test
 
