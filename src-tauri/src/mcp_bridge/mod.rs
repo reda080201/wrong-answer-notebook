@@ -1465,11 +1465,11 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
         // Session-specific passages and segments are added above, so apply the
         // disclosure boundary only after every source has populated the item.
         if !share_text {
-            item.as_object_mut().map(|object| {
+            if let Some(object) = item.as_object_mut() {
                 object.remove("question");
                 object.remove("passage");
                 object.remove("contentSegments");
-            });
+            }
         }
         if !share_choices {
             item.as_object_mut().map(|object| object.remove("choices"));

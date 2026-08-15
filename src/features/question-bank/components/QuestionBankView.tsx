@@ -11,6 +11,7 @@ import QuestionBankDetail from "./QuestionBankDetail";
 import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
 import type { TransientWriteRegistration } from "../../../hooks/useAppWriteRegistrations";
 import Dialog from "../../../shared/ui/Dialog";
+import type { StudyItemReference } from "../../../models/studySession";
 
 interface QuestionBankViewProps {
   entries: WrongAnswerEntry[];
@@ -19,9 +20,10 @@ interface QuestionBankViewProps {
   onPreferencesChange?: (patch: Partial<QuestionBankPreferences>) => Promise<void> | void;
   onRegisterPreferenceFlush?: (registration: TransientWriteRegistration) => void;
   onPatchQuestionClassification?: (entryId: string, questionNumber: string, patch: QuestionMetaPatch) => Promise<void> | void;
+  onStartStudy?: (items: StudyItemReference[]) => void;
 }
 
-export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onRegisterPreferenceFlush, onPatchQuestionClassification }: QuestionBankViewProps) {
+export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onRegisterPreferenceFlush, onPatchQuestionClassification, onStartStudy }: QuestionBankViewProps) {
   const [filters, setFilters] = useState<QuestionBankFilters>(() => filtersFromPreferences(preferences?.recentFilters));
   const [sort, setSort] = useState<QuestionBankSort>(preferences?.lastSort ?? "updated");
   const [detailItem, setDetailItem] = useState<QuestionBankItem | null>(null);
@@ -139,6 +141,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
+      {onStartStudy && <button type="button" className="btn-secondary" disabled={!filtered.length} onClick={() => onStartStudy(filtered.map((item) => ({ id: `${item.entryId}:${item.questionNumber}`, kind: "question" as const, entryId: item.entryId, questionNumber: item.questionNumber })))}>이 문항 학습</button>}
     </div>
     {maintenanceBlocked && <p className="form-hint" role="status">백업 또는 복원 중에는 저장되는 문제 은행 설정을 변경할 수 없습니다.</p>}
     {preferencesError && <p className="form-hint" role="alert">{preferencesError}{!maintenanceBlocked && <button type="button" className="btn-secondary" onClick={() => {
