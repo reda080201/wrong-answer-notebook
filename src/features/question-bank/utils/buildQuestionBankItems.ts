@@ -43,7 +43,7 @@ function isMastered(entry: WrongAnswerEntry, meta?: QuestionMeta): boolean {
   return meta?.review?.phase === "archived" || (!meta && entry.mastered);
 }
 
-function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date): QuestionBankItem {
+function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, duplicateQuestionNumber = false, occurrence = 0): QuestionBankItem {
   const meta = findMeta(entry, number);
   const answer = findAnswer(entry, number);
   const classification = resolveQuestionClassification(entry, meta);
@@ -55,11 +55,12 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     .join("\n")
     .trim();
   return {
-    id: `${entry.id}:${normalizeQuestionNumber(number) || "entry"}`,
+    id: `${entry.id}:${normalizeQuestionNumber(number) || "entry"}${duplicateQuestionNumber ? `:duplicate-${occurrence}` : ""}`,
     entryId: entry.id,
     entryTitle: entry.title || "(제목 없음)",
     entryKind: entry.entryKind,
     questionNumber: normalizeQuestionNumber(number) || number,
+    duplicateQuestionNumber,
     questionId: answer?.id,
     subject: classification.subject,
     questionText: text,
@@ -82,8 +83,14 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
 export function buildQuestionBankItems(entries: WrongAnswerEntry[], now = new Date()): QuestionBankItem[] {
   return entries.flatMap((entry) => {
     if (entry.entryKind === "problem_sheet") {
-      return getEntryQuestions(entry)
-        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now));
+      const blocks = getEntryQuestions(entry);
+      const counts = new Map<string, number>();
+      blocks.forEach((block) => { const number = normalizeQuestionNumber(block.questionNumber); counts.set(number, (counts.get(number) ?? 0) + 1); });
+      return blocks.map((block, index) => {
+        const number = normalizeQuestionNumber(block.questionNumber);
+        const duplicate = (counts.get(number) ?? 0) > 1;
+        return makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, duplicate, index);
+      });
     }
     if (entry.entryKind !== "wrong_answer" || !entry.question.trim()) return [];
     const number = normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber

@@ -15,7 +15,7 @@ describe("QuestionBankView", () => {
   it("filters projected questions and opens the exact question target", () => {
     const onOpenQuestion = vi.fn();
     render(<QuestionBankView entries={[entry]} onOpenQuestion={onOpenQuestion} />);
-    expect(screen.getByText("기출 시험 1번")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "기출 시험 1번 열기" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "필터" }));
     fireEvent.change(screen.getByLabelText("문제 은행 검색"), { target: { value: "없는 개념" } });
     expect(screen.getByText("조건에 맞는 문항이 없습니다.")).toBeInTheDocument();

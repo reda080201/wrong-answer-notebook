@@ -25,6 +25,7 @@ function folderPath(folder: LibraryFolder, folders: LibraryFolder[]): string[] {
 }
 
 type LibraryView = "recent" | "unclassified" | "folder";
+type LibrarySort = "name" | "updatedAt" | "subject" | "type";
 
 function flattenVisibleFolders(folders: LibraryFolder[], expanded: Set<string>) {
   const result: Array<{ folder: LibraryFolder; depth: number }> = [];
@@ -44,6 +45,7 @@ export default function LibraryExplorer({ folders, entries, onOpenEntry, onCreat
   const [focusedFolderId, setFocusedFolderId] = useState<string | undefined>();
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<LibrarySort>("updatedAt");
   const folderRefs = useRef<Record<string, HTMLLIElement | null>>({});
   const current = folders.find((folder) => folder.id === currentFolderId);
   const visibleFolders = useMemo(() => flattenVisibleFolders(folders, expanded), [expanded, folders]);
@@ -56,6 +58,12 @@ export default function LibraryExplorer({ folders, entries, onOpenEntry, onCreat
     return matchesSearch;
   }), [currentFolderId, entries, folders, search, view]);
   const recent = useMemo(() => [...visibleEntries].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 12), [visibleEntries]);
+  const sortedEntries = useMemo(() => [...visibleEntries].sort((a, b) => {
+    if (sort === "name") return a.title.localeCompare(b.title, "ko");
+    if (sort === "subject") return a.subject.localeCompare(b.subject, "ko") || a.title.localeCompare(b.title, "ko");
+    if (sort === "type") return a.entryKind.localeCompare(b.entryKind) || a.title.localeCompare(b.title, "ko");
+    return b.updatedAt.localeCompare(a.updatedAt);
+  }), [sort, visibleEntries]);
 
   useEffect(() => {
     if (view !== "folder" || !currentFolderId) return;
@@ -139,6 +147,6 @@ export default function LibraryExplorer({ folders, entries, onOpenEntry, onCreat
   };
   return <section className="library-explorer" aria-label="문제지 파일 탐색기">
     <aside className="library-tree"><header><h2>보관함</h2><button type="button" className="btn-icon" aria-label="새 폴더" onClick={() => onCreateFolder(view === "folder" ? currentFolderId : undefined)}>+</button></header><button type="button" className={view === "recent" ? "active" : ""} onClick={() => { setView("recent"); setCurrentFolderId(undefined); }}>루트</button><button type="button" className={view === "unclassified" ? "active" : ""} onClick={() => { setView("unclassified"); setCurrentFolderId(undefined); }}>미분류 항목</button><ul role="tree" aria-label="폴더">{childrenOf(folders).map((folder) => renderFolder(folder))}</ul></aside>
-    <main className="library-content"><header><nav aria-label="폴더 경로">루트{view === "folder" && current ? ` / ${folderPath(current, folders).join(" / ")}` : ""}</nav><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="보관함 검색" /><button type="button" className="btn-secondary" onClick={() => { setView("recent"); setCurrentFolderId(undefined); }}>루트로 이동</button></header>{view === "recent" ? <section><h3>최근 항목</h3><div className="library-entry-grid">{recent.map((entry) => <button key={entry.id} type="button" onClick={() => onOpenEntry(entry.id)}>{entry.title || "제목 없음"}<small>{entry.subject}</small></button>)}</div></section> : <section><h3>{current?.name ?? "미분류 항목"}</h3><div className="library-entry-grid">{visibleEntries.map((entry) => <button key={entry.id} type="button" draggable onDragStart={(event) => event.dataTransfer.setData("application/x-entry-ids", entry.id)} onClick={() => onOpenEntry(entry.id)}>{entry.title || "제목 없음"}<small>{entry.subject} · {new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</small></button>)}</div></section>}</main>
+    <main className="library-content"><header><nav aria-label="폴더 경로">루트{view === "folder" && current ? ` / ${folderPath(current, folders).join(" / ")}` : ""}</nav><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="보관함 검색" /><button type="button" className="btn-secondary" onClick={() => { setView("recent"); setCurrentFolderId(undefined); }}>루트로 이동</button></header>{view === "recent" ? <section><h3>최근 항목</h3><div className="library-entry-list">{recent.map((entry) => <button className="library-entry-row" key={entry.id} type="button" onClick={() => onOpenEntry(entry.id)}><strong>{entry.title || "제목 없음"}</strong><span>{entry.entryKind}</span><span>{entry.subject}</span><time>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</time></button>)}</div></section> : <section><div className="library-content-heading"><h3>{current?.name ?? "미분류 항목"}</h3><label>정렬<select value={sort} onChange={(event) => setSort(event.target.value as LibrarySort)}><option value="updatedAt">수정일</option><option value="name">이름</option><option value="subject">과목</option><option value="type">자료 유형</option></select></label></div><div className="library-entry-list">{sortedEntries.map((entry) => <button className="library-entry-row" key={entry.id} type="button" draggable onDragStart={(event) => event.dataTransfer.setData("application/x-entry-ids", entry.id)} onClick={() => onOpenEntry(entry.id)}><strong>{entry.title || "제목 없음"}</strong><span>{entry.entryKind}</span><span>{entry.subject}</span><time>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</time></button>)}</div></section>}</main>
   </section>;
 }
