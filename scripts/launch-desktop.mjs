@@ -145,7 +145,7 @@ export async function launchDesktop({
   launch = launchReleaseExecutable,
   waitForReady = launch === launchReleaseExecutable ? waitForFrontendReady : async () => 0,
   log = console.log,
-  now = performance.now,
+  now = () => performance.now(),
 } = {}) {
   const totalStarted = now();
   const dependencyStarted = now();

@@ -65,6 +65,20 @@ test("runtime helpers expose the no-bundle release command and millisecond timin
   assert.equal(formatTiming("rust/tauri", 12.4), "[STARTUP] rust/tauri=12ms");
 });
 
+test("desktop launcher default clock remains callable on current Node", async () => {
+  const fixture = root;
+  await assert.rejects(
+    launchDesktop({
+      root: fixture,
+      synchronize: async () => {
+        throw new Error("clock reached dependency synchronization");
+      },
+      log: () => undefined,
+    }),
+    /clock reached dependency synchronization/,
+  );
+});
+
 test("runtime fingerprint changes when a tracked frontend or Tauri input changes", async (t) => {
   const fixture = await mkdtemp(path.join(os.tmpdir(), "desktop-runtime-fingerprint-"));
   t.after(() => rm(fixture, { recursive: true, force: true }));
