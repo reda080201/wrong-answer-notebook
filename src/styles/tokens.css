@@ -13,9 +13,9 @@
   --space-8: 40px;
   --control-height-compact: 32px;
   --control-height: 38px;
-  --radius-control: 6px;
-  --radius-panel: 8px;
-  --radius-dialog: 12px;
+  --radius-control: 10px;
+  --radius-panel: 14px;
+  --radius-dialog: 18px;
   --motion-fast: 120ms;
   --motion-standard: 160ms;
   --motion-slow: 220ms;

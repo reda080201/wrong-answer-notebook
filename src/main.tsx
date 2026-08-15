@@ -8,6 +8,10 @@ import "./index.css";
 import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
 import "katex/dist/katex.min.css";
 
+if (import.meta.env.VITE_STORAGE_MODE === "desktop-shared" && window.location.hostname === "localhost") {
+  window.location.replace(`http://127.0.0.1:${window.location.port || "1420"}${window.location.pathname}${window.location.search}${window.location.hash}`);
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <AppErrorBoundary>

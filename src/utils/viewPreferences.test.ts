@@ -55,6 +55,7 @@ describe("normalizeViewPreferences", () => {
       compactToolbar: true,
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
       problemSheetDisplayMode: "questions",
       lectureLayout: "document",
       conceptLinksEnabled: true,
@@ -73,6 +74,7 @@ describe("normalizeViewPreferences", () => {
     expect(normalizeViewPreferences({})).toMatchObject({
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
     });
   });
 
@@ -94,6 +96,7 @@ describe("normalizeViewPreferences", () => {
     })).toMatchObject({
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
     });
   });
 });
@@ -141,6 +144,7 @@ describe("migrateViewPreferences", () => {
       problemSheetDisplayMode: "questions",
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -160,6 +164,7 @@ describe("migrateViewPreferences", () => {
       problemSheetDisplayMode: "questions",
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -190,6 +195,7 @@ describe("resolveViewPreferences", () => {
       problemSheetDisplayMode: "questions",
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
@@ -369,6 +375,7 @@ describe("normalizeSettings integration", () => {
       problemSheetDisplayMode: "questions",
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
+      textReviewDockState: "compact",
       lectureLayout: "document",
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,

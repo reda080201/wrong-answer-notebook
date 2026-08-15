@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { writeUiStorageValue } from "../services/uiStorage";
-import { Minus, Plus, RotateCcw, Search } from "lucide-react";
+import { Minus, Plus, RotateCcw, SlidersHorizontal, X } from "lucide-react";
 
 interface StudyZoomViewportProps {
   storageKey: string;
@@ -69,10 +69,13 @@ export default function StudyZoomViewport({ storageKey, children }: StudyZoomVie
     >
       <div className="study-zoom-content">{children}</div>
       <div className={`study-zoom-hud${controlsOpen ? " is-open" : ""}`} aria-label="문제지 줌 조절">
-        <button type="button" className="ui-icon-button ui-icon-button--compact" aria-expanded={controlsOpen} aria-label={controlsOpen ? "줌 조절 접기" : "줌 조절 열기"} onClick={() => setControlsOpen((open) => !open)}><Search size={16} /></button>
-        <span className="study-zoom-value">{zoom}%</span>
-        {controlsOpen && <><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(-STEP)} disabled={zoom <= MIN_ZOOM} aria-label="문제지 축소"><Minus size={15} /></button><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(STEP)} disabled={zoom >= MAX_ZOOM} aria-label="문제지 확대"><Plus size={15} /></button></>}
-        <button type="button" className="study-zoom-reset" onClick={() => setZoom(100)} disabled={zoom === 100} aria-label="초기화"><RotateCcw size={15} /></button>
+        <button type="button" className="ui-icon-button ui-icon-button--compact" aria-expanded={controlsOpen} aria-label={controlsOpen ? "줌 조절 닫기" : "줌 조절 열기"} onClick={() => setControlsOpen((open) => !open)}>{controlsOpen ? <X size={16} /> : <SlidersHorizontal size={16} />}</button>
+        {controlsOpen && <div className="study-zoom-controls">
+          <span className="study-zoom-value" aria-live="polite">{zoom}%</span>
+          <button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(-STEP)} disabled={zoom <= MIN_ZOOM} aria-label="문제지 축소"><Minus size={15} /></button>
+          <button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(STEP)} disabled={zoom >= MAX_ZOOM} aria-label="문제지 확대"><Plus size={15} /></button>
+          <button type="button" className="study-zoom-reset ui-icon-button ui-icon-button--compact" onClick={() => setZoom(100)} disabled={zoom === 100} aria-label="줌 초기화"><RotateCcw size={15} /></button>
+        </div>}
       </div>
     </div>
   );

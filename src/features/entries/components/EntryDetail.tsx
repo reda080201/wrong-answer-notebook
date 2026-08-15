@@ -258,6 +258,7 @@ export default function EntryDetail({
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
   const [quickMemoText, setQuickMemoText] = useState("");
   const [studyControlCompact, setStudyControlCompact] = useState(viewPreferences?.compactToolbar ?? loadStudyControlCompact);
+  const [textReviewDockState, setTextReviewDockState] = useState<"expanded" | "compact" | "hidden">(viewPreferences?.textReviewDockState ?? "compact");
   const [showTextReview, setShowTextReview] = useState(false);
   const [showExportHub, setShowExportHub] = useState(false);
   const [exportHubView, setExportHubView] = useState<ExportHubView>("home");
@@ -296,6 +297,7 @@ export default function EntryDetail({
     if (key === "hideAnswers") setHideAnswers(Boolean(value));
     if (key === "compactToolbar") setStudyControlCompact(Boolean(value));
     if (key === "problemSheetDisplayMode") setProblemSheetDisplayMode(value as ProblemSheetDisplayMode);
+    if (key === "textReviewDockState") setTextReviewDockState(value as "expanded" | "compact" | "hidden");
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
 
@@ -306,6 +308,7 @@ export default function EntryDetail({
     setHideAnswers(viewPreferences.hideAnswers);
     setStudyControlCompact(viewPreferences.compactToolbar);
     setProblemSheetDisplayMode(viewPreferences.problemSheetDisplayMode);
+    setTextReviewDockState(viewPreferences.textReviewDockState ?? "compact");
   }, [viewPreferences]);
 
   const filledParts = entry.explanationParts
@@ -1666,13 +1669,18 @@ export default function EntryDetail({
               <span className="kind-badge kind-badge--wrong">오답</span>
             )}
             {hasSuspiciousText && (
-              <button
-                type="button"
-                className="text-review-badge"
-                onClick={() => setShowTextReview(true)}
-              >
-                텍스트 검수 필요 {suspiciousSegments.length}
-              </button>
+              <div className={`text-review-dock text-review-dock--${textReviewDockState}`}>
+                {textReviewDockState === "hidden" ? (
+                  <button type="button" className="text-review-dock__restore" onClick={() => updateViewPreference("textReviewDockState", "compact")}>검수 알림 보기</button>
+                ) : (
+                  <>
+                    <button type="button" className="text-review-badge" onClick={() => setShowTextReview(true)}>텍스트 검수 필요 {suspiciousSegments.length}</button>
+                    {textReviewDockState === "expanded" && <span className="text-review-dock__hint">문항 본문과 연결된 segment를 확인하세요.</span>}
+                    <button type="button" className="text-review-dock__toggle" onClick={() => updateViewPreference("textReviewDockState", textReviewDockState === "compact" ? "expanded" : "compact")}>{textReviewDockState === "compact" ? "자세히" : "간단히"}</button>
+                    <button type="button" className="text-review-dock__toggle" onClick={() => updateViewPreference("textReviewDockState", "hidden")}>숨기기</button>
+                  </>
+                )}
+              </div>
             )}
             {entry.difficulty && entry.difficulty !== "none" && (
               <span className={`difficulty-badge difficulty-badge--${entry.difficulty}`}>
