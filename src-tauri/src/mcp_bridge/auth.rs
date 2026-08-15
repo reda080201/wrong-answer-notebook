@@ -38,6 +38,7 @@ pub(super) fn load_or_create_token() -> Result<String, String> {
     Ok(token)
 }
 
+#[allow(clippy::result_large_err)]
 pub(super) fn authorize(state: &BridgeHttpState, headers: &HeaderMap) -> Result<(), Response> {
     if !origin_allowed(headers) {
         return Err((StatusCode::FORBIDDEN, "허용되지 않은 Origin입니다.").into_response());

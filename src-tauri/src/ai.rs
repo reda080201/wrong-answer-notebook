@@ -536,20 +536,22 @@ fn validate_similar_question_ranking_request(
         .context
         .content
         .as_ref()
-        .is_some_and(|content| content.as_bytes().len() > MAX_SIMILAR_CONTEXT_CONTENT_BYTES)
+        .is_some_and(|content| content.len() > MAX_SIMILAR_CONTEXT_CONTENT_BYTES)
     {
         return Err("유사 문제 기준 본문이 너무 깁니다.".into());
     }
     for candidate in &request.candidates {
-        if candidate.question_text.as_bytes().len() > MAX_SIMILAR_CANDIDATE_QUESTION_BYTES {
+        if candidate.question_text.len() > MAX_SIMILAR_CANDIDATE_QUESTION_BYTES {
             return Err(format!(
                 "후보 문제 본문이 너무 깁니다: {}",
                 candidate.candidate_id
             ));
         }
-        if candidate.explanation.as_ref().is_some_and(|explanation| {
-            explanation.as_bytes().len() > MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES
-        }) {
+        if candidate
+            .explanation
+            .as_ref()
+            .is_some_and(|explanation| explanation.len() > MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES)
+        {
             return Err(format!(
                 "후보 해설이 너무 깁니다: {}",
                 candidate.candidate_id
