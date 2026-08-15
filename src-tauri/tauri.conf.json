@@ -33,6 +33,11 @@
     "active": true,
     "targets": ["nsis"],
     "createUpdaterArtifacts": true,
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -43,7 +48,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDQ4QjM2Q0Y1RTVBOUYyQkQKUldTOThxbmw5V3l6U0lCU1VGRUh0ZnpvWjljYW5nbDRxY0k2djFOY1hMWG9OS3dqQVRCeEM5THMK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc2OUMxODE4QTFDMEVEQzIKUldUQzdjQ2hHQmljZHRHSnpnOGpidFNDQ00zWnZ2bEo4Uk9UcVI2aWJEQXR2c2o3WW43dHNnUGoK",
       "endpoints": ["https://github.com/reda080201/wrong-answer-notebook/releases/latest/download/latest.json"],
       "windows": { "installMode": "passive" }
     }
