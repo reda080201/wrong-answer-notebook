@@ -6,4 +6,6 @@ export * from "./models/exam";
 export * from "./models/integrations";
 export * from "./models/settings";
 export * from "./models/library";
+export * from "./models/studySession";
+export * from "./models/lifeEthics";
 export * from "./features/gpt-solution-roundtrip/model";

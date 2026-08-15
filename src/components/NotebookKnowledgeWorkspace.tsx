@@ -9,6 +9,7 @@ import QuestionBankView from "../features/question-bank/components/QuestionBankV
 import { buildQuestionBankItems } from "../features/question-bank/utils/buildQuestionBankItems";
 import { patchQuestionClassification, type QuestionMetaPatch } from "../features/question-bank/utils/patchQuestionClassification";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
+import type { StudyItemReference } from "../models/studySession";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 
@@ -24,6 +25,7 @@ interface NotebookKnowledgeWorkspaceProps {
   openCandidateReview(entryId: string): void;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  onStartStudy?: (items: StudyItemReference[]) => void;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -38,6 +40,7 @@ export default function NotebookKnowledgeWorkspace({
   openCandidateReview,
   aiProviderStatus,
   onOpenAiSettings,
+  onStartStudy,
 }: NotebookKnowledgeWorkspaceProps) {
   if (mode === "question-bank") {
     return (
@@ -53,6 +56,7 @@ export default function NotebookKnowledgeWorkspace({
           const entry = entries.find((candidate) => candidate.id === item.entryId);
           if (entry) openEntry(entry, item.questionNumber);
         }}
+        onStartStudy={onStartStudy}
       />
     );
   }
@@ -96,6 +100,7 @@ export default function NotebookKnowledgeWorkspace({
       onOpenCandidateReview={openCandidateReview}
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
+      onStartStudy={onStartStudy}
     />
   );
 }

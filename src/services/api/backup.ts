@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, WrongAnswerEntry } from "../../types";
+import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, StudySession, WrongAnswerEntry } from "../../types";
 import type { ImportWorkspace } from "../../features/import-workspace/model/importWorkspace";
 import { isGptSolutionRoundtripDraftArray, type GptSolutionRoundtripDraft } from "../../features/gpt-solution-roundtrip/model";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
@@ -21,6 +21,7 @@ import {
 } from "./shared";
 import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
+import { STUDY_SESSIONS_STORAGE_KEY } from "../storageBackend";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -47,6 +48,7 @@ export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
   libraryFolders: LibraryFolder[];
   gptSolutionDrafts: GptSolutionRoundtripDraft[];
   importWorkspaceDraft: ImportWorkspace | null;
+  studySessions?: StudySession[];
 }
 
 export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
@@ -90,6 +92,7 @@ function readBrowserBackupSnapshot(
       [],
     ),
     importWorkspaceDraft,
+    studySessions: readBrowserArray<StudySession>(STUDY_SESSIONS_STORAGE_KEY, "학습 세션"),
   };
 }
 
@@ -173,7 +176,8 @@ function isBrowserBackupPayload(value: unknown): value is BackupPayload {
     && isGeneratedExamArray(v2.generatedExams)
     && isLibraryFolderArray(v2.libraryFolders)
     && isGptSolutionRoundtripDraftArray(v2.gptSolutionDrafts)
-    && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft));
+    && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft))
+    && (v2.studySessions === undefined || Array.isArray(v2.studySessions));
 }
 
 function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): void {
@@ -204,6 +208,7 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
     managedKeys.add(LIBRARY_FOLDERS_STORAGE_KEY);
     managedKeys.add(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY);
     managedKeys.add(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY);
+    managedKeys.add(STUDY_SESSIONS_STORAGE_KEY);
   }
   const previous = new Map([...managedKeys].map((key) => [key, localStorage.getItem(key)]));
 
@@ -225,6 +230,7 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
       if (v2Payload.importWorkspaceDraft) {
         writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
       }
+      writeStorageJson(localStorage, STUDY_SESSIONS_STORAGE_KEY, v2Payload.studySessions ?? []);
     }
     clearImageUrlCache();
   } catch (error) {

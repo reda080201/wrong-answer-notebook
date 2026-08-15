@@ -283,6 +283,23 @@ fn save_generated_exams(app: tauri::AppHandle, exams: serde_json::Value) -> Resu
     )
 }
 
+#[tauri::command]
+fn load_study_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    load_array_json_file(
+        &app_dir(&app)?.join("study-sessions.json"),
+        "학습 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
+}
+
+#[tauri::command]
+fn save_study_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
+    save_array_json_file(
+        &app_dir(&app)?.join("study-sessions.json"),
+        &sessions,
+        "학습 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
+}
+
 fn validate_array_json(
     value: serde_json::Value,
     error_message: &str,
@@ -1008,6 +1025,8 @@ pub fn run() {
             submit_exam_transaction,
             load_generated_exams,
             save_generated_exams,
+            load_study_sessions,
+            save_study_sessions,
             load_gpt_solution_roundtrip_drafts,
             save_gpt_solution_roundtrip_drafts,
             load_library_folders,

@@ -35,6 +35,7 @@ const STORE_NAMES: &[&str] = &[
     "library-folders",
     "gpt-solution-drafts",
     "import-workspace-draft",
+    "study-sessions",
 ];
 
 #[derive(Clone)]
@@ -62,6 +63,7 @@ fn store_path(root: &Path, name: &str) -> BridgeResult<PathBuf> {
         "library-folders" => "library-folders.json",
         "gpt-solution-drafts" => "gpt-solution-drafts.json",
         "import-workspace-draft" => "import-workspace-draft.json",
+        "study-sessions" => "study-sessions.json",
         "entries" => "entries.json",
         _ => return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into())),
     };
@@ -72,6 +74,7 @@ fn with_file_lock<T>(root: &Path, operation: impl FnOnce() -> BridgeResult<T>) -
     fs::create_dir_all(root).map_err(internal)?;
     let lock = OpenOptions::new()
         .create(true)
+        .truncate(true)
         .read(true)
         .write(true)
         .open(root.join(".desktop-storage.lock"))
@@ -98,6 +101,10 @@ fn validate_store(name: &str, value: &Value) -> Result<(), String> {
             .ok_or_else(|| "설정 저장 형식이 올바르지 않습니다. 객체여야 합니다.".into()),
         "exam-sessions" => exam_submission::validate_sessions_value(value),
         "generated-exams" => validate_persistent_store_value("generated-exams.json", value),
+        "study-sessions" => value
+            .is_array()
+            .then_some(())
+            .ok_or_else(|| "학습 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.".into()),
         "library-folders" => validate_persistent_store_value("library-folders.json", value),
         "gpt-solution-drafts" => validate_persistent_store_value("gpt-solution-drafts.json", value),
         "import-workspace-draft" => value
@@ -511,10 +518,10 @@ async fn load_image(
     } else {
         "image/jpeg"
     };
-    Ok(Response::builder()
+    Response::builder()
         .header(header::CONTENT_TYPE, mime)
         .body(Body::from(bytes))
-        .map_err(internal)?)
+        .map_err(internal)
 }
 
 async fn delete_image(

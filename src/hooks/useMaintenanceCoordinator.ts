@@ -6,6 +6,7 @@ interface MaintenanceCoordinatorOptions {
   flushGeneratedExams(): Promise<void>;
   flushLibraryFolders?(): Promise<void>;
   flushGptSolutionDrafts?(): Promise<void>;
+  flushStudySessions?(): Promise<void>;
   flushActiveExam?(): Promise<void>;
   flushTransientWrites?(): Promise<void>;
   setTransientWritesMaintenanceBlocked?(blocked: boolean): void;
@@ -14,6 +15,7 @@ interface MaintenanceCoordinatorOptions {
   setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
   setLibraryMaintenanceBlocked?(blocked: boolean): void;
   setGptSolutionDraftsMaintenanceBlocked?(blocked: boolean): void;
+  setStudySessionsMaintenanceBlocked?(blocked: boolean): void;
 }
 
 export function useMaintenanceCoordinator({
@@ -22,6 +24,7 @@ export function useMaintenanceCoordinator({
   flushGeneratedExams,
   flushLibraryFolders = async () => undefined,
   flushGptSolutionDrafts = async () => undefined,
+  flushStudySessions = async () => undefined,
   flushActiveExam = async () => undefined,
   flushTransientWrites = async () => undefined,
   setTransientWritesMaintenanceBlocked = () => undefined,
@@ -30,6 +33,7 @@ export function useMaintenanceCoordinator({
   setGeneratedExamsMaintenanceBlocked,
   setLibraryMaintenanceBlocked = () => undefined,
   setGptSolutionDraftsMaintenanceBlocked = () => undefined,
+  setStudySessionsMaintenanceBlocked = () => undefined,
 }: MaintenanceCoordinatorOptions) {
   const activeRef = useRef(false);
 
@@ -49,6 +53,7 @@ export function useMaintenanceCoordinator({
     setGeneratedExamsMaintenanceBlocked(true);
     setLibraryMaintenanceBlocked(true);
     setGptSolutionDraftsMaintenanceBlocked(true);
+    setStudySessionsMaintenanceBlocked(true);
     try {
       await Promise.all([
         flushEntries(),
@@ -56,6 +61,7 @@ export function useMaintenanceCoordinator({
         flushGeneratedExams(),
         flushLibraryFolders(),
         flushGptSolutionDrafts(),
+        flushStudySessions(),
         flushActiveExam(),
       ]);
       return await task();
@@ -65,8 +71,9 @@ export function useMaintenanceCoordinator({
       setGeneratedExamsMaintenanceBlocked(false);
       setLibraryMaintenanceBlocked(false);
       setGptSolutionDraftsMaintenanceBlocked(false);
+      setStudySessionsMaintenanceBlocked(false);
       setTransientWritesMaintenanceBlocked(false);
       activeRef.current = false;
     }
-  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
+  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushSettings, flushStudySessions, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setStudySessionsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
 }
