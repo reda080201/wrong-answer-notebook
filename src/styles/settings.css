@@ -22,6 +22,27 @@
   padding: 0;
 }
 
+.settings-modal > .dialog-body > .modal-head {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.settings-modal > .dialog-body > .modal-head h2,
+.settings-modal > .dialog-body > .modal-head p {
+  margin: 0;
+}
+
+.settings-modal > .dialog-body > .modal-head p {
+  margin-top: var(--space-1);
+}
+
 .settings-modal-body {
   display: grid;
   min-height: 0;
