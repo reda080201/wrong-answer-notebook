@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "오답노트",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "identifier": "com.wronganswer.notebook",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -25,13 +25,17 @@
       "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' asset: http://asset.localhost data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:* ws://localhost:*",
       "assetProtocol": {
         "enable": true,
-        "scope": ["$APPDATA/images/**"]
+        "scope": [
+          "$APPDATA/images/**"
+        ]
       }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "createUpdaterArtifacts": true,
     "windows": {
       "nsis": {
@@ -49,8 +53,12 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDc2OUMxODE4QTFDMEVEQzIKUldUQzdjQ2hHQmljZHRHSnpnOGpidFNDQ00zWnZ2bEo4Uk9UcVI2aWJEQXR2c2o3WW43dHNnUGoK",
-      "endpoints": ["https://github.com/reda080201/wrong-answer-notebook/releases/latest/download/latest.json"],
-      "windows": { "installMode": "passive" }
+      "endpoints": [
+        "https://github.com/reda080201/wrong-answer-notebook/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }
