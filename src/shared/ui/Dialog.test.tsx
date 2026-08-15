@@ -77,4 +77,9 @@ describe("Dialog", () => {
     expect(screen.getByText("내용")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
   });
+
+  it("keeps the modal base class when a custom class is supplied", () => {
+    render(<Dialog open onClose={vi.fn()} ariaLabel="surface" className="custom-surface"><p>내용</p></Dialog>);
+    expect(screen.getByRole("dialog")).toHaveClass("modal-card", "custom-surface");
+  });
 });

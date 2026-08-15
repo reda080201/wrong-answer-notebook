@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
 import MathText from "../../../components/MathText";
-import Dialog from "../../../shared/ui/Dialog";
 import type { ProblemSourceType, QuestionAnswerType } from "../../../types";
 import { difficultyScoreLabel } from "../../../utils/difficulty";
 import { normalizeLegacyMathCommandsForDisplay } from "../../../utils/legacyMathCommands";
@@ -41,6 +40,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasFailedPatch, setHasFailedPatch] = useState(false);
+  const [classificationOpen, setClassificationOpen] = useState(false);
   const failedPatchRef = useRef<QuestionMetaPatch | null>(null);
 
   useEffect(() => {
@@ -56,6 +56,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     failedPatchRef.current = null;
     setHasFailedPatch(false);
     setSaveError(null);
+    setClassificationOpen(false);
   }, [item]);
 
   const makePatch = (): QuestionMetaPatch => ({
@@ -90,14 +91,16 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     }
   };
 
-  return <Dialog open={Boolean(item)} onClose={onClose} title={item ? `${item.entryTitle} ${item.questionNumber}번` : "문항 상세"} ariaLabel="문제 은행 문항 상세" closeDisabled={saving} busy={saving}>
-    {item && <div className="question-bank-detail">
+  if (!item) return null;
+  return <aside className="question-bank-inspector" role="dialog" aria-label={`${item.entryTitle} ${item.questionNumber}번 문항 검사`} aria-busy={saving || undefined}>
+    <header className="question-bank-inspector__header"><div><span>문제 은행</span><h2>{item.entryTitle} {item.questionNumber}번</h2></div><button type="button" className="ui-icon-button" onClick={onClose} aria-label="문항 검사 닫기">×</button></header>
+    <div className="question-bank-detail">
       <div className="question-bank-card__chips"><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span><span>{item.subject}</span>{item.classification.unit && <span>{item.classification.unit}</span>}{item.classification.subunit && <span>{item.classification.subunit}</span>}</div>
       <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>
       <dl><div><dt>난이도</dt><dd>{difficultyScoreLabel(item.classification.difficultyScore)}</dd></div><div><dt>중요도</dt><dd>{item.classification.importanceScore ? `${Math.ceil(item.classification.importanceScore / 20)}/5` : "미지정"}</dd></div><div><dt>품질</dt><dd>{item.classification.qualityScore ?? "미지정"}</dd></div><div><dt>답 유형</dt><dd>{answerTypeLabel[item.classification.answerType ?? "unknown"]}</dd></div></dl>
       <section><h4>정답</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.answer ?? "연결되지 않음")} /></p></section>
       <section><h4>해설</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.explanation ?? "연결되지 않음")} /></p></section>
-      {onPatchClassification && <section className="question-bank-detail__classification"><h4>분류 편집</h4>
+      {onPatchClassification && <section className="question-bank-detail__classification"><button type="button" className="question-bank-detail__classification-toggle" aria-expanded={classificationOpen} onClick={() => setClassificationOpen((value) => !value)}><span>분류 편집</span><span>{classificationOpen ? "접기" : "열기"}</span></button>{classificationOpen && <div className="question-bank-detail__classification-form">
         <label>난이도 (0-100)<input type="number" min="0" max="100" value={difficulty} onChange={(event) => setDifficulty(event.target.value)} /></label>
         <label>중요도 (0-100)<input type="number" min="0" max="100" value={importance} onChange={(event) => setImportance(event.target.value)} /></label>
         <label>품질 (0-100)<input type="number" min="0" max="100" value={quality} onChange={(event) => setQuality(event.target.value)} /></label>
@@ -106,8 +109,8 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
         <label>단원<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label>소단원<input value={subunit} onChange={(event) => setSubunit(event.target.value)} /></label><label>개념 (쉼표)<input value={concepts} onChange={(event) => setConcepts(event.target.value)} /></label><label>태그 (쉼표)<input value={tags} onChange={(event) => setTags(event.target.value)} /></label>
         {saveError && <p className="form-error" role="alert">{saveError}<button type="button" className="btn-secondary" onClick={() => { const failed = failedPatchRef.current; if (failed) void saveClassification(failed); }} disabled={saving || !hasFailedPatch}>다시 저장</button></p>}
         <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button>
-      </section>}
-      <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>
-    </div>}
-  </Dialog>;
+      </div>}</section>}
+      <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" className="btn-primary" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>
+    </div>
+  </aside>;
 }

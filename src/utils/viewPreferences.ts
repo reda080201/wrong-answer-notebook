@@ -7,6 +7,7 @@ import type {
   ImagePreferences,
   LectureBlockDefaultState,
   QuestionSolutionPresentation,
+  TextReviewDockState,
   ViewPreferences,
 } from "../types";
 
@@ -35,6 +36,7 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   problemSheetDisplayMode: "questions",
   questionSolutionPresentation: "split",
   lectureBlockDefaultState: "first",
+  textReviewDockState: "compact",
   lectureLayout: "document",
   conceptLinksEnabled: true,
   automaticConceptLinksEnabled: false,
@@ -108,6 +110,10 @@ export function normalizeLectureBlockDefaultState(value: unknown): LectureBlockD
   return value === "all" || value === "none" || value === "first" ? value : "first";
 }
 
+export function normalizeTextReviewDockState(value: unknown): TextReviewDockState {
+  return value === "expanded" || value === "hidden" ? value : "compact";
+}
+
 function normalizeThumbnailSize(value: unknown): ImagePreferences["thumbnailSize"] {
   return value === "small" || value === "large" ? value : "medium";
 }
@@ -132,6 +138,7 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     problemSheetDisplayMode: value.problemSheetDisplayMode === "exam" ? "exam" : "questions",
     questionSolutionPresentation: normalizeQuestionSolutionPresentation(value.questionSolutionPresentation),
     lectureBlockDefaultState: normalizeLectureBlockDefaultState(value.lectureBlockDefaultState),
+    textReviewDockState: normalizeTextReviewDockState(value.textReviewDockState),
     lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",
     conceptLinksEnabled: value.conceptLinksEnabled !== false,
     automaticConceptLinksEnabled: Boolean(value.automaticConceptLinksEnabled),

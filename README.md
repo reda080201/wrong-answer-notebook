@@ -35,7 +35,7 @@ cd wrong-answer-notebook
 npm ci
 ```
 
-`run-dev.bat`은 Tauri 개발 모드, `run-web.bat`은 브라우저 개발 모드를 실행합니다. 개발용 Rust build cache는 `%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target`에만 생성됩니다. 브라우저 모드는 localStorage를 사용하며 Tauri 전용 파일 저장과 OS keyring 기능은 제공하지 않습니다.
+`run-dev.bat`은 Tauri 개발 모드입니다. `run-web.bat`은 인증된 desktop-proxy를 사용하는 공유 Web 모드이며 `127.0.0.1:1420`에서 데스크톱 저장소를 그대로 확인합니다. `run-web-isolated.bat`만 명시적인 localStorage 격리 모드입니다. 개발용 Rust build cache는 `%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target`에만 생성됩니다.
 
 ## AI 가져오기
 

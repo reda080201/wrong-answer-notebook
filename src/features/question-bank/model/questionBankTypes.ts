@@ -13,6 +13,7 @@ export interface QuestionBankItem {
   entryTitle: string;
   entryKind: EntryKind;
   questionNumber: string;
+  duplicateQuestionNumber?: boolean;
   questionId?: string;
   subject: string;
   questionText: string;

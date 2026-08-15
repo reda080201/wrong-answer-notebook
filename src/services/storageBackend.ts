@@ -57,6 +57,7 @@ type StoreName =
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
 const proxyToken = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_TOKEN;
+const storageMode = import.meta.env.VITE_STORAGE_MODE;
 
 async function proxyRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 설정이 없습니다.");
@@ -189,6 +190,9 @@ export function getStorageBackend(): StorageBackend {
   if (proxyUrl || proxyToken) {
     if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 환경 설정이 불완전합니다.");
     return proxyBackend;
+  }
+  if (storageMode === "desktop-shared") {
+    throw new Error("데스크톱 저장소 연결 실패: shared Web 실행에는 인증된 desktop-proxy가 필요합니다. run-web.bat을 다시 시작하세요.");
   }
   return isolatedBrowserBackend;
 }

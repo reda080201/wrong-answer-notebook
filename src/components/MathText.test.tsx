@@ -13,4 +13,10 @@ describe("MathText", () => {
     render(<MathText text={"잘못된 $\\notacommand{$ 수식"} />);
     expect(screen.getByText("$\\notacommand{$")).toBeInTheDocument();
   });
+
+  it("hides malformed delimiters behind a non-destructive warning", () => {
+    render(<MathText text="본문 $$x^2" />);
+    expect(screen.getByText("수식 형식 확인 필요")).toBeInTheDocument();
+    expect(screen.getByText("본문 $$x^2")).not.toBeVisible();
+  });
 });

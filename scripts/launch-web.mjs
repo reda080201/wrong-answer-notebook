@@ -11,6 +11,8 @@ import { synchronizeDependencies } from "./dependency-sync.mjs";
 import { calculateDevelopmentBridgeFingerprint, developmentCargoTargetDir } from "./development-runtime.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const isolatedMode = process.argv.includes("--isolated");
+const sharedMode = process.argv.includes("--shared") || !isolatedMode;
 const cargoTargetDir = developmentCargoTargetDir();
 const bridgeExecutable = path.join(cargoTargetDir, "release", process.platform === "win32" ? "dev-storage-bridge.exe" : "dev-storage-bridge");
 const bridgeStamp = path.join(cargoTargetDir, "release", ".dev-storage-bridge-fingerprint");
@@ -108,6 +110,20 @@ try {
   await synchronizeDependencies(root);
   logTiming("dependency-check", dependencyStarted);
 
+  if (!sharedMode) {
+    const vite = command("npm", ["run", "dev:web", "--", "--host", "127.0.0.1"], {
+      stdio: "inherit",
+      env: { ...process.env, VITE_STORAGE_MODE: "isolated-browser" },
+    });
+    children.push(vite);
+    await waitForHttp("http://127.0.0.1:1420");
+    logTiming("total", totalStarted);
+    openBrowser("http://127.0.0.1:1420");
+    await new Promise((resolve) => vite.once("exit", resolve));
+    stopChildren();
+    return;
+  }
+
   const bridgeBuildStarted = performance.now();
   const bridgeFingerprint = await calculateDevelopmentBridgeFingerprint(root);
   let installedBridgeFingerprint = "";
@@ -137,6 +153,7 @@ try {
     env: {
       ...process.env,
       WRONG_ANSWER_DESKTOP_PROXY: "1",
+      VITE_STORAGE_MODE: "desktop-shared",
       VITE_DESKTOP_STORAGE_BRIDGE_URL: `http://127.0.0.1:${port}`,
       VITE_DESKTOP_STORAGE_BRIDGE_TOKEN: token,
     },

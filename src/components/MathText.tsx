@@ -6,6 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import katex from "katex";
+import { hasUnbalancedMathDelimiter, normalizeMathForDisplay } from "../utils/mathDisplay";
 
 interface MathToken {
   raw: string;
@@ -83,9 +84,13 @@ function MathFragment({ token }: { token: MathToken }) {
 }
 
 export default function MathText({ text }: { text: string }) {
+  const displayText = normalizeMathForDisplay(text);
+  if (hasUnbalancedMathDelimiter(displayText)) {
+    return <span className="math-source-warning" title="수식 형식 확인 필요"><span className="math-source-warning__label">수식 형식 확인 필요</span><details><summary>원문 보기</summary><span>{text}</span></details></span>;
+  }
   return (
     <>
-      {splitMathText(text).map((part, index) =>
+      {splitMathText(displayText).map((part, index) =>
         typeof part === "string" ? part : <MathFragment key={`${part.raw}-${index}`} token={part} />,
       )}
     </>
