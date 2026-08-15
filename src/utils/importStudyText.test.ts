@@ -29,6 +29,34 @@ describe("importStudyText", () => {
   });
 
   describe("JSON parse enhancements", () => {
+    it("normalizes legacy math commands in imported question and answer text", () => {
+      const source = JSON.stringify({
+        entryKind: "problem_sheet",
+        question: "문제 /frac{1}{2}",
+        questions: [{
+          questionNumber: "1",
+          questionText: "후보 /sqrt{x}",
+          conditions: ["/sin x"],
+          equations: ["/frac{1}{2}"],
+          choices: ["① /cos x"],
+          contentSegments: [{ id: "text-1", type: "text", text: "본문 /tan x" }],
+          figureIds: [],
+        }],
+        answerKey: [{ questionNumber: "1", answer: "/log x", explanation: "풀이 /int f(x)" }],
+      });
+      const result = parseImportedStudyText(source);
+
+      expect(result.data.question).toBe("문제 \\frac{1}{2}");
+      expect(result.data.answerKey?.[0]).toMatchObject({ answer: "\\log x", explanation: "풀이 \\int f(x)" });
+      expect(result.data.structuredQuestions?.[0]).toMatchObject({
+        questionText: "후보 \\sqrt{x}",
+        conditions: ["\\sin x"],
+        equations: ["\\frac{1}{2}"],
+        choices: ["① \\cos x"],
+      });
+      expect(result.data.structuredQuestions?.[0]?.contentSegments[0]).toMatchObject({ text: "본문 \\tan x" });
+    });
+
     it("removes UTF-8 BOM", () => {
       const jsonWithBom = '\uFEFF{"entryKind": "problem_sheet", "question": "test", "subject": "수학"}';
       const result = parseImportedStudyText(jsonWithBom);

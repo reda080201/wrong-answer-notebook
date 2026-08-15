@@ -1,0 +1,116 @@
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  openSyntheticSheet,
+  seedBrowserStorage,
+  syntheticLifecycleEntry,
+} from "./fixtures/syntheticLifecycle";
+
+const viewport = { width: 1100, height: 750 };
+
+async function openPaper(page: Page) {
+  await page.setViewportSize(viewport);
+  await seedBrowserStorage(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await openSyntheticSheet(page);
+  await expect(page.locator(".study-paper").first()).toBeVisible();
+}
+
+async function documentHorizontalOverflow(page: Page) {
+  return page.evaluate(() => Math.max(
+    0,
+    document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    document.body.scrollWidth - document.body.clientWidth,
+  ));
+}
+
+async function expectNoOverlap(first: Locator, second: Locator) {
+  const [firstBox, secondBox] = await Promise.all([first.boundingBox(), second.boundingBox()]);
+  expect(firstBox).not.toBeNull();
+  expect(secondBox).not.toBeNull();
+  if (!firstBox || !secondBox) return;
+
+  const overlaps = firstBox.x < secondBox.x + secondBox.width
+    && firstBox.x + firstBox.width > secondBox.x
+    && firstBox.y < secondBox.y + secondBox.height
+    && firstBox.y + firstBox.height > secondBox.y;
+  expect(overlaps).toBe(false);
+}
+
+test.describe("runtime/UI convergence", () => {
+  test("paper search is triggered, removable with Escape, and stays outside the paper", async ({ page }) => {
+    await openPaper(page);
+
+    const searchTrigger = page.getByRole("button", { name: "시험지 검색", exact: true });
+    const searchInput = page.getByRole("searchbox", { name: "시험지 안에서 검색" });
+    const paper = page.locator(".study-paper").first();
+
+    await expect(searchInput).toHaveCount(0);
+    await searchTrigger.click();
+    await expect(searchInput).toBeVisible();
+    await expectNoOverlap(page.locator("#problem-sheet-search"), paper);
+    await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+
+    await searchInput.fill("합성 시험");
+    await page.keyboard.press("Escape");
+    await expect(searchInput).toHaveCount(0);
+    await expect(searchTrigger).toBeVisible();
+    await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+  });
+
+  test("core runtime surfaces compute the Pretendard family", async ({ page }) => {
+    await openPaper(page);
+
+    const surfaces = page.locator("html, body, #root, .app-shell, .app-sidebar, .main, .detail-panel, .study-paper");
+    await expect(surfaces).not.toHaveCount(0);
+    const fontFamilies = await surfaces.evaluateAll((elements) => elements.map((element) => ({
+      selector: element.tagName.toLowerCase() + (element.className ? `.${String(element.className).split(/\\s+/).join(".")}` : ""),
+      fontFamily: getComputedStyle(element).fontFamily,
+    })));
+
+    for (const surface of fontFamilies) {
+      expect(surface.fontFamily, surface.selector).toMatch(/Pretendard/i);
+    }
+  });
+
+  test("settings and the sidebar footer remain reachable at 1100x750", async ({ page }) => {
+    await page.setViewportSize(viewport);
+    const entries = Array.from({ length: 36 }, (_, index) => ({
+      ...syntheticLifecycleEntry,
+      id: `e2e-sidebar-${index}`,
+      subject: `과목 ${String(index + 1).padStart(2, "0")}`,
+      title: `사이드바 스크롤 시험지 ${index + 1}`,
+    }));
+    await seedBrowserStorage(page, entries);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    const settingsButton = page.getByRole("button", { name: /설정/ }).first();
+    await settingsButton.click();
+    const settingsPanel = page.locator(".settings-modal-panel");
+    await expect(settingsPanel).toBeVisible();
+    await page.getByRole("button", { name: "GPT·MCP", exact: true }).click();
+
+    await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollHeight - element.clientHeight))
+      .toBeGreaterThan(0);
+    await settingsPanel.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+    await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollTop + element.clientHeight >= element.scrollHeight - 1))
+      .toBe(true);
+
+    await page.getByRole("button", { name: "닫기", exact: true }).first().click();
+    await expect(page.getByRole("dialog", { name: "설정" })).toBeHidden();
+    await page.getByRole("button", { name: "시험지함", exact: true }).click();
+
+    const sidebarScrollRegion = page.locator(".app-sidebar-scroll-region");
+    await expect.poll(async () => sidebarScrollRegion.evaluate((element) => element.scrollHeight - element.clientHeight))
+      .toBeGreaterThan(0);
+    await sidebarScrollRegion.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+    await expect.poll(async () => sidebarScrollRegion.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0);
+
+    const sidebarFooter = page.locator(".sidebar-footer");
+    await expect(sidebarFooter).toBeInViewport();
+    await expect(page.getByRole("button", { name: /새 시험지 추가/ })).toBeInViewport();
+    await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+  });
+});

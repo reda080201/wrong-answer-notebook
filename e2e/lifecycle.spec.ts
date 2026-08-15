@@ -74,7 +74,8 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: "시험지함" }).click();
-  await page.getByRole("button", { name: "GPT 결과 가져오기" }).click();
+  await page.getByRole("button", { name: "추가 작업" }).click();
+  await page.getByRole("menuitem", { name: "GPT 결과 가져오기" }).click();
   const input = page.getByLabel("올인원 가져오기");
   await input.setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
 
