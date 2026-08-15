@@ -20,3 +20,4 @@ export { StatusNotice } from "./StatusNotice";
 export type { NoticeSeverity, StatusNoticeProps } from "./StatusNotice";
 export { WorkspaceShell } from "./WorkspaceShell";
 export type { WorkspaceShellProps } from "./WorkspaceShell";
+export { default as QuestionNavigator } from "./QuestionNavigator";

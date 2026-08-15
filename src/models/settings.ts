@@ -22,7 +22,9 @@ export interface MemoTemplate {
   builtIn?: boolean;
 }
 
-export type ProblemSheetDisplayMode = "questions" | "exam";
+/** `questions` is retained as the persisted legacy spelling for continuous study. */
+export type ProblemSheetDisplayMode = "questions" | "continuous" | "exam" | "one_question";
+export type StudyQuickAction = "copy" | "share" | "important" | "review" | "text_review" | "info";
 export type QuestionSolutionPresentation = "dialog" | "split";
 export type LectureBlockDefaultState = "first" | "all" | "none";
 
@@ -35,6 +37,9 @@ export interface ViewPreferences {
   showLearningVisuals: boolean;
   compactToolbar: boolean;
   problemSheetDisplayMode: ProblemSheetDisplayMode;
+  studyQuickActions?: StudyQuickAction[];
+  studyKeyboardShortcutsEnabled?: boolean;
+  questionNavigatorCollapsed?: boolean;
   questionSolutionPresentation: QuestionSolutionPresentation;
   lectureBlockDefaultState: LectureBlockDefaultState;
   lectureLayout?: LectureLayout;

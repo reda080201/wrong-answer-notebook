@@ -13,6 +13,7 @@ import {
 } from "../../../utils/mistakeAnalysis";
 import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextStudyAction";
 import { normalizeDifficultyScore } from "../../../utils/difficulty";
+import { shouldHandleStudyKeyboard } from "../../../utils/studyNavigation";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions, resolvedQuestionToBlock } from "../../../utils/entryQuestions";
 import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
@@ -47,6 +48,7 @@ import { validateGptSolutionResponse } from "../../../features/gpt-solution-roun
 import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSolutionRoundtripDrafts";
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
 import Dialog from "../../../shared/ui/Dialog";
+import QuestionNavigator from "../../../shared/ui/QuestionNavigator";
 import { writeUiStorageValue } from "../../../services/uiStorage";
 import Toast from "../../../shared/ui/Toast";
 import Menu from "../../../shared/ui/Menu";
@@ -479,8 +481,11 @@ export default function EntryDetail({
     }
   }, [focusedQuestionIndex, questionAnchors.length]);
 
-  const scrollToQuestion = useCallback((start: number) => {
-    document.getElementById(`sheet-question-${start}`)?.scrollIntoView({
+  const scrollToQuestion = useCallback((start: number, questionNumber?: string) => {
+    const target = questionNumber
+      ? document.getElementById(`sheet-question-canonical-${normalizeQuestionNumber(questionNumber)}`)
+      : document.getElementById(`sheet-question-${start}`);
+    target?.scrollIntoView({
       block: "start",
       behavior: "smooth",
     });
@@ -558,6 +563,23 @@ export default function EntryDetail({
       return next;
     });
   }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+
+  useEffect(() => {
+    if (!isSheet || detailViewMode !== "paper" || viewPreferences?.studyKeyboardShortcutsEnabled === false) return undefined;
+    const handleStudyKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      if (!shouldHandleStudyKeyboard(event.target)) return;
+      if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+        event.preventDefault();
+        moveFocusedQuestion(1);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+        event.preventDefault();
+        moveFocusedQuestion(-1);
+      }
+    };
+    document.addEventListener("keydown", handleStudyKeyDown);
+    return () => document.removeEventListener("keydown", handleStudyKeyDown);
+  }, [detailViewMode, isSheet, moveFocusedQuestion, viewPreferences?.studyKeyboardShortcutsEnabled]);
 
   const handleReviewResult = useCallback(async (
     result: ReviewResult,
@@ -1360,7 +1382,8 @@ export default function EntryDetail({
               {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
               {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
-                <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
+                <button type="button" className={(problemSheetDisplayMode === "questions" || problemSheetDisplayMode === "continuous") ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions" || problemSheetDisplayMode === "continuous"} onClick={() => updateViewPreference("problemSheetDisplayMode", "continuous")}>문항별</button>
+                <button type="button" className={problemSheetDisplayMode === "one_question" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "one_question"} onClick={() => updateViewPreference("problemSheetDisplayMode", "one_question")}>한 문항</button>
                 <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
               </div>
               <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
@@ -1442,11 +1465,19 @@ export default function EntryDetail({
             <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
               <button
                 type="button"
-                className={problemSheetDisplayMode === "questions" ? "active" : ""}
-                aria-pressed={problemSheetDisplayMode === "questions"}
-                onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}
+                className={(problemSheetDisplayMode === "questions" || problemSheetDisplayMode === "continuous") ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "questions" || problemSheetDisplayMode === "continuous"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "continuous")}
               >
                 문항별
+              </button>
+              <button
+                type="button"
+                className={problemSheetDisplayMode === "one_question" ? "active" : ""}
+                aria-pressed={problemSheetDisplayMode === "one_question"}
+                onClick={() => updateViewPreference("problemSheetDisplayMode", "one_question")}
+              >
+                한 문항
               </button>
               <button
                 type="button"
@@ -1792,6 +1823,19 @@ export default function EntryDetail({
               />
             ) : (
               <>
+                {isSheet && detailViewMode === "paper" && questionAnchors.length > 0 && (
+                  <QuestionNavigator
+                    count={questionAnchors.length}
+                    current={focusedQuestionIndex}
+                    numbers={resolvedSheetQuestions.length ? resolvedSheetQuestions.map((question) => question.questionNumber) : undefined}
+                    collapsed={viewPreferences?.questionNavigatorCollapsed}
+                    onCollapsedChange={(collapsed) => updateViewPreference("questionNavigatorCollapsed", collapsed)}
+                    onChange={(index) => {
+                      setFocusedQuestionIndex(index);
+                      scrollToQuestion(questionAnchors[index]?.start ?? 0, resolvedSheetQuestions[index]?.questionNumber);
+                    }}
+                  />
+                )}
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
@@ -1812,6 +1856,7 @@ export default function EntryDetail({
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
                     displayMode={isSheet ? problemSheetDisplayMode : "questions"}
+                    currentQuestionIndex={focusedQuestionIndex}
                     revealedAnswerNumbers={revealedAnswerNumbers}
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
