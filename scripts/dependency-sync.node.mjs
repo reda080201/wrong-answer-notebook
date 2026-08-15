@@ -53,7 +53,7 @@ test("matching lockfile and complete dependency tree skip npm ci", async (t) => 
   const calls = [];
   const result = await synchronizeDependencies(root, async (_root, args) => calls.push(args.join(" ")));
   assert.equal(result.installed, false);
-  assert.deepEqual(calls, ["ls --depth=0"]);
+  assert.deepEqual(calls, []);
 });
 
 test("lockfile changes and missing Pretendard files trigger npm ci", async (t) => {
@@ -75,23 +75,19 @@ test("lockfile changes and missing Pretendard files trigger npm ci", async (t) =
   }
 });
 
-test("damaged stamp and npm ls failure trigger repair", async (t) => {
-  for (const damageStamp of [true, false]) {
+test("damaged stamp triggers repair and verifies the repaired tree", async (t) => {
+  for (const damageStamp of [true]) {
     const root = await fixture();
     t.after(() => rm(root, { recursive: true, force: true }));
     await installRequiredFiles(root);
     await stamp(root);
     if (damageStamp) await writeFile(path.join(root, "node_modules", INSTALL_STATE_FILE), "not json");
-    let firstList = !damageStamp;
     const calls = [];
     await synchronizeDependencies(root, async (_root, args) => {
       calls.push(args.join(" "));
-      if (args[0] === "ls" && firstList) {
-        firstList = false;
-        throw new Error("invalid dependency tree");
-      }
+      if (args[0] === "ci") await installRequiredFiles(root);
     });
-    assert.ok(calls.includes("ci"));
+    assert.deepEqual(calls, ["ci", "ls --depth=0"]);
   }
 });
 

@@ -1,14 +1,9 @@
 import { useEffect, useRef } from "react";
 import type { ImportWorkspace } from "../model/importWorkspace";
-import { readStorageJson, writeStorageJson } from "../../../services/storageJson";
+import { getStorageBackend } from "../../../services/storageBackend";
 
-const STORAGE_KEY = "wrong-answer-import-workspace-draft";
-
-export function loadImportWorkspaceDraft(): ImportWorkspace | null {
-  try {
-    const draft = readStorageJson(localStorage, STORAGE_KEY, (value): value is ImportWorkspace =>
-      value !== null && typeof value === "object" && "id" in value && "groups" in value,
-    );
+export async function loadImportWorkspaceDraft(): Promise<ImportWorkspace | null> {
+    const draft = await getStorageBackend().loadImportWorkspaceDraft();
     if (!draft) return null;
     return {
       ...draft,
@@ -21,13 +16,14 @@ export function loadImportWorkspaceDraft(): ImportWorkspace | null {
         })),
       })),
     };
-  } catch { return null; }
 }
 
-export function clearImportWorkspaceDraft(): void { localStorage.removeItem(STORAGE_KEY); }
+export async function clearImportWorkspaceDraft(): Promise<void> {
+  await getStorageBackend().clearImportWorkspaceDraft();
+}
 
-export function saveImportWorkspaceDraft(workspace: ImportWorkspace): void {
-  writeStorageJson(localStorage, STORAGE_KEY, workspace);
+export async function saveImportWorkspaceDraft(workspace: ImportWorkspace): Promise<void> {
+  await getStorageBackend().saveImportWorkspaceDraft(workspace);
 }
 
 export interface ImportWorkspaceAutosaveCallbacks {
@@ -48,10 +44,10 @@ export function useImportWorkspaceAutosave(
 
   useEffect(() => {
     if (!enabled) return;
-    const timer = window.setTimeout(() => {
+    const timer = window.setTimeout(async () => {
       callbacksRef.current?.onSaving?.();
       try {
-        saveImportWorkspaceDraft(workspace);
+        await saveImportWorkspaceDraft(workspace);
         callbacksRef.current?.onSaved?.();
       } catch (error) {
         callbacksRef.current?.onError?.(error);

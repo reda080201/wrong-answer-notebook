@@ -19,11 +19,12 @@ export function useAppMaintenance({
 }: UseAppMaintenanceOptions) {
   useEffect(() => {
     if (!isTauri()) return;
-    const draft = loadImportWorkspaceDraft();
-    const protectedSessionIds = draft?.assetSession?.mode === "tauri-staged"
-      ? [draft.assetSession.id]
-      : [];
-    void cleanupStaleImportAssetSessions(protectedSessionIds).catch(() => undefined);
+    void loadImportWorkspaceDraft().then((draft) => {
+      const protectedSessionIds = draft?.assetSession?.mode === "tauri-staged"
+        ? [draft.assetSession.id]
+        : [];
+      return cleanupStaleImportAssetSessions(protectedSessionIds);
+    }).catch(() => undefined);
   }, []);
 
   useEffect(() => {

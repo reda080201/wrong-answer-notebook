@@ -1,5 +1,6 @@
 mod ai;
 mod backup;
+mod dev_storage_bridge;
 mod exam_submission;
 mod images;
 mod import_assets;
@@ -8,6 +9,8 @@ mod mcp_bridge;
 mod mcp_bridge_contract;
 mod notebook_store;
 mod storage;
+
+pub use dev_storage_bridge::run_dev_storage_bridge;
 
 pub(crate) use images::{
     image_path, images_dir, save_import_image_bytes_to_dir, validate_image_filename,
@@ -112,6 +115,18 @@ pub struct WrongAnswerEntry {
 
 fn default_entry_kind() -> String {
     "wrong_answer".to_string()
+}
+
+#[tauri::command]
+fn report_frontend_ready() -> Result<(), String> {
+    let Ok(path) = std::env::var("WRONG_ANSWER_STARTUP_TRACE") else {
+        return Ok(());
+    };
+    let path = std::path::PathBuf::from(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    }
+    write_bytes_atomic(&path, unix_time_string().as_bytes())
 }
 
 /// MCP active-exam sharing consent parsed from active-exam-context.json.
@@ -456,6 +471,41 @@ fn save_library_folders(app: tauri::AppHandle, folders: Vec<LibraryFolder>) -> R
     validate_library_folders(&folders)?;
     let value = serde_json::to_value(folders).map_err(|error| error.to_string())?;
     write_json_atomic(&app_dir(&app)?.join("library-folders.json"), &value)
+}
+
+#[tauri::command]
+fn load_import_workspace_draft(app: tauri::AppHandle) -> Result<Option<serde_json::Value>, String> {
+    let path = app_dir(&app)?.join("import-workspace-draft.json");
+    if !path.exists() {
+        return Ok(None);
+    }
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(path).map_err(|error| error.to_string())?)
+            .map_err(|error| error.to_string())?;
+    if !value.is_object() {
+        return Err("가져오기 작업실 초안은 객체여야 합니다.".into());
+    }
+    Ok(Some(value))
+}
+
+#[tauri::command]
+fn save_import_workspace_draft(
+    app: tauri::AppHandle,
+    draft: serde_json::Value,
+) -> Result<(), String> {
+    if !draft.is_object() {
+        return Err("가져오기 작업실 초안은 객체여야 합니다.".into());
+    }
+    write_json_atomic(&app_dir(&app)?.join("import-workspace-draft.json"), &draft)
+}
+
+#[tauri::command]
+fn clear_import_workspace_draft(app: tauri::AppHandle) -> Result<(), String> {
+    let path = app_dir(&app)?.join("import-workspace-draft.json");
+    if path.exists() {
+        fs::remove_file(path).map_err(|error| error.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -962,6 +1012,9 @@ pub fn run() {
             save_gpt_solution_roundtrip_drafts,
             load_library_folders,
             save_library_folders,
+            load_import_workspace_draft,
+            save_import_workspace_draft,
+            clear_import_workspace_draft,
             load_settings,
             save_settings,
             ai::get_ai_provider_status,
@@ -1001,6 +1054,7 @@ pub fn run() {
             sync_active_export_context,
             clear_mcp_shared_contexts,
             get_mcp_shared_context_status,
+            report_frontend_ready,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,27 +1,16 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import type { WrongAnswerEntry } from "../../types";
 import { normalizeEntry } from "../../utils/entry";
-import { readStorageJson, writeStorageJson } from "../storageJson";
-import {
-  ENTRIES_SCHEMA_VERSION,
-  ENTRIES_STORAGE_KEY,
-  errorMessage,
-  isUnknownStorageValue,
-  parseStoredEntries,
-  type StoredEntriesDocument,
-} from "./shared";
+import { getStorageBackend } from "../storageBackend";
+import { errorMessage } from "./shared";
 import { reconcileBrowserExamSubmissionJournal } from "./examSubmission";
 
 export async function loadEntries(): Promise<WrongAnswerEntry[]> {
   try {
-    let data: WrongAnswerEntry[];
-    if (isTauri()) {
-      data = await invoke<WrongAnswerEntry[]>("load_entries");
-    } else {
+    const backend = getStorageBackend();
+    if (backend.kind === "isolated-browser") {
       reconcileBrowserExamSubmissionJournal();
-      const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
-      data = stored === null ? [] : parseStoredEntries(stored);
     }
+    const data = await backend.loadEntries();
     return data.map(normalizeEntry);
   } catch (error) {
     throw new Error(errorMessage(error, "저장된 노트를 불러오지 못했습니다."), {
@@ -32,15 +21,7 @@ export async function loadEntries(): Promise<WrongAnswerEntry[]> {
 
 export async function saveEntries(entries: WrongAnswerEntry[]): Promise<void> {
   try {
-    if (isTauri()) {
-      await invoke("save_entries", { entries });
-      return;
-    }
-    const document: StoredEntriesDocument = {
-      schemaVersion: ENTRIES_SCHEMA_VERSION,
-      entries,
-    };
-    writeStorageJson(localStorage, ENTRIES_STORAGE_KEY, document);
+    await getStorageBackend().saveEntries(entries);
   } catch (error) {
     throw new Error(errorMessage(error, "노트를 저장하지 못했습니다."), {
       cause: error,

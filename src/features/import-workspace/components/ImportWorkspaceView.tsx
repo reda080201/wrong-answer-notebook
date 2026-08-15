@@ -67,11 +67,11 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   const selectedContentSegments = selectedQuestion ? getEditableContentSegments(selectedQuestion) : [];
 
   useLayoutEffect(() => { workspaceRef.current = workspace; }, [workspace]);
-  const persistDraft = useCallback((snapshot: ImportWorkspace) => {
+  const persistDraft = useCallback(async (snapshot: ImportWorkspace) => {
     setDraftSaveState("saving");
     setDraftSaveError(null);
     try {
-      saveImportWorkspaceDraft(snapshot);
+      await saveImportWorkspaceDraft(snapshot);
       setDraftSaveState("saved");
     } catch (error) {
       const message = error instanceof Error ? error.message : "초안을 저장하지 못했습니다.";
@@ -102,12 +102,20 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   });
   useEffect(() => {
     registerDraftFlush({
-      flush: async () => { persistDraft(workspaceRef.current); },
+      flush: async () => { await persistDraft(workspaceRef.current); },
       setMaintenanceBlocked: updateMaintenanceBlocked,
     });
     return () => registerDraftFlush(null);
   }, [persistDraft, registerDraftFlush, updateMaintenanceBlocked]);
-  useEffect(() => { setRecoveryAvailable(Boolean(loadImportWorkspaceDraft())); }, []);
+  useEffect(() => {
+    let active = true;
+    void loadImportWorkspaceDraft().then((draft) => {
+      if (active) setRecoveryAvailable(Boolean(draft));
+    }).catch((error) => {
+      if (active) setRecoveryError(error instanceof Error ? error.message : "복구 초안을 읽지 못했습니다.");
+    });
+    return () => { active = false; };
+  }, []);
 
   const requestClose = () => {
     if (busy || recoveryBusy || closeBusy || rejectMaintenanceMutation()) return;
@@ -120,7 +128,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setCloseBusy(true);
     setCloseError(null);
     try {
-      persistDraft(workspaceRef.current);
+      await persistDraft(workspaceRef.current);
       setClosePromptOpen(false);
       onClose();
     } catch (error) {
@@ -136,7 +144,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setCloseError(null);
     try {
       await discardWorkspaceAssets?.(workspace);
-      clearImportWorkspaceDraft();
+      await clearImportWorkspaceDraft();
       setClosePromptOpen(false);
       onClose();
     } catch (error) {
@@ -148,7 +156,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
 
   const recoverDraft = async () => {
     if (rejectMaintenanceMutation()) return;
-    const recovered = loadImportWorkspaceDraft();
+    const recovered = await loadImportWorkspaceDraft();
     if (!recovered) {
       setRecoveryError("복구 초안을 읽지 못했습니다.");
       return;
@@ -180,11 +188,11 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
 
   const discardRecoveryDraft = async () => {
     if (rejectMaintenanceMutation()) return;
-    const recovered = loadImportWorkspaceDraft();
+    const recovered = await loadImportWorkspaceDraft();
     setRecoveryBusy(true);
     try {
       if (recovered) await discardWorkspaceAssets?.(recovered);
-      clearImportWorkspaceDraft();
+      await clearImportWorkspaceDraft();
       setRecoveryAvailable(false);
       setRecoveryError(null);
     } catch (error) {

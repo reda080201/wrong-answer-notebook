@@ -101,12 +101,7 @@ export async function writeInstallState(root, expected) {
 export async function synchronizeDependencies(root, runner = runNpm) {
   let inspection = await inspectDependencyState(root);
   if (!inspection.syncRequired) {
-    try {
-      await verifyDependencyTree(root, runner);
-      return { installed: false };
-    } catch (error) {
-      inspection = { ...inspection, syncRequired: true, reason: error.message };
-    }
+    return { installed: false, fingerprint: inspection.expected.fingerprint };
   }
 
   console.log(`[dependency sync] ${inspection.reason}`);
@@ -115,7 +110,7 @@ export async function synchronizeDependencies(root, runner = runNpm) {
   await verifyDependencyTree(root, runner);
   const expected = (await inspectDependencyStateWithoutStamp(root));
   await writeInstallState(root, expected);
-  return { installed: true };
+  return { installed: true, fingerprint: expected.fingerprint };
 }
 
 async function inspectDependencyStateWithoutStamp(root) {

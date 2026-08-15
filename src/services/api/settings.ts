@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { isTauri } from "@tauri-apps/api/core";
 import { v4 as uuidv4 } from "uuid";
 import type {
   AppSettings,
@@ -24,9 +24,9 @@ import {
   normalizeImagePreferences,
   resolveViewPreferences,
 } from "../../utils/viewPreferences";
-import { readStorageJson, writeStorageJson } from "../storageJson";
+import { getStorageBackend } from "../storageBackend";
 import { builtInMemoTemplates, builtInPromptTemplates } from "./prompts";
-import { errorMessage, isUnknownStorageValue, SETTINGS_STORAGE_KEY } from "./shared";
+import { errorMessage } from "./shared";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   templates: [],
@@ -69,11 +69,7 @@ export const defaultSettings = DEFAULT_SETTINGS;
 
 export async function loadSettings(): Promise<AppSettings> {
   try {
-    if (isTauri()) {
-      const data = await invoke<AppSettings>("load_settings");
-      return normalizeSettings(data);
-    }
-    const stored = readStorageJson<unknown>(localStorage, SETTINGS_STORAGE_KEY, isUnknownStorageValue);
+    const stored = await getStorageBackend().loadSettings();
     return normalizeSettings((stored ?? DEFAULT_SETTINGS) as AppSettings);
   } catch (error) {
     throw new Error(errorMessage(error, "설정을 불러오지 못했습니다."), {
@@ -85,11 +81,7 @@ export async function loadSettings(): Promise<AppSettings> {
 export async function saveSettings(settings: AppSettings): Promise<void> {
   try {
     const normalized = normalizeSettings(settings);
-    if (isTauri()) {
-      await invoke("save_settings", { settings: normalized });
-      return;
-    }
-    writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalized);
+    await getStorageBackend().saveSettings(normalized);
   } catch (error) {
     throw new Error(errorMessage(error, "설정을 저장하지 못했습니다."), {
       cause: error,

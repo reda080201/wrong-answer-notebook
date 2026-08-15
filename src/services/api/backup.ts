@@ -20,6 +20,7 @@ import {
   SETTINGS_STORAGE_KEY,
 } from "./shared";
 import { normalizeSettings } from "./settings";
+import { getStorageBackendKind } from "../storageBackend";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -187,7 +188,7 @@ function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): vo
  * all-or-nothing so quota failures cannot leave a mixed point-in-time state.
  */
 export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBackupResult {
-  if (isTauri()) throw new Error("브라우저 백업 복원은 데스크톱 저장소에서 사용할 수 없습니다.");
+  if (getStorageBackendKind() !== "isolated-browser") throw new Error("브라우저 백업 복원은 격리 브라우저 저장소에서만 사용할 수 있습니다.");
   if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
 
   const v2Payload = payload.meta.version === 2 ? payload as BrowserBackupPayloadV2 : null;
@@ -244,6 +245,9 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
 }
 
 export async function selectBackupDestination(): Promise<string | null> {
+  if (getStorageBackendKind() === "desktop-proxy") {
+    throw new Error("Web 데스크톱 저장소 모드의 백업은 데스크톱 앱에서 실행해 주세요.");
+  }
   if (!isTauri()) return null;
   const backupPath = await save({
     title: "백업 저장",
@@ -254,6 +258,9 @@ export async function selectBackupDestination(): Promise<string | null> {
 }
 
 export async function selectBackupSource(): Promise<string | File | null> {
+  if (getStorageBackendKind() === "desktop-proxy") {
+    throw new Error("Web 데스크톱 저장소 모드의 복원은 데스크톱 앱에서 실행해 주세요.");
+  }
   if (isTauri()) {
     const selected = await open({ multiple: false, filters: [{ name: "ZIP", extensions: ["zip"] }] });
     return typeof selected === "string" ? selected : null;
@@ -272,6 +279,9 @@ export async function createBackupAtDestination(
   entries: WrongAnswerEntry[],
   settings: AppSettings,
 ): Promise<string> {
+  if (getStorageBackendKind() === "desktop-proxy") {
+    throw new Error("Web 데스크톱 저장소 모드의 백업은 데스크톱 앱에서 실행해 주세요.");
+  }
   if (isTauri()) {
     if (!backupPath) return "백업이 취소되었습니다.";
     await invoke("create_backup_zip", { backupPath });

@@ -15,6 +15,9 @@ commands.allow = [
   "save_gpt_solution_roundtrip_drafts",
   "load_library_folders",
   "save_library_folders",
+  "load_import_workspace_draft",
+  "save_import_workspace_draft",
+  "clear_import_workspace_draft",
   "get_ai_provider_status",
   "save_ai_provider_config",
   "save_ai_provider_key",
@@ -52,4 +55,5 @@ commands.allow = [
   "sync_active_export_context",
   "clear_mcp_shared_contexts",
   "get_mcp_shared_context_status",
+  "report_frontend_ready",
 ]
