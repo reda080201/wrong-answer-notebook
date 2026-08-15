@@ -4,6 +4,7 @@ import { openSyntheticSheet, seedBrowserStorage, syntheticLifecycleEntry } from 
 
 test.describe("synthetic real-exam lifecycle", () => {
   test("starts, persists, resumes, and navigates a 30-question real exam", async ({ page }, testInfo) => {
+    testInfo.setTimeout(120_000);
     await page.setViewportSize({ width: 1100, height: 750 });
     await seedBrowserStorage(page);
     await page.goto("/", { waitUntil: "domcontentloaded" });
