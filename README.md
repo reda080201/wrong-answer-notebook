@@ -15,15 +15,19 @@ React + Tauri로 만든 로컬 학습·오답노트 앱입니다. 단일 오답,
 - 개념노트·특강자료 라이브러리와 개념 링크
 - 다크모드, 자동 백업, 백업 복원, 무결성 검사, 미사용 이미지 정리
 
-## 요구 사항
-
-- Node.js 24 이상, npm 10 이상 (`package.json` engines 필드 참고)
-- 브라우저 모드만 사용할 때는 Node.js만 필요합니다.
-- Tauri 데스크톱 앱에는 Rust와 Windows Visual Studio Build Tools(C++ 워크로드)가 필요합니다.
-
-Rust는 [공식 설치 안내](https://www.rust-lang.org/tools/install)에서 설치할 수 있습니다. 설치 후 터미널을 다시 열어 주세요.
-
 ## 설치 및 실행
+
+일반 사용자는 Git, Node.js, npm, Rust를 설치할 필요가 없습니다.
+
+1. [GitHub Releases](https://github.com/reda080201/wrong-answer-notebook/releases)에서 최신 NSIS 설치 파일을 내려받아 설치합니다.
+2. 시작 메뉴의 `오답노트`로 앱을 실행합니다.
+3. source 폴더에 남아 있는 `run.bat`은 호환용 launcher이며, 설치된 시작 메뉴 바로가기만 실행합니다. source build나 dependency 설치를 하지 않습니다.
+
+업데이트는 앱 내부 updater가 서명된 릴리스만 내려받아 설치합니다. 앱 데이터는 `%APPDATA%\com.wronganswer.notebook`에 저장되며 설치·업데이트·제거 과정에서 유지됩니다.
+
+### 개발자 실행
+
+source에서 개발하려면 Node.js 24 이상, npm 10 이상, Rust와 Windows Visual Studio Build Tools(C++ 워크로드)가 필요합니다.
 
 ```bash
 git clone https://github.com/reda080201/wrong-answer-notebook.git
@@ -31,19 +35,7 @@ cd wrong-answer-notebook
 npm ci
 ```
 
-브라우저 모드로 실행하려면:
-
-```bash
-npm run dev
-```
-
-브라우저 모드는 localStorage를 사용하고 Tauri 전용 파일 저장, Gemini 키 보안 저장, 로컬 이미지 경로 기능은 사용할 수 없습니다.
-
-데스크톱 앱으로 실행하려면:
-
-```bash
-npm run tauri dev
-```
+`run-dev.bat`은 Tauri 개발 모드, `run-web.bat`은 브라우저 개발 모드를 실행합니다. 개발용 Rust build cache는 `%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target`에만 생성됩니다. 브라우저 모드는 localStorage를 사용하며 Tauri 전용 파일 저장과 OS keyring 기능은 제공하지 않습니다.
 
 ## AI 가져오기
 
@@ -85,13 +77,13 @@ cd ..
 npm run tauri -- build --no-bundle
 ```
 
-설치 파일을 만들려면:
+릴리스 빌드는 로컬 사용자 실행이 아니라 GitHub Actions에서만 만듭니다. 개발자가 bundle을 점검해야 할 때는:
 
 ```bash
 npm run tauri build
 ```
 
-## 데이터 위치
+## 데이터 위치와 과거 산출물
 
 Tauri 앱은 OS 앱 데이터 폴더에 다음 데이터를 저장합니다.
 
@@ -101,6 +93,13 @@ Tauri 앱은 OS 앱 데이터 폴더에 다음 데이터를 저장합니다.
 - AI 비밀 키: 일반 설정 JSON이 아니라 OS keyring 우선 사용
 
 브라우저 모드에서는 항목과 설정이 localStorage에 저장됩니다.
+
+과거 source checkout의 build 산출물은 아래 도구로만 진단하거나 명시적으로 정리할 수 있습니다. 기본 동작은 읽기 전용이며 AppData, 이미지, 백업, import 자료에는 절대 접근하지 않습니다.
+
+```powershell
+.\scripts\inspect-legacy-build-artifacts.ps1
+.\scripts\inspect-legacy-build-artifacts.ps1 -Remove
+```
 
 ## 로컬 MCP 브리지
 

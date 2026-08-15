@@ -8,11 +8,12 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { synchronizeDependencies } from "./dependency-sync.mjs";
-import { calculateRuntimeFingerprint } from "./launch-desktop.mjs";
+import { calculateDevelopmentBridgeFingerprint, developmentCargoTargetDir } from "./development-runtime.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const bridgeExecutable = path.join(root, "src-tauri", "target", "release", process.platform === "win32" ? "dev-storage-bridge.exe" : "dev-storage-bridge");
-const bridgeStamp = path.join(root, "src-tauri", "target", "release", ".dev-storage-bridge-fingerprint");
+const cargoTargetDir = developmentCargoTargetDir();
+const bridgeExecutable = path.join(cargoTargetDir, "release", process.platform === "win32" ? "dev-storage-bridge.exe" : "dev-storage-bridge");
+const bridgeStamp = path.join(cargoTargetDir, "release", ".dev-storage-bridge-fingerprint");
 const dataDir = process.env.WRONG_ANSWER_STORAGE_DIR
   || path.join(process.env.APPDATA || path.join(process.env.USERPROFILE || root, "AppData", "Roaming"), "com.wronganswer.notebook");
 
@@ -108,7 +109,7 @@ try {
   logTiming("dependency-check", dependencyStarted);
 
   const bridgeBuildStarted = performance.now();
-  const bridgeFingerprint = await calculateRuntimeFingerprint(root);
+  const bridgeFingerprint = await calculateDevelopmentBridgeFingerprint(root);
   let installedBridgeFingerprint = "";
   try { installedBridgeFingerprint = (await readFile(bridgeStamp, "utf8")).trim(); } catch { /* missing stamp */ }
   if (!existsSync(bridgeExecutable) || installedBridgeFingerprint !== bridgeFingerprint || process.env.WRONG_ANSWER_REBUILD_BRIDGE === "1") {
