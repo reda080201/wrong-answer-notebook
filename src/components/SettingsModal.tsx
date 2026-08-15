@@ -22,6 +22,7 @@ import type {
 import type { AppUpdateState } from "../features/updater/model/appUpdate";
 import Dialog from "../shared/ui/Dialog";
 import { useSettingsContext } from "../contexts/SettingsContext";
+import { X } from "lucide-react";
 
 export type SettingsTab =
   | "theme"
@@ -162,11 +163,11 @@ export default function SettingsModal({
     <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정" size="xl" scrollMode="custom">
         <header className="modal-head">
           <div>
-            <span className="modal-eyebrow">설정</span>
             <h2>설정</h2>
+            <p className="form-hint">보기, 시험, 연결과 데이터 동작을 관리합니다.</p>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose}>
-            닫기
+          <button type="button" className="btn-icon" aria-label="닫기" title="닫기" onClick={onClose}>
+            <X size={18} aria-hidden="true" />
           </button>
         </header>
 
