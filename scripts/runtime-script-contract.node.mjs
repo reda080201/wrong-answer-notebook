@@ -60,7 +60,7 @@ test("runtime readiness is a pure fingerprint and executable decision", () => {
 
 test("runtime helpers expose the no-bundle release command and millisecond timing labels", () => {
   assert.deepEqual(runtimeBuildCommand(), ["run", "tauri", "--", "build", "--no-bundle"]);
-  assert.equal(formatTiming("build", 12.4), "[desktop runtime] build=12ms");
+  assert.equal(formatTiming("rust/tauri", 12.4), "[STARTUP] rust/tauri=12ms");
 });
 
 test("runtime fingerprint changes when a tracked frontend or Tauri input changes", async (t) => {
@@ -148,7 +148,7 @@ test("unchanged release launches immediately, while a changed runtime builds and
   assert.deepEqual(buildCalls, [fixture]);
   assert.match(await readFile(runtimeStatePath(fixture), "utf8"), /"fingerprint"/);
   assert.ok(timings.some((line) => line.includes("dependency-check=") && line.endsWith("ms")));
-  assert.ok(timings.some((line) => line.includes("build=") && line.endsWith("ms")));
+  assert.ok(timings.some((line) => line.includes("rust/tauri=") && line.endsWith("ms")));
   assert.ok(timings.some((line) => line.includes("launch=") && line.endsWith("ms")));
   assert.ok(timings.some((line) => line.includes("webview-ready=") && line.endsWith("ms")));
   assert.ok(timings.some((line) => line.includes("total=") && line.endsWith("ms")));

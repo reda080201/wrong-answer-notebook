@@ -83,7 +83,7 @@ export function runtimeBuildCommand() {
 }
 
 export function formatTiming(label, milliseconds) {
-  return `[desktop runtime] ${label}=${Math.round(milliseconds)}ms`;
+  return `[STARTUP] ${label}=${Math.round(milliseconds)}ms`;
 }
 
 async function readRuntimeStamp(root) {
@@ -160,7 +160,7 @@ export async function launchDesktop({
 
   let buildMilliseconds = 0;
   if (!readiness.ready) {
-    log(`[desktop runtime] ${readiness.reason}; building release executable`);
+    log(`[STARTUP] ${readiness.reason}; building release executable`);
     const buildStarted = now();
     await build(root);
     const builtFingerprint = await calculateRuntimeFingerprint(root);
@@ -168,13 +168,13 @@ export async function launchDesktop({
     await writeRuntimeStamp(root, builtFingerprint);
     buildMilliseconds = now() - buildStarted;
   }
-  log(formatTiming("build", buildMilliseconds));
+  log(formatTiming("rust/tauri", buildMilliseconds));
 
   const launchStarted = now();
   await rm(path.join(root, "src-tauri", "target", "release", ".frontend-ready"), { force: true });
   await launch(executable, root);
   const launchMilliseconds = now() - launchStarted;
-  log(formatTiming("launch", launchMilliseconds));
+  log(formatTiming("process-launch", launchMilliseconds));
   const webviewStarted = now();
   await waitForReady(root);
   const webviewMilliseconds = now() - webviewStarted;
@@ -188,7 +188,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     await launchDesktop({ root });
   } catch (error) {
-    console.error(`[desktop runtime] launch failed: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[STARTUP] launch failed: ${error instanceof Error ? error.message : String(error)}`);
     process.exitCode = 1;
   }
 }
