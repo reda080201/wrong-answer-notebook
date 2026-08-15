@@ -45,7 +45,6 @@ interface AppSidebarProps {
   openLearningImport: () => void;
   onSubjectSelect: (subject: string | null) => void;
   onOpenExamBuilder?: () => void;
-  onOpenGeneratedExams?: () => void;
   learningHubOpen?: boolean;
   onOpenLearningHub?: () => void;
   questionBankOpen?: boolean;
@@ -81,7 +80,6 @@ export default function AppSidebar({
   openLearningImport,
   onSubjectSelect,
   onOpenExamBuilder,
-  onOpenGeneratedExams,
   learningHubOpen = false,
   onOpenLearningHub,
   questionBankOpen = false,
@@ -239,35 +237,20 @@ export default function AppSidebar({
       </div>}
 
       <div className="sidebar-footer">
-        {!collapsed && activeSection === "problem_sheet" && onOpenExamBuilder && (
-          <button type="button" className="btn-new" onClick={onOpenExamBuilder}>
-            모의고사 만들기
-          </button>
-        )}
         {!collapsed && <button type="button" className="btn-new" onClick={openNew}>
           + 새 {entryKindName(activeSection)} 추가
         </button>}
-        {!collapsed && (activeSection === "problem_sheet" || activeSection === "concept") && (
-          <button
-            type="button"
-            className="btn-new btn-new--secondary"
-            onClick={openImport}
-          >
-            GPT 결과 가져오기
-          </button>
-        )}
-        {!collapsed && activeSection === "lecture" && (
-          <button
-            type="button"
-            className="btn-new btn-new--secondary"
-            onClick={openLearningImport}
-          >
-            HTML/MD/JSON 가져오기
-          </button>
-        )}
-        {!collapsed && activeSection === "problem_sheet" && onOpenGeneratedExams && (
-          <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="시험지함 더보기">
-            <button type="button" onClick={onOpenGeneratedExams}>내 모의고사</button>
+        {!collapsed && activeSection !== "wrong_answer" && (
+          <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="추가 작업">
+            {activeSection === "problem_sheet" && onOpenExamBuilder && (
+              <button type="button" onClick={onOpenExamBuilder}>모의고사 만들기</button>
+            )}
+            {(activeSection === "problem_sheet" || activeSection === "concept") && (
+              <button type="button" onClick={openImport}>GPT 결과 가져오기</button>
+            )}
+            {activeSection === "lecture" && (
+              <button type="button" onClick={openLearningImport}>HTML/MD/JSON 가져오기</button>
+            )}
           </Menu>
         )}
       </div>

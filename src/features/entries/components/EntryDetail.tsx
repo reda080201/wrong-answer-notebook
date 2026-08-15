@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
 import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
@@ -1386,12 +1387,16 @@ export default function EntryDetail({
                     placeholder="시험지 안에서 검색"
                     aria-label="시험지 안에서 검색"
                   />
-                  <span aria-live="polite">{sheetSearch.trim() ? `${sheetMatches.length}개` : "검색"}</span>
-                  <button type="button" className="btn-icon" onClick={() => moveSearch(-1)} disabled={sheetMatches.length === 0} aria-label="이전 검색 결과">이전</button>
-                  <button type="button" className="btn-icon" onClick={() => moveSearch(1)} disabled={sheetMatches.length === 0} aria-label="다음 검색 결과">다음</button>
+                  <span aria-live="polite">{sheetSearch.trim() ? `${sheetMatches.length ? activeSearchIndex + 1 : 0}/${sheetMatches.length}` : "검색"}</span>
+                  <button type="button" className="btn-icon" onClick={() => moveSearch(-1)} disabled={sheetMatches.length === 0} aria-label="이전 검색 결과" title="이전 검색 결과"><ChevronUp size={16} aria-hidden="true" /></button>
+                  <button type="button" className="btn-icon" onClick={() => moveSearch(1)} disabled={sheetMatches.length === 0} aria-label="다음 검색 결과" title="다음 검색 결과"><ChevronDown size={16} aria-hidden="true" /></button>
+                  <button type="button" className="btn-icon" onClick={() => {
+                    setSheetSearchOpen(false);
+                    requestAnimationFrame(() => sheetSearchTriggerRef.current?.focus());
+                  }} aria-label="시험지 검색 닫기" title="시험지 검색 닫기"><X size={16} aria-hidden="true" /></button>
                 </div>
               ) : (
-                <button ref={sheetSearchTriggerRef} type="button" className="btn-icon" aria-expanded={false} aria-controls="problem-sheet-search" onClick={() => setSheetSearchOpen(true)}>검색</button>
+                <button ref={sheetSearchTriggerRef} type="button" className="btn-icon" aria-label="시험지 검색" title="시험지 검색" aria-expanded={false} aria-controls="problem-sheet-search" onClick={() => setSheetSearchOpen(true)}><Search size={17} aria-hidden="true" /></button>
               )}
               <Menu label="더보기" triggerAriaLabel="문제지 더보기" className="detail-more-menu">
                 <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("paper")}>문제로 돌아가기</button>

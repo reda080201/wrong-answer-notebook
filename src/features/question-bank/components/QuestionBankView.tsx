@@ -135,6 +135,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   return <section className="question-bank-view" aria-label="문제 은행">
     <header className="question-bank-view__header"><div><h2>문제 은행</h2><p>문제지의 문항과 단일 오답을 한곳에서 찾습니다.</p></div><strong>{filtered.length} / {items.length}</strong></header>
     <div className="question-bank-actions">
+      <label className="question-bank-search">검색 <input type="search" value={filters.search} onChange={(event) => patchFilters({ search: event.target.value })} placeholder="문제 본문·자료명 검색" /></label>
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>

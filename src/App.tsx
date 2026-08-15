@@ -45,6 +45,7 @@ import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
+import { getStorageBackendKind } from "./services/storageBackend";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -55,6 +56,7 @@ export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newB
 }
 
 function AppContent() {
+  const storageBackendKind = getStorageBackendKind();
   const { confirm, prompt } = useAppDialog();
   const {
     entries,
@@ -507,7 +509,6 @@ function AppContent() {
         openLearningImport={() => actions.setShowLearningImportModal(true)}
         onSubjectSelect={setSubjectFilter}
         onOpenExamBuilder={() => setShowExamBuilder(true)}
-        onOpenGeneratedExams={() => setShowGeneratedExams(true)}
         learningHubOpen={showLearningHub}
         onOpenLearningHub={() => {
           void (async () => {
@@ -543,6 +544,11 @@ function AppContent() {
       />
 
       <main className="main">
+        {storageBackendKind === "isolated-browser" && (
+          <div className="storage-mode-notice" role="status">
+            브라우저 격리 모드 · 이 창의 데이터는 데스크톱 앱 데이터와 분리됩니다.
+          </div>
+        )}
         {error && <ErrorNotice message={error} onRetry={() => void refresh()} onDismiss={clearError} />}
         {examSessionsLoadError && (
           <ErrorNotice
@@ -577,6 +583,13 @@ function AppContent() {
           startReview={actions.startReview}
           onOpenSettings={() => openSettings()}
         />}
+
+        {!showLearningHub && !showQuestionBank && !showLibraryExplorer && activeSection === "problem_sheet" && (
+          <nav className="problem-sheet-library-tabs" aria-label="시험지함 보기">
+            <button type="button" className="is-active" aria-current="page">시험지</button>
+            <button type="button" onClick={() => setShowGeneratedExams(true)}>생성한 모의고사</button>
+          </nav>
+        )}
 
         <div className="content">
           {showLibraryExplorer ? (

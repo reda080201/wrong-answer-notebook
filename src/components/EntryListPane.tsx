@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { writeUiStorageJson } from "../services/uiStorage";
 import QuickConceptPanel from "./QuickConceptPanel";
 import type { EntryFormData, EntryKind, Subject, WrongAnswerEntry } from "../types";
@@ -194,7 +194,7 @@ export default function EntryListPane({
     );
   };
   return (
-    <aside className="entry-list" style={{ width, minWidth: width }} aria-label="항목 목록">
+    <aside className="entry-list" style={{ "--entry-pane-width": `${width}px` } as CSSProperties} aria-label="항목 목록">
       <div className="entry-pane-controls">
         {activeSection === "concept" && <button type="button" className="ui-icon-button" aria-label="새 개념" title="새 개념" onClick={() => setConceptCreateOpen(true)}><Plus size={17} /></button>}
         <button
