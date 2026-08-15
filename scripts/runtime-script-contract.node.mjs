@@ -9,6 +9,8 @@ import {
   formatTiming,
   getRuntimeReadiness,
   launchDesktop,
+  RUNTIME_FINGERPRINT_PATHS,
+  RUNTIME_STATE_VERSION,
   runtimeExecutablePath,
   runtimeBuildCommand,
   runtimeStatePath,
@@ -49,7 +51,7 @@ test("web startup delegates authenticated desktop storage and browser ownership 
 });
 
 test("runtime readiness is a pure fingerprint and executable decision", () => {
-  const stamp = { version: 1, fingerprint: "abc" };
+  const stamp = { version: RUNTIME_STATE_VERSION, fingerprint: "abc" };
   assert.deepEqual(getRuntimeReadiness({ stamp, fingerprint: "abc", releaseExecutableExists: true }), {
     ready: true,
     reason: "runtime fingerprint and release executable match",
@@ -94,6 +96,25 @@ test("runtime fingerprint changes when a tracked frontend or Tauri input changes
     assert.notEqual(await calculateRuntimeFingerprint(fixture), initial, filename);
     await writeFile(path.join(fixture, filename), "initial");
   }
+});
+
+test("runtime fingerprint ignores frontend test-only changes", async (t) => {
+  const fixture = await mkdtemp(path.join(os.tmpdir(), "desktop-runtime-test-fingerprint-"));
+  t.after(() => rm(fixture, { recursive: true, force: true }));
+  for (const filename of RUNTIME_FINGERPRINT_PATHS) {
+    const target = path.join(fixture, filename);
+    if (path.extname(filename)) {
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, "initial");
+    } else {
+      await mkdir(target, { recursive: true });
+    }
+  }
+  const testFile = path.join(fixture, "src", "App.test.tsx");
+  await writeFile(testFile, "test('first', () => {})");
+  const before = await calculateRuntimeFingerprint(fixture);
+  await writeFile(testFile, "test('second', () => {})");
+  assert.equal(await calculateRuntimeFingerprint(fixture), before);
 });
 
 test("unchanged release launches immediately, while a changed runtime builds and stamps atomically", async (t) => {

@@ -37,7 +37,7 @@ async function expectNoOverlap(first: Locator, second: Locator) {
 }
 
 test.describe("runtime/UI convergence", () => {
-  test("paper search is triggered, removable with Escape, and stays outside the paper", async ({ page }) => {
+  test("paper search is triggered, removable with Escape, and stays outside the paper", async ({ page }, testInfo) => {
     await openPaper(page);
 
     const searchTrigger = page.getByRole("button", { name: "시험지 검색", exact: true });
@@ -49,6 +49,7 @@ test.describe("runtime/UI convergence", () => {
     await expect(searchInput).toBeVisible();
     await expectNoOverlap(page.locator("#problem-sheet-search"), paper);
     await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath("problem-sheet-search-and-math.png"), fullPage: true });
 
     await searchInput.fill("합성 시험");
     await page.keyboard.press("Escape");
@@ -72,7 +73,7 @@ test.describe("runtime/UI convergence", () => {
     }
   });
 
-  test("settings and the sidebar footer remain reachable at 1100x750", async ({ page }) => {
+  test("settings and the sidebar footer remain reachable at 1100x750", async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
     const entries = Array.from({ length: 36 }, (_, index) => ({
       ...syntheticLifecycleEntry,
@@ -96,6 +97,7 @@ test.describe("runtime/UI convergence", () => {
       .toBeGreaterThan(0);
     await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollTop + element.clientHeight >= element.scrollHeight - 1))
       .toBe(true);
+    await page.screenshot({ path: testInfo.outputPath("settings-scroll-reachability.png"), fullPage: true });
 
     await page.getByRole("button", { name: "닫기", exact: true }).first().click();
     await expect(page.getByRole("dialog", { name: "설정" })).toBeHidden();
@@ -111,6 +113,40 @@ test.describe("runtime/UI convergence", () => {
     const sidebarFooter = page.locator(".sidebar-footer");
     await expect(sidebarFooter).toBeInViewport();
     await expect(page.getByRole("button", { name: /새 시험지 추가/ })).toBeInViewport();
+    await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+  });
+
+  test("Learning Hub and Question Bank keep Pretendard, compact layout, and MathText", async ({ page }, testInfo) => {
+    const learningEntry = {
+      ...syntheticLifecycleEntry,
+      learningBlocks: [{
+        id: "e2e-learning-block",
+        type: "formula",
+        title: "아주 긴 합성함수 미분 학습 개념 이름과 적용 조건",
+        content: "합성함수의 극한은 /lim과 \\frac{1}{2}를 함께 확인합니다.",
+        subjectDomain: "math",
+        importance: "essential",
+        reviewStatus: "draft",
+      }],
+    };
+    await page.setViewportSize(viewport);
+    await seedBrowserStorage(page, [learningEntry]);
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+
+    await page.getByRole("button", { name: "학습 허브", exact: true }).click();
+    const learningHub = page.getByRole("region", { name: "학습 허브" });
+    await expect(learningHub).toBeVisible();
+    await expect(learningHub.getByRole("button", { name: "자세히" })).toBeVisible();
+    await expect(learningHub.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
+    await page.screenshot({ path: testInfo.outputPath("learning-hub-compact.png"), fullPage: true });
+
+    await page.getByRole("button", { name: "문제 은행", exact: true }).click();
+    const questionBank = page.locator(".question-bank-view");
+    await expect(questionBank).toBeVisible();
+    await expect(questionBank.locator(".question-bank-card").first()).toBeVisible();
+    await expect(questionBank.locator(".katex").first()).toBeVisible();
+    await expect(questionBank.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
+    await page.screenshot({ path: testInfo.outputPath("question-bank-mathtext.png"), fullPage: true });
     await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
   });
 });

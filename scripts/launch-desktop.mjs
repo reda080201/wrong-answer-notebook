@@ -7,7 +7,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { runNpm, synchronizeDependencies } from "./dependency-sync.mjs";
 
-export const RUNTIME_STATE_VERSION = 1;
+export const RUNTIME_STATE_VERSION = 2;
 export const RUNTIME_STATE_FILE = ".wrong-answer-notebook-runtime-state.json";
 export const RUNTIME_FINGERPRINT_PATHS = [
   "package.json",
@@ -32,15 +32,18 @@ async function exists(filename) {
 async function collectFiles(root, relativePath) {
   const absolutePath = path.join(root, relativePath);
   const details = await stat(absolutePath);
-  if (details.isFile()) return [relativePath];
+  if (details.isFile()) {
+    const normalized = relativePath.replaceAll(path.sep, "/");
+    if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(normalized) || normalized.includes("/__tests__/")) return [];
+    return [relativePath];
+  }
   if (!details.isDirectory()) return [];
 
   const entries = await readdir(absolutePath, { withFileTypes: true });
   const files = [];
   for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
     const childPath = path.join(relativePath, entry.name);
-    if (entry.isDirectory()) files.push(...await collectFiles(root, childPath));
-    else if (entry.isFile()) files.push(childPath);
+    if (entry.isDirectory() || entry.isFile()) files.push(...await collectFiles(root, childPath));
   }
   return files;
 }
