@@ -16,19 +16,19 @@ describe("useImportWorkspaceAutosave", () => {
     localStorage.clear();
   });
 
-  it("reports a successful deferred draft save", () => {
+  it("reports a successful deferred draft save", async () => {
     vi.useFakeTimers();
     const onSaving = vi.fn();
     const onSaved = vi.fn();
     renderHook(() => useImportWorkspaceAutosave(workspace, true, { onSaving, onSaved }));
 
-    act(() => vi.advanceTimersByTime(750));
+    await act(async () => { await vi.advanceTimersByTimeAsync(750); });
 
     expect(onSaving).toHaveBeenCalledOnce();
     expect(onSaved).toHaveBeenCalledOnce();
   });
 
-  it("reports storage errors instead of silently dropping the draft", () => {
+  it("reports storage errors instead of silently dropping the draft", async () => {
     vi.useFakeTimers();
     const onError = vi.fn();
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
@@ -36,7 +36,7 @@ describe("useImportWorkspaceAutosave", () => {
     });
     renderHook(() => useImportWorkspaceAutosave(workspace, true, { onError }));
 
-    act(() => vi.advanceTimersByTime(750));
+    await act(async () => { await vi.advanceTimersByTimeAsync(750); });
 
     expect(onError).toHaveBeenCalledOnce();
   });

@@ -173,6 +173,9 @@ describe("SettingsModal", () => {
       />,
     );
 
+    expect(screen.getAllByRole("heading", { name: "설정" })).toHaveLength(1);
+    expect(screen.getByText("보기, 시험, 연결과 데이터 동작을 관리합니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "닫기" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "보기" })).toHaveClass("active");
     fireEvent.click(screen.getByLabelText("정답 가리기"));
     expect(patchView).toHaveBeenCalledWith({ hideAnswers: true });

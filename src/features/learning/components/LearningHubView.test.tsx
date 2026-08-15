@@ -15,6 +15,7 @@ describe("LearningHubView", () => {
     render(<LearningHubView entries={[entry]} onOpenSource={onOpenSource} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     expect(screen.getByText("과목별 학습 지식 허브")).toBeInTheDocument();
     expect(screen.getByText("합성함수 미분")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "자세히" }));
     expect(screen.getByText("언제 사용하는가")).toBeInTheDocument();
     expect(screen.getByText("안쪽 미분 누락")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "연결 문제 열기" }));
@@ -102,9 +103,11 @@ describe("LearningHubView", () => {
     };
     render(<LearningHubView entries={[ethicsEntry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     fireEvent.change(screen.getByRole("combobox", { name: "과목 필터" }), { target: { value: "life_ethics" } });
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
     fireEvent.click(screen.getByRole("button", { name: "칸트" }));
     fireEvent.click(screen.getByRole("button", { name: "롤스" }));
     fireEvent.click(screen.getByRole("button", { name: "지문 단서" }));
+    fireEvent.click(screen.getByRole("button", { name: "적용" }));
     expect(screen.getByRole("button", { name: "칸트 필터 제거" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "롤스 필터 제거" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "지문 단서 필터 제거" })).toBeInTheDocument();

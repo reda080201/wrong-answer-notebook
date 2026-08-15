@@ -22,7 +22,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' asset: http://asset.localhost data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:* ws://localhost:*",
+      "csp": "default-src 'self' ipc: http://ipc.localhost; script-src 'self' ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' asset: http://asset.localhost data:; connect-src 'self' ipc: http://ipc.localhost http://localhost:* ws://localhost:*",
       "assetProtocol": {
         "enable": true,
         "scope": ["$APPDATA/images/**"]

@@ -11,6 +11,7 @@ const FOCUSABLE_SELECTOR = [
 ].join(", ");
 
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "fullscreen";
+export type DialogScrollMode = "body" | "custom";
 
 export interface DialogProps {
   open: boolean;
@@ -28,6 +29,7 @@ export interface DialogProps {
   header?: ReactNode;
   footer?: ReactNode;
   bodyClassName?: string;
+  scrollMode?: DialogScrollMode;
 }
 
 export default function Dialog({
@@ -46,6 +48,7 @@ export default function Dialog({
   header,
   footer,
   bodyClassName,
+  scrollMode = "body",
 }: DialogProps) {
   const generatedTitleId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
@@ -107,7 +110,7 @@ export default function Dialog({
 
   if (!open) return null;
 
-  const resolvedClassName = [className, size && `dialog-size-${size}`].filter(Boolean).join(" ");
+  const resolvedClassName = [className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
   const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
 
   return (

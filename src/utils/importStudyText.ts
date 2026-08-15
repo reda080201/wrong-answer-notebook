@@ -15,6 +15,7 @@ import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { applyAutomaticFigurePreference } from "../features/figures/services/figureRepresentation";
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { decodeTextFile } from "../features/import/services/decodeTextFile";
+import { normalizeImportedMathCommands } from "./legacyMathCommands";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -116,6 +117,15 @@ export async function readImportFile(file: File): Promise<string> {
 }
 
 export function parseImportedStudyText(
+  input: string,
+  filename?: string,
+  fallbackSubject: Subject = "수학",
+): ImportedStudyText {
+  const result = parseImportedStudyTextInternal(input, filename, fallbackSubject);
+  return { ...result, data: normalizeImportedEntryMath(result.data) };
+}
+
+function parseImportedStudyTextInternal(
   input: string,
   filename?: string,
   fallbackSubject: Subject = "수학",
@@ -343,6 +353,65 @@ export function parseImportedStudyText(
       annotations: [],
       mastered: false,
     },
+  };
+}
+
+function normalizeImportedText(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : normalizeImportedMathCommands(value);
+}
+
+function normalizeImportedAnswer(item: SheetAnswerItem): SheetAnswerItem {
+  return {
+    ...item,
+    answer: normalizeImportedMathCommands(item.answer),
+    explanation: normalizeImportedMathCommands(item.explanation),
+    strategy: normalizeImportedText(item.strategy),
+    steps: item.steps?.map(normalizeImportedMathCommands),
+    choiceJudgements: item.choiceJudgements?.map((judgement) => ({
+      ...judgement,
+      text: normalizeImportedMathCommands(judgement.text),
+    })),
+    wrongPoint: normalizeImportedText(item.wrongPoint),
+    reviewPoint: normalizeImportedText(item.reviewPoint),
+    notes: normalizeImportedText(item.notes),
+    importantPoints: item.importantPoints.map(normalizeImportedMathCommands),
+    sourceNote: normalizeImportedText(item.sourceNote),
+  };
+}
+
+function normalizeImportedSegment(segment: QuestionContentSegment): QuestionContentSegment {
+  if (segment.type === "text" || segment.type === "condition") {
+    return { ...segment, text: normalizeImportedMathCommands(segment.text) };
+  }
+  if (segment.type === "equation") return { ...segment, latex: normalizeImportedMathCommands(segment.latex) };
+  if (segment.type === "table") return { ...segment, rows: segment.rows.map((row) => row.map(normalizeImportedMathCommands)) };
+  return segment;
+}
+
+function normalizeImportedEntryMath(data: Partial<EntryFormData>): Partial<EntryFormData> {
+  const questionContentSegments = data.questionContentSegments
+    ? Object.fromEntries(Object.entries(data.questionContentSegments).map(([number, segments]) => [number, segments.map(normalizeImportedSegment)]))
+    : data.questionContentSegments;
+
+  return {
+    ...data,
+    question: normalizeImportedText(data.question),
+    memo: normalizeImportedText(data.memo),
+    correctAnswer: normalizeImportedText(data.correctAnswer),
+    explanationParts: data.explanationParts?.map((part) => ({
+      ...part,
+      text: normalizeImportedMathCommands(part.text),
+    })),
+    answerKey: data.answerKey?.map(normalizeImportedAnswer),
+    structuredQuestions: data.structuredQuestions?.map((question) => ({
+      ...question,
+      questionText: normalizeImportedMathCommands(question.questionText),
+      conditions: question.conditions.map(normalizeImportedMathCommands),
+      equations: question.equations.map(normalizeImportedMathCommands),
+      choices: question.choices.map(normalizeImportedMathCommands),
+      contentSegments: question.contentSegments.map(normalizeImportedSegment),
+    })),
+    questionContentSegments,
   };
 }
 

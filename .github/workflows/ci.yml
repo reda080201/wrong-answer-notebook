@@ -67,6 +67,17 @@ jobs:
       - name: E2E smoke
         run: npm run test:e2e
 
+      - name: Upload Playwright evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-runtime-ui-evidence
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
+          retention-days: 7
+
   rust:
     name: Rust check
     runs-on: windows-latest

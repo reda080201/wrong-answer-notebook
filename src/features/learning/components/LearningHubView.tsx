@@ -78,6 +78,7 @@ function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave
 
 function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, questionBankItems = [], highlighted, aiProviderStatus, onOpenAiSettings }: { item: LearningHubItem; highlighted?: boolean } & Pick<LearningHubViewProps, "onOpenSource" | "onUpdateBlock" | "onDuplicateBlock" | "onDeleteBlock" | "questionBankItems" | "aiProviderStatus" | "onOpenAiSettings">) {
   const [editing, setEditing] = useState(false);
+  const [expanded, setExpanded] = useState(Boolean(highlighted));
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const actionMutexRef = useRef(false);
@@ -128,12 +129,15 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
       }
       throw saved.error;
     }} onCancel={() => setEditing(false)} /> : <>
-      {block.content && <div className="learning-hub-content"><MathText text={block.content} /></div>}
-      <SubjectLearningDetails block={block} />
-      {block.commonTraps?.length ? <section className="learning-hub-warning"><h4>함정 또는 오개념</h4><ul>{block.commonTraps.map((trap) => <li key={trap}>{trap}</li>)}</ul></section> : null}
-      {block.relatedConcepts?.length ? <p className="learning-hub-related">관련 개념: {block.relatedConcepts.join(" · ")}</p> : null}
-      {block.passageExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 지문 예시" : "지문 예시"}</h4><p>{example.text}</p>{example.explanation && <small>{example.explanation}</small>}</section>)}
-      {block.choiceExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 선지 예시" : "선지 예시"}{example.verdict ? ` · ${example.verdict === "correct" ? "옳음" : example.verdict === "incorrect" ? "틀림" : "조건부"}` : ""}</h4><p>{example.text}</p>{example.reason && <small>{example.reason}</small>}</section>)}
+      {block.content && <div className="learning-hub-content learning-hub-content--preview"><MathText text={block.content} /></div>}
+      <button type="button" className="learning-hub-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>{expanded ? "간단히" : "자세히"}</button>
+      {expanded && <div className="learning-hub-card-details">
+        <SubjectLearningDetails block={block} />
+        {block.commonTraps?.length ? <section className="learning-hub-warning"><h4>함정 또는 오개념</h4><ul>{block.commonTraps.map((trap) => <li key={trap}>{trap}</li>)}</ul></section> : null}
+        {block.relatedConcepts?.length ? <p className="learning-hub-related">관련 개념: {block.relatedConcepts.join(" · ")}</p> : null}
+        {block.passageExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 지문 예시" : "지문 예시"}</h4><p>{example.text}</p>{example.explanation && <small>{example.explanation}</small>}</section>)}
+        {block.choiceExamples?.map((example) => <section className="learning-hub-example" key={example.id}><h4>{example.isSynthetic ? "합성 선지 예시" : "선지 예시"}{example.verdict ? ` · ${example.verdict === "correct" ? "옳음" : example.verdict === "incorrect" ? "틀림" : "조건부"}` : ""}</h4><p>{example.text}</p>{example.reason && <small>{example.reason}</small>}</section>)}
+      </div>}
       <footer><button type="button" onClick={() => onOpenSource(item.sourceEntryId, sourceQuestion)}>연결 문제 열기</button><span>{item.sourceEntryTitle}</span></footer>
       <SimilarQuestionLinksPanel sourceEntry={item.sourceEntry} block={block} links={block.similarQuestionLinks ?? []} items={questionBankItems} onOpen={onOpenSource} onChange={(links) => onUpdateBlock(item.sourceEntryId, block.id, { similarQuestionLinks: links })} label="이 학습 카드의 관련 문제" aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />
     </>}
@@ -167,6 +171,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     [entries],
   );
   const [candidatePickerOpen, setCandidatePickerOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState("");
   const visibleCandidates = candidateEntries.filter((entry) => entry.title.toLocaleLowerCase("ko").includes(candidateSearch.toLocaleLowerCase("ko")));
   return <section className="learning-hub" aria-label="학습 허브">
@@ -175,14 +180,18 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      <select aria-label="단원 필터" value={filters.unit} onChange={(event) => set("unit", event.target.value)}><option value="all">모든 단원</option>{units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select>
       <select aria-label="자료 종류 필터" value={filters.type} onChange={(event) => set("type", event.target.value as LearningHubFilters["type"])}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      <select aria-label="중요도 필터" value={filters.importance} onChange={(event) => set("importance", event.target.value as LearningHubFilters["importance"])}>{Object.entries(IMPORTANCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      <select aria-label="검토 상태 필터" value={filters.reviewStatus} onChange={(event) => set("reviewStatus", event.target.value as LearningHubFilters["reviewStatus"])}>{Object.entries(REVIEW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      <label className="learning-hub-linked"><input type="checkbox" checked={filters.linkedOnly} onChange={(event) => set("linkedOnly", event.target.checked)} /> 연결 문항만</label>
-      {filters.domain === "life_ethics" && <><div className="learning-hub-thinker-filter" aria-label="사상가 필터">{thinkers.map((thinker) => <button key={thinker} type="button" className={filters.thinkers.includes(thinker) ? "active" : ""} onClick={() => set("thinkers", filters.thinkers.includes(thinker) ? filters.thinkers.filter((value) => value !== thinker) : [...filters.thinkers, thinker])}>{thinker}</button>)}</div><div className="learning-hub-thinker-filter" aria-label="생활과 윤리 자료 유형 필터">{(["passage_clue", "incorrect_choice"] as const).map((kind) => <button key={kind} type="button" className={filters.lifeEthicsKinds.includes(kind) ? "active" : ""} onClick={() => set("lifeEthicsKinds", filters.lifeEthicsKinds.includes(kind) ? filters.lifeEthicsKinds.filter((value) => value !== kind) : [...filters.lifeEthicsKinds, kind])}>{kind === "passage_clue" ? "지문 단서" : "틀린 선지"}</button>)}</div></>}
-      <button type="button" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>
+      <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
     </div>
+    {filtersOpen && <Dialog open size="md" ariaLabel="학습 허브 필터" onClose={() => setFiltersOpen(false)} title="학습 허브 필터" footer={<><button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>초기화</button><button type="button" className="btn-primary" onClick={() => setFiltersOpen(false)}>적용</button></>}>
+      <div className="learning-hub-advanced-filters">
+        <label>단원<select value={filters.unit} onChange={(event) => set("unit", event.target.value)}><option value="all">모든 단원</option>{units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</select></label>
+        <label>중요도<select value={filters.importance} onChange={(event) => set("importance", event.target.value as LearningHubFilters["importance"])}>{Object.entries(IMPORTANCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label>검토 상태<select value={filters.reviewStatus} onChange={(event) => set("reviewStatus", event.target.value as LearningHubFilters["reviewStatus"])}>{Object.entries(REVIEW_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+        <label className="learning-hub-linked"><input type="checkbox" checked={filters.linkedOnly} onChange={(event) => set("linkedOnly", event.target.checked)} /> 연결 문항만</label>
+        {filters.domain === "life_ethics" && <><div className="learning-hub-thinker-filter" aria-label="사상가 필터">{thinkers.map((thinker) => <button key={thinker} type="button" className={filters.thinkers.includes(thinker) ? "active" : ""} onClick={() => set("thinkers", filters.thinkers.includes(thinker) ? filters.thinkers.filter((value) => value !== thinker) : [...filters.thinkers, thinker])}>{thinker}</button>)}</div><div className="learning-hub-thinker-filter" aria-label="생활과 윤리 자료 유형 필터">{(["passage_clue", "incorrect_choice"] as const).map((kind) => <button key={kind} type="button" className={filters.lifeEthicsKinds.includes(kind) ? "active" : ""} onClick={() => set("lifeEthicsKinds", filters.lifeEthicsKinds.includes(kind) ? filters.lifeEthicsKinds.filter((value) => value !== kind) : [...filters.lifeEthicsKinds, kind])}>{kind === "passage_clue" ? "지문 단서" : "틀린 선지"}</button>)}</div></>}
+      </div>
+    </Dialog>}
     <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
     {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;

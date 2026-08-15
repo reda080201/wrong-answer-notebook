@@ -1,6 +1,10 @@
 @import "./styles/tokens.css";
 @import "./styles/ui-consolidation.css";
-@import "./styles/material-expressive.css";
+@import "./styles/question-theater.css";
+@import "./styles/lecture.css";
+@import "./styles/problem-sheet.css";
+@import "./styles/dialog-foundation.css";
+@import "./styles/settings.css";
 
 @import "tailwindcss";
 
@@ -90,8 +94,19 @@
   --paper-shadow: 0 10px 26px rgba(15, 23, 42, 0.08);
 }
 
+html,
+body,
+#root {
+  min-width: 0;
+  min-height: 0;
+  font-family: var(--font-ui);
+}
+
+html {
+  height: 100%;
+}
+
 :root {
-  font-family: "Noto Sans KR", system-ui, sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--text);
@@ -110,17 +125,29 @@
 }
 
 body {
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
   overflow: hidden;
+  background: var(--surface-canvas);
+  color: var(--ink-primary);
 }
 
 .ui-button,
 .ui-icon-button {
   font: inherit;
+  font-family: var(--font-ui);
   color: var(--text);
   border: 1px solid var(--control-border);
   background: var(--control-bg);
   cursor: pointer;
+}
+
+input,
+textarea,
+select,
+optgroup,
+option {
+  font-family: var(--font-ui);
 }
 
 .ui-button { min-height: 2.25rem; padding: 0.4rem 0.75rem; border-radius: 0.5rem; }
@@ -128,7 +155,21 @@ body {
 .ui-button:hover, .ui-icon-button:hover { border-color: var(--accent); }
 
 #root {
-  min-height: 100vh;
+  height: 100dvh;
+}
+
+dialog,
+[role="dialog"],
+.modal-card,
+.dialog-body {
+  font-family: var(--font-ui);
+}
+
+pre,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
 }
 
 @theme inline {
@@ -147,7 +188,7 @@ body {
 }
 
 button {
-  font-family: inherit;
+  font-family: var(--font-ui);
   cursor: pointer;
   border: none;
   background: none;
@@ -156,7 +197,7 @@ button {
 input,
 textarea,
 select {
-  font-family: inherit;
+  font-family: var(--font-ui);
   font-size: 0.95rem;
   color: var(--text);
   background: var(--bg);

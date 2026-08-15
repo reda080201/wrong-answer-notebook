@@ -4,6 +4,7 @@ import type { EntryFormData } from "../../types";
 import { IMPORT_LIMITS } from "../../features/import/services/importLimits";
 import { mapEntryImportImageReferences, normalizeImportImageKey } from "../../utils/importImageReferences";
 import { errorMessage } from "./shared";
+import { getStorageBackendKind, proxyRequest } from "../storageBackend";
 
 export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
@@ -57,7 +58,8 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
         throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
       }
       await validateImageHeader(file, extension);
-      if (isTauri()) {
+      const backendKind = getStorageBackendKind();
+      if (backendKind === "tauri") {
         const bytes = new Uint8Array(await file.arrayBuffer());
         const filename = await invoke<string>("save_import_image_bytes", {
           bytes,
@@ -65,6 +67,17 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
           mime: file.type || undefined,
         });
         names.push(filename);
+        continue;
+      }
+      if (backendKind === "desktop-proxy") {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = "";
+        for (const byte of bytes) binary += String.fromCharCode(byte);
+        const result = await proxyRequest<{ filename: string }>("/v1/images", {
+          method: "POST",
+          body: JSON.stringify({ filename: file.name, bytesBase64: btoa(binary) }),
+        });
+        names.push(result.filename);
         continue;
       }
       const dataUrl = await fileToDataUrl(file);
@@ -145,11 +158,19 @@ export async function getImageUrl(filename: string): Promise<string> {
     return cached;
   }
 
-  const localDataUrl = localStorage.getItem(filename);
-  if (localDataUrl) {
-    return localDataUrl;
+  const backendKind = getStorageBackendKind();
+  if (backendKind === "isolated-browser") {
+    return localStorage.getItem(filename) ?? "";
   }
-
+  if (backendKind === "desktop-proxy") {
+    const response = await fetch(`${import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL}/v1/images/${encodeURIComponent(filename)}`, {
+      headers: { Authorization: `Bearer ${import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_TOKEN}` },
+    });
+    if (!response.ok) throw new Error((await response.text()) || "이미지를 불러오지 못했습니다.");
+    const url = URL.createObjectURL(await response.blob());
+    cacheImageUrl(filename, url);
+    return url;
+  }
   if (!isTauri()) {
     return "";
   }
@@ -177,16 +198,28 @@ function cacheImageUrl(filename: string, url: string): void {
 }
 
 export function clearImageUrlCache(filename?: string): void {
-  if (filename) imageUrlCache.delete(filename);
-  else imageUrlCache.clear();
+  const revoke = (value: string | undefined) => {
+    if (value?.startsWith("blob:")) URL.revokeObjectURL(value);
+  };
+  if (filename) {
+    revoke(imageUrlCache.get(filename));
+    imageUrlCache.delete(filename);
+  } else {
+    imageUrlCache.forEach(revoke);
+    imageUrlCache.clear();
+  }
 }
 
 export async function deleteImage(filename: string): Promise<void> {
   try {
     clearImageUrlCache(filename);
-    if (localStorage.getItem(filename)) {
+    if (getStorageBackendKind() === "isolated-browser" && localStorage.getItem(filename)) {
       localStorage.removeItem(filename);
-      if (!isTauri()) return;
+      return;
+    }
+    if (getStorageBackendKind() === "desktop-proxy") {
+      await proxyRequest(`/v1/images/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      return;
     }
     if (!isTauri()) {
       return;

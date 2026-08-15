@@ -1,0 +1,29 @@
+.lecture-reader-cover,
+.lecture-overview,
+.lecture-support-section,
+.lecture-toc,
+.lecture-block {
+  border-color: var(--line-subtle);
+  box-shadow: none;
+}
+
+.lecture-reader--document .lecture-block {
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: transparent;
+}
+
+.lecture-reader-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lecture-reader * {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

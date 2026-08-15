@@ -1,4 +1,3 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
 import type {
   ExamSession,
   ExamSubmissionTransactionInput,
@@ -9,6 +8,7 @@ import { normalizeEntry } from "../../utils/entry";
 import { normalizeQuestionNumber } from "../../utils/questionMeta";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
 import { ENTRIES_SCHEMA_VERSION, ENTRIES_STORAGE_KEY, errorMessage, parseStoredEntries, type StoredEntriesDocument } from "./shared";
+import { getStorageBackend } from "../storageBackend";
 
 const JOURNAL_KEY = "wrong-answer-exam-submission-journal";
 
@@ -107,8 +107,9 @@ function commitBrowserExamSubmission(input: ExamSubmissionTransactionInput): Exa
 
 export async function commitExamSubmission(input: ExamSubmissionTransactionInput): Promise<ExamSubmissionTransactionResult> {
   try {
-    if (isTauri()) {
-      const result = await invoke<ExamSubmissionTransactionResult>("submit_exam_transaction", { input });
+    const backend = getStorageBackend();
+    if (backend.kind !== "isolated-browser") {
+      const result = await backend.commitExamSubmission(input);
       return {
         entries: result.entries.map(normalizeEntry),
         sessions: result.sessions,

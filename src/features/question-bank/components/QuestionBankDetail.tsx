@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import MathText from "../../../components/MathText";
 import Dialog from "../../../shared/ui/Dialog";
 import type { ProblemSourceType, QuestionAnswerType } from "../../../types";
 import { difficultyScoreLabel } from "../../../utils/difficulty";
+import { normalizeLegacyMathCommandsForDisplay } from "../../../utils/legacyMathCommands";
 import { PROBLEM_SOURCE_LABELS } from "../../../utils/problemSource";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
@@ -91,10 +93,10 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   return <Dialog open={Boolean(item)} onClose={onClose} title={item ? `${item.entryTitle} ${item.questionNumber}번` : "문항 상세"} ariaLabel="문제 은행 문항 상세" closeDisabled={saving} busy={saving}>
     {item && <div className="question-bank-detail">
       <div className="question-bank-card__chips"><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span><span>{item.subject}</span>{item.classification.unit && <span>{item.classification.unit}</span>}{item.classification.subunit && <span>{item.classification.subunit}</span>}</div>
-      <pre className="question-bank-detail__question">{item.questionText}</pre>
+      <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>
       <dl><div><dt>난이도</dt><dd>{difficultyScoreLabel(item.classification.difficultyScore)}</dd></div><div><dt>중요도</dt><dd>{item.classification.importanceScore ? `${Math.ceil(item.classification.importanceScore / 20)}/5` : "미지정"}</dd></div><div><dt>품질</dt><dd>{item.classification.qualityScore ?? "미지정"}</dd></div><div><dt>답 유형</dt><dd>{answerTypeLabel[item.classification.answerType ?? "unknown"]}</dd></div></dl>
-      <section><h4>정답</h4><p>{item.answer ?? "연결되지 않음"}</p></section>
-      <section><h4>해설</h4><p>{item.explanation ?? "연결되지 않음"}</p></section>
+      <section><h4>정답</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.answer ?? "연결되지 않음")} /></p></section>
+      <section><h4>해설</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.explanation ?? "연결되지 않음")} /></p></section>
       {onPatchClassification && <section className="question-bank-detail__classification"><h4>분류 편집</h4>
         <label>난이도 (0-100)<input type="number" min="0" max="100" value={difficulty} onChange={(event) => setDifficulty(event.target.value)} /></label>
         <label>중요도 (0-100)<input type="number" min="0" max="100" value={importance} onChange={(event) => setImportance(event.target.value)} /></label>

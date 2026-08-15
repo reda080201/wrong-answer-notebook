@@ -215,7 +215,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "검색" }));
+    fireEvent.click(screen.getByRole("button", { name: "시험지 검색" }));
     fireEvent.change(screen.getByPlaceholderText("시험지 안에서 검색"), {
       target: { value: "둘째" },
     });
@@ -224,7 +224,7 @@ describe("EntryDetail sheet layout", () => {
 
     expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "2" })).toBeInTheDocument();
-    expect(screen.getByText("1개")).toBeInTheDocument();
+    expect(screen.getByText("1/1")).toBeInTheDocument();
     expect(container.querySelector(".question-search-mark")).toHaveTextContent("둘째");
   });
 

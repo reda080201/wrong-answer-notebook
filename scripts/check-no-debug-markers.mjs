@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const forbidden = [
   "127.0.0.1:7928",
@@ -13,6 +13,7 @@ const files = execFileSync("git", ["ls-files", "src", "src-tauri", ".github", "s
   .filter((file) => file && file !== "scripts/check-no-debug-markers.mjs");
 let failed = false;
 for (const file of files) {
+  if (!existsSync(file)) continue;
   const contents = readFileSync(file, "utf8");
   for (const marker of forbidden) {
     if (contents.includes(marker)) {

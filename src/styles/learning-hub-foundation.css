@@ -1,0 +1,14 @@
+.candidate-source-picker { display: grid; gap: var(--space-2); padding: var(--space-4); }
+.candidate-source-picker > button { display: flex; justify-content: space-between; padding: var(--space-3); border-bottom: 1px solid var(--border); text-align: left; }
+.candidate-source-picker small { color: var(--text-muted); }
+.learning-hub-source-actions { display: none; }
+.learning-hub-filters { border: 0; background: transparent; }
+.learning-hub-filters { flex-wrap: nowrap; align-items: end; }
+.learning-hub-filters > input { min-width: 220px; }
+.learning-hub-advanced-filters { display: grid; gap: var(--space-4); }
+.learning-hub-advanced-filters > label { display: grid; gap: var(--space-2); }
+
+@media (max-width: 1100px) {
+  .learning-hub-filters > input { min-width: 0; }
+  .learning-hub-filters { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .45fr) minmax(120px, .45fr) auto; }
+}

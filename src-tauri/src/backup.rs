@@ -29,6 +29,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "generated-exams.json",
     "gpt-solution-drafts.json",
     "library-folders.json",
+    "import-workspace-draft.json",
     "data-schema.json",
 ];
 
@@ -311,6 +312,9 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         | "gpt-solution-drafts.json"
         | "library-folders.json" => crate::validate_persistent_store_value(name, &value)
             .map_err(|error| format!("백업의 {name} 형식이 올바르지 않습니다: {error}")),
+        "import-workspace-draft.json" if !value.is_object() => {
+            Err("백업의 가져오기 작업실 초안은 객체여야 합니다.".into())
+        }
         "data-schema.json" => {
             if value
                 .get("schemaVersion")
@@ -453,6 +457,7 @@ pub(crate) fn restore_backup_zip(
         app_dir.join("generated-exams.json"),
         app_dir.join("gpt-solution-drafts.json"),
         app_dir.join("library-folders.json"),
+        app_dir.join("import-workspace-draft.json"),
         app_dir.join("data-schema.json"),
         image_dir.clone(),
         app_dir.join("import-workspaces"),
