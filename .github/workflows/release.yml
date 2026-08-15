@@ -32,8 +32,10 @@ jobs:
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) { throw 'TAURI_SIGNING_PRIVATE_KEY secret is required.' }
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD)) { throw 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD secret is required.' }
       - name: Verify tag version
         shell: pwsh
         run: |
@@ -41,6 +43,10 @@ jobs:
           $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') { '${{ inputs.tag }}' } else { '${{ github.ref_name }}' }
           if ($tag -ne "app-v$version") { throw "tag $tag does not match app-v$version" }
           git ls-remote --exit-code origin "refs/tags/$tag" | Out-Null
+          git fetch origin main --depth=1
+          $tagCommit = (git rev-parse HEAD).Trim()
+          $mainCommit = (git rev-parse origin/main).Trim()
+          if ($tagCommit -ne $mainCommit) { throw "release tag must point at origin/main ($mainCommit), got $tagCommit" }
       - name: Read release notes
         id: release_notes
         shell: pwsh
@@ -65,7 +71,6 @@ jobs:
         working-directory: src-tauri
       - run: cargo test
         working-directory: src-tauri
-      - run: npm run tauri -- build --no-bundle
       - name: Publish signed Tauri release
         uses: tauri-apps/tauri-action@v1
         env:
@@ -102,6 +107,20 @@ jobs:
           if (-not ($assetNames | Where-Object { $_ -match '\.sig$' })) { throw 'updater signature is missing' }
           if (-not ($assetNames | Where-Object { $_ -match '\.nsis\.zip$' })) { throw 'NSIS updater artifact is missing' }
           if (-not ($assetNames | Where-Object { $_ -match '-setup\.exe$' })) { throw 'NSIS installer is missing' }
+          $requiredAssets = @(
+            $assetName,
+            "$assetName.sig",
+            ($assetNames | Where-Object { $_ -match '-setup\.exe$' } | Select-Object -First 1)
+          )
+          gh release download $tag --pattern $assetName --pattern "$assetName.sig" --pattern '*-setup.exe' --dir $dir --clobber
+          foreach ($filename in $requiredAssets) {
+            $path = Join-Path $dir $filename
+            if (!(Test-Path -LiteralPath $path)) { throw "verified asset is missing after download: $filename" }
+            if ((Get-Item -LiteralPath $path).Length -le 0) { throw "verified asset is empty: $filename" }
+            $sha256 = (Get-FileHash -Algorithm SHA256 -LiteralPath $path).Hash
+            if ([string]::IsNullOrWhiteSpace($sha256)) { throw "SHA-256 could not be calculated: $filename" }
+            Write-Host "verified $filename size=$((Get-Item -LiteralPath $path).Length) sha256=$sha256"
+          }
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish verified release
