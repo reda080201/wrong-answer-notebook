@@ -9,6 +9,8 @@ commands.allow = [
   "submit_exam_transaction",
   "load_generated_exams",
   "save_generated_exams",
+  "load_study_sessions",
+  "save_study_sessions",
   "load_settings",
   "save_settings",
   "load_gpt_solution_roundtrip_drafts",

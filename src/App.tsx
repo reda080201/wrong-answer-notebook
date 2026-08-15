@@ -46,6 +46,9 @@ import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestio
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
+import { useStudySessions } from "./features/learning/hooks/useStudySessions";
+import StudySessionView from "./features/learning/components/StudySessionView";
+import type { StudyItemReference, StudySession } from "./types";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -124,6 +127,8 @@ function AppContent() {
   } | null>(null);
   const [realExamStartEntry, setRealExamStartEntry] = useState<WrongAnswerEntry | null>(null);
   const [realExamMinutes, setRealExamMinutes] = useState(50);
+  const studySessions = useStudySessions();
+  const [activeStudySession, setActiveStudySession] = useState<StudySession | null>(null);
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -196,7 +201,9 @@ function AppContent() {
     flushLibraryFolders: library.flush,
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushStudySessions: studySessions.flush,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
+    setStudySessionsMaintenanceBlocked: studySessions.setMaintenanceBlocked,
     flushActiveExam: flushActiveExamForMaintenance,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
@@ -229,6 +236,12 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+  const startStudySession = useCallback((itemRefs: StudyItemReference[], scope: StudySession["scope"] = "learning-hub") => {
+    if (!itemRefs.length) return;
+    const now = new Date().toISOString();
+    const session: StudySession = { id: uuidv4(), title: "수동 학습", scope, itemRefs, currentIndex: 0, reviewEvents: [], createdAt: now, updatedAt: now, status: "in_progress" };
+    void studySessions.persist((current) => [...current, session]).then(() => setActiveStudySession(session)).catch(() => undefined);
+  }, [studySessions]);
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
@@ -258,6 +271,7 @@ function AppContent() {
     flushImportWorkspaceDraft: flushTransientWrites,
     flushLibraryFolders: library.flush,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushStudySessions: studySessions.flush,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
@@ -592,7 +606,17 @@ function AppContent() {
         )}
 
         <div className="content">
-          {showLibraryExplorer ? (
+          {activeStudySession ? (
+            <StudySessionView
+              session={activeStudySession}
+              entries={entries}
+              onChange={async (next) => {
+                await studySessions.persist((current) => current.map((item) => item.id === next.id ? next : item));
+                setActiveStudySession(next);
+              }}
+              onClose={() => setActiveStudySession(null)}
+            />
+          ) : showLibraryExplorer ? (
             <LibraryExplorer
               folders={library.folders}
               entries={entries}
@@ -615,6 +639,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onStartStudy={startStudySession}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -633,6 +658,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onStartStudy={startStudySession}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,

@@ -23,6 +23,7 @@ export async function flushPendingAppWrites(options: {
   flushImportWorkspaceDraft: () => Promise<void>;
   flushLibraryFolders: () => Promise<void>;
   flushGptSolutionDrafts?: () => Promise<void>;
+  flushStudySessions?: () => Promise<void>;
   timeoutMs?: number;
 }): Promise<void> {
   const flush = async () => {
@@ -44,6 +45,9 @@ export async function flushPendingAppWrites(options: {
       { name: "보관함 폴더", run: options.flushLibraryFolders },
       ...(options.flushGptSolutionDrafts
         ? [{ name: "GPT 해설 초안", run: options.flushGptSolutionDrafts }]
+        : []),
+      ...(options.flushStudySessions
+        ? [{ name: "학습 세션", run: options.flushStudySessions }]
         : []),
     ];
     const results = await Promise.allSettled(

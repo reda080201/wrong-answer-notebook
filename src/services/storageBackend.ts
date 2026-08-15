@@ -6,6 +6,7 @@ import type {
   ExamSubmissionTransactionResult,
   GeneratedExam,
   WrongAnswerEntry,
+  StudySession,
 } from "../types";
 import type { LibraryFolder } from "../models/library";
 import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
@@ -21,6 +22,7 @@ import { EXAM_SESSIONS_STORAGE_KEY } from "../features/exam/storage/examSessionS
 import { GENERATED_EXAMS_STORAGE_KEY } from "../features/exam-builder/storage/generatedExamStorage";
 import { LIBRARY_FOLDERS_STORAGE_KEY } from "./api/libraryFolders";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
+export const STUDY_SESSIONS_STORAGE_KEY = "wrong-answer-study-sessions";
 
 export type StorageBackendKind = "tauri" | "desktop-proxy" | "isolated-browser";
 
@@ -44,6 +46,8 @@ export interface StorageBackend {
   saveImportWorkspaceDraft(draft: ImportWorkspace): Promise<void>;
   clearImportWorkspaceDraft(): Promise<void>;
   commitExamSubmission(input: ExamSubmissionTransactionInput): Promise<ExamSubmissionTransactionResult>;
+  loadStudySessions?(): Promise<StudySession[]>;
+  saveStudySessions?(sessions: StudySession[]): Promise<void>;
 }
 
 type StoreName =
@@ -53,7 +57,8 @@ type StoreName =
   | "generated-exams"
   | "library-folders"
   | "gpt-solution-drafts"
-  | "import-workspace-draft";
+  | "import-workspace-draft"
+  | "study-sessions";
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
 const proxyToken = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_TOKEN;
@@ -115,6 +120,8 @@ const tauriBackend: StorageBackend = {
   saveImportWorkspaceDraft: (draft) => invoke("save_import_workspace_draft", { draft }),
   clearImportWorkspaceDraft: () => invoke("clear_import_workspace_draft"),
   commitExamSubmission: (input) => invoke("submit_exam_transaction", { input }),
+  loadStudySessions: () => invoke("load_study_sessions"),
+  saveStudySessions: (sessions) => invoke("save_study_sessions", { sessions }),
 };
 
 const proxyBackend: StorageBackend = {
@@ -143,6 +150,8 @@ const proxyBackend: StorageBackend = {
   saveImportWorkspaceDraft: (draft) => proxySave("import-workspace-draft", draft),
   clearImportWorkspaceDraft: () => proxyRequest("/v1/stores/import-workspace-draft", { method: "DELETE" }),
   commitExamSubmission: (input) => proxyRequest("/v1/exam-submissions", { method: "POST", body: JSON.stringify(input) }),
+  loadStudySessions: () => proxyLoad("study-sessions"),
+  saveStudySessions: (sessions) => proxySave("study-sessions", sessions),
 };
 
 function arrayOrThrow<T>(value: unknown, name: string): T[] {
@@ -179,6 +188,8 @@ const isolatedBrowserBackend: StorageBackend = {
   async saveImportWorkspaceDraft(draft) { writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, draft); },
   async clearImportWorkspaceDraft() { localStorage.removeItem(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY); },
   async commitExamSubmission() { throw new Error("격리 브라우저 transaction adapter를 사용해야 합니다."); },
+  async loadStudySessions() { return arrayOrThrow(readStorageJson(localStorage, STUDY_SESSIONS_STORAGE_KEY, Array.isArray) ?? [], "학습 세션"); },
+  async saveStudySessions(sessions) { writeStorageJson(localStorage, STUDY_SESSIONS_STORAGE_KEY, sessions); },
 };
 
 let overrideBackend: StorageBackend | undefined;
