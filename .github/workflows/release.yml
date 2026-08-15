@@ -78,7 +78,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: app-v__VERSION__
+          tagName: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           releaseName: "오답노트 v__VERSION__"
           releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: true
@@ -101,18 +101,17 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($manifest.notes)) { throw 'latest.json notes is empty' }
           $platform = $manifest.platforms.'windows-x86_64'
           if ($null -eq $platform -or [string]::IsNullOrWhiteSpace($platform.url) -or [string]::IsNullOrWhiteSpace($platform.signature)) { throw 'windows-x86_64 URL/signature missing' }
-          $assetNames = @($release.assets | ForEach-Object { $_.name })
-          $assetName = [IO.Path]::GetFileName(([Uri]$platform.url).AbsolutePath)
-          if ($assetNames -notcontains $assetName) { throw "manifest URL asset missing: $assetName" }
-          if (-not ($assetNames | Where-Object { $_ -match '\.sig$' })) { throw 'updater signature is missing' }
-          if (-not ($assetNames | Where-Object { $_ -match '\.nsis\.zip$' })) { throw 'NSIS updater artifact is missing' }
-          if (-not ($assetNames | Where-Object { $_ -match '-setup\.exe$' })) { throw 'NSIS installer is missing' }
+          $updaterAsset = @($release.assets | Where-Object { $_.apiUrl -eq $platform.url } | Select-Object -First 1)
+          if (!$updaterAsset) { throw "manifest URL does not identify a release asset: $($platform.url)" }
+          $assetName = $updaterAsset.name
+          if ($assetName -notmatch '-setup\.exe$') { throw "updater asset is not an NSIS installer: $assetName" }
+          $signatureAsset = @($release.assets | Where-Object { $_.name -eq "$assetName.sig" } | Select-Object -First 1)
+          if (!$signatureAsset) { throw "updater signature is missing for $assetName" }
           $requiredAssets = @(
             $assetName,
-            "$assetName.sig",
-            ($assetNames | Where-Object { $_ -match '-setup\.exe$' } | Select-Object -First 1)
+            $signatureAsset.name
           )
-          gh release download $tag --pattern $assetName --pattern "$assetName.sig" --pattern '*-setup.exe' --dir $dir --clobber
+          gh release download $tag --pattern $assetName --pattern $signatureAsset.name --dir $dir --clobber
           foreach ($filename in $requiredAssets) {
             $path = Join-Path $dir $filename
             if (!(Test-Path -LiteralPath $path)) { throw "verified asset is missing after download: $filename" }

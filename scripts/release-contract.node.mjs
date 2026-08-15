@@ -19,8 +19,10 @@ test("release workflow requires main-tag parity, signing secrets, and signed upd
   assert.match(workflow, /TAURI_SIGNING_PRIVATE_KEY_PASSWORD/);
   assert.match(workflow, /git fetch origin main --depth=1/);
   assert.match(workflow, /release tag must point at origin\/main/);
-  assert.match(workflow, /updater signature is missing/);
-  assert.match(workflow, /NSIS updater artifact is missing/);
+  assert.match(workflow, /updater signature is missing for/);
+  assert.match(workflow, /updater asset is not an NSIS installer/);
+  assert.match(workflow, /apiUrl -eq \$platform\.url/);
+  assert.match(workflow, /tagName: \$\{\{ github\.event_name/);
   assert.match(workflow, /Get-FileHash -Algorithm SHA256/);
   assert.doesNotMatch(workflow, /tauri -- build --no-bundle/);
 });
