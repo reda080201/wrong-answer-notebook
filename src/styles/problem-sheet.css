@@ -1,0 +1,31 @@
+.sheet-search--inline {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  width: clamp(320px, 38vw, 420px);
+  max-width: 100%;
+  margin: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.sheet-search--inline input {
+  min-width: 0;
+  height: var(--control-height-compact);
+}
+
+@media (max-width: 1100px) {
+  .sheet-search--inline { width: min(100%, 360px); grid-column: 1 / -1; }
+  .problem-sheet-primary-toolbar { align-items: flex-start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet-search--inline * {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

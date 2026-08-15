@@ -1,0 +1,5 @@
+.text-review-panel--structured { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; width: min(1180px, calc(100vw - 48px)); height: auto; max-height: calc(100dvh - 48px); margin: auto; overflow: hidden; padding: 0; }
+.text-review-panel--structured > .modal-head, .text-review-panel--structured > .text-review-warning, .text-review-panel--structured > footer { padding: var(--space-4) var(--space-5); }
+.text-review-panel--structured > .modal-head { position: sticky; top: 0; z-index: 2; background: var(--surface); }
+.text-review-panel--structured .text-review-structured-layout { padding: 0 var(--space-5) var(--space-4); }
+.text-review-panel--structured > footer { position: sticky; bottom: 0; background: var(--surface); }

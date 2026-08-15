@@ -5,6 +5,31 @@
 
 .dialog-body {
   min-width: 0;
+  min-height: 0;
+}
+
+.modal-card,
+[role="dialog"] {
+  min-width: 0;
+  min-height: 0;
+}
+
+[role="dialog"].dialog-scroll-body {
+  display: flex;
+  flex-direction: column;
+  max-height: min(88dvh, 900px);
+  overflow: hidden;
+}
+
+[role="dialog"].dialog-scroll-body > .dialog-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+[role="dialog"].dialog-scroll-custom {
+  max-height: min(92dvh, 960px);
+  overflow: hidden;
 }
 
 .dialog-visually-hidden {
@@ -35,7 +60,7 @@
   background: var(--backdrop, rgba(0, 0, 0, 0.6));
 }
 
-.fullscreen-dialog-card {
+[role="dialog"].fullscreen-dialog-card.dialog-scroll-custom {
   display: flex;
   flex-direction: column;
   width: 100%;

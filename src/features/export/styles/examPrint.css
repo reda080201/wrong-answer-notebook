@@ -1,6 +1,6 @@
 @page { size: A4 portrait; margin: 14mm 13mm 15mm; }
 @media print { .exam-print-chrome { display: none !important; } }
-.exam-print-root { color: #111; background: #fff; font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif; }
+.exam-print-root { color: #111; background: #fff; font-family: var(--font-content); }
 .exam-print-page { width: 180mm; margin: 0 auto 16px; padding: 8mm; border: 1px dashed #ccc; background: #fff; }
 @media print { .exam-print-page { width: auto; margin: 0; padding: 0; border: 0; } }
 .exam-print-page-number { display: none; }

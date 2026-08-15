@@ -1,0 +1,85 @@
+.question-text-block--question,
+.structured-problem-sheet-question {
+  position: relative;
+}
+
+.question-theater-open {
+  display: inline-grid;
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  place-items: center;
+  width: var(--control-height-compact);
+  height: var(--control-height-compact);
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-control);
+  background: var(--surface-primary);
+  color: var(--ink-secondary);
+  opacity: .18;
+}
+
+.question-text-block--question:hover .question-theater-open,
+.question-theater-open:focus-visible {
+  opacity: 1;
+}
+
+.question-theater,
+.modal-backdrop {
+  background: color-mix(in srgb, #111 58%, transparent);
+}
+
+.question-theater-shell {
+  border: 1px solid var(--line-subtle);
+  border-radius: var(--radius-dialog);
+  background: var(--surface-primary);
+  box-shadow: var(--shadow-dialog);
+}
+
+.question-theater-toolbar,
+.question-theater-dock {
+  border-color: var(--line-subtle);
+  background: var(--surface-secondary);
+}
+
+.question-theater-identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.question-theater-position {
+  font: var(--type-meta);
+  color: var(--ink-secondary);
+}
+
+.question-theater-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-top: 1px solid var(--line-subtle);
+}
+
+.question-theater-dock__primary,
+.question-theater-dock__secondary {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+@media (max-width: 1100px) {
+  .question-theater-dock { align-items: stretch; flex-direction: column; }
+  .question-theater-dock__primary,
+  .question-theater-dock__secondary { justify-content: space-between; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .question-theater * {
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}

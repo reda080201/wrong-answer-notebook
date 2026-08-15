@@ -28,6 +28,7 @@ export default function FullscreenDialog({
       className="fullscreen-dialog-card"
       backdropClassName="fullscreen-dialog-backdrop"
       bodyClassName="fullscreen-dialog-body"
+      scrollMode="custom"
       header={
         <button type="button" className="fullscreen-dialog-close ui-icon-button" aria-label="전체 화면 닫기" onClick={onClose}>
           <X size={18} aria-hidden="true" />

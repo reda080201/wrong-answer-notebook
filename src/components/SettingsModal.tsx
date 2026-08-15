@@ -159,7 +159,7 @@ export default function SettingsModal({
   const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
   return (
-    <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정">
+    <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정" size="xl" scrollMode="custom">
         <header className="modal-head">
           <div>
             <span className="modal-eyebrow">설정</span>
