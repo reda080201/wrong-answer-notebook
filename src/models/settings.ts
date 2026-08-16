@@ -1,6 +1,13 @@
 import type { EntryFormData, EntryKind, ProblemSourceType, QuestionAnswerType } from "./entry";
 import type { AiProviderSettings, McpBridgeSettings } from "./integrations";
 
+export interface LibraryPreferences {
+  separateMockExams: boolean;
+  defaultUnitView: "home" | "lectures" | "problems";
+  listDensity: "standard" | "compact";
+  showUserFolders: boolean;
+}
+
 export interface EntryTemplate {
   id: string;
   name: string;
@@ -38,12 +45,14 @@ export interface ViewPreferences {
   questionSolutionPresentation: QuestionSolutionPresentation;
   lectureBlockDefaultState: LectureBlockDefaultState;
   lectureLayout?: LectureLayout;
+  lectureBodyWidth?: LectureBodyWidth;
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;
   conceptLinkPreviewMode?: "popover";
 }
 
 export type LectureLayout = "document" | "cards";
+export type LectureBodyWidth = "narrow" | "standard" | "wide" | "full";
 
 export interface ExamPreferences {
   showScratchNote: boolean;
@@ -142,6 +151,7 @@ export interface AppSettings {
   mcpBridge: McpBridgeSettings;
   updatePreferences: AppUpdatePreferences;
   questionBankPreferences?: QuestionBankPreferences;
+  libraryPreferences?: LibraryPreferences;
 }
 
 export type QuestionBankSort = "updated" | "difficulty" | "importance" | "quality" | "review_due";

@@ -22,6 +22,28 @@ export type ProblemSourceType =
   | "ai_generated"
   | "unknown";
 
+export type LibraryResourceType =
+  | "past_collection"
+  | "official_exam"
+  | "official_mock"
+  | "education_office_mock"
+  | "nset"
+  | "problem_set"
+  | "private_mock"
+  | "lecture"
+  | "other";
+
+/** Optional metadata used by the library navigator. It never replaces legacy source fields. */
+export interface LearningResourceClassification {
+  subject?: string;
+  course?: string;
+  majorUnit?: string;
+  unit?: string;
+  subunit?: string;
+  conceptIds?: string[];
+  resourceType?: LibraryResourceType;
+}
+
 export interface ProblemSourceInfo {
   type: ProblemSourceType;
   publisher?: string;
@@ -333,6 +355,8 @@ export interface WrongAnswerEntry {
   questionImages: string[];
   sourcePageImages?: string[];
   problemSource?: ProblemSourceInfo;
+  /** Optional library navigation metadata; legacy entries remain valid without it. */
+  resourceClassification?: LearningResourceClassification;
   similarQuestionLinks?: SimilarQuestionLink[];
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;

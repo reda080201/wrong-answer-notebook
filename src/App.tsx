@@ -596,6 +596,7 @@ function AppContent() {
             <LibraryExplorer
               folders={library.folders}
               entries={entries}
+              preferences={settings.libraryPreferences}
               onOpenEntry={openEntryById}
               onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
               onRenameFolder={(folder) => void renameLibraryFolder(folder)}

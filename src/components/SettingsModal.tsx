@@ -28,6 +28,7 @@ export type SettingsTab =
   | "theme"
   | "ai"
   | "view"
+  | "library"
   | "exam"
   | "images"
   | "gpt-mcp"
@@ -41,6 +42,7 @@ const SETTINGS_TABS: Array<[SettingsTab, string]> = [
   ["theme", "테마"],
   ["ai", "AI 설정"],
   ["view", "보기"],
+  ["library", "보관함"],
   ["exam", "시험"],
   ["images", "이미지"],
   ["gpt-mcp", "GPT·MCP"],
@@ -331,6 +333,21 @@ export default function SettingsModal({
                     <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.lectureBlockDefaultState === value ? "active" : ""}`} aria-pressed={settings.viewPreferences.lectureBlockDefaultState === value} onClick={() => void patchView({ lectureBlockDefaultState: value })}>{label}</button>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {activeTab === "library" && (
+              <div className="settings-pref-panel">
+                <p className="settings-label">보관함</p>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.libraryPreferences?.separateMockExams === true} onChange={(event) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), separateMockExams: event.target.checked } })} /> 모의고사를 별도 분류</label>
+                <p className="settings-help">끄면 공식 모의고사는 기출, 사설 모의고사는 N제로 표시합니다.</p>
+                <p className="settings-label">단원 진입 화면</p>
+                <div className="theme-options" role="group" aria-label="단원 진입 화면">
+                  {([['home', '단원 홈'], ['lectures', '특강'], ['problems', '문제']] as const).map(([value, label]) => <button key={value} type="button" className={`theme-btn ${settings.libraryPreferences?.defaultUnitView === value ? "active" : ""}`} aria-pressed={settings.libraryPreferences?.defaultUnitView === value} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), defaultUnitView: value } })}>{label}</button>)}
+                </div>
+                <p className="settings-label">자료 목록 밀도</p>
+                <div className="theme-options" role="group" aria-label="자료 목록 밀도"><button type="button" className={`theme-btn ${settings.libraryPreferences?.listDensity !== "compact" ? "active" : ""}`} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), listDensity: "standard" } })}>표준</button><button type="button" className={`theme-btn ${settings.libraryPreferences?.listDensity === "compact" ? "active" : ""}`} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), listDensity: "compact" } })}>조밀</button></div>
+                <label className="settings-checkbox"><input type="checkbox" checked={settings.libraryPreferences?.showUserFolders !== false} onChange={(event) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), showUserFolders: event.target.checked } })} /> 사용자 폴더 표시</label>
               </div>
             )}
 

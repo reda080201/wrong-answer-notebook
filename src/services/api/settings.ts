@@ -24,6 +24,7 @@ import {
   normalizeImagePreferences,
   resolveViewPreferences,
 } from "../../utils/viewPreferences";
+import { DEFAULT_LIBRARY_PREFERENCES, normalizeLibraryPreferences } from "../../utils/libraryClassification";
 import { getStorageBackend } from "../storageBackend";
 import { builtInMemoTemplates, builtInPromptTemplates } from "./prompts";
 import { errorMessage } from "./shared";
@@ -62,6 +63,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
     backupBeforeInstall: true,
     channel: "stable",
   },
+  libraryPreferences: DEFAULT_LIBRARY_PREFERENCES,
 };
 
 /** @deprecated Use DEFAULT_SETTINGS */
@@ -207,6 +209,7 @@ export function normalizeSettings(raw: AppSettings): AppSettings {
     mcpBridge: normalizeMcpBridgeSettings(raw?.mcpBridge),
     updatePreferences: normalizeUpdatePreferences(raw?.updatePreferences),
     questionBankPreferences: normalizeQuestionBankPreferences(raw?.questionBankPreferences),
+    libraryPreferences: normalizeLibraryPreferences(raw?.libraryPreferences),
   };
 }
 
