@@ -35,7 +35,12 @@ cd wrong-answer-notebook
 npm ci
 ```
 
-`run-dev.bat`은 Tauri 개발 모드, `run-web.bat`은 브라우저 개발 모드를 실행합니다. 개발용 Rust build cache는 `%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target`에만 생성됩니다. 브라우저 모드는 localStorage를 사용하며 Tauri 전용 파일 저장과 OS keyring 기능은 제공하지 않습니다.
+개발 실행은 목적에 따라 나뉩니다.
+
+- `run-preview.bat`은 최신 source를 Vite HMR로 열고, 사전 빌드된 인증 storage bridge를 통해 기존 `%APPDATA%\com.wronganswer.notebook`을 사용합니다. 첫 실행에 helper 다운로드가 필요할 수 있지만 source에서 Rust를 컴파일하지 않습니다. 화면에는 `SOURCE PREVIEW`가 표시됩니다.
+- `run-web.bat`은 기존 호환용 shared preview 별칭입니다. localStorage로 자동 전환하지 않으며 bridge가 없으면 시작하지 않습니다.
+- `run-web-isolated.bat`만 명시적인 localStorage sandbox입니다. 이 모드의 데이터는 데스크톱 앱과 분리됩니다.
+- `run-dev.bat`은 전체 Tauri 개발 모드이며 개발용 Rust build cache는 `%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target`에만 생성됩니다.
 
 ## AI 가져오기
 
@@ -92,7 +97,7 @@ Tauri 앱은 OS 앱 데이터 폴더에 다음 데이터를 저장합니다.
 - `images/`: 첨부 이미지
 - AI 비밀 키: 일반 설정 JSON이 아니라 OS keyring 우선 사용
 
-브라우저 모드에서는 항목과 설정이 localStorage에 저장됩니다.
+isolated web 모드에서는 항목과 설정이 localStorage에 저장됩니다. shared preview는 데스크톱 AppData bridge를 사용합니다.
 
 과거 source checkout의 build 산출물은 아래 도구로만 진단하거나 명시적으로 정리할 수 있습니다. 기본 동작은 읽기 전용이며 AppData, 이미지, 백업, import 자료에는 절대 접근하지 않습니다.
 

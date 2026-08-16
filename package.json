@@ -21,7 +21,7 @@
     "tauri": "tauri",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:startup": "node --test scripts/dependency-sync.node.mjs scripts/runtime-script-contract.node.mjs",
+    "test:startup": "node --test scripts/dependency-sync.node.mjs scripts/runtime-script-contract.node.mjs scripts/preview-runtime-contract.node.mjs",
     "test:release-contract": "node --test scripts/release-contract.node.mjs"
   },
   "dependencies": {

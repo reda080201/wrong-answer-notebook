@@ -57,6 +57,7 @@ export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newB
 
 function AppContent() {
   const storageBackendKind = getStorageBackendKind();
+  const sourcePreview = import.meta.env.VITE_SOURCE_PREVIEW === "1";
   const { confirm, prompt } = useAppDialog();
   const {
     entries,
@@ -544,6 +545,7 @@ function AppContent() {
       />
 
       <main className="main">
+        {sourcePreview && <div className="source-preview-badge" role="status">SOURCE PREVIEW · 데스크톱 데이터</div>}
         {storageBackendKind === "isolated-browser" && (
           <div className="storage-mode-notice" role="status">
             브라우저 격리 모드 · 이 창의 데이터는 데스크톱 앱 데이터와 분리됩니다.

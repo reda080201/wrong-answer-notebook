@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import {
-  INSTALL_STATE_FILE,
   REQUIRED_FILES,
   calculateDependencyFingerprint,
+  dependencyStampPath,
   inspectDependencyState,
   synchronizeDependencies,
   writeInstallState,
@@ -42,7 +42,7 @@ test("fresh clone runs npm ci, verifies, and writes the install stamp", async (t
   const result = await synchronizeDependencies(root, runner);
   assert.equal(result.installed, true);
   assert.deepEqual(calls, ["ci", "ls --depth=0"]);
-  assert.equal(JSON.parse(await readFile(path.join(root, "node_modules", INSTALL_STATE_FILE))).fingerprint, await calculateDependencyFingerprint(root));
+  assert.equal(JSON.parse(await readFile(dependencyStampPath(root))).fingerprint, await calculateDependencyFingerprint(root));
 });
 
 test("matching lockfile and complete dependency tree skip npm ci", async (t) => {
@@ -53,7 +53,22 @@ test("matching lockfile and complete dependency tree skip npm ci", async (t) => 
   const calls = [];
   const result = await synchronizeDependencies(root, async (_root, args) => calls.push(args.join(" ")));
   assert.equal(result.installed, false);
-  assert.deepEqual(calls, []);
+  assert.deepEqual(calls, ["ls --depth=0"]);
+});
+
+test("npm ls failure repairs an otherwise stamped installation", async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await installRequiredFiles(root);
+  await stamp(root);
+  const calls = [];
+  let failed = false;
+  await synchronizeDependencies(root, async (_root, args) => {
+    calls.push(args.join(" "));
+    if (args[0] === "ls" && !failed) { failed = true; throw new Error("npm tree is stale"); }
+    if (args[0] === "ci") await installRequiredFiles(root);
+  });
+  assert.deepEqual(calls, ["ls --depth=0", "ci", "ls --depth=0"]);
 });
 
 test("lockfile changes and missing Pretendard files trigger npm ci", async (t) => {
@@ -81,7 +96,7 @@ test("damaged stamp triggers repair and verifies the repaired tree", async (t) =
     t.after(() => rm(root, { recursive: true, force: true }));
     await installRequiredFiles(root);
     await stamp(root);
-    if (damageStamp) await writeFile(path.join(root, "node_modules", INSTALL_STATE_FILE), "not json");
+    if (damageStamp) await writeFile(dependencyStampPath(root), "not json");
     const calls = [];
     await synchronizeDependencies(root, async (_root, args) => {
       calls.push(args.join(" "));
@@ -97,5 +112,17 @@ test("npm ci failure is propagated and no success stamp is written", async (t) =
   await assert.rejects(synchronizeDependencies(root, async (_root, args) => {
     if (args[0] === "ci") throw new Error("offline");
   }), /offline/);
-  await assert.rejects(readFile(path.join(root, "node_modules", INSTALL_STATE_FILE)));
+  await assert.rejects(readFile(dependencyStampPath(root)));
+});
+
+test("a missing direct dependency package is not accepted by the warm path", async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await installRequiredFiles(root);
+  await writeFile(path.join(root, "package.json"), JSON.stringify({ dependencies: { pretendard: "^1.3.9", uuid: "^11.1.0" } }));
+  const inspection = await inspectDependencyState(root);
+  await writeInstallState(root, inspection.expected);
+  const result = await inspectDependencyState(root);
+  assert.equal(result.syncRequired, true);
+  assert.match(result.reason, /직접 dependency/);
 });
