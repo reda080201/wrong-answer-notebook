@@ -1,7 +1,7 @@
 @echo off
+chcp 65001 >nul
 cd /d "%~dp0"
 echo MODE=WEB
-set "CARGO_TARGET_DIR=%LOCALAPPDATA%\WrongAnswerNotebookDev\cargo-target"
-where node >nul 2>&1 || (echo [ERROR] Node.js is required. & exit /b 1)
-node scripts\launch-web.mjs
+echo [INFO] Shared desktop storage preview mode. For an isolated sandbox use run-web-isolated.bat.
+call "%~dp0run-preview.bat"
 exit /b %ERRORLEVEL%

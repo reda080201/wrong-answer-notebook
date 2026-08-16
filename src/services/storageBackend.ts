@@ -57,6 +57,8 @@ type StoreName =
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
 const proxyToken = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_TOKEN;
+const sharedStorageMode = import.meta.env.VITE_STORAGE_MODE === "desktop-shared";
+const isolatedStorageMode = import.meta.env.VITE_STORAGE_MODE === "isolated-browser";
 
 async function proxyRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 설정이 없습니다.");
@@ -186,10 +188,12 @@ let overrideBackend: StorageBackend | undefined;
 export function getStorageBackend(): StorageBackend {
   if (overrideBackend) return overrideBackend;
   if (isTauri()) return tauriBackend;
+  if (isolatedStorageMode) return isolatedBrowserBackend;
   if (proxyUrl || proxyToken) {
     if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 환경 설정이 불완전합니다.");
     return proxyBackend;
   }
+  if (sharedStorageMode) throw new Error("데스크톱 데이터 연결 실패: shared storage bridge가 없습니다.");
   return isolatedBrowserBackend;
 }
 

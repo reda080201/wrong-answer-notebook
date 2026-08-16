@@ -5,11 +5,20 @@ import process from "node:process";
 import { spawn } from "node:child_process";
 
 export const INSTALL_STATE_VERSION = 1;
-export const INSTALL_STATE_FILE = ".wrong-answer-notebook-install-state.json";
+export const INSTALL_STATE_FILE = "wrong-answer-notebook-install-state.json";
 export const REQUIRED_FILES = [
   "node_modules/pretendard/package.json",
   "node_modules/pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css",
 ];
+
+export function dependencyStampPath(root, runtime = process) {
+  const rootHash = createHash("sha256").update(path.resolve(root)).digest("hex").slice(0, 16);
+  const base = runtime.env?.WRONG_ANSWER_DEPENDENCY_STAMP_DIR
+    || (runtime.platform === "win32"
+      ? path.join(runtime.env?.LOCALAPPDATA || path.join(runtime.env?.USERPROFILE || root, "AppData", "Local"), "WrongAnswerNotebookDev", "dependency-stamps")
+      : path.join(runtime.env?.XDG_STATE_HOME || path.join(runtime.env?.HOME || root, ".local", "state"), "WrongAnswerNotebookDev", "dependency-stamps"));
+  return path.join(base, `${rootHash}.json`);
+}
 
 export async function calculateDependencyFingerprint(root) {
   const hash = createHash("sha256");
@@ -21,6 +30,12 @@ export async function calculateDependencyFingerprint(root) {
     hash.update("\0");
   }
   return hash.digest("hex");
+}
+
+async function directDependencyPackageFiles(root) {
+  const manifest = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+  return Object.keys({ ...(manifest.dependencies || {}), ...(manifest.devDependencies || {}) })
+    .map((name) => path.join(root, "node_modules", name, "package.json"));
 }
 
 async function exists(filename) {
@@ -35,7 +50,7 @@ async function exists(filename) {
 export async function inspectDependencyState(root, runtime = process) {
   const fingerprint = await calculateDependencyFingerprint(root);
   const nodeModules = path.join(root, "node_modules");
-  const stampPath = path.join(nodeModules, INSTALL_STATE_FILE);
+  const stampPath = dependencyStampPath(root, runtime);
   const expected = {
     version: INSTALL_STATE_VERSION,
     fingerprint,
@@ -65,6 +80,12 @@ export async function inspectDependencyState(root, runtime = process) {
     }
   }
 
+  for (const filename of await directDependencyPackageFiles(root)) {
+    if (!(await exists(filename))) {
+      return { syncRequired: true, reason: `직접 dependency가 없습니다: ${path.relative(root, filename)}`, expected };
+    }
+  }
+
   return { syncRequired: false, expected };
 }
 
@@ -87,12 +108,14 @@ export async function verifyDependencyTree(root, runner = runNpm) {
   for (const filename of REQUIRED_FILES) {
     if (!(await exists(path.join(root, filename)))) throw new Error(`필수 dependency 파일이 없습니다: ${filename}`);
   }
+  for (const filename of await directDependencyPackageFiles(root)) {
+    if (!(await exists(filename))) throw new Error(`직접 dependency 파일이 없습니다: ${path.relative(root, filename)}`);
+  }
 }
 
-export async function writeInstallState(root, expected) {
-  const nodeModules = path.join(root, "node_modules");
-  await mkdir(nodeModules, { recursive: true });
-  const target = path.join(nodeModules, INSTALL_STATE_FILE);
+export async function writeInstallState(root, expected, runtime = process) {
+  const target = dependencyStampPath(root, runtime);
+  await mkdir(path.dirname(target), { recursive: true });
   const temporary = `${target}.${process.pid}.tmp`;
   await writeFile(temporary, `${JSON.stringify({ ...expected, installedAt: new Date().toISOString() }, null, 2)}\n`, "utf8");
   await rename(temporary, target);
@@ -101,7 +124,12 @@ export async function writeInstallState(root, expected) {
 export async function synchronizeDependencies(root, runner = runNpm) {
   let inspection = await inspectDependencyState(root);
   if (!inspection.syncRequired) {
-    return { installed: false, fingerprint: inspection.expected.fingerprint };
+    try {
+      await verifyDependencyTree(root, runner);
+      return { installed: false, fingerprint: inspection.expected.fingerprint };
+    } catch (error) {
+      inspection = { ...inspection, syncRequired: true, reason: `설치된 dependency 검증에 실패했습니다: ${error instanceof Error ? error.message : "알 수 없는 오류"}` };
+    }
   }
 
   console.log(`[dependency sync] ${inspection.reason}`);

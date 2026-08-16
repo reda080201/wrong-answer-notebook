@@ -1,0 +1,38 @@
+name: Preview storage bridge
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Publish verified preview bridge
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Build helper
+        run: cargo build --release --manifest-path src-tauri/Cargo.toml --bin dev-storage-bridge
+      - name: Create manifest
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force preview-bridge-release | Out-Null
+          Copy-Item src-tauri/target/release/dev-storage-bridge.exe preview-bridge-release/preview-bridge-windows-x86_64.exe
+          node scripts/create-preview-bridge-manifest.mjs preview-bridge-release/preview-bridge-windows-x86_64.exe preview-bridge-release/preview-bridge-windows-x86_64.json
+      - name: Create or update preview release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view preview-bridge *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create preview-bridge --title "Preview storage bridge" --notes "CI-built helper for source preview."
+          }
+          gh release upload preview-bridge preview-bridge-release/preview-bridge-windows-x86_64.exe preview-bridge-release/preview-bridge-windows-x86_64.json --clobber

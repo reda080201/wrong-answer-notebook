@@ -2,7 +2,18 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
-const FINGERPRINT_INPUTS = ["package.json", "package-lock.json", "src", "src-tauri/src", "src-tauri/Cargo.toml", "src-tauri/Cargo.lock", "src-tauri/build.rs"];
+// Frontend changes must not invalidate the prebuilt storage bridge. Keep this
+// list deliberately narrow: it is the contract for the Rust helper artifact.
+const FINGERPRINT_INPUTS = [
+  "src-tauri/Cargo.toml",
+  "src-tauri/Cargo.lock",
+  "src-tauri/src/bin/dev-storage-bridge.rs",
+  "src-tauri/src/dev_storage_bridge.rs",
+  "src-tauri/src/exam_submission.rs",
+  "src-tauri/src/notebook_store",
+  "src-tauri/src/storage.rs",
+  "src-tauri/src/lib.rs",
+];
 
 async function collectFiles(root, relativePath) {
   const target = path.join(root, relativePath);

@@ -121,6 +121,19 @@
   font: var(--type-helper);
 }
 
+.source-preview-badge {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin: var(--space-2) var(--space-4) 0;
+  padding: 4px 8px;
+  border: 1px solid var(--accent-primary);
+  border-radius: var(--radius-control);
+  color: var(--accent-primary);
+  background: var(--surface-selected);
+  font: var(--type-meta);
+  letter-spacing: .04em;
+}
+
 .problem-sheet-library-tabs {
   flex: 0 0 auto;
   display: inline-flex;
