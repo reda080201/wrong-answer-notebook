@@ -1754,6 +1754,8 @@ export default function EntryDetail({
               layout={viewPreferences?.lectureLayout ?? "document"}
               onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
               blockDefaultState={viewPreferences?.lectureBlockDefaultState ?? "first"}
+              bodyWidth={viewPreferences?.lectureBodyWidth ?? "standard"}
+              onBodyWidthChange={(width) => onViewPreferencesChange?.({ lectureBodyWidth: width })}
             />
           ) : !isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
