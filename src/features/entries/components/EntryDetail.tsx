@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
-import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, LectureDocument, LectureQuestionRelation, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -92,6 +92,8 @@ interface EntryDetailProps {
   onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
   onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
+  onLectureDocumentChange?: (entry: WrongAnswerEntry, document: LectureDocument) => Promise<void>;
+  onLectureQuestionRelationsChange?: (entry: WrongAnswerEntry, relations: LectureQuestionRelation[]) => Promise<void>;
   onImportLecture?: () => void;
   onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onStructuredQuestionsChange?: (entry: WrongAnswerEntry, questions: NonNullable<WrongAnswerEntry["structuredQuestions"]>) => Promise<void>;
@@ -215,6 +217,8 @@ export default function EntryDetail({
   onReview,
   onQuickMemo,
   onLearningBlocksChange,
+  onLectureDocumentChange,
+  onLectureQuestionRelationsChange,
   onImportLecture,
   onQuestionTextChange,
   onStructuredQuestionsChange,
@@ -1748,9 +1752,13 @@ export default function EntryDetail({
           {isLecture ? (
             <LectureReaderView
               entry={entry}
+              allEntries={allEntries}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
               onOpenLinkedEntry={onOpenEntry}
+              onOpenLinkedQuestion={onOpenQuestionTarget}
+              onDocumentChange={onLectureDocumentChange ? (document) => onLectureDocumentChange(entry, document) : undefined}
+              onRelationsChange={onLectureQuestionRelationsChange ? (relations) => onLectureQuestionRelationsChange(entry, relations) : undefined}
               layout={viewPreferences?.lectureLayout ?? "document"}
               onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
               blockDefaultState={viewPreferences?.lectureBlockDefaultState ?? "first"}

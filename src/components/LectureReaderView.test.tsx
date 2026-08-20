@@ -64,13 +64,13 @@ describe("LectureReaderView", () => {
 
   it("uses the configured block default and supports expand or collapse all", () => {
     const { container, rerender } = render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} blockDefaultState="first" />);
-    expect(Array.from(container.querySelectorAll("details")).map((item) => item.open)).toEqual([true, false]);
+    expect(Array.from(container.querySelectorAll<HTMLElement>(".lecture-block")).map((item) => (item as HTMLDetailsElement).open)).toEqual([true, false]);
     fireEvent.click(screen.getByRole("button", { name: "모두 펼치기" }));
-    expect(Array.from(container.querySelectorAll("details")).every((item) => item.open)).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLElement>(".lecture-block")).every((item) => (item as HTMLDetailsElement).open)).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "모두 접기" }));
-    expect(Array.from(container.querySelectorAll("details")).every((item) => !item.open)).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLElement>(".lecture-block")).every((item) => !(item as HTMLDetailsElement).open)).toBe(true);
     rerender(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} blockDefaultState="all" />);
-    expect(Array.from(container.querySelectorAll("details")).every((item) => item.open)).toBe(true);
+    expect(Array.from(container.querySelectorAll<HTMLElement>(".lecture-block")).every((item) => (item as HTMLDetailsElement).open)).toBe(true);
   });
 
   it("opens the same lecture content in a fullscreen dialog and restores focus on Escape", async () => {
@@ -84,5 +84,49 @@ describe("LectureReaderView", () => {
 
     fireEvent.keyDown(document, { key: "Escape" });
     await waitFor(() => expect(trigger).toHaveFocus());
+  });
+
+  it("edits an authoritative document without replacing block ids or order", async () => {
+    const entry = lecture();
+    entry.lectureDocument = {
+      blocks: [
+        { id: "heading-a", type: "heading", content: "도입" },
+        { id: "paragraph-b", type: "paragraph", content: "기존 본문" },
+      ],
+    };
+    const onDocumentChange = vi.fn();
+    render(<LectureReaderView entry={entry} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onDocumentChange={onDocumentChange} />);
+
+    fireEvent.click(screen.getByText("더보기"));
+    fireEvent.click(screen.getByRole("button", { name: "문서 편집" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "2번 block 내용" }), { target: { value: "수정된 본문" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+
+    await waitFor(() => expect(onDocumentChange).toHaveBeenCalledWith({
+      blocks: [
+        { id: "heading-a", type: "heading", content: "도입" },
+        { id: "paragraph-b", type: "paragraph", content: "수정된 본문" },
+      ],
+    }));
+  });
+
+  it("creates direct relations from canonical question numbers", async () => {
+    const entry = lecture();
+    entry.lectureDocument = { blocks: [{ id: "block-a", type: "paragraph", content: "연결할 내용" }] };
+    const problemSheet: WrongAnswerEntry = {
+      ...lecture(), id: "sheet-1", entryKind: "problem_sheet", title: "연결 문제지", question: "12. 문항 본문", learningBlocks: [],
+    };
+    const onRelationsChange = vi.fn();
+    render(<LectureReaderView entry={entry} allEntries={[problemSheet]} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onRelationsChange={onRelationsChange} />);
+
+    fireEvent.click(screen.getByText("더보기"));
+    fireEvent.click(screen.getByRole("button", { name: "문제 연결" }));
+    fireEvent.change(screen.getByLabelText("문제지"), { target: { value: "sheet-1" } });
+    fireEvent.change(screen.getByLabelText("문항 번호"), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "연결" }));
+
+    await waitFor(() => expect(onRelationsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ questionEntryId: "sheet-1", questionNumber: "12" }),
+    ]));
   });
 });

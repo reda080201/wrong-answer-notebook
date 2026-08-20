@@ -61,5 +61,19 @@
 .lecture-panel-restore { position: absolute; top: 12px; z-index: 2; padding: 6px; }
 .lecture-panel-restore--left { left: 8px; }
 .lecture-panel-restore--right { right: 8px; }
+.lecture-more-menu { position: relative; }
+.lecture-more-menu > summary { cursor: pointer; list-style: none; }
+.lecture-more-menu > summary::-webkit-details-marker { display: none; }
+.lecture-more-menu > div { position: absolute; right: 0; z-index: 3; display: grid; gap: 4px; min-width: 112px; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow-popover); }
+.lecture-more-menu:not([open]) > div { display: none; }
+.lecture-more-menu button { border: 0; border-radius: 6px; background: transparent; color: var(--text); padding: 7px 9px; text-align: left; }
+.lecture-more-menu button:hover, .lecture-more-menu button:focus-visible { background: var(--surface-hover); }
+.lecture-document-editor { display: grid; gap: 12px; max-height: min(65dvh, 680px); overflow: auto; padding: 16px 24px; }
+.lecture-editor-block { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.lecture-editor-block-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lecture-editor-block-head select, .lecture-editor-block-head button, .lecture-relation-form input, .lecture-relation-form select { min-height: 32px; }
+.lecture-editor-block textarea { min-height: 110px; resize: vertical; }
+.lecture-relation-form { display: grid; gap: 14px; padding: 20px 24px; }
+.lecture-relation-form label { display: grid; gap: 6px; color: var(--text-muted); font-size: 13px; }
 @media (max-width: 1100px) { .lecture-workspace { grid-template-columns: 200px minmax(0, 1fr); } .lecture-related-panel { grid-column: 1 / -1; border-top: 1px solid var(--border); border-left: 0; max-height: 180px; } }
 @media (max-width: 720px) { .lecture-workspace { display: block; height: auto; } .lecture-outline-panel, .lecture-related-panel { max-height: none; border: 0; border-bottom: 1px solid var(--border); } }
