@@ -17,6 +17,13 @@
 .learning-hub-active-filters { padding: var(--space-3) 0; }
 .learning-hub-active-filters span, .learning-hub-chip { padding: var(--space-1) var(--space-2); background: var(--accent-soft); color: var(--accent); font-size: 12px; }
 .learning-hub-grid { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0 var(--space-4); align-items: start; }
+.learning-hub-outline { display: grid; grid-template-columns: minmax(240px, 280px) minmax(0, 1fr); gap: var(--space-5); min-width: 0; border-top: 1px solid var(--border); }
+.learning-hub-outline__index { min-width: 0; max-height: calc(100dvh - 260px); overflow: auto; border-right: 1px solid var(--border); padding: var(--space-3) var(--space-3) var(--space-3) 0; }
+.learning-hub-outline__index h3 { margin: 0 0 var(--space-2); font-size: 13px; color: var(--text-muted); }
+.learning-hub-outline__index button { display: grid; width: 100%; gap: 2px; min-height: 48px; padding: var(--space-2); border: 0; border-left: 3px solid transparent; text-align: left; background: transparent; color: inherit; cursor: pointer; }
+.learning-hub-outline__index button.is-selected { border-left-color: var(--accent); background: var(--accent-soft); }
+.learning-hub-outline__index small { color: var(--text-muted); }
+.learning-hub-outline__detail { min-width: 0; }
 .learning-hub-card { min-width: 0; border: 0; border-bottom: 1px solid var(--border); background: transparent; padding: var(--space-4) 0; box-shadow: none; }
 .learning-hub-card--highlighted { outline: 3px solid var(--accent); outline-offset: 2px; }
 .learning-hub-card > header, .learning-hub-card footer, .learning-hub-actions { display: flex; justify-content: space-between; gap: var(--space-2); align-items: center; }
@@ -63,4 +70,6 @@
   .learning-hub-filters { grid-template-columns: minmax(0, 1fr) minmax(0, .45fr) minmax(0, .45fr) auto; }
   .learning-hub-filters > * { min-width: 0; }
   .learning-hub-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .learning-hub-outline { grid-template-columns: 1fr; }
+  .learning-hub-outline__index { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--border); padding-right: 0; }
 }

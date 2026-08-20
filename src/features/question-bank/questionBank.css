@@ -16,16 +16,17 @@
 .question-bank-chips button { padding: var(--space-1) var(--space-2); }
 .question-bank-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin-top: var(--space-4); background: var(--border); }
 .question-bank-card { min-width: 0; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
-.question-bank-card__main { width: 100%; border: 0; padding: var(--space-4); text-align: left; color: inherit; background: transparent; cursor: pointer; }
+.question-bank-card { position: relative; min-height: 72px; }
+.question-bank-card__main { width: 100%; min-height: 72px; border: 0; padding: var(--space-2) 56px var(--space-2) var(--space-3); text-align: left; color: inherit; background: transparent; cursor: pointer; }
 .question-bank-card__main:hover { background: var(--surface-hover); }
 .question-bank-card__main > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .question-bank-card__main > header span { flex: 0 0 auto; color: var(--accent); font-size: 12px; }
-.question-bank-card__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-3) 0; }
+.question-bank-card__chips { display: flex; flex-wrap: nowrap; gap: var(--space-1); margin: var(--space-1) 0; overflow: hidden; }
 .question-bank-card__chips span { padding: var(--space-1) var(--space-2); }
 .question-bank-card__main > p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--text); line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.question-bank-card__main > footer { flex-wrap: wrap; justify-content: flex-start; margin-top: var(--space-3); color: var(--text-muted); font-size: 12px; }
+.question-bank-card__main > footer { flex-wrap: nowrap; justify-content: flex-start; margin-top: var(--space-1); color: var(--text-muted); font-size: 12px; overflow: hidden; }
 .question-bank-card__warning { color: var(--warning); font-weight: 700; }
-.question-bank-card__detail { width: 100%; padding: var(--space-2); border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--accent); cursor: pointer; opacity: 0; }
+.question-bank-card__detail { position: absolute; top: 50%; right: var(--space-2); width: 40px; height: 40px; transform: translateY(-50%); padding: 0; border: 0; background: transparent; color: var(--accent); cursor: pointer; opacity: 0; }
 .question-bank-card:hover .question-bank-card__detail,
 .question-bank-card:focus-within .question-bank-card__detail { opacity: 1; }
 .question-bank-detail { display: grid; gap: var(--space-4); min-width: min(640px, 80vw); }
