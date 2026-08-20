@@ -14,6 +14,36 @@
   min-height: 0;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog, 80);
+  display: grid;
+  place-items: center;
+  padding: var(--space-4, 16px);
+  background: rgb(28 31 35 / 48%);
+}
+
+.modal-card {
+  width: min(100%, 440px);
+  max-height: min(88dvh, 900px);
+  overflow: hidden;
+  border: 1px solid var(--line-subtle, #deddd8);
+  border-radius: var(--radius-dialog, 18px);
+  background: var(--surface-primary, #fff);
+  color: var(--ink-primary, #202124);
+  box-shadow: var(--shadow-dialog, 0 18px 48px rgb(15 23 42 / 18%));
+}
+
+.modal-card > .dialog-header,
+.modal-card > .dialog-footer {
+  padding: var(--space-4, 16px) var(--space-5, 20px);
+}
+
+.modal-card > .dialog-header { border-bottom: 1px solid var(--line-subtle, #deddd8); }
+.modal-card > .dialog-footer { border-top: 1px solid var(--line-subtle, #deddd8); }
+.modal-card > .dialog-body { padding: var(--space-5, 20px); }
+
 [role="dialog"].dialog-scroll-body {
   display: flex;
   flex-direction: column;
@@ -45,7 +75,7 @@
 }
 
 .dialog-size-sm { width: min(100%, 360px); }
-.dialog-size-md { width: min(100%, 520px); }
+.dialog-size-md { width: min(100%, 440px); }
 .dialog-size-lg { width: min(100%, 720px); }
 .dialog-size-xl { width: min(100%, 960px); }
 

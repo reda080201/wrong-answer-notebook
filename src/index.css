@@ -1,12 +1,12 @@
-@import "./styles/tokens.css";
-@import "./styles/ui-consolidation.css";
-@import "./styles/question-theater.css";
-@import "./styles/lecture.css";
-@import "./styles/problem-sheet.css";
-@import "./styles/dialog-foundation.css";
-@import "./styles/settings.css";
-
+@layer theme, tokens, base, legacy, shared-components, feature-components, utilities;
 @import "tailwindcss";
+@import "./styles/tokens.css" layer(tokens);
+@import "./styles/ui-consolidation.css" layer(shared-components);
+@import "./styles/dialog-foundation.css" layer(shared-components);
+@import "./styles/question-theater.css" layer(feature-components);
+@import "./styles/lecture.css" layer(feature-components);
+@import "./styles/problem-sheet.css" layer(feature-components);
+@import "./styles/settings.css" layer(feature-components);
 
 :root,
 [data-theme="dark"] {
@@ -51,6 +51,28 @@
   --paper-subtle-bg: #202b3d;
   --paper-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
 }
+
+.storage-connection-failure {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6, 24px);
+  background: var(--surface-canvas, #f5f3ee);
+  color: var(--ink-primary, #202124);
+}
+
+.storage-connection-failure__surface {
+  width: min(100%, 480px);
+  padding: var(--space-6, 24px);
+  border: 1px solid var(--line-subtle, #deddd8);
+  border-radius: var(--radius-dialog, 18px);
+  background: var(--surface-primary, #fff);
+  box-shadow: var(--shadow-dialog, 0 18px 48px rgba(32, 37, 44, 0.16));
+}
+
+.storage-connection-failure h1 { margin: 0 0 12px; font-size: 20px; }
+.storage-connection-failure p { margin: 0 0 12px; line-height: 1.6; }
+.storage-connection-failure__reason { color: var(--danger, #b3261e); }
 
 [data-theme="light"] {
   --app-bg: #eef1f6;

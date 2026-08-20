@@ -77,4 +77,14 @@ describe("Dialog", () => {
     expect(screen.getByText("내용")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
   });
+
+  it("keeps the shared modal-card surface when a feature class is added", () => {
+    render(
+      <Dialog open onClose={vi.fn()} ariaLabel="표면 계약" className="feature-dialog">
+        <p>내용</p>
+      </Dialog>,
+    );
+    expect(screen.getByRole("dialog")).toHaveClass("modal-card", "feature-dialog");
+    expect(screen.getByRole("dialog").parentElement?.parentElement).toBe(document.body);
+  });
 });
