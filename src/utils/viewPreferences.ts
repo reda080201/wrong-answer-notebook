@@ -54,6 +54,7 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   realExamAnswerSheetOpen: true,
   warnBeforeEnd: true,
   autoSubmitOnTimeExpired: false,
+  defaultAnswerSheetLayout: "auto",
 };
 
 export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = {
@@ -185,6 +186,10 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
       value.autoSubmitOnTimeExpired === undefined
         ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
         : Boolean(value.autoSubmitOnTimeExpired),
+    defaultAnswerSheetLayout:
+      value.defaultAnswerSheetLayout === "vertical" || value.defaultAnswerSheetLayout === "horizontal"
+        ? value.defaultAnswerSheetLayout
+        : "auto",
   };
 }
 

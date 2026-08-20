@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
+import type { ExamAnswerSheetLayout, ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -10,6 +10,7 @@ export interface ExamSessionCreationOptions {
   timeLimitMinutes?: number;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: ExamAnswerSheetLayout;
 }
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
@@ -70,6 +71,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     deadlineAt: timeLimitMinutes ? new Date(now.getTime() + timeLimitMinutes * 60_000).toISOString() : undefined,
     showTimer: mode === "real" ? options.showTimer !== false : undefined,
     answerSheetOpen: mode === "real" ? options.answerSheetOpen !== false : undefined,
+    answerSheetLayout: mode === "real" ? options.answerSheetLayout ?? "auto" : undefined,
     questions: snapshots,
     responses: [],
     currentQuestionIndex: 0,

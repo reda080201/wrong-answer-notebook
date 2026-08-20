@@ -77,6 +77,7 @@ export interface ExamPreferences {
   realExamAnswerSheetOpen?: boolean;
   warnBeforeEnd?: boolean;
   autoSubmitOnTimeExpired?: boolean;
+  defaultAnswerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
 export interface ImagePreferences {
