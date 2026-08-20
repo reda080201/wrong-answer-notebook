@@ -126,11 +126,15 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     ? value.libraryNavigation
     : {};
   const text = (candidate: unknown) => typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
+  const group = ["all", "lectures", "problems", "past", "nset", "mocks", "unclassified"].includes(navigation.group as string)
+    ? navigation.group
+    : navigation.section === "lectures" ? "lectures" : navigation.section === "problems" ? "problems" : undefined;
   const libraryNavigation = Object.fromEntries(
     [
       ["subject", text(navigation.subject)],
       ["course", text(navigation.course)],
       ["unit", text(navigation.unit)],
+      ["group", group],
       ["section", navigation.section === "lectures" || navigation.section === "problems" ? navigation.section : undefined],
     ].filter(([, candidate]) => candidate !== undefined),
   ) as ViewPreferences["libraryNavigation"];

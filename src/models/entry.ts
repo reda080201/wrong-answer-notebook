@@ -42,6 +42,10 @@ export interface LearningResourceClassification {
   subunit?: string;
   conceptIds?: string[];
   resourceType?: LibraryResourceType;
+  courseOrder?: number;
+  majorUnitOrder?: number;
+  unitOrder?: number;
+  subunitOrder?: number;
 }
 
 export interface ProblemSourceInfo {

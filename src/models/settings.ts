@@ -33,10 +33,13 @@ export type ProblemSheetDisplayMode = "questions" | "exam";
 export type QuestionSolutionPresentation = "dialog" | "split";
 export type LectureBlockDefaultState = "first" | "all" | "none";
 
+export type LibraryNavigationGroup = "all" | "lectures" | "problems" | "past" | "nset" | "mocks" | "unclassified";
+
 export interface LibraryNavigationPreference {
   subject?: string;
   course?: string;
   unit?: string;
+  group?: LibraryNavigationGroup;
   section?: "all" | "lectures" | "problems";
 }
 

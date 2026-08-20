@@ -604,6 +604,7 @@ function AppContent() {
               onRenameFolder={(folder) => void renameLibraryFolder(folder)}
               onMoveFolder={(folder, parentId) => void moveLibraryFolder(folder, parentId)}
               onMoveEntries={(entryIds, folderId) => void moveLibraryEntries(entryIds, folderId)}
+              onUpdateEntries={(entryIds, patch) => Promise.all(entryIds.map((entryId) => patchEntry(entryId, patch))).then(() => undefined)}
               onDeleteFolder={(folder) => void deleteLibraryFolder(folder)}
             />
           ) : showQuestionBank ? (
