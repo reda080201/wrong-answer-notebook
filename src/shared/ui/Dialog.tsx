@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import "../../styles/dialog-shell.css";
 
@@ -58,7 +58,7 @@ export default function Dialog({
   const generatedTitleId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
   const dialogRef = useRef<HTMLDivElement>(null);
-  const dialogOrderRef = useRef(++nextDialogOrder);
+  const [dialogOrder] = useState(() => ++nextDialogOrder);
   const closeDisabledRef = useRef(closeDisabled);
   const onCloseRef = useRef(onClose);
 
@@ -139,7 +139,7 @@ export default function Dialog({
         aria-label={resolvedTitleId ? undefined : ariaLabel}
         aria-labelledby={resolvedTitleId}
         aria-busy={busy || undefined}
-        data-dialog-order={dialogOrderRef.current}
+        data-dialog-order={dialogOrder}
         tabIndex={-1}
       >
         {(header || titleNode) && <header className="dialog-header">{titleNode}{header}</header>}
