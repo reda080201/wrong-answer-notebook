@@ -1,4 +1,6 @@
-import type { LearningBlock, WrongAnswerEntry } from "../types";
+import { normalizeQuestionNumber } from "./questionMeta";
+import { getEntryQuestions } from "./entryQuestions";
+import type { LearningBlock, LectureQuestionRelation, WrongAnswerEntry } from "../types";
 import type { LectureDocument, LectureDocumentBlock, LectureDocumentBlockType } from "../types";
 
 const VALID_TYPES = new Set<LectureDocumentBlockType>([
@@ -37,4 +39,39 @@ export function getLectureDocument(entry: WrongAnswerEntry): LectureDocument {
 
 export function getLectureHeadings(document: LectureDocument) {
   return document.blocks.filter((block) => block.type === "heading").map((block) => ({ id: block.id, title: block.content?.trim() || "제목 없음", level: block.level ?? 1 }));
+}
+
+export interface LectureRelationDiagnostic {
+  relation: LectureQuestionRelation;
+  status: "valid" | "missing_entry" | "missing_question" | "missing_block";
+}
+
+export function lectureRelationKey(relation: Pick<LectureQuestionRelation, "questionEntryId" | "questionNumber" | "lectureBlockId">): string {
+  return `${relation.questionEntryId}:${normalizeQuestionNumber(relation.questionNumber)}:${relation.lectureBlockId ?? "root"}`;
+}
+
+export function dedupeLectureQuestionRelations(relations: LectureQuestionRelation[]): LectureQuestionRelation[] {
+  const seen = new Set<string>();
+  return relations.filter((relation) => {
+    const key = lectureRelationKey(relation);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+export function diagnoseLectureQuestionRelations(
+  lecture: WrongAnswerEntry,
+  entries: WrongAnswerEntry[],
+): LectureRelationDiagnostic[] {
+  const document = getLectureDocument(lecture);
+  const blocks = new Set(document.blocks.map((block) => block.id));
+  return (lecture.lectureQuestionRelations ?? []).map((relation) => {
+    const target = entries.find((entry) => entry.id === relation.questionEntryId);
+    if (!target) return { relation, status: "missing_entry" };
+    const hasQuestion = getEntryQuestions(target).some((question) => normalizeQuestionNumber(question.questionNumber) === normalizeQuestionNumber(relation.questionNumber));
+    if (!hasQuestion) return { relation, status: "missing_question" };
+    if (relation.lectureBlockId && !blocks.has(relation.lectureBlockId)) return { relation, status: "missing_block" };
+    return { relation, status: "valid" };
+  });
 }

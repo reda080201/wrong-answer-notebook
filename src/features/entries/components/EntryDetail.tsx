@@ -1768,6 +1768,7 @@ export default function EntryDetail({
               onOpenLinkedQuestion={onOpenQuestionTarget}
               onDocumentChange={onLectureDocumentChange ? (document) => onLectureDocumentChange(entry, document) : undefined}
               onRelationsChange={onLectureQuestionRelationsChange ? (relations) => onLectureQuestionRelationsChange(entry, relations) : undefined}
+              onSendToMcp={() => openExportHub("chatgpt-share", "current")}
               layout={viewPreferences?.lectureLayout ?? "document"}
               onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
               blockDefaultState={viewPreferences?.lectureBlockDefaultState ?? "first"}

@@ -54,11 +54,9 @@ describe("LectureReaderView", () => {
     });
   });
 
-  it("keeps the card/document preference selectable", async () => {
-    const onLayoutChange = vi.fn();
-    render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} layout="document" onLayoutChange={onLayoutChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "카드형" }));
-    expect(onLayoutChange).toHaveBeenCalledWith("cards");
+  it("keeps the canonical document as the default presentation", async () => {
+    render(<LectureReaderView entry={lecture()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} layout="document" />);
+    expect(screen.getByRole("article")).toHaveClass("lecture-reader--document");
     await waitFor(() => expect(screen.getAllByRole("img").length).toBeGreaterThan(0));
   });
 
@@ -97,8 +95,8 @@ describe("LectureReaderView", () => {
     const onDocumentChange = vi.fn();
     render(<LectureReaderView entry={entry} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onDocumentChange={onDocumentChange} />);
 
-    fireEvent.click(screen.getByText("더보기"));
-    fireEvent.click(screen.getByRole("button", { name: "문서 편집" }));
+    fireEvent.click(screen.getByRole("button", { name: "특강 더보기" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "문서 편집" }));
     fireEvent.change(screen.getByRole("textbox", { name: "2번 block 내용" }), { target: { value: "수정된 본문" } });
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
 
@@ -119,8 +117,8 @@ describe("LectureReaderView", () => {
     const onRelationsChange = vi.fn();
     render(<LectureReaderView entry={entry} allEntries={[problemSheet]} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onRelationsChange={onRelationsChange} />);
 
-    fireEvent.click(screen.getByText("더보기"));
-    fireEvent.click(screen.getByRole("button", { name: "문제 연결" }));
+    fireEvent.click(screen.getByRole("button", { name: "특강 더보기" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "문제 연결" }));
     fireEvent.change(screen.getByLabelText("문제지"), { target: { value: "sheet-1" } });
     fireEvent.change(screen.getByLabelText("문항 번호"), { target: { value: "12" } });
     fireEvent.click(screen.getByRole("button", { name: "연결" }));
