@@ -11,7 +11,7 @@ import FullscreenDialog from "../shared/ui/FullscreenDialog";
 import { normalizeLegacyLectureMathForDisplay } from "../utils/legacyLectureMath";
 import { getLectureDocument, getLectureHeadings } from "../utils/lectureDocument";
 import { getEntryQuestions } from "../utils/entryQuestions";
-import { loadLectureWorkspaceState, saveLectureWorkspaceState } from "../utils/lectureWorkspaceState";
+import { consumeLectureWorkspaceFocus, loadLectureWorkspaceState, saveLectureWorkspaceState } from "../utils/lectureWorkspaceState";
 import Dialog from "../shared/ui/Dialog";
 
 interface LectureReaderViewProps {
@@ -132,6 +132,14 @@ function LectureReaderContent({
     setRelatedOpen(state?.relatedOpen ?? true);
     requestAnimationFrame(() => {
       if (articleRef.current && state?.scrollTop) articleRef.current.scrollTop = state.scrollTop;
+    });
+  }, [entry.id]);
+
+  useEffect(() => {
+    const target = consumeLectureWorkspaceFocus(entry.id);
+    if (!target?.blockId) return;
+    requestAnimationFrame(() => {
+      document.getElementById(`lecture-block-${target.blockId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }, [entry.id]);
 

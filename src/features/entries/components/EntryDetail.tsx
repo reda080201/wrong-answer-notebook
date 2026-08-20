@@ -15,6 +15,7 @@ import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextS
 import { normalizeDifficultyScore } from "../../../utils/difficulty";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions, resolvedQuestionToBlock } from "../../../utils/entryQuestions";
+import { requestLectureWorkspaceFocus } from "../../../utils/lectureWorkspaceState";
 import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
@@ -382,6 +383,14 @@ export default function EntryDetail({
   const relatedEntries = useMemo(
     () => (isConcept ? getRelatedEntries(entry, allEntries) : []),
     [allEntries, entry, isConcept],
+  );
+  const directLectureRelations = useMemo(
+    () => !isSheet ? [] : allEntries.flatMap((lecture) =>
+      lecture.entryKind !== "lecture" ? [] : (lecture.lectureQuestionRelations ?? [])
+        .filter((relation) => relation.questionEntryId === entry.id)
+        .map((relation) => ({ lecture, relation })),
+    ),
+    [allEntries, entry.id, isSheet],
   );
   const conceptAnalytics = useMemo(() => {
     if (!isConcept || !entry.title.trim()) return undefined;
@@ -1838,6 +1847,26 @@ export default function EntryDetail({
                     onEditLecture={onEdit}
                   />
                 </CollapsibleSection>
+                {directLectureRelations.length > 0 && (
+                  <section className="lecture-question-relations" aria-label="직접 연결된 특강">
+                    <h3>직접 연결된 특강</h3>
+                    <div>
+                      {directLectureRelations.map(({ lecture, relation }) => (
+                        <button
+                          key={relation.id}
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => {
+                            requestLectureWorkspaceFocus({ entryId: lecture.id, blockId: relation.lectureBlockId });
+                            onOpenEntry?.(lecture.id);
+                          }}
+                        >
+                          {lecture.title || "특강자료"} · {relation.questionNumber}번
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             )
           ) : isSheet && isFocusExpanded ? (

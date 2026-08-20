@@ -6,6 +6,7 @@ export interface LectureWorkspaceState {
 }
 
 const STORAGE_KEY = "wrong-answer-lecture-workspace-state";
+const FOCUS_TARGET_KEY = "wrong-answer-lecture-workspace-focus-target";
 const MAX_LECTURES = 100;
 let lastUpdatedAt = 0;
 
@@ -45,3 +46,31 @@ export function saveLectureWorkspaceState(entryId: string, patch: Partial<Lectur
 }
 
 export const LECTURE_WORKSPACE_STORAGE_KEY = STORAGE_KEY;
+
+interface LectureWorkspaceFocusTarget {
+  entryId: string;
+  blockId?: string;
+}
+
+export function requestLectureWorkspaceFocus(target: LectureWorkspaceFocusTarget, storage: Pick<Storage, "setItem"> | undefined = typeof localStorage === "undefined" ? undefined : localStorage): void {
+  if (!storage || !target.entryId) return;
+  try {
+    storage.setItem(FOCUS_TARGET_KEY, JSON.stringify(target));
+  } catch {
+    // Navigation still opens the document when optional UI state cannot be retained.
+  }
+}
+
+export function consumeLectureWorkspaceFocus(entryId: string, storage: Pick<Storage, "getItem" | "removeItem"> | undefined = typeof localStorage === "undefined" ? undefined : localStorage): LectureWorkspaceFocusTarget | undefined {
+  if (!storage) return undefined;
+  try {
+    const raw = storage.getItem(FOCUS_TARGET_KEY);
+    if (!raw) return undefined;
+    const value = JSON.parse(raw) as Partial<LectureWorkspaceFocusTarget>;
+    if (value.entryId !== entryId) return undefined;
+    storage.removeItem(FOCUS_TARGET_KEY);
+    return { entryId, blockId: typeof value.blockId === "string" ? value.blockId : undefined };
+  } catch {
+    return undefined;
+  }
+}
