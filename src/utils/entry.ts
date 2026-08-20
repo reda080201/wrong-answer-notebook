@@ -37,6 +37,7 @@ import { normalizeSheetGroup } from "./sheetGroup";
 import { normalizeProblemSource } from "./problemSource";
 import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
 import { reconcileEntryQuestions } from "./questionCanonical";
+import { normalizeLearningResourceClassification } from "./libraryClassification";
 import {
   isLearningImportance,
   isLearningReviewStatus,
@@ -910,6 +911,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       ? rest.sourcePageImages.filter((image): image is string => typeof image === "string" && image.trim().length > 0).map((image) => image.trim())
       : [],
     problemSource: normalizeProblemSource(rest.problemSource),
+    resourceClassification: normalizeLearningResourceClassification(rest.resourceClassification),
     explanationParts,
     memo: rest.memo ?? "",
     annotations: rest.annotations ?? [],

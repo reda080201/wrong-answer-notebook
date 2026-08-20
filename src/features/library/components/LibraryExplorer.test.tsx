@@ -3,84 +3,46 @@ import { describe, expect, it, vi } from "vitest";
 import type { LibraryFolder, WrongAnswerEntry } from "../../../types";
 import LibraryExplorer from "./LibraryExplorer";
 
-const folders: LibraryFolder[] = [
-  { id: "math", name: "수학", sortOrder: 0, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
-  { id: "algebra", name: "대수", parentId: "math", sortOrder: 0, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
-  { id: "geometry", name: "기하", sortOrder: 1, createdAt: "2026-01-01", updatedAt: "2026-01-01" },
-];
+const folders: LibraryFolder[] = [{ id: "math", name: "수학 폴더", sortOrder: 0, createdAt: "2026-01-01", updatedAt: "2026-01-01" }];
+const entry = (id: string, title: string, partial: Partial<WrongAnswerEntry> = {}): WrongAnswerEntry => ({ id, title, subject: "수학", question: "문제", questionImages: [], entryKind: "problem_sheet", difficult: false, myAnswer: "", correctAnswer: "", explanationParts: [], memo: "", annotations: [], tags: [], createdAt: "2026-01-01", updatedAt: "2026-01-02", mastered: false, ...partial });
 
-const entry = (id: string, title: string, folderId?: string) => ({
-  id,
-  title,
-  folderId,
-  subject: "수학",
-  question: "문제",
-  questionImages: [],
-  entryKind: "wrong_answer",
-  difficult: false,
-  myAnswer: "",
-  correctAnswer: "",
-  explanationParts: [],
-  memo: "",
-  annotations: [],
-  tags: [],
-  createdAt: "2026-01-01",
-  updatedAt: "2026-01-01",
-  mastered: false,
-} as unknown as WrongAnswerEntry);
-
-const defaultProps = () => ({
-  folders,
-  entries: [entry("root-entry", "루트 문항"), entry("missing-entry", "미분류 문항", "deleted-folder"), entry("folder-entry", "수학 문항", "math")],
-  onOpenEntry: vi.fn(),
-  onCreateFolder: vi.fn(),
-  onRenameFolder: vi.fn(),
-  onMoveFolder: vi.fn(),
-  onMoveEntries: vi.fn(),
-  onDeleteFolder: vi.fn(),
-});
+function props(entries: WrongAnswerEntry[] = [entry("one", "미분", { resourceClassification: { subject: "수학", course: "수학 II", unit: "미분", resourceType: "nset" } })]) {
+  return { folders, entries, onOpenEntry: vi.fn(), onCreateFolder: vi.fn(), onRenameFolder: vi.fn(), onMoveFolder: vi.fn(), onMoveEntries: vi.fn(), onDeleteFolder: vi.fn() };
+}
 
 describe("LibraryExplorer", () => {
-  it("shows only entries without a valid folder in the unclassified view", () => {
-    render(<LibraryExplorer {...defaultProps()} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "미분류 항목" }));
-
-    expect(screen.getByRole("heading", { name: "미분류 항목" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /루트 문항/ })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /미분류 문항/ })).toBeInTheDocument();
-    expect(screen.getByText("미분류 문항")).toBeInTheDocument();
-    expect(screen.queryByText("수학 문항")).not.toBeInTheDocument();
+  it("navigates subject, course, unit and resource group as lists", () => {
+    render(<LibraryExplorer {...props()} />);
+    fireEvent.click(screen.getByRole("navigation", { name: "과목 목록" }).querySelector("button")!);
+    fireEvent.click(screen.getByRole("button", { name: /수학 II/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^미분\s*1개 자료$/ }));
+    expect(screen.getByRole("button", { name: /미분.*N제/ })).toBeInTheDocument();
   });
 
-  it("supports tree expansion, collapse, navigation and focus synchronization", () => {
-    render(<LibraryExplorer {...defaultProps()} />);
-    const tree = screen.getByRole("tree");
-    const math = screen.getByRole("treeitem", { name: /수학/ });
+  it("keeps metadata-free legacy entries visible as unclassified", () => {
+    render(<LibraryExplorer {...props([entry("legacy", "옛 자료", { resourceClassification: undefined })])} />);
+    expect(screen.getByText("옛 자료")).toBeInTheDocument();
+    expect(screen.getByText("미분류")).toBeInTheDocument();
+  });
 
-    expect(math).toHaveAttribute("tabindex", "0");
+  it("preserves folder navigation and actions", () => {
+    const handlers = props();
+    render(<LibraryExplorer {...handlers} />);
+    fireEvent.click(screen.getByRole("button", { name: "수학 폴더" }));
+    expect(screen.getByText("단원 탐색으로 돌아가기")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "새 폴더" }));
+    expect(handlers.onCreateFolder).toHaveBeenCalledWith("math");
+  });
 
-    math.focus();
-    fireEvent.keyDown(math, { key: "ArrowRight" });
-    expect(math).toHaveAttribute("aria-expanded", "true");
-    const algebra = screen.getAllByRole("treeitem").find((item) => item.getAttribute("aria-level") === "2");
-    if (!algebra) throw new Error("대수 폴더 treeitem이 없습니다.");
-
-    fireEvent.keyDown(math, { key: "ArrowDown" });
-    expect(document.activeElement).toBe(algebra);
-
-    fireEvent.keyDown(algebra, { key: "ArrowLeft" });
-    expect(document.activeElement).toBe(math);
-    expect(math).toHaveAttribute("aria-expanded", "true");
-
-    fireEvent.keyDown(math, { key: "ArrowLeft" });
-    expect(math).toHaveAttribute("aria-expanded", "false");
-    fireEvent.keyDown(math, { key: "End" });
-    expect(document.activeElement).toBe(screen.getByRole("treeitem", { name: /기하/ }));
-
-    fireEvent.keyDown(screen.getByRole("treeitem", { name: /기하/ }), { key: "Home" });
-    expect(document.activeElement).toBe(math);
-    expect(tree).toHaveAttribute("role", "tree");
-    expect(math).toHaveAttribute("aria-level", "1");
+  it("persists the selected unit and section through the navigation callback", () => {
+    const handlers = { ...props(), onNavigationChange: vi.fn() };
+    render(<LibraryExplorer {...handlers} navigation={{ subject: "수학", course: "수학 II" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /^미분\s*1개 자료$/ }));
+    expect(handlers.onNavigationChange).toHaveBeenLastCalledWith({
+      subject: "수학",
+      course: "수학 II",
+      unit: "미분",
+      section: "all",
+    });
   });
 });

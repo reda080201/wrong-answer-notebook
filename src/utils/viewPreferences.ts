@@ -36,6 +36,7 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   questionSolutionPresentation: "split",
   lectureBlockDefaultState: "first",
   lectureLayout: "document",
+  libraryNavigation: {},
   conceptLinksEnabled: true,
   automaticConceptLinksEnabled: false,
   conceptLinkPreviewMode: "popover",
@@ -121,6 +122,18 @@ function normalizeMcpShareScope(value: unknown): GptMcpPreferences["mcpShareScop
 
 export function normalizeViewPreferences(raw: unknown): ViewPreferences {
   const value = raw && typeof raw === "object" ? (raw as Partial<ViewPreferences>) : {};
+  const navigation = value.libraryNavigation && typeof value.libraryNavigation === "object"
+    ? value.libraryNavigation
+    : {};
+  const text = (candidate: unknown) => typeof candidate === "string" && candidate.trim() ? candidate.trim() : undefined;
+  const libraryNavigation = Object.fromEntries(
+    [
+      ["subject", text(navigation.subject)],
+      ["course", text(navigation.course)],
+      ["unit", text(navigation.unit)],
+      ["section", navigation.section === "lectures" || navigation.section === "problems" ? navigation.section : undefined],
+    ].filter(([, candidate]) => candidate !== undefined),
+  ) as ViewPreferences["libraryNavigation"];
   return {
     sheetLayout: normalizeSheetLayout(value.sheetLayout),
     fontSize: normalizeFontSize(value.fontSize),
@@ -133,6 +146,7 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     questionSolutionPresentation: normalizeQuestionSolutionPresentation(value.questionSolutionPresentation),
     lectureBlockDefaultState: normalizeLectureBlockDefaultState(value.lectureBlockDefaultState),
     lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",
+    libraryNavigation,
     conceptLinksEnabled: value.conceptLinksEnabled !== false,
     automaticConceptLinksEnabled: Boolean(value.automaticConceptLinksEnabled),
     conceptLinkPreviewMode: "popover",
