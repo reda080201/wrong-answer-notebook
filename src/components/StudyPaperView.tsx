@@ -27,6 +27,7 @@ interface StudyPaperViewProps {
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   displayMode?: "questions" | "exam";
+  currentQuestionIndex?: number;
   revealedAnswerNumbers?: Set<string>;
   onToggleAnswerReveal?: (questionNumber: string) => void;
   onOpenQuestionSolution?: (questionNumber: string) => void;
@@ -49,6 +50,7 @@ export default function StudyPaperView({
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
   displayMode = "questions",
+  currentQuestionIndex = 0,
   revealedAnswerNumbers,
   onToggleAnswerReveal,
   onOpenQuestionSolution,
@@ -56,6 +58,9 @@ export default function StudyPaperView({
   const structuredQuestions = entry.structuredQuestions?.length ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
+  const visibleStructuredQuestions = displayMode === "questions"
+    ? structuredQuestions.slice(Math.max(0, currentQuestionIndex), Math.max(0, currentQuestionIndex) + 1)
+    : structuredQuestions;
   const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
   const diagramItems = [
     ...(entry.answerKey ?? [])
@@ -98,7 +103,8 @@ export default function StudyPaperView({
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
-            {structuredQuestions.map((question, index) => {
+            {visibleStructuredQuestions.map((question) => {
+              const index = structuredQuestions.indexOf(question);
               const number = normalizeQuestionNumber(question.questionNumber);
               const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
               const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);

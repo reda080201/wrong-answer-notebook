@@ -1792,6 +1792,13 @@ export default function EntryDetail({
               />
             ) : (
               <>
+                {isSheet && problemSheetDisplayMode === "questions" && questionAnchors.length > 1 && (
+                  <nav className="problem-sheet-question-navigation" aria-label="문항 이동">
+                    <button type="button" className="btn-secondary" onClick={() => moveFocusedQuestion(-1)} disabled={focusedQuestionIndex === 0}>이전</button>
+                    <strong>{questionIdentifier(focusedQuestion) ?? focusedQuestionIndex + 1}번 <span>{focusedQuestionIndex + 1} / {questionAnchors.length}</span></strong>
+                    <button type="button" className="btn-secondary" onClick={() => moveFocusedQuestion(1)} disabled={focusedQuestionIndex >= questionAnchors.length - 1}>다음</button>
+                  </nav>
+                )}
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
@@ -1812,6 +1819,7 @@ export default function EntryDetail({
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
                     displayMode={isSheet ? problemSheetDisplayMode : "questions"}
+                    currentQuestionIndex={focusedQuestionIndex}
                     revealedAnswerNumbers={revealedAnswerNumbers}
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
