@@ -33,6 +33,13 @@ export type ProblemSheetDisplayMode = "questions" | "exam";
 export type QuestionSolutionPresentation = "dialog" | "split";
 export type LectureBlockDefaultState = "first" | "all" | "none";
 
+export interface LibraryNavigationPreference {
+  subject?: string;
+  course?: string;
+  unit?: string;
+  section?: "all" | "lectures" | "problems";
+}
+
 export interface ViewPreferences {
   sheetLayout: "single" | "columns";
   fontSize: "normal" | "large" | "xlarge";
@@ -45,6 +52,7 @@ export interface ViewPreferences {
   questionSolutionPresentation: QuestionSolutionPresentation;
   lectureBlockDefaultState: LectureBlockDefaultState;
   lectureLayout?: LectureLayout;
+  libraryNavigation?: LibraryNavigationPreference;
   lectureBodyWidth?: LectureBodyWidth;
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;

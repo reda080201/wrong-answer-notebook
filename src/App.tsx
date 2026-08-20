@@ -597,6 +597,8 @@ function AppContent() {
               folders={library.folders}
               entries={entries}
               preferences={settings.libraryPreferences}
+              navigation={settings.viewPreferences.libraryNavigation}
+              onNavigationChange={(libraryNavigation) => void patchViewPreferences({ libraryNavigation })}
               onOpenEntry={openEntryById}
               onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
               onRenameFolder={(folder) => void renameLibraryFolder(folder)}

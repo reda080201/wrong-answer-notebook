@@ -33,4 +33,16 @@ describe("LibraryExplorer", () => {
     fireEvent.click(screen.getByRole("button", { name: "새 폴더" }));
     expect(handlers.onCreateFolder).toHaveBeenCalledWith("math");
   });
+
+  it("persists the selected unit and section through the navigation callback", () => {
+    const handlers = { ...props(), onNavigationChange: vi.fn() };
+    render(<LibraryExplorer {...handlers} navigation={{ subject: "수학", course: "수학 II" }} />);
+    fireEvent.click(screen.getByRole("button", { name: /^미분\s*1개 자료$/ }));
+    expect(handlers.onNavigationChange).toHaveBeenLastCalledWith({
+      subject: "수학",
+      course: "수학 II",
+      unit: "미분",
+      section: "all",
+    });
+  });
 });

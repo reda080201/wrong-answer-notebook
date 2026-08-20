@@ -33,6 +33,7 @@
 .library-list-heading { margin: 22px 0 8px; }
 .library-list-heading p { margin: 2px 0; color: var(--text-muted); font-size: 12px; }
 .library-resource-row { display: grid; grid-template-columns: minmax(180px, 1.8fr) 120px 100px 70px 90px; align-items: center; width: 100%; min-height: 52px; padding: 8px 10px; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
+.library-resource-list--compact .library-resource-row { min-height: 44px; padding-block: 5px; }
 .library-resource-row:hover, .library-resource-row:focus-visible { background: var(--surface-hover); }
 .library-resource-name { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .library-resource-type, .library-resource-subject, .library-resource-count, .library-resource-row time { color: var(--text-muted); font-size: 12px; }

@@ -57,6 +57,7 @@ describe("normalizeViewPreferences", () => {
       lectureBlockDefaultState: "first",
       problemSheetDisplayMode: "questions",
       lectureLayout: "document",
+      libraryNavigation: {},
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
@@ -85,6 +86,13 @@ describe("normalizeViewPreferences", () => {
       lectureBlockDefaultState: "all",
     });
     expect(normalizeViewPreferences({ lectureBlockDefaultState: "none" }).lectureBlockDefaultState).toBe("none");
+  });
+
+  it("normalizes a saved library path without fabricating a path for legacy settings", () => {
+    expect(normalizeViewPreferences({}).libraryNavigation).toEqual({});
+    expect(normalizeViewPreferences({
+      libraryNavigation: { subject: " 수학 ", course: "수학 II", unit: "미분", section: "lectures" },
+    }).libraryNavigation).toEqual({ subject: "수학", course: "수학 II", unit: "미분", section: "lectures" });
   });
 
   it("falls back for invalid or legacy presentation preference values", () => {
@@ -142,6 +150,7 @@ describe("migrateViewPreferences", () => {
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
       lectureLayout: "document",
+      libraryNavigation: {},
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
@@ -161,6 +170,7 @@ describe("migrateViewPreferences", () => {
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
       lectureLayout: "document",
+      libraryNavigation: {},
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
@@ -191,6 +201,7 @@ describe("resolveViewPreferences", () => {
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
       lectureLayout: "document",
+      libraryNavigation: {},
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
@@ -370,6 +381,7 @@ describe("normalizeSettings integration", () => {
       questionSolutionPresentation: "split",
       lectureBlockDefaultState: "first",
       lectureLayout: "document",
+      libraryNavigation: {},
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
