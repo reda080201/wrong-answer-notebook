@@ -139,7 +139,7 @@ function LectureReaderContent({
     const target = consumeLectureWorkspaceFocus(entry.id);
     if (!target?.blockId) return;
     requestAnimationFrame(() => {
-      document.getElementById(`lecture-block-${target.blockId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+      globalThis.document.getElementById(`lecture-block-${target.blockId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
     });
   }, [entry.id]);
 
