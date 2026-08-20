@@ -97,7 +97,9 @@ export default function LibraryExplorer({ folders, entries, preferences, navigat
     return [...new Set(candidates.map((item) => item.classification.course).filter(Boolean))].sort((left, right) => {
       const leftItem = candidates.find((item) => item.classification.course === left);
       const rightItem = candidates.find((item) => item.classification.course === right);
-      return compareLibraryClassifications(leftItem?.classification ?? {}, rightItem?.classification ?? {}, left ?? "", right ?? "");
+      return leftItem && rightItem
+        ? compareLibraryClassifications(leftItem.classification, rightItem.classification, left ?? "", right ?? "")
+        : (left ?? "").localeCompare(right ?? "", "ko");
     }) as string[];
   }, [projections, subject]);
   const units = useMemo(() => {
@@ -105,7 +107,9 @@ export default function LibraryExplorer({ folders, entries, preferences, navigat
     return [...new Set(candidates.map((item) => item.classification.unit).filter(Boolean))].sort((left, right) => {
       const leftItem = candidates.find((item) => item.classification.unit === left);
       const rightItem = candidates.find((item) => item.classification.unit === right);
-      return compareLibraryClassifications(leftItem?.classification ?? {}, rightItem?.classification ?? {}, left ?? "", right ?? "");
+      return leftItem && rightItem
+        ? compareLibraryClassifications(leftItem.classification, rightItem.classification, left ?? "", right ?? "")
+        : (left ?? "").localeCompare(right ?? "", "ko");
     }) as string[];
   }, [course, projections, subject]);
   const visible = useMemo(() => projections.filter((item) => { const c = item.classification; if (subject && c.subject !== subject) return false; if (course && c.course !== course) return false; if (unit && c.unit !== unit) return false; if (resourceGroup === "lectures" && item.group !== "특강") return false; if (resourceGroup === "problems" && item.group === "특강") return false; if (resourceGroup === "past" && item.group !== "기출") return false; if (resourceGroup === "nset" && item.group !== "N제") return false; if (resourceGroup === "mocks" && item.group !== "모의고사") return false; if (resourceGroup === "unclassified" && item.group !== "미분류") return false; const query = search.trim().toLocaleLowerCase("ko"); return !query || `${item.entry.title} ${item.entry.subject} ${c.unit ?? ""} ${item.entry.tags.join(" ")}`.toLocaleLowerCase("ko").includes(query); }).sort((a, b) => sort === "name" ? a.entry.title.localeCompare(b.entry.title, "ko") : sort === "created" ? b.entry.createdAt.localeCompare(a.entry.createdAt) : sort === "type" ? resourceTypeLabel(a.classification.resourceType).localeCompare(resourceTypeLabel(b.classification.resourceType), "ko") : compareLibraryClassifications(a.classification, b.classification, a.entry.id, b.entry.id)), [course, projections, resourceGroup, search, sort, subject, unit]);
