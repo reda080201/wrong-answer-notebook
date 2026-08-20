@@ -238,6 +238,32 @@ describe("storage backend registry", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
+  it("does not mount the shared storage backend until its authenticated health check succeeds", async () => {
+    vi.stubEnv("VITE_STORAGE_MODE", "desktop-shared");
+    vi.stubEnv("VITE_DESKTOP_STORAGE_BRIDGE_URL", BRIDGE_URL);
+    vi.stubEnv("VITE_DESKTOP_STORAGE_BRIDGE_TOKEN", BRIDGE_TOKEN);
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ ok: true, backend: "desktop-proxy" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })));
+    const { initializeStorageBackend } = await import("./storageBackend");
+    await expect(initializeStorageBackend()).resolves.toEqual({ kind: "desktop-proxy", ready: true });
+    expect(fetch).toHaveBeenCalledWith(`${BRIDGE_URL}/v1/health`, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: `Bearer ${BRIDGE_TOKEN}` }),
+    }));
+  });
+
+  it("fails closed when shared mode has incomplete bridge settings", async () => {
+    vi.stubEnv("VITE_STORAGE_MODE", "desktop-shared");
+    vi.stubEnv("VITE_DESKTOP_STORAGE_BRIDGE_URL", BRIDGE_URL);
+    const { initializeStorageBackend } = await import("./storageBackend");
+    await expect(initializeStorageBackend()).resolves.toMatchObject({
+      kind: "desktop-proxy",
+      ready: false,
+      error: expect.stringContaining("데스크톱 데이터 연결 실패"),
+    });
+  });
+
   it("sends the bearer token on proxy store requests", async () => {
     vi.stubEnv("VITE_DESKTOP_STORAGE_BRIDGE_URL", BRIDGE_URL);
     vi.stubEnv("VITE_DESKTOP_STORAGE_BRIDGE_TOKEN", "secret-token");
