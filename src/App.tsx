@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -37,7 +36,6 @@ import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace"
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
 import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
 import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDrafts";
-import type { LibraryFolder } from "./types";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
@@ -46,7 +44,7 @@ import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestio
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
-import { getFolderDescendantIds } from "./utils/libraryFolders";
+import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -445,44 +443,13 @@ function AppContent() {
       }
     })();
   };
-  const createLibraryFolder = useCallback(async (parentId?: string) => {
-    const name = await prompt({ title: "새 폴더", message: "폴더 이름을 입력하세요." });
-    if (!name?.trim()) return;
-    const now = new Date().toISOString();
-    await library.mutate((current) => [
-      ...current,
-      { id: uuidv4(), name: name.trim(), parentId, sortOrder: current.filter((folder) => folder.parentId === parentId).length, createdAt: now, updatedAt: now },
-    ]);
-  }, [library, prompt]);
-  const renameLibraryFolder = useCallback(async (folder: LibraryFolder) => {
-    const name = await prompt({ title: "폴더 이름 변경", message: "새 폴더 이름을 입력하세요.", defaultValue: folder.name });
-    if (!name?.trim() || name.trim() === folder.name) return;
-    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, name: name.trim(), updatedAt: new Date().toISOString() } : item));
-  }, [library, prompt]);
-  const moveLibraryFolder = useCallback(async (folder: LibraryFolder, parentId?: string) => {
-    if (folder.id === parentId) throw new Error("폴더를 자기 자신으로 이동할 수 없습니다.");
-    const descendants = getFolderDescendantIds(library.folders, folder.id);
-    if (parentId && descendants.has(parentId)) throw new Error("폴더를 자신의 하위 폴더로 이동할 수 없습니다.");
-    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, parentId, updatedAt: new Date().toISOString() } : item));
-  }, [library]);
-  const moveLibraryEntries = useCallback(async (entryIds: string[], folderId?: string) => {
-    const validFolderId = folderId && library.folders.some((folder) => folder.id === folderId) ? folderId : undefined;
-    await Promise.all(entryIds.map((entryId) => patchEntry(entryId, { folderId: validFolderId })));
-  }, [library.folders, patchEntry]);
-  const deleteLibraryFolder = useCallback(async (folder: LibraryFolder) => {
-    const childFolders = library.folders.filter((item) => item.parentId === folder.id);
-    const childEntries = entries.filter((entry) => entry.folderId === folder.id);
-    const accepted = await confirm({
-      title: "폴더 삭제",
-      message: childFolders.length || childEntries.length
-        ? `이 폴더의 하위 폴더 ${childFolders.length}개와 항목 ${childEntries.length}개를 루트로 이동합니다. 항목은 삭제되지 않습니다.`
-        : "빈 폴더를 삭제합니다.",
-      confirmLabel: "삭제",
-    });
-    if (!accepted) return;
-    await Promise.all(childEntries.map((entry) => patchEntry(entry.id, { folderId: undefined })));
-    await library.mutate((current) => current.filter((item) => item.id !== folder.id).map((item) => item.parentId === folder.id ? { ...item, parentId: undefined, updatedAt: new Date().toISOString() } : item));
-  }, [confirm, entries, library, patchEntry]);
+  const libraryActions = useLibraryFolderActions({
+    entries,
+    library,
+    patchEntry,
+    confirm,
+    prompt,
+  });
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -596,12 +563,12 @@ function AppContent() {
               navigation={settings.viewPreferences.libraryNavigation}
               onNavigationChange={(libraryNavigation) => void patchViewPreferences({ libraryNavigation })}
               onOpenEntry={openEntryById}
-              onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
-              onRenameFolder={(folder) => void renameLibraryFolder(folder)}
-              onMoveFolder={(folder, parentId) => void moveLibraryFolder(folder, parentId)}
-              onMoveEntries={(entryIds, folderId) => void moveLibraryEntries(entryIds, folderId)}
+              onCreateFolder={(parentId) => void libraryActions.createFolder(parentId)}
+              onRenameFolder={(folder) => void libraryActions.renameFolder(folder)}
+              onMoveFolder={(folder, parentId) => void libraryActions.moveFolder(folder, parentId)}
+              onMoveEntries={(entryIds, folderId) => void libraryActions.moveEntries(entryIds, folderId)}
               onUpdateEntries={(entryIds, patch) => Promise.all(entryIds.map((entryId) => patchEntry(entryId, patch))).then(() => undefined)}
-              onDeleteFolder={(folder) => void deleteLibraryFolder(folder)}
+              onDeleteFolder={(folder) => void libraryActions.deleteFolder(folder)}
             />
           ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
