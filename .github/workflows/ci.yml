@@ -76,6 +76,42 @@ jobs:
             playwright-report
             test-results
           if-no-files-found: ignore
+            retention-days: 7
+
+  e2e-shared-storage:
+    name: E2E shared storage acceptance
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Shared storage E2E
+        run: npm run test:e2e:shared
+
+      - name: Upload shared storage evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-shared-storage-evidence
+          path: |
+            playwright-report
+            test-results
+          if-no-files-found: ignore
           retention-days: 7
 
   rust:
