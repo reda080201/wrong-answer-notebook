@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, ReactNode, useMemo, useState } from "react";
 import type {
   AppSettings,
   AiProviderStatus,
@@ -163,6 +163,9 @@ export interface SettingsContextValue {
   };
 }
 
+const noopAsync = async () => undefined;
+const noop = () => undefined;
+
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export interface SettingsProviderProps {
@@ -189,15 +192,15 @@ export function SettingsProvider({
   children,
   settingsMessage: initialSettingsMessage = null,
   integrityReport = null,
-  handleBackup = async () => undefined,
-  handleRestore = async () => undefined,
-  handleCleanupOrphans = async () => undefined,
-  handleRunIntegrity = async () => undefined,
+  handleBackup = noopAsync,
+  handleRestore = noopAsync,
+  handleCleanupOrphans = noopAsync,
+  handleRunIntegrity = noopAsync,
   updateState,
-  onCheckForUpdate = async () => undefined,
-  onInstallUpdate = async () => undefined,
-  onRestartAfterUpdate = async () => undefined,
-  onOpenReleasePage = () => undefined,
+  onCheckForUpdate = noopAsync,
+  onInstallUpdate = noopAsync,
+  onRestartAfterUpdate = noopAsync,
+  onOpenReleasePage = noop,
 }: SettingsProviderProps) {
   const settingsHook = useSettings();
   const { theme, setTheme } = useTheme();
@@ -209,10 +212,13 @@ export function SettingsProvider({
     setSettingsMessage,
   });
   
+  const persistMcpBridge = useCallback(async (next: McpBridgeSettings) => {
+    await settingsHook.patchSettings({ mcpBridge: next });
+  }, [settingsHook.patchSettings]);
+
   const mcpBridge = useMcpBridgeSettings({
     mcpBridge: settingsHook.settings.mcpBridge,
-    persistMcpBridge: async (next) =>
-      settingsHook.patchSettings({ mcpBridge: next }),
+    persistMcpBridge,
     setSettingsMessage,
   });
 
