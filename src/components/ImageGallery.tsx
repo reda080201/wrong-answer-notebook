@@ -5,14 +5,17 @@ import Dialog from "../shared/ui/Dialog";
 interface ImageGalleryProps {
   filenames: string[];
   variant?: "grid" | "inline" | "fill";
+  alt?: string;
 }
 
 function ImageThumb({
   filename,
   variant,
+  alt,
 }: {
   filename: string;
   variant: "grid" | "inline" | "fill";
+  alt: string;
 }) {
   const [src, setSrc] = useState("");
   const [error, setError] = useState(false);
@@ -59,15 +62,14 @@ function ImageThumb({
   if (variant === "fill") {
     return (
       <>
-        <div
+        <button
+          type="button"
           className="image-fill-wrap"
           onClick={() => setLightbox(true)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === "Enter" && setLightbox(true)}
+          aria-label={`${alt} 확대 보기`}
         >
-          <img src={src} alt="첨부 이미지" className="image-fill-img" loading="lazy" />
-        </div>
+          <img src={src} alt={alt} className="image-fill-img" loading="lazy" />
+        </button>
         <Dialog open={lightbox} onClose={() => setLightbox(false)} className="modal-overlay modal-overlay--fullscreen" backdropClassName="dialog-host" ariaLabel="이미지 확대 보기">
             <button
               type="button"
@@ -79,7 +81,7 @@ function ImageThumb({
             </button>
             <img
               src={src}
-              alt="확대 이미지"
+              alt={`${alt} 확대`}
               className="modal-img-full"
               onClick={(e) => e.stopPropagation()}
             />
@@ -90,15 +92,14 @@ function ImageThumb({
 
   return (
     <>
-      <div
+      <button
+        type="button"
         className={`image-thumb ${variant === "inline" ? "image-thumb--inline" : ""}`}
         onClick={() => setLightbox(true)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => e.key === "Enter" && setLightbox(true)}
+        aria-label={`${alt} 확대 보기`}
       >
-        <img src={src} alt="첨부 이미지" loading="lazy" />
-      </div>
+        <img src={src} alt={alt} loading="lazy" />
+      </button>
       <Dialog open={lightbox} onClose={() => setLightbox(false)} className="modal-overlay" backdropClassName="dialog-host" ariaLabel="이미지 확대 보기">
           <button
             type="button"
@@ -108,7 +109,7 @@ function ImageThumb({
           >
             ✕
           </button>
-          <img src={src} alt="확대 이미지" onClick={(e) => e.stopPropagation()} />
+          <img src={src} alt={`${alt} 확대`} onClick={(e) => e.stopPropagation()} />
       </Dialog>
     </>
   );
@@ -117,6 +118,7 @@ function ImageThumb({
 export default function ImageGallery({
   filenames,
   variant = "grid",
+  alt = "첨부 이미지",
 }: ImageGalleryProps) {
   if (!filenames.length) return null;
 
@@ -125,7 +127,7 @@ export default function ImageGallery({
   return (
     <div className={`image-gallery image-gallery--${variant}`}>
       {filenames.map((f) => (
-        <ImageThumb key={f} filename={f} variant={thumbVariant} />
+        <ImageThumb key={f} filename={f} variant={thumbVariant} alt={alt} />
       ))}
     </div>
   );

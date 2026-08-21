@@ -153,15 +153,6 @@ export default function EntryListPane({
       <div
         key={entry.id}
         className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
-        onClick={() => selectEntry(entry.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            selectEntry(entry.id);
-          }
-        }}
       >
         <div className="entry-card-header">
           {entry.entryKind === "problem_sheet" && (
@@ -181,15 +172,22 @@ export default function EntryListPane({
           <span className="entry-mini-badge">{entryKindName(entry.entryKind)}</span>
           {entry.mastered ? <span className="entry-mini-badge">복습 완료</span> : entry.difficult ? <span className="entry-mini-badge">어려움</span> : null}
         </div>
-        <p className="entry-card-question">{getEntryTitle(entry)}</p>
-        <div className="entry-card-meta">
-          <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
-          {resourceStatus && (
-            <span className="entry-resource-status">
-              문항 {resourceStatus.questionCount}개
-            </span>
-          )}
-        </div>
+        <button
+          type="button"
+          className="entry-card-select"
+          aria-label={`${getEntryTitle(entry)} 열기`}
+          onClick={() => selectEntry(entry.id)}
+        >
+          <p className="entry-card-question">{getEntryTitle(entry)}</p>
+          <div className="entry-card-meta">
+            <span>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</span>
+            {resourceStatus && (
+              <span className="entry-resource-status">
+                문항 {resourceStatus.questionCount}개
+              </span>
+            )}
+          </div>
+        </button>
       </div>
     );
   };

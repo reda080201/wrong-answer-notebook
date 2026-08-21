@@ -82,13 +82,32 @@ describe("EntryListPane", () => {
       />,
     );
 
-    const card = screen.getByRole("button", { name: /오답/ });
+    const card = screen.getByRole("button", { name: "오답 열기" });
     fireEvent.click(card);
     fireEvent.keyDown(card, { key: "Enter" });
     fireEvent.keyDown(card, { key: " " });
 
     expect(setSelectedId).toHaveBeenCalledWith("wrong");
     expect(setSelectedId).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps the row non-interactive so its menu is not nested in a button", () => {
+    render(
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={[entry("sheet", "problem_sheet", "시험지")]}
+        filtered={[entry("sheet", "problem_sheet", "시험지")]}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+      />,
+    );
+
+    const selectButton = screen.getByRole("button", { name: "시험지 열기" });
+    expect(selectButton.closest("button")).toBe(selectButton);
+    expect(selectButton.parentElement?.querySelector("button[aria-label*='추가 자료']")).toBeTruthy();
   });
 
   it("shows only important sheet questions and opens the selected question", () => {
