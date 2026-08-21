@@ -1,9 +1,10 @@
 import type { SheetAnswerItem, WrongAnswerEntry } from "../../../types";
 import { LinkifiedText } from "../../../utils/wikiLinks";
 import { buildConceptLinkContext } from "../../learning/utils/conceptIndex";
+import { useEntryDetailContext } from "./EntryDetailContext";
 
 interface FocusedNotesPanelProps {
-  entry: WrongAnswerEntry;
+  entry?: WrongAnswerEntry;
   focusedAnswer?: SheetAnswerItem;
   hasNotes: boolean;
   existingTargets: Set<string>;
@@ -17,21 +18,23 @@ export default function FocusedNotesPanel({
   existingTargets,
   onWikiLinkClick,
 }: FocusedNotesPanelProps) {
+  const context = useEntryDetailContext();
+  const resolvedEntry = entry ?? context.entry;
   if (!hasNotes) {
     return <div className="focused-empty-panel">현재 문제에 표시할 필기가 없습니다.</div>;
   }
 
   return (
     <div className="focused-notes-panel">
-      {entry.memo.trim() && (
+      {resolvedEntry.memo.trim() && (
         <section className="sheet-study-note-card sheet-study-note-card--global">
           <strong>전체 메모</strong>
           <div className="memo-content">
             <LinkifiedText
-              text={entry.memo}
+              text={resolvedEntry.memo}
               onLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
-              conceptContext={buildConceptLinkContext(entry)}
+              conceptContext={buildConceptLinkContext(resolvedEntry)}
             />
           </div>
         </section>

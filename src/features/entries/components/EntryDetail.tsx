@@ -62,6 +62,7 @@ import {
 import FocusedAnswerPanel from "./FocusedAnswerPanel";
 import FocusedNotesPanel from "./FocusedNotesPanel";
 import FocusedStudyHints from "./FocusedStudyHints";
+import { EntryDetailProvider } from "./EntryDetailContext";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1243,6 +1244,11 @@ export default function EntryDetail({
   );
 
   return (
+    <EntryDetailProvider value={{
+      entry,
+      actions: { onEdit, onDelete, onToggleMastered, onToggleDifficult: handleToggleDifficultWithToast },
+      workspace: { detailViewMode, focusMode, selectionMode },
+    }}>
     <div
       className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
     >
@@ -2340,5 +2346,6 @@ export default function EntryDetail({
         </aside>
       )}
     </div>
+    </EntryDetailProvider>
   );
 }

@@ -2,9 +2,10 @@ import type { SheetAnswerItem, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import { LinkifiedText } from "../../../utils/wikiLinks";
 import { buildConceptLinkContext } from "../../learning/utils/conceptIndex";
+import { useEntryDetailContext } from "./EntryDetailContext";
 
 interface FocusedAnswerPanelProps {
-  entry: WrongAnswerEntry;
+  entry?: WrongAnswerEntry;
   answer?: SheetAnswerItem;
   hideAnswers: boolean;
   existingTargets: Set<string>;
@@ -18,6 +19,8 @@ export default function FocusedAnswerPanel({
   existingTargets,
   onWikiLinkClick,
 }: FocusedAnswerPanelProps) {
+  const context = useEntryDetailContext();
+  const resolvedEntry = entry ?? context.entry;
   if (!answer) {
     return <div className="focused-empty-panel">현재 문제에 연결된 답안이 없습니다.</div>;
   }
@@ -40,7 +43,7 @@ export default function FocusedAnswerPanel({
               text={answer.explanation}
               onLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
-              conceptContext={buildConceptLinkContext(entry, answer.questionNumber)}
+              conceptContext={buildConceptLinkContext(resolvedEntry, answer.questionNumber)}
             />
           )}
         </div>
