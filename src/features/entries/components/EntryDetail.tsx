@@ -59,6 +59,7 @@ import {
   EntryImportAuditSection,
   EntryMistakeAnalysisSection,
 } from "../../../components/EntryDetailSections";
+import FocusedAnswerPanel from "./FocusedAnswerPanel";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1239,51 +1240,6 @@ export default function EntryDetail({
     </div>
   );
 
-  const renderFocusedAnswer = () => {
-    if (!focusedAnswer) {
-      return <div className="focused-empty-panel">현재 문제에 연결된 답안이 없습니다.</div>;
-    }
-
-    return (
-      <article className="focused-answer-card">
-        <header>
-          <span className="focused-section-label">답지</span>
-          <strong className={hideAnswers ? "answer-hidden" : ""}>
-            {hideAnswers ? "•••" : <MathText text={focusedAnswer.answer || "정답 없음"} />}
-          </strong>
-          {focusedAnswer.needsReview && <span className="answer-review-badge">검토 필요</span>}
-        </header>
-        {focusedAnswer.sourceNote?.trim() && (
-          <p className="sheet-answer-source">{focusedAnswer.sourceNote}</p>
-        )}
-        {!hideAnswers && focusedAnswer.notes?.trim() && (
-          <p className="sheet-answer-source">문제별 메모: {focusedAnswer.notes}</p>
-        )}
-        {focusedAnswer.explanation.trim() && (
-          <div className={`focused-answer-explanation ${hideAnswers ? "answer-hidden" : ""}`}>
-            {hideAnswers ? (
-              "답 가리기 모드입니다."
-            ) : (
-              <LinkifiedText
-                text={focusedAnswer.explanation}
-                onLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                conceptContext={buildConceptLinkContext(entry, focusedAnswer.questionNumber)}
-              />
-            )}
-          </div>
-        )}
-        {!hideAnswers && focusedAnswer.importantPoints.length > 0 && (
-          <ul className="sheet-answer-points">
-            {focusedAnswer.importantPoints.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-        )}
-      </article>
-    );
-  };
-
   const renderFocusStudyHints = () => {
     if (!isFocusExpanded || !isFocusedQuestionShort) return null;
     return (
@@ -1979,7 +1935,13 @@ export default function EntryDetail({
               <h3 className="section-heading">답지</h3>
               {renderAnswerToolbar()}
             </div>
-            {renderFocusedAnswer()}
+            <FocusedAnswerPanel
+              entry={entry}
+              answer={focusedAnswer}
+              hideAnswers={hideAnswers}
+              existingTargets={existingTargets}
+              onWikiLinkClick={onWikiLinkClick}
+            />
           </section>
         )}
 
