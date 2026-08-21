@@ -32,13 +32,8 @@ import { classifyImportValidationIssues, validateImportedStudyData } from "../..
 import {
   normalizeImportAudit,
   parseExpectedQuestionNumbers,
-  normalizeRejectedNotes,
-  removeRejectedNotes,
-  scrubRejectedNotesFromAnswers,
-  scrubRejectedNotesFromStructuredQuestions,
 } from "../../../utils/importAudit";
 import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../../../utils/gptSolution";
-import { cleanQuestionText } from "../../../utils/textCleanup";
 import { parseQuestionText } from "../../../utils/textLayout";
 import ImageField from "../../../components/ImageField";
 import ConceptImportPreviewModal from "../../../components/ConceptImportPreviewModal";
@@ -65,6 +60,7 @@ import {
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
+import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -90,32 +86,6 @@ interface ImportFromGptModalProps {
 
 function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
   return cloneEntryDraft(mergeEntryDraft(data));
-}
-
-function canonicalizeImportDraftForSave(data: Partial<EntryFormData>): Partial<EntryFormData> {
-  const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
-  const structuredQuestions = scrubRejectedNotesFromStructuredQuestions(
-    data.structuredQuestions,
-    rejectedNotes,
-  );
-  const question = structuredQuestions?.length
-    ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
-    : cleanQuestionText(removeRejectedNotes(data.question ?? "", rejectedNotes));
-  const answerKey = scrubRejectedNotesFromAnswers(data.answerKey ?? [], rejectedNotes);
-  return {
-    ...data,
-    question,
-    structuredQuestions,
-    questionContentSegments: structuredQuestions?.length
-      ? Object.fromEntries(structuredQuestions.map((item) => [item.questionNumber, item.contentSegments]))
-      : data.questionContentSegments,
-    memo: removeRejectedNotes(data.memo ?? "", rejectedNotes),
-    answerKey,
-    rejectedNotes,
-    importAudit: data.importAudit
-      ? normalizeImportAudit(data.importAudit, { question, answerKey, figures: data.figures, structuredQuestions })
-      : undefined,
-  };
 }
 
 function answerDifficultyLabel(value: SheetAnswerItem["difficulty"]) {
