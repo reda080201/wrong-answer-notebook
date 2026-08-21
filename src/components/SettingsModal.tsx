@@ -23,6 +23,7 @@ import type { AppUpdateState } from "../features/updater/model/appUpdate";
 import Dialog from "../shared/ui/Dialog";
 import { useSettingsContext } from "../contexts/SettingsContext";
 import { X } from "lucide-react";
+import SettingsTabList from "./SettingsTabList";
 
 export type SettingsTab =
   | "theme"
@@ -192,7 +193,7 @@ export default function SettingsModal({
 
         <div className="settings-modal-body">
           <nav className="settings-modal-tabs" aria-label="설정 탭">
-            {SETTINGS_TABS.map(([id, label]) => <button key={id} type="button" className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id)}>{label}</button>)}
+            <SettingsTabList activeTab={activeTab} tabs={SETTINGS_TABS} onSelect={setActiveTab} />
           </nav>
 
           <section className="settings-modal-panel">
