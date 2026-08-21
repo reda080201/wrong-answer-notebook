@@ -33,6 +33,9 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   showLearningVisuals: true,
   compactToolbar: false,
   problemSheetDisplayMode: "questions",
+  studyQuickActions: ["copy", "share"],
+  studyKeyboardShortcutsEnabled: true,
+  questionNavigatorCollapsed: false,
   questionSolutionPresentation: "split",
   lectureBlockDefaultState: "first",
   lectureLayout: "document",
@@ -146,7 +149,15 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     showOriginalPages: value.showOriginalPages !== false,
     showLearningVisuals: value.showLearningVisuals !== false,
     compactToolbar: Boolean(value.compactToolbar),
-    problemSheetDisplayMode: value.problemSheetDisplayMode === "exam" ? "exam" : "questions",
+    problemSheetDisplayMode:
+      value.problemSheetDisplayMode === "continuous" || value.problemSheetDisplayMode === "one_question" || value.problemSheetDisplayMode === "exam"
+        ? value.problemSheetDisplayMode
+        : "questions",
+    studyQuickActions: Array.isArray(value.studyQuickActions)
+      ? value.studyQuickActions.filter((item): item is NonNullable<ViewPreferences["studyQuickActions"]>[number] => ["copy", "share", "important", "review", "text_review", "info"].includes(item as string)).slice(0, 2)
+      : DEFAULT_VIEW_PREFERENCES.studyQuickActions,
+    studyKeyboardShortcutsEnabled: value.studyKeyboardShortcutsEnabled !== false,
+    questionNavigatorCollapsed: Boolean(value.questionNavigatorCollapsed),
     questionSolutionPresentation: normalizeQuestionSolutionPresentation(value.questionSolutionPresentation),
     lectureBlockDefaultState: normalizeLectureBlockDefaultState(value.lectureBlockDefaultState),
     lectureLayout: value.lectureLayout === "cards" ? "cards" : "document",

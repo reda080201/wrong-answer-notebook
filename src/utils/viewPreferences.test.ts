@@ -61,6 +61,9 @@ describe("normalizeViewPreferences", () => {
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
+      studyQuickActions: ["copy", "share"],
+      studyKeyboardShortcutsEnabled: true,
+      questionNavigatorCollapsed: false,
     });
   });
 
@@ -154,6 +157,9 @@ describe("migrateViewPreferences", () => {
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
+      studyQuickActions: ["copy", "share"],
+      studyKeyboardShortcutsEnabled: true,
+      questionNavigatorCollapsed: false,
     });
   });
 
@@ -174,6 +180,9 @@ describe("migrateViewPreferences", () => {
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
+      studyQuickActions: ["copy", "share"],
+      studyKeyboardShortcutsEnabled: true,
+      questionNavigatorCollapsed: false,
     });
   });
 });
@@ -205,6 +214,9 @@ describe("resolveViewPreferences", () => {
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
+      studyQuickActions: ["copy", "share"],
+      studyKeyboardShortcutsEnabled: true,
+      questionNavigatorCollapsed: false,
     });
   });
 
@@ -385,6 +397,9 @@ describe("normalizeSettings integration", () => {
       conceptLinksEnabled: true,
       automaticConceptLinksEnabled: false,
       conceptLinkPreviewMode: "popover",
+      studyQuickActions: ["copy", "share"],
+      studyKeyboardShortcutsEnabled: true,
+      questionNavigatorCollapsed: false,
     });
     expect(normalized.answerViewPreferences).toEqual({
       viewMode: "table",

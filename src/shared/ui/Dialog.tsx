@@ -40,7 +40,7 @@ export default function Dialog({
   title,
   titleId,
   backdropClassName = "modal-backdrop",
-  className = "modal-card",
+  className = "",
   closeOnBackdrop = true,
   closeDisabled = false,
   busy = false,
@@ -110,7 +110,7 @@ export default function Dialog({
 
   if (!open) return null;
 
-  const resolvedClassName = [className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
+  const resolvedClassName = ["modal-card", className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
   const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
 
   return (

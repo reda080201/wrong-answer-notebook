@@ -43,6 +43,11 @@
   --z-popover: 40;
   --z-dialog: 80;
   --z-toast: 100;
+  --surface-canvas-warm: #f7f5f0;
+  --state-success: #2f7d54;
+  --state-danger: #b3261e;
+  --state-unanswered: #6f747b;
+  --focus-ring: 0 0 0 3px rgb(53 106 195 / 24%);
 }
 
 [data-theme="dark"] {
@@ -60,4 +65,6 @@
   --accent-on-primary: #10213e;
   --state-review: #f3bd63;
   --state-unanswered: #aeb4bc;
+  --state-success: #8bd5a9;
+  --state-danger: #ff9b91;
 }

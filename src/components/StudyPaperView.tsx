@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
+import type { Annotation, AnnotationTool, ProblemSheetDisplayMode, WrongAnswerEntry } from "../types";
 import { parseQuestionText } from "../utils/textLayout";
 import { getEntryQuestions } from "../utils/entryQuestions";
 import { normalizeQuestionNumber, normalizeQuestionMeta } from "../utils/questionMeta";
@@ -26,7 +26,8 @@ interface StudyPaperViewProps {
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
-  displayMode?: "questions" | "exam";
+  displayMode?: ProblemSheetDisplayMode;
+  currentQuestionIndex?: number;
   revealedAnswerNumbers?: Set<string>;
   onToggleAnswerReveal?: (questionNumber: string) => void;
   onOpenQuestionSolution?: (questionNumber: string) => void;
@@ -49,6 +50,7 @@ export default function StudyPaperView({
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
   displayMode = "questions",
+  currentQuestionIndex = 0,
   revealedAnswerNumbers,
   onToggleAnswerReveal,
   onOpenQuestionSolution,
@@ -56,6 +58,10 @@ export default function StudyPaperView({
   const structuredQuestions = entry.structuredQuestions?.length ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
+  const canonicalDisplayMode = displayMode === "questions" ? "continuous" : displayMode;
+  const visibleStructuredQuestions = canonicalDisplayMode === "one_question"
+    ? structuredQuestions.slice(currentQuestionIndex, currentQuestionIndex + 1)
+    : structuredQuestions;
   const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
   const diagramItems = [
     ...(entry.answerKey ?? [])
@@ -77,7 +83,7 @@ export default function StudyPaperView({
   ];
 
   return (
-    <div className={`study-paper study-paper--${displayMode}`}>
+    <div className={`study-paper study-paper--${canonicalDisplayMode}`}>
       <div className="study-paper-sheet">
         <header className="study-paper-cover">
           <div>
@@ -98,14 +104,15 @@ export default function StudyPaperView({
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
-            {structuredQuestions.map((question, index) => {
+            {visibleStructuredQuestions.map((question) => {
+              const index = structuredQuestions.indexOf(question);
               const number = normalizeQuestionNumber(question.questionNumber);
               const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
               const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
               const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
               const revealed = revealedAnswerNumbers?.has(number);
               return (
-                <article key={number || question.position} id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
+                <article key={number || question.position} id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${canonicalDisplayMode}`}>
                   <header>
                     <div>
                       <span>문제 {question.questionNumber}</span>
@@ -149,14 +156,14 @@ export default function StudyPaperView({
           selectionMode={selectionMode}
           selectedQuestionNumbers={selectedQuestionNumbers}
           onToggleQuestionSelected={onToggleQuestionSelected}
-          presentation={displayMode}
+          presentation={canonicalDisplayMode === "exam" ? "exam" : "questions"}
           revealedAnswerNumbers={revealedAnswerNumbers}
           onToggleAnswerReveal={onToggleAnswerReveal}
           onOpenQuestionSolution={onOpenQuestionSolution}
           zoomableImages
         />}
 
-        {displayMode === "questions" && diagramItems.length > 0 && (
+        {canonicalDisplayMode === "continuous" && diagramItems.length > 0 && (
           <details className="study-paper-diagrams" aria-label="학습 시각화">
             <summary className="study-paper-section-title">
               <span />
@@ -174,7 +181,7 @@ export default function StudyPaperView({
           </details>
         )}
 
-        {displayMode === "questions" && figureImages.length > 0 && (
+        {canonicalDisplayMode === "continuous" && figureImages.length > 0 && (
           <section className="study-paper-figures" aria-label="문제 삽화 확대 보기">
             <div className="study-paper-section-title">
               <span />
