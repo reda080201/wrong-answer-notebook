@@ -63,7 +63,7 @@ import FocusedAnswerPanel from "./FocusedAnswerPanel";
 import FocusedNotesPanel from "./FocusedNotesPanel";
 import FocusedStudyHints from "./FocusedStudyHints";
 import { EntryDetailProvider } from "./EntryDetailContext";
-import { ProblemSheetHeader, ReviewExportDialogs } from "./EntryDetailAreas";
+import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs } from "./EntryDetailAreas";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1592,6 +1592,7 @@ export default function EntryDetail({
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
+        <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
           {!isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
             <StudyFlowStrip
@@ -1884,6 +1885,7 @@ export default function EntryDetail({
             />
           )}
         </section>
+        </QuestionWorkspace>
 
         {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
 
