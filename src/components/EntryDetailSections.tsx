@@ -3,6 +3,7 @@ import type { ConceptAnalyticsItem } from "../utils/conceptAnalytics";
 import { PRACTICE_MODE_LABELS, mistakeCauseLabel, summarizeMistakeAnalysis } from "../utils/mistakeAnalysis";
 import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
+import FeatureErrorBoundary from "./FeatureErrorBoundary";
 import MathText from "./MathText";
 
 interface EntryImportAuditSectionProps {
@@ -164,13 +165,15 @@ export function ConceptConnectionsSection({
 }: ConceptConnectionsSectionProps) {
   return (
     <CollapsibleSection title="연결된 개념과 항목" badge={`${relatedEntries.length}개`} defaultOpen={false}>
-      <ConceptGraph
-        entries={allEntries}
-        focusEntry={entry}
-        onOpenEntry={(entryId) => {
-          onOpenEntry?.(entryId);
-        }}
-      />
+      <FeatureErrorBoundary featureName="개념 그래프">
+        <ConceptGraph
+          entries={allEntries}
+          focusEntry={entry}
+          onOpenEntry={(entryId) => {
+            onOpenEntry?.(entryId);
+          }}
+        />
+      </FeatureErrorBoundary>
       {analytics && (
         <div className="concept-analytics-strip">
           <div><strong>{analytics.relatedEntries.length}</strong><span>연결 오답</span></div>
