@@ -203,6 +203,7 @@ export function SettingsProvider({
   onOpenReleasePage = noop,
 }: SettingsProviderProps) {
   const settingsHook = useSettings();
+  const { patchSettings } = settingsHook;
   const { theme, setTheme } = useTheme();
   const [settingsMessage, setSettingsMessage] = useState<string | null>(initialSettingsMessage);
 
@@ -213,8 +214,8 @@ export function SettingsProvider({
   });
   
   const persistMcpBridge = useCallback(async (next: McpBridgeSettings) => {
-    await settingsHook.patchSettings({ mcpBridge: next });
-  }, [settingsHook.patchSettings]);
+    await patchSettings({ mcpBridge: next });
+  }, [patchSettings]);
 
   const mcpBridge = useMcpBridgeSettings({
     mcpBridge: settingsHook.settings.mcpBridge,

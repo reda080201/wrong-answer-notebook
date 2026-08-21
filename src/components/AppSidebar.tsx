@@ -90,7 +90,7 @@ export default function AppSidebar({
   collapsed = false,
   onCollapsedChange,
 }: AppSidebarProps) {
-  const { sectionEntries, sidebarStats } = useMemo(() => {
+  const sidebarStats = useMemo(() => {
     const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
     const sidebarStats =
     activeSection === "problem_sheet"
@@ -123,7 +123,7 @@ export default function AppSidebar({
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
           ];
-    return { sectionEntries, sidebarStats };
+    return sidebarStats;
   }, [activeSection, entries, stats]);
   return (
     <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
