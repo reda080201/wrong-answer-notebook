@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { isTauri } from "@tauri-apps/api/core";
 import {
   MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
   type McpBridgeRuntimeStatus,
@@ -7,7 +6,6 @@ import {
 } from "../hooks/useMcpBridgeSettings";
 import { normalizeRemoteMcpBaseUrl } from "../features/chatgpt/services/chatGptConnection";
 import type {
-  AiProviderType,
   EntryKind,
   EntryTemplate,
   ExamPreferences,
@@ -26,6 +24,7 @@ import SettingsTabList from "./SettingsTabList";
 import SettingsThemePanel from "./settings/SettingsThemePanel";
 import SettingsViewPanel from "./settings/SettingsViewPanel";
 import { SettingsAdvancedPanel, SettingsDataPanel, SettingsExamPanel, SettingsImagesPanel, SettingsLibraryPanel, SettingsUpdatesPanel } from "./settings/SettingsOperationalPanels";
+import SettingsAiPanel from "./settings/SettingsAiPanel";
 
 export type SettingsTab =
   | "theme"
@@ -204,82 +203,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "ai" && (
-              <div className="ai-provider-settings">
-                <div className="form-field">
-                  <label htmlFor="ai-provider-type">AI 제공자</label>
-                  <select
-                    id="ai-provider-type"
-                    value={settings.aiProvider.type}
-                    disabled={!isTauri()}
-                    onChange={(event) =>
-                      updateAiProviderConfig({
-                        type: event.target.value as AiProviderType,
-                      })
-                    }
-                  >
-                    <option value="manual">수동 입력</option>
-                    <option value="gemini-flash-lite">Gemini Flash Lite</option>
-                    <option value="gemini-3.5-flash">Gemini 3.5 Flash</option>
-                  </select>
-                  <p className="provider-hint">
-                    flash-lite는 빠른 정리에, 3.5-flash는 이미지 인식과 복잡한 추론에 맞춰 사용합니다.
-                  </p>
-                </div>
-                <label className="settings-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={settings.aiProvider.enabled}
-                    disabled={!isTauri() || settings.aiProvider.type === "manual"}
-                    onChange={(event) =>
-                      updateAiProviderConfig({ enabled: event.target.checked })
-                    }
-                  />
-                  API 사용 {isTauri() ? "(선택)" : "(데스크톱 앱에서 사용 가능)"}
-                </label>
-                <div className="theme-options">
-                  {(["env", "tauri-settings"] as const).map((source) => (
-                    <button
-                      key={source}
-                      type="button"
-                      className={`theme-btn ${settings.aiProvider.keySource === source ? "active" : ""}`}
-                      disabled={!isTauri()}
-                      onClick={() => updateAiProviderConfig({ keySource: source })}
-                    >
-                      {source === "env" ? "환경변수" : "OS 보안 저장소"}
-                    </button>
-                  ))}
-                </div>
-                <div className="ai-provider-status">
-                  {aiProviderStatusLoading ? (
-                    <span>상태: 확인 중</span>
-                  ) : aiProviderStatusError ? (
-                    <span role="alert">상태 확인 실패: {aiProviderStatusError}</span>
-                  ) : aiProviderStatus ? (
-                    <>
-                      <span>환경변수 키: {aiProviderStatus.hasEnvKey ? "감지됨" : "없음"}</span>
-                      <span>저장된 키: {aiProviderStatus.hasStoredKey ? "저장됨" : "없음"}</span>
-                      <span>상태: {aiProviderStatus.available ? "사용 가능" : "수동 모드 대기"}</span>
-                    </>
-                  ) : <span>상태: 확인 대기</span>}
-                </div>
-                {settings.aiProvider.keySource === "tauri-settings" && (
-                  <div className="ai-provider-key-row">
-                    <input
-                      type="password"
-                      value={aiProviderKeyInput}
-                      disabled={!isTauri()}
-                      onChange={(event) => setAiProviderKeyInput(event.target.value)}
-                      placeholder="Gemini API 키"
-                    />
-                    <button type="button" className="theme-btn" disabled={!isTauri()} onClick={storeAiProviderKey}>
-                      키 저장
-                    </button>
-                    <button type="button" className="theme-btn" disabled={!isTauri()} onClick={removeAiProviderKey}>
-                      키 삭제
-                    </button>
-                  </div>
-                )}
-              </div>
+              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} />
             )}
 
             {activeTab === "view" && (
