@@ -6,50 +6,9 @@ import {
   type ReactNode,
 } from "react";
 import katex from "katex";
-import { hasUnbalancedMathDelimiter, normalizeMathForDisplay } from "../utils/mathDisplay";
+import { tokenizeMathForDisplay, type MathDisplaySegment } from "../utils/mathDisplay";
 
-interface MathToken {
-  raw: string;
-  expression: string;
-  displayMode: boolean;
-}
-
-const MATH_PATTERN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?!\$)(?:\\.|[^$\n])+\$)/g;
-const RAW_LATEX_PATTERN = /\\(?:sum|frac|lim|sqrt|sin|cos|tan|log|int|left|right|begin\{cases\}|infty)(?:\\[A-Za-z]+|[A-Za-z0-9{}_^+\-*/=().,|!\s])*|(?:[A-Za-z0-9{}()]+(?:\^[A-Za-z0-9{}()+\-*/=.,]+|_[A-Za-z0-9{}()+\-*/=.,]+))+/g;
-
-function toMathToken(raw: string): MathToken {
-  if (raw.startsWith("$$")) return { raw, expression: raw.slice(2, -2), displayMode: true };
-  if (raw.startsWith("\\[")) return { raw, expression: raw.slice(2, -2), displayMode: true };
-  if (raw.startsWith("\\(")) return { raw, expression: raw.slice(2, -2), displayMode: false };
-  return { raw, expression: raw.slice(1, -1), displayMode: false };
-}
-
-export function splitMathText(text: string): Array<string | MathToken> {
-  const explicitRanges = [...text.matchAll(MATH_PATTERN)].map((match) => ({
-    start: match.index ?? 0,
-    end: (match.index ?? 0) + match[0].length,
-    token: toMathToken(match[0]),
-  }));
-  const rawRanges = [...text.matchAll(RAW_LATEX_PATTERN)]
-    .map((match) => ({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, raw: match[0].trim() }))
-    .filter((range) => range.raw.length > 1 && !explicitRanges.some((explicit) => range.start < explicit.end && range.end > explicit.start));
-  const ranges = [
-    ...explicitRanges.map((range) => ({ start: range.start, end: range.end, token: range.token })),
-    ...rawRanges.map((range) => ({ start: range.start, end: range.end, token: { raw: range.raw, expression: range.raw, displayMode: /^\\(?:begin\{cases\}|sum|frac|int|lim)/.test(range.raw) && !/[가-힣]/.test(range.raw) } })),
-  ].sort((a, b) => a.start - b.start);
-  const result: Array<string | MathToken> = [];
-  let cursor = 0;
-  for (const range of ranges) {
-    if (range.start < cursor) continue;
-    if (range.start > cursor) result.push(text.slice(cursor, range.start));
-    result.push(range.token);
-    cursor = range.end;
-  }
-  if (cursor < text.length) result.push(text.slice(cursor));
-  return result;
-}
-
-function MathFragment({ token }: { token: MathToken }) {
+function MathFragment({ token }: { token: Extract<MathDisplaySegment, { type: "math" }> }) {
   const containerRef = useRef<HTMLSpanElement>(null);
 
   useLayoutEffect(() => {
@@ -69,9 +28,12 @@ function MathFragment({ token }: { token: MathToken }) {
         strict: "warn",
         output: "htmlAndMathml",
       });
+      container.className = token.displayMode ? "math-fragment math-fragment--display" : "math-fragment";
     } catch {
       container.className = "math-fragment--invalid";
       container.textContent = "수식 형식 확인 필요";
+      container.setAttribute("aria-label", "수식 형식 확인 필요");
+      container.dataset.mathSource = token.raw;
     }
   }, [token.displayMode, token.expression, token.raw]);
 
@@ -83,16 +45,28 @@ function MathFragment({ token }: { token: MathToken }) {
   );
 }
 
+function InvalidMathFragment({ token }: { token: Extract<MathDisplaySegment, { type: "invalid-math" }> }) {
+  return (
+    <span
+      className="math-fragment--invalid"
+      role="status"
+      aria-label="수식 형식 확인 필요"
+      data-math-source={token.raw}
+      title={token.reason}
+    >
+      수식 형식 확인 필요
+    </span>
+  );
+}
+
 export default function MathText({ text }: { text: string }) {
-  const displayText = normalizeMathForDisplay(text);
-  if (hasUnbalancedMathDelimiter(displayText)) {
-    return <span className="math-source-warning" role="status" title="원문은 변경되지 않았습니다. Text Review에서 수식을 확인하세요.">수식 형식 확인 필요</span>;
-  }
   return (
     <>
-      {splitMathText(displayText).map((part, index) =>
-        typeof part === "string" ? part : <MathFragment key={`${part.raw}-${index}`} token={part} />,
-      )}
+      {tokenizeMathForDisplay(text).map((part, index) => {
+        if (part.type === "text") return <span key={`text-${index}`}>{part.value}</span>;
+        if (part.type === "invalid-math") return <InvalidMathFragment key={`invalid-${index}`} token={part} />;
+        return <MathFragment key={`${part.raw}-${index}`} token={part} />;
+      })}
     </>
   );
 }

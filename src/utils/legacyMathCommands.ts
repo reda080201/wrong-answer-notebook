@@ -1,4 +1,4 @@
-const LEGACY_MATH_COMMANDS = "lim|frac|sqrt|sum|int|sin|cos|tan|log|left|right";
+const LEGACY_MATH_COMMANDS = "lim|frac|sqrt|times|sum|int|sin|cos|tan|log|left|right";
 const LEGACY_COMMAND_PATTERN = new RegExp(
   `(?<![\\p{L}\\p{N}_/\\\\])/(${LEGACY_MATH_COMMANDS})(?![\\p{L}\\p{N}_])`,
   "gu",

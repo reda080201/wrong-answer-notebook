@@ -37,5 +37,16 @@ describe("Question Bank math rendering", () => {
     const { container } = render(<QuestionBankDetail item={item} onClose={vi.fn()} onOpenQuestion={vi.fn()} />);
     expect(container.querySelectorAll(".math-fragment")).toHaveLength(3);
   });
+
+  it("renders mixed valid and invalid math without dropping the row text", () => {
+    const mixed = { ...item, questionText: "앞 $$x^2$$ 중간 $$깨진 수식 뒤" };
+    const { container } = render(<QuestionBankCard item={mixed} onOpen={vi.fn()} onInspect={vi.fn()} />);
+    expect(container.querySelector(".katex")).toBeInTheDocument();
+    expect(container.querySelector(".math-fragment--invalid")).toBeInTheDocument();
+    expect(container.textContent).toContain("앞 ");
+    expect(container.textContent).toContain(" 중간 ");
+    expect(container.textContent).toContain("수식 형식 확인 필요");
+    expect(container.textContent).not.toContain("$$깨진 수식 뒤");
+  });
 });
 
