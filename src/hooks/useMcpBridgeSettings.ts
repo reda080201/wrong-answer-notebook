@@ -176,5 +176,36 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     }
   }, [setSettingsMessage]);
 
-  return { mcpBridgeSettings: config, mcpBridgeStatus: runtimeStatus, mcpBridgePortInput: portInput, setMcpBridgePortInput: setPortInput, updateMcpBridgeConfig, applyMcpBridgePort, testMcpBridgeConnection, createPairing, rotateCredential, disconnectClients, pairingSession, isMcpBridgePairingPending: pairingPending, isMcpBridgeConnectionTesting: connectionTesting, isMcpBridgeBrowserBlocked: !isTauri(), isMcpBridgeDesktopAvailable: isTauri(), refreshMcpBridgeStatus };
+  return useMemo(() => ({
+    mcpBridgeSettings: config,
+    mcpBridgeStatus: runtimeStatus,
+    mcpBridgePortInput: portInput,
+    setMcpBridgePortInput: setPortInput,
+    updateMcpBridgeConfig,
+    applyMcpBridgePort,
+    testMcpBridgeConnection,
+    createPairing,
+    rotateCredential,
+    disconnectClients,
+    pairingSession,
+    isMcpBridgePairingPending: pairingPending,
+    isMcpBridgeConnectionTesting: connectionTesting,
+    isMcpBridgeBrowserBlocked: !isTauri(),
+    isMcpBridgeDesktopAvailable: isTauri(),
+    refreshMcpBridgeStatus,
+  }), [
+    config,
+    runtimeStatus,
+    portInput,
+    updateMcpBridgeConfig,
+    applyMcpBridgePort,
+    testMcpBridgeConnection,
+    createPairing,
+    rotateCredential,
+    disconnectClients,
+    pairingSession,
+    pairingPending,
+    connectionTesting,
+    refreshMcpBridgeStatus,
+  ]);
 }
