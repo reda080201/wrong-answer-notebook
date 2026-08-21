@@ -38,6 +38,7 @@ import { normalizeProblemSource } from "./problemSource";
 import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
 import { reconcileEntryQuestions } from "./questionCanonical";
 import { normalizeLearningResourceClassification } from "./libraryClassification";
+import { normalizeLectureDocument } from "./lectureDocument";
 import {
   isLearningImportance,
   isLearningReviewStatus,
@@ -912,6 +913,17 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       : [],
     problemSource: normalizeProblemSource(rest.problemSource),
     resourceClassification: normalizeLearningResourceClassification(rest.resourceClassification),
+    lectureDocument: normalizeLectureDocument(rest.lectureDocument),
+    lectureQuestionRelations: Array.isArray(rest.lectureQuestionRelations)
+      ? rest.lectureQuestionRelations
+        .filter((item): item is NonNullable<WrongAnswerEntry["lectureQuestionRelations"]>[number] => Boolean(item && typeof item === "object" && typeof item.id === "string" && typeof item.questionEntryId === "string" && typeof item.questionNumber === "string" && typeof item.createdAt === "string"))
+        .map((item) => ({
+          ...item,
+          id: item.id.trim(),
+          questionEntryId: item.questionEntryId.trim(),
+          questionNumber: normalizeQuestionNumber(item.questionNumber) || item.questionNumber.trim(),
+        }))
+      : [],
     explanationParts,
     memo: rest.memo ?? "",
     annotations: rest.annotations ?? [],

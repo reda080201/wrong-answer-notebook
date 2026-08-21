@@ -752,6 +752,8 @@ function AppContent() {
               onReview={actions.handleReview}
               onQuickMemo={actions.handleQuickMemo}
               onLearningBlocksChange={actions.handleLearningBlocksChange}
+              onLectureDocumentChange={(entry, lectureDocument) => patchEntry(entry.id, { lectureDocument })}
+              onLectureQuestionRelationsChange={(entry, lectureQuestionRelations) => patchEntry(entry.id, { lectureQuestionRelations })}
               onImportLecture={() => actions.setShowLearningImportModal(true)}
               onQuestionTextChange={(entry, text) =>
                 patchEntry(entry.id, { question: text })

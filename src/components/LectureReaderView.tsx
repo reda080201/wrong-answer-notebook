@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import type { LectureBlockDefaultState, LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { v4 as uuidv4 } from "uuid";
+import type { LectureBlockDefaultState, LectureBodyWidth, LectureDocument, LectureDocumentBlock, LectureDocumentBlockType, LectureLayout, LectureQuestionRelation, SheetFigureItem, WrongAnswerEntry } from "../types";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 import SemanticFigureView from "../features/figures/components/SemanticFigureView";
 import DiagramCard from "./DiagramCard";
@@ -8,15 +9,27 @@ import LearningContentPanel from "./LearningContentPanel";
 import MathText from "./MathText";
 import FullscreenDialog from "../shared/ui/FullscreenDialog";
 import { normalizeLegacyLectureMathForDisplay } from "../utils/legacyLectureMath";
+import { dedupeLectureQuestionRelations, diagnoseLectureQuestionRelations, getLectureDocument, getLectureHeadings, lectureRelationKey } from "../utils/lectureDocument";
+import { getEntryQuestions } from "../utils/entryQuestions";
+import { consumeLectureWorkspaceFocus, loadLectureWorkspaceState, saveLectureWorkspaceState } from "../utils/lectureWorkspaceState";
+import Dialog from "../shared/ui/Dialog";
+import Menu from "../shared/ui/Menu";
 
 interface LectureReaderViewProps {
   entry: WrongAnswerEntry;
+  allEntries?: WrongAnswerEntry[];
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   onOpenLinkedEntry?: (entryId: string) => void;
+  onOpenLinkedQuestion?: (entryId: string, questionNumber: string) => void;
+  onDocumentChange?: (document: LectureDocument) => Promise<void> | void;
+  onRelationsChange?: (relations: LectureQuestionRelation[]) => Promise<void> | void;
+  onSendToMcp?: () => void;
   layout?: LectureLayout;
   onLayoutChange?: (layout: LectureLayout) => void;
   blockDefaultState?: LectureBlockDefaultState;
+  bodyWidth?: LectureBodyWidth;
+  onBodyWidthChange?: (width: LectureBodyWidth) => void;
 }
 
 interface LectureReaderContentProps extends LectureReaderViewProps {
@@ -50,39 +63,179 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
   );
 }
 
+function lectureNavLabel(block: { title?: string; type?: string; content?: string }) {
+  return block.title || (block.type ? blockLabel(block.type) : block.content || "학습 내용");
+}
+
+const semanticBlockLabels: Record<LectureDocumentBlockType, string> = {
+  heading: "제목", paragraph: "본문", math: "수식", image: "이미지", figure: "도형", table: "표",
+  quote: "인용", callout: "강조", example: "예시", warning: "주의", collapsible: "접기",
+  related_concept: "관련 개념", related_question: "관련 문제",
+};
+
+function renderBlockBody(block: LectureDocumentBlock, connectedFigure?: SheetFigureItem): ReactNode {
+  const content = block.content?.trim() ? <MathText text={normalizeLegacyLectureMathForDisplay(block.content)} /> : null;
+  if (block.type === "image") return content ?? <p className="lecture-block-empty">연결된 이미지가 없습니다.</p>;
+  if (block.type === "figure") return connectedFigure ? <FigureContent figure={connectedFigure} /> : <p className="lecture-block-empty">연결된 도형이 없습니다.</p>;
+  if (block.type === "table") return <div className="lecture-table-block">{content}</div>;
+  if (block.type === "quote") return <blockquote>{content}</blockquote>;
+  if (block.type === "callout" || block.type === "warning") return <aside role="note" className={`lecture-callout lecture-callout--${block.type}`}>{content}</aside>;
+  if (block.type === "example") return <section className="lecture-example-block"><strong>예시</strong>{content}</section>;
+  if (block.type === "related_concept" || block.type === "related_question") return <section className="lecture-related-block"><strong>{semanticBlockLabels[block.type]}</strong>{content}</section>;
+  return content;
+}
+
+function DocumentBlockView({ block, index, open, onToggle, figures }: { block: LectureDocumentBlock; index: number; open: boolean; onToggle(open: boolean): void; figures: SheetFigureItem[] }) {
+  const connectedFigure = block.figureId ? figures.find((figure) => figure.id === block.figureId) : undefined;
+  if (block.type === "heading") {
+    const Heading = block.level === 3 ? "h4" : block.level === 2 ? "h3" : "h2";
+    return <section id={`lecture-block-${block.id}`} className="lecture-block lecture-block--heading"><Heading>{block.content || "제목 없음"}</Heading></section>;
+  }
+  if (block.type === "collapsible") return <details id={`lecture-block-${block.id}`} className="lecture-block lecture-block--collapsible" open={open} onToggle={(event) => onToggle(event.currentTarget.open)}><summary><span className="formula-chip">{semanticBlockLabels[block.type]}</span><strong>{block.content?.split("\n")[0] || `${index + 1}. 학습 내용`}</strong></summary>{renderBlockBody(block, connectedFigure)}</details>;
+  return <section id={`lecture-block-${block.id}`} className={`lecture-block lecture-block--${block.type}`}><div className="lecture-block-label">{semanticBlockLabels[block.type]}</div>{renderBlockBody(block, connectedFigure)}</section>;
+}
+
 function LectureReaderContent({
   entry,
+  allEntries = [],
   onWikiLinkClick,
   existingTargets,
   onOpenLinkedEntry,
+  onOpenLinkedQuestion,
+  onDocumentChange,
+  onRelationsChange,
+  onSendToMcp,
   layout = "document",
-  onLayoutChange,
   showFullscreen = true,
   onRequestFullscreen,
   blockDefaultState = "first",
+  bodyWidth = "standard",
+  onBodyWidthChange,
 }: LectureReaderContentProps) {
-  const blocks = useMemo(() => entry.learningBlocks ?? [], [entry.learningBlocks]);
+  const legacyBlocks = useMemo(() => entry.learningBlocks ?? [], [entry.learningBlocks]);
+  const document = useMemo(() => getLectureDocument(entry), [entry]);
+  const documentHeadings = useMemo(() => getLectureHeadings(document), [document]);
+  const blocks = entry.lectureDocument ? document.blocks : legacyBlocks;
   const [openBlockIds, setOpenBlockIds] = useState<Set<string>>(() => defaultOpenBlockIds(blocks, blockDefaultState));
+  const restoredState = useMemo(() => loadLectureWorkspaceState(entry.id), [entry.id]);
+  const [outlineOpen, setOutlineOpen] = useState(() => restoredState?.outlineOpen ?? true);
+  const [relatedOpen, setRelatedOpen] = useState(() => restoredState?.relatedOpen ?? true);
+  const [focusMode, setFocusMode] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [relationOpen, setRelationOpen] = useState(false);
+  const [draftBlocks, setDraftBlocks] = useState<LectureDocumentBlock[]>(() => document.blocks.map((block) => ({ ...block, metadata: block.metadata ? { ...block.metadata } : undefined })));
+  const [relationEntryId, setRelationEntryId] = useState("");
+  const [relationQuestionNumber, setRelationQuestionNumber] = useState("");
+  const [relationBlockId, setRelationBlockId] = useState("");
+  const articleRef = useRef<HTMLElement>(null);
+  const scrollWriteFrameRef = useRef<number | null>(null);
+  const pendingScrollTopRef = useRef<number | null>(null);
   const figures = entry.figures ?? [];
-  const connectedFigureIds = new Set(blocks.flatMap((block) => block.figureIds ?? []));
+  const connectedFigureIds = new Set(entry.lectureDocument ? document.blocks.flatMap((block) => block.figureId ? [block.figureId] : []) : legacyBlocks.flatMap((block) => block.figureIds ?? []));
   const unlinkedFigures = figures.filter((figure) => !connectedFigureIds.has(figure.id));
   const overview = entry.question.trim();
   const memo = entry.memo.trim();
+  const relationEntry = useMemo(
+    () => allEntries.find((item) => item.id === relationEntryId),
+    [allEntries, relationEntryId],
+  );
+  const relationQuestions = useMemo(
+    () => relationEntry ? getEntryQuestions(relationEntry) : [],
+    [relationEntry],
+  );
+  const relationDiagnostics = useMemo(
+    () => diagnoseLectureQuestionRelations(entry, allEntries),
+    [allEntries, entry],
+  );
 
   useEffect(() => {
     setOpenBlockIds(defaultOpenBlockIds(blocks, blockDefaultState));
   }, [blockDefaultState, blocks, entry.id]);
 
+  useEffect(() => {
+    const state = loadLectureWorkspaceState(entry.id);
+    setOutlineOpen(state?.outlineOpen ?? true);
+    setRelatedOpen(state?.relatedOpen ?? true);
+    requestAnimationFrame(() => {
+      if (articleRef.current && state?.scrollTop) articleRef.current.scrollTop = state.scrollTop;
+    });
+  }, [entry.id]);
+
+  useEffect(() => {
+    const target = consumeLectureWorkspaceFocus(entry.id);
+    if (!target?.blockId) return;
+    requestAnimationFrame(() => {
+      globalThis.document.getElementById(`lecture-block-${target.blockId}`)?.scrollIntoView({ block: "start", behavior: "smooth" });
+    });
+  }, [entry.id]);
+
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setFocusMode(false); };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [focusMode]);
+
+  const updateWorkspaceState = (patch: Parameters<typeof saveLectureWorkspaceState>[1]) => {
+    saveLectureWorkspaceState(entry.id, patch);
+  };
+  const flushScrollState = useCallback(() => {
+    if (pendingScrollTopRef.current === null) return;
+    saveLectureWorkspaceState(entry.id, { scrollTop: pendingScrollTopRef.current });
+    pendingScrollTopRef.current = null;
+    scrollWriteFrameRef.current = null;
+  }, [entry.id]);
+  const scheduleScrollState = (scrollTop: number) => {
+    pendingScrollTopRef.current = scrollTop;
+    if (scrollWriteFrameRef.current !== null) return;
+    scrollWriteFrameRef.current = requestAnimationFrame(flushScrollState);
+  };
+  useEffect(() => () => {
+    if (scrollWriteFrameRef.current !== null) cancelAnimationFrame(scrollWriteFrameRef.current);
+    flushScrollState();
+  }, [entry.id, flushScrollState]);
+
+  const saveDocument = async () => {
+    if (!onDocumentChange) return;
+    await onDocumentChange({ blocks: draftBlocks.map((block) => ({ ...block, metadata: block.metadata ? { ...block.metadata } : undefined })) });
+    setEditorOpen(false);
+  };
+
+  const addRelation = async () => {
+    if (!onRelationsChange || !relationEntryId || !relationQuestionNumber.trim()) return;
+    const normalized = relationQuestionNumber.trim();
+    const nextRelation = {
+      id: uuidv4(),
+      questionEntryId: relationEntryId,
+      questionNumber: normalized,
+      lectureBlockId: relationBlockId || undefined,
+      createdAt: new Date().toISOString(),
+    } satisfies LectureQuestionRelation;
+    const key = `${relationEntryId}:${normalized}:${relationBlockId || "root"}`;
+    if ((entry.lectureQuestionRelations ?? []).some((relation) => lectureRelationKey(relation) === key)) return;
+    const relations = dedupeLectureQuestionRelations([...(entry.lectureQuestionRelations ?? []), nextRelation]);
+    await onRelationsChange(relations);
+    setRelationOpen(false); setRelationEntryId(""); setRelationQuestionNumber(""); setRelationBlockId("");
+  };
+
   return (
-    <article className={`lecture-reader lecture-reader--${layout}`}>
+    <>
+    <div className={`lecture-workspace${focusMode ? " lecture-workspace--focus" : ""}`}>
+      {outlineOpen && !focusMode && <aside className="lecture-outline-panel"><div className="lecture-panel-heading"><strong>목차</strong><button type="button" aria-label="목차 접기" onClick={() => { setOutlineOpen(false); updateWorkspaceState({ outlineOpen: false }); }}>‹</button></div><ol>{(entry.lectureDocument ? documentHeadings : legacyBlocks).map((block, index) => <li key={block.id}><a href={`#lecture-block-${block.id}`}>{index + 1}. {lectureNavLabel(block)}</a></li>)}</ol></aside>}
+      <article ref={articleRef} onScroll={(event) => scheduleScrollState(event.currentTarget.scrollTop)} className={`lecture-reader lecture-reader--${layout} lecture-reader--width-${bodyWidth}`}>
       <header className="lecture-reader-cover">
         <div className="lecture-reader-toolbar">
           <span className="modal-eyebrow">Lecture Library</span>
-          <div className="lecture-layout-toggle" role="group" aria-label="특강 보기 방식">
-            <button type="button" className={layout === "document" ? "active" : ""} onClick={() => onLayoutChange?.("document")}>문서형</button>
-            <button type="button" className={layout === "cards" ? "active" : ""} onClick={() => onLayoutChange?.("cards")}>카드형</button>
-          </div>
+          <div className="lecture-width-toggle" role="group" aria-label="본문 폭">{([['narrow', '좁게'], ['standard', '표준'], ['wide', '넓게'], ['full', '전체']] as const).map(([value, label]) => <button key={value} type="button" className={bodyWidth === value ? "active" : ""} aria-pressed={bodyWidth === value} onClick={() => onBodyWidthChange?.(value)}>{label}</button>)}</div>
           {showFullscreen && <button type="button" onClick={onRequestFullscreen} aria-label="특강 전체 화면">전체 화면</button>}
+          <button type="button" onClick={() => setFocusMode((value) => !value)}>{focusMode ? "집중 읽기 해제" : "집중 읽기"}</button>
+          <Menu label="⋯" triggerAriaLabel="특강 더보기">
+            <button type="button" onClick={() => { setDraftBlocks(document.blocks.map((block) => ({ ...block, metadata: block.metadata ? { ...block.metadata } : undefined }))); setEditorOpen(true); }}>문서 편집</button>
+            <button type="button" onClick={() => setRelationOpen(true)}>문제 연결</button>
+            <button type="button" onClick={() => void navigator.clipboard?.writeText(document.blocks.map((block) => block.content ?? "").join("\n\n"))}>내용 복사</button>
+            {onSendToMcp && <button type="button" onClick={onSendToMcp}>MCP로 보내기</button>}
+            <button type="button" onClick={() => setFocusMode((value) => !value)}>{focusMode ? "집중 읽기 해제" : "집중 읽기"}</button>
+          </Menu>
         </div>
         <h2>{entry.title.trim() || "특강자료"}</h2>
         <p>{entry.subject}{entry.sourceType ? ` · ${entry.sourceType.toUpperCase()}에서 변환` : ""}</p>
@@ -108,13 +261,17 @@ function LectureReaderContent({
             <button type="button" className="btn-secondary btn-sm" onClick={() => setOpenBlockIds(new Set(blocks.map((block) => block.id)))}>모두 펼치기</button>
             <button type="button" className="btn-secondary btn-sm" onClick={() => setOpenBlockIds(new Set())}>모두 접기</button>
           </div>
-          <ol>{blocks.map((block, index) => <li key={block.id}><a href={`#lecture-block-${block.id}`}>{index + 1}. {block.title || blockLabel(block.type)}</a></li>)}</ol>
+          <ol>{(entry.lectureDocument ? documentHeadings : legacyBlocks).map((block, index) => <li key={block.id}><a href={`#lecture-block-${block.id}`}>{index + 1}. {lectureNavLabel(block)}</a></li>)}</ol>
         </nav>
       )}
 
-      {blocks.length > 0 ? (
+      {entry.lectureDocument ? (
         <div className="lecture-reader-grid">
-          {blocks.map((block, index) => {
+          {document.blocks.map((block, index) => <DocumentBlockView key={block.id} block={block} index={index} open={openBlockIds.has(block.id)} onToggle={(open) => setOpenBlockIds((current) => { const next = new Set(current); if (open) next.add(block.id); else next.delete(block.id); return next; })} figures={figures} />)}
+        </div>
+      ) : blocks.length > 0 ? (
+        <div className="lecture-reader-grid">
+          {legacyBlocks.map((block, index) => {
             const connectedFigures = figures.filter((figure) => (block.figureIds ?? []).includes(figure.id));
             return (
               <details
@@ -166,12 +323,33 @@ function LectureReaderContent({
           </div>
         </section>
       )}
-    </article>
+      </article>
+      {relatedOpen && !focusMode && <aside className="lecture-related-panel"><div className="lecture-panel-heading"><strong>관련 자료</strong><button type="button" aria-label="관련 자료 접기" onClick={() => { setRelatedOpen(false); updateWorkspaceState({ relatedOpen: false }); }}>›</button></div><h3>직접 연결</h3>{relationDiagnostics.map(({ relation, status }) => { const target = allEntries.find((item) => item.id === relation.questionEntryId); return <div className="lecture-related-item" key={relation.id}><button type="button" className="lecture-related-row" onClick={() => {
+        if (onOpenLinkedQuestion) onOpenLinkedQuestion(relation.questionEntryId, relation.questionNumber);
+        else onOpenLinkedEntry?.(relation.questionEntryId);
+      }}>{target?.title || "시험지"} · {relation.questionNumber}번{relation.lectureBlockId ? ` · ${document.blocks.find((block) => block.id === relation.lectureBlockId)?.content || "연결 위치"}` : ""}</button>{status !== "valid" && <span className="lecture-relation-stale">{status === "missing_entry" ? "시험지 없음" : status === "missing_question" ? "문항 없음" : "위치 없음"}</span>}<button type="button" aria-label={`${relation.questionNumber}번 연결 해제`} onClick={() => void onRelationsChange?.((entry.lectureQuestionRelations ?? []).filter((item) => item.id !== relation.id))}>해제</button></div>; })}{entry.linkedEntryIds?.filter((id) => !(entry.lectureQuestionRelations ?? []).some((relation) => relation.questionEntryId === id)).map((id) => <button type="button" className="lecture-related-row" key={id} onClick={() => onOpenLinkedEntry?.(id)}>연결 자료 열기</button>)}{!(entry.lectureQuestionRelations?.length || entry.linkedEntryIds?.length) && <p className="lecture-related-empty">연결된 자료가 없습니다.</p>}</aside>}
+      {!outlineOpen && !focusMode && <button type="button" className="lecture-panel-restore lecture-panel-restore--left" onClick={() => { setOutlineOpen(true); updateWorkspaceState({ outlineOpen: true }); }}>목차</button>}
+      {!relatedOpen && !focusMode && <button type="button" className="lecture-panel-restore lecture-panel-restore--right" onClick={() => { setRelatedOpen(true); updateWorkspaceState({ relatedOpen: true }); }}>관련 자료</button>}
+    </div>
+    <Dialog open={editorOpen} onClose={() => setEditorOpen(false)} ariaLabel="특강 문서 편집" size="xl">
+      <header className="modal-head"><div><span className="modal-eyebrow">Lecture document</span><h2>문서 편집</h2></div></header>
+      <div className="lecture-document-editor">
+        {draftBlocks.map((block, index) => <section key={block.id} className="lecture-editor-block"><div className="lecture-editor-block-head"><strong>{index + 1}. {block.id}</strong><select aria-label={`${index + 1}번 block 유형`} value={block.type} onChange={(event) => setDraftBlocks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, type: event.target.value as LectureDocumentBlock["type"] } : item))}>{["heading", "paragraph", "math", "image", "figure", "table", "quote", "callout", "example", "warning", "collapsible", "related_concept", "related_question"].map((type) => <option key={type} value={type}>{type}</option>)}</select><button type="button" disabled={index === 0} onClick={() => setDraftBlocks((current) => { const next = [...current]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}>위로</button><button type="button" disabled={index === draftBlocks.length - 1} onClick={() => setDraftBlocks((current) => { const next = [...current]; [next[index], next[index + 1]] = [next[index + 1], next[index]]; return next; })}>아래로</button><button type="button" onClick={() => setDraftBlocks((current) => current.filter((_, itemIndex) => itemIndex !== index))}>삭제</button></div><textarea aria-label={`${index + 1}번 block 내용`} value={block.content ?? ""} onChange={(event) => setDraftBlocks((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, content: event.target.value } : item))} /></section>)}
+        <button type="button" className="btn-secondary" onClick={() => setDraftBlocks((current) => [...current, { id: uuidv4(), type: "paragraph", content: "" }])}>문단 추가</button>
+      </div>
+      <footer className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setEditorOpen(false)}>취소</button><button type="button" className="btn-primary" onClick={() => void saveDocument()}>저장</button></footer>
+    </Dialog>
+    <Dialog open={relationOpen} onClose={() => setRelationOpen(false)} ariaLabel="특강 문제 연결" size="md">
+      <header className="modal-head"><h2>직접 문제 연결</h2></header>
+      <div className="lecture-relation-form"><label>문제지<select value={relationEntryId} onChange={(event) => { setRelationEntryId(event.target.value); setRelationQuestionNumber(""); }}><option value="">문제지를 선택하세요</option>{allEntries.filter((item) => item.entryKind === "problem_sheet").map((item) => <option key={item.id} value={item.id}>{item.title || "제목 없음"}</option>)}</select></label><label>문항 번호<select value={relationQuestionNumber} disabled={!relationEntryId} onChange={(event) => setRelationQuestionNumber(event.target.value)}><option value="">문항을 선택하세요</option>{relationQuestions.map((question) => <option key={question.questionNumber} value={question.questionNumber}>{question.questionNumber}번</option>)}</select></label><label>연결 위치<select value={relationBlockId} onChange={(event) => setRelationBlockId(event.target.value)}><option value="">특강 처음</option>{document.blocks.map((block) => <option key={block.id} value={block.id}>{lectureNavLabel(block)}</option>)}</select></label></div>
+      <footer className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setRelationOpen(false)}>취소</button><button type="button" className="btn-primary" disabled={!relationEntryId || !relationQuestionNumber.trim()} onClick={() => void addRelation()}>연결</button></footer>
+    </Dialog>
+    </>
   );
 }
 
 function defaultOpenBlockIds(
-  blocks: NonNullable<WrongAnswerEntry["learningBlocks"]>,
+  blocks: Array<{ id: string }>,
   state: LectureBlockDefaultState,
 ) {
   if (state === "all") return new Set(blocks.map((block) => block.id));

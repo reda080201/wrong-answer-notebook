@@ -1,6 +1,7 @@
 import type { Annotation } from "./shared";
 import type { DiagramSpec, LearningBlock, LearningDiagramType, SimilarQuestionLink } from "./learning";
 import type { ChecklistItem, MistakeAnalysis, ReviewAttempt, ReviewState } from "./review";
+import type { LectureDocument, LectureQuestionRelation } from "./lecture";
 
 /** 오답 한 건 vs 문제지(전체) 보관 vs 개념 vs 특강자료 */
 export type EntryKind = "wrong_answer" | "problem_sheet" | "concept" | "lecture";
@@ -361,6 +362,8 @@ export interface WrongAnswerEntry {
   problemSource?: ProblemSourceInfo;
   /** Optional library navigation metadata; legacy entries remain valid without it. */
   resourceClassification?: LearningResourceClassification;
+  lectureDocument?: LectureDocument;
+  lectureQuestionRelations?: LectureQuestionRelation[];
   similarQuestionLinks?: SimilarQuestionLink[];
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;

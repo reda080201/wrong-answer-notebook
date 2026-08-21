@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
-import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, LectureDocument, LectureQuestionRelation, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -15,6 +15,7 @@ import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextS
 import { normalizeDifficultyScore } from "../../../utils/difficulty";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions, resolvedQuestionToBlock } from "../../../utils/entryQuestions";
+import { requestLectureWorkspaceFocus } from "../../../utils/lectureWorkspaceState";
 import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
@@ -92,6 +93,8 @@ interface EntryDetailProps {
   onReview?: (entry: WrongAnswerEntry, result: ReviewResult) => Promise<void>;
   onQuickMemo?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onLearningBlocksChange?: (entry: WrongAnswerEntry, blocks: WrongAnswerEntry["learningBlocks"]) => Promise<void>;
+  onLectureDocumentChange?: (entry: WrongAnswerEntry, document: LectureDocument) => Promise<void>;
+  onLectureQuestionRelationsChange?: (entry: WrongAnswerEntry, relations: LectureQuestionRelation[]) => Promise<void>;
   onImportLecture?: () => void;
   onQuestionTextChange?: (entry: WrongAnswerEntry, text: string) => Promise<void>;
   onStructuredQuestionsChange?: (entry: WrongAnswerEntry, questions: NonNullable<WrongAnswerEntry["structuredQuestions"]>) => Promise<void>;
@@ -215,6 +218,8 @@ export default function EntryDetail({
   onReview,
   onQuickMemo,
   onLearningBlocksChange,
+  onLectureDocumentChange,
+  onLectureQuestionRelationsChange,
   onImportLecture,
   onQuestionTextChange,
   onStructuredQuestionsChange,
@@ -378,6 +383,14 @@ export default function EntryDetail({
   const relatedEntries = useMemo(
     () => (isConcept ? getRelatedEntries(entry, allEntries) : []),
     [allEntries, entry, isConcept],
+  );
+  const directLectureRelations = useMemo(
+    () => !isSheet ? [] : allEntries.flatMap((lecture) =>
+      lecture.entryKind !== "lecture" ? [] : (lecture.lectureQuestionRelations ?? [])
+        .filter((relation) => relation.questionEntryId === entry.id)
+        .map((relation) => ({ lecture, relation })),
+    ),
+    [allEntries, entry.id, isSheet],
   );
   const conceptAnalytics = useMemo(() => {
     if (!isConcept || !entry.title.trim()) return undefined;
@@ -1748,12 +1761,19 @@ export default function EntryDetail({
           {isLecture ? (
             <LectureReaderView
               entry={entry}
+              allEntries={allEntries}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
               onOpenLinkedEntry={onOpenEntry}
+              onOpenLinkedQuestion={onOpenQuestionTarget}
+              onDocumentChange={onLectureDocumentChange ? (document) => onLectureDocumentChange(entry, document) : undefined}
+              onRelationsChange={onLectureQuestionRelationsChange ? (relations) => onLectureQuestionRelationsChange(entry, relations) : undefined}
+              onSendToMcp={() => openExportHub("chatgpt-share", "current")}
               layout={viewPreferences?.lectureLayout ?? "document"}
               onLayoutChange={(layout) => onViewPreferencesChange?.({ lectureLayout: layout })}
               blockDefaultState={viewPreferences?.lectureBlockDefaultState ?? "first"}
+              bodyWidth={viewPreferences?.lectureBodyWidth ?? "standard"}
+              onBodyWidthChange={(width) => onViewPreferencesChange?.({ lectureBodyWidth: width })}
             />
           ) : !isFocusExpanded && !isConcept ? (
             detailViewMode === "solution" ? (
@@ -1828,6 +1848,26 @@ export default function EntryDetail({
                     onEditLecture={onEdit}
                   />
                 </CollapsibleSection>
+                {directLectureRelations.length > 0 && (
+                  <section className="lecture-question-relations" aria-label="직접 연결된 특강">
+                    <h3>직접 연결된 특강</h3>
+                    <div>
+                      {directLectureRelations.map(({ lecture, relation }) => (
+                        <button
+                          key={relation.id}
+                          type="button"
+                          className="btn-secondary btn-sm"
+                          onClick={() => {
+                            requestLectureWorkspaceFocus({ entryId: lecture.id, blockId: relation.lectureBlockId });
+                            onOpenEntry?.(lecture.id);
+                          }}
+                        >
+                          {lecture.title || "특강자료"} · {relation.questionNumber}번
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                )}
               </>
             )
           ) : isSheet && isFocusExpanded ? (
