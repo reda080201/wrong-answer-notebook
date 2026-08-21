@@ -66,7 +66,7 @@ function ImageThumb({
           type="button"
           className="image-fill-wrap"
           onClick={() => setLightbox(true)}
-          aria-label={`${alt} 확대 보기`}
+          aria-label={`${alt} 이미지 열기`}
         >
           <img src={src} alt={alt} className="image-fill-img" loading="lazy" />
         </button>
@@ -96,7 +96,7 @@ function ImageThumb({
         type="button"
         className={`image-thumb ${variant === "inline" ? "image-thumb--inline" : ""}`}
         onClick={() => setLightbox(true)}
-        aria-label={`${alt} 확대 보기`}
+        aria-label={`${alt} 이미지 열기`}
       >
         <img src={src} alt={alt} loading="lazy" />
       </button>

@@ -177,6 +177,11 @@ export default function EntryListPane({
           className="entry-card-select"
           aria-label={`${getEntryTitle(entry)} 열기`}
           onClick={() => selectEntry(entry.id)}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            selectEntry(entry.id);
+          }}
         >
           <p className="entry-card-question">{getEntryTitle(entry)}</p>
           <div className="entry-card-meta">

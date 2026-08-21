@@ -27,7 +27,7 @@ describe("ImageGallery", () => {
 
     render(<ImageGallery filenames={["graph.png"]} alt="함수 그래프" />);
 
-    const trigger = await screen.findByRole("button", { name: "함수 그래프 확대 보기" });
+    const trigger = await screen.findByRole("button", { name: "함수 그래프 이미지 열기" });
     expect(trigger.querySelector("img")).toHaveAttribute("alt", "함수 그래프");
   });
 });
