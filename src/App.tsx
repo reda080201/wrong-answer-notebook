@@ -14,7 +14,7 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, WrongAnswerEntry } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
@@ -24,11 +24,10 @@ import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
 import ErrorNotice from "./shared/ui/ErrorNotice";
 import Dialog from "./shared/ui/Dialog";
-import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
-import { useExamSessionController } from "./hooks/useExamSessionController";
-import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
-import { useMaintenanceCoordinator } from "./hooks/useMaintenanceCoordinator";
+import { useExamWorkspaceController } from "./hooks/useExamWorkspaceController";
+import { useAppNavigationController } from "./hooks/useAppNavigationController";
+import { usePersistenceCoordinator } from "./hooks/usePersistenceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
@@ -37,7 +36,6 @@ import LibraryExplorer from "./features/library/components/LibraryExplorer";
 import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
 import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDrafts";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
-import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
@@ -129,10 +127,10 @@ function AppContent() {
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
   } = useAppWriteRegistrations();
-  const exam = useExamSessionController({
-    chatGptPreferences: settings.chatGptMcpPreferences,
+  const examWorkspace = useExamWorkspaceController({
     existingEntries: entries,
     commitExamSubmission,
+    examPrintPreferences: settings.examPrintPreferences,
   });
   const {
     session: examSession,
@@ -152,17 +150,13 @@ function AppContent() {
     savedSessions: savedExamSessions,
     activeGeneratedExam,
     open: openExamSession,
-    openGenerated: openGeneratedExamSession,
     close: closeExamSession,
     discardActiveSessionAfterRestore,
     flush: flushExamSessionSave,
     submit: handleExamSubmit,
-  } = exam;
+  } = examWorkspace;
 
-  const generatedExamController = useGeneratedExamController({
-    examPrintPreferences: settings.examPrintPreferences,
-    onOpenExam: openGeneratedExamSession,
-  });
+  const generatedExamController = examWorkspace.generated;
   const {
     flush: flushGeneratedExams,
     reload: reloadGeneratedExams,
@@ -174,31 +168,32 @@ function AppContent() {
   } = generatedExamController;
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
-  const flushActiveExamForMaintenance = useCallback(async () => {
-    if (examSaveTimerRef.current !== null) {
-      window.clearTimeout(examSaveTimerRef.current);
-      examSaveTimerRef.current = null;
-    }
-    const current = examSessionRef.current;
-    if (current && !(await flushExamSessionSave(current))) {
-      throw new Error("시험 진행 상태를 저장하지 못했습니다.");
-    }
-  }, [examSaveTimerRef, examSessionRef, flushExamSessionSave]);
-  const runMaintenanceOperation = useMaintenanceCoordinator({
+  const persistence = usePersistenceCoordinator({
+    activeExam: examSession,
+    examSaveTimerRef,
+    examSessionRef,
+    flushExamSession: flushExamSessionSave,
     flushEntries,
     flushSettings,
     flushGeneratedExams,
+    flushImportWorkspaceDraft: flushTransientWrites,
+    flushLibraryFolders: library.flush,
+    flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushTransientWrites,
+    setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
     setSettingsMaintenanceBlocked,
     setGeneratedExamsMaintenanceBlocked,
-    flushLibraryFolders: library.flush,
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
-    flushGptSolutionDrafts: gptSolutionDrafts.flush,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
-    flushActiveExam: flushActiveExamForMaintenance,
-    flushTransientWrites,
-    setTransientWritesMaintenanceBlocked,
+    confirmCloseWithoutSaving: () => confirm({
+      title: "저장하지 않고 종료",
+      message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
+      confirmLabel: "저장하지 않고 종료",
+      cancelLabel: "종료 취소",
+    }),
   });
+  const { runMaintenanceOperation } = persistence;
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -232,7 +227,7 @@ function AppContent() {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
 
-  const requestNavigation = useNotebookNavigationController({
+  const { requestNavigation } = useAppNavigationController({
     activeSection,
     examSubmitting,
     examSession,
@@ -246,23 +241,13 @@ function AppContent() {
     setExamSaveError,
   });
 
-  const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose, closeWithoutSaving } = useWindowCloseGuard({
-    activeExam: examSession,
-    examSaveTimerRef,
-    flushExamSession: flushExamSessionSave,
-    flushEntries,
-    flushGeneratedExams,
-    flushSettings,
-    flushImportWorkspaceDraft: flushTransientWrites,
-    flushLibraryFolders: library.flush,
-    flushGptSolutionDrafts: gptSolutionDrafts.flush,
-    confirmCloseWithoutSaving: () => confirm({
-      title: "저장하지 않고 종료",
-      message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
-      confirmLabel: "저장하지 않고 종료",
-      cancelLabel: "종료 취소",
-    }),
-  });
+  const {
+    closeError: closeFlushError,
+    saving: closeFlushSaving,
+    clearCloseError: clearCloseFlushError,
+    retryClose,
+    closeWithoutSaving,
+  } = persistence;
 
   useEffect(() => {
     if (!examSession) return;
