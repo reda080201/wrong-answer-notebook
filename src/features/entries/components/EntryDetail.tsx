@@ -63,6 +63,7 @@ import FocusedAnswerPanel from "./FocusedAnswerPanel";
 import FocusedNotesPanel from "./FocusedNotesPanel";
 import FocusedStudyHints from "./FocusedStudyHints";
 import { EntryDetailProvider } from "./EntryDetailContext";
+import { ProblemSheetHeader, ReviewExportDialogs } from "./EntryDetailAreas";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1253,6 +1254,7 @@ export default function EntryDetail({
       className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
     >
       {!isFocusExpanded && (
+      <ProblemSheetHeader>
       <div className={`detail-toolbar ${isSheet && detailViewMode === "paper" ? "detail-toolbar--problem-sheet" : ""}`}>
         {isSheet && detailViewMode === "paper" ? (
           <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
@@ -1441,6 +1443,7 @@ export default function EntryDetail({
         </>
         )}
       </div>
+      </ProblemSheetHeader>
       )}
 
       {entry.structuredQuestionsRecovery && (
@@ -2083,6 +2086,7 @@ export default function EntryDetail({
           />
         )}
       </div>
+      <ReviewExportDialogs>
       {showTextReview && (
         <TextReviewPanel
           entry={entry}
@@ -2100,6 +2104,7 @@ export default function EntryDetail({
           }}
         />
       )}
+      </ReviewExportDialogs>
       {theaterQuestion && theaterQuestionIndex !== null && (
         <QuestionTheaterView
           passage={theaterPassage}
