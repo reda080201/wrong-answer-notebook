@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -42,6 +42,7 @@ import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext
 import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
+import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
@@ -107,29 +108,27 @@ function AppContent() {
   const setLastImportTemplate = promptTemplates.setLastUsed;
   const { status: aiProviderStatus } = aiProvider;
   const { subjectOrder, moveSubject } = useSubjectOrder();
-  const [showSettings, setShowSettings] = useState(false);
+  const {
+    showSettings, setShowSettings,
+    showLearningHub, setShowLearningHub,
+    learningHubTarget, setLearningHubTarget,
+    showQuestionBank, setShowQuestionBank,
+    showLibraryExplorer, setShowLibraryExplorer,
+    examHistoryOpen, setExamHistoryOpen,
+    learningCandidateEntryId, setLearningCandidateEntryId,
+    settingsInitialTab, setSettingsInitialTab,
+    questionTarget, setQuestionTarget,
+    realExamStartEntry, setRealExamStartEntry,
+    realExamMinutes, setRealExamMinutes,
+    dismissedUpdateVersion, setDismissedUpdateVersion,
+  } = useAppModalController();
   const shell = useUiShellPreferences();
-  const [showLearningHub, setShowLearningHub] = useState(false);
-  const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
-  const [showQuestionBank, setShowQuestionBank] = useState(false);
-  const [showLibraryExplorer, setShowLibraryExplorer] = useState(false);
-  const [examHistoryOpen, setExamHistoryOpen] = useState(false);
-  const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
-  const [questionTarget, setQuestionTarget] = useState<{
-    entryId: string;
-    questionNumber: string;
-    requestId: number;
-  } | null>(null);
-  const [realExamStartEntry, setRealExamStartEntry] = useState<WrongAnswerEntry | null>(null);
-  const [realExamMinutes, setRealExamMinutes] = useState(50);
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
   } = useAppWriteRegistrations();
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
   const exam = useExamSessionController({
     chatGptPreferences: settings.chatGptMcpPreferences,
     existingEntries: entries,
