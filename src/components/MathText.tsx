@@ -32,6 +32,7 @@ function MathFragment({ token }: { token: Extract<MathDisplaySegment, { type: "m
     } catch {
       container.className = "math-fragment--invalid";
       container.textContent = "수식 형식 확인 필요";
+      container.setAttribute("role", "status");
       container.setAttribute("aria-label", "수식 형식 확인 필요");
       container.dataset.mathSource = token.raw;
     }

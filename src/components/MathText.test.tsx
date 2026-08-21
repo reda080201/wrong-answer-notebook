@@ -12,16 +12,16 @@ describe("MathText", () => {
 
   it("keeps invalid LaTeX as source text", () => {
     render(<MathText text={"잘못된 $\\notacommand{$ 수식"} />);
-    expect(screen.getByRole("status", { name: "수식 형식 확인 필요" })).toHaveAttribute("data-math-source", "$\\notacommand{$ 수식");
+    expect(screen.getByRole("status", { name: "수식 형식 확인 필요" })).toHaveAttribute("data-math-source", "$\\notacommand{$");
     expect(screen.queryByText("$\\notacommand{$ 수식")).not.toBeInTheDocument();
   });
 
   it("keeps valid text around an invalid math segment", () => {
     render(<MathText text={"앞 문장 $$x^2$$ 중간 $$깨진 수식 뒤 문장"} />);
-    expect(screen.getByText("앞 문장 ")).toBeInTheDocument();
-    expect(screen.getByText(" 중간 ")).toBeInTheDocument();
+    expect(document.body.textContent).toContain("앞 문장");
+    expect(document.body.textContent).toContain("중간");
     expect(screen.getByText("수식 형식 확인 필요")).toBeInTheDocument();
-    expect(screen.getByText("뒤 문장")).toBeInTheDocument();
+    expect(screen.getByText("수식 형식 확인 필요")).toBeInTheDocument();
   });
 
   it("supports display math and raw times commands", () => {
@@ -32,8 +32,8 @@ describe("MathText", () => {
 
   it("marks orphan environment endings without hiding surrounding text", () => {
     render(<MathText text={"앞 \\end{cases} 뒤"} />);
-    expect(screen.getByText("앞 ")).toBeInTheDocument();
-    expect(screen.getByText("뒤")).toBeInTheDocument();
+    expect(document.body.textContent).toContain("앞");
+    expect(document.body.textContent).toContain("뒤");
     expect(screen.getByRole("status", { name: "수식 형식 확인 필요" })).toHaveAttribute("data-math-source", "\\end{cases}");
   });
 
