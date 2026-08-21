@@ -25,6 +25,7 @@ import { X } from "lucide-react";
 import SettingsTabList from "./SettingsTabList";
 import SettingsThemePanel from "./settings/SettingsThemePanel";
 import SettingsViewPanel from "./settings/SettingsViewPanel";
+import { SettingsAdvancedPanel, SettingsDataPanel, SettingsExamPanel, SettingsImagesPanel, SettingsLibraryPanel, SettingsUpdatesPanel } from "./settings/SettingsOperationalPanels";
 
 export type SettingsTab =
   | "theme"
@@ -289,51 +290,15 @@ export default function SettingsModal({
             )}
 
             {activeTab === "library" && (
-              <div className="settings-pref-panel">
-                <p className="settings-label">보관함</p>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.libraryPreferences?.separateMockExams === true} onChange={(event) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), separateMockExams: event.target.checked } })} /> 모의고사를 별도 분류</label>
-                <p className="settings-help">끄면 공식 모의고사는 기출, 사설 모의고사는 N제로 표시합니다.</p>
-                <p className="settings-label">단원 진입 화면</p>
-                <div className="theme-options" role="group" aria-label="단원 진입 화면">
-                  {([['home', '단원 홈'], ['lectures', '특강'], ['problems', '문제']] as const).map(([value, label]) => <button key={value} type="button" className={`theme-btn ${settings.libraryPreferences?.defaultUnitView === value ? "active" : ""}`} aria-pressed={settings.libraryPreferences?.defaultUnitView === value} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), defaultUnitView: value } })}>{label}</button>)}
-                </div>
-                <p className="settings-label">자료 목록 밀도</p>
-                <div className="theme-options" role="group" aria-label="자료 목록 밀도"><button type="button" className={`theme-btn ${settings.libraryPreferences?.listDensity !== "compact" ? "active" : ""}`} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), listDensity: "standard" } })}>표준</button><button type="button" className={`theme-btn ${settings.libraryPreferences?.listDensity === "compact" ? "active" : ""}`} onClick={() => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), listDensity: "compact" } })}>조밀</button></div>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.libraryPreferences?.showUserFolders !== false} onChange={(event) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), showUserFolders: event.target.checked } })} /> 사용자 폴더 표시</label>
-              </div>
+              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), ...patch } })} />
             )}
 
             {activeTab === "exam" && (
-              <div className="settings-pref-panel">
-                <p className="settings-label">시험</p>
-                <p className="settings-label">연습 모드</p>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showScratchNote} onChange={(event) => void patchExam({ showScratchNote: event.target.checked })} /> 풀이 메모 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showOriginalPages} onChange={(event) => void patchExam({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showNavigator} onChange={(event) => void patchExam({ showNavigator: event.target.checked })} /> 문항 navigator 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.autoAdvanceOnAnswer} onChange={(event) => void patchExam({ autoAdvanceOnAnswer: event.target.checked })} /> 답 선택 후 자동 이동</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.warnUnansweredOnSubmit} onChange={(event) => void patchExam({ warnUnansweredOnSubmit: event.target.checked })} /> 미응답 제출 경고</label>
-                <p className="settings-label">실전 모드</p>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showTimer !== false} onChange={(event) => void patchExam({ showTimer: event.target.checked })} /> 타이머 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.realExamAnswerSheetOpen !== false} onChange={(event) => void patchExam({ realExamAnswerSheetOpen: event.target.checked })} /> 답안지 처음 열기</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.warnBeforeEnd !== false} onChange={(event) => void patchExam({ warnBeforeEnd: event.target.checked })} /> 종료 전 경고</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={Boolean(settings.examPreferences.autoSubmitOnTimeExpired)} onChange={(event) => void patchExam({ autoSubmitOnTimeExpired: event.target.checked })} /> 시간 만료 시 자동 제출</label>
-                <label className="settings-field">기본 제한 시간(분)<input type="number" min={1} step={1} value={settings.examPreferences.defaultRealExamMinutes ?? 50} onChange={(event) => { const value = Number(event.target.value); if (Number.isFinite(value) && value > 0) void patchExam({ defaultRealExamMinutes: Math.round(value) }); }} /></label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.examPreferences.showMcpHelp} onChange={(event) => void patchExam({ showMcpHelp: event.target.checked })} /> MCP 도움 표시</label>
-              </div>
+              <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />
             )}
 
             {activeTab === "images" && (
-              <div className="settings-pref-panel">
-                <p className="settings-label">이미지</p>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.imagePreferences.preserveSourcePages} onChange={(event) => void patchImages({ preserveSourcePages: event.target.checked })} /> 원본 페이지 보존</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.imagePreferences.showUnlinkedImages} onChange={(event) => void patchImages({ showUnlinkedImages: event.target.checked })} /> 미연결 이미지 표시</label>
-                <p className="settings-label">썸네일 크기</p>
-                <div className="theme-options">
-                  {([["small", "작게"], ["medium", "보통"], ["large", "크게"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`theme-btn ${settings.imagePreferences.thumbnailSize === value ? "active" : ""}`} onClick={() => void patchImages({ thumbnailSize: value })}>{label}</button>
-                  ))}
-                </div>
-              </div>
+              <SettingsImagesPanel preferences={settings.imagePreferences} onPatch={(patch) => void patchImages(patch)} />
             )}
 
             {activeTab === "gpt-mcp" && (
@@ -410,38 +375,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "data" && (
-              <>
-                <div className="settings-actions">
-                  <button type="button" className="theme-btn" onClick={handleBackup}>백업 만들기</button>
-                  <button type="button" className="theme-btn" onClick={handleRestore}>백업 복원</button>
-                  <button type="button" className="theme-btn" onClick={runIntegrity}>무결성 검사</button>
-                  <button type="button" className="theme-btn" onClick={handleCleanupOrphans}>미사용 이미지 정리</button>
-                </div>
-                <label className="settings-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={settings.autoBackup.enabled}
-                    disabled={!isTauri()}
-                    onChange={(event) =>
-                      patchSettings({ autoBackup: { ...settings.autoBackup, enabled: event.target.checked } })
-                    }
-                  />
-                  자동 백업 {isTauri() ? "하루 1회" : "(데스크톱 앱에서 사용 가능)"}
-                </label>
-                {integrityReport && (
-                  <div className="integrity-report">
-                    {integrityReport.issues.length === 0 ? (
-                      <p>문제가 없습니다.</p>
-                    ) : (
-                      integrityReport.issues.slice(0, 8).map((issue) => (
-                        <p key={issue.id} className={`integrity-issue integrity-issue--${issue.severity}`}>
-                          {issue.message}
-                        </p>
-                      ))
-                    )}
-                  </div>
-                )}
-              </>
+              <SettingsDataPanel settings={settings} report={integrityReport} onBackup={() => void handleBackup()} onRestore={() => void handleRestore()} onIntegrity={() => void runIntegrity()} onCleanup={() => void handleCleanupOrphans()} onAutoBackupChange={(enabled) => void patchSettings({ autoBackup: { ...settings.autoBackup, enabled } })} />
             )}
 
             {activeTab === "templates" && (
@@ -533,26 +467,11 @@ export default function SettingsModal({
             )}
 
             {activeTab === "advanced" && (
-              <div className="advanced-settings-panel">
-                <p>고급 설정은 진단 정보와 위험한 옵션을 분리해 두는 공간입니다.</p>
-                <p>백업, 복원, 무결성 검사, 이미지 정리는 데이터 관리 탭에서 실행하세요.</p>
-              </div>
+              <SettingsAdvancedPanel />
             )}
 
             {activeTab === "updates" && (
-              <div className="settings-pref-panel updater-settings-panel">
-                <p className="settings-label">앱 업데이트</p>
-                <p>현재 버전: {updateState.status === "available" ? updateState.currentVersion : updateState.status === "up_to_date" ? updateState.currentVersion : "설치된 데스크톱 앱에서 확인"}</p>
-                {updateState.status === "available" && <><p>최신 버전: {updateState.latestVersion}</p><div className="update-notes"><pre>{updateState.notes || "변경사항이 없습니다."}</pre></div><button type="button" className="theme-btn" onClick={() => void onInstallUpdate()}>다운로드 및 설치</button></>}
-                {updateState.status === "downloading" && <p>업데이트 다운로드 중… {updateState.percent === undefined ? `${Math.round(updateState.downloadedBytes / 1024 / 1024)}MB` : `${updateState.percent}%`}</p>}
-                {updateState.status === "restart_required" && <button type="button" className="theme-btn" onClick={() => void onRestartAfterUpdate()}>지금 다시 시작</button>}
-                {updateState.status === "up_to_date" && <p>최신 버전입니다.</p>}
-                {updateState.status === "offline" && <p>{updateState.message}</p>}
-                <div className="settings-actions"><button type="button" className="theme-btn" onClick={() => void onCheckForUpdate()}>업데이트 확인</button><button type="button" className="theme-btn" onClick={onOpenReleasePage}>GitHub Releases 열기</button></div>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.autoCheckEnabled} onChange={(event) => void onPatchUpdatePreferences({ autoCheckEnabled: event.target.checked })} /> 앱 시작 시 업데이트 확인</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.notificationsEnabled} onChange={(event) => void onPatchUpdatePreferences({ notificationsEnabled: event.target.checked })} /> 업데이트 알림 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.updatePreferences.backupBeforeInstall} onChange={(event) => void onPatchUpdatePreferences({ backupBeforeInstall: event.target.checked })} /> 설치 전 자동 백업</label>
-              </div>
+              <SettingsUpdatesPanel state={updateState} onCheck={() => void onCheckForUpdate()} onInstall={() => void onInstallUpdate()} onRestart={() => void onRestartAfterUpdate()} onOpenRelease={onOpenReleasePage} preferences={settings.updatePreferences} onPatch={(patch) => void onPatchUpdatePreferences(patch)} />
             )}
           </section>
         </div>
