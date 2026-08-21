@@ -10,6 +10,39 @@ export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
 /** Per-file cap for browser/Tauri image import (aligned with `IMPORT_LIMITS.MAX_IMAGE_BYTES`). */
 export const MAX_IMPORT_IMAGE_BYTES = IMPORT_LIMITS.MAX_IMAGE_BYTES;
+/** Keep browser image storage below the common localStorage quota with headroom for metadata. */
+export const MAX_BROWSER_IMAGE_STORAGE_BYTES = 4 * 1024 * 1024;
+const BROWSER_IMAGE_STORAGE_ERROR = "브라우저 이미지 저장 공간이 부족합니다. 이미지 크기를 줄이거나 기존 이미지를 삭제한 후 다시 시도해 주세요.";
+
+export function estimateBrowserImageStorageBytes(fileSize: number, mime: string): number {
+  const dataUrlPrefixBytes = `data:${mime};base64,`.length;
+  const base64Characters = 4 * Math.ceil(fileSize / 3);
+  // localStorage strings are commonly accounted for as UTF-16 code units.
+  return (dataUrlPrefixBytes + base64Characters) * 2;
+}
+
+function getBrowserStorageUsageBytes(): number {
+  let characters = 0;
+  for (let index = 0; index < localStorage.length; index += 1) {
+    const key = localStorage.key(index);
+    if (!key) continue;
+    characters += key.length + (localStorage.getItem(key)?.length ?? 0);
+  }
+  return characters * 2;
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: unknown; code?: unknown };
+  return candidate.name === "QuotaExceededError" || candidate.code === 22 || candidate.code === 1014;
+}
+
+function preflightBrowserImageStorage(file: File, mime: string): void {
+  const expectedBytes = estimateBrowserImageStorageBytes(file.size, mime);
+  if (getBrowserStorageUsageBytes() + expectedBytes > MAX_BROWSER_IMAGE_STORAGE_BYTES) {
+    throw new Error(BROWSER_IMAGE_STORAGE_ERROR);
+  }
+}
 
 export async function pickImages(): Promise<string[]> {
   if (!isTauri()) {
@@ -82,12 +115,19 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
       }
       const dataUrl = await fileToDataUrl(file);
       const key = createBrowserImageKey(file.name);
-      localStorage.setItem(key, dataUrl);
+      preflightBrowserImageStorage(file, expectedMime);
+      try {
+        localStorage.setItem(key, dataUrl);
+      } catch (error) {
+        if (isQuotaExceededError(error)) throw new Error(BROWSER_IMAGE_STORAGE_ERROR, { cause: error });
+        throw error;
+      }
       names.push(key);
     }
   } catch (error) {
     await Promise.all(names.map((filename) => deleteImage(filename).catch(() => undefined)));
-    throw new Error(errorMessage(error, "이미지를 저장하지 못했습니다."), { cause: error });
+    const message = isQuotaExceededError(error) ? BROWSER_IMAGE_STORAGE_ERROR : errorMessage(error, "이미지를 저장하지 못했습니다.");
+    throw new Error(message, { cause: error });
   }
   return names;
 }

@@ -17,6 +17,8 @@ import {
   loadExamSessions,
   loadGeneratedExams,
   MAX_IMPORT_IMAGE_BYTES,
+  MAX_BROWSER_IMAGE_STORAGE_BYTES,
+  estimateBrowserImageStorageBytes,
   cleanupOrphanImages,
   clearImageUrlCache,
   getImageUrl,
@@ -78,6 +80,7 @@ describe("image file security limits", () => {
     mockedIsTauri.mockReturnValue(false);
     localStorage.clear();
     clearImageUrlCache();
+    vi.restoreAllMocks();
   });
 
   it("exposes the shared 25MB import image cap", () => {
@@ -91,6 +94,30 @@ describe("image file security limits", () => {
     });
 
     await expect(saveImageFiles([largeImage])).rejects.toThrow("25MB 이하");
+  });
+
+  it("preflights the encoded browser size before writing localStorage", async () => {
+    const bytes = new Uint8Array(Math.ceil(MAX_BROWSER_IMAGE_STORAGE_BYTES / 2));
+    bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const image = new File([bytes], "near-quota.png", { type: "image/png" });
+
+    expect(estimateBrowserImageStorageBytes(image.size, image.type)).toBeGreaterThan(MAX_BROWSER_IMAGE_STORAGE_BYTES);
+    await expect(saveImageFiles([image])).rejects.toThrow("브라우저 이미지 저장 공간이 부족합니다");
+    expect(localStorage.length).toBe(0);
+  });
+
+  it("normalizes a browser quota exception and rolls back earlier files", async () => {
+    const first = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "first.png", { type: "image/png" });
+    const second = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "second.png", { type: "image/png" });
+    const originalSetItem = Storage.prototype.setItem;
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    setItem.mockImplementationOnce((key, value) => originalSetItem.call(localStorage, key, value));
+    setItem.mockImplementationOnce(() => {
+      throw new DOMException("quota exceeded", "QuotaExceededError");
+    });
+
+    await expect(saveImageFiles([first, second])).rejects.toThrow("브라우저 이미지 저장 공간이 부족합니다");
+    expect(localStorage.length).toBe(0);
   });
 
   it("stores browser image files in localStorage", async () => {

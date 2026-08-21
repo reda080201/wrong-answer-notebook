@@ -50,6 +50,7 @@ import { applyAutomaticFigurePreference } from "../../../features/figures/servic
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../../../utils/importImageReferences";
 import Dialog from "../../../shared/ui/Dialog";
 import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
+import FeatureErrorBoundary from "../../../components/FeatureErrorBoundary";
 import FigureComparisonPanel from "../../../features/figures/components/FigureComparisonPanel";
 import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 import type { SupplementalImportMode } from "../../../features/supplemental-resources/model/supplementalResource";
@@ -1748,6 +1749,7 @@ export default function ImportFromGptModal({
       >
         <pre className="import-prompt-full" tabIndex={0}>{activePromptContent}</pre>
       </Dialog>
+      <FeatureErrorBoundary featureName="가져오기 검수">
       <ImportReviewWorkspace
         open={reviewWorkspaceOpen && Boolean(draft)}
         title={`${draft?.title?.trim() || "가져온 자료"} 검수`}
@@ -1863,6 +1865,7 @@ export default function ImportFromGptModal({
           </section>
         )}
       </ImportReviewWorkspace>
+      </FeatureErrorBoundary>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}

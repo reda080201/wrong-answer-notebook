@@ -9,6 +9,7 @@ import ProbabilityTreeDiagram from "./diagrams/ProbabilityTreeDiagram";
 import SequenceFlowDiagram from "./diagrams/SequenceFlowDiagram";
 import TrigUnitCircleDiagram from "./diagrams/TrigUnitCircleDiagram";
 import VennDiagram from "./diagrams/VennDiagram";
+import FeatureErrorBoundary from "./FeatureErrorBoundary";
 
 const DIAGRAM_LABELS: Record<LearningDiagramType, string> = {
   "derivative-tangent": "미분계수와 접선",
@@ -80,7 +81,8 @@ export default function DiagramCard({
   const paramLines = spec ? diagramParamLines(spec) : [];
 
   return (
-    <figure className="learning-diagram-card" aria-label={`${title} 다이어그램`}>
+    <FeatureErrorBoundary featureName="다이어그램">
+      <figure className="learning-diagram-card" aria-label={`${title} 다이어그램`}>
       {type === "derivative-tangent" && (
         <DerivativeTangentDiagram spec={spec?.type === "derivative-tangent" ? spec : undefined} />
       )}
@@ -126,6 +128,7 @@ export default function DiagramCard({
           ))}
         </ul>
       ) : null}
-    </figure>
+      </figure>
+    </FeatureErrorBoundary>
   );
 }

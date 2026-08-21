@@ -1,10 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Annotation } from "../types";
+import { getImageUrl } from "../api";
 import AnnotatableQuestion from "./AnnotatableQuestion";
 
 vi.mock("../api", () => ({
-  getImageUrl: vi.fn(),
+  getImageUrl: vi.fn().mockResolvedValue("mock://question.png"),
 }));
 
 describe("AnnotatableQuestion", () => {
@@ -143,5 +144,72 @@ describe("AnnotatableQuestion", () => {
     expect(screen.getByText("①")).toBeInTheDocument();
     expect(screen.getByText("②")).toBeInTheDocument();
     expect(container.querySelectorAll(".question-choice")).toHaveLength(2);
+  });
+
+  it.each(["Enter", " "])("erases an image annotation with %s only in erase mode", async (key) => {
+    const onAnnotationsChange = vi.fn();
+    const annotation: Annotation = {
+      id: "image-ann-1",
+      target: "question",
+      kind: "image",
+      imageId: "question.png",
+      x: 0.1,
+      y: 0.1,
+      width: 0.2,
+      height: 0.2,
+      tool: "highlight",
+    };
+
+    render(
+      <AnnotatableQuestion
+        question="1. 이미지 문항"
+        questionImages={["question.png"]}
+        annotations={[annotation]}
+        memoMode
+        activeTool="erase"
+        onAnnotationsChange={onAnnotationsChange}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    const eraseTarget = await screen.findByRole("button", { name: "이미지 주석 지우기" });
+    fireEvent.keyDown(eraseTarget, { key });
+
+    expect(onAnnotationsChange).toHaveBeenCalledWith([]);
+    expect(getImageUrl).toHaveBeenCalledWith("question.png");
+  });
+
+  it("does not expose image annotations as keyboard controls outside erase mode", async () => {
+    const annotation: Annotation = {
+      id: "image-ann-2",
+      target: "question",
+      kind: "image",
+      imageId: "question.png",
+      x: 0.1,
+      y: 0.1,
+      width: 0.2,
+      height: 0.2,
+      tool: "highlight",
+    };
+
+    const { container } = render(
+      <AnnotatableQuestion
+        question="1. 이미지 문항"
+        questionImages={["question.png"]}
+        annotations={[annotation]}
+        memoMode
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector(".image-ann")).toBeInTheDocument());
+    expect(container.querySelector(".image-ann")).not.toHaveAttribute("role");
+    expect(container.querySelector(".image-ann")).not.toHaveAttribute("tabindex");
   });
 });
