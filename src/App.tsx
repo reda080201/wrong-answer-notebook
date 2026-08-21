@@ -46,6 +46,7 @@ import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestio
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
+import { getFolderDescendantIds } from "./utils/libraryFolders";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -460,12 +461,7 @@ function AppContent() {
   }, [library, prompt]);
   const moveLibraryFolder = useCallback(async (folder: LibraryFolder, parentId?: string) => {
     if (folder.id === parentId) throw new Error("폴더를 자기 자신으로 이동할 수 없습니다.");
-    const descendants = new Set<string>([folder.id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const item of library.folders) if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) { descendants.add(item.id); changed = true; }
-    }
+    const descendants = getFolderDescendantIds(library.folders, folder.id);
     if (parentId && descendants.has(parentId)) throw new Error("폴더를 자신의 하위 폴더로 이동할 수 없습니다.");
     await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, parentId, updatedAt: new Date().toISOString() } : item));
   }, [library]);
