@@ -24,6 +24,7 @@ import { useSettingsContext } from "../contexts/SettingsContext";
 import { X } from "lucide-react";
 import SettingsTabList from "./SettingsTabList";
 import SettingsThemePanel from "./settings/SettingsThemePanel";
+import SettingsViewPanel from "./settings/SettingsViewPanel";
 
 export type SettingsTab =
   | "theme"
@@ -281,40 +282,10 @@ export default function SettingsModal({
             )}
 
             {activeTab === "view" && (
-              <div className="settings-pref-panel">
-                <p className="settings-label">보기</p>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.hideAnswers} onChange={(event) => void patchView({ hideAnswers: event.target.checked })} /> 정답 가리기</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showDifficulty} onChange={(event) => void patchView({ showDifficulty: event.target.checked })} /> 난이도 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showOriginalPages} onChange={(event) => void patchView({ showOriginalPages: event.target.checked })} /> 원본 페이지 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.showLearningVisuals} onChange={(event) => void patchView({ showLearningVisuals: event.target.checked })} /> 학습 시각화 표시</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.compactToolbar} onChange={(event) => void patchView({ compactToolbar: event.target.checked })} /> 컴팩트 도구바</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={settings.viewPreferences.conceptLinksEnabled !== false} onChange={(event) => void patchView({ conceptLinksEnabled: event.target.checked })} /> 해설의 개념 링크 사용</label>
-                <label className="settings-checkbox"><input type="checkbox" checked={Boolean(settings.viewPreferences.automaticConceptLinksEnabled)} disabled={settings.viewPreferences.conceptLinksEnabled === false} onChange={(event) => void patchView({ automaticConceptLinksEnabled: event.target.checked })} /> 정확히 일치하는 개념 자동 연결</label>
-                <p className="settings-label">문제지 배치</p>
-                <div className="theme-options">
-                  {([["single", "한 단"], ["columns", "2단"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.sheetLayout === value ? "active" : ""}`} onClick={() => void patchView({ sheetLayout: value })}>{label}</button>
-                  ))}
-                </div>
-                <p className="settings-label">글자 크기</p>
-                <div className="theme-options">
-                  {([["normal", "기본"], ["large", "크게"], ["xlarge", "아주 크게"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.fontSize === value ? "active" : ""}`} onClick={() => void patchView({ fontSize: value })}>{label}</button>
-                  ))}
-                </div>
-                <p className="settings-label">문제 크게 보기 해설</p>
-                <div className="theme-options" role="group" aria-label="문제 크게 보기 해설 방식">
-                  {([["split", "나란히"], ["dialog", "별도 창"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.questionSolutionPresentation === value ? "active" : ""}`} aria-pressed={settings.viewPreferences.questionSolutionPresentation === value} onClick={() => void patchView({ questionSolutionPresentation: value })}>{label}</button>
-                  ))}
-                </div>
-                <p className="settings-label">특강 항목 기본 상태</p>
-                <div className="theme-options" role="group" aria-label="특강 항목 기본 상태">
-                  {([["first", "첫 항목만 펼침"], ["all", "모두 펼침"], ["none", "모두 접힘"]] as const).map(([value, label]) => (
-                    <button key={value} type="button" className={`theme-btn ${settings.viewPreferences.lectureBlockDefaultState === value ? "active" : ""}`} aria-pressed={settings.viewPreferences.lectureBlockDefaultState === value} onClick={() => void patchView({ lectureBlockDefaultState: value })}>{label}</button>
-                  ))}
-                </div>
-              </div>
+              <SettingsViewPanel
+                preferences={settings.viewPreferences}
+                onPatch={patchView}
+              />
             )}
 
             {activeTab === "library" && (
