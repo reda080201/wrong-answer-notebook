@@ -25,7 +25,7 @@ export interface ViewPreferencesLegacyStorage {
 }
 
 export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
-  sheetLayout: "single",
+  sheetLayout: "auto",
   fontSize: "normal",
   hideAnswers: false,
   showDifficulty: true,
@@ -95,7 +95,7 @@ export const DEFAULT_CHATGPT_MCP_PREFERENCES: ChatGptMcpPreferences = {
 };
 
 function normalizeSheetLayout(value: unknown): ViewPreferences["sheetLayout"] {
-  return value === "columns" ? "columns" : "single";
+  return value === "single" || value === "columns" || value === "auto" ? value : "auto";
 }
 
 function normalizeFontSize(value: unknown): ViewPreferences["fontSize"] {
@@ -254,7 +254,9 @@ export function migrateViewPreferences(input: MigrateViewPreferencesInput = {}):
   const hideFromStorage = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.answerHide) === "true";
 
   const savedLayout = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.sheetLayout);
-  const sheetLayout = savedLayout === "columns" ? "columns" : DEFAULT_VIEW_PREFERENCES.sheetLayout;
+  const sheetLayout = savedLayout === "single" || savedLayout === "columns" || savedLayout === "auto"
+    ? savedLayout
+    : DEFAULT_VIEW_PREFERENCES.sheetLayout;
 
   const savedFontSize = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.focusTextSize);
   const fontSize =

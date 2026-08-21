@@ -16,4 +16,14 @@
 .structured-question-described-figure, .structured-question-missing-figure, .structured-problem-sheet-warning { padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.375rem; background: var(--surface-soft); }
 .structured-question-equation-fallback { white-space: pre-wrap; color: var(--danger); }
 .structured-problem-sheet-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; padding: 0.75rem; background: var(--surface-soft); }
+.structured-problem-sheet-importance { position: relative; }
+.structured-problem-sheet-importance-popover { position: absolute; z-index: 5; top: calc(100% + 0.35rem); right: 0; display: grid; grid-template-columns: minmax(8rem, 1fr) 4rem auto; align-items: center; gap: 0.45rem; min-width: 18rem; padding: 0.6rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface); box-shadow: var(--shadow-popover, 0 8px 24px rgb(0 0 0 / 0.14)); }
+.structured-problem-sheet-more { display: none; }
+.study-paper--exam .structured-problem-sheet { gap: 0; padding: 1.5rem; border: 1px solid var(--border); background: var(--surface); }
+.study-paper--exam .structured-problem-sheet-question { break-inside: avoid; padding: 1.4rem 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.study-paper--exam .structured-problem-sheet-question + .structured-problem-sheet-question { border-top: 1px solid var(--border); }
+.study-paper--exam .structured-problem-sheet-actions { opacity: 0; transition: opacity 120ms ease; }
+.study-paper--exam .structured-problem-sheet-question:focus-within .structured-problem-sheet-actions, .study-paper--exam .structured-problem-sheet-question:hover .structured-problem-sheet-actions { opacity: 1; }
+@media (min-width: 1440px) { .study-paper--exam .structured-problem-sheet--auto, .study-paper--exam .structured-problem-sheet--columns { column-count: 2; column-gap: 2.5rem; } .study-paper--exam .structured-problem-sheet-question { break-inside: avoid-column; } }
+@media (max-width: 760px) { .structured-problem-sheet-importance, .structured-problem-sheet-star, .structured-problem-sheet-actions > .btn-icon[aria-label$="크게 보기"] { display: none; } .structured-problem-sheet-more { display: inline-flex; } .structured-problem-sheet-importance-popover { position: fixed; right: 0.75rem; left: 0.75rem; grid-template-columns: minmax(0, 1fr) 4rem auto; min-width: 0; } }
 @media (max-width: 760px) { .structured-problem-sheet-question { padding: 0.75rem; } .structured-problem-sheet-question > header { align-items: flex-start; flex-direction: column; } .structured-problem-sheet-actions { justify-content: flex-start; } }
