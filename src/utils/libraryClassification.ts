@@ -47,6 +47,10 @@ function textList(value: unknown): string[] | undefined {
   return result.length ? result : undefined;
 }
 
+function order(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
 function resourceType(value: unknown): LibraryResourceType | undefined {
   return typeof value === "string" && RESOURCE_TYPES.has(value as LibraryResourceType)
     ? value as LibraryResourceType
@@ -66,6 +70,10 @@ export function normalizeLearningResourceClassification(
     subunit: text(value.subunit),
     conceptIds: textList(value.conceptIds),
     resourceType: resourceType(value.resourceType),
+    courseOrder: order(value.courseOrder),
+    majorUnitOrder: order(value.majorUnitOrder),
+    unitOrder: order(value.unitOrder),
+    subunitOrder: order(value.subunitOrder),
   };
   return Object.values(normalized).some((item) => item !== undefined) ? normalized : undefined;
 }
@@ -159,4 +167,24 @@ export function projectLibraryResource(
     classification: resolveLearningResourceClassification(entry),
     group: getLibraryResourceGroup(entry, normalizedPreferences),
   };
+}
+
+export function compareLibraryClassifications(
+  left: ResolvedLearningResourceClassification,
+  right: ResolvedLearningResourceClassification,
+  leftId = "",
+  rightId = "",
+): number {
+  const keys: Array<keyof LearningResourceClassification> = ["courseOrder", "majorUnitOrder", "unitOrder", "subunitOrder"];
+  for (const key of keys) {
+    const a = left[key];
+    const b = right[key];
+    if (typeof a === "number" && typeof b === "number" && a !== b) return a - b;
+    if (typeof a === "number" && typeof b !== "number") return -1;
+    if (typeof a !== "number" && typeof b === "number") return 1;
+  }
+  return `${left.course ?? ""}/${left.majorUnit ?? ""}/${left.unit ?? ""}/${left.subunit ?? ""}`.localeCompare(
+    `${right.course ?? ""}/${right.majorUnit ?? ""}/${right.unit ?? ""}/${right.subunit ?? ""}`,
+    "ko",
+  ) || leftId.localeCompare(rightId);
 }

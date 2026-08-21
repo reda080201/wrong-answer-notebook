@@ -92,7 +92,7 @@ describe("normalizeViewPreferences", () => {
     expect(normalizeViewPreferences({}).libraryNavigation).toEqual({});
     expect(normalizeViewPreferences({
       libraryNavigation: { subject: " 수학 ", course: "수학 II", unit: "미분", section: "lectures" },
-    }).libraryNavigation).toEqual({ subject: "수학", course: "수학 II", unit: "미분", section: "lectures" });
+    }).libraryNavigation).toEqual({ subject: "수학", course: "수학 II", unit: "미분", group: "lectures", section: "lectures" });
   });
 
   it("falls back for invalid or legacy presentation preference values", () => {

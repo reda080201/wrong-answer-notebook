@@ -16,6 +16,7 @@ describe("LibraryExplorer", () => {
     fireEvent.click(screen.getByRole("navigation", { name: "과목 목록" }).querySelector("button")!);
     fireEvent.click(screen.getByRole("button", { name: /수학 II/ }));
     fireEvent.click(screen.getByRole("button", { name: /^미분\s*1개 자료$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "전체 자료 보기" }));
     expect(screen.getByRole("button", { name: /미분.*N제/ })).toBeInTheDocument();
   });
 
@@ -42,7 +43,7 @@ describe("LibraryExplorer", () => {
       subject: "수학",
       course: "수학 II",
       unit: "미분",
-      section: "all",
+      group: "all",
     });
   });
 });

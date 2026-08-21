@@ -32,14 +32,19 @@
 .library-group-tabs button.is-active { border-bottom-color: var(--accent); color: var(--text); font-weight: 700; }
 .library-list-heading { margin: 22px 0 8px; }
 .library-list-heading p { margin: 2px 0; color: var(--text-muted); font-size: 12px; }
-.library-resource-row { display: grid; grid-template-columns: minmax(180px, 1.8fr) 120px 100px 70px 90px; align-items: center; width: 100%; min-height: 52px; padding: 8px 10px; border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
+.library-resource-row { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: center; width: 100%; min-height: 52px; padding: 8px 10px; border-top: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
+.library-resource-open { display: grid; grid-template-columns: minmax(180px, 1.8fr) 120px 100px 70px 90px; align-items: center; min-width: 0; width: 100%; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; }
 .library-resource-list--compact .library-resource-row { min-height: 44px; padding-block: 5px; }
-.library-resource-row:hover, .library-resource-row:focus-visible { background: var(--surface-hover); }
+.library-resource-row:hover, .library-resource-row:focus-within { background: var(--surface-hover); }
 .library-resource-name { overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .library-resource-type, .library-resource-subject, .library-resource-count, .library-resource-row time { color: var(--text-muted); font-size: 12px; }
 .library-folder-context { max-width: 960px; margin: 20px auto; }
 .library-folder-context > span { display: block; margin-bottom: 10px; color: var(--text-muted); font-size: 13px; }
 .library-folder-context > button { margin-bottom: 12px; border: 0; background: transparent; color: var(--accent-strong); }
 .library-empty { padding: 40px 0; color: var(--text-muted); text-align: center; }
-@media (max-width: 1100px) { .library-explorer { grid-template-columns: 220px minmax(0, 1fr); } .library-resource-pane { padding-inline: 20px; } .library-resource-row { grid-template-columns: minmax(150px, 1fr) 100px 80px 65px; } .library-resource-subject { display: none; } }
-@media (max-width: 720px) { .library-explorer { display: block; overflow: auto; } .library-subject-pane { border-right: 0; border-bottom: 1px solid var(--border); } .library-resource-pane { padding: 16px; } .library-resource-toolbar { display: block; } .library-toolbar-controls { margin-top: 12px; } .library-toolbar-controls input { width: 100%; } .library-resource-row { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; } .library-resource-type, .library-resource-count { display: none; } .library-resource-row time { grid-column: 2; grid-row: 1 / span 2; } }
+.library-classification-form { display: grid; gap: 14px; }
+.library-classification-form > label, .library-classification-form fieldset > label { display: grid; grid-template-columns: minmax(110px, .35fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.library-classification-form fieldset { display: grid; gap: 10px; margin: 4px 0 0; padding: 12px; border: 1px solid var(--border); }
+.library-classification-form fieldset legend { padding-inline: 4px; color: var(--text-muted); font-size: 12px; }
+@media (max-width: 1100px) { .library-explorer { grid-template-columns: 220px minmax(0, 1fr); } .library-resource-pane { padding-inline: 20px; } .library-resource-open { grid-template-columns: minmax(150px, 1fr) 100px 80px 65px; } .library-resource-subject { display: none; } }
+@media (max-width: 720px) { .library-explorer { display: block; overflow: auto; } .library-subject-pane { border-right: 0; border-bottom: 1px solid var(--border); } .library-resource-pane { padding: 16px; } .library-resource-toolbar { display: block; } .library-toolbar-controls { margin-top: 12px; } .library-toolbar-controls input { width: 100%; } .library-resource-open { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 8px; } .library-resource-type, .library-resource-count { display: none; } .library-resource-open time { grid-column: 2; grid-row: 1 / span 2; } }
