@@ -22,20 +22,22 @@ test("normal user launchers only resolve and start the installed application", a
 });
 
 test("developer-only launchers own dependency synchronization and the external Cargo target", async () => {
-  const [desktop, web, webLauncher] = await Promise.all([
+  const [desktop, web, preview, isolated, previewLauncher] = await Promise.all([
     readFile(path.join(root, "run-dev.bat"), "utf8"),
     readFile(path.join(root, "run-web.bat"), "utf8"),
-    readFile(path.join(root, "scripts", "launch-web.mjs"), "utf8"),
+    readFile(path.join(root, "run-preview.bat"), "utf8"),
+    readFile(path.join(root, "run-web-isolated.bat"), "utf8"),
+    readFile(path.join(root, "scripts", "launch-preview.mjs"), "utf8"),
   ]);
-  for (const script of [desktop, web]) {
-    assert.match(script, /CARGO_TARGET_DIR=.*WrongAnswerNotebookDev\\cargo-target/);
-  }
+  assert.match(desktop, /CARGO_TARGET_DIR=.*WrongAnswerNotebookDev\\cargo-target/);
   assert.match(desktop, /sync-dependencies\.mjs/);
   assert.match(desktop, /npm run dev:desktop/);
-  assert.match(web, /launch-web\.mjs/);
-  assert.match(webLauncher, /synchronizeDependencies/);
-  assert.match(webLauncher, /developmentCargoTargetDir/);
-  assert.match(webLauncher, /openBrowser\("http:\/\/127\.0\.0\.1:1420"\)/);
+  assert.match(web, /run-preview\.bat/);
+  assert.match(preview, /launch-preview\.mjs/);
+  assert.match(isolated, /VITE_STORAGE_MODE=isolated-browser/);
+  assert.match(previewLauncher, /synchronizeDependencies/);
+  assert.match(previewLauncher, /VITE_STORAGE_MODE: "desktop-shared"/);
+  assert.doesNotMatch(previewLauncher, /cargo\s+(?:build|run)/i);
 });
 
 test("development Cargo target defaults outside the source checkout", () => {

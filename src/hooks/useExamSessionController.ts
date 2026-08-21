@@ -7,6 +7,7 @@ import type {
   ChatGptMcpPreferences,
   EntryFormData,
   ExamMode,
+  ExamAnswerSheetLayout,
   ExamSession,
   ExamSubmissionTransactionResult,
   GeneratedExam,
@@ -45,6 +46,7 @@ export interface ExamOpenOptions {
   timeLimitMinutes?: number;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: ExamAnswerSheetLayout;
 }
 
 export function useExamSessionController({

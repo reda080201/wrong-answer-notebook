@@ -25,7 +25,7 @@ export interface ViewPreferencesLegacyStorage {
 }
 
 export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
-  sheetLayout: "single",
+  sheetLayout: "auto",
   fontSize: "normal",
   hideAnswers: false,
   showDifficulty: true,
@@ -54,6 +54,7 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   realExamAnswerSheetOpen: true,
   warnBeforeEnd: true,
   autoSubmitOnTimeExpired: false,
+  defaultAnswerSheetLayout: "auto",
 };
 
 export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = {
@@ -94,7 +95,7 @@ export const DEFAULT_CHATGPT_MCP_PREFERENCES: ChatGptMcpPreferences = {
 };
 
 function normalizeSheetLayout(value: unknown): ViewPreferences["sheetLayout"] {
-  return value === "columns" ? "columns" : "single";
+  return value === "single" || value === "columns" || value === "auto" ? value : "auto";
 }
 
 function normalizeFontSize(value: unknown): ViewPreferences["fontSize"] {
@@ -185,6 +186,10 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
       value.autoSubmitOnTimeExpired === undefined
         ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
         : Boolean(value.autoSubmitOnTimeExpired),
+    defaultAnswerSheetLayout:
+      value.defaultAnswerSheetLayout === "vertical" || value.defaultAnswerSheetLayout === "horizontal"
+        ? value.defaultAnswerSheetLayout
+        : "auto",
   };
 }
 
@@ -249,7 +254,9 @@ export function migrateViewPreferences(input: MigrateViewPreferencesInput = {}):
   const hideFromStorage = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.answerHide) === "true";
 
   const savedLayout = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.sheetLayout);
-  const sheetLayout = savedLayout === "columns" ? "columns" : DEFAULT_VIEW_PREFERENCES.sheetLayout;
+  const sheetLayout = savedLayout === "single" || savedLayout === "columns" || savedLayout === "auto"
+    ? savedLayout
+    : DEFAULT_VIEW_PREFERENCES.sheetLayout;
 
   const savedFontSize = storage?.getItem(ENTRY_DETAIL_STORAGE_KEYS.focusTextSize);
   const fontSize =

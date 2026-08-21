@@ -23,6 +23,13 @@ import { LIBRARY_FOLDERS_STORAGE_KEY } from "./api/libraryFolders";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
 
 export type StorageBackendKind = "tauri" | "desktop-proxy" | "isolated-browser";
+export type RequestedStorageMode = "desktop-shared" | "isolated-browser";
+
+export interface StorageBackendInitialization {
+  kind: StorageBackendKind;
+  ready: boolean;
+  error?: string;
+}
 
 export const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -57,6 +64,8 @@ type StoreName =
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
 const proxyToken = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_TOKEN;
+const sharedStorageMode = import.meta.env.VITE_STORAGE_MODE === "desktop-shared";
+const isolatedStorageMode = import.meta.env.VITE_STORAGE_MODE === "isolated-browser";
 
 async function proxyRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 설정이 없습니다.");
@@ -186,15 +195,50 @@ let overrideBackend: StorageBackend | undefined;
 export function getStorageBackend(): StorageBackend {
   if (overrideBackend) return overrideBackend;
   if (isTauri()) return tauriBackend;
+  if (isolatedStorageMode) return isolatedBrowserBackend;
   if (proxyUrl || proxyToken) {
     if (!proxyUrl || !proxyToken) throw new Error("데스크톱 저장소 bridge 환경 설정이 불완전합니다.");
     return proxyBackend;
   }
+  if (sharedStorageMode) throw new Error("데스크톱 데이터 연결 실패: shared storage bridge가 없습니다.");
   return isolatedBrowserBackend;
 }
 
 export function getStorageBackendKind(): StorageBackendKind {
   return getStorageBackend().kind;
+}
+
+export function getRequestedStorageMode(): RequestedStorageMode | undefined {
+  if (isTauri()) return undefined;
+  if (sharedStorageMode) return "desktop-shared";
+  if (isolatedStorageMode) return "isolated-browser";
+  return undefined;
+}
+
+/** Verifies storage before React mounts persistence consumers. */
+export async function initializeStorageBackend(): Promise<StorageBackendInitialization> {
+  if (isTauri()) return { kind: "tauri", ready: true };
+  if (sharedStorageMode) {
+    if (!proxyUrl || !proxyToken) {
+      return { kind: "desktop-proxy", ready: false, error: "데스크톱 데이터 연결 실패: 저장소 bridge 설정이 완전하지 않습니다." };
+    }
+    try {
+      const health = await proxyRequest<{ ok?: boolean; backend?: string }>("/v1/health");
+      if (health.ok !== true || health.backend !== "desktop-proxy") {
+        throw new Error("저장소 bridge 상태를 확인하지 못했습니다.");
+      }
+      return { kind: "desktop-proxy", ready: true };
+    } catch (cause) {
+      const reason = cause instanceof Error && cause.message ? cause.message : "저장소 bridge에 연결하지 못했습니다.";
+      return { kind: "desktop-proxy", ready: false, error: `데스크톱 데이터 연결 실패: ${reason}` };
+    }
+  }
+  if (isolatedStorageMode) return { kind: "isolated-browser", ready: true };
+  return {
+    kind: "isolated-browser",
+    ready: false,
+    error: "데스크톱 데이터 연결 실패: Web 실행 모드가 지정되지 않았습니다. run-preview.bat 또는 run-web-isolated.bat을 사용하세요.",
+  };
 }
 
 export function setStorageBackendForTests(backend?: StorageBackend): void {

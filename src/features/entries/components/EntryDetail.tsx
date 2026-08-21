@@ -34,7 +34,7 @@ import StudyAnalysisView from "../../../components/StudyAnalysisView";
 import StudyControlBar from "../../../components/StudyControlBar";
 import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
-import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
+import StudyZoomViewport, { getQuestionZoomStorageKey, restoreStudyZoomControls } from "../../../components/StudyZoomViewport";
 import TextReviewPanel from "../../../components/TextReviewPanel";
 import QuestionTheaterView from "../../../components/QuestionTheaterView";
 import LectureReaderView from "../../../components/LectureReaderView";
@@ -120,7 +120,7 @@ interface EntryDetailProps {
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
-type SheetLayout = "single" | "columns";
+type SheetLayout = "auto" | "single" | "columns";
 type AnswerViewMode = "card" | "table";
 type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
 type FocusMode = "closed" | "expanded" | "mini";
@@ -146,7 +146,7 @@ function formatDate(iso: string) {
 
 function loadSheetLayout(): SheetLayout {
   const saved = localStorage.getItem(SHEET_LAYOUT_KEY);
-  return saved === "columns" ? "columns" : "single";
+  return saved === "single" || saved === "columns" || saved === "auto" ? saved : "auto";
 }
 
 function loadAnswerView(): AnswerViewMode {
@@ -752,6 +752,37 @@ export default function EntryDetail({
       );
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "난이도 점수 저장에 실패했습니다.", "error");
+    }
+  };
+
+  const handleQuestionImportanceScoreChange = async (
+    questionNumber: string,
+    score: number | undefined,
+  ) => {
+    if (!onQuestionMetaChange) return;
+    const normalized = normalizeQuestionNumber(questionNumber);
+    const normalizedScore = normalizeDifficultyScore(score);
+    try {
+      await onQuestionMetaChange(entry, (current) => {
+        const now = new Date().toISOString();
+        const items = normalizeQuestionMeta(current);
+        const index = items.findIndex((meta) => normalizeQuestionNumber(meta.questionNumber) === normalized);
+        const apply = (meta: QuestionMeta) => ({
+          ...meta,
+          questionNumber: normalized,
+          rating: { ...meta.rating, importanceScore: normalizedScore },
+          updatedAt: now,
+        });
+        return index >= 0
+          ? items.map((meta, itemIndex) => itemIndex === index ? apply(meta) : meta)
+          : [apply({ questionNumber: normalized, important: false, updatedAt: now })];
+      });
+      pushToast(
+        normalizedScore ? `${normalized}번 중요도를 ${normalizedScore}점으로 저장했습니다.` : `${normalized}번 중요도를 비웠습니다.`,
+        "success",
+      );
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : "중요도 저장에 실패했습니다.", "error");
     }
   };
 
@@ -1409,6 +1440,7 @@ export default function EntryDetail({
                 {onQuickGptSolution && <button type="button" className="btn-icon" onClick={onQuickGptSolution}>GPT 해설</button>}
                 <button type="button" className="btn-icon" onClick={onEdit}>수정</button>
                 <button type="button" className="btn-icon" onClick={() => setQuickViewSettingsRequested(true)}>보기 설정</button>
+                <button type="button" className="btn-icon" onClick={() => restoreStudyZoomControls(getQuestionZoomStorageKey(entry.id, "paper"))}>줌 컨트롤 다시 표시</button>
                 {onTitleChange && <button type="button" className="btn-icon" onClick={() => setTitleEditing(true)}>이름 변경</button>}
                 <button type="button" className={`btn-icon ${memoMode ? "active" : ""}`} onClick={() => setMemoMode((value) => !value)}>메모</button>
                 <button type="button" className={`btn-icon ${entry.difficult ? "active-difficult" : ""}`} onClick={handleToggleDifficultWithToast}>어려움 표시</button>
@@ -1792,6 +1824,13 @@ export default function EntryDetail({
               />
             ) : (
               <>
+                {isSheet && problemSheetDisplayMode === "questions" && questionAnchors.length > 1 && (
+                  <nav className="problem-sheet-question-navigation" aria-label="문항 이동">
+                    <button type="button" className="btn-secondary" onClick={() => moveFocusedQuestion(-1)} disabled={focusedQuestionIndex === 0}>이전</button>
+                    <strong>{questionIdentifier(focusedQuestion) ?? focusedQuestionIndex + 1}번 <span>{focusedQuestionIndex + 1} / {questionAnchors.length}</span></strong>
+                    <button type="button" className="btn-secondary" onClick={() => moveFocusedQuestion(1)} disabled={focusedQuestionIndex >= questionAnchors.length - 1}>다음</button>
+                  </nav>
+                )}
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
@@ -1808,10 +1847,14 @@ export default function EntryDetail({
                     onQuestionDifficultyScoreChange={
                       isSheet ? handleQuestionDifficultyScoreChange : undefined
                     }
+                    onQuestionImportanceScoreChange={
+                      isSheet ? handleQuestionImportanceScoreChange : undefined
+                    }
                     selectionMode={selectionMode}
                     selectedQuestionNumbers={selectedQuestionNumbers}
                     onToggleQuestionSelected={toggleQuestionSelected}
                     displayMode={isSheet ? problemSheetDisplayMode : "questions"}
+                    currentQuestionIndex={focusedQuestionIndex}
                     revealedAnswerNumbers={revealedAnswerNumbers}
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}

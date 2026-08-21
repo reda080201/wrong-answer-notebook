@@ -4,6 +4,7 @@ import type { WrongAnswerEntry } from "./entry";
 export type ExamSessionStatus = "in_progress" | "submitted";
 
 export type ExamMode = "practice" | "real";
+export type ExamAnswerSheetLayout = "auto" | "vertical" | "horizontal";
 
 export interface ExamQuestionSnapshot {
   id: string;
@@ -83,6 +84,7 @@ export interface ExamSession {
   deadlineAt?: string;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: ExamAnswerSheetLayout;
   submittedAt?: string;
   score?: ExamSessionScore;
 }

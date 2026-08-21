@@ -44,7 +44,7 @@ export interface LibraryNavigationPreference {
 }
 
 export interface ViewPreferences {
-  sheetLayout: "single" | "columns";
+  sheetLayout: "auto" | "single" | "columns";
   fontSize: "normal" | "large" | "xlarge";
   hideAnswers: boolean;
   showDifficulty: boolean;
@@ -77,6 +77,7 @@ export interface ExamPreferences {
   realExamAnswerSheetOpen?: boolean;
   warnBeforeEnd?: boolean;
   autoSubmitOnTimeExpired?: boolean;
+  defaultAnswerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
 export interface ImagePreferences {

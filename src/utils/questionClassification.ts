@@ -66,7 +66,7 @@ export function resolveQuestionClassification(
     subject: classification.subject || entry.subject || "기타",
     sourceType,
     difficultyScore: normalizeDifficultyScore(meta?.difficultyScore),
-    importanceScore: normalizeDifficultyScore(meta?.rating?.importanceScore) ?? (meta?.important ? 100 : undefined),
+    importanceScore: normalizeDifficultyScore(meta?.rating?.importanceScore),
     qualityScore: normalizeDifficultyScore(meta?.rating?.qualityScore),
     isPastExam: sourceType === "past_exam",
   };
@@ -77,7 +77,7 @@ export function resolveQuestionDifficulty(meta?: QuestionMeta): number | undefin
 }
 
 export function resolveQuestionImportance(meta?: QuestionMeta): number | undefined {
-  return normalizeDifficultyScore(meta?.rating?.importanceScore) ?? (meta?.important ? 100 : undefined);
+  return normalizeDifficultyScore(meta?.rating?.importanceScore);
 }
 
 export function resolveQuestionQuality(meta?: QuestionMeta): number | undefined {

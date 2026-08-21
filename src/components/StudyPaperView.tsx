@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
 import { parseQuestionText } from "../utils/textLayout";
 import { getEntryQuestions } from "../utils/entryQuestions";
@@ -7,7 +8,8 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
-import { Maximize2 } from "lucide-react";
+import { Maximize2, MoreHorizontal, SlidersHorizontal, Star } from "lucide-react";
+import Menu from "../shared/ui/Menu";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -17,16 +19,18 @@ interface StudyPaperViewProps {
   onAnnotationsChange: (annotations: Annotation[]) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
-  sheetLayout: "single" | "columns";
+  sheetLayout: "auto" | "single" | "columns";
   searchQuery?: string;
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
   onToggleQuestionImportant?: (questionNumber: string) => void;
   onQuestionDifficultyScoreChange?: (questionNumber: string, score: number | undefined) => void;
+  onQuestionImportanceScoreChange?: (questionNumber: string, score: number | undefined) => void;
   selectionMode?: boolean;
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   displayMode?: "questions" | "exam";
+  currentQuestionIndex?: number;
   revealedAnswerNumbers?: Set<string>;
   onToggleAnswerReveal?: (questionNumber: string) => void;
   onOpenQuestionSolution?: (questionNumber: string) => void;
@@ -45,17 +49,23 @@ export default function StudyPaperView({
   onOpenQuestionTheater,
   onToggleQuestionImportant,
   onQuestionDifficultyScoreChange,
+  onQuestionImportanceScoreChange,
   selectionMode = false,
   selectedQuestionNumbers = [],
   onToggleQuestionSelected,
   displayMode = "questions",
+  currentQuestionIndex = 0,
   revealedAnswerNumbers,
   onToggleAnswerReveal,
   onOpenQuestionSolution,
 }: StudyPaperViewProps) {
+  const [importanceEditor, setImportanceEditor] = useState<string | null>(null);
   const structuredQuestions = entry.structuredQuestions?.length ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
+  const visibleStructuredQuestions = displayMode === "questions"
+    ? structuredQuestions.slice(Math.max(0, currentQuestionIndex), Math.max(0, currentQuestionIndex) + 1)
+    : structuredQuestions;
   const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
   const diagramItems = [
     ...(entry.answerKey ?? [])
@@ -97,8 +107,9 @@ export default function StudyPaperView({
         </header>
 
         {structuredQuestions.length > 0 ? (
-          <div className="structured-problem-sheet" data-source="structuredQuestions">
-            {structuredQuestions.map((question, index) => {
+          <div className={`structured-problem-sheet structured-problem-sheet--${sheetLayout}`} data-source="structuredQuestions">
+            {visibleStructuredQuestions.map((question) => {
+              const index = structuredQuestions.indexOf(question);
               const number = normalizeQuestionNumber(question.questionNumber);
               const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
               const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
@@ -116,7 +127,19 @@ export default function StudyPaperView({
                     <div className="structured-problem-sheet-actions">
                       {selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}
                       {onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}
-                      {onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}
+                      {onToggleQuestionImportant && <button type="button" className="btn-icon structured-problem-sheet-star" aria-label={`${question.questionNumber}번 중요 표시`} title={meta?.important ? "중요 표시 해제" : "중요 표시"} aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}><Star size={16} fill={meta?.important ? "currentColor" : "none"} aria-hidden="true" /></button>}
+                      {onQuestionImportanceScoreChange && <div className="structured-problem-sheet-importance">
+                        <button type="button" className="btn-secondary btn-sm" aria-expanded={importanceEditor === number} aria-controls={`importance-editor-${number}`} onClick={() => setImportanceEditor((current) => current === number ? null : number)}>중요도 {meta?.rating?.importanceScore ?? "-"}</button>
+                        {importanceEditor === number && <div id={`importance-editor-${number}`} className="structured-problem-sheet-importance-popover" role="group" aria-label={`${question.questionNumber}번 중요도`}>
+                          <input aria-label="중요도 슬라이더" type="range" min="1" max="100" value={meta?.rating?.importanceScore ?? 50} onChange={(event) => onQuestionImportanceScoreChange(number, Number(event.target.value))} />
+                          <input aria-label="중요도 숫자" type="number" min="1" max="100" value={meta?.rating?.importanceScore ?? ""} onChange={(event) => onQuestionImportanceScoreChange(number, event.target.value ? Number(event.target.value) : undefined)} />
+                          <button type="button" onClick={() => onQuestionImportanceScoreChange(number, undefined)}>값 삭제</button>
+                        </div>}
+                      </div>}
+                      <Menu label={<MoreHorizontal size={16} />} triggerAriaLabel={`${question.questionNumber}번 추가 작업`} className="structured-problem-sheet-more">
+                        {onOpenQuestionTheater && <button type="button" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={15} aria-hidden="true" /> 크게 보기</button>}
+                        {onQuestionImportanceScoreChange && <button type="button" onClick={() => setImportanceEditor(number)}><SlidersHorizontal size={15} aria-hidden="true" /> 중요도</button>}
+                      </Menu>
                       {answer ? <button type="button" className="btn-secondary btn-sm" aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" disabled title="연결된 정답이 없습니다.">답</button>}
                     </div>
                   </header>
@@ -137,7 +160,7 @@ export default function StudyPaperView({
           onAnnotationsChange={onAnnotationsChange}
           onWikiLinkClick={onWikiLinkClick}
           existingTargets={existingTargets}
-          sheetLayout={sheetLayout}
+          sheetLayout={sheetLayout === "auto" ? "single" : sheetLayout}
           searchQuery={searchQuery}
           suspiciousSegments={suspiciousSegments}
           sourceEntry={entry}
