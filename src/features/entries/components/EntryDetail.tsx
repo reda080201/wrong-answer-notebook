@@ -60,6 +60,8 @@ import {
   EntryMistakeAnalysisSection,
 } from "../../../components/EntryDetailSections";
 import FocusedAnswerPanel from "./FocusedAnswerPanel";
+import FocusedNotesPanel from "./FocusedNotesPanel";
+import FocusedStudyHints from "./FocusedStudyHints";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1240,69 +1242,6 @@ export default function EntryDetail({
     </div>
   );
 
-  const renderFocusStudyHints = () => {
-    if (!isFocusExpanded || !isFocusedQuestionShort) return null;
-    return (
-      <aside className="focus-study-hints" aria-label="집중 보기 학습 힌트">
-        <header>
-          <span>다음 행동</span>
-          <strong>{nextActionHint}</strong>
-        </header>
-        {focusedStudyHints.length > 0 ? (
-          <div className="focus-study-hint-list">
-            {focusedStudyHints.map((hint) => (
-              <p key={`${hint.label}-${hint.text}`}>
-                <span>{hint.label}</span>
-                <MathText text={hint.text} />
-              </p>
-            ))}
-          </div>
-        ) : (
-          <p className="focus-study-hint-empty">짧은 문제는 정답 확인 후 바로 복습 결과를 남겨도 좋습니다.</p>
-        )}
-      </aside>
-    );
-  };
-
-  const renderFocusedNotes = () => {
-    if (!focusedHasNotes) {
-      return <div className="focused-empty-panel">현재 문제에 표시할 필기가 없습니다.</div>;
-    }
-
-    return (
-      <div className="focused-notes-panel">
-        {entry.memo.trim() && (
-          <section className="sheet-study-note-card sheet-study-note-card--global">
-            <strong>전체 메모</strong>
-            <div className="memo-content">
-              <LinkifiedText
-                text={entry.memo}
-                onLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                conceptContext={buildConceptLinkContext(entry)}
-              />
-            </div>
-          </section>
-        )}
-        {focusedAnswer && (
-          <article className="sheet-study-note-card">
-            <strong>현재 문제 메모 {focusedAnswer.questionNumber ? `(${focusedAnswer.questionNumber}번)` : ""}</strong>
-            {focusedAnswer.needsReview && <span className="answer-review-badge">번호 확인 필요</span>}
-            {focusedAnswer.notes?.trim() && <p>{focusedAnswer.notes}</p>}
-            {focusedAnswer.sourceNote?.trim() && <p>{focusedAnswer.sourceNote}</p>}
-            {focusedAnswer.importantPoints.length > 0 && (
-              <ul>
-                {focusedAnswer.importantPoints.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-            )}
-          </article>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div
       className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
@@ -1805,7 +1744,12 @@ export default function EntryDetail({
                     suspiciousSegments={suspiciousSegments}
                   />
                 </StudyZoomViewport>
-                {renderFocusStudyHints()}
+                {isFocusedQuestionShort && (
+                  <FocusedStudyHints
+                    nextActionHint={nextActionHint}
+                    hints={focusedStudyHints}
+                  />
+                )}
                 <div className="focus-panel-tabs" aria-label="집중 보기 패널">
                   <button
                     type="button"
@@ -1865,7 +1809,12 @@ export default function EntryDetail({
                   />
                 </StudyZoomViewport>
               </div>
-              {renderFocusStudyHints()}
+              {isFocusedQuestionShort && (
+                <FocusedStudyHints
+                  nextActionHint={nextActionHint}
+                  hints={focusedStudyHints}
+                />
+              )}
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
                 <button
                   type="button"
@@ -1948,7 +1897,13 @@ export default function EntryDetail({
         {isFocusExpanded && isSheet && activeStudyPanel === "notes" && focusedHasNotes && (
           <section className="sheet-study-panel sheet-study-panel--notes">
             <h3 className="section-heading">필기</h3>
-            {renderFocusedNotes()}
+            <FocusedNotesPanel
+              entry={entry}
+              focusedAnswer={focusedAnswer}
+              hasNotes={focusedHasNotes}
+              existingTargets={existingTargets}
+              onWikiLinkClick={onWikiLinkClick}
+            />
           </section>
         )}
 
