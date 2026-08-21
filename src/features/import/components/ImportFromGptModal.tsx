@@ -64,6 +64,7 @@ import {
 } from "../services/importDraftCanonical";
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
+import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -89,65 +90,6 @@ interface ImportFromGptModalProps {
 
 function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
   return cloneEntryDraft(mergeEntryDraft(data));
-}
-
-interface ActiveQuestionReviewProps {
-  questionNumber: string;
-  answers: SheetAnswerItem[];
-  figures: SheetFigureItem[];
-  sourcePageImages: string[];
-  detailOpen: boolean;
-  onUpdateAnswer(id: string, patch: Partial<SheetAnswerItem>): void;
-  onRemoveAnswer(id: string): void;
-  onUpdateFigure(id: string, patch: Partial<SheetFigureItem>): void;
-  onRemoveFigure(id: string): void;
-}
-
-function ActiveQuestionReview({
-  questionNumber,
-  answers,
-  figures,
-  sourcePageImages,
-  detailOpen,
-  onUpdateAnswer,
-  onRemoveAnswer,
-  onUpdateFigure,
-  onRemoveFigure,
-}: ActiveQuestionReviewProps) {
-  return (
-    <section className="import-active-question-review" aria-label={`${questionNumber}번 부가 검수`}>
-      {answers.length > 0 && (
-        <section className="import-active-answer" aria-label={`${questionNumber}번 답안 검수`}>
-          <h3>답안</h3>
-          <ImportAnswerReviewList
-            items={answers}
-            defaultDetailsOpen={detailOpen}
-            onUpdate={onUpdateAnswer}
-            onRemove={onRemoveAnswer}
-          />
-        </section>
-      )}
-      {figures.length > 0 && (
-        <section className="import-active-figures" aria-label={`${questionNumber}번 그림 검수`}>
-          <h3>그림·표 배치</h3>
-          {figures.map((figure) => (
-            <article key={figure.id} className="import-active-figure">
-              <strong>{figure.title || `${questionNumber}번 그림`}</strong>
-              {figure.caption && <p>{figure.caption}</p>}
-              <small>{figure.image ? `연결됨: ${figure.image}` : figure.source === "described_only" ? "설명 도표" : "이미지 나중에 연결"}</small>
-              {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "original", image: figure.original?.image, source: "original", needsReview: false })}>원본 사용</button>}
-              {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "cleaned", image: figure.cleaned?.image, source: "gpt_cleaned", needsReview: false })}>GPT 정리본 승인</button>}
-              {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "semantic_render", needsReview: false })}>구조 렌더링 사용</button>}
-              {!figure.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { source: "described_only", needsReview: false })}>설명 도표로 유지</button>}
-              <button type="button" className="btn-secondary btn-sm danger" onClick={() => onRemoveFigure(figure.id)}>도표 항목 제외</button>
-              {(figure.original || figure.cleaned || figure.semanticSpec) && <FigureComparisonPanel figure={figure} onReady={() => undefined} />}
-            </article>
-          ))}
-        </section>
-      )}
-      {sourcePageImages.length > 0 && <aside className="import-active-source" aria-label={`${questionNumber}번 원본 페이지`}><h3>원본 페이지</h3><ImageGallery filenames={sourcePageImages} variant="fill" /></aside>}
-    </section>
-  );
 }
 
 function canonicalizeImportDraftForSave(data: Partial<EntryFormData>): Partial<EntryFormData> {
@@ -1812,7 +1754,7 @@ export default function ImportFromGptModal({
                 });
               }}
             />
-            <ActiveQuestionReview
+            <ImportActiveQuestionReview
               questionNumber={activeQuestion.questionNumber}
               answers={answerKey.filter((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
               figures={figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
