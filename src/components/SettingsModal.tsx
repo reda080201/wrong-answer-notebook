@@ -16,7 +16,6 @@ import type {
   ImagePreferences,
   IntegrityReport,
   McpBridgePairingSession,
-  ThemeMode,
   ViewPreferences,
 } from "../types";
 import type { AppUpdateState } from "../features/updater/model/appUpdate";
@@ -24,6 +23,7 @@ import Dialog from "../shared/ui/Dialog";
 import { useSettingsContext } from "../contexts/SettingsContext";
 import { X } from "lucide-react";
 import SettingsTabList from "./SettingsTabList";
+import SettingsThemePanel from "./settings/SettingsThemePanel";
 
 export type SettingsTab =
   | "theme"
@@ -198,27 +198,7 @@ export default function SettingsModal({
 
           <section className="settings-modal-panel">
             {activeTab === "theme" && (
-              <>
-                <p className="settings-label">테마</p>
-                <div className="theme-options">
-                  {(
-                    [
-                      ["light", "라이트"],
-                      ["dark", "다크"],
-                      ["system", "시스템"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`theme-btn ${theme === value ? "active" : ""}`}
-                      onClick={() => setTheme(value as ThemeMode)}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </>
+              <SettingsThemePanel theme={theme} onThemeChange={setTheme} />
             )}
 
             {activeTab === "ai" && (
