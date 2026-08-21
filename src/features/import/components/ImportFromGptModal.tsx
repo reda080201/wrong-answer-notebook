@@ -61,6 +61,7 @@ import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
 import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
+import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -331,7 +332,6 @@ export default function ImportFromGptModal({
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
   const [confirmedValidationFingerprint, setConfirmedValidationFingerprint] = useState<string | null>(null);
   const [structuredReviewError, setStructuredReviewError] = useState<string | null>(null);
-  const [quickSaving, setQuickSaving] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -340,12 +340,16 @@ export default function ImportFromGptModal({
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
-  const quickSavingRef = useRef(false);
   const parseErrorRef = useRef<string | null>(null);
   const preserveSupplementalImagesRef = useRef(false);
   // Supplemental drafts can be cancelled after an image was removed from the UI.
   // Keep the complete set created by this modal so those final-store files are not orphaned.
   const createdSupplementalImagesRef = useRef(new Set<string>());
+  const importSaveCoordinator = useImportSaveCoordinator({
+    onError: (message) => setError(message),
+    onSuccess: onClose,
+  });
+  const quickSaving = importSaveCoordinator.busy;
   const rememberSupplementalImages = (filenames: string[]) => {
     if (!isSupplementalMode) return;
     filenames.forEach((filename) => createdSupplementalImagesRef.current.add(filename));
@@ -839,7 +843,6 @@ export default function ImportFromGptModal({
   };
 
   const quickSave = async () => {
-    if (quickSavingRef.current) return;
     if (!draft || !onApplyEntries || isSolutionMode || isSupplementalMode) return;
     if (!canApply) {
       setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
@@ -853,17 +856,7 @@ export default function ImportFromGptModal({
         : "확인이 필요한 항목을 검토한 뒤 체크박스를 선택해 주세요.");
       return;
     }
-    quickSavingRef.current = true;
-    setQuickSaving(true);
-    try {
-      await onApplyEntries([normalizedDraft], assetFiles);
-      onClose();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "가져온 문제지를 저장하지 못했습니다.");
-    } finally {
-      quickSavingRef.current = false;
-      setQuickSaving(false);
-    }
+    await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
   };
 
   const updateLegacyQuestionText = (value: string) => {
