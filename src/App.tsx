@@ -229,6 +229,7 @@ function AppContent() {
 
   const appNavigationController = useAppNavigationController({
     activeSection,
+    selectedId,
     examSubmitting,
     examSession,
     closeExamSession,

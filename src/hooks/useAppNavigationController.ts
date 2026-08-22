@@ -11,6 +11,7 @@ export interface NavigationTarget {
 
 interface UseAppNavigationControllerOptions {
   activeSection: EntryKind;
+  selectedId: string | null;
   examSubmitting: boolean;
   examSession: { entryId: string } | null;
   closeExamSession: () => Promise<boolean>;
@@ -28,12 +29,55 @@ interface UseAppNavigationControllerOptions {
 }
 
 export interface AppNavigationController {
+  activeSection: EntryKind;
+  selectedId: string | null;
   requestNavigation(target: NavigationTarget): Promise<boolean>;
+  selectSection(section: EntryKind): Promise<boolean>;
+  selectEntry(entryId: string | null, section?: EntryKind): Promise<boolean>;
+  openQuestion(entryId: string, questionNumber: string): Promise<boolean>;
+  openLearningHub(): Promise<boolean>;
+  openQuestionBank(): Promise<boolean>;
+  openLibrary(): Promise<boolean>;
 }
 
-export type AppNavigationControllerGroup = Pick<AppNavigationController, "requestNavigation">;
+export type AppNavigationControllerGroup = AppNavigationController;
 
 export function useAppNavigationController(options: UseAppNavigationControllerOptions): AppNavigationController {
   const requestNavigation = useNotebookNavigationController(options);
-  return { requestNavigation: useCallback((target: NavigationTarget) => requestNavigation(target), [requestNavigation]) };
+  const request = useCallback((target: NavigationTarget) => requestNavigation(target), [requestNavigation]);
+  const selectSection = useCallback((section: EntryKind) => request({ section, entryId: null }), [request]);
+  const selectEntry = useCallback((entryId: string | null, section?: EntryKind) => request({ entryId, section }), [request]);
+  const openQuestion = useCallback((entryId: string, questionNumber: string) => request({ question: { entryId, questionNumber } }), [request]);
+  const openLearningHub = useCallback(async () => {
+    if (!(await request({ entryId: null }))) return false;
+    options.setShowLearningHub(true);
+    options.setShowQuestionBank(false);
+    options.setShowLibraryExplorer(false);
+    return true;
+  }, [options, request]);
+  const openQuestionBank = useCallback(async () => {
+    if (!(await request({ entryId: null }))) return false;
+    options.setShowLearningHub(false);
+    options.setShowQuestionBank(true);
+    options.setShowLibraryExplorer(false);
+    return true;
+  }, [options, request]);
+  const openLibrary = useCallback(async () => {
+    if (!(await request({ entryId: null }))) return false;
+    options.setShowLearningHub(false);
+    options.setShowQuestionBank(false);
+    options.setShowLibraryExplorer(true);
+    return true;
+  }, [options, request]);
+  return {
+    activeSection: options.activeSection,
+    selectedId: options.selectedId,
+    requestNavigation: request,
+    selectSection,
+    selectEntry,
+    openQuestion,
+    openLearningHub,
+    openQuestionBank,
+    openLibrary,
+  };
 }

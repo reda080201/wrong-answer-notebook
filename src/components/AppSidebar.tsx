@@ -169,40 +169,40 @@ export default function AppSidebar({
             {!collapsed && <span>{label}</span>}
           </button>
         ))}
-        {onOpenLearningHub && (
+        {(onOpenLearningHub || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
             aria-current={learningHubOpen ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
-            onClick={onOpenLearningHub}
+            onClick={() => void (navigationController ? navigationController.openLearningHub() : onOpenLearningHub?.())}
           >
             <Library size={18} aria-hidden="true" />
             {!collapsed && <span>학습 허브</span>}
           </button>
         )}
-        {onOpenQuestionBank && (
+        {(onOpenQuestionBank || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
             aria-current={questionBankOpen ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
-            onClick={onOpenQuestionBank}
+            onClick={() => void (navigationController ? navigationController.openQuestionBank() : onOpenQuestionBank?.())}
           >
             <BookOpen size={18} aria-hidden="true" />
             {!collapsed && <span>문제 은행</span>}
           </button>
         )}
-        {onOpenLibrary && (
+        {(onOpenLibrary || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
             aria-current={libraryOpen ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
-            onClick={onOpenLibrary}
+            onClick={() => void (navigationController ? navigationController.openLibrary() : onOpenLibrary?.())}
           >
             <Archive size={18} aria-hidden="true" />
             {!collapsed && <span>보관함</span>}
