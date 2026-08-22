@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import SubjectList from "./SubjectList";
 import type {
   EntryKind,
@@ -92,9 +93,11 @@ export default function AppSidebar({
   collapsed = false,
   onCollapsedChange,
 }: AppSidebarProps) {
-  const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
-  const sidebarStats =
-    activeSection === "problem_sheet"
+  const sectionEntries = useMemo(
+    () => entries.filter((entry) => entry.entryKind === activeSection),
+    [entries, activeSection],
+  );
+  const sidebarStats = useMemo(() => activeSection === "problem_sheet"
       ? [
           ["시험지", sectionEntries.length],
           ["총 문항", sectionEntries.reduce((sum, entry) => sum + getQuestionCount(entry), 0)],
@@ -123,7 +126,7 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-            ];
+          ], [activeSection, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
     if (navigationController) {
       void navigationController.requestNavigation({ section, entryId: null });
