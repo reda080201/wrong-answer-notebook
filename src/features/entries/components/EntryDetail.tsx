@@ -35,7 +35,6 @@ import StudyControlBar from "../../../components/StudyControlBar";
 import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
-import TextReviewPanel from "../../../components/TextReviewPanel";
 import QuestionTheaterView from "../../../components/QuestionTheaterView";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
@@ -64,6 +63,7 @@ import FocusedNotesPanel from "./FocusedNotesPanel";
 import FocusedStudyHints from "./FocusedStudyHints";
 import { EntryDetailProvider } from "./EntryDetailContext";
 import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs } from "./EntryDetailAreas";
+import EntryDetailReviewDialogs from "./EntryDetailReviewDialogs";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -2089,23 +2089,7 @@ export default function EntryDetail({
         )}
       </div>
       <ReviewExportDialogs>
-      {showTextReview && (
-        <TextReviewPanel
-          entry={entry}
-          segments={suspiciousSegments}
-          onClose={() => setShowTextReview(false)}
-          onSave={async (text) => {
-            if (!onQuestionTextChange) return;
-            await onQuestionTextChange(entry, text);
-            pushToast("검수한 문제 텍스트를 저장했습니다.", "success");
-          }}
-          onStructuredQuestionsChange={async (target, questions) => {
-            if (!onStructuredQuestionsChange) return;
-            await onStructuredQuestionsChange(target, questions);
-            pushToast("구조화 문항을 저장했습니다.", "success");
-          }}
-        />
-      )}
+      <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
       </ReviewExportDialogs>
       {theaterQuestion && theaterQuestionIndex !== null && (
         <QuestionTheaterView
