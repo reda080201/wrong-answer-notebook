@@ -31,11 +31,9 @@ import LearningContentPanel from "../../../components/LearningContentPanel";
 import MathText from "../../../components/MathText";
 import SolutionBookView from "../../../components/SolutionBookView";
 import StudyAnalysisView from "../../../components/StudyAnalysisView";
-import StudyControlBar from "../../../components/StudyControlBar";
 import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
-import TextReviewPanel from "../../../components/TextReviewPanel";
 import QuestionTheaterView from "../../../components/QuestionTheaterView";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
@@ -46,7 +44,6 @@ import type { GptSolutionRoundtripDraft } from "../../../features/gpt-solution-r
 import { validateGptSolutionResponse } from "../../../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
 import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSolutionRoundtripDrafts";
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
-import Dialog from "../../../shared/ui/Dialog";
 import { writeUiStorageValue } from "../../../services/uiStorage";
 import Toast from "../../../shared/ui/Toast";
 import Menu from "../../../shared/ui/Menu";
@@ -59,6 +56,14 @@ import {
   EntryImportAuditSection,
   EntryMistakeAnalysisSection,
 } from "../../../components/EntryDetailSections";
+import FocusedAnswerPanel from "./FocusedAnswerPanel";
+import FocusedNotesPanel from "./FocusedNotesPanel";
+import FocusedStudyHints from "./FocusedStudyHints";
+import { EntryDetailProvider } from "./EntryDetailContext";
+import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs, SecondaryStudyViews } from "./EntryDetailAreas";
+import EntryDetailReviewDialogs from "./EntryDetailReviewDialogs";
+import EntryDetailStudyControls from "./EntryDetailStudyControls";
+import EntryDetailViewHelpDialog from "./EntryDetailViewHelpDialog";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -1239,119 +1244,17 @@ export default function EntryDetail({
     </div>
   );
 
-  const renderFocusedAnswer = () => {
-    if (!focusedAnswer) {
-      return <div className="focused-empty-panel">현재 문제에 연결된 답안이 없습니다.</div>;
-    }
-
-    return (
-      <article className="focused-answer-card">
-        <header>
-          <span className="focused-section-label">답지</span>
-          <strong className={hideAnswers ? "answer-hidden" : ""}>
-            {hideAnswers ? "•••" : <MathText text={focusedAnswer.answer || "정답 없음"} />}
-          </strong>
-          {focusedAnswer.needsReview && <span className="answer-review-badge">검토 필요</span>}
-        </header>
-        {focusedAnswer.sourceNote?.trim() && (
-          <p className="sheet-answer-source">{focusedAnswer.sourceNote}</p>
-        )}
-        {!hideAnswers && focusedAnswer.notes?.trim() && (
-          <p className="sheet-answer-source">문제별 메모: {focusedAnswer.notes}</p>
-        )}
-        {focusedAnswer.explanation.trim() && (
-          <div className={`focused-answer-explanation ${hideAnswers ? "answer-hidden" : ""}`}>
-            {hideAnswers ? (
-              "답 가리기 모드입니다."
-            ) : (
-              <LinkifiedText
-                text={focusedAnswer.explanation}
-                onLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                conceptContext={buildConceptLinkContext(entry, focusedAnswer.questionNumber)}
-              />
-            )}
-          </div>
-        )}
-        {!hideAnswers && focusedAnswer.importantPoints.length > 0 && (
-          <ul className="sheet-answer-points">
-            {focusedAnswer.importantPoints.map((point) => (
-              <li key={point}>{point}</li>
-            ))}
-          </ul>
-        )}
-      </article>
-    );
-  };
-
-  const renderFocusStudyHints = () => {
-    if (!isFocusExpanded || !isFocusedQuestionShort) return null;
-    return (
-      <aside className="focus-study-hints" aria-label="집중 보기 학습 힌트">
-        <header>
-          <span>다음 행동</span>
-          <strong>{nextActionHint}</strong>
-        </header>
-        {focusedStudyHints.length > 0 ? (
-          <div className="focus-study-hint-list">
-            {focusedStudyHints.map((hint) => (
-              <p key={`${hint.label}-${hint.text}`}>
-                <span>{hint.label}</span>
-                <MathText text={hint.text} />
-              </p>
-            ))}
-          </div>
-        ) : (
-          <p className="focus-study-hint-empty">짧은 문제는 정답 확인 후 바로 복습 결과를 남겨도 좋습니다.</p>
-        )}
-      </aside>
-    );
-  };
-
-  const renderFocusedNotes = () => {
-    if (!focusedHasNotes) {
-      return <div className="focused-empty-panel">현재 문제에 표시할 필기가 없습니다.</div>;
-    }
-
-    return (
-      <div className="focused-notes-panel">
-        {entry.memo.trim() && (
-          <section className="sheet-study-note-card sheet-study-note-card--global">
-            <strong>전체 메모</strong>
-            <div className="memo-content">
-              <LinkifiedText
-                text={entry.memo}
-                onLinkClick={onWikiLinkClick}
-                existingTargets={existingTargets}
-                conceptContext={buildConceptLinkContext(entry)}
-              />
-            </div>
-          </section>
-        )}
-        {focusedAnswer && (
-          <article className="sheet-study-note-card">
-            <strong>현재 문제 메모 {focusedAnswer.questionNumber ? `(${focusedAnswer.questionNumber}번)` : ""}</strong>
-            {focusedAnswer.needsReview && <span className="answer-review-badge">번호 확인 필요</span>}
-            {focusedAnswer.notes?.trim() && <p>{focusedAnswer.notes}</p>}
-            {focusedAnswer.sourceNote?.trim() && <p>{focusedAnswer.sourceNote}</p>}
-            {focusedAnswer.importantPoints.length > 0 && (
-              <ul>
-                {focusedAnswer.importantPoints.map((point) => (
-                  <li key={point}>{point}</li>
-                ))}
-              </ul>
-            )}
-          </article>
-        )}
-      </div>
-    );
-  };
-
   return (
+    <EntryDetailProvider value={{
+      entry,
+      actions: { onEdit, onDelete, onToggleMastered, onToggleDifficult: handleToggleDifficultWithToast },
+      workspace: { detailViewMode, focusMode, selectionMode },
+    }}>
     <div
       className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
     >
       {!isFocusExpanded && (
+      <ProblemSheetHeader>
       <div className={`detail-toolbar ${isSheet && detailViewMode === "paper" ? "detail-toolbar--problem-sheet" : ""}`}>
         {isSheet && detailViewMode === "paper" ? (
           <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
@@ -1540,6 +1443,7 @@ export default function EntryDetail({
         </>
         )}
       </div>
+      </ProblemSheetHeader>
       )}
 
       {entry.structuredQuestionsRecovery && (
@@ -1688,6 +1592,7 @@ export default function EntryDetail({
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>
 
+        <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
           {!isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
             <StudyFlowStrip
@@ -1849,7 +1754,12 @@ export default function EntryDetail({
                     suspiciousSegments={suspiciousSegments}
                   />
                 </StudyZoomViewport>
-                {renderFocusStudyHints()}
+                {isFocusedQuestionShort && (
+                  <FocusedStudyHints
+                    nextActionHint={nextActionHint}
+                    hints={focusedStudyHints}
+                  />
+                )}
                 <div className="focus-panel-tabs" aria-label="집중 보기 패널">
                   <button
                     type="button"
@@ -1909,7 +1819,12 @@ export default function EntryDetail({
                   />
                 </StudyZoomViewport>
               </div>
-              {renderFocusStudyHints()}
+              {isFocusedQuestionShort && (
+                <FocusedStudyHints
+                  nextActionHint={nextActionHint}
+                  hints={focusedStudyHints}
+                />
+              )}
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
                 <button
                   type="button"
@@ -1970,6 +1885,9 @@ export default function EntryDetail({
             />
           )}
         </section>
+        </QuestionWorkspace>
+
+        <SecondaryStudyViews>
 
         {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
 
@@ -1979,14 +1897,26 @@ export default function EntryDetail({
               <h3 className="section-heading">답지</h3>
               {renderAnswerToolbar()}
             </div>
-            {renderFocusedAnswer()}
+            <FocusedAnswerPanel
+              entry={entry}
+              answer={focusedAnswer}
+              hideAnswers={hideAnswers}
+              existingTargets={existingTargets}
+              onWikiLinkClick={onWikiLinkClick}
+            />
           </section>
         )}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "notes" && focusedHasNotes && (
           <section className="sheet-study-panel sheet-study-panel--notes">
             <h3 className="section-heading">필기</h3>
-            {renderFocusedNotes()}
+            <FocusedNotesPanel
+              entry={entry}
+              focusedAnswer={focusedAnswer}
+              hasNotes={focusedHasNotes}
+              existingTargets={existingTargets}
+              onWikiLinkClick={onWikiLinkClick}
+            />
           </section>
         )}
 
@@ -2159,24 +2089,11 @@ export default function EntryDetail({
             onOpenEntry={onOpenEntry}
           />
         )}
+        </SecondaryStudyViews>
       </div>
-      {showTextReview && (
-        <TextReviewPanel
-          entry={entry}
-          segments={suspiciousSegments}
-          onClose={() => setShowTextReview(false)}
-          onSave={async (text) => {
-            if (!onQuestionTextChange) return;
-            await onQuestionTextChange(entry, text);
-            pushToast("검수한 문제 텍스트를 저장했습니다.", "success");
-          }}
-          onStructuredQuestionsChange={async (target, questions) => {
-            if (!onStructuredQuestionsChange) return;
-            await onStructuredQuestionsChange(target, questions);
-            pushToast("구조화 문항을 저장했습니다.", "success");
-          }}
-        />
-      )}
+      <ReviewExportDialogs>
+      <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
+      </ReviewExportDialogs>
       {theaterQuestion && theaterQuestionIndex !== null && (
         <QuestionTheaterView
           passage={theaterPassage}
@@ -2239,7 +2156,7 @@ export default function EntryDetail({
         </div>
       )}
       {isFocusable && (
-        <StudyControlBar
+        <EntryDetailStudyControls
           isSheet={isSheet}
           isConcept={isConcept}
           questionIndex={focusedQuestionIndex}
@@ -2280,17 +2197,7 @@ export default function EntryDetail({
           } : undefined}
         />
       )}
-      <Dialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} className="exam-dialog" ariaLabel="보기 도움말">
-            <header>
-              <h3>보기 도움말</h3>
-              <button type="button" className="btn-icon" onClick={() => setViewHelpOpen(false)}>닫기</button>
-            </header>
-            <ul>
-              <li>빠른 보기 설정은 현재 화면의 배치, 글자 크기, 정답 가리기를 바로 바꾼니다.</li>
-              <li>전체 설정에서는 보기, 시험, 이미지, GPT·MCP 기본값을 함께 관리합니다.</li>
-              <li>개념노트와 특강자료에는 정답 가리기가 표시되지 않습니다.</li>
-            </ul>
-      </Dialog>
+      <EntryDetailViewHelpDialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} />
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
@@ -2423,5 +2330,6 @@ export default function EntryDetail({
         </aside>
       )}
     </div>
+    </EntryDetailProvider>
   );
 }

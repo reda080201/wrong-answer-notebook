@@ -441,10 +441,6 @@
   color: var(--accent-strong, #1849aa);
 }
 
-.detail-toolbar--problem-sheet {
-  min-height: 48px;
-}
-
 .detail-title-block--sheet-compact .detail-title-row,
 .detail-title-block--sheet-compact .detail-date {
   display: none;

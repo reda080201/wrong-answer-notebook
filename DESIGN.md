@@ -27,4 +27,15 @@ Question content is always more prominent than application chrome. Repeated data
 
 Import Review and structured Text Review share a navigator/editor/source/action layout. Practice and real exam share answer controls while retaining their distinct focus. Narrow desktop windows collapse secondary panes and commands before allowing overlap or uncontrolled toolbar wrapping.
 
+## Responsive ownership
+
+Use four product breakpoints. They are chosen for the desktop study workspace rather than copied from a framework default:
+
+- `640px`: compact dialogs and single-column control groups.
+- `768px`: compact reading and list layouts.
+- `1100px`: secondary shell panes become drawers or collapse before the detail workspace compresses.
+- `1440px`: paper and workspace layouts may opt into stable multi-column reading.
+
+New feature CSS should use these boundaries. Existing legacy selectors remain until their owning surface is replaced; do not add another competing geometry rule for shell, sidebar, or entry rows.
+
 This foundation is visual only. Structured question identity, persistence, import rollback, atomic submission, and MCP isolation remain authoritative.

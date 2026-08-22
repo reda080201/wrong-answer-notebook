@@ -32,13 +32,8 @@ import { classifyImportValidationIssues, validateImportedStudyData } from "../..
 import {
   normalizeImportAudit,
   parseExpectedQuestionNumbers,
-  normalizeRejectedNotes,
-  removeRejectedNotes,
-  scrubRejectedNotesFromAnswers,
-  scrubRejectedNotesFromStructuredQuestions,
 } from "../../../utils/importAudit";
 import { buildMathSolutionPrompt, type GptSolutionApplyMode } from "../../../utils/gptSolution";
-import { cleanQuestionText } from "../../../utils/textCleanup";
 import { parseQuestionText } from "../../../utils/textLayout";
 import ImageField from "../../../components/ImageField";
 import ConceptImportPreviewModal from "../../../components/ConceptImportPreviewModal";
@@ -64,6 +59,10 @@ import {
 } from "../services/importDraftCanonical";
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
+import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
+import ImportSaveFooter from "./ImportSaveFooter";
+import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
+import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -89,91 +88,6 @@ interface ImportFromGptModalProps {
 
 function cloneDraft(data: Partial<EntryFormData>): Partial<EntryFormData> {
   return cloneEntryDraft(mergeEntryDraft(data));
-}
-
-interface ActiveQuestionReviewProps {
-  questionNumber: string;
-  answers: SheetAnswerItem[];
-  figures: SheetFigureItem[];
-  sourcePageImages: string[];
-  detailOpen: boolean;
-  onUpdateAnswer(id: string, patch: Partial<SheetAnswerItem>): void;
-  onRemoveAnswer(id: string): void;
-  onUpdateFigure(id: string, patch: Partial<SheetFigureItem>): void;
-  onRemoveFigure(id: string): void;
-}
-
-function ActiveQuestionReview({
-  questionNumber,
-  answers,
-  figures,
-  sourcePageImages,
-  detailOpen,
-  onUpdateAnswer,
-  onRemoveAnswer,
-  onUpdateFigure,
-  onRemoveFigure,
-}: ActiveQuestionReviewProps) {
-  return (
-    <section className="import-active-question-review" aria-label={`${questionNumber}번 부가 검수`}>
-      {answers.length > 0 && (
-        <section className="import-active-answer" aria-label={`${questionNumber}번 답안 검수`}>
-          <h3>답안</h3>
-          <ImportAnswerReviewList
-            items={answers}
-            defaultDetailsOpen={detailOpen}
-            onUpdate={onUpdateAnswer}
-            onRemove={onRemoveAnswer}
-          />
-        </section>
-      )}
-      {figures.length > 0 && (
-        <section className="import-active-figures" aria-label={`${questionNumber}번 그림 검수`}>
-          <h3>그림·표 배치</h3>
-          {figures.map((figure) => (
-            <article key={figure.id} className="import-active-figure">
-              <strong>{figure.title || `${questionNumber}번 그림`}</strong>
-              {figure.caption && <p>{figure.caption}</p>}
-              <small>{figure.image ? `연결됨: ${figure.image}` : figure.source === "described_only" ? "설명 도표" : "이미지 나중에 연결"}</small>
-              {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "original", image: figure.original?.image, source: "original", needsReview: false })}>원본 사용</button>}
-              {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "cleaned", image: figure.cleaned?.image, source: "gpt_cleaned", needsReview: false })}>GPT 정리본 승인</button>}
-              {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "semantic_render", needsReview: false })}>구조 렌더링 사용</button>}
-              {!figure.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { source: "described_only", needsReview: false })}>설명 도표로 유지</button>}
-              <button type="button" className="btn-secondary btn-sm danger" onClick={() => onRemoveFigure(figure.id)}>도표 항목 제외</button>
-              {(figure.original || figure.cleaned || figure.semanticSpec) && <FigureComparisonPanel figure={figure} onReady={() => undefined} />}
-            </article>
-          ))}
-        </section>
-      )}
-      {sourcePageImages.length > 0 && <aside className="import-active-source" aria-label={`${questionNumber}번 원본 페이지`}><h3>원본 페이지</h3><ImageGallery filenames={sourcePageImages} variant="fill" /></aside>}
-    </section>
-  );
-}
-
-function canonicalizeImportDraftForSave(data: Partial<EntryFormData>): Partial<EntryFormData> {
-  const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
-  const structuredQuestions = scrubRejectedNotesFromStructuredQuestions(
-    data.structuredQuestions,
-    rejectedNotes,
-  );
-  const question = structuredQuestions?.length
-    ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
-    : cleanQuestionText(removeRejectedNotes(data.question ?? "", rejectedNotes));
-  const answerKey = scrubRejectedNotesFromAnswers(data.answerKey ?? [], rejectedNotes);
-  return {
-    ...data,
-    question,
-    structuredQuestions,
-    questionContentSegments: structuredQuestions?.length
-      ? Object.fromEntries(structuredQuestions.map((item) => [item.questionNumber, item.contentSegments]))
-      : data.questionContentSegments,
-    memo: removeRejectedNotes(data.memo ?? "", rejectedNotes),
-    answerKey,
-    rejectedNotes,
-    importAudit: data.importAudit
-      ? normalizeImportAudit(data.importAudit, { question, answerKey, figures: data.figures, structuredQuestions })
-      : undefined,
-  };
 }
 
 function answerDifficultyLabel(value: SheetAnswerItem["difficulty"]) {
@@ -419,7 +333,6 @@ export default function ImportFromGptModal({
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
   const [confirmedValidationFingerprint, setConfirmedValidationFingerprint] = useState<string | null>(null);
   const [structuredReviewError, setStructuredReviewError] = useState<string | null>(null);
-  const [quickSaving, setQuickSaving] = useState(false);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
@@ -428,12 +341,16 @@ export default function ImportFromGptModal({
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const zipAbortRef = useRef<AbortController | null>(null);
-  const quickSavingRef = useRef(false);
   const parseErrorRef = useRef<string | null>(null);
   const preserveSupplementalImagesRef = useRef(false);
   // Supplemental drafts can be cancelled after an image was removed from the UI.
   // Keep the complete set created by this modal so those final-store files are not orphaned.
   const createdSupplementalImagesRef = useRef(new Set<string>());
+  const importSaveCoordinator = useImportSaveCoordinator({
+    onError: (message) => setError(message),
+    onSuccess: onClose,
+  });
+  const quickSaving = importSaveCoordinator.busy;
   const rememberSupplementalImages = (filenames: string[]) => {
     if (!isSupplementalMode) return;
     filenames.forEach((filename) => createdSupplementalImagesRef.current.add(filename));
@@ -927,7 +844,6 @@ export default function ImportFromGptModal({
   };
 
   const quickSave = async () => {
-    if (quickSavingRef.current) return;
     if (!draft || !onApplyEntries || isSolutionMode || isSupplementalMode) return;
     if (!canApply) {
       setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
@@ -941,17 +857,7 @@ export default function ImportFromGptModal({
         : "확인이 필요한 항목을 검토한 뒤 체크박스를 선택해 주세요.");
       return;
     }
-    quickSavingRef.current = true;
-    setQuickSaving(true);
-    try {
-      await onApplyEntries([normalizedDraft], assetFiles);
-      onClose();
-    } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "가져온 문제지를 저장하지 못했습니다.");
-    } finally {
-      quickSavingRef.current = false;
-      setQuickSaving(false);
-    }
+    await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
   };
 
   const updateLegacyQuestionText = (value: string) => {
@@ -1722,19 +1628,7 @@ export default function ImportFromGptModal({
           </div>
         </div>
 
-        <div className="form-footer">
-          <button type="button" className="btn-secondary" onClick={handleClose}>
-            취소
-          </button>
-          {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
-            <button type="button" className="btn-primary" disabled={!canApply || quickSaving} onClick={() => void quickSave()}>
-              {quickSaving ? "저장 중..." : "바로 저장"}
-            </button>
-          )}
-          <button type="button" className="btn-secondary" disabled={!canApply || quickSaving} onClick={() => void apply()}>
-            {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
-          </button>
-        </div>
+        <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         {!canApply && applyBlockReason && (
           <p className="import-apply-reason" role="status">{applyBlockReason}</p>
         )}
@@ -1812,7 +1706,7 @@ export default function ImportFromGptModal({
                 });
               }}
             />
-            <ActiveQuestionReview
+            <ImportActiveQuestionReview
               questionNumber={activeQuestion.questionNumber}
               answers={answerKey.filter((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
               figures={figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
@@ -1834,17 +1728,7 @@ export default function ImportFromGptModal({
           </div>
         ) : undefined}
         footer={(
-          <div className="import-review-footer-actions">
-            <button type="button" className="ui-button ui-button--secondary" onClick={() => setReviewWorkspaceOpen(false)}>검수 닫기</button>
-            {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
-              <button type="button" className="ui-button ui-button--primary" disabled={!canApply || quickSaving} onClick={() => void quickSave()}>
-                {quickSaving ? "저장 중..." : "바로 저장"}
-              </button>
-            )}
-            <button type="button" className="ui-button ui-button--secondary" disabled={!canApply || quickSaving} onClick={() => void apply()}>
-              {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
-            </button>
-          </div>
+          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={() => setReviewWorkspaceOpen(false)} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         )}
       >
         {error && <p className="form-save-error" role="alert">{error}</p>}
