@@ -24,6 +24,8 @@ import SettingsViewPanel from "./settings/SettingsViewPanel";
 import { SettingsAdvancedPanel, SettingsDataPanel, SettingsExamPanel, SettingsImagesPanel, SettingsLibraryPanel, SettingsUpdatesPanel } from "./settings/SettingsOperationalPanels";
 import SettingsAiPanel from "./settings/SettingsAiPanel";
 import SettingsTemplatesPanel from "./settings/SettingsTemplatesPanel";
+import SettingsMcpPanel from "./settings/SettingsMcpPanel";
+import SettingsChatGptPanel from "./settings/SettingsChatGptPanel";
 
 export type SettingsTab =
   | "theme"
@@ -152,6 +154,25 @@ export default function SettingsModal({
     await ctx.chatGptMcpPreferences.patch(patch);
   };
 
+  const renderMcpBridgePanel = () => (
+    <McpBridgeSettingsPanel
+      settings={mcpBridgeSettings}
+      status={mcpBridgeStatus}
+      portInput={bridgePortValue}
+      controlsDisabled={bridgeControlsDisabled}
+      connectionTesting={isMcpBridgeConnectionTesting}
+      onPortInputChange={setMcpBridgePortInput}
+      onApplyPort={applyMcpBridgePort}
+      onToggleEnabled={(enabled) => updateMcpBridgeConfig({ enabled })}
+      onTestConnection={testMcpBridgeConnection}
+      onCreatePairing={createMcpBridgePairing}
+      onRotateCredential={rotateMcpBridgeCredential}
+      onDisconnectClients={disconnectMcpBridgeClients}
+      pairingSession={mcpBridgePairingSession}
+      pairingPending={isMcpBridgePairingPending}
+    />
+  );
+
   const saveRemoteBaseUrl = async (raw: string) => {
     if (!raw.trim()) {
       await patchChatGpt({ remoteBaseUrl: undefined });
@@ -224,6 +245,26 @@ export default function SettingsModal({
             )}
 
             {activeTab === "gpt-mcp" && (
+              <SettingsMcpPanel preferences={settings.gptMcpPreferences} onPatch={patchGptMcp} bridgePanel={renderMcpBridgePanel()} />
+            )}
+
+            {activeTab === "chatgpt" && (
+              <SettingsChatGptPanel
+                preferences={settings.chatGptMcpPreferences}
+                status={mcpBridgeStatus}
+                onPatch={patchChatGpt}
+                onSaveRemoteBaseUrl={async (raw) => {
+                  try {
+                    await saveRemoteBaseUrl(raw);
+                  } catch (error) {
+                    setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다.");
+                  }
+                }}
+                bridgePanel={renderMcpBridgePanel()}
+              />
+            )}
+
+            {activeTab === ("__legacy_gpt_mcp__" as SettingsTab) && (
               <div className="settings-pref-panel">
                 <p className="settings-label">GPT·MCP</p>
                 <label className="settings-checkbox"><input type="checkbox" checked={settings.gptMcpPreferences.importReviewExpanded} onChange={(event) => void patchGptMcp({ importReviewExpanded: event.target.checked })} /> 가져오기 검토 기본 펼침</label>
@@ -253,7 +294,7 @@ export default function SettingsModal({
               </div>
             )}
 
-            {activeTab === "chatgpt" && (
+            {activeTab === ("__legacy_chatgpt__" as SettingsTab) && (
               <div className="settings-pref-panel chatgpt-connection-center">
                 <h3>ChatGPT와 오답노트 연결</h3>
                 <p className="provider-hint">OpenAI API 키 없이 읽기 전용 MCP와 ChatGPT 앱 사용 흐름을 연결합니다.</p>
