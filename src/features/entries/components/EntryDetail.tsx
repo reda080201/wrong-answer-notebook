@@ -44,7 +44,6 @@ import type { GptSolutionRoundtripDraft } from "../../../features/gpt-solution-r
 import { validateGptSolutionResponse } from "../../../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
 import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSolutionRoundtripDrafts";
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
-import Dialog from "../../../shared/ui/Dialog";
 import { writeUiStorageValue } from "../../../services/uiStorage";
 import Toast from "../../../shared/ui/Toast";
 import Menu from "../../../shared/ui/Menu";
@@ -64,6 +63,7 @@ import { EntryDetailProvider } from "./EntryDetailContext";
 import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs } from "./EntryDetailAreas";
 import EntryDetailReviewDialogs from "./EntryDetailReviewDialogs";
 import EntryDetailStudyControls from "./EntryDetailStudyControls";
+import EntryDetailViewHelpDialog from "./EntryDetailViewHelpDialog";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -2194,17 +2194,7 @@ export default function EntryDetail({
           } : undefined}
         />
       )}
-      <Dialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} className="exam-dialog" ariaLabel="보기 도움말">
-            <header>
-              <h3>보기 도움말</h3>
-              <button type="button" className="btn-icon" onClick={() => setViewHelpOpen(false)}>닫기</button>
-            </header>
-            <ul>
-              <li>빠른 보기 설정은 현재 화면의 배치, 글자 크기, 정답 가리기를 바로 바꾼니다.</li>
-              <li>전체 설정에서는 보기, 시험, 이미지, GPT·MCP 기본값을 함께 관리합니다.</li>
-              <li>개념노트와 특강자료에는 정답 가리기가 표시되지 않습니다.</li>
-            </ul>
-      </Dialog>
+      <EntryDetailViewHelpDialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} />
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
