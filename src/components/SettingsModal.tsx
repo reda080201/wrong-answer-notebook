@@ -318,7 +318,7 @@ export default function SettingsModal({
               />
             )}
 
-            {false && activeTab === "templates" && (
+            {activeTab === ("__legacy_templates__" as SettingsTab) && (
               <>
                 <p className="settings-label">입력 템플릿</p>
                 <TemplateList
