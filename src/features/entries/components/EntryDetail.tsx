@@ -31,7 +31,6 @@ import LearningContentPanel from "../../../components/LearningContentPanel";
 import MathText from "../../../components/MathText";
 import SolutionBookView from "../../../components/SolutionBookView";
 import StudyAnalysisView from "../../../components/StudyAnalysisView";
-import StudyControlBar from "../../../components/StudyControlBar";
 import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
@@ -64,6 +63,7 @@ import FocusedStudyHints from "./FocusedStudyHints";
 import { EntryDetailProvider } from "./EntryDetailContext";
 import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs } from "./EntryDetailAreas";
 import EntryDetailReviewDialogs from "./EntryDetailReviewDialogs";
+import EntryDetailStudyControls from "./EntryDetailStudyControls";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
@@ -2153,7 +2153,7 @@ export default function EntryDetail({
         </div>
       )}
       {isFocusable && (
-        <StudyControlBar
+        <EntryDetailStudyControls
           isSheet={isSheet}
           isConcept={isConcept}
           questionIndex={focusedQuestionIndex}
