@@ -60,7 +60,7 @@ import FocusedAnswerPanel from "./FocusedAnswerPanel";
 import FocusedNotesPanel from "./FocusedNotesPanel";
 import FocusedStudyHints from "./FocusedStudyHints";
 import { EntryDetailProvider } from "./EntryDetailContext";
-import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs } from "./EntryDetailAreas";
+import { ProblemSheetHeader, QuestionWorkspace, ReviewExportDialogs, SecondaryStudyViews } from "./EntryDetailAreas";
 import EntryDetailReviewDialogs from "./EntryDetailReviewDialogs";
 import EntryDetailStudyControls from "./EntryDetailStudyControls";
 import EntryDetailViewHelpDialog from "./EntryDetailViewHelpDialog";
@@ -1887,6 +1887,8 @@ export default function EntryDetail({
         </section>
         </QuestionWorkspace>
 
+        <SecondaryStudyViews>
+
         {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
@@ -2087,6 +2089,7 @@ export default function EntryDetail({
             onOpenEntry={onOpenEntry}
           />
         )}
+        </SecondaryStudyViews>
       </div>
       <ReviewExportDialogs>
       <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
