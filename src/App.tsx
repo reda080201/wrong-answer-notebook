@@ -119,6 +119,7 @@ function AppContent() {
     realExamStartEntry, setRealExamStartEntry,
     realExamMinutes, setRealExamMinutes,
     dismissedUpdateVersion, setDismissedUpdateVersion,
+    controller: modalController,
   } = useAppModalController();
   const shell = useUiShellPreferences();
   const {
@@ -775,7 +776,7 @@ function AppContent() {
       })()}
 
       <AppModals
-        modalController={{ openSettings, closeSettings: () => setShowSettings(false) }}
+        modalController={modalController}
         registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}
         showForm={actions.showForm}
         editingEntry={actions.editingEntry}

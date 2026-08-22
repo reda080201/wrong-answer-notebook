@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { SettingsTab } from "../components/SettingsModal";
 import type { WrongAnswerEntry } from "../types";
 
@@ -25,6 +25,13 @@ export function useAppModalController() {
     setShowSettings(true);
   }, []);
   const closeSettings = useCallback(() => setShowSettings(false), []);
+  const controller = useMemo<AppModalControllerGroup>(() => ({
+    settings: { open: openSettings, close: closeSettings },
+    learningHub: { open: (target) => { setLearningHubTarget(target ?? null); setShowLearningHub(true); }, close: () => setShowLearningHub(false) },
+    questionBank: { open: () => setShowQuestionBank(true), close: () => setShowQuestionBank(false) },
+    library: { open: () => setShowLibraryExplorer(true), close: () => setShowLibraryExplorer(false) },
+    examHistory: { open: () => setExamHistoryOpen(true), close: () => setExamHistoryOpen(false) },
+  }), [closeSettings, openSettings]);
   return {
     showSettings, setShowSettings,
     showLearningHub, setShowLearningHub,
@@ -39,10 +46,14 @@ export function useAppModalController() {
     realExamMinutes, setRealExamMinutes,
     dismissedUpdateVersion, setDismissedUpdateVersion,
     openSettings, closeSettings,
+    controller,
   };
 }
 
 export interface AppModalControllerGroup {
-  openSettings(tab?: SettingsTab): void;
-  closeSettings(): void;
+  settings: { open(tab?: SettingsTab): void; close(): void };
+  learningHub: { open(target?: { entryId: string; blockId: string }): void; close(): void };
+  questionBank: { open(): void; close(): void };
+  library: { open(): void; close(): void };
+  examHistory: { open(): void; close(): void };
 }

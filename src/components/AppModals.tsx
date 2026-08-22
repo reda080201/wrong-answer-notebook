@@ -153,7 +153,7 @@ export default function AppModals({
   onCloseSupplementalLink,
   onLinkLearningEntry,
 }: AppModalsProps) {
-  const openSettings = onOpenSettings ?? modalController?.openSettings;
+  const openSettings = onOpenSettings ?? modalController?.settings.open;
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
   const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
