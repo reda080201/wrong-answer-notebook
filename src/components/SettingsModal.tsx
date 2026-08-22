@@ -25,6 +25,7 @@ import SettingsThemePanel from "./settings/SettingsThemePanel";
 import SettingsViewPanel from "./settings/SettingsViewPanel";
 import { SettingsAdvancedPanel, SettingsDataPanel, SettingsExamPanel, SettingsImagesPanel, SettingsLibraryPanel, SettingsUpdatesPanel } from "./settings/SettingsOperationalPanels";
 import SettingsAiPanel from "./settings/SettingsAiPanel";
+import SettingsTemplatesPanel from "./settings/SettingsTemplatesPanel";
 
 export type SettingsTab =
   | "theme"
@@ -303,6 +304,21 @@ export default function SettingsModal({
             )}
 
             {activeTab === "templates" && (
+              <SettingsTemplatesPanel
+                templates={settings.templates}
+                promptTemplates={settings.promptTemplates}
+                memoTemplates={settings.memoTemplates}
+                saveTemplate={saveTemplate}
+                deleteTemplate={deleteTemplate}
+                savePromptTemplate={savePromptTemplate}
+                deletePromptTemplate={deletePromptTemplate}
+                saveMemoTemplate={saveMemoTemplate}
+                deleteMemoTemplate={deleteMemoTemplate}
+                onError={setSettingsMessage}
+              />
+            )}
+
+            {false && activeTab === "templates" && (
               <>
                 <p className="settings-label">입력 템플릿</p>
                 <TemplateList
@@ -350,21 +366,21 @@ export default function SettingsModal({
                     className="template-edit-form"
                     onSubmit={async (event) => {
                       event.preventDefault();
-                      const name = templateDraft.name.trim();
-                      const content = templateDraft.content.trim();
+                      const name = templateDraft!.name.trim();
+                      const content = templateDraft!.content.trim();
                       if (!name || !content) return;
                       try {
-                        if (templateDraft.kind === "prompt") {
-                          await savePromptTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, content });
-                        } else if (templateDraft.kind === "entry") {
+                        if (templateDraft!.kind === "prompt") {
+                          await savePromptTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, content });
+                        } else if (templateDraft!.kind === "entry") {
                           const data = JSON.parse(content) as EntryTemplate["data"];
                           const entryKind: EntryKind =
                             data.entryKind === "concept" || data.entryKind === "problem_sheet" || data.entryKind === "lecture"
                               ? data.entryKind
                               : "wrong_answer";
-                          await saveTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, entryKind, data });
+                          await saveTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, entryKind, data });
                         } else {
-                          await saveMemoTemplate({ id: templateDraft.id ?? crypto.randomUUID(), name, content });
+                          await saveMemoTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, content });
                         }
                       } catch (error) {
                         setSettingsMessage(error instanceof Error ? error.message : "템플릿 저장에 실패했습니다.");
@@ -375,11 +391,11 @@ export default function SettingsModal({
                   >
                     <label>
                       이름
-                      <input value={templateDraft.name} onChange={(event) => setTemplateDraft({ ...templateDraft, name: event.target.value })} />
+                      <input value={templateDraft!.name} onChange={(event) => setTemplateDraft({ ...templateDraft!, name: event.target.value })} />
                     </label>
                     <label>
                       내용
-                      <textarea value={templateDraft.content} onChange={(event) => setTemplateDraft({ ...templateDraft, content: event.target.value })} />
+                      <textarea value={templateDraft!.content} onChange={(event) => setTemplateDraft({ ...templateDraft!, content: event.target.value })} />
                     </label>
                     <div className="settings-actions">
                       <button type="submit" className="theme-btn">저장</button>
