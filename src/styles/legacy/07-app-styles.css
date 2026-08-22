@@ -490,10 +490,6 @@
   }
 }
 
-.detail-toolbar {
-  background: linear-gradient(180deg, var(--panel-bg) 0%, var(--surface-soft) 100%);
-}
-
 .study-mode-tabs {
   padding: 2px;
   border-color: var(--paper-border);
