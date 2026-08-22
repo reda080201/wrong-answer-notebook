@@ -60,6 +60,7 @@ import {
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
+import ImportSaveFooter from "./ImportSaveFooter";
 import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
 import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { FileUp, Maximize2 } from "lucide-react";
@@ -1627,19 +1628,7 @@ export default function ImportFromGptModal({
           </div>
         </div>
 
-        <div className="form-footer">
-          <button type="button" className="btn-secondary" onClick={handleClose}>
-            취소
-          </button>
-          {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
-            <button type="button" className="btn-primary" disabled={!canApply || quickSaving} onClick={() => void quickSave()}>
-              {quickSaving ? "저장 중..." : "바로 저장"}
-            </button>
-          )}
-          <button type="button" className="btn-secondary" disabled={!canApply || quickSaving} onClick={() => void apply()}>
-            {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
-          </button>
-        </div>
+        <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         {!canApply && applyBlockReason && (
           <p className="import-apply-reason" role="status">{applyBlockReason}</p>
         )}
@@ -1739,17 +1728,7 @@ export default function ImportFromGptModal({
           </div>
         ) : undefined}
         footer={(
-          <div className="import-review-footer-actions">
-            <button type="button" className="ui-button ui-button--secondary" onClick={() => setReviewWorkspaceOpen(false)}>검수 닫기</button>
-            {!isSolutionMode && !isSupplementalMode && draftOverride && onApplyEntries && (
-              <button type="button" className="ui-button ui-button--primary" disabled={!canApply || quickSaving} onClick={() => void quickSave()}>
-                {quickSaving ? "저장 중..." : "바로 저장"}
-              </button>
-            )}
-            <button type="button" className="ui-button ui-button--secondary" disabled={!canApply || quickSaving} onClick={() => void apply()}>
-              {isSolutionMode ? "해설 적용하기" : "수정 후 저장"}
-            </button>
-          </div>
+          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={() => setReviewWorkspaceOpen(false)} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         )}
       >
         {error && <p className="form-save-error" role="alert">{error}</p>}
