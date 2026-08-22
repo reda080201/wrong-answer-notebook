@@ -227,7 +227,7 @@ function AppContent() {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
 
-  const { requestNavigation } = useAppNavigationController({
+  const appNavigationController = useAppNavigationController({
     activeSection,
     examSubmitting,
     examSession,
@@ -434,11 +434,13 @@ function AppContent() {
     confirm,
     prompt,
   });
+  const { requestNavigation } = appNavigationController;
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
+        navigationController={appNavigationController}
         activeSection={activeSection}
         entries={entries}
         setActiveSection={setActiveSection}
@@ -772,6 +774,7 @@ function AppContent() {
       })()}
 
       <AppModals
+        modalController={{ openSettings, closeSettings: () => setShowSettings(false) }}
         registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}
         showForm={actions.showForm}
         editingEntry={actions.editingEntry}

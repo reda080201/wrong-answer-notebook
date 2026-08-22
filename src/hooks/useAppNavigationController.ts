@@ -3,7 +3,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type { EntryKind } from "../types";
 import { useNotebookNavigationController } from "./useNotebookNavigationController";
 
-interface NavigationTarget {
+export interface NavigationTarget {
   section?: EntryKind;
   entryId?: string | null;
   question?: { entryId: string; questionNumber: string };
@@ -30,6 +30,8 @@ interface UseAppNavigationControllerOptions {
 export interface AppNavigationController {
   requestNavigation(target: NavigationTarget): Promise<boolean>;
 }
+
+export type AppNavigationControllerGroup = Pick<AppNavigationController, "requestNavigation">;
 
 export function useAppNavigationController(options: UseAppNavigationControllerOptions): AppNavigationController {
   const requestNavigation = useNotebookNavigationController(options);

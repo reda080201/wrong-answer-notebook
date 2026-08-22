@@ -20,8 +20,10 @@ import {
   NotebookPen,
 } from "lucide-react";
 import Menu from "../shared/ui/Menu";
+import type { AppNavigationControllerGroup } from "../hooks/useAppNavigationController";
 
 interface AppSidebarProps {
+  navigationController?: AppNavigationControllerGroup;
   activeSection: EntryKind;
   entries: WrongAnswerEntry[];
   setActiveSection: (section: EntryKind) => void;
@@ -63,6 +65,7 @@ const sectionTabs = [
 ] as const;
 
 export default function AppSidebar({
+  navigationController,
   activeSection,
   entries,
   setActiveSection,
@@ -121,6 +124,18 @@ export default function AppSidebar({
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
             ];
+  const handleSectionSelect = (section: EntryKind) => {
+    if (navigationController) {
+      void navigationController.requestNavigation({ section, entryId: null });
+      return;
+    }
+    if (onSectionSelect) {
+      onSectionSelect(section);
+    } else {
+      setActiveSection(section);
+      setSelectedId(null);
+    }
+  };
   return (
     <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
       <div className="logo">
@@ -147,12 +162,7 @@ export default function AppSidebar({
             aria-label={label}
             title={collapsed ? label : undefined}
             onClick={() => {
-              if (onSectionSelect) {
-                onSectionSelect(key);
-              } else {
-                setActiveSection(key);
-                setSelectedId(null);
-              }
+              handleSectionSelect(key);
             }}
           >
             <Icon size={18} aria-hidden="true" />

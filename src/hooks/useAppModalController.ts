@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { SettingsTab } from "../components/SettingsModal";
 import type { WrongAnswerEntry } from "../types";
 
@@ -20,6 +20,11 @@ export function useAppModalController() {
   const [realExamMinutes, setRealExamMinutes] = useState(50);
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
 
+  const openSettings = useCallback((tab?: SettingsTab) => {
+    setSettingsInitialTab(tab);
+    setShowSettings(true);
+  }, []);
+  const closeSettings = useCallback(() => setShowSettings(false), []);
   return {
     showSettings, setShowSettings,
     showLearningHub, setShowLearningHub,
@@ -33,5 +38,11 @@ export function useAppModalController() {
     realExamStartEntry, setRealExamStartEntry,
     realExamMinutes, setRealExamMinutes,
     dismissedUpdateVersion, setDismissedUpdateVersion,
+    openSettings, closeSettings,
   };
+}
+
+export interface AppModalControllerGroup {
+  openSettings(tab?: SettingsTab): void;
+  closeSettings(): void;
 }
