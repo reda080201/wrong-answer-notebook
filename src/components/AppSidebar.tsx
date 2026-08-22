@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import SubjectList from "./SubjectList";
 import type {
   EntryKind,
@@ -20,8 +21,10 @@ import {
   NotebookPen,
 } from "lucide-react";
 import Menu from "../shared/ui/Menu";
+import type { AppNavigationControllerGroup } from "../hooks/useAppNavigationController";
 
 interface AppSidebarProps {
+  navigationController?: AppNavigationControllerGroup;
   activeSection: EntryKind;
   entries: WrongAnswerEntry[];
   setActiveSection: (section: EntryKind) => void;
@@ -63,6 +66,7 @@ const sectionTabs = [
 ] as const;
 
 export default function AppSidebar({
+  navigationController,
   activeSection,
   entries,
   setActiveSection,
@@ -89,9 +93,11 @@ export default function AppSidebar({
   collapsed = false,
   onCollapsedChange,
 }: AppSidebarProps) {
-  const sectionEntries = entries.filter((entry) => entry.entryKind === activeSection);
-  const sidebarStats =
-    activeSection === "problem_sheet"
+  const sectionEntries = useMemo(
+    () => entries.filter((entry) => entry.entryKind === activeSection),
+    [entries, activeSection],
+  );
+  const sidebarStats = useMemo(() => activeSection === "problem_sheet"
       ? [
           ["시험지", sectionEntries.length],
           ["총 문항", sectionEntries.reduce((sum, entry) => sum + getQuestionCount(entry), 0)],
@@ -120,7 +126,19 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-            ];
+          ], [activeSection, sectionEntries, stats]);
+  const handleSectionSelect = (section: EntryKind) => {
+    if (navigationController) {
+      void navigationController.requestNavigation({ section, entryId: null });
+      return;
+    }
+    if (onSectionSelect) {
+      onSectionSelect(section);
+    } else {
+      setActiveSection(section);
+      setSelectedId(null);
+    }
+  };
   return (
     <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
       <div className="logo">
@@ -147,52 +165,47 @@ export default function AppSidebar({
             aria-label={label}
             title={collapsed ? label : undefined}
             onClick={() => {
-              if (onSectionSelect) {
-                onSectionSelect(key);
-              } else {
-                setActiveSection(key);
-                setSelectedId(null);
-              }
+              handleSectionSelect(key);
             }}
           >
             <Icon size={18} aria-hidden="true" />
             {!collapsed && <span>{label}</span>}
           </button>
         ))}
-        {onOpenLearningHub && (
+        {(onOpenLearningHub || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
             aria-current={learningHubOpen ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
-            onClick={onOpenLearningHub}
+            onClick={() => void (navigationController ? navigationController.openLearningHub() : onOpenLearningHub?.())}
           >
             <Library size={18} aria-hidden="true" />
             {!collapsed && <span>학습 허브</span>}
           </button>
         )}
-        {onOpenQuestionBank && (
+        {(onOpenQuestionBank || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
             aria-current={questionBankOpen ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
-            onClick={onOpenQuestionBank}
+            onClick={() => void (navigationController ? navigationController.openQuestionBank() : onOpenQuestionBank?.())}
           >
             <BookOpen size={18} aria-hidden="true" />
             {!collapsed && <span>문제 은행</span>}
           </button>
         )}
-        {onOpenLibrary && (
+        {(onOpenLibrary || navigationController) && (
           <button
             type="button"
             className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
             aria-current={libraryOpen ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
-            onClick={onOpenLibrary}
+            onClick={() => void (navigationController ? navigationController.openLibrary() : onOpenLibrary?.())}
           >
             <Archive size={18} aria-hidden="true" />
             {!collapsed && <span>보관함</span>}

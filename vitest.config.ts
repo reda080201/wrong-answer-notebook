@@ -10,7 +10,8 @@ export default defineConfig({
     exclude: ["e2e/**", "node_modules/**"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    minWorkers: 1,
-    maxWorkers: 4,
+    pool: "threads",
+    fileParallelism: false,
+    maxWorkers: 1,
   },
 });

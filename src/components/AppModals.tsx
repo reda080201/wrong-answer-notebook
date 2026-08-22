@@ -33,6 +33,7 @@ import { normalizeChoice } from "../features/import-workspace/model/importWorksp
 import { parseQuestionText } from "../utils/textLayout";
 import { normalizeQuestionNumber } from "../utils/questionMeta";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
+import type { AppModalControllerGroup } from "../hooks/useAppModalController";
 
 type PendingSupplementalImport = {
   target: WrongAnswerEntry;
@@ -46,6 +47,7 @@ type PendingSupplementalImport = {
 };
 
 interface AppModalsProps {
+  modalController?: AppModalControllerGroup;
   registerWorkspaceDraftFlush: (registration: TransientWriteRegistration) => void;
   showForm: boolean;
   editingEntry?: WrongAnswerEntry;
@@ -106,6 +108,7 @@ interface AppModalsProps {
 }
 
 export default function AppModals({
+  modalController,
   registerWorkspaceDraftFlush,
   showForm,
   editingEntry,
@@ -150,6 +153,7 @@ export default function AppModals({
   onCloseSupplementalLink,
   onLinkLearningEntry,
 }: AppModalsProps) {
+  const openSettings = onOpenSettings ?? modalController?.settings.open;
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
   const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
@@ -283,7 +287,7 @@ export default function AppModals({
           onClose={closeImportModal}
           onApply={handleImportApply}
           onApplyEntries={handleWorkspaceEntries}
-          onOpenSettings={onOpenSettings}
+          onOpenSettings={openSettings}
           gptMcpPreferences={settings.gptMcpPreferences}
         />
       )}
@@ -308,7 +312,7 @@ export default function AppModals({
             setPendingSupplemental({ target: supplementalTarget.entry, expectedUpdatedAt: supplementalTarget.entry.updatedAt, mode: supplementalTarget.mode, data, assetFiles: staged ? [] : assetFiles, savedImageFilenames, sourceFilename, assetSession });
             onCloseSupplementalImport();
           }}
-          onOpenSettings={onOpenSettings}
+          onOpenSettings={openSettings}
         />
       )}
       {pendingSupplemental && (
