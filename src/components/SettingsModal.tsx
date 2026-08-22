@@ -6,8 +6,6 @@ import {
 } from "../hooks/useMcpBridgeSettings";
 import { normalizeRemoteMcpBaseUrl } from "../features/chatgpt/services/chatGptConnection";
 import type {
-  EntryKind,
-  EntryTemplate,
   ExamPreferences,
   GptMcpPreferences,
   ChatGptMcpPreferences,
@@ -162,7 +160,6 @@ export default function SettingsModal({
     const normalized = normalizeRemoteMcpBaseUrl(raw);
     await patchChatGpt({ remoteBaseUrl: normalized.baseUrl });
   };
-  const [templateDraft, setTemplateDraft] = useState<{ kind: "entry" | "prompt" | "memo"; id?: string; name: string; content: string } | null>(null);
 
   return (
     <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정" size="xl" scrollMode="custom">
@@ -318,94 +315,6 @@ export default function SettingsModal({
               />
             )}
 
-            {activeTab === ("__legacy_templates__" as SettingsTab) && (
-              <>
-                <p className="settings-label">입력 템플릿</p>
-                <TemplateList
-                  empty="저장된 템플릿이 없습니다."
-                  items={settings.templates.map((template) => ({
-                    id: template.id,
-                    name: template.name,
-                    builtIn: false,
-                    onDelete: () => deleteTemplate(template.id),
-                    onEdit: () => setTemplateDraft({
-                      kind: "entry",
-                      id: template.id,
-                      name: template.name,
-                      content: JSON.stringify(template.data, null, 2),
-                    }),
-                  }))}
-                />
-                <p className="settings-label">GPT 프롬프트 템플릿</p>
-                <TemplateList
-                  items={settings.promptTemplates.map((template) => ({
-                    id: template.id,
-                    name: template.name,
-                    builtIn: template.builtIn,
-                    onDelete: () => deletePromptTemplate(template.id),
-                    onEdit: () => setTemplateDraft({ kind: "prompt", id: template.id, name: template.name, content: template.content }),
-                    onCopy: () => setTemplateDraft({ kind: "prompt", name: `${template.name} 복사본`, content: template.content }),
-                  }))}
-                />
-                <p className="settings-label">메모 템플릿</p>
-                <button type="button" className="theme-btn" onClick={() => setTemplateDraft({ kind: "memo", name: "", content: "" })}>
-                  메모 템플릿 추가
-                </button>
-                <TemplateList
-                  items={settings.memoTemplates.map((template) => ({
-                    id: template.id,
-                    name: template.name,
-                    builtIn: template.builtIn,
-                    onDelete: () => deleteMemoTemplate(template.id),
-                    onEdit: () => setTemplateDraft({ kind: "memo", id: template.id, name: template.name, content: template.content }),
-                    onCopy: () => setTemplateDraft({ kind: "memo", name: `${template.name} 복사본`, content: template.content }),
-                  }))}
-                />
-                {templateDraft && (
-                  <form
-                    className="template-edit-form"
-                    onSubmit={async (event) => {
-                      event.preventDefault();
-                      const name = templateDraft!.name.trim();
-                      const content = templateDraft!.content.trim();
-                      if (!name || !content) return;
-                      try {
-                        if (templateDraft!.kind === "prompt") {
-                          await savePromptTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, content });
-                        } else if (templateDraft!.kind === "entry") {
-                          const data = JSON.parse(content) as EntryTemplate["data"];
-                          const entryKind: EntryKind =
-                            data.entryKind === "concept" || data.entryKind === "problem_sheet" || data.entryKind === "lecture"
-                              ? data.entryKind
-                              : "wrong_answer";
-                          await saveTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, entryKind, data });
-                        } else {
-                          await saveMemoTemplate({ id: templateDraft!.id ?? crypto.randomUUID(), name, content });
-                        }
-                      } catch (error) {
-                        setSettingsMessage(error instanceof Error ? error.message : "템플릿 저장에 실패했습니다.");
-                        return;
-                      }
-                      setTemplateDraft(null);
-                    }}
-                  >
-                    <label>
-                      이름
-                      <input value={templateDraft!.name} onChange={(event) => setTemplateDraft({ ...templateDraft!, name: event.target.value })} />
-                    </label>
-                    <label>
-                      내용
-                      <textarea value={templateDraft!.content} onChange={(event) => setTemplateDraft({ ...templateDraft!, content: event.target.value })} />
-                    </label>
-                    <div className="settings-actions">
-                      <button type="submit" className="theme-btn">저장</button>
-                      <button type="button" className="theme-btn" onClick={() => setTemplateDraft(null)}>취소</button>
-                    </div>
-                  </form>
-                )}
-              </>
-            )}
-
             {activeTab === "advanced" && (
               <SettingsAdvancedPanel />
             )}
@@ -418,43 +327,6 @@ export default function SettingsModal({
     </Dialog>
   );
 }
-
-function TemplateList({
-  items,
-  empty = "템플릿이 없습니다.",
-}: {
-  items: Array<{ id: string; name: string; builtIn?: boolean; onDelete: () => void; onEdit?: () => void; onCopy?: () => void }>;
-  empty?: string;
-}) {
-  return (
-    <div className="template-list">
-      {items.length === 0 ? (
-        <span className="template-empty">{empty}</span>
-      ) : (
-        items.map((item) => (
-          <div key={item.id} className="template-item">
-            <span>
-              {item.name}
-              {item.builtIn ? " · 기본" : ""}
-            </span>
-            {!item.builtIn && (
-              <>
-                {item.onEdit && <button type="button" onClick={item.onEdit}>편집</button>}
-                <button type="button" onClick={item.onDelete}>삭제</button>
-              </>
-            )}
-            {item.builtIn && item.onCopy && (
-              <button type="button" onClick={item.onCopy}>
-                복사해서 편집
-              </button>
-            )}
-          </div>
-        ))
-      )}
-    </div>
-  );
-}
-
 
 function mcpBridgeStatusLabel(status: McpBridgeRuntimeStatus["status"]): string {
   switch (status) {
