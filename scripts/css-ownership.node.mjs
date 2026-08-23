@@ -23,3 +23,16 @@ test("current feature layers own the migrated selectors", async () => {
   assert.match(foundation, /\.entry-card/);
   assert.match(consolidation, /\.detail-toolbar--problem-sheet/);
 });
+
+test("shell geometry has one owner and the documented breakpoint contract", async () => {
+  const foundation = await read("ui-foundation.css");
+  const legacy = (await Promise.all([
+    read("legacy/00-app-styles.css"),
+    read("legacy/03-app-styles.css"),
+    read("legacy/07-app-styles.css"),
+    read("legacy/10-app-styles.css"),
+  ])).join("\n");
+  assert.equal((foundation.match(/\.app-sidebar\s*\{/g) ?? []).length, 1);
+  assert.doesNotMatch(legacy, /\.app-sidebar\s*\{/);
+  assert.doesNotMatch(foundation, /@media\s*\([^)]*(?:960|820|760|720|680)px/);
+});
