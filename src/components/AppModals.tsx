@@ -48,111 +48,28 @@ type PendingSupplementalImport = {
 
 interface AppModalsProps {
   modalController?: AppModalControllerGroup;
-  registerWorkspaceDraftFlush: (registration: TransientWriteRegistration) => void;
-  showForm: boolean;
-  editingEntry?: WrongAnswerEntry;
-  handleSave: (data: EntryFormData, removedImages: string[]) => Promise<void>;
-  closeForm: () => void;
-  activeSection: EntryKind;
-  prefilledTitle: string;
-  importedInitialData?: Partial<EntryFormData>;
-  settings: AppSettings;
-  saveTemplate: (template: EntryTemplate) => Promise<void>;
-  showImportModal: boolean;
-  importMode: "import" | "solution";
-  solutionSourceEntry?: WrongAnswerEntry;
-  importFallbackSubject: Subject;
-  aiProviderStatus: AiProviderStatus | null;
-  setLastImportTemplate: (templateId: string) => Promise<void>;
-  savePromptTemplate: (template: PromptTemplate) => Promise<void>;
-  closeImportModal: () => void;
-  handleImportApply: (
-    data: Partial<EntryFormData>,
-    applyMode?: GptSolutionApplyMode,
-    assetFiles?: File[],
-  ) => void;
-  showLearningImportModal: boolean;
-  setShowLearningImportModal: (show: boolean) => void;
-  handleLearningImportApply: (
-    blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType },
-  ) => Promise<void>;
-  handleImportedEntriesApply: (
-    entries: Partial<EntryFormData>[],
-    assetFiles?: File[],
-    assetSession?: ImportWorkspace["assetSession"],
-  ) => Promise<void>;
-  reviewMode: "today" | "random" | "difficult" | "important" | null;
-  reviewSeed: ReviewItem[];
-  setReviewMode: (mode: "today" | "random" | "difficult" | "important" | null) => void;
-  handleReview: (
-    item: ReviewItem | WrongAnswerEntry,
-    result: ReviewResult,
-  ) => Promise<void>;
-  setActiveSection: (section: EntryKind) => void;
-  setSelectedId: (id: string | null) => void;
-  handleWikiLinkClick: (target: string) => void;
-  existingTargets: Set<string>;
-  onOpenSettings?: (tab?: SettingsTab) => void;
-  supplementalTarget?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null;
-  onCloseSupplementalImport: () => void;
-  applySupplementalMerge: (payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }) => Promise<void>;
-  supplementalManagerEntry?: WrongAnswerEntry | null;
-  onCloseSupplementalManager: () => void;
-  renameSupplementalResource: (entryId: string, resourceId: string, title: string) => Promise<void>;
-  deleteSupplementalResource: (entryId: string, resourceId: string) => Promise<void>;
-  supplementalLinkTarget?: WrongAnswerEntry | null;
-  supplementalLinkCandidates: WrongAnswerEntry[];
-  onCloseSupplementalLink: () => void;
-  onLinkLearningEntry: (entryId: string, source: WrongAnswerEntry) => Promise<void>;
+  workspaceActions: { registerDraftFlush(registration: TransientWriteRegistration): void };
+  form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
+  settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
+  importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"]): Promise<void> };
+  learningImport: { show: boolean; setShow(show: boolean): void; apply(blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType }): Promise<void> };
+  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void> };
+  navigation: { setActiveSection(section: EntryKind): void; setSelectedId(id: string | null): void; handleWikiLinkClick(target: string): void; existingTargets: Set<string> };
+  supplemental: { target?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null; closeImport(): void; applyMerge(payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }): Promise<void>; managerEntry?: WrongAnswerEntry | null; closeManager(): void; rename(entryId: string, resourceId: string, title: string): Promise<void>; remove(entryId: string, resourceId: string): Promise<void>; linkTarget?: WrongAnswerEntry | null; linkCandidates: WrongAnswerEntry[]; closeLink(): void; link(entryId: string, source: WrongAnswerEntry): Promise<void> };
 }
 
 export default function AppModals({
   modalController,
-  registerWorkspaceDraftFlush,
-  showForm,
-  editingEntry,
-  handleSave,
-  closeForm,
-  activeSection,
-  prefilledTitle,
-  importedInitialData,
-  settings,
-  saveTemplate,
-  showImportModal,
-  importMode,
-  solutionSourceEntry,
-  importFallbackSubject,
-  aiProviderStatus,
-  setLastImportTemplate,
-  savePromptTemplate,
-  closeImportModal,
-  handleImportApply,
-  showLearningImportModal,
-  setShowLearningImportModal,
-  handleLearningImportApply,
-  handleImportedEntriesApply,
-  reviewMode,
-  reviewSeed,
-  setReviewMode,
-  handleReview,
-  setActiveSection,
-  setSelectedId,
-  handleWikiLinkClick,
-  existingTargets,
-  onOpenSettings,
-  supplementalTarget,
-  onCloseSupplementalImport,
-  applySupplementalMerge,
-  supplementalManagerEntry,
-  onCloseSupplementalManager,
-  renameSupplementalResource,
-  deleteSupplementalResource,
-  supplementalLinkTarget,
-  supplementalLinkCandidates,
-  onCloseSupplementalLink,
-  onLinkLearningEntry,
+  workspaceActions, form, settings: settingsGroup, importFlow, learningImport, review, navigation, supplemental,
 }: AppModalsProps) {
+  const { registerDraftFlush: registerWorkspaceDraftFlush } = workspaceActions;
+  const { show: showForm, editingEntry, handleSave, close: closeForm, activeSection, prefilledTitle, importedInitialData } = form;
+  const { value: settings, saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate, open: onOpenSettings } = settingsGroup;
+  const { show: showImportModal, mode: importMode, solutionSourceEntry, fallbackSubject: importFallbackSubject, close: closeImportModal, apply: handleImportApply, applyEntries: handleImportedEntriesApply } = importFlow;
+  const { show: showLearningImportModal, setShow: setShowLearningImportModal, apply: handleLearningImportApply } = learningImport;
+  const { mode: reviewMode, seed: reviewSeed, setMode: setReviewMode, handle: handleReview } = review;
+  const { setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets } = navigation;
+  const { target: supplementalTarget, closeImport: onCloseSupplementalImport, applyMerge: applySupplementalMerge, managerEntry: supplementalManagerEntry, closeManager: onCloseSupplementalManager, rename: renameSupplementalResource, remove: deleteSupplementalResource, linkTarget: supplementalLinkTarget, linkCandidates: supplementalLinkCandidates, closeLink: onCloseSupplementalLink, link: onLinkLearningEntry } = supplemental;
   const openSettings = onOpenSettings ?? modalController?.settings.open;
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);

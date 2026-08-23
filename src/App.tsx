@@ -736,53 +736,18 @@ function AppContent() {
 
       <AppModals
         modalController={modalController}
-        registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}
-        showForm={actions.showForm}
-        editingEntry={actions.editingEntry}
-        handleSave={actions.handleSave}
-        closeForm={actions.closeForm}
-        activeSection={activeSection}
-        prefilledTitle={actions.prefilledTitle}
-        importedInitialData={actions.importedInitialData}
-        settings={settings}
-        saveTemplate={actions.saveTemplate}
-        showImportModal={actions.showImportModal}
-        importMode={actions.importMode}
-        solutionSourceEntry={actions.solutionSourceEntry}
-        importFallbackSubject={actions.importFallbackSubject}
-        aiProviderStatus={aiProviderStatus}
-        setLastImportTemplate={setLastImportTemplate}
-        savePromptTemplate={actions.savePromptTemplate}
-        closeImportModal={actions.closeImportModal}
-        handleImportApply={actions.handleImportApply}
-        showLearningImportModal={actions.showLearningImportModal}
-        setShowLearningImportModal={actions.setShowLearningImportModal}
-        handleLearningImportApply={actions.handleLearningImportApply}
-        handleImportedEntriesApply={actions.handleImportedEntriesApply}
-        reviewMode={actions.reviewMode}
-        reviewSeed={actions.reviewSeed}
-        setReviewMode={actions.setReviewMode}
-        handleReview={actions.handleReview}
-        setActiveSection={setActiveSection}
-        setSelectedId={setSelectedId}
-        handleWikiLinkClick={handleWikiLinkClick}
-        existingTargets={linkableTargets}
-        onOpenSettings={openSettings}
-        supplementalTarget={(() => {
+        workspaceActions={{ registerDraftFlush: registerWorkspaceDraftFlush }}
+        form={{ show: actions.showForm, editingEntry: actions.editingEntry, handleSave: actions.handleSave, close: actions.closeForm, activeSection, prefilledTitle: actions.prefilledTitle, importedInitialData: actions.importedInitialData }}
+        settings={{ value: settings, saveTemplate: actions.saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate: actions.savePromptTemplate, open: openSettings }}
+        importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply }}
+        learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
+        review={{ mode: actions.reviewMode, seed: actions.reviewSeed, setMode: actions.setReviewMode, handle: actions.handleReview }}
+        navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
+        supplemental={{ target: (() => {
           if (!actions.supplementalTarget) return null;
           const entry = entries.find((item) => item.id === actions.supplementalTarget?.entryId);
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
-        })()}
-        onCloseSupplementalImport={actions.closeSupplementalImport}
-        applySupplementalMerge={actions.applySupplementalMerge}
-        supplementalManagerEntry={actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null}
-        onCloseSupplementalManager={actions.closeSupplementalManager}
-        renameSupplementalResource={actions.renameSupplementalResource}
-        deleteSupplementalResource={actions.deleteSupplementalResource}
-        supplementalLinkTarget={actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null}
-        supplementalLinkCandidates={entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept")}
-        onCloseSupplementalLink={actions.closeLearningEntryLink}
-        onLinkLearningEntry={actions.linkLearningEntry}
+        })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
       {showExamBuilder && (
         <ExamBuilderWizard
