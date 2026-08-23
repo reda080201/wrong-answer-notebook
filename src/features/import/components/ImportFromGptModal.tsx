@@ -49,7 +49,7 @@ import FigureComparisonPanel from "../../../features/figures/components/FigureCo
 import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 import type { SupplementalImportMode } from "../../../features/supplemental-resources/model/supplementalResource";
 import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
-import ImportPreviewSummary from "../../../components/ImportPreviewSummary";
+import ImportValidationSummary from "./ImportValidationSummary";
 import TextReviewSplitView from "./TextReviewSplitView";
 import StructuredQuestionReviewEditor from "./StructuredQuestionReviewEditor";
 import { renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
@@ -1305,7 +1305,7 @@ export default function ImportFromGptModal({
                       <ul>{importWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
                     </div>
                   )}
-                  <ImportPreviewSummary
+                  <ImportValidationSummary
                     title={draft.title}
                     detectedFormat={detectedFormat}
                     questionCount={questionCount}
