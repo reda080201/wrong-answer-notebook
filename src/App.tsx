@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { useCallback, useEffect } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -15,7 +14,7 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, WrongAnswerEntry } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
@@ -25,11 +24,10 @@ import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
 import ErrorNotice from "./shared/ui/ErrorNotice";
 import Dialog from "./shared/ui/Dialog";
-import { useWindowCloseGuard } from "./hooks/useWindowCloseGuard";
-import { useExamSessionController } from "./hooks/useExamSessionController";
-import { useGeneratedExamController } from "./hooks/useGeneratedExamController";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
-import { useMaintenanceCoordinator } from "./hooks/useMaintenanceCoordinator";
+import { useExamWorkspaceController } from "./hooks/useExamWorkspaceController";
+import { useAppNavigationController } from "./hooks/useAppNavigationController";
+import { usePersistenceCoordinator } from "./hooks/usePersistenceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
@@ -37,15 +35,15 @@ import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace"
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
 import { useLibraryFolders } from "./features/library/hooks/useLibraryFolders";
 import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDrafts";
-import type { LibraryFolder } from "./types";
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
-import { useNotebookNavigationController } from "./hooks/useNotebookNavigationController";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
+import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
+import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -108,33 +106,32 @@ function AppContent() {
   const setLastImportTemplate = promptTemplates.setLastUsed;
   const { status: aiProviderStatus } = aiProvider;
   const { subjectOrder, moveSubject } = useSubjectOrder();
-  const [showSettings, setShowSettings] = useState(false);
+  const {
+    showSettings, setShowSettings,
+    showLearningHub, setShowLearningHub,
+    learningHubTarget, setLearningHubTarget,
+    showQuestionBank, setShowQuestionBank,
+    showLibraryExplorer, setShowLibraryExplorer,
+    examHistoryOpen, setExamHistoryOpen,
+    learningCandidateEntryId, setLearningCandidateEntryId,
+    settingsInitialTab, setSettingsInitialTab,
+    questionTarget, setQuestionTarget,
+    realExamStartEntry, setRealExamStartEntry,
+    realExamMinutes, setRealExamMinutes,
+    dismissedUpdateVersion, setDismissedUpdateVersion,
+    controller: modalController,
+  } = useAppModalController();
   const shell = useUiShellPreferences();
-  const [showLearningHub, setShowLearningHub] = useState(false);
-  const [learningHubTarget, setLearningHubTarget] = useState<{ entryId: string; blockId: string } | null>(null);
-  const [showQuestionBank, setShowQuestionBank] = useState(false);
-  const [showLibraryExplorer, setShowLibraryExplorer] = useState(false);
-  const [examHistoryOpen, setExamHistoryOpen] = useState(false);
-  const [learningCandidateEntryId, setLearningCandidateEntryId] = useState<string | null>(null);
-  const [settingsInitialTab, setSettingsInitialTab] = useState<SettingsTab | undefined>(undefined);
-  const [questionTarget, setQuestionTarget] = useState<{
-    entryId: string;
-    questionNumber: string;
-    requestId: number;
-  } | null>(null);
-  const [realExamStartEntry, setRealExamStartEntry] = useState<WrongAnswerEntry | null>(null);
-  const [realExamMinutes, setRealExamMinutes] = useState(50);
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
   } = useAppWriteRegistrations();
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
-  const exam = useExamSessionController({
-    chatGptPreferences: settings.chatGptMcpPreferences,
+  const examWorkspace = useExamWorkspaceController({
     existingEntries: entries,
     commitExamSubmission,
+    examPrintPreferences: settings.examPrintPreferences,
   });
   const {
     session: examSession,
@@ -154,17 +151,13 @@ function AppContent() {
     savedSessions: savedExamSessions,
     activeGeneratedExam,
     open: openExamSession,
-    openGenerated: openGeneratedExamSession,
     close: closeExamSession,
     discardActiveSessionAfterRestore,
     flush: flushExamSessionSave,
     submit: handleExamSubmit,
-  } = exam;
+  } = examWorkspace;
 
-  const generatedExamController = useGeneratedExamController({
-    examPrintPreferences: settings.examPrintPreferences,
-    onOpenExam: openGeneratedExamSession,
-  });
+  const generatedExamController = examWorkspace.generated;
   const {
     flush: flushGeneratedExams,
     reload: reloadGeneratedExams,
@@ -176,31 +169,32 @@ function AppContent() {
   } = generatedExamController;
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
-  const flushActiveExamForMaintenance = useCallback(async () => {
-    if (examSaveTimerRef.current !== null) {
-      window.clearTimeout(examSaveTimerRef.current);
-      examSaveTimerRef.current = null;
-    }
-    const current = examSessionRef.current;
-    if (current && !(await flushExamSessionSave(current))) {
-      throw new Error("시험 진행 상태를 저장하지 못했습니다.");
-    }
-  }, [examSaveTimerRef, examSessionRef, flushExamSessionSave]);
-  const runMaintenanceOperation = useMaintenanceCoordinator({
+  const persistence = usePersistenceCoordinator({
+    activeExam: examSession,
+    examSaveTimerRef,
+    examSessionRef,
+    flushExamSession: flushExamSessionSave,
     flushEntries,
     flushSettings,
     flushGeneratedExams,
+    flushImportWorkspaceDraft: flushTransientWrites,
+    flushLibraryFolders: library.flush,
+    flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushTransientWrites,
+    setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
     setSettingsMaintenanceBlocked,
     setGeneratedExamsMaintenanceBlocked,
-    flushLibraryFolders: library.flush,
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
-    flushGptSolutionDrafts: gptSolutionDrafts.flush,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
-    flushActiveExam: flushActiveExamForMaintenance,
-    flushTransientWrites,
-    setTransientWritesMaintenanceBlocked,
+    confirmCloseWithoutSaving: () => confirm({
+      title: "저장하지 않고 종료",
+      message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
+      confirmLabel: "저장하지 않고 종료",
+      cancelLabel: "종료 취소",
+    }),
   });
+  const { runMaintenanceOperation } = persistence;
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -234,8 +228,9 @@ function AppContent() {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
 
-  const requestNavigation = useNotebookNavigationController({
+  const appNavigationController = useAppNavigationController({
     activeSection,
+    selectedId,
     examSubmitting,
     examSession,
     closeExamSession,
@@ -248,23 +243,13 @@ function AppContent() {
     setExamSaveError,
   });
 
-  const { closeError: closeFlushError, saving: closeFlushSaving, clearCloseError: clearCloseFlushError, retryClose, closeWithoutSaving } = useWindowCloseGuard({
-    activeExam: examSession,
-    examSaveTimerRef,
-    flushExamSession: flushExamSessionSave,
-    flushEntries,
-    flushGeneratedExams,
-    flushSettings,
-    flushImportWorkspaceDraft: flushTransientWrites,
-    flushLibraryFolders: library.flush,
-    flushGptSolutionDrafts: gptSolutionDrafts.flush,
-    confirmCloseWithoutSaving: () => confirm({
-      title: "저장하지 않고 종료",
-      message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
-      confirmLabel: "저장하지 않고 종료",
-      cancelLabel: "종료 취소",
-    }),
-  });
+  const {
+    closeError: closeFlushError,
+    saving: closeFlushSaving,
+    clearCloseError: clearCloseFlushError,
+    retryClose,
+    closeWithoutSaving,
+  } = persistence;
 
   useEffect(() => {
     if (!examSession) return;
@@ -444,103 +429,28 @@ function AppContent() {
       }
     })();
   };
-  const createLibraryFolder = useCallback(async (parentId?: string) => {
-    const name = await prompt({ title: "새 폴더", message: "폴더 이름을 입력하세요." });
-    if (!name?.trim()) return;
-    const now = new Date().toISOString();
-    await library.mutate((current) => [
-      ...current,
-      { id: uuidv4(), name: name.trim(), parentId, sortOrder: current.filter((folder) => folder.parentId === parentId).length, createdAt: now, updatedAt: now },
-    ]);
-  }, [library, prompt]);
-  const renameLibraryFolder = useCallback(async (folder: LibraryFolder) => {
-    const name = await prompt({ title: "폴더 이름 변경", message: "새 폴더 이름을 입력하세요.", defaultValue: folder.name });
-    if (!name?.trim() || name.trim() === folder.name) return;
-    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, name: name.trim(), updatedAt: new Date().toISOString() } : item));
-  }, [library, prompt]);
-  const moveLibraryFolder = useCallback(async (folder: LibraryFolder, parentId?: string) => {
-    if (folder.id === parentId) throw new Error("폴더를 자기 자신으로 이동할 수 없습니다.");
-    const descendants = new Set<string>([folder.id]);
-    let changed = true;
-    while (changed) {
-      changed = false;
-      for (const item of library.folders) if (item.parentId && descendants.has(item.parentId) && !descendants.has(item.id)) { descendants.add(item.id); changed = true; }
-    }
-    if (parentId && descendants.has(parentId)) throw new Error("폴더를 자신의 하위 폴더로 이동할 수 없습니다.");
-    await library.mutate((current) => current.map((item) => item.id === folder.id ? { ...item, parentId, updatedAt: new Date().toISOString() } : item));
-  }, [library]);
-  const moveLibraryEntries = useCallback(async (entryIds: string[], folderId?: string) => {
-    const validFolderId = folderId && library.folders.some((folder) => folder.id === folderId) ? folderId : undefined;
-    await Promise.all(entryIds.map((entryId) => patchEntry(entryId, { folderId: validFolderId })));
-  }, [library.folders, patchEntry]);
-  const deleteLibraryFolder = useCallback(async (folder: LibraryFolder) => {
-    const childFolders = library.folders.filter((item) => item.parentId === folder.id);
-    const childEntries = entries.filter((entry) => entry.folderId === folder.id);
-    const accepted = await confirm({
-      title: "폴더 삭제",
-      message: childFolders.length || childEntries.length
-        ? `이 폴더의 하위 폴더 ${childFolders.length}개와 항목 ${childEntries.length}개를 루트로 이동합니다. 항목은 삭제되지 않습니다.`
-        : "빈 폴더를 삭제합니다.",
-      confirmLabel: "삭제",
-    });
-    if (!accepted) return;
-    await Promise.all(childEntries.map((entry) => patchEntry(entry.id, { folderId: undefined })));
-    await library.mutate((current) => current.filter((item) => item.id !== folder.id).map((item) => item.parentId === folder.id ? { ...item, parentId: undefined, updatedAt: new Date().toISOString() } : item));
-  }, [confirm, entries, library, patchEntry]);
+  const libraryActions = useLibraryFolderActions({
+    entries,
+    library,
+    patchEntry,
+    confirm,
+    prompt,
+  });
+  const { requestNavigation } = appNavigationController;
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
+        navigationController={appNavigationController}
         activeSection={activeSection}
         entries={entries}
-        setActiveSection={setActiveSection}
-        setSelectedId={setSelectedId}
-        onSectionSelect={(section) => void requestNavigation({ section, entryId: null })}
         stats={stats}
         learningStats={learningStats}
-        subjectOrder={subjectOrder}
-        subjectFilter={subjectFilter}
-        subjectCounts={subjectCounts}
-        sectionEntryCount={sectionEntryCount}
-        moveSubject={moveSubject}
-        openNew={actions.openNew}
-        openImport={actions.openImport}
-        openLearningImport={() => actions.setShowLearningImportModal(true)}
-        onSubjectSelect={setSubjectFilter}
-        onOpenExamBuilder={() => setShowExamBuilder(true)}
-        learningHubOpen={showLearningHub}
-        onOpenLearningHub={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        questionBankOpen={showQuestionBank}
-        onOpenQuestionBank={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(false);
-              setShowQuestionBank(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        libraryOpen={showLibraryExplorer}
-        onOpenLibrary={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(false);
-              setShowQuestionBank(false);
-              setShowLibraryExplorer(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        collapsed={shell.appSidebarCollapsed}
-        onCollapsedChange={shell.setAppSidebarCollapsed}
+        subjects={{ order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount, move: moveSubject, select: setSubjectFilter }}
+        actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
+        destinations={{ learningHubOpen: showLearningHub, questionBankOpen: showQuestionBank, libraryOpen: showLibraryExplorer }}
+        shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
       />
 
       <main className="main">
@@ -600,12 +510,12 @@ function AppContent() {
               navigation={settings.viewPreferences.libraryNavigation}
               onNavigationChange={(libraryNavigation) => void patchViewPreferences({ libraryNavigation })}
               onOpenEntry={openEntryById}
-              onCreateFolder={(parentId) => void createLibraryFolder(parentId)}
-              onRenameFolder={(folder) => void renameLibraryFolder(folder)}
-              onMoveFolder={(folder, parentId) => void moveLibraryFolder(folder, parentId)}
-              onMoveEntries={(entryIds, folderId) => void moveLibraryEntries(entryIds, folderId)}
+              onCreateFolder={(parentId) => void libraryActions.createFolder(parentId)}
+              onRenameFolder={(folder) => void libraryActions.renameFolder(folder)}
+              onMoveFolder={(folder, parentId) => void libraryActions.moveFolder(folder, parentId)}
+              onMoveEntries={(entryIds, folderId) => void libraryActions.moveEntries(entryIds, folderId)}
               onUpdateEntries={(entryIds, patch) => Promise.all(entryIds.map((entryId) => patchEntry(entryId, patch))).then(() => undefined)}
-              onDeleteFolder={(folder) => void deleteLibraryFolder(folder)}
+              onDeleteFolder={(folder) => void libraryActions.deleteFolder(folder)}
             />
           ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
@@ -825,53 +735,19 @@ function AppContent() {
       })()}
 
       <AppModals
-        registerWorkspaceDraftFlush={registerWorkspaceDraftFlush}
-        showForm={actions.showForm}
-        editingEntry={actions.editingEntry}
-        handleSave={actions.handleSave}
-        closeForm={actions.closeForm}
-        activeSection={activeSection}
-        prefilledTitle={actions.prefilledTitle}
-        importedInitialData={actions.importedInitialData}
-        settings={settings}
-        saveTemplate={actions.saveTemplate}
-        showImportModal={actions.showImportModal}
-        importMode={actions.importMode}
-        solutionSourceEntry={actions.solutionSourceEntry}
-        importFallbackSubject={actions.importFallbackSubject}
-        aiProviderStatus={aiProviderStatus}
-        setLastImportTemplate={setLastImportTemplate}
-        savePromptTemplate={actions.savePromptTemplate}
-        closeImportModal={actions.closeImportModal}
-        handleImportApply={actions.handleImportApply}
-        showLearningImportModal={actions.showLearningImportModal}
-        setShowLearningImportModal={actions.setShowLearningImportModal}
-        handleLearningImportApply={actions.handleLearningImportApply}
-        handleImportedEntriesApply={actions.handleImportedEntriesApply}
-        reviewMode={actions.reviewMode}
-        reviewSeed={actions.reviewSeed}
-        setReviewMode={actions.setReviewMode}
-        handleReview={actions.handleReview}
-        setActiveSection={setActiveSection}
-        setSelectedId={setSelectedId}
-        handleWikiLinkClick={handleWikiLinkClick}
-        existingTargets={linkableTargets}
-        onOpenSettings={openSettings}
-        supplementalTarget={(() => {
+        modalController={modalController}
+        workspaceActions={{ registerDraftFlush: registerWorkspaceDraftFlush }}
+        form={{ show: actions.showForm, editingEntry: actions.editingEntry, handleSave: actions.handleSave, close: actions.closeForm, activeSection, prefilledTitle: actions.prefilledTitle, importedInitialData: actions.importedInitialData }}
+        settings={{ value: settings, saveTemplate: actions.saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate: actions.savePromptTemplate, open: openSettings }}
+        importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply }}
+        learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
+        review={{ mode: actions.reviewMode, seed: actions.reviewSeed, setMode: actions.setReviewMode, handle: actions.handleReview }}
+        navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
+        supplemental={{ target: (() => {
           if (!actions.supplementalTarget) return null;
           const entry = entries.find((item) => item.id === actions.supplementalTarget?.entryId);
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
-        })()}
-        onCloseSupplementalImport={actions.closeSupplementalImport}
-        applySupplementalMerge={actions.applySupplementalMerge}
-        supplementalManagerEntry={actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null}
-        onCloseSupplementalManager={actions.closeSupplementalManager}
-        renameSupplementalResource={actions.renameSupplementalResource}
-        deleteSupplementalResource={actions.deleteSupplementalResource}
-        supplementalLinkTarget={actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null}
-        supplementalLinkCandidates={entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept")}
-        onCloseSupplementalLink={actions.closeLearningEntryLink}
-        onLinkLearningEntry={actions.linkLearningEntry}
+        })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
       {showExamBuilder && (
         <ExamBuilderWizard

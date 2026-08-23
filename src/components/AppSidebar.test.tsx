@@ -3,21 +3,25 @@ import { describe, expect, it, vi } from "vitest";
 import AppSidebar from "./AppSidebar";
 
 const baseProps = {
+  navigationController: {
+    activeSection: "wrong_answer" as const,
+    selectedId: null,
+    requestNavigation: vi.fn(async () => true),
+    selectSection: vi.fn(async () => true),
+    selectEntry: vi.fn(async () => true),
+    openQuestion: vi.fn(async () => true),
+    openLearningHub: vi.fn(async () => true),
+    openQuestionBank: vi.fn(async () => true),
+    openLibrary: vi.fn(async () => true),
+  },
   activeSection: "wrong_answer" as const,
   entries: [],
-  setActiveSection: vi.fn(),
-  setSelectedId: vi.fn(),
   stats: { total: 0, pending: 0, difficult: 0 },
   learningStats: { recentReviewCount: 0, topCauses: [], weakConcepts: [] } as never,
-  subjectOrder: [],
-  subjectFilter: null,
-  subjectCounts: {},
-  sectionEntryCount: 0,
-  moveSubject: vi.fn(),
-  openNew: vi.fn(),
-  openImport: vi.fn(),
-  openLearningImport: vi.fn(),
-  onSubjectSelect: vi.fn(),
+  subjects: { order: [], filter: null, counts: {}, sectionEntryCount: 0, move: vi.fn(), select: vi.fn() },
+  actions: { openNew: vi.fn(), openImport: vi.fn(), openLearningImport: vi.fn() },
+  destinations: { learningHubOpen: false, questionBankOpen: false, libraryOpen: false },
+  shell: { collapsed: false, onCollapsedChange: vi.fn() },
 };
 
 describe("AppSidebar", () => {
@@ -25,11 +29,7 @@ describe("AppSidebar", () => {
     render(
       <AppSidebar
         {...baseProps}
-        collapsed
-        onCollapsedChange={vi.fn()}
-        onOpenLearningHub={vi.fn()}
-        onOpenQuestionBank={vi.fn()}
-        onOpenLibrary={vi.fn()}
+        shell={{ collapsed: true, onCollapsedChange: vi.fn() }}
       />,
     );
 
@@ -41,10 +41,10 @@ describe("AppSidebar", () => {
 
   it("requests an independent restore without changing navigation", () => {
     const onCollapsedChange = vi.fn();
-    render(<AppSidebar {...baseProps} collapsed onCollapsedChange={onCollapsedChange} />);
+    render(<AppSidebar {...baseProps} shell={{ collapsed: true, onCollapsedChange }} />);
 
     fireEvent.click(screen.getByRole("button", { name: "앱 사이드바 펼치기" }));
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
-    expect(baseProps.setActiveSection).not.toHaveBeenCalled();
+    expect(baseProps.navigationController.requestNavigation).not.toHaveBeenCalled();
   });
 });
