@@ -1247,6 +1247,7 @@ export default function EntryDetail({
   return (
     <EntryDetailProvider value={{
       entry,
+      data: { entry, allEntries, selectedQuestion: resolvedSheetQuestions[focusedQuestionIndex] ?? null, questions: resolvedSheetQuestions },
       actions: { onEdit, onDelete, onToggleMastered, onToggleDifficult: handleToggleDifficultWithToast },
       workspace: { detailViewMode, focusMode, selectionMode },
     }}>
