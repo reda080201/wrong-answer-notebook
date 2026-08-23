@@ -26,6 +26,7 @@ import SettingsAiPanel from "./settings/SettingsAiPanel";
 import SettingsTemplatesPanel from "./settings/SettingsTemplatesPanel";
 import SettingsMcpPanel from "./settings/SettingsMcpPanel";
 import SettingsChatGptPanel from "./settings/SettingsChatGptPanel";
+import SettingsMcpBridgePanel from "./settings/SettingsMcpBridgePanel";
 
 export type SettingsTab =
   | "theme"
@@ -155,7 +156,7 @@ export default function SettingsModal({
   };
 
   const renderMcpBridgePanel = () => (
-    <McpBridgeSettingsPanel
+    <SettingsMcpBridgePanel
       settings={mcpBridgeSettings}
       status={mcpBridgeStatus}
       portInput={bridgePortValue}
@@ -172,6 +173,7 @@ export default function SettingsModal({
       pairingPending={isMcpBridgePairingPending}
     />
   );
+  void McpBridgeSettingsPanel;
 
   const saveRemoteBaseUrl = async (raw: string) => {
     if (!raw.trim()) {
