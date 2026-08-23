@@ -26,7 +26,7 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/set-state-in-effect": "warn",
       "react-refresh/only-export-components": "off",
     },
   },
