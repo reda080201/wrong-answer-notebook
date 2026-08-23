@@ -24,12 +24,9 @@ import Menu from "../shared/ui/Menu";
 import type { AppNavigationControllerGroup } from "../hooks/useAppNavigationController";
 
 interface AppSidebarProps {
-  navigationController?: AppNavigationControllerGroup;
+  navigationController: AppNavigationControllerGroup;
   activeSection: EntryKind;
   entries: WrongAnswerEntry[];
-  setActiveSection: (section: EntryKind) => void;
-  setSelectedId: (id: string | null) => void;
-  onSectionSelect?: (section: EntryKind) => void;
   stats: {
     total: number;
     pending: number;
@@ -38,24 +35,10 @@ interface AppSidebarProps {
   learningStats: ReturnType<
     typeof import("../utils/conceptAnalytics").buildLearningDashboardStats
   >;
-  subjectOrder: string[];
-  subjectFilter: string | null;
-  subjectCounts: Record<string, number>;
-  sectionEntryCount: number;
-  moveSubject: (fromIndex: number, toIndex: number) => void;
-  openNew: () => void;
-  openImport: () => void;
-  openLearningImport: () => void;
-  onSubjectSelect: (subject: string | null) => void;
-  onOpenExamBuilder?: () => void;
-  learningHubOpen?: boolean;
-  onOpenLearningHub?: () => void;
-  questionBankOpen?: boolean;
-  onOpenQuestionBank?: () => void;
-  libraryOpen?: boolean;
-  onOpenLibrary?: () => void;
-  collapsed?: boolean;
-  onCollapsedChange?: (collapsed: boolean) => void;
+  subjects: { order: string[]; filter: string | null; counts: Record<string, number>; sectionEntryCount: number; move(fromIndex: number, toIndex: number): void; select(subject: string | null): void };
+  actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
+  destinations: { learningHubOpen: boolean; questionBankOpen: boolean; libraryOpen: boolean };
+  shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
 }
 
 const sectionTabs = [
@@ -69,30 +52,17 @@ export default function AppSidebar({
   navigationController,
   activeSection,
   entries,
-  setActiveSection,
-  setSelectedId,
-  onSectionSelect,
   stats,
   learningStats,
-  subjectOrder,
-  subjectFilter,
-  subjectCounts,
-  sectionEntryCount,
-  moveSubject,
-  openNew,
-  openImport,
-  openLearningImport,
-  onSubjectSelect,
-  onOpenExamBuilder,
-  learningHubOpen = false,
-  onOpenLearningHub,
-  questionBankOpen = false,
-  onOpenQuestionBank,
-  libraryOpen = false,
-  onOpenLibrary,
-  collapsed = false,
-  onCollapsedChange,
+  subjects,
+  actions,
+  destinations,
+  shell,
 }: AppSidebarProps) {
+  const { order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount } = subjects;
+  const { openNew, openImport, openLearningImport, openExamBuilder: onOpenExamBuilder } = actions;
+  const { learningHubOpen, questionBankOpen, libraryOpen } = destinations;
+  const { collapsed, onCollapsedChange } = shell;
   const sectionEntries = useMemo(
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
@@ -128,16 +98,7 @@ export default function AppSidebar({
               ["어려움", stats.difficult],
           ], [activeSection, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
-    if (navigationController) {
-      void navigationController.requestNavigation({ section, entryId: null });
-      return;
-    }
-    if (onSectionSelect) {
-      onSectionSelect(section);
-    } else {
-      setActiveSection(section);
-      setSelectedId(null);
-    }
+    void navigationController.requestNavigation({ section, entryId: null });
   };
   return (
     <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
@@ -172,45 +133,47 @@ export default function AppSidebar({
             {!collapsed && <span>{label}</span>}
           </button>
         ))}
-        {(onOpenLearningHub || navigationController) && (
+        <>
+        {(
           <button
             type="button"
             className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
             aria-current={learningHubOpen ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
-            onClick={() => void (navigationController ? navigationController.openLearningHub() : onOpenLearningHub?.())}
+            onClick={() => void navigationController.openLearningHub()}
           >
             <Library size={18} aria-hidden="true" />
             {!collapsed && <span>학습 허브</span>}
           </button>
         )}
-        {(onOpenQuestionBank || navigationController) && (
+        {(
           <button
             type="button"
             className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
             aria-current={questionBankOpen ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
-            onClick={() => void (navigationController ? navigationController.openQuestionBank() : onOpenQuestionBank?.())}
+            onClick={() => void navigationController.openQuestionBank()}
           >
             <BookOpen size={18} aria-hidden="true" />
             {!collapsed && <span>문제 은행</span>}
           </button>
         )}
-        {(onOpenLibrary || navigationController) && (
+        {(
           <button
             type="button"
             className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
             aria-current={libraryOpen ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
-            onClick={() => void (navigationController ? navigationController.openLibrary() : onOpenLibrary?.())}
+            onClick={() => void navigationController.openLibrary()}
           >
             <Archive size={18} aria-hidden="true" />
             {!collapsed && <span>보관함</span>}
           </button>
         )}
+        </>
       </div>
 
       {!collapsed && <details className="sidebar-summary">
@@ -244,8 +207,8 @@ export default function AppSidebar({
           subjectFilter={subjectFilter}
           subjectCounts={subjectCounts}
           totalCount={sectionEntryCount}
-          onSelect={onSubjectSelect}
-          onReorder={moveSubject}
+            onSelect={subjects.select}
+            onReorder={subjects.move}
         />
       </div>}
 

@@ -445,53 +445,12 @@ function AppContent() {
         navigationController={appNavigationController}
         activeSection={activeSection}
         entries={entries}
-        setActiveSection={setActiveSection}
-        setSelectedId={setSelectedId}
-        onSectionSelect={(section) => void requestNavigation({ section, entryId: null })}
         stats={stats}
         learningStats={learningStats}
-        subjectOrder={subjectOrder}
-        subjectFilter={subjectFilter}
-        subjectCounts={subjectCounts}
-        sectionEntryCount={sectionEntryCount}
-        moveSubject={moveSubject}
-        openNew={actions.openNew}
-        openImport={actions.openImport}
-        openLearningImport={() => actions.setShowLearningImportModal(true)}
-        onSubjectSelect={setSubjectFilter}
-        onOpenExamBuilder={() => setShowExamBuilder(true)}
-        learningHubOpen={showLearningHub}
-        onOpenLearningHub={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        questionBankOpen={showQuestionBank}
-        onOpenQuestionBank={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(false);
-              setShowQuestionBank(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        libraryOpen={showLibraryExplorer}
-        onOpenLibrary={() => {
-          void (async () => {
-            if (await requestNavigation({ entryId: null })) {
-              setShowLearningHub(false);
-              setShowQuestionBank(false);
-              setShowLibraryExplorer(true);
-              setSelectedId(null);
-            }
-          })();
-        }}
-        collapsed={shell.appSidebarCollapsed}
-        onCollapsedChange={shell.setAppSidebarCollapsed}
+        subjects={{ order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount, move: moveSubject, select: setSubjectFilter }}
+        actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
+        destinations={{ learningHubOpen: showLearningHub, questionBankOpen: showQuestionBank, libraryOpen: showLibraryExplorer }}
+        shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
       />
 
       <main className="main">
