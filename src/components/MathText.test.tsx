@@ -37,4 +37,11 @@ describe("MathText", () => {
     expect(container.querySelectorAll(".katex").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("수식 형식 확인 필요")).not.toBeInTheDocument();
   });
+
+  it("keeps a complete raw integral expression in one KaTeX fragment", () => {
+    const { container } = render(<MathText text={String.raw`적분값은 \\int_1^3\\left(x^2-1\\right)\\,dx=2 이다.`} />);
+    expect(container.querySelectorAll(".katex")).toHaveLength(1);
+    expect(screen.getByText("적분값은", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("이다.", { exact: false })).toBeInTheDocument();
+  });
 });

@@ -25,7 +25,7 @@ export interface ViewPreferencesLegacyStorage {
 }
 
 export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
-  sheetLayout: "single",
+  sheetLayout: "auto",
   fontSize: "normal",
   hideAnswers: false,
   showDifficulty: true,
@@ -94,7 +94,7 @@ export const DEFAULT_CHATGPT_MCP_PREFERENCES: ChatGptMcpPreferences = {
 };
 
 function normalizeSheetLayout(value: unknown): ViewPreferences["sheetLayout"] {
-  return value === "columns" ? "columns" : "single";
+  return value === "columns" || value === "single" ? value : "auto";
 }
 
 function normalizeFontSize(value: unknown): ViewPreferences["fontSize"] {

@@ -68,7 +68,27 @@ function readRawCommand(value: string, start: number): { end: number; raw: strin
     if (next < 0) return null;
     end = next;
   }
-  return { end, raw: value.slice(start, end) };
+  // A raw command is commonly followed by scripts, delimiters, variables and
+  // further commands (for example `\\int_1^3\\left(x\\right)\\,dx=2`).
+  // Keeping that expression together lets KaTeX validate it as a single unit
+  // while stopping before ordinary prose.
+  let cursor = end;
+  let depth = 0;
+  while (cursor < value.length) {
+    const character = value[cursor];
+    if (/[^\x00-\x7F]/.test(character) || /[\r\n]/.test(character)) break;
+    if (/\s/.test(character)) break;
+    if (character === "{") depth += 1;
+    if (character === "}") {
+      if (depth === 0) break;
+      depth -= 1;
+    }
+    // Raw prose punctuation ends an expression, except the TeX punctuation
+    // that appears after a command or within a number.
+    if (depth === 0 && /[!?;]/.test(character)) break;
+    cursor += 1;
+  }
+  return { end: cursor, raw: value.slice(start, cursor) };
 }
 
 function commandExpression(raw: string) {

@@ -7,7 +7,7 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
-import ExamPaperCompositor from "./ExamPaperCompositor";
+import ExamPaperCompositor, { type ExamPaperLayout } from "./ExamPaperCompositor";
 import { Maximize2 } from "lucide-react";
 import "./StudyPaperView.css";
 
@@ -18,7 +18,7 @@ interface StudyPaperViewProps {
   onAnnotationsChange: (annotations: Annotation[]) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
-  sheetLayout: "single" | "columns";
+  sheetLayout: ExamPaperLayout;
   searchQuery?: string;
   suspiciousSegments?: SuspiciousTextSegment[];
   onOpenQuestionTheater?: (questionIndex: number) => void;
@@ -140,7 +140,7 @@ export default function StudyPaperView({
           onAnnotationsChange={onAnnotationsChange}
           onWikiLinkClick={onWikiLinkClick}
           existingTargets={existingTargets}
-          sheetLayout={sheetLayout}
+          sheetLayout={sheetLayout === "auto" ? "single" : sheetLayout}
           searchQuery={searchQuery}
           suspiciousSegments={suspiciousSegments}
           sourceEntry={entry}

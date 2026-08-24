@@ -125,7 +125,7 @@ interface EntryDetailProps {
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
-type SheetLayout = "single" | "columns";
+type SheetLayout = "auto" | "single" | "columns";
 type AnswerViewMode = "card" | "table";
 type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
 type FocusMode = "closed" | "expanded" | "mini";

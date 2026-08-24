@@ -537,6 +537,41 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
     .map(applyAutomaticFigurePreference);
 }
 
+function normalizeQuestionSourceCrops(raw: unknown): WrongAnswerEntry["questionSourceCrops"] {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const crops = raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
+    const image = typeof value.image === "string" ? value.image.trim() : "";
+    if (!questionNumber || !image || seen.has(questionNumber)) return [];
+    seen.add(questionNumber);
+    const rawRect = value.cropRect && typeof value.cropRect === "object" ? value.cropRect as Record<string, unknown> : undefined;
+    const cropRect = rawRect && [rawRect.x, rawRect.y, rawRect.width, rawRect.height].every((part) => typeof part === "number" && Number.isFinite(part))
+      ? { x: Number(rawRect.x), y: Number(rawRect.y), width: Number(rawRect.width), height: Number(rawRect.height) }
+      : undefined;
+    return [{ questionNumber, image, sourcePageImage: typeof value.sourcePageImage === "string" && value.sourcePageImage.trim() ? value.sourcePageImage.trim() : undefined, cropRect }];
+  });
+  return crops.length ? crops : undefined;
+}
+
+function normalizeQuestionRenderVerification(raw: unknown): WrongAnswerEntry["questionRenderVerification"] {
+  if (!Array.isArray(raw)) return undefined;
+  const seen = new Set<string>();
+  const records = raw.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const value = item as Record<string, unknown>;
+    const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
+    const canonicalFingerprint = typeof value.canonicalFingerprint === "string" ? value.canonicalFingerprint.trim() : "";
+    const status = value.status;
+    if (!questionNumber || !canonicalFingerprint || seen.has(questionNumber) || (status !== "unverified" && status !== "needs_review" && status !== "verified")) return [];
+    seen.add(questionNumber);
+    return [{ questionNumber, canonicalFingerprint, status, verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined, renderedImage: typeof value.renderedImage === "string" && value.renderedImage.trim() ? value.renderedImage.trim() : undefined }];
+  });
+  return records.length ? records : undefined;
+}
+
 function normalizeFigureOriginal(raw: unknown): SheetFigureItem["original"] {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Record<string, unknown>;
@@ -910,6 +945,8 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     sourcePageImages: Array.isArray(rest.sourcePageImages)
       ? rest.sourcePageImages.filter((image): image is string => typeof image === "string" && image.trim().length > 0).map((image) => image.trim())
       : [],
+    questionSourceCrops: normalizeQuestionSourceCrops(rest.questionSourceCrops),
+    questionRenderVerification: normalizeQuestionRenderVerification(rest.questionRenderVerification),
     problemSource: normalizeProblemSource(rest.problemSource),
     resourceClassification: normalizeLearningResourceClassification(rest.resourceClassification),
     explanationParts,
@@ -959,12 +996,17 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromLearningBlocks = (entry.learningBlocks ?? []).flatMap((block) => block.images ?? []);
   const fromSupplementalResources = (entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
+  const fromQuestionVisuals = [
+    ...(entry.questionSourceCrops ?? []).map((crop) => crop.image),
+    ...(entry.questionRenderVerification ?? []).map((record) => record.renderedImage).filter((image): image is string => Boolean(image)),
+  ];
   return [
     ...new Set([
       ...entry.questionImages,
       ...(entry.sourcePageImages ?? []),
       ...fromParts,
       ...fromFigures,
+      ...fromQuestionVisuals,
       ...fromLearningBlocks,
       ...fromSupplementalResources,
       ...(entry.images ?? []),
