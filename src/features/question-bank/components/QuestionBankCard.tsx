@@ -17,15 +17,15 @@ export default function QuestionBankCard({ item, onOpen, onInspect }: QuestionBa
     item.hasAnswer ? "정답 있음" : null,
     item.hasExplanation ? "해설 있음" : null,
   ].filter((value): value is string => Boolean(value)).slice(0, 2);
-  return <article className="question-bank-card">
+  return <article className="question-bank-card" aria-label={`${item.entryTitle} ${item.questionNumber}번`}>
     <button type="button" className="question-bank-card__main" onClick={() => onOpen(item)} aria-label={`${item.entryTitle} ${item.questionNumber}번 열기`}>
-      <header><strong>{item.entryTitle} {item.questionNumber}번</strong><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span></header>
-      <div className="question-bank-card__chips"><span>{item.subject}</span>{classification.unit && <span>{classification.unit}</span>}{classification.subunit && <span>{classification.subunit}</span>}</div>
+      <header><strong><span className="question-bank-card__number">{item.questionNumber}번</span>{item.entryTitle}</strong><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span></header>
+      <div className="question-bank-card__meta"><span>{item.subject}</span>{classification.unit && <span>{classification.unit}</span>}{classification.subunit && <span>{classification.subunit}</span>}</div>
       <p><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></p>
       <footer>
         {statuses.map((status) => <span key={status} className={status === "오답" || status === "복습 예정" ? "question-bank-card__warning" : undefined}>{status}</span>)}
       </footer>
     </button>
-    <button type="button" className="question-bank-card__detail" onClick={() => onInspect(item)}>상세</button>
+    <button type="button" className="question-bank-card__detail" onClick={() => onInspect(item)} aria-label={`${item.entryTitle} ${item.questionNumber}번 검사기 열기`}>검사기</button>
   </article>;
 }

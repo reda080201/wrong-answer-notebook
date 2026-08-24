@@ -13,6 +13,7 @@ interface QuestionBankDetailProps {
   onClose: () => void;
   onOpenQuestion: (item: QuestionBankItem) => void;
   onPatchClassification?: (entryId: string, questionNumber: string, patch: QuestionMetaPatch) => Promise<void> | void;
+  inline?: boolean;
 }
 
 const answerTypeLabel: Record<QuestionAnswerType, string> = {
@@ -28,7 +29,7 @@ const score = (value: string) => {
   return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : undefined;
 };
 
-export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPatchClassification }: QuestionBankDetailProps) {
+export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPatchClassification, inline = false }: QuestionBankDetailProps) {
   const [unit, setUnit] = useState("");
   const [subunit, setSubunit] = useState("");
   const [concepts, setConcepts] = useState("");
@@ -90,8 +91,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     }
   };
 
-  return <Dialog open={Boolean(item)} onClose={onClose} title={item ? `${item.entryTitle} ${item.questionNumber}번` : "문항 상세"} ariaLabel="문제 은행 문항 상세" closeDisabled={saving} busy={saving}>
-    {item && <div className="question-bank-detail">
+  const content = item && <div className="question-bank-detail">
       <div className="question-bank-card__chips"><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span><span>{item.subject}</span>{item.classification.unit && <span>{item.classification.unit}</span>}{item.classification.subunit && <span>{item.classification.subunit}</span>}</div>
       <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>
       <dl><div><dt>난이도</dt><dd>{difficultyScoreLabel(item.classification.difficultyScore)}</dd></div><div><dt>중요도</dt><dd>{item.classification.importanceScore ? `${Math.ceil(item.classification.importanceScore / 20)}/5` : "미지정"}</dd></div><div><dt>품질</dt><dd>{item.classification.qualityScore ?? "미지정"}</dd></div><div><dt>답 유형</dt><dd>{answerTypeLabel[item.classification.answerType ?? "unknown"]}</dd></div></dl>
@@ -108,6 +108,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
         <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button>
       </section>}
       <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>
-    </div>}
-  </Dialog>;
+    </div>;
+  if (inline) return content ? <aside className="question-bank-inspector" aria-label="문항 검사기">{content}</aside> : null;
+  return <Dialog open={Boolean(item)} onClose={onClose} title={item ? `${item.entryTitle} ${item.questionNumber}번` : "문항 상세"} ariaLabel="문제 은행 문항 상세" closeDisabled={saving} busy={saving}>{content}</Dialog>;
 }
