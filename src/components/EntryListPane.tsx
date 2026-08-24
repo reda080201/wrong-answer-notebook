@@ -154,7 +154,7 @@ export default function EntryListPane({
         key={entry.id}
         className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
       >
-        <button type="button" className="entry-card__main" onClick={() => selectEntry(entry.id)} aria-current={selectedId === entry.id ? "page" : undefined}>
+        <button type="button" className="entry-card__main" onClick={() => selectEntry(entry.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectEntry(entry.id); } }} aria-current={selectedId === entry.id ? "page" : undefined}>
         <div className="entry-card-header">
           {entry.entryKind === "problem_sheet" && (
             <span className="entry-card-subject">{entry.subject}</span>

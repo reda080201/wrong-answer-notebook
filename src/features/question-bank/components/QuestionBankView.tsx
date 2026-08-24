@@ -30,7 +30,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [maintenanceBlocked, setMaintenanceBlocked] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [narrowViewport, setNarrowViewport] = useState(() => typeof window !== "undefined" && window.matchMedia("(max-width: 900px)").matches);
+  const [narrowViewport, setNarrowViewport] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches === true);
   const preferenceTimerRef = useRef<number | null>(null);
   const pendingPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
   const failedPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
@@ -40,6 +40,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const savedPresetsRef = useRef(preferences?.savedPresets ?? []);
   const maintenanceBlockedRef = useRef(false);
   useEffect(() => {
+    if (!window.matchMedia) return undefined;
     const query = window.matchMedia("(max-width: 900px)");
     const update = () => setNarrowViewport(query.matches);
     update();
