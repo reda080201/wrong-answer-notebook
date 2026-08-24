@@ -39,7 +39,7 @@ describe("MathText", () => {
   });
 
   it("keeps a complete raw integral expression in one KaTeX fragment", () => {
-    const { container } = render(<MathText text={String.raw`적분값은 \\int_1^3\\left(x^2-1\\right)\\,dx=2 이다.`} />);
+    const { container } = render(<MathText text={String.raw`적분값은 \int_1^3\left(x^2-1\right)\,dx=2 이다.`} />);
     expect(container.querySelectorAll(".katex")).toHaveLength(1);
     expect(screen.getByText("적분값은", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("이다.", { exact: false })).toBeInTheDocument();
