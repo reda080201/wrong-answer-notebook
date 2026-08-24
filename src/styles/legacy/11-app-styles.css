@@ -97,6 +97,8 @@
   background: var(--control-bg);
   border: 1px solid var(--control-border);
 }
+.chatgpt-help-prompt { display: grid; gap: 8px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
+.chatgpt-help-prompt textarea { width: 100%; min-height: 180px; resize: vertical; font: inherit; }
 
 .chatgpt-connection-status {
   display: grid;
