@@ -316,6 +316,7 @@ export default function ImportFromGptModal({
     ? availablePromptTemplates[0]?.id ?? ""
     : selectedPromptTemplateId ?? availablePromptTemplates[0]?.id ?? "";
   const [rawText, setRawText] = useState("");
+  const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct">("gpt");
   const [filename, setFilename] = useState<string | undefined>();
   const [images, setImages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -899,10 +900,14 @@ export default function ImportFromGptModal({
           </div>
         </div>
 
+        {!isSolutionMode && !isSupplementalMode && <nav className="import-mode-tabs" aria-label="시험지 가져오기 방식">
+          {([['gpt', 'GPT 결과'], ['file', '파일 / ZIP / JSON'], ['direct', '직접 입력']] as const).map(([value, label]) => <button key={value} type="button" className={importInputMode === value ? "active" : ""} aria-pressed={importInputMode === value} onClick={() => setImportInputMode(value)}>{label}</button>)}
+        </nav>}
+
         <div className="form-body import-modal-body">
           <div className="import-grid">
             <section className="import-pane">
-              {!isSolutionMode && (
+              {!isSolutionMode && !isSupplementalMode && importInputMode === "file" && (
                 <section className="import-source-launcher" aria-labelledby="import-source-title">
                   <div className="import-source-launcher-heading">
                     <FileUp size={20} aria-hidden="true" />
@@ -940,6 +945,10 @@ export default function ImportFromGptModal({
                   )}
                 </section>
               )}
+              {!isSolutionMode && !isSupplementalMode && importInputMode !== "file" && <>
+                <input id="gpt-all-in-one-file" className="import-source-file-input" aria-label="올인원 가져오기" type="file" multiple accept=".zip,.json,.png,.jpg,.jpeg,.webp,application/zip,application/json,image/png,image/jpeg,image/webp" onChange={(event) => handleAllInOneFiles(event.target.files)} />
+                <input id="gpt-import-file" className="import-source-file-input" aria-label="텍스트 파일 업로드" type="file" accept=".txt,.md,.json,text/plain,text/markdown,application/json" onChange={(event) => handleFile(event.target.files?.[0])} />
+              </>}
               {helpOpen && (
                 <section className="import-inline-help" aria-label="가져오기 도움말">
                   <header><h3>가져오기 순서</h3><button type="button" className="btn-icon" aria-label="가져오기 도움말 닫기" onClick={() => setHelpOpen(false)}>닫기</button></header>

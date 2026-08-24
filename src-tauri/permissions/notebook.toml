@@ -19,6 +19,7 @@ commands.allow = [
   "save_import_workspace_draft",
   "clear_import_workspace_draft",
   "get_ai_provider_status",
+  "test_ai_provider_connection",
   "save_ai_provider_config",
   "save_ai_provider_key",
   "clear_ai_provider_key",

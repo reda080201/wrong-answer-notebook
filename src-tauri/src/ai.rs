@@ -12,7 +12,7 @@ pub(crate) const MAX_AI_IMAGE_BYTES: u64 = 10 * 1024 * 1024;
 pub(crate) const MAX_AI_IMAGE_COUNT: usize = 20;
 pub(crate) const MAX_AI_IMAGE_TOTAL_BYTES: u64 = 14 * 1024 * 1024;
 const AI_KEYRING_SERVICE: &str = "wrong-answer-notebook";
-const AI_KEYRING_USER: &str = "gemini-api-key";
+const AI_KEYRING_USER_PREFIX: &str = "ai-provider-key";
 const SIMILAR_QUESTION_PROMPT_VERSION: &str = "similar-question-ranking-v1";
 const MAX_SIMILAR_CONTEXT_CONTENT_BYTES: usize = 6_000;
 const MAX_SIMILAR_CANDIDATE_QUESTION_BYTES: usize = 3_000;
@@ -24,8 +24,9 @@ fn ai_provider_key_file(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(app_dir(app)?.join("ai_provider_key.txt"))
 }
 
-fn ai_provider_key_entry() -> Result<keyring::Entry, String> {
-    keyring::Entry::new(AI_KEYRING_SERVICE, AI_KEYRING_USER)
+fn ai_provider_key_entry(provider: AiProviderType) -> Result<keyring::Entry, String> {
+    let user = format!("{AI_KEYRING_USER_PREFIX}-{}", provider_key_name(provider));
+    keyring::Entry::new(AI_KEYRING_SERVICE, &user)
         .map_err(|error| format!("OS 보안 저장소를 열지 못했습니다: {error}"))
 }
 
@@ -37,13 +38,25 @@ pub(crate) enum AiProviderType {
     GeminiFlashLite,
     #[serde(rename = "gemini-3.5-flash")]
     Gemini35Flash,
+    #[serde(rename = "openai")]
+    OpenAi,
+    #[serde(rename = "anthropic")]
+    Anthropic,
+    #[serde(rename = "google-gemini")]
+    GoogleGemini,
+    #[serde(rename = "openrouter")]
+    OpenRouter,
+    #[serde(rename = "groq")]
+    Groq,
+    #[serde(rename = "openai-compatible")]
+    OpenAiCompatible,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub(crate) enum AiProviderKeySource {
     #[serde(rename = "env")]
     Env,
-    #[serde(rename = "tauri-settings")]
+    #[serde(rename = "tauri-settings", alias = "keyring")]
     TauriSettings,
 }
 
@@ -52,6 +65,12 @@ pub(crate) enum AiProviderKeySource {
 pub(crate) struct AiProviderConfig {
     #[serde(rename = "type")]
     provider_type: AiProviderType,
+    #[serde(default)]
+    provider: Option<AiProviderType>,
+    #[serde(default)]
+    model: String,
+    #[serde(default)]
+    base_url: Option<String>,
     enabled: bool,
     key_source: AiProviderKeySource,
     #[serde(default)]
@@ -63,6 +82,10 @@ pub(crate) struct AiProviderConfig {
 pub(crate) struct AiProviderStatus {
     #[serde(rename = "type")]
     provider_type: AiProviderType,
+    provider: AiProviderType,
+    model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    base_url: Option<String>,
     enabled: bool,
     key_source: AiProviderKeySource,
     has_stored_key: bool,
@@ -75,10 +98,36 @@ pub(crate) struct AiProviderStatus {
 fn default_ai_provider_config() -> AiProviderConfig {
     AiProviderConfig {
         provider_type: AiProviderType::Manual,
+        provider: Some(AiProviderType::OpenAiCompatible),
+        model: String::new(),
+        base_url: None,
         enabled: false,
         key_source: AiProviderKeySource::Env,
         has_stored_key: false,
     }
+}
+
+fn provider_key_name(provider: AiProviderType) -> &'static str {
+    match provider {
+        AiProviderType::OpenAi => "openai",
+        AiProviderType::Anthropic => "anthropic",
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => "google-gemini",
+        AiProviderType::OpenRouter => "openrouter",
+        AiProviderType::Groq => "groq",
+        AiProviderType::OpenAiCompatible | AiProviderType::Manual => "openai-compatible",
+    }
+}
+
+fn effective_provider(config: &AiProviderConfig) -> AiProviderType {
+    config.provider.unwrap_or(match config.provider_type {
+        AiProviderType::GeminiFlashLite | AiProviderType::Gemini35Flash => {
+            AiProviderType::GoogleGemini
+        }
+        AiProviderType::Manual => AiProviderType::OpenAiCompatible,
+        value => value,
+    })
 }
 
 pub(crate) fn vision_image_mime(filename: &str) -> Result<&'static str, String> {
@@ -151,11 +200,26 @@ fn build_gemini_parts(
     Ok(parts)
 }
 
-fn has_env_ai_key() -> bool {
-    std::env::var("GOOGLE_API_KEY")
+fn has_env_ai_key(provider: AiProviderType) -> bool {
+    let primary = match provider {
+        AiProviderType::OpenAi => "OPENAI_API_KEY",
+        AiProviderType::Anthropic => "ANTHROPIC_API_KEY",
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => "GOOGLE_API_KEY",
+        AiProviderType::OpenRouter => "OPENROUTER_API_KEY",
+        AiProviderType::Groq => "GROQ_API_KEY",
+        AiProviderType::OpenAiCompatible | AiProviderType::Manual => "OPENAI_COMPATIBLE_API_KEY",
+    };
+    std::env::var(primary)
         .map(|value| !value.trim().is_empty())
         .unwrap_or(false)
-        || std::env::var("GEMINI_API_KEY")
+        || matches!(
+            provider,
+            AiProviderType::GoogleGemini
+                | AiProviderType::GeminiFlashLite
+                | AiProviderType::Gemini35Flash
+        ) && std::env::var("GEMINI_API_KEY")
             .map(|value| !value.trim().is_empty())
             .unwrap_or(false)
 }
@@ -181,8 +245,8 @@ fn remove_legacy_ai_provider_key(app: &tauri::AppHandle) {
     }
 }
 
-fn stored_ai_provider_key() -> Result<Option<String>, String> {
-    match ai_provider_key_entry()?.get_password() {
+fn stored_ai_provider_key(provider: AiProviderType) -> Result<Option<String>, String> {
+    match ai_provider_key_entry(provider)?.get_password() {
         Ok(key) => {
             let trimmed = key.trim().to_string();
             if trimmed.is_empty() {
@@ -196,17 +260,26 @@ fn stored_ai_provider_key() -> Result<Option<String>, String> {
     }
 }
 
-fn has_stored_ai_provider_key(app: &tauri::AppHandle) -> bool {
-    stored_ai_provider_key()
+fn has_stored_ai_provider_key(app: &tauri::AppHandle, provider: AiProviderType) -> bool {
+    stored_ai_provider_key(provider)
         .map(|key| key.is_some())
         .unwrap_or(false)
-        || legacy_ai_provider_key(app)
+        || (matches!(
+            provider,
+            AiProviderType::GoogleGemini
+                | AiProviderType::GeminiFlashLite
+                | AiProviderType::Gemini35Flash
+        ) && legacy_ai_provider_key(app)
             .map(|key| key.is_some())
-            .unwrap_or(false)
+            .unwrap_or(false))
 }
 
-fn save_stored_ai_provider_key(app: &tauri::AppHandle, api_key: &str) -> Result<(), String> {
-    ai_provider_key_entry()?
+fn save_stored_ai_provider_key(
+    app: &tauri::AppHandle,
+    provider: AiProviderType,
+    api_key: &str,
+) -> Result<(), String> {
+    ai_provider_key_entry(provider)?
         .set_password(api_key)
         .map_err(|error| {
             format!("Gemini API key를 OS 보안 저장소에 저장하지 못했습니다: {error}")
@@ -215,8 +288,11 @@ fn save_stored_ai_provider_key(app: &tauri::AppHandle, api_key: &str) -> Result<
     Ok(())
 }
 
-fn clear_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<(), String> {
-    match ai_provider_key_entry()?.delete_credential() {
+fn clear_stored_ai_provider_key(
+    app: &tauri::AppHandle,
+    provider: AiProviderType,
+) -> Result<(), String> {
+    match ai_provider_key_entry(provider)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => {
             remove_legacy_ai_provider_key(app);
             Ok(())
@@ -227,15 +303,25 @@ fn clear_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<(), String> {
     }
 }
 
-fn read_stored_ai_provider_key(app: &tauri::AppHandle) -> Result<String, String> {
-    if let Some(key) = stored_ai_provider_key()? {
+fn read_stored_ai_provider_key(
+    app: &tauri::AppHandle,
+    provider: AiProviderType,
+) -> Result<String, String> {
+    if let Some(key) = stored_ai_provider_key(provider)? {
         return Ok(key);
     }
-    if let Some(key) = legacy_ai_provider_key(app)? {
-        save_stored_ai_provider_key(app, &key)?;
-        return Ok(key);
+    if matches!(
+        provider,
+        AiProviderType::GoogleGemini
+            | AiProviderType::GeminiFlashLite
+            | AiProviderType::Gemini35Flash
+    ) {
+        if let Some(key) = legacy_ai_provider_key(app)? {
+            save_stored_ai_provider_key(app, provider, &key)?;
+            return Ok(key);
+        }
     }
-    Err("저장된 Gemini API key를 찾지 못했습니다.".into())
+    Err("선택한 AI provider의 저장된 API key를 찾지 못했습니다.".into())
 }
 
 fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
@@ -247,7 +333,16 @@ fn load_ai_provider_config(app: &tauri::AppHandle) -> AiProviderConfig {
         .cloned()
         .and_then(|item| serde_json::from_value::<AiProviderConfig>(item).ok())
         .unwrap_or_else(default_ai_provider_config);
-    config.has_stored_key = has_stored_ai_provider_key(app);
+    let provider = effective_provider(&config);
+    config.provider = Some(provider);
+    if config.model.trim().is_empty() {
+        config.model = match config.provider_type {
+            AiProviderType::GeminiFlashLite => "gemini-2.5-flash-lite".into(),
+            AiProviderType::Gemini35Flash => "gemini-3.5-flash".into(),
+            _ => String::new(),
+        };
+    }
+    config.has_stored_key = has_stored_ai_provider_key(app, provider);
     if matches!(config.provider_type, AiProviderType::Manual) {
         config.enabled = false;
     }
@@ -278,15 +373,19 @@ fn save_ai_provider_config_to_settings(
 
 fn ai_provider_status(app: &tauri::AppHandle) -> AiProviderStatus {
     let config = load_ai_provider_config(app);
-    let has_env_key = has_env_ai_key();
+    let provider = effective_provider(&config);
+    let has_env_key = has_env_ai_key(provider);
     let has_key = match config.key_source {
         AiProviderKeySource::Env => has_env_key,
-        AiProviderKeySource::TauriSettings => config.has_stored_key,
+        AiProviderKeySource::TauriSettings => has_stored_ai_provider_key(app, provider),
     };
     let available =
         config.enabled && !matches!(config.provider_type, AiProviderType::Manual) && has_key;
     AiProviderStatus {
         provider_type: config.provider_type,
+        provider,
+        model: config.model,
+        base_url: config.base_url,
         enabled: config.enabled,
         key_source: config.key_source,
         has_stored_key: config.has_stored_key,
@@ -301,21 +400,87 @@ fn ai_provider_status(app: &tauri::AppHandle) -> AiProviderStatus {
 }
 
 fn ai_provider_key(app: &tauri::AppHandle, config: &AiProviderConfig) -> Result<String, String> {
+    let provider = effective_provider(config);
     match config.key_source {
-        AiProviderKeySource::Env => std::env::var("GOOGLE_API_KEY")
-            .or_else(|_| std::env::var("GEMINI_API_KEY"))
-            .map(|key| key.trim().to_string())
-            .map_err(|_| "Gemini API key 환경변수를 찾지 못했습니다.".to_string()),
-        AiProviderKeySource::TauriSettings => read_stored_ai_provider_key(app),
+        AiProviderKeySource::Env => std::env::var(match provider {
+            AiProviderType::OpenAi => "OPENAI_API_KEY",
+            AiProviderType::Anthropic => "ANTHROPIC_API_KEY",
+            AiProviderType::GoogleGemini
+            | AiProviderType::GeminiFlashLite
+            | AiProviderType::Gemini35Flash => "GOOGLE_API_KEY",
+            AiProviderType::OpenRouter => "OPENROUTER_API_KEY",
+            AiProviderType::Groq => "GROQ_API_KEY",
+            AiProviderType::OpenAiCompatible | AiProviderType::Manual => {
+                "OPENAI_COMPATIBLE_API_KEY"
+            }
+        })
+        .or_else(|_| {
+            if matches!(
+                provider,
+                AiProviderType::GoogleGemini
+                    | AiProviderType::GeminiFlashLite
+                    | AiProviderType::Gemini35Flash
+            ) {
+                std::env::var("GEMINI_API_KEY")
+            } else {
+                Err(std::env::VarError::NotPresent)
+            }
+        })
+        .map(|key| key.trim().to_string())
+        .map_err(|_| "선택한 AI provider의 API key를 찾지 못했습니다.".to_string()),
+        AiProviderKeySource::TauriSettings => read_stored_ai_provider_key(app, provider),
     }
 }
 
-fn gemini_model(provider: &AiProviderType) -> &'static str {
-    match provider {
-        AiProviderType::Manual => "",
-        AiProviderType::GeminiFlashLite => "gemini-2.5-flash-lite",
-        AiProviderType::Gemini35Flash => "gemini-3.5-flash",
+fn provider_base_url(config: &AiProviderConfig) -> String {
+    if let Some(base) = config
+        .base_url
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        return base.trim_end_matches('/').to_string();
     }
+    match effective_provider(config) {
+        AiProviderType::OpenAi => "https://api.openai.com/v1".into(),
+        AiProviderType::Anthropic => "https://api.anthropic.com/v1".into(),
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => {
+            "https://generativelanguage.googleapis.com/v1beta".into()
+        }
+        AiProviderType::OpenRouter => "https://openrouter.ai/api/v1".into(),
+        AiProviderType::Groq => "https://api.groq.com/openai/v1".into(),
+        AiProviderType::OpenAiCompatible | AiProviderType::Manual => "".into(),
+    }
+}
+
+fn extract_openai_text(value: &serde_json::Value) -> Result<String, String> {
+    value
+        .get("choices")
+        .and_then(|items| items.as_array())
+        .and_then(|items| items.first())
+        .and_then(|item| item.get("message"))
+        .and_then(|message| message.get("content"))
+        .and_then(|content| content.as_str())
+        .filter(|text| !text.trim().is_empty())
+        .map(ToOwned::to_owned)
+        .ok_or_else(|| "OpenAI 호환 응답에서 텍스트를 찾지 못했습니다.".into())
+}
+
+fn extract_anthropic_text(value: &serde_json::Value) -> Result<String, String> {
+    value
+        .get("content")
+        .and_then(|items| items.as_array())
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.get("text").and_then(|text| text.as_str()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
+        .filter(|text| !text.trim().is_empty())
+        .ok_or_else(|| "Anthropic 응답에서 텍스트를 찾지 못했습니다.".into())
 }
 
 fn extract_gemini_text(value: serde_json::Value) -> Result<String, String> {
@@ -352,10 +517,9 @@ pub(crate) fn save_ai_provider_config(
     app: tauri::AppHandle,
     mut config: AiProviderConfig,
 ) -> Result<AiProviderStatus, String> {
-    config.has_stored_key = has_stored_ai_provider_key(&app);
-    if matches!(config.provider_type, AiProviderType::Manual) {
-        config.enabled = false;
-    }
+    let provider = effective_provider(&config);
+    config.provider = Some(provider);
+    config.has_stored_key = has_stored_ai_provider_key(&app, provider);
     save_ai_provider_config_to_settings(&app, &config)?;
     Ok(ai_provider_status(&app))
 }
@@ -369,8 +533,9 @@ pub(crate) fn save_ai_provider_key(
     if trimmed.is_empty() {
         return Err("API key가 비어 있습니다.".into());
     }
-    save_stored_ai_provider_key(&app, trimmed)?;
     let mut config = load_ai_provider_config(&app);
+    let provider = effective_provider(&config);
+    save_stored_ai_provider_key(&app, provider, trimmed)?;
     config.has_stored_key = true;
     save_ai_provider_config_to_settings(&app, &config)?;
     Ok(ai_provider_status(&app))
@@ -378,8 +543,8 @@ pub(crate) fn save_ai_provider_key(
 
 #[tauri::command]
 pub(crate) fn clear_ai_provider_key(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
-    clear_stored_ai_provider_key(&app)?;
     let mut config = load_ai_provider_config(&app);
+    clear_stored_ai_provider_key(&app, effective_provider(&config))?;
     config.has_stored_key = false;
     save_ai_provider_config_to_settings(&app, &config)?;
     Ok(ai_provider_status(&app))
@@ -393,27 +558,60 @@ pub(crate) fn generate_import_with_ai(
     image_filenames: Vec<String>,
 ) -> Result<String, String> {
     let config = load_ai_provider_config(&app);
-    if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
+    let provider = effective_provider(&config);
+    if !config.enabled || config.model.trim().is_empty() {
         return Err("AI provider가 비활성화되어 있습니다.".into());
     }
 
     let key = ai_provider_key(&app, &config)?;
-    let model = gemini_model(&config.provider_type);
-    let url =
-        format!("https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent");
     let text = if input_text.trim().is_empty() {
         prompt
     } else {
         format!("{prompt}\n\n입력:\n{input_text}")
     };
-    let parts = build_gemini_parts(&app, text, &image_filenames)?;
-    let body = serde_json::json!({
-        "contents": [{ "role": "user", "parts": parts }],
-        "generationConfig": {
-            "temperature": 0.2,
-            "responseMimeType": "application/json",
-        },
-    });
+    let (url, body, response_kind) = match provider {
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => {
+            let parts = build_gemini_parts(&app, text, &image_filenames)?;
+            (
+                format!(
+                    "{}/models/{}:generateContent",
+                    provider_base_url(&config),
+                    config.model.trim()
+                ),
+                serde_json::json!({
+                    "contents": [{ "role": "user", "parts": parts }],
+                    "generationConfig": { "temperature": 0.2, "responseMimeType": "application/json" },
+                }),
+                "gemini",
+            )
+        }
+        AiProviderType::Anthropic => {
+            if !image_filenames.is_empty() {
+                return Err("Anthropic 가져오기는 현재 텍스트 입력만 지원합니다.".into());
+            }
+            (
+                format!("{}/messages", provider_base_url(&config)),
+                serde_json::json!({ "model": config.model, "max_tokens": 4096, "temperature": 0.2, "messages": [{ "role": "user", "content": text }] }),
+                "anthropic",
+            )
+        }
+        AiProviderType::OpenAi
+        | AiProviderType::OpenRouter
+        | AiProviderType::Groq
+        | AiProviderType::OpenAiCompatible
+        | AiProviderType::Manual => {
+            if !image_filenames.is_empty() {
+                return Err("선택한 provider의 가져오기는 현재 텍스트 입력만 지원합니다.".into());
+            }
+            (
+                format!("{}/chat/completions", provider_base_url(&config)),
+                serde_json::json!({ "model": config.model, "temperature": 0.2, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": text }] }),
+                "openai",
+            )
+        }
+    };
 
     let client = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
@@ -422,7 +620,38 @@ pub(crate) fn generate_import_with_ai(
         .map_err(|error| format!("Gemini HTTP client를 만들지 못했습니다: {error}"))?;
     let response = client
         .post(url)
-        .header("x-goog-api-key", key)
+        .header(
+            "x-goog-api-key",
+            if response_kind == "gemini" {
+                key.clone()
+            } else {
+                String::new()
+            },
+        )
+        .header(
+            "Authorization",
+            if response_kind != "gemini" && response_kind != "anthropic" {
+                format!("Bearer {key}")
+            } else {
+                String::new()
+            },
+        )
+        .header(
+            "x-api-key",
+            if response_kind == "anthropic" {
+                key.clone()
+            } else {
+                String::new()
+            },
+        )
+        .header(
+            "anthropic-version",
+            if response_kind == "anthropic" {
+                "2023-06-01"
+            } else {
+                ""
+            },
+        )
         .json(&body)
         .send()
         .map_err(|error| format!("Gemini 호출에 실패했습니다: {error}"))?;
@@ -439,7 +668,57 @@ pub(crate) fn generate_import_with_ai(
         return Err(format!("Gemini API 오류({status}): {message}"));
     }
 
-    extract_gemini_text(value)
+    match response_kind {
+        "gemini" => extract_gemini_text(value),
+        "anthropic" => extract_anthropic_text(&value),
+        _ => extract_openai_text(&value),
+    }
+}
+
+#[tauri::command]
+pub(crate) fn test_ai_provider_connection(
+    app: tauri::AppHandle,
+) -> Result<AiProviderStatus, String> {
+    let config = load_ai_provider_config(&app);
+    let provider = effective_provider(&config);
+    if config.model.trim().is_empty() {
+        return Err("연결 테스트 전에 모델명을 입력해 주세요.".into());
+    }
+    let key = ai_provider_key(&app, &config)?;
+    let url = match provider {
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => {
+            format!("{}/models/{}", provider_base_url(&config), config.model)
+        }
+        AiProviderType::Anthropic => format!("{}/models", provider_base_url(&config)),
+        _ => format!("{}/models", provider_base_url(&config)),
+    };
+    let client = reqwest::blocking::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|error| error.to_string())?;
+    let mut request = client.get(url);
+    request = match provider {
+        AiProviderType::GoogleGemini
+        | AiProviderType::GeminiFlashLite
+        | AiProviderType::Gemini35Flash => request.header("x-goog-api-key", key),
+        AiProviderType::Anthropic => request
+            .header("x-api-key", key)
+            .header("anthropic-version", "2023-06-01"),
+        _ => request.header("Authorization", format!("Bearer {key}")),
+    };
+    let response = request
+        .send()
+        .map_err(|error| format!("연결 테스트에 실패했습니다: {error}"))?;
+    if !response.status().is_success() {
+        return Err(format!(
+            "provider 연결 테스트가 HTTP {}를 반환했습니다.",
+            response.status()
+        ));
+    }
+    Ok(ai_provider_status(&app))
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -536,20 +815,22 @@ fn validate_similar_question_ranking_request(
         .context
         .content
         .as_ref()
-        .is_some_and(|content| content.as_bytes().len() > MAX_SIMILAR_CONTEXT_CONTENT_BYTES)
+        .is_some_and(|content| content.len() > MAX_SIMILAR_CONTEXT_CONTENT_BYTES)
     {
         return Err("유사 문제 기준 본문이 너무 깁니다.".into());
     }
     for candidate in &request.candidates {
-        if candidate.question_text.as_bytes().len() > MAX_SIMILAR_CANDIDATE_QUESTION_BYTES {
+        if candidate.question_text.len() > MAX_SIMILAR_CANDIDATE_QUESTION_BYTES {
             return Err(format!(
                 "후보 문제 본문이 너무 깁니다: {}",
                 candidate.candidate_id
             ));
         }
-        if candidate.explanation.as_ref().is_some_and(|explanation| {
-            explanation.as_bytes().len() > MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES
-        }) {
+        if candidate
+            .explanation
+            .as_ref()
+            .is_some_and(|explanation| explanation.len() > MAX_SIMILAR_CANDIDATE_EXPLANATION_BYTES)
+        {
             return Err(format!(
                 "후보 해설이 너무 깁니다: {}",
                 candidate.candidate_id
@@ -570,13 +851,14 @@ pub(crate) fn rank_similar_questions_with_ai(
     request: SimilarQuestionRankingRequest,
 ) -> Result<SimilarQuestionRankingResponse, String> {
     let config = load_ai_provider_config(&app);
-    if !config.enabled || matches!(config.provider_type, AiProviderType::Manual) {
+    if !config.enabled || config.model.trim().is_empty() {
         return Err("AI provider가 비활성화되어 있습니다.".into());
     }
     validate_similar_question_ranking_request(&request)?;
 
     let key = ai_provider_key(&app, &config)?;
-    let model = gemini_model(&config.provider_type);
+    let provider = effective_provider(&config);
+    let model = config.model.clone();
     let context_json = serde_json::to_string(&request.context)
         .map_err(|error| format!("유사 문제 기준 정보를 직렬화하지 못했습니다: {error}"))?;
     let candidates_json = serde_json::to_string(&request.candidates)
@@ -584,23 +866,48 @@ pub(crate) fn rank_similar_questions_with_ai(
     let prompt = format!(
         "다음 context와 각 candidate를 개별적으로 비교해 유사도를 평가하세요. candidate끼리 비교하지 마세요. 새 문제나 새로운 candidateId를 생성하지 마세요. 제공된 candidateId만 사용해 JSON {{\"results\":[{{\"candidateId\":string,\"score\":0-100,\"reasons\":[string],\"sharedConcepts\":[string],\"differences\":[string]}}]}}만 반환하세요.\n\ncontext(JSON):\n{context_json}\n\ncandidates(JSON):\n{candidates_json}"
     );
-    let body = serde_json::json!({
-        "contents": [{ "role": "user", "parts": [{ "text": prompt }] }],
-        "generationConfig": {
-            "temperature": 0.1,
-            "responseMimeType": "application/json",
-        },
-    });
+    let is_gemini = matches!(
+        provider,
+        AiProviderType::GoogleGemini
+            | AiProviderType::GeminiFlashLite
+            | AiProviderType::Gemini35Flash
+    );
+    let body = if is_gemini {
+        serde_json::json!({ "contents": [{ "role": "user", "parts": [{ "text": prompt }] }], "generationConfig": { "temperature": 0.1, "responseMimeType": "application/json" } })
+    } else {
+        serde_json::json!({ "model": model, "temperature": 0.1, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": prompt }] })
+    };
 
     let response = reqwest::blocking::Client::builder()
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(90))
         .build()
         .map_err(|error| format!("Gemini HTTP client를 만들지 못했습니다: {error}"))?
-        .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        ))
-        .header("x-goog-api-key", key)
+        .post(if is_gemini {
+            format!(
+                "{}/models/{}:generateContent",
+                provider_base_url(&config),
+                model
+            )
+        } else {
+            format!("{}/chat/completions", provider_base_url(&config))
+        })
+        .header(
+            "x-goog-api-key",
+            if is_gemini {
+                key.clone()
+            } else {
+                String::new()
+            },
+        )
+        .header(
+            "Authorization",
+            if is_gemini {
+                String::new()
+            } else {
+                format!("Bearer {key}")
+            },
+        )
         .json(&body)
         .send()
         .map_err(|error| format!("Gemini 호출에 실패했습니다: {error}"))?;
@@ -612,7 +919,11 @@ pub(crate) fn rank_similar_questions_with_ai(
         return Err("Gemini 유사 문제 재정렬에 실패했습니다.".into());
     }
 
-    let content = extract_gemini_text(value)?;
+    let content = if is_gemini {
+        extract_gemini_text(value)?
+    } else {
+        extract_openai_text(&value)?
+    };
     Ok(SimilarQuestionRankingResponse {
         content,
         model: model.to_string(),

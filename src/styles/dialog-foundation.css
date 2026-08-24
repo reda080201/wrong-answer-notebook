@@ -68,3 +68,6 @@
   .import-modal-header { align-items: flex-start; }
   .import-modal-header-actions { flex-wrap: wrap; justify-content: flex-end; }
 }
+.import-mode-tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--border); }
+.import-mode-tabs button { min-height: 36px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-weight: 650; }
+.import-mode-tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }

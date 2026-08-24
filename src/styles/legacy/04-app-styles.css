@@ -525,6 +525,8 @@
   gap: 0.4rem;
 }
 
+.ai-provider-settings .theme-options { margin-top: 2px; }
+
 .ai-provider-key-row input {
   min-width: 0;
   border: 1px solid var(--border);

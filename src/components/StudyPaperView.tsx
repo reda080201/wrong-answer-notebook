@@ -7,6 +7,7 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
+import ExamPaperCompositor from "./ExamPaperCompositor";
 import { Maximize2 } from "lucide-react";
 import "./StudyPaperView.css";
 
@@ -98,6 +99,7 @@ export default function StudyPaperView({
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
+            <ExamPaperCompositor enabled={displayMode === "exam"}>
             {structuredQuestions.map((question, index) => {
               const number = normalizeQuestionNumber(question.questionNumber);
               const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
@@ -108,8 +110,8 @@ export default function StudyPaperView({
                 <article key={number || question.position} id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
                   <header>
                     <div>
-                      <span>문제 {question.questionNumber}</span>
-                      <small>{question.position} / {questionCount}</small>
+                      <span className="question-identity">{question.questionNumber}번</span>
+                      <small className="question-sequence">{question.position} / {questionCount}</small>
                       {question.points !== undefined && <small>{question.points}점</small>}
                       {question.needsReview && <small className="answer-review-badge">검토 필요</small>}
                     </div>
@@ -126,6 +128,7 @@ export default function StudyPaperView({
                 </article>
               );
             })}
+            </ExamPaperCompositor>
           </div>
         ) : <AnnotatableQuestion
           question={entry.question}

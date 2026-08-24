@@ -1022,6 +1022,7 @@ pub fn run() {
             ai::save_ai_provider_key,
             ai::clear_ai_provider_key,
             ai::generate_import_with_ai,
+            ai::test_ai_provider_connection,
             ai::rank_similar_questions_with_ai,
             images::save_import_image_bytes,
             import_assets::create_import_asset_session,

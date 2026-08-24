@@ -34,7 +34,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   promptTemplates: [],
   memoTemplates: [],
   aiProvider: {
+    provider: "openai-compatible",
     type: "manual",
+    model: "",
     enabled: false,
     keySource: "env",
     hasStoredKey: false,
@@ -148,21 +150,37 @@ function normalizeMemoTemplates(raw: unknown): MemoTemplate[] {
 function normalizeAiProvider(raw: unknown): AiProviderSettings {
   if (!isTauri()) {
     return {
+      provider: "openai-compatible",
       type: "manual",
+      model: "",
       enabled: false,
       keySource: "env",
       hasStoredKey: false,
     };
   }
   const value = raw && typeof raw === "object" ? raw as Partial<AiProviderSettings> : {};
-  const type: AiProviderType =
-    value.type === "gemini-flash-lite" || value.type === "gemini-3.5-flash"
-      ? value.type
-      : "manual";
+  const legacyType = value.type;
+  const provider: Exclude<AiProviderType, "manual" | "gemini-flash-lite" | "gemini-3.5-flash"> =
+    value.provider === "openai" || value.provider === "anthropic" || value.provider === "google-gemini" || value.provider === "openrouter" || value.provider === "groq" || value.provider === "openai-compatible"
+      ? value.provider
+      : legacyType === "gemini-flash-lite" || legacyType === "gemini-3.5-flash"
+        ? "google-gemini"
+        : "openai-compatible";
+  const model = typeof value.model === "string" && value.model.trim()
+    ? value.model.trim()
+    : legacyType === "gemini-flash-lite"
+      ? "gemini-2.5-flash-lite"
+      : legacyType === "gemini-3.5-flash"
+        ? "gemini-3.5-flash"
+        : "";
+  const type: AiProviderType = provider === "google-gemini" ? (legacyType === "gemini-flash-lite" || legacyType === "gemini-3.5-flash" ? legacyType : "gemini-3.5-flash") : provider;
   return {
+    provider,
     type,
-    enabled: type !== "manual" && Boolean(value.enabled),
-    keySource: value.keySource === "tauri-settings" ? "tauri-settings" : "env",
+    model,
+    baseUrl: typeof value.baseUrl === "string" && value.baseUrl.trim() ? value.baseUrl.trim() : undefined,
+    enabled: Boolean(value.enabled),
+    keySource: value.keySource === "tauri-settings" || value.keySource === "keyring" ? "keyring" : "env",
     hasStoredKey: Boolean(value.hasStoredKey),
   };
 }

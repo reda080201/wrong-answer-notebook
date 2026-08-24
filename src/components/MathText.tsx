@@ -1,95 +1,136 @@
-import {
-  cloneElement,
-  isValidElement,
-  useLayoutEffect,
-  useRef,
-  type ReactNode,
-} from "react";
+import { cloneElement, isValidElement, useLayoutEffect, useRef, type ReactNode } from "react";
 import katex from "katex";
 
-interface MathToken {
-  raw: string;
-  expression: string;
-  displayMode: boolean;
+export type MathDisplaySegment =
+  | { type: "text"; value: string }
+  | { type: "math"; raw: string; expression: string; displayMode: boolean }
+  | { type: "invalid-math"; raw: string; reason: string };
+
+const COMMANDS = new Set(["times", "cdot", "div", "pm", "mp", "ge", "geq", "le", "leq", "neq", "approx", "to", "rightarrow", "leftarrow", "leftrightarrow", "in", "notin", "subset", "supset", "cup", "cap", "parallel", "perp", "angle", "triangle", "circ", "infty", "sum", "prod", "frac", "sqrt", "int", "lim", "sin", "cos", "tan", "log", "ln", "left", "right"]);
+const ENVIRONMENTS = new Set(["cases", "aligned", "array"]);
+const OPENERS = ["$$", "\\[", "\\(", "$"] as const;
+
+function isBoundary(value: string, index: number): boolean {
+  if (index === 0) return true;
+  return /[\s([{,:;=+\-*]/.test(value[index - 1]);
 }
 
-const MATH_PATTERN = /(\$\$[\s\S]+?\$\$|\\\[[\s\S]+?\\\]|\\\([\s\S]+?\\\)|\$(?!\$)(?:\\.|[^$\n])+\$)/g;
-const RAW_LATEX_PATTERN = /\\(?:sum|frac|lim|sqrt|sin|cos|tan|log|int|left|right|begin\{cases\}|infty)(?:\\[A-Za-z]+|[A-Za-z0-9{}_^+\-*/=().,|!\s])*|(?:[A-Za-z0-9{}()]+(?:\^[A-Za-z0-9{}()+\-*/=.,]+|_[A-Za-z0-9{}()+\-*/=.,]+))+/g;
-
-function toMathToken(raw: string): MathToken {
-  if (raw.startsWith("$$")) return { raw, expression: raw.slice(2, -2), displayMode: true };
-  if (raw.startsWith("\\[")) return { raw, expression: raw.slice(2, -2), displayMode: true };
-  if (raw.startsWith("\\(")) return { raw, expression: raw.slice(2, -2), displayMode: false };
-  return { raw, expression: raw.slice(1, -1), displayMode: false };
-}
-
-export function splitMathText(text: string): Array<string | MathToken> {
-  const explicitRanges = [...text.matchAll(MATH_PATTERN)].map((match) => ({
-    start: match.index ?? 0,
-    end: (match.index ?? 0) + match[0].length,
-    token: toMathToken(match[0]),
-  }));
-  const rawRanges = [...text.matchAll(RAW_LATEX_PATTERN)]
-    .map((match) => ({ start: match.index ?? 0, end: (match.index ?? 0) + match[0].length, raw: match[0].trim() }))
-    .filter((range) => range.raw.length > 1 && !explicitRanges.some((explicit) => range.start < explicit.end && range.end > explicit.start));
-  const ranges = [
-    ...explicitRanges.map((range) => ({ start: range.start, end: range.end, token: range.token })),
-    ...rawRanges.map((range) => ({ start: range.start, end: range.end, token: { raw: range.raw, expression: range.raw, displayMode: /^\\(?:begin\{cases\}|sum|frac|int|lim)/.test(range.raw) && !/[가-힣]/.test(range.raw) } })),
-  ].sort((a, b) => a.start - b.start);
-  const result: Array<string | MathToken> = [];
-  let cursor = 0;
-  for (const range of ranges) {
-    if (range.start < cursor) continue;
-    if (range.start > cursor) result.push(text.slice(cursor, range.start));
-    result.push(range.token);
-    cursor = range.end;
+function findClosingDelimiter(value: string, start: number, opener: string): number {
+  const closer = opener === "$$" ? "$$" : opener === "\\[" ? "\\]" : opener === "\\(" ? "\\)" : "$";
+  let escaped = false;
+  for (let index = start + opener.length; index < value.length; index += 1) {
+    if (escaped) { escaped = false; continue; }
+    if (value[index] === "\\") { escaped = true; continue; }
+    if (value.startsWith(closer, index)) return index;
   }
-  if (cursor < text.length) result.push(text.slice(cursor));
+  return -1;
+}
+
+function invalidEnd(value: string, start: number, opener: string): number {
+  const newline = value.indexOf("\n", start + opener.length);
+  if (newline >= 0) return newline;
+  const whitespace = value.slice(start + opener.length).search(/[\s.,!?]/);
+  return whitespace >= 0 ? start + opener.length + whitespace : Math.min(value.length, start + opener.length + 24);
+}
+
+function readBalanced(value: string, start: number): number {
+  let depth = 0;
+  for (let index = start; index < value.length; index += 1) {
+    if (value[index] === "{") depth += 1;
+    if (value[index] === "}") { depth -= 1; if (depth === 0) return index + 1; }
+  }
+  return -1;
+}
+
+function readRawCommand(value: string, start: number): { end: number; raw: string } | null {
+  const previous = value[start - 1];
+  if (!isBoundary(value, start) && !(value[start] === "\\" && /[)\]}]/.test(previous ?? ""))) return null;
+  const match = value.slice(start + 1).match(/^(begin\{([A-Za-z]+)\}|[A-Za-z]+)/);
+  if (!match) return null;
+  const command = match[1];
+  const environment = match[2];
+  if (environment && ENVIRONMENTS.has(environment)) {
+    const endMarker = `\\end{${environment}}`;
+    const end = value.indexOf(endMarker, start + 1 + command.length);
+    return end < 0 ? null : { end: end + endMarker.length, raw: value.slice(start, end + endMarker.length) };
+  }
+  if (!COMMANDS.has(command)) return null;
+  let end = start + command.length + 1;
+  if (command === "left") {
+    const right = value.indexOf("\\right", end);
+    if (right >= 0) {
+      const rightEnd = Math.min(value.length, right + "\\right".length + 1);
+      return { end: rightEnd, raw: value.slice(start, rightEnd) };
+    }
+  }
+  for (let count = 0; count < 3 && value[end] === "{"; count += 1) {
+    const next = readBalanced(value, end);
+    if (next < 0) return null;
+    end = next;
+  }
+  return { end, raw: value.slice(start, end) };
+}
+
+function commandExpression(raw: string) {
+  const expression = raw.startsWith("/") ? `\\${raw.slice(1)}` : raw;
+  return { expression, displayMode: /^(?:\\(?:begin\{(?:cases|aligned|array)\}|sum|prod|int|lim))/.test(expression) };
+}
+
+export function tokenizeMathForDisplay(text: string): MathDisplaySegment[] {
+  const result: MathDisplaySegment[] = [];
+  let cursor = 0;
+  let textStart = 0;
+  const pushText = (end: number) => { if (end > textStart) result.push({ type: "text", value: text.slice(textStart, end) }); };
+  while (cursor < text.length) {
+    const opener = OPENERS.find((candidate) => text.startsWith(candidate, cursor));
+    if (opener && isBoundary(text, cursor)) {
+      const close = findClosingDelimiter(text, cursor, opener);
+      if (close < 0) {
+        const end = invalidEnd(text, cursor, opener);
+        pushText(cursor);
+        result.push({ type: "invalid-math", raw: text.slice(cursor, end), reason: "닫히지 않은 수식 구분자" });
+        cursor = end; textStart = end; continue;
+      }
+      pushText(cursor);
+      const closer = opener === "$$" ? "$$" : opener === "\\[" ? "\\]" : opener === "\\(" ? "\\)" : "$";
+      const raw = text.slice(cursor, close + closer.length);
+      result.push({ type: "math", raw, expression: raw.slice(opener.length, -closer.length), displayMode: opener === "$$" || opener === "\\[" });
+      cursor = close + closer.length; textStart = cursor; continue;
+    }
+    const command = (text[cursor] === "\\" || text[cursor] === "/") ? readRawCommand(text, cursor) : null;
+    if (command) {
+      pushText(cursor);
+      const parsed = commandExpression(command.raw);
+      result.push({ type: "math", raw: command.raw, expression: parsed.expression, displayMode: parsed.displayMode });
+      cursor = command.end; textStart = cursor; continue;
+    }
+    cursor += 1;
+  }
+  pushText(text.length);
   return result;
 }
 
-function MathFragment({ token }: { token: MathToken }) {
-  const containerRef = useRef<HTMLSpanElement>(null);
+export function splitMathText(text: string): MathDisplaySegment[] { return tokenizeMathForDisplay(text); }
 
+function MathFragment({ segment }: { segment: Extract<MathDisplaySegment, { type: "math" }> }) {
+  const containerRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-
     container.textContent = "";
-    container.className = token.displayMode
-      ? "math-fragment math-fragment--display"
-      : "math-fragment";
-
-    try {
-      katex.render(token.expression, container, {
-        displayMode: token.displayMode,
-        throwOnError: true,
-        trust: false,
-        strict: "warn",
-        output: "htmlAndMathml",
-      });
-    } catch {
-      container.className = "math-fragment--invalid";
-      container.textContent = token.raw;
-    }
-  }, [token.displayMode, token.expression, token.raw]);
-
-  return (
-    <span
-      ref={containerRef}
-      className={token.displayMode ? "math-fragment math-fragment--display" : "math-fragment"}
-    />
-  );
+    container.className = segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment";
+    try { katex.render(segment.expression, container, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
+    catch { container.className = "math-fragment--invalid"; container.textContent = "수식 형식 확인 필요"; }
+  }, [segment.displayMode, segment.expression]);
+  return <span ref={containerRef} className={segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment"} aria-label="수식" />;
 }
 
 export default function MathText({ text }: { text: string }) {
-  return (
-    <>
-      {splitMathText(text).map((part, index) =>
-        typeof part === "string" ? part : <MathFragment key={`${part.raw}-${index}`} token={part} />,
-      )}
-    </>
-  );
+  return <>{tokenizeMathForDisplay(text).map((segment, index) => {
+    if (segment.type === "text") return <span key={`text-${index}`}>{segment.value}</span>;
+    if (segment.type === "invalid-math") return <span key={`invalid-${index}`} className="math-fragment--invalid" role="status">수식 형식 확인 필요</span>;
+    return <MathFragment key={`${segment.raw}-${index}`} segment={segment} />;
+  })}</>;
 }
 
 export function renderMathInNodes(nodes: ReactNode[]): ReactNode[] {

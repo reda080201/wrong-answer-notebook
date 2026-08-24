@@ -308,8 +308,8 @@ impl NotebookStore {
             .filter(|entry| {
                 let matches_subject = subject
                     .as_ref()
-                    .map_or(true, |value| entry.subject.to_lowercase() == *value);
-                let matches_kind = entry_kind.map_or(true, |value| entry.entry_kind == value);
+                    .is_none_or(|value| entry.subject.to_lowercase() == *value);
+                let matches_kind = entry_kind.is_none_or(|value| entry.entry_kind == value);
                 let haystack = entry_search_text(entry).to_lowercase();
                 matches_subject && matches_kind && (needle.is_empty() || haystack.contains(&needle))
             })
@@ -665,11 +665,7 @@ fn is_choice_prefix(value: &str) -> bool {
         .chars()
         .next()
         .is_some_and(|character| character.is_ascii_digit())
-        && value
-            .chars()
-            .skip_while(|character| character.is_ascii_digit())
-            .next()
-            == Some(')')
+        && value.chars().find(|character| !character.is_ascii_digit()) == Some(')')
     {
         return true;
     }

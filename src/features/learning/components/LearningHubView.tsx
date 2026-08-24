@@ -148,6 +148,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
+  const [selectedBlockKey, setSelectedBlockKey] = useState<string | null>(null);
   const units = useMemo(() => learningHubUnits(items), [items]);
   const thinkers = useMemo(() => learningHubThinkers(items), [items]);
   useEffect(() => {
@@ -193,6 +194,9 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       </div>
     </Dialog>}
     <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
-    {filtered.length ? <div className="learning-hub-grid">{filtered.map((item) => <LearningBlockCard key={`${item.sourceEntryId}:${item.block.id}`} item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
+    {filtered.length ? <div className="learning-hub-workspace">
+      <aside className="learning-hub-outline" aria-label="학습 항목 목록">{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setSelectedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || item.block.type}</small></button>; })}</aside>
+      <main className="learning-hub-selected">{(() => { const item = filtered.find((candidate) => `${candidate.sourceEntryId}:${candidate.block.id}` === selectedBlockKey) ?? filtered[0]; return <LearningBlockCard item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />; })()}</main>
+    </div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;
 }

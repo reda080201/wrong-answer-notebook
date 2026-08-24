@@ -1,13 +1,14 @@
 /* Extracted from App.css: balanced chunk 12. Keep import order stable. */
 
 .exam-session-overlay {
-  position: absolute;
-  inset: 0.75rem;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
   overflow: auto;
   padding: 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 0;
 }
 
 .exam-session-save-error {

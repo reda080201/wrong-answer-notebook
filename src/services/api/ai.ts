@@ -6,7 +6,9 @@ import { errorMessage } from "./shared";
 export async function getAiProviderStatus(): Promise<AiProviderStatus> {
   if (!isTauri()) {
     return {
+      provider: "openai-compatible",
       type: "manual",
+      model: "",
       enabled: false,
       keySource: "env",
       hasStoredKey: false,
@@ -38,6 +40,11 @@ export async function saveAiProviderConfig(config: AiProviderSettings): Promise<
 export async function saveAiProviderKey(apiKey: string): Promise<AiProviderStatus> {
   if (!isTauri()) return getAiProviderStatus();
   return invoke<AiProviderStatus>("save_ai_provider_key", { apiKey });
+}
+
+export async function testAiProviderConnection(): Promise<AiProviderStatus> {
+  if (!isTauri()) throw new Error("AI provider 연결 테스트는 데스크톱 앱에서만 사용할 수 있습니다.");
+  return invoke<AiProviderStatus>("test_ai_provider_connection");
 }
 
 export async function clearAiProviderKey(): Promise<AiProviderStatus> {
