@@ -76,7 +76,7 @@ function readRawCommand(value: string, start: number): { end: number; raw: strin
   let depth = 0;
   while (cursor < value.length) {
     const character = value[cursor];
-    if (/[^\x00-\x7F]/.test(character) || /[\r\n]/.test(character)) break;
+    if (character.charCodeAt(0) > 127 || /[\r\n]/.test(character)) break;
     if (/\s/.test(character)) break;
     if (character === "{") depth += 1;
     if (character === "}") {

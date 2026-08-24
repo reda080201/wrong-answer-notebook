@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { ChatGptMcpPreferences } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import {
@@ -37,9 +37,7 @@ export default function ChatGptHelpLauncher({
   const [status, setStatus] = useState<string | null>(null);
   const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
   const questions = useMemo(() => recommendedChatGptQuestions(mode), [mode]);
-  const generatedPrompt = buildChatGptPrompt(mode, selectedQuestion, preferences);
-  const [prompt, setPrompt] = useState(generatedPrompt);
-  useEffect(() => { setPrompt(buildChatGptPrompt(mode, selectedQuestion, preferences)); }, [generatedPrompt, mode, selectedQuestion]);
+  const [prompt, setPrompt] = useState(() => buildChatGptPrompt(mode, selectedQuestion, preferences));
 
   const syncAndCopy = async () => {
     setStatus(null);
