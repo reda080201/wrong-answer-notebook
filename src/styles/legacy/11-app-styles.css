@@ -221,6 +221,9 @@
   font-size: 0.86rem;
   color: var(--accent, #2563eb);
 }
+.export-question-png { display: grid; gap: 12px; max-width: 880px; }
+.export-question-png > label { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 12px; }
+.export-question-png__preview { display: block; max-width: 100%; max-height: 58dvh; margin: 0 auto; border: 1px solid var(--border); background: #fff; object-fit: contain; }
 
 .exam-builder-modal,
 .generated-exams-modal { width: min(58rem, calc(100vw - 2rem)); max-height: min(90vh, 52rem); overflow: auto; }

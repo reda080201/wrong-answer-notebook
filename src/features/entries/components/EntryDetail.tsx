@@ -1879,7 +1879,7 @@ export default function EntryDetail({
               onAnnotationsChange={onAnnotationsChange}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
-              sheetLayout={isSheet ? sheetLayout : "single"}
+              sheetLayout={isSheet && sheetLayout === "columns" ? "columns" : "single"}
               searchQuery={isSheet ? sheetSearch : ""}
               suspiciousSegments={suspiciousSegments}
               sourceEntry={entry}

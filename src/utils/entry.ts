@@ -567,7 +567,7 @@ function normalizeQuestionRenderVerification(raw: unknown): WrongAnswerEntry["qu
     const status = value.status;
     if (!questionNumber || !canonicalFingerprint || seen.has(questionNumber) || (status !== "unverified" && status !== "needs_review" && status !== "verified")) return [];
     seen.add(questionNumber);
-    return [{ questionNumber, canonicalFingerprint, status, verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined, renderedImage: typeof value.renderedImage === "string" && value.renderedImage.trim() ? value.renderedImage.trim() : undefined }];
+    return [{ questionNumber, canonicalFingerprint, status: status as "unverified" | "needs_review" | "verified", verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined, renderedImage: typeof value.renderedImage === "string" && value.renderedImage.trim() ? value.renderedImage.trim() : undefined }];
   });
   return records.length ? records : undefined;
 }
