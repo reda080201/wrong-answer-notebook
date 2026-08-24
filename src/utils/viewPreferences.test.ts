@@ -46,7 +46,7 @@ describe("normalizeViewPreferences", () => {
         compactToolbar: true,
       }),
     ).toEqual({
-      sheetLayout: "single",
+      sheetLayout: "auto",
       fontSize: "normal",
       hideAnswers: true,
       showDifficulty: false,
@@ -159,7 +159,7 @@ describe("migrateViewPreferences", () => {
 
   it("defaults show* toggles to true and compactToolbar to false when legacy keys are absent", () => {
     expect(migrateViewPreferences()).toEqual({
-      sheetLayout: "single",
+      sheetLayout: "auto",
       fontSize: "normal",
       hideAnswers: false,
       showDifficulty: true,
