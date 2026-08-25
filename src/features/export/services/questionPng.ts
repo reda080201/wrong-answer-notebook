@@ -1,10 +1,14 @@
+export type QuestionPngScope = "question" | "question_answer" | "question_answer_explanation";
+
 export interface QuestionPngOptions {
+  scope: QuestionPngScope;
   background: "white" | "transparent";
-  scale: 1 | 2 | 3;
+  scale: 2 | 3;
   filename: string;
 }
 
 export const DEFAULT_QUESTION_PNG_OPTIONS: QuestionPngOptions = {
+  scope: "question",
   background: "white",
   scale: 2,
   filename: "question.png",
@@ -29,6 +33,14 @@ function copyStyles(from: Element, to: Element) {
 /** Renders only a canonical question surface. Toolbars and app chrome are never cloned. */
 export async function renderQuestionNodeToPng(node: HTMLElement, options: QuestionPngOptions): Promise<Blob> {
   const clone = node.cloneNode(true) as HTMLElement;
+  if (options.scope !== "question") {
+    const answer = node.querySelector<HTMLElement>("[data-question-png-answer]")?.cloneNode(true);
+    if (answer) clone.appendChild(answer);
+    if (options.scope === "question_answer_explanation") {
+      const explanation = node.querySelector<HTMLElement>("[data-question-png-explanation]")?.cloneNode(true);
+      if (explanation) clone.appendChild(explanation);
+    }
+  }
   copyStyles(node, clone);
   clone.style.width = `${Math.ceil(node.getBoundingClientRect().width)}px`;
   clone.style.background = options.background === "white" ? "#ffffff" : "transparent";
