@@ -122,6 +122,7 @@ interface EntryDetailProps {
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
   onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
+  onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string }) => Promise<void>;
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
@@ -239,6 +240,7 @@ export default function EntryDetail({
   questionBankItems = [],
   onSimilarQuestionLinksChange,
   onApplyGptSolutionRoundtrip,
+  onPersistQuestionRender,
   gptSolutionDraftStore,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
@@ -2226,6 +2228,7 @@ export default function EntryDetail({
           initialScope={exportHubScope}
           selectionOnly={exportSelectionOnly}
           onToast={(message) => pushToast(message, "success")}
+          onPersistQuestionRender={onPersistQuestionRender}
           onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip && gptSolutionDraftStore?.ready ? async (input) => {
             const now = new Date().toISOString();
             const draft: GptSolutionRoundtripDraft = {

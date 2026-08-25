@@ -8,7 +8,7 @@ import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
-import { createPreUpdateBackup } from "./api";
+import { createPreUpdateBackup, deleteImage, saveImageFiles } from "./api";
 import { syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
@@ -685,6 +685,21 @@ function AppContent() {
                     : nextQuestionMeta,
                 }))
               }
+              onPersistQuestionRender={async ({ questionNumber, blob, filename, canonicalFingerprint }) => {
+                const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, { type: "image/png" });
+                const [savedImage] = await saveImageFiles([file]);
+                try {
+                  await patchEntry(selected.id, (current) => ({
+                    questionRenderVerification: [
+                      ...(current.questionRenderVerification ?? []).filter((item) => item.questionNumber !== questionNumber),
+                      { questionNumber, canonicalFingerprint, status: "unverified", renderedImage: savedImage },
+                    ],
+                  }));
+                } catch (error) {
+                  await deleteImage(savedImage).catch(() => undefined);
+                  throw error;
+                }
+              }}
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
