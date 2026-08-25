@@ -1,4 +1,6 @@
 .real-exam-session { min-height: 100%; background: var(--surface-soft); }
+.exam-session-overlay { position: relative; }
+.exam-session-close { position: absolute; top: 12px; right: 12px; z-index: 5; width: 44px; height: 44px; }
 .real-exam-header { position: sticky; top: 0; z-index: 3; display: flex; justify-content: space-between; gap: var(--space-4); padding: var(--space-3) var(--space-5); background: var(--surface); border-bottom: 1px solid var(--border); }
 .real-exam-header h2, .real-exam-header p { margin: 0; }
 .real-exam-header-status { display: flex; align-items: center; gap: 12px; }
@@ -21,6 +23,7 @@
 .real-exam-answer-item.is-answered { border-color: var(--success); }
 .real-exam-answer-item.is-current { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
 .real-exam-answer-item.is-marked { outline: 2px solid var(--warning); outline-offset: -2px; }
+.real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); min-height: 50px; padding: var(--space-2) var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-answer-jump { display: flex; align-items: center; justify-content: space-between; border: 0 !important; padding: 2px !important; }
 .real-exam-answer-sheet-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
 .real-exam-answer-sheet-choices button { padding: 4px 2px; }

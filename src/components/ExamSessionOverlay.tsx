@@ -2,6 +2,8 @@ import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../typ
 import type { SettingsTab } from "./SettingsModal";
 import ExamSessionView from "../features/exam/components/ExamSessionView";
 import RealExamSessionView from "../features/exam/components/RealExamSessionView";
+import { IconButton } from "../shared/ui";
+import { X } from "lucide-react";
 
 interface ExamSessionOverlayProps {
   session: ExamSession;
@@ -52,7 +54,7 @@ export default function ExamSessionOverlay({
           <button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button>
         </div>
       )}
-      <button type="button" onClick={() => void onClose()} disabled={submitting || saving}>시험 닫기</button>
+      <IconButton className="exam-session-close" label="시험 닫기" onClick={() => void onClose()} disabled={submitting || saving}><X size={20} /></IconButton>
       {session.mode === "real" ? <RealExamSessionView
         session={session}
         onChange={onChange}
