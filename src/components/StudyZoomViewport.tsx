@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { writeUiStorageValue } from "../services/uiStorage";
-import { Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
+import { Eye, EyeOff, Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
 
 interface StudyZoomViewportProps {
   storageKey: string;
@@ -20,21 +20,31 @@ function loadZoom(storageKey: string): number {
   return Number.isFinite(saved) ? clampZoom(saved) : 100;
 }
 
+function loadHidden(storageKey: string): boolean {
+  return localStorage.getItem(`${storageKey}:hidden`) === "true";
+}
+
 export function getQuestionZoomStorageKey(entryId: string, mode: "paper" | "focus" | "theater" = "paper") {
   return `wrong-answer-question-zoom:${mode}:${entryId}`;
 }
 
 export default function StudyZoomViewport({ storageKey, children }: StudyZoomViewportProps) {
   const [zoom, setZoom] = useState(() => loadZoom(storageKey));
+  const [hidden, setHidden] = useState(() => loadHidden(storageKey));
   const [controlsOpen, setControlsOpen] = useState(false);
 
   useEffect(() => {
     setZoom(loadZoom(storageKey));
+    setHidden(loadHidden(storageKey));
   }, [storageKey]);
 
   useEffect(() => {
     writeUiStorageValue(storageKey, String(zoom));
   }, [storageKey, zoom]);
+
+  useEffect(() => {
+    writeUiStorageValue(`${storageKey}:hidden`, String(hidden));
+  }, [hidden, storageKey]);
 
   const scale = useMemo(() => zoom / 100, [zoom]);
 
@@ -68,10 +78,10 @@ export default function StudyZoomViewport({ storageKey, children }: StudyZoomVie
       aria-label="문제지 확대 축소 영역"
     >
       <div className="study-zoom-content">{children}</div>
-      <div className={`study-zoom-hud${controlsOpen ? " is-open" : ""}`} aria-label="문제지 줌 조절">
+      {hidden ? <button type="button" className="study-zoom-restore ui-icon-button ui-icon-button--compact" aria-label="줌 컨트롤 다시 표시" onClick={() => setHidden(false)}><Eye size={17} /></button> : <div className={`study-zoom-hud${controlsOpen ? " is-open" : ""}`} aria-label="문제지 줌 조절">
         <button type="button" className="ui-icon-button ui-icon-button--compact" aria-expanded={controlsOpen} aria-label={controlsOpen ? "줌 조절 접기" : "줌 조절 열기"} onClick={() => setControlsOpen((open) => !open)}><ZoomIn size={17} /></button>
-        {controlsOpen && <div className="study-zoom-popover" role="group" aria-label="문제지 콘텐츠 크기"><strong>{zoom}%</strong><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(-STEP)} disabled={zoom <= MIN_ZOOM} aria-label="문제지 축소"><Minus size={15} /></button><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(STEP)} disabled={zoom >= MAX_ZOOM} aria-label="문제지 확대"><Plus size={15} /></button><button type="button" className="study-zoom-reset" onClick={() => setZoom(100)} disabled={zoom === 100} aria-label="초기화"><RotateCcw size={15} /></button></div>}
-      </div>
+        {controlsOpen && <div className="study-zoom-popover" role="group" aria-label="문제지 콘텐츠 크기"><strong>{zoom}%</strong><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(-STEP)} disabled={zoom <= MIN_ZOOM} aria-label="문제지 축소"><Minus size={15} /></button><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => changeZoom(STEP)} disabled={zoom >= MAX_ZOOM} aria-label="문제지 확대"><Plus size={15} /></button><button type="button" className="study-zoom-reset" onClick={() => setZoom(100)} disabled={zoom === 100} aria-label="초기화"><RotateCcw size={15} /></button><button type="button" className="ui-icon-button ui-icon-button--compact" onClick={() => { setControlsOpen(false); setHidden(true); }} aria-label="줌 컨트롤 숨기기"><EyeOff size={15} /></button></div>}
+      </div>}
     </div>
   );
 }
