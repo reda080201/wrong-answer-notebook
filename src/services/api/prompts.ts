@@ -39,7 +39,10 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 
 필수 규칙:
  - import.json은 순수 JSON 객체 하나만 출력하고 base64 이미지, data URL, raw HTML/SVG, script, iframe은 넣지 마라.
- - figures[] 배열의 각 항목에 original, cleaned, semanticSpec, verification, preferredRepresentation을 별도 필드로 보존한다. 기존 image/source/needsReview도 반드시 함께 넣어 하위 호환한다.
+- figures[] 배열의 각 항목에 original, cleaned, semanticSpec, verification, preferredRepresentation을 별도 필드로 보존한다. 기존 image/source/needsReview도 반드시 함께 넣어 하위 호환한다.
+- cleaned.generatedBy는 실제 입력값을 그대로 보존하며 허용값은 "gpt", "deterministic_cleanup", "deterministic_redraw" 중 하나다. deterministic_cleanup 또는 deterministic_redraw를 gpt로 바꾸지 마라.
+- original.crop은 정규화 좌표 {x, y, width, height}이며 x/y는 0 이상 1 이하, width/height는 0 초과 1 이하, x+width와 y+height는 1 이하여야 한다. 범위를 벗어나면 clamp하지 말고 needsReview=true와 구체적인 검증 경고를 남겨라.
+- questionSourceCrops[].image와 figures[].original.image/cleaned.image는 원본·정리본 source asset 참조다. 앱이 canonical DOM에서 만든 renderedQuestionPng는 파생 artifact이며 source crop으로 기록하거나 원본을 덮어쓰지 마라.
  - 파일명은 실제 ZIP 파일명과 대소문자까지 일치시킨다. 예: graph_1.png. original.image와 cleaned.image가 있으면 둘 다 ZIP에 포함한다.
 - 문제 번호가 불확실하거나 검증이 실패하면 questionNumber를 비우고 needsReview=true로 표시한다.
 - 손글씨와 학생 풀이 흔적은 문제·답안에 넣지 말고 rejectedNotes에 기록한다.
