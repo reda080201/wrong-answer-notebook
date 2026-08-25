@@ -917,10 +917,24 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
   const storedStructured = normalizeStoredStructuredQuestions(rest.structuredQuestions);
-  const structuredQuestions = scrubRejectedNotesFromStructuredQuestions(
+  const scrubbedStructuredQuestions = scrubRejectedNotesFromStructuredQuestions(
     storedStructured.questions,
     normalizeRejectedNotes(rest.rejectedNotes),
   );
+  const invalidCropNumbers = new Set(
+    (Array.isArray(rest.questionSourceCrops) ? rest.questionSourceCrops : [])
+      .filter((item) => item && typeof item === "object")
+      .flatMap((item) => {
+        const value = item as unknown as Record<string, unknown>;
+        return value.cropRect !== undefined && !isValidNormalizedCrop(value.cropRect)
+          ? [normalizeQuestionNumber(`${value.questionNumber ?? ""}`)]
+          : [];
+      })
+      .filter(Boolean),
+  );
+  const structuredQuestions = scrubbedStructuredQuestions?.map((item) => invalidCropNumbers.has(item.questionNumber)
+    ? { ...item, needsReview: true, warning: [item.warning, "원본 crop 좌표를 확인해야 합니다."].filter(Boolean).join(" ") }
+    : item);
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
   const canonical = canonicalizeQuestionMistakeAnalysis(
     answerKey,
