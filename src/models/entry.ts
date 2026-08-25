@@ -178,7 +178,7 @@ export interface FigureOriginalRepresentation {
 
 export interface FigureCleanedRepresentation {
   image: string;
-  generatedBy: "gpt";
+  generatedBy: "gpt" | "deterministic_cleanup" | "deterministic_redraw";
   generatedAt: string;
   sourceImageHash: string;
   promptVersion: string;

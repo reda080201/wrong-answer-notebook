@@ -195,6 +195,14 @@ describe("normalizeEntry", () => {
     expect(getAllImageFilenames(entry)).toEqual(expect.arrayContaining(["original.png", "page.png", "cleaned.png"]));
   });
 
+  it.each(["gpt", "deterministic_cleanup", "deterministic_redraw"] as const)("preserves cleaned generator %s", (generatedBy) => {
+    const entry = normalizeEntry(rawEntry({ entryKind: "problem_sheet", figures: [{
+      id: "generator-1", questionNumber: "1", title: "", caption: "", source: "gpt_cleaned",
+      cleaned: { image: "clean.png", generatedBy, generatedAt: "2026-01-01T00:00:00Z", sourceImageHash: "hash", promptVersion: "v1" },
+    }] }));
+    expect(entry.figures?.[0].cleaned?.generatedBy).toBe(generatedBy);
+  });
+
   it("collects source pages and learning block images", () => {
     const entry = normalizeEntry(rawEntry({
       entryKind: "lecture",

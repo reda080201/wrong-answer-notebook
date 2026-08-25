@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
+import { isValidNormalizedCrop } from "./normalizedCrop";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { isMultipleChoiceQuestion, normalizeStructuredQuestionType } from "./structuredQuestionType";
 import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
@@ -524,7 +525,12 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
       caption: `${item.caption ?? ""}`.trim(),
       image: item.image ? `${item.image}`.trim() : undefined,
       source: isFigureSource(item.source) ? item.source : "gpt_cleaned",
-      needsReview: Boolean(item.needsReview),
+      needsReview: Boolean(item.needsReview || (() => {
+        const original = item.original as unknown;
+        if (!original || typeof original !== "object") return false;
+        const crop = (original as Record<string, unknown>).crop;
+        return crop !== undefined && !isValidNormalizedCrop(crop);
+      })()),
       original: normalizeFigureOriginal(item.original),
       cleaned: normalizeFigureCleaned(item.cleaned),
       semanticSpec: normalizeDiagramSemanticSpec(item.semanticSpec),
@@ -548,8 +554,8 @@ function normalizeQuestionSourceCrops(raw: unknown): WrongAnswerEntry["questionS
     if (!questionNumber || !image || seen.has(questionNumber)) return [];
     seen.add(questionNumber);
     const rawRect = value.cropRect && typeof value.cropRect === "object" ? value.cropRect as Record<string, unknown> : undefined;
-    const cropRect = rawRect && [rawRect.x, rawRect.y, rawRect.width, rawRect.height].every((part) => typeof part === "number" && Number.isFinite(part))
-      ? { x: Number(rawRect.x), y: Number(rawRect.y), width: Number(rawRect.width), height: Number(rawRect.height) }
+    const cropRect = rawRect && isValidNormalizedCrop(rawRect)
+      ? rawRect
       : undefined;
     return [{ questionNumber, image, sourcePageImage: typeof value.sourcePageImage === "string" && value.sourcePageImage.trim() ? value.sourcePageImage.trim() : undefined, cropRect }];
   });
@@ -577,8 +583,8 @@ function normalizeFigureOriginal(raw: unknown): SheetFigureItem["original"] {
   const value = raw as Record<string, unknown>;
   if (typeof value.image !== "string" || !value.image.trim()) return undefined;
   const crop = value.crop && typeof value.crop === "object" ? value.crop as Record<string, unknown> : undefined;
-  const normalizedCrop = crop && [crop.x, crop.y, crop.width, crop.height].every((item) => typeof item === "number" && Number.isFinite(item))
-    ? { x: Number(crop.x), y: Number(crop.y), width: Number(crop.width), height: Number(crop.height) }
+  const normalizedCrop = crop && isValidNormalizedCrop(crop)
+    ? crop
     : undefined;
   return { image: value.image.trim(), sourcePageImage: typeof value.sourcePageImage === "string" ? value.sourcePageImage.trim() || undefined : undefined, crop: normalizedCrop };
 }
@@ -587,7 +593,10 @@ function normalizeFigureCleaned(raw: unknown): SheetFigureItem["cleaned"] {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Record<string, unknown>;
   if (typeof value.image !== "string" || !value.image.trim() || typeof value.sourceImageHash !== "string" || typeof value.promptVersion !== "string") return undefined;
-  return { image: value.image.trim(), generatedBy: "gpt", generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : "", sourceImageHash: value.sourceImageHash, promptVersion: value.promptVersion };
+  const generatedBy = value.generatedBy === "gpt" || value.generatedBy === "deterministic_cleanup" || value.generatedBy === "deterministic_redraw"
+    ? value.generatedBy
+    : "gpt";
+  return { image: value.image.trim(), generatedBy, generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : "", sourceImageHash: value.sourceImageHash, promptVersion: value.promptVersion };
 }
 
 function normalizeDiagramSemanticSpec(raw: unknown): SheetFigureItem["semanticSpec"] {

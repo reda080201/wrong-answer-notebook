@@ -2,6 +2,7 @@ import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionNumber } from "./questionMeta";
+import { cropValidationMessage, isValidNormalizedCrop } from "./normalizedCrop";
 
 export type ImportValidationSeverity = "info" | "warning" | "error";
 
@@ -34,6 +35,7 @@ export function classifyImportValidationIssues(report: ImportValidationReport): 
     if (
       issue.id.startsWith("audit-missing-question-") ||
       issue.id.startsWith("structured-question-") ||
+      issue.id.startsWith("invalid-crop-") ||
       (issue.id.startsWith("duplicate-question-") && issue.severity === "error")
     ) {
       blocking.push(issue);
@@ -188,6 +190,23 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
     : undefined;
   const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
   issues.push(...structuredQuestionIssues);
+
+  for (const [index, crop] of ((data as EntryFormData & { questionSourceCrops?: unknown }).questionSourceCrops ?? [] as unknown[]).entries()) {
+    if (!crop || typeof crop !== "object") continue;
+    const value = crop as Record<string, unknown>;
+    if (value.cropRect !== undefined && !isValidNormalizedCrop(value.cropRect)) {
+      issues.push({ id: `invalid-crop-question-${index}`, severity: "error", message: cropValidationMessage(`${String(value.questionNumber ?? "문항")}번 원본 crop`) });
+    }
+  }
+  for (const [index, figure] of ((data.figures ?? []) as unknown[]).entries()) {
+    if (!figure || typeof figure !== "object") continue;
+    const original = (figure as Record<string, unknown>).original;
+    if (!original || typeof original !== "object") continue;
+    const crop = (original as Record<string, unknown>).crop;
+    if (crop !== undefined && !isValidNormalizedCrop(crop)) {
+      issues.push({ id: `invalid-crop-figure-${index}`, severity: "error", message: cropValidationMessage(`${String((figure as Record<string, unknown>).questionNumber ?? "문항")}번 그림 원본 crop`) });
+    }
+  }
 
   for (const number of audit?.missingQuestionNumbers ?? []) {
     issues.push({
