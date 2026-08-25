@@ -123,6 +123,7 @@ interface EntryDetailProps {
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
   onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
   onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string }) => Promise<void>;
+  onUpdateQuestionRenderVerification?: (input: { questionNumber: string; status: "unverified" | "needs_review" | "verified" }) => Promise<void>;
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
@@ -241,6 +242,7 @@ export default function EntryDetail({
   onSimilarQuestionLinksChange,
   onApplyGptSolutionRoundtrip,
   onPersistQuestionRender,
+  onUpdateQuestionRenderVerification,
   gptSolutionDraftStore,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
@@ -2229,6 +2231,7 @@ export default function EntryDetail({
           selectionOnly={exportSelectionOnly}
           onToast={(message) => pushToast(message, "success")}
           onPersistQuestionRender={onPersistQuestionRender}
+          onUpdateQuestionRenderVerification={onUpdateQuestionRenderVerification}
           onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip && gptSolutionDraftStore?.ready ? async (input) => {
             const now = new Date().toISOString();
             const draft: GptSolutionRoundtripDraft = {

@@ -700,6 +700,13 @@ function AppContent() {
                   throw error;
                 }
               }}
+              onUpdateQuestionRenderVerification={async ({ questionNumber, status }) => {
+                await patchEntry(selected.id, (current) => ({
+                  questionRenderVerification: (current.questionRenderVerification ?? []).map((item) => item.questionNumber === questionNumber
+                    ? { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined }
+                    : item),
+                }));
+              }}
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }

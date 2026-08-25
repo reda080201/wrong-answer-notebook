@@ -5,11 +5,12 @@ import { getImageUrl } from "../../../api";
 interface Props {
   entry: WrongAnswerEntry;
   questionNumber?: string;
+  onVerificationChange?: (status: "unverified" | "needs_review" | "verified") => Promise<void> | void;
 }
 
 type View = "rendered" | "original" | "compare";
 
-export default function QuestionRenderComparisonPanel({ entry, questionNumber }: Props) {
+export default function QuestionRenderComparisonPanel({ entry, questionNumber, onVerificationChange }: Props) {
   const [view, setView] = useState<View>("rendered");
   const [originalUrl, setOriginalUrl] = useState<string | null>(null);
   const [renderedUrl, setRenderedUrl] = useState<string | null>(null);
@@ -40,5 +41,9 @@ export default function QuestionRenderComparisonPanel({ entry, questionNumber }:
     {view === "original" && (originalUrl ? <img src={originalUrl} alt={`${questionNumber ?? "현재"}번 원본 crop`} /> : <p>연결된 원본 crop이 없습니다.</p>)}
     {view === "compare" && <div className="question-render-comparison__grid"><figure>{originalUrl ? <img src={originalUrl} alt="원본 crop" /> : <p>원본 없음</p>}<figcaption>원본</figcaption></figure><figure>{renderedUrl ? <img src={renderedUrl} alt="정리본" /> : <p>정리본 없음</p>}<figcaption>정리본</figcaption></figure></div>}
     <p role="status">검증 상태: {verification?.status ?? "unverified"}</p>
+    {view === "compare" && verification?.renderedImage && crop?.image && onVerificationChange && <div className="question-render-comparison__actions">
+      <button type="button" onClick={() => void onVerificationChange("verified")}>정리본 검증 완료</button>
+      <button type="button" onClick={() => void onVerificationChange("needs_review")}>검토 필요로 표시</button>
+    </div>}
   </section>;
 }
