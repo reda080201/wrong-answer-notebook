@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { ChatGptMcpPreferences } from "../../../types";
+import Dialog from "../../../shared/ui/Dialog";
 import {
   buildChatGptPrompt,
   openChatGpt,
@@ -36,7 +37,7 @@ export default function ChatGptHelpLauncher({
   const [status, setStatus] = useState<string | null>(null);
   const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
   const questions = useMemo(() => recommendedChatGptQuestions(mode), [mode]);
-  const prompt = buildChatGptPrompt(mode, selectedQuestion, preferences);
+  const [prompt, setPrompt] = useState(() => buildChatGptPrompt(mode, selectedQuestion, preferences));
 
   const syncAndCopy = async () => {
     setStatus(null);
@@ -79,14 +80,17 @@ export default function ChatGptHelpLauncher({
       <button type="button" className="btn-secondary" onClick={() => setOpen((value) => !value)}>
         {label}
       </button>
-      {open && (
-        <section className="chatgpt-help-panel" role="dialog" aria-label="ChatGPT에서 도움받기">
+      <Dialog open={open} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={() => setOpen(false)} footer={<div className="chatgpt-help-actions">
+        <button type="button" className="btn-secondary" onClick={() => void syncAndCopy()}>질문 복사</button>
+        <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
+        <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>질문 복사 후 ChatGPT 열기</button>
+        {onOpenSettings && <button type="button" className="btn-secondary" onClick={onOpenSettings}>연결 설정</button>}
+      </div>}>
+        <section className="chatgpt-help-panel">
           <header>
             <div>
-              <strong>ChatGPT에서 도움받기</strong>
               <p>문맥을 동기화하고 질문만 복사합니다. 메시지는 자동 전송하지 않습니다.</p>
             </div>
-            <button type="button" className="btn-icon" aria-label="ChatGPT 도움 닫기" onClick={() => setOpen(false)}>닫기</button>
           </header>
           <p className="chatgpt-help-note">보안 터널: {remoteMcpConfigured ? "외부 HTTPS MCP URL 등록됨" : "외부 URL 미등록 - ChatGPT 연결 전 등록이 필요할 수 있습니다."}</p>
           <fieldset>
@@ -98,20 +102,15 @@ export default function ChatGptHelpLauncher({
           </fieldset>
           <div className="chatgpt-help-questions" aria-label="추천 질문">
             {questions.map((question) => (
-              <button key={question} type="button" className={selectedQuestion === question ? "active" : ""} onClick={() => setSelectedQuestion(question)}>{question}</button>
+              <button key={question} type="button" className={selectedQuestion === question ? "active" : ""} onClick={() => { setSelectedQuestion(question); setPrompt(buildChatGptPrompt(mode, question, preferences)); }}>{question}</button>
             ))}
           </div>
-          <div className="chatgpt-help-actions">
-            <button type="button" className="btn-secondary" onClick={() => void syncAndCopy()}>질문 복사</button>
-            <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
-            <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>질문 복사 후 ChatGPT 열기</button>
-            {onOpenSettings && <button type="button" className="btn-icon" onClick={onOpenSettings}>연결 설정</button>}
-          </div>
+          <label className="chatgpt-help-prompt">보낼 프롬프트<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={10} aria-label="편집할 ChatGPT 프롬프트" /></label>
           {status && <p className="form-error" role="status">{status}</p>}
           {fallbackPrompt && <textarea className="chatgpt-help-fallback" readOnly value={fallbackPrompt} aria-label="복사할 추천 질문" />}
           <p className="chatgpt-help-note">ChatGPT의 MCP 기능은 계정, 워크스페이스 및 단계적 출시 상태에 따라 다를 수 있습니다.</p>
         </section>
-      )}
+      </Dialog>
     </div>
   );
 }

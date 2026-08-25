@@ -17,10 +17,10 @@
 .real-exam-answer-sheet > header { display: flex; justify-content: space-between; align-items: center; }
 .real-exam-answer-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .real-exam-answer-grid button { display: grid; gap: 2px; padding: var(--space-2) var(--space-1); border-bottom: 1px solid var(--border); background: transparent; }
-.real-exam-answer-grid button.is-answered { border-color: var(--success); }
-.real-exam-answer-grid button.is-marked { outline: 2px solid var(--warning); }
 .real-exam-answer-item { display: grid; gap: var(--space-2); padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
 .real-exam-answer-item.is-answered { border-color: var(--success); }
+.real-exam-answer-item.is-current { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.real-exam-answer-item.is-marked { outline: 2px solid var(--warning); outline-offset: -2px; }
 .real-exam-answer-jump { display: flex; align-items: center; justify-content: space-between; border: 0 !important; padding: 2px !important; }
 .real-exam-answer-sheet-choices { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; }
 .real-exam-answer-sheet-choices button { padding: 4px 2px; }

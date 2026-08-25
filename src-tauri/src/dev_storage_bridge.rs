@@ -72,6 +72,7 @@ fn with_file_lock<T>(root: &Path, operation: impl FnOnce() -> BridgeResult<T>) -
     fs::create_dir_all(root).map_err(internal)?;
     let lock = OpenOptions::new()
         .create(true)
+        .truncate(false)
         .read(true)
         .write(true)
         .open(root.join(".desktop-storage.lock"))
@@ -511,10 +512,10 @@ async fn load_image(
     } else {
         "image/jpeg"
     };
-    Ok(Response::builder()
+    Response::builder()
         .header(header::CONTENT_TYPE, mime)
         .body(Body::from(bytes))
-        .map_err(internal)?)
+        .map_err(internal)
 }
 
 async fn delete_image(

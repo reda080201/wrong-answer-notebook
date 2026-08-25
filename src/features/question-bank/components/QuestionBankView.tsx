@@ -30,6 +30,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
   const [maintenanceBlocked, setMaintenanceBlocked] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [narrowViewport, setNarrowViewport] = useState(() => typeof window !== "undefined" && window.matchMedia?.("(max-width: 900px)").matches === true);
   const preferenceTimerRef = useRef<number | null>(null);
   const pendingPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
   const failedPreferencePatchRef = useRef<Partial<QuestionBankPreferences> | null>(null);
@@ -38,6 +39,14 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const sortRef = useRef(sort);
   const savedPresetsRef = useRef(preferences?.savedPresets ?? []);
   const maintenanceBlockedRef = useRef(false);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const query = window.matchMedia("(max-width: 900px)");
+    const update = () => setNarrowViewport(query.matches);
+    update();
+    query.addEventListener("change", update);
+    return () => query.removeEventListener("change", update);
+  }, []);
   const updateMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
     setMaintenanceBlocked(blocked);
@@ -150,7 +159,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     }}>다시 저장</button>}</p>}
     {filtersOpen && <Dialog open size="lg" ariaLabel="문제 은행 필터" onClose={() => setFiltersOpen(false)}><header className="modal-head"><h2>문제 필터</h2></header><QuestionBankFilterBar items={items} filters={filters} onChange={patchFilters} onReset={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)} disabled={maintenanceBlocked} /><details className="question-bank-presets"><summary>프리셋과 일괄 추출</summary><label>프리셋 이름 <input value={presetName} disabled={maintenanceBlocked} onChange={(event) => setPresetName(event.target.value)} placeholder="필터 이름" /></label><button type="button" className="btn-secondary" disabled={maintenanceBlocked || !presetName.trim()} onClick={savePreset}>현재 필터 저장</button>{(preferences?.savedPresets ?? []).map((preset) => <button type="button" key={preset.id} className="btn-secondary" disabled={maintenanceBlocked} onClick={() => applySelection(filtersFromPreferences(preset.filters), preset.sort)}>{preset.name}</button>)}<button type="button" className="btn-secondary" disabled={!filtered.length} onClick={() => setPicked(selectQuestionBankItems(filtered, Math.min(10, filtered.length), `${Date.now()}`))}>10개 추출</button></details></Dialog>}
     {picked.length > 0 && <div className="question-bank-picked" role="status">추출된 문항 {picked.map((item) => `${item.entryTitle} ${item.questionNumber}번`).join(" · ")}</div>}
-    {filtered.length ? <div className="question-bank-list">{filtered.map((item) => <QuestionBankCard key={item.id} item={item} onOpen={onOpenQuestion} onInspect={setDetailItem} />)}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 문항이 없습니다.</p><button type="button" className="btn-secondary" onClick={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)}>필터 초기화</button></div>}
-    <QuestionBankDetail item={detailItem} onClose={() => setDetailItem(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />
+    {filtered.length ? <div className="question-bank-workspace"><div className="question-bank-list">{filtered.map((item) => <QuestionBankCard key={item.id} item={item} onOpen={onOpenQuestion} onInspect={setDetailItem} />)}</div>{!narrowViewport && <QuestionBankDetail inline item={detailItem} onClose={() => setDetailItem(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />}</div> : <div className="detail-panel empty-state"><p>조건에 맞는 문항이 없습니다.</p><button type="button" className="btn-secondary" onClick={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)}>필터 초기화</button></div>}
+    {narrowViewport && <QuestionBankDetail item={detailItem} onClose={() => setDetailItem(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />}
   </section>;
 }

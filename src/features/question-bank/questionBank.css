@@ -14,21 +14,25 @@
 .question-bank-chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
 .question-bank-chips button, .question-bank-card__chips span { border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); color: inherit; font-size: 12px; }
 .question-bank-chips button { padding: var(--space-1) var(--space-2); }
-.question-bank-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; margin-top: var(--space-4); background: var(--border); }
-.question-bank-card { min-width: 0; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
-.question-bank-card__main { width: 100%; border: 0; padding: var(--space-4); text-align: left; color: inherit; background: transparent; cursor: pointer; }
+.question-bank-workspace { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 480px); gap: var(--space-4); margin-top: var(--space-4); min-height: 0; }
+.question-bank-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; background: var(--border); }
+.question-bank-card { position: relative; min-width: 0; min-height: 72px; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
+.question-bank-card__main { width: 100%; min-height: 72px; border: 0; padding: var(--space-3) 64px var(--space-3) var(--space-4); text-align: left; color: inherit; background: transparent; cursor: pointer; }
 .question-bank-card__main:hover { background: var(--surface-hover); }
 .question-bank-card__main > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .question-bank-card__main > header span { flex: 0 0 auto; color: var(--accent); font-size: 12px; }
-.question-bank-card__chips { display: flex; flex-wrap: wrap; gap: var(--space-1); margin: var(--space-3) 0; }
-.question-bank-card__chips span { padding: var(--space-1) var(--space-2); }
+.question-bank-card__number { margin-right: var(--space-2); color: var(--accent); }
+.question-bank-card__meta { display: flex; gap: var(--space-2); margin: var(--space-1) 0; color: var(--text-muted); font-size: 12px; }
 .question-bank-card__main > p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--text); line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.question-bank-card__main > footer { flex-wrap: wrap; justify-content: flex-start; margin-top: var(--space-3); color: var(--text-muted); font-size: 12px; }
+.question-bank-card__main > footer { justify-content: flex-start; margin-top: var(--space-1); color: var(--text-muted); font-size: 12px; }
 .question-bank-card__warning { color: var(--warning); font-weight: 700; }
-.question-bank-card__detail { width: 100%; padding: var(--space-2); border: 0; border-top: 1px solid var(--border); background: transparent; color: var(--accent); cursor: pointer; opacity: 0; }
+.question-bank-card__detail { position: absolute; right: var(--space-2); top: 50%; width: 42px; height: 32px; transform: translateY(-50%); border: 0; background: transparent; color: var(--accent); cursor: pointer; opacity: 0; }
 .question-bank-card:hover .question-bank-card__detail,
 .question-bank-card:focus-within .question-bank-card__detail { opacity: 1; }
 .question-bank-detail { display: grid; gap: var(--space-4); min-width: min(640px, 80vw); }
+.question-bank-inspector { min-width: 0; max-height: calc(100dvh - 220px); overflow: auto; padding: var(--space-4); border-left: 1px solid var(--border); background: var(--surface); }
+.question-bank-inspector .question-bank-detail { min-width: 0; }
+.question-bank-detail-mobile { display: none; }
 .question-bank-detail__question { margin: 0; padding: var(--space-3); white-space: pre-wrap; font: inherit; line-height: 1.6; background: var(--surface-soft); border: 1px solid var(--border); }
 .question-bank-detail dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
 .question-bank-detail dl div { padding: var(--space-2); border: 1px solid var(--border); }
@@ -45,3 +49,4 @@
 .question-bank-presets { margin: var(--space-4); padding: var(--space-3); border-top: 1px solid var(--border); }
 .question-bank-presets > * { margin: var(--space-1); }
 .question-bank-detail__classification { display: grid; gap: var(--space-2); margin-top: var(--space-4); padding-top: var(--space-3); border-top: 1px solid var(--border); }
+@media (max-width: 900px) { .question-bank-workspace { grid-template-columns: minmax(0, 1fr); } .question-bank-inspector { display: none; } .question-bank-detail-mobile { display: contents; } }

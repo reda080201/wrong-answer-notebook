@@ -101,6 +101,7 @@ export default function SettingsModal({
   const updateAiProviderConfig = ctx.aiProvider.updateConfig;
   const storeAiProviderKey = ctx.aiProvider.storeKey;
   const removeAiProviderKey = ctx.aiProvider.removeKey;
+  const testAiProvider = ctx.aiProvider.testConnection;
   const saveTemplate = ctx.templates.save;
   const deleteTemplate = ctx.templates.delete;
   const savePromptTemplate = ctx.promptTemplates.save;
@@ -224,7 +225,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "ai" && (
-              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} />
+              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} />
             )}
 
             {activeTab === "view" && (

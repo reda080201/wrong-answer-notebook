@@ -48,7 +48,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     await resumeDialog.getByRole("button", { name: "이어서 풀기" }).click();
     await page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "펼치기" }).click();
     await expect(page.getByLabel("2번 답안", { exact: true })).toHaveValue("short-2");
-    await expect(page.getByRole("button", { name: "20번 미응답", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^20번 미응답/ })).toBeVisible();
 
     await page.screenshot({ path: testInfo.outputPath("real-exam-resumed-1100x750.png"), fullPage: true });
   });
@@ -75,8 +75,7 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: "시험지함" }).click();
-  await page.getByRole("button", { name: "추가 작업" }).click();
-  await page.getByRole("menuitem", { name: "GPT 결과 가져오기" }).click();
+  await page.getByRole("button", { name: "시험지 가져오기" }).click();
   const input = page.getByLabel("올인원 가져오기");
   await input.setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
 

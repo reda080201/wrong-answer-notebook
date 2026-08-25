@@ -41,6 +41,14 @@
 .learning-hub-editor label { display: grid; gap: var(--space-1); font-size: 12px; font-weight: 600; }
 .learning-hub-editor input, .learning-hub-editor textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); padding: var(--space-2); font: inherit; }
 .learning-hub-subject-details section { margin-top: var(--space-3); }
+.learning-hub-workspace { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(220px, 280px) minmax(0, 1fr); min-height: 0; border-top: 1px solid var(--border); }
+.learning-hub-outline { min-width: 0; display: grid; align-content: start; gap: 0; border-right: 1px solid var(--border); }
+.learning-hub-outline button { min-width: 0; display: grid; gap: var(--space-1); padding: var(--space-3); border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.learning-hub-outline button:hover, .learning-hub-outline button:focus-visible, .learning-hub-outline button.active { background: var(--accent-soft); color: var(--accent); }
+.learning-hub-outline button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.learning-hub-outline button small { color: var(--text-muted); }
+.learning-hub-selected { min-width: 0; padding: 0 var(--space-5); }
+.learning-hub-selected .learning-hub-card { max-width: 880px; margin: 0 auto; }
 .learning-candidate-list { display: grid; gap: var(--space-2); }
 .learning-candidate-row { display: flex; gap: var(--space-3); padding: var(--space-3); border-bottom: 1px solid var(--border); background: transparent; }
 .learning-candidate-row span { display: grid; gap: var(--space-1); }
@@ -63,4 +71,7 @@
   .learning-hub-filters { grid-template-columns: minmax(0, 1fr) minmax(0, .45fr) minmax(0, .45fr) auto; }
   .learning-hub-filters > * { min-width: 0; }
   .learning-hub-grid { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .learning-hub-workspace { grid-template-columns: 1fr; }
+  .learning-hub-outline { max-height: 240px; overflow: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+  .learning-hub-selected { padding: 0 var(--space-3); }
 }

@@ -125,7 +125,7 @@ interface EntryDetailProps {
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
-type SheetLayout = "single" | "columns";
+type SheetLayout = "auto" | "single" | "columns";
 type AnswerViewMode = "card" | "table";
 type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
 type FocusMode = "closed" | "expanded" | "mini";
@@ -1879,7 +1879,7 @@ export default function EntryDetail({
               onAnnotationsChange={onAnnotationsChange}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
-              sheetLayout={isSheet ? sheetLayout : "single"}
+              sheetLayout={isSheet && sheetLayout === "columns" ? "columns" : "single"}
               searchQuery={isSheet ? sheetSearch : ""}
               suspiciousSegments={suspiciousSegments}
               sourceEntry={entry}

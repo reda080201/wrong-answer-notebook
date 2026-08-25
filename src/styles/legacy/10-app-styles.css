@@ -193,6 +193,8 @@
   line-height: 1.5;
 }
 
+.mcp-port-field .provider-hint { margin-top: 8px; line-height: 1.5; }
+
 .mcp-pairing-controls {
   margin-top: 1rem;
   padding-top: 0.85rem;

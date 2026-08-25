@@ -1,0 +1,11 @@
+.exam-paper-compositor { display: grid; gap: 24px; justify-content: center; padding: 16px 0 40px; }
+.exam-paper-page { position: relative; box-sizing: border-box; width: min(210mm, calc(100vw - 32px)); min-height: 297mm; padding: 18mm 16mm 20mm; overflow: hidden; background: #fff; color: #171717; box-shadow: 0 2px 12px rgb(20 20 20 / 14%); }
+.exam-paper-page__columns { column-gap: 12mm; }
+.exam-paper-compositor--single .exam-paper-page__columns { columns: 1; }
+.exam-paper-compositor--columns .exam-paper-page__columns { columns: 2; }
+.exam-paper-page__item { break-inside: avoid; page-break-inside: avoid; margin-bottom: 8mm; }
+.exam-paper-page__item .structured-problem-sheet-question { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.exam-paper-page__number { position: absolute; right: 16mm; bottom: 8mm; color: #666; font-size: 11px; }
+.exam-paper-measure { position: absolute; visibility: hidden; pointer-events: none; z-index: -1; width: 178mm; padding: 0; }
+@media (max-width: 1439px) { .exam-paper-compositor[data-layout="auto"] .exam-paper-page__columns { columns: 1; } }
+@media print { .exam-paper-compositor { display: block; padding: 0; } .exam-paper-page { width: 210mm; min-height: 297mm; margin: 0; box-shadow: none; break-after: page; page-break-after: always; } .exam-paper-measure { display: none; } }

@@ -213,16 +213,13 @@ export default function AppSidebar({
       </div>}
 
       <div className="sidebar-footer">
-        {!collapsed && <button type="button" className="btn-new" onClick={openNew}>
-          + 새 {entryKindName(activeSection)} 추가
+        {!collapsed && <button type="button" className="btn-new" onClick={activeSection === "problem_sheet" ? openImport : openNew}>
+          + {activeSection === "problem_sheet" ? "시험지 가져오기" : `새 ${entryKindName(activeSection)} 추가`}
         </button>}
         {!collapsed && activeSection !== "wrong_answer" && (
           <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="추가 작업">
             {activeSection === "problem_sheet" && onOpenExamBuilder && (
               <button type="button" onClick={onOpenExamBuilder}>모의고사 만들기</button>
-            )}
-            {(activeSection === "problem_sheet" || activeSection === "concept") && (
-              <button type="button" onClick={openImport}>GPT 결과 가져오기</button>
             )}
             {activeSection === "lecture" && (
               <button type="button" onClick={openLearningImport}>HTML/MD/JSON 가져오기</button>

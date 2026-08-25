@@ -253,6 +253,23 @@ export interface FigureVerification {
   verifier?: string;
 }
 
+/** A crop remains an immutable reference to the imported source-page asset. */
+export interface QuestionSourceCrop {
+  questionNumber: string;
+  image: string;
+  sourcePageImage?: string;
+  cropRect?: NormalizedCrop;
+}
+
+/** Metadata for an explicitly retained app-rendered clean question image. */
+export interface QuestionRenderVerification {
+  questionNumber: string;
+  canonicalFingerprint: string;
+  status: "unverified" | "needs_review" | "verified";
+  verifiedAt?: string;
+  renderedImage?: string;
+}
+
 export type QuestionContentSegment =
   | { id: string; type: "text"; text: string }
   | { id: string; type: "condition"; label?: string; text: string }
@@ -358,6 +375,8 @@ export interface WrongAnswerEntry {
   question: string;
   questionImages: string[];
   sourcePageImages?: string[];
+  questionSourceCrops?: QuestionSourceCrop[];
+  questionRenderVerification?: QuestionRenderVerification[];
   problemSource?: ProblemSourceInfo;
   /** Optional library navigation metadata; legacy entries remain valid without it. */
   resourceClassification?: LearningResourceClassification;

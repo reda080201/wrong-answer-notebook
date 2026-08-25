@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { downloadMarkdown } from "../../../utils/exportEntry";
 import { buildGptExportPayload } from "../../../utils/gptExport";
@@ -11,6 +11,7 @@ import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
 import Dialog from "../../../shared/ui/Dialog";
+import { DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, renderQuestionNodeToPng, type QuestionPngOptions } from "../services/questionPng";
 
 interface ExportHubModalProps {
   entry: WrongAnswerEntry;
@@ -63,6 +64,11 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   const [view, setView] = useState<ExportHubView>(initialView);
   const [scope, setScope] = useState<ExportScopeMode>(initialScope ?? (selectedQuestionNumbers.length ? "selected" : "current"));
   const [manualRange, setManualRange] = useState(selectedQuestionNumbers.join(", "));
+  const [pngOptions, setPngOptions] = useState<QuestionPngOptions>(DEFAULT_QUESTION_PNG_OPTIONS);
+  const [pngPreviewUrl, setPngPreviewUrl] = useState<string | null>(null);
+  const [pngBlob, setPngBlob] = useState<Blob | null>(null);
+  const [pngError, setPngError] = useState<string | null>(null);
+  const [pngBusy, setPngBusy] = useState(false);
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
   const printModel = useMemo(() => buildExamPrintModel({ entry, questionNumbers: scopeResult.questionNumbers, preferences: examPrintPreferences, preset: examPrintPreferences.preset, scope }), [entry, scopeResult.questionNumbers, examPrintPreferences, scope]);
 
@@ -96,6 +102,18 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     downloadBlob(blob, `${entry.title.replace(/[^a-zA-Z0-9가-힣_-]/g, "_")}_문항.zip`);
     onToast?.("문항 ZIP을 저장했습니다.");
   };
+  useEffect(() => () => { if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl); }, [pngPreviewUrl]);
+  const renderQuestionPng = async () => {
+    const number = currentQuestionNumber ?? scopeResult.questionNumbers[0];
+    const target = number ? document.getElementById(`sheet-question-canonical-${number}`) : null;
+    if (!target) { setPngError("현재 문항의 정리본 surface를 찾지 못했습니다. 문항별 화면에서 다시 시도해 주세요."); return; }
+    setPngBusy(true); setPngError(null);
+    try {
+      const blob = await renderQuestionNodeToPng(target, pngOptions);
+      setPngBlob(blob);
+      setPngPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
+    } catch (error) { setPngError(error instanceof Error ? error.message : "문항 PNG를 만들지 못했습니다."); } finally { setPngBusy(false); }
+  };
   return (
     <Dialog open onClose={onClose} className="modal-card export-hub-modal" ariaLabel="공유·내보내기" backdropClassName="modal-backdrop export-hub-backdrop">
         <header className="modal-header">
@@ -122,6 +140,11 @@ export default function ExportHubModal(props: ExportHubModalProps) {
               <p>정답과 해설을 제외하고 문제 구조와 직접 연결 그림을 추출합니다.</p>
               <span>JSON · Markdown · 텍스트</span>
             </button>
+            <button type="button" className="export-hub-card" onClick={() => setView("question-png")}>
+              <strong>정리본 PNG 만들기</strong>
+              <p>현재 canonical 문항 surface만 렌더해 미리보기와 다운로드를 제공합니다.</p>
+              <span>PNG 미리보기 · 다운로드</span>
+            </button>
             <details className="export-hub-misc">
               <summary>기타 내보내기</summary>
               <div className="export-hub-misc-actions">
@@ -133,6 +156,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
           </div>
         ) : null}
         {view === "questions" ? <div className="export-hub-misc-actions"><p>현재 범위의 문제 본문·선지·그림만 내보냅니다. 정답, 해설, 답안, 메모는 제외됩니다.</p><button type="button" className="btn-secondary" onClick={() => void exportQuestionZip()}>문항 ZIP 다운로드</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("json")}>JSON 복사</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("markdown")}>Markdown 복사</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("text")}>텍스트 복사</button><button type="button" className="btn-secondary" onClick={() => setView("home")}>뒤로</button></div> : null}
+        {view === "question-png" ? <section className="export-question-png"><p>앱 도구 모음과 사용자 메모를 제외한 현재 문항만 PNG로 렌더합니다. 다운로드는 entry를 변경하지 않습니다.</p><label>배경<select value={pngOptions.background} onChange={(event) => setPngOptions((current) => ({ ...current, background: event.target.value as QuestionPngOptions["background"] }))}><option value="white">흰색</option><option value="transparent">투명</option></select></label><label>배율<select value={pngOptions.scale} onChange={(event) => setPngOptions((current) => ({ ...current, scale: Number(event.target.value) as QuestionPngOptions["scale"] }))}>{([1, 2, 3] as const).map((scale) => <option key={scale} value={scale}>{scale}x</option>)}</select></label><label>파일명<input value={pngOptions.filename} onChange={(event) => setPngOptions((current) => ({ ...current, filename: event.target.value }))} /></label><div className="dialog-actions"><button type="button" className="btn-primary" disabled={pngBusy} onClick={() => void renderQuestionPng()}>{pngBusy ? "렌더링 중..." : "미리보기 만들기"}</button><button type="button" className="btn-secondary" disabled={!pngBlob} onClick={() => pngBlob && downloadQuestionPng(pngBlob, pngOptions.filename)}>PNG 저장</button><button type="button" className="btn-secondary" onClick={() => setView("home")}>뒤로</button></div>{pngError && <p className="form-error" role="alert">{pngError}</p>}{pngPreviewUrl && <img className="export-question-png__preview" src={pngPreviewUrl} alt="정리본 문항 PNG 미리보기" />}</section> : null}
         {view === "exam-pdf" ? (
           <ExamPdfOptions
             preferences={examPrintPreferences}

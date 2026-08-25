@@ -1,13 +1,30 @@
 import type { ExportScopeMode } from "./settings";
 
-export type AiProviderType = "manual" | "gemini-flash-lite" | "gemini-3.5-flash";
+export type AiProviderType =
+  | "openai"
+  | "anthropic"
+  | "google-gemini"
+  | "openrouter"
+  | "groq"
+  | "openai-compatible"
+  /** Legacy values are accepted only while loading older settings. */
+  | "manual"
+  | "gemini-flash-lite"
+  | "gemini-3.5-flash";
 
 export type AiProviderKeySource = "env" | "tauri-settings";
 
 export interface AiProviderSettings {
+  /** Canonical provider identifier. Optional only for legacy callers. */
+  provider?: Exclude<AiProviderType, "manual" | "gemini-flash-lite" | "gemini-3.5-flash">;
+  /** Free-form model name. */
+  model?: string;
+  /** Optional OpenAI-compatible or provider-specific base URL. */
+  baseUrl?: string;
+  /** @deprecated Use provider. Kept for persisted-data compatibility. */
   type: AiProviderType;
   enabled: boolean;
-  keySource: AiProviderKeySource;
+  keySource: AiProviderKeySource | "keyring";
   hasStoredKey: boolean;
 }
 

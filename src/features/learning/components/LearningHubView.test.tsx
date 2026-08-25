@@ -14,7 +14,7 @@ describe("LearningHubView", () => {
     const onOpenSource = vi.fn();
     render(<LearningHubView entries={[entry]} onOpenSource={onOpenSource} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     expect(screen.getByText("과목별 학습 지식 허브")).toBeInTheDocument();
-    expect(screen.getByText("합성함수 미분")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /합성함수 미분/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "자세히" }));
     expect(screen.getByText("언제 사용하는가")).toBeInTheDocument();
     expect(screen.getByText("안쪽 미분 누락")).toBeInTheDocument();

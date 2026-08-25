@@ -112,7 +112,7 @@ test.describe("runtime/UI convergence", () => {
 
     const sidebarFooter = page.locator(".sidebar-footer");
     await expect(sidebarFooter).toBeInViewport();
-    await expect(page.getByRole("button", { name: /새 시험지 추가/ })).toBeInViewport();
+    await expect(page.getByRole("button", { name: /시험지 가져오기/ })).toBeInViewport();
     await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
   });
 

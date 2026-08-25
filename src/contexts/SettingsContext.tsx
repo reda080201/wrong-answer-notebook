@@ -64,6 +64,7 @@ export interface SettingsContextValue {
     updateConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<void>;
     storeKey: () => Promise<void>;
     removeKey: () => Promise<void>;
+    testConnection: () => Promise<void>;
   };
 
   // ============ View Preferences Controller ============
@@ -250,6 +251,7 @@ export function SettingsProvider({
         updateConfig: aiProvider.updateAiProviderConfig,
         storeKey: aiProvider.storeAiProviderKey,
         removeKey: aiProvider.removeAiProviderKey,
+        testConnection: aiProvider.testAiProvider,
       },
 
       // View Preferences Controller

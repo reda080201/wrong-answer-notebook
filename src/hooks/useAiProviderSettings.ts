@@ -5,6 +5,7 @@ import {
   getAiProviderStatus,
   saveAiProviderConfig,
   saveAiProviderKey,
+  testAiProviderConnection,
 } from "../api";
 import type { AiProviderSettings, AiProviderStatus } from "../types";
 
@@ -140,6 +141,22 @@ export function useAiProviderSettings({
     } finally { if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false); }
   };
 
+  const testAiProvider = async () => {
+    setAiProviderStatusLoading(true);
+    setAiProviderStatusError(null);
+    try {
+      const status = await testAiProviderConnection();
+      setAiProviderStatus(status);
+      setSettingsMessage(status.available ? "AI provider 연결 테스트에 성공했습니다." : status.message ?? "AI provider를 사용할 수 없습니다.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "AI provider 연결 테스트에 실패했습니다.";
+      setAiProviderStatusError(message);
+      setSettingsMessage(message);
+    } finally {
+      setAiProviderStatusLoading(false);
+    }
+  };
+
   return {
     aiProviderStatus,
     aiProviderStatusLoading,
@@ -150,6 +167,7 @@ export function useAiProviderSettings({
     updateAiProviderConfig,
     storeAiProviderKey,
     removeAiProviderKey,
+    testAiProvider,
     isAiProviderDesktopAvailable: isTauri(),
   };
 }

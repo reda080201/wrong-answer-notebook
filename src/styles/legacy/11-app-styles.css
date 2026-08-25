@@ -1,13 +1,14 @@
 /* Extracted from App.css: balanced chunk 12. Keep import order stable. */
 
 .exam-session-overlay {
-  position: absolute;
-  inset: 0.75rem;
+  position: fixed;
+  inset: 0;
+  z-index: 90;
   overflow: auto;
   padding: 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: 0;
 }
 
 .exam-session-save-error {
@@ -96,6 +97,8 @@
   background: var(--control-bg);
   border: 1px solid var(--control-border);
 }
+.chatgpt-help-prompt { display: grid; gap: 8px; margin-top: 12px; color: var(--text-muted); font-size: 13px; }
+.chatgpt-help-prompt textarea { width: 100%; min-height: 180px; resize: vertical; font: inherit; }
 
 .chatgpt-connection-status {
   display: grid;
@@ -218,6 +221,9 @@
   font-size: 0.86rem;
   color: var(--accent, #2563eb);
 }
+.export-question-png { display: grid; gap: 12px; max-width: 880px; }
+.export-question-png > label { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: 12px; }
+.export-question-png__preview { display: block; max-width: 100%; max-height: 58dvh; margin: 0 auto; border: 1px solid var(--border); background: #fff; object-fit: contain; }
 
 .exam-builder-modal,
 .generated-exams-modal { width: min(58rem, calc(100vw - 2rem)); max-height: min(90vh, 52rem); overflow: auto; }

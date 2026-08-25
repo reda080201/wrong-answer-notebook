@@ -454,6 +454,7 @@ describe("EntryDetail sheet layout", () => {
     );
 
     const viewport = screen.getByLabelText("문제지 확대 축소 영역");
+    fireEvent.click(screen.getByRole("button", { name: "줌 조절 열기" }));
     fireEvent.click(screen.getByRole("button", { name: "초기화" }));
     fireEvent.wheel(viewport, { ctrlKey: true, deltaY: -120 });
     expect(screen.getByText("110%")).toBeInTheDocument();

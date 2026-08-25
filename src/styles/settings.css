@@ -52,7 +52,8 @@
 }
 
 .settings-modal-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr;
   min-height: 0;
   flex-direction: column;
   gap: var(--space-1);
@@ -60,6 +61,14 @@
   padding: var(--space-3);
   border-right: 1px solid var(--border);
   background: var(--surface-soft);
+}
+
+/* SettingsTabList owns a nested navigation node; target that real DOM shape
+   so a consumer-provided wrapper cannot accidentally turn this into columns. */
+.settings-modal-tabs > [aria-label="설정 섹션"] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
 }
 
 .settings-modal-tabs button {
@@ -89,6 +98,7 @@
 @media (max-width: 820px) {
   .settings-modal { width: 100vw; height: 100dvh; }
   .settings-modal-body { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
-  .settings-modal-tabs { flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-modal-tabs { display: flex; flex-direction: row; border-right: 0; border-bottom: 1px solid var(--border); }
+  .settings-modal-tabs > [aria-label="설정 섹션"] { display: flex; gap: var(--space-1); }
   .settings-modal-tabs button { flex: 0 0 auto; }
 }

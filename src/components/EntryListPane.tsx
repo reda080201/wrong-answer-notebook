@@ -150,34 +150,16 @@ export default function EntryListPane({
   const renderEntryCard = (entry: WrongAnswerEntry) => {
     const resourceStatus = entry.entryKind === "problem_sheet" ? getSheetResourceStatus(entry) : null;
     return (
-      <div
+      <article
         key={entry.id}
         className={`entry-card ${selectedId === entry.id ? "selected" : ""} ${entry.mastered ? "mastered" : ""}`}
-        onClick={() => selectEntry(entry.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
-            event.preventDefault();
-            selectEntry(entry.id);
-          }
-        }}
       >
+        <button type="button" className="entry-card__main" onClick={() => selectEntry(entry.id)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); selectEntry(entry.id); } }} aria-current={selectedId === entry.id ? "page" : undefined}>
         <div className="entry-card-header">
           {entry.entryKind === "problem_sheet" && (
-            <Menu label="⋮" triggerAriaLabel={`${getEntryTitle(entry)} 추가 자료 및 관리`} stopPropagation>
-              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_key")}>답지만 추가</button>
-              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_and_solution")}>답지와 해설 추가</button>
-              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "solution")}>해설만 추가</button>
-              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "source_pages")}>원본 페이지 추가</button>
-              <button type="button" onClick={() => onAddSupplemental?.(entry.id, "correction")}>정오표·보충자료 추가</button>
-              <button type="button" onClick={() => onLinkLearningEntry?.(entry.id)}>특강·개념자료 연결</button>
-              <button type="button" onClick={() => onManageSupplemental?.(entry.id)}>추가 자료 관리</button>
-              <button type="button" onClick={() => onEditEntry?.(entry.id)}>문제지 수정</button>
-              <button type="button" onClick={() => onDeleteEntry?.(entry.id)}>문제지 삭제</button>
-            </Menu>
+            <span className="entry-card-subject">{entry.subject}</span>
           )}
-          <span className="entry-card-subject">{entry.subject}</span>
+          {entry.entryKind !== "problem_sheet" && <span className="entry-card-subject">{entry.subject}</span>}
           <span className="entry-mini-badge">{entryKindName(entry.entryKind)}</span>
           {entry.mastered ? <span className="entry-mini-badge">복습 완료</span> : entry.difficult ? <span className="entry-mini-badge">어려움</span> : null}
         </div>
@@ -190,7 +172,11 @@ export default function EntryListPane({
             </span>
           )}
         </div>
-      </div>
+        </button>
+        {entry.entryKind === "problem_sheet" && <div className="entry-card__actions"><Menu label="⋮" triggerAriaLabel={`${getEntryTitle(entry)} 추가 자료 및 관리`}>
+          <button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_key")}>답지만 추가</button><button type="button" onClick={() => onAddSupplemental?.(entry.id, "answer_and_solution")}>답지와 해설 추가</button><button type="button" onClick={() => onAddSupplemental?.(entry.id, "solution")}>해설만 추가</button><button type="button" onClick={() => onAddSupplemental?.(entry.id, "source_pages")}>원본 페이지 추가</button><button type="button" onClick={() => onAddSupplemental?.(entry.id, "correction")}>정오표·보충자료 추가</button><button type="button" onClick={() => onLinkLearningEntry?.(entry.id)}>특강·개념자료 연결</button><button type="button" onClick={() => onManageSupplemental?.(entry.id)}>추가 자료 관리</button><button type="button" onClick={() => onEditEntry?.(entry.id)}>문제지 수정</button><button type="button" onClick={() => onDeleteEntry?.(entry.id)}>문제지 삭제</button>
+        </Menu></div>}
+      </article>
     );
   };
   return (

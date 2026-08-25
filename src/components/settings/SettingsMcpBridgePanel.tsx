@@ -45,7 +45,7 @@ export default function SettingsMcpBridgePanel({
         <input type="checkbox" checked={settings.enabled} disabled={controlsDisabled} onChange={(event) => onToggleEnabled(event.target.checked)} />
         MCP 브릿지 사용 {controlsDisabled ? "(데스크톱 앱에서 사용 가능)" : "(기본: 꺼짐)"}
       </label>
-      <div className="form-field">
+      <div className="form-field mcp-port-field">
         <label htmlFor="mcp-bridge-port">포트</label>
         <div className="ai-provider-key-row">
           <input id="mcp-bridge-port" type="number" min={1024} max={65535} value={portInput} disabled={controlsDisabled || !settings.enabled} onChange={(event) => onPortInputChange?.(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void onApplyPort?.(); } }} />

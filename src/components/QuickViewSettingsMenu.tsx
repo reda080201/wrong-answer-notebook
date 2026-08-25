@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-export type QuickViewSheetLayout = "single" | "columns";
+export type QuickViewSheetLayout = "auto" | "single" | "columns";
 export type QuickViewFontSize = "normal" | "large" | "xlarge";
 
 interface QuickViewSettingsMenuProps {
@@ -62,6 +62,7 @@ export default function QuickViewSettingsMenu({
             <strong>화면 보기</strong>
             {layout && onLayoutChange && (
               <div className="quick-view-settings__choices" aria-label="문제지 배치">
+                <button type="button" className={layout === "auto" ? "active" : ""} onClick={() => onLayoutChange("auto")}>자동</button>
                 <button type="button" className={layout === "single" ? "active" : ""} onClick={() => onLayoutChange("single")}>한 단</button>
                 <button type="button" className={layout === "columns" ? "active" : ""} onClick={() => onLayoutChange("columns")}>2단</button>
               </div>

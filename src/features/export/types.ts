@@ -6,7 +6,7 @@ import type {
   SheetFigureItem,
 } from "../../types";
 
-export type ExportHubView = "home" | "exam-pdf" | "exam-preview" | "chatgpt-share" | "questions";
+export type ExportHubView = "home" | "exam-pdf" | "exam-preview" | "chatgpt-share" | "questions" | "question-png";
 
 export interface ExamPrintQuestionModel {
   questionNumber: string;
