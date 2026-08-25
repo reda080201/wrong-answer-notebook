@@ -19,6 +19,9 @@ test.describe("synthetic real-exam lifecycle", () => {
     await expect(page.getByRole("region", { name: "실전 모의고사" })).toBeVisible();
     await expect(page.getByRole("heading", { name: syntheticLifecycleEntry.title })).toBeVisible();
     await expect(page.getByRole("complementary", { name: "답안지" })).toBeVisible();
+    await expect(page.locator(".real-exam-paper .real-exam-question")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "문제 2", exact: true })).toHaveCount(0);
+    await expect(page.locator(".exam-session-close")).toHaveAttribute("aria-label", "시험 닫기");
 
     await page
       .getByRole("group", { name: "1번 선택지", exact: true })
@@ -53,7 +56,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     await page.screenshot({ path: testInfo.outputPath("real-exam-resumed-1100x750.png"), fullPage: true });
   });
 
-  for (const viewport of [{ width: 1280, height: 720 }, { width: 1536, height: 864 }]) {
+  for (const viewport of [{ width: 1280, height: 720 }, { width: 1366, height: 768 }, { width: 1536, height: 864 }, { width: 1920, height: 1080 }]) {
     test(`real exam surface has no horizontal overflow at ${viewport.width}x${viewport.height}`, async ({ page }, testInfo) => {
       await page.setViewportSize(viewport);
       await seedBrowserStorage(page);
