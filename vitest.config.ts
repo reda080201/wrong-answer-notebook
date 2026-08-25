@@ -14,5 +14,6 @@ export default defineConfig({
     minWorkers: 1,
     fileParallelism: false,
     maxWorkers: 1,
+    singleThread: true,
   },
 });
