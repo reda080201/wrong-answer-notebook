@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -430,6 +430,21 @@ function AppContent() {
   const selectedRealSession = selected
     ? savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode === "real")
     : undefined;
+  const openNewRealExamDialog = () => {
+    const defaultMinutes = settings.examPreferences.defaultRealExamMinutes ?? 50;
+    if ([30, 50, 80, 100].includes(defaultMinutes)) {
+      setRealExamTimePreset(String(defaultMinutes) as "30" | "50" | "80" | "100");
+      setRealExamCustomMinutes(String(defaultMinutes));
+    } else {
+      setRealExamTimePreset("custom");
+      setRealExamCustomMinutes(String(defaultMinutes));
+    }
+    setRealExamMinutes(defaultMinutes);
+    setRealExamShowTimer(settings.examPreferences.showTimer);
+    setRealExamAnswerSheetOpen(settings.examPreferences.realExamAnswerSheetOpen ?? true);
+    setRealExamAnswerSheetLayout(settings.examPreferences.defaultAnswerSheetLayout ?? "auto");
+    setRealExamStartEntry(selected);
+  };
   const availableUpdate = updater.state.status === "available" ? updater.state : null;
   const openConceptLearningBlock = (entryId: string, blockId: string) => {
     void (async () => {
@@ -628,11 +643,7 @@ function AppContent() {
                 openExamSession(selected, { mode: "practice", resumable: selectedPracticeSession });
               } : undefined}
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
-                setRealExamStartEntry(selected);
-                setRealExamMinutes(settings.examPreferences.defaultRealExamMinutes ?? 50);
-                setRealExamShowTimer(settings.examPreferences.showTimer);
-                setRealExamAnswerSheetOpen(settings.examPreferences.realExamAnswerSheetOpen ?? true);
-                setRealExamAnswerSheetLayout(settings.examPreferences.defaultAnswerSheetLayout ?? "auto");
+                openNewRealExamDialog();
               } : undefined}
               startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
               startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
@@ -865,8 +876,9 @@ function AppContent() {
             )}
             <label className="form-field">
               제한 시간
-              <select value={selectedRealSession?.timeLimitMinutes ?? (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
+              <select value={selectedRealSession ? String(selectedRealSession.timeLimitMinutes ?? 50) : (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
                 {["30", "50", "80", "100"].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+                {selectedRealSession && ![30, 50, 80, 100].includes(selectedRealSession.timeLimitMinutes ?? 50) && <option value={String(selectedRealSession.timeLimitMinutes)}>{selectedRealSession.timeLimitMinutes}분 (기존 설정)</option>}
                 <option value="custom">사용자 지정</option>
               </select>
               {!selectedRealSession && realExamTimePreset === "custom" && <><input aria-label="사용자 지정 제한 시간" type="number" min="1" max="720" step="1" value={realExamCustomMinutes} onChange={(event) => setRealExamCustomMinutes(event.target.value)} />{customTimeError && <span className="form-error" role="alert">{customTimeError}</span>}</>}

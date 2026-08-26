@@ -95,7 +95,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   }, [updateSession]);
 
   const submit = useCallback(async () => {
-    if (submittingRef.current || session.status === "submitted") return;
+    if (submittingRef.current || sessionRef.current.status === "submitted") return;
     submittingRef.current = true;
     setSubmitting(true);
     onSubmittingChange?.(true);

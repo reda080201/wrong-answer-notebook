@@ -25,7 +25,7 @@ export const builtInPromptTemplates: PromptTemplate[] = [
     "entryKind": "problem_sheet",
     "title": "시험지 제목",
     "subject": "수학",
-    "question": "...",
+    "questions": [{ "questionNumber": "1", "questionText": "...", "contentSegments": [], "choices": [], "figures": [], "questionSourceCrops": [] }],
     "answerKey": [],
     "figures": [],
     "learningBlocks": [],
@@ -52,7 +52,7 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 - original.crop은 정규화 좌표 {x, y, width, height}이며 x/y는 0 이상 1 이하, width/height는 0 초과 1 이하, x+width와 y+height는 1 이하여야 한다. 범위를 벗어나면 clamp하지 말고 needsReview=true와 구체적인 검증 경고를 남겨라.
 - questionSourceCrops[].image와 figures[].original.image/cleaned.image는 원본·정리본 source asset 참조다. 앱이 canonical DOM에서 만든 renderedQuestionPng는 파생 artifact이며 source crop으로 기록하거나 원본을 덮어쓰지 마라.
  - 파일명은 실제 ZIP 파일명과 대소문자까지 일치시킨다. 예: graph_1.png. original.image와 cleaned.image가 있으면 둘 다 ZIP에 포함한다.
-- 문제 번호가 불확실하거나 검증이 실패하면 questionNumber를 비우고 needsReview=true로 표시한다.
+- 문제 번호가 불확실하거나 검증에 실패해도 번호를 추측하거나 빈 번호의 import-ready canonical 문항을 만들지 마라. 해당 불확실성은 audit와 review 데이터에 보존한다.
 - 손글씨와 학생 풀이 흔적은 문제·답안에 넣지 말고 rejectedNotes에 기록한다.
 - audit에는 예상/감지/누락/불확실 번호와 needsReviewCount를 기록한다.
 - semanticSpec은 function_graph, coordinate_geometry, plane_geometry, solid_geometry, probability_tree, table, venn_diagram, number_line, sequence_diagram, custom_math_diagram 중 하나를 사용한다.
@@ -108,7 +108,7 @@ figure 예시:
 - 오답 원인은 추측이 약하면 unknown만 쓰거나 causes를 비워둬.
 - 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.
 - 근거가 부족하면 difficulty 필드를 생략해줘. 모든 문항에 같은 difficulty를 반복해서 채우지 마.
-- 답안 번호가 불확실하면 questionNumber를 추측하지 말고 빈 문자열로 두고 needsReview를 true로 표시해줘.
+- 답안 번호가 불확실하면 questionNumber를 추측하지 말고 import-ready canonical 문항을 만들지 말며, 불확실성을 audit와 review 데이터에 보존해줘.
 - 모르는 값은 추측하지 말고 빈 문자열이나 빈 배열로 둬.
 - tags 필드는 만들지 마.
 - 최상위 difficulty 필드는 만들지 마.
