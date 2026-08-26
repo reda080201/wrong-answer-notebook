@@ -10,6 +10,7 @@ import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
 import Dialog from "../../../shared/ui/Dialog";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 import { parseChoice } from "../../../utils/choice";
+export { parseChoice } from "../../../utils/choice";
 
 interface ExamSessionViewProps {
   session: ExamSession;
