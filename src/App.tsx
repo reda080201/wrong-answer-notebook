@@ -17,6 +17,7 @@ import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
+import { collectAllImageReferences } from "./utils/entry";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
@@ -124,6 +125,13 @@ function AppContent() {
     dismissedUpdateVersion, setDismissedUpdateVersion,
     controller: modalController,
   } = useAppModalController();
+  const [realExamTimePreset, setRealExamTimePreset] = useState<"30" | "50" | "80" | "100" | "custom">("50");
+  const [realExamCustomMinutes, setRealExamCustomMinutes] = useState("50");
+  const parsedCustomMinutes = Number(realExamCustomMinutes);
+  const customTimeError = realExamTimePreset === "custom" && (!Number.isInteger(parsedCustomMinutes) || parsedCustomMinutes < 1 || parsedCustomMinutes > 720)
+    ? "1~720분 사이의 정수를 입력하세요."
+    : null;
+  const selectedRealMinutes = realExamTimePreset === "custom" ? parsedCustomMinutes : Number(realExamTimePreset);
   const shell = useUiShellPreferences();
   const {
     registerWorkspaceDraftFlush,
@@ -707,14 +715,12 @@ function AppContent() {
                   throw error;
                 }
                 if (previousImage && previousImage !== savedImage) {
-                  const referencedBySource = Boolean(
-                    selected.sourcePageImages?.includes(previousImage)
-                    || selected.questionSourceCrops?.some((crop) => crop.image === previousImage || crop.sourcePageImage === previousImage)
-                    || selected.figures?.some((figure) => figure.image === previousImage || figure.original?.image === previousImage || figure.original?.sourcePageImage === previousImage || figure.cleaned?.image === previousImage)
-                    || selected.questionRenderVerification?.some((item) => item.renderedImage === previousImage && !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion))
-                    || entries.some((entry) => entry.id !== selected.id && entry.questionRenderVerification?.some((item) => item.renderedImage === previousImage)),
-                  );
-                  if (!referencedBySource) await deleteImage(previousImage).catch(() => undefined);
+                  const nextVerification = [
+                    ...(selected.questionRenderVerification ?? []).filter((item) => !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)),
+                    { questionNumber, canonicalFingerprint, scope, rendererVersion, status: "unverified" as const, renderedImage: savedImage },
+                  ];
+                  const nextEntries = entries.map((entry) => entry.id === selected.id ? { ...entry, questionRenderVerification: nextVerification } : entry);
+                  if ((collectAllImageReferences(nextEntries).get(previousImage) ?? 0) === 0) await deleteImage(previousImage).catch(() => undefined);
                 }
               }}
               onUpdateQuestionRenderVerification={async ({ questionNumber, scope, rendererVersion, status }) => {
@@ -859,9 +865,11 @@ function AppContent() {
             )}
             <label className="form-field">
               제한 시간
-              <select value={selectedRealSession?.timeLimitMinutes ?? realExamMinutes} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamMinutes(Number(event.target.value))}>
-                {[30, 50, 80, 100].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+              <select value={selectedRealSession?.timeLimitMinutes ?? (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
+                {["30", "50", "80", "100"].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+                <option value="custom">사용자 지정</option>
               </select>
+              {!selectedRealSession && realExamTimePreset === "custom" && <><input aria-label="사용자 지정 제한 시간" type="number" min="1" max="720" step="1" value={realExamCustomMinutes} onChange={(event) => setRealExamCustomMinutes(event.target.value)} />{customTimeError && <span className="form-error" role="alert">{customTimeError}</span>}</>}
             </label>
             <label className="form-field">
               답안지
@@ -880,7 +888,8 @@ function AppContent() {
                 onClick={() => {
                   const entry = realExamStartEntry;
                   setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? realExamMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
+                  if (!selectedRealSession && customTimeError) return;
+                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? selectedRealMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
                 }}
               >
                 {selectedRealSession ? "이어서 풀기" : "실전 모드 시작"}

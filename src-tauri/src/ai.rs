@@ -304,11 +304,18 @@ fn save_stored_ai_provider_key(
 }
 
 fn clear_stored_ai_provider_key(
-    _app: &tauri::AppHandle,
+    app: &tauri::AppHandle,
     provider: AiProviderType,
 ) -> Result<(), String> {
     match ai_provider_key_entry(provider)?.delete_credential() {
-        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Ok(()) | Err(keyring::Error::NoEntry) => {
+            // The legacy file is a Gemini-only credential. Remove it only
+            // after the corresponding Gemini keyring operation completed.
+            if is_legacy_gemini_provider(provider) {
+                remove_legacy_ai_provider_key(app);
+            }
+            Ok(())
+        }
         Err(error) => Err(format!(
             "저장된 AI 제공자 API key를 삭제하지 못했습니다: {error}"
         )),

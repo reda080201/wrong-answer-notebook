@@ -9,6 +9,19 @@ describe("MathText", () => {
     expect(container.querySelector(".math-fragment--display")).toBeInTheDocument();
   });
 
+  it("recognizes escaped-parenthesis and escaped-bracket closers", () => {
+    const { container } = render(<MathText text={String.raw`앞 \(x^2+1\) 뒤 \[y^2\] 끝`} />);
+    expect(container.querySelectorAll(".katex")).toHaveLength(2);
+    expect(screen.getByText("앞", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("끝", { exact: false })).toBeInTheDocument();
+  });
+
+  it("keeps an escaped dollar as ordinary text", () => {
+    const { container } = render(<MathText text={String.raw`가격은 \$5이고 $x+1$이다.`} />);
+    expect(container.querySelectorAll(".katex")).toHaveLength(1);
+    expect(screen.getByText(/가격은/)).toBeInTheDocument();
+  });
+
   it("keeps surrounding text and marks invalid LaTeX without exposing raw source", () => {
     render(<MathText text={"잘못된 $\\notacommand{$ 수식"} />);
     expect(screen.getByText("수식 형식 확인 필요")).toBeInTheDocument();

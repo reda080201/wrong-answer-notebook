@@ -10,7 +10,7 @@ import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
 import { sanitizeExamQuestionDomId } from "../services/examDom";
-import { parseChoice } from "./ExamSessionView";
+import { parseChoice } from "../../../utils/choice";
 import "./RealExamSessionView.css";
 
 interface RealExamSessionViewProps {
@@ -40,6 +40,8 @@ function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
 }
 
 export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false }: RealExamSessionViewProps) {
+  const sessionRef = useRef(session);
+  useEffect(() => { sessionRef.current = session; }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -74,16 +76,23 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     setAnswerSheetOpen(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
   }, [examPreferences?.realExamAnswerSheetOpen, session.id, session.answerSheetOpen]);
 
-  const changeResponse = (questionNumber: string, patch: { response?: string; markedForReview?: boolean }) => {
-    const current = responses.get(questionNumber);
-    onChange(updateExamResponse(session, {
+  const updateSession = useCallback((recipe: (current: ExamSession) => ExamSession) => {
+    const next = recipe(sessionRef.current);
+    sessionRef.current = next;
+    onChange(next);
+  }, [onChange]);
+
+  const changeResponse = useCallback((questionNumber: string, patch: { response?: string; markedForReview?: boolean }) => {
+    const currentSession = sessionRef.current;
+    const current = currentSession.responses.find((item) => item.questionNumber === questionNumber);
+    updateSession((latest) => updateExamResponse(latest, {
       questionNumber,
       response: patch.response ?? current?.response ?? "",
       scratchNote: current?.scratchNote ?? "",
       markedForReview: patch.markedForReview ?? current?.markedForReview ?? false,
       updatedAt: new Date().toISOString(),
     }));
-  };
+  }, [updateSession]);
 
   const submit = useCallback(async () => {
     if (submittingRef.current || session.status === "submitted") return;
@@ -91,14 +100,14 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     setSubmitting(true);
     onSubmittingChange?.(true);
     try {
-      await onSubmit(session);
+      await onSubmit(sessionRef.current);
       setSubmitOpen(false);
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
       onSubmittingChange?.(false);
     }
-  }, [onSubmit, onSubmittingChange, session]);
+  }, [onSubmit, onSubmittingChange]);
 
   useEffect(() => {
     if (session.status !== "in_progress" || !session.deadlineAt) return;
@@ -120,13 +129,14 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     })
     : session.questions;
 
-  const navigateToQuestion = (index: number) => {
-    if (index < 0 || index >= session.questions.length) return;
-    const questionNumber = session.questions[index]?.questionNumber;
+  const navigateToQuestion = useCallback((index: number) => {
+    const currentSession = sessionRef.current;
+    if (index < 0 || index >= currentSession.questions.length) return;
+    const questionNumber = currentSession.questions[index]?.questionNumber;
     if (!questionNumber) return;
-    onChange({ ...session, currentQuestionIndex: index });
+    updateSession((latest) => ({ ...latest, currentQuestionIndex: index }));
     document.getElementById(sanitizeExamQuestionDomId(questionNumber))?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  }, [updateSession]);
 
   useEffect(() => {
     if (session.status !== "in_progress") return undefined;
@@ -142,12 +152,12 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [safeCurrentQuestionIndex, session.status, session.questions]);
+  }, [navigateToQuestion, safeCurrentQuestionIndex, session.status]);
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;
     setAnswerSheetOpen(next);
-    onChange({ ...session, answerSheetOpen: next });
+    updateSession((latest) => ({ ...latest, answerSheetOpen: next }));
   };
 
   const answerSheetControl = (question: ExamSession["questions"][number]) => {

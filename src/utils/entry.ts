@@ -1059,7 +1059,7 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromSupplementalResources = (entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   const fromQuestionVisuals = [
-    ...(entry.questionSourceCrops ?? []).map((crop) => crop.image),
+    ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]).filter((image): image is string => Boolean(image)),
     ...(entry.questionRenderVerification ?? []).map((record) => record.renderedImage).filter((image): image is string => Boolean(image)),
   ];
   return [
@@ -1074,6 +1074,15 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
       ...(entry.images ?? []),
     ]),
   ];
+}
+
+/** Counts every image reference before a derived asset is removed. */
+export function collectAllImageReferences(entries: WrongAnswerEntry[]): Map<string, number> {
+  const references = new Map<string, number>();
+  for (const entry of entries) {
+    for (const filename of getAllImageFilenames(entry)) references.set(filename, (references.get(filename) ?? 0) + 1);
+  }
+  return references;
 }
 
 export function hasEntryContent(

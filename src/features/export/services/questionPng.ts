@@ -3,6 +3,7 @@ import type { QuestionContentSegment, SheetFigureItem } from "../../../types";
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { tokenizeMathForDisplay } from "../../../components/MathText";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
+import { parseChoice } from "../../../utils/choice";
 
 export type QuestionPngScope = "question" | "question_answer" | "question_answer_explanation";
 
@@ -22,7 +23,41 @@ export interface QuestionPngCompositionContent {
 }
 
 export const DEFAULT_QUESTION_PNG_OPTIONS: QuestionPngOptions = { scope: "question", background: "white", scale: 2, filename: "question.png" };
-export const QUESTION_PNG_RENDERER_VERSION = "question-render-v1";
+export const QUESTION_PNG_RENDERER_VERSION = "question-render-v2";
+
+export interface QuestionPngPreviewSignature {
+  questionNumber: string;
+  scope: QuestionPngScope;
+  rendererVersion: string;
+  fingerprint: string;
+}
+
+export interface QuestionExportComposition {
+  segments: QuestionContentSegment[];
+  placementWarnings: string[];
+}
+
+export function buildQuestionExportComposition(question: ResolvedEntryQuestion): QuestionExportComposition {
+  const segments = [...(question.contentSegments ?? [])];
+  const warnings: string[] = [];
+  const values = new Set(segments.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text.trim()] : segment.type === "equation" ? [segment.latex.trim()] : []));
+  if (!segments.some((segment) => segment.type === "text" && segment.text.trim()) && question.questionText.trim()) {
+    segments.unshift({ id: "export-question-text", type: "text", text: question.questionText });
+  }
+  for (const [index, condition] of question.conditions.entries()) {
+    if (condition.trim() && !values.has(condition.trim())) segments.push({ id: `export-condition-${index + 1}`, type: "condition", label: "조건", text: condition });
+  }
+  for (const [index, equation] of question.equations.entries()) {
+    if (equation.trim() && !values.has(equation.trim())) segments.push({ id: `export-equation-${index + 1}`, type: "equation", latex: equation, display: true });
+  }
+  const linked = new Set(segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "figure" }> => segment.type === "figure").map((segment) => segment.figureId));
+  for (const figureId of question.figureIds) {
+    if (linked.has(figureId)) continue;
+    segments.push({ id: `export-figure-${figureId}`, type: "figure", figureId });
+    warnings.push(`그림 ${figureId}의 저장 위치가 없어 export 끝에 배치했습니다.`);
+  }
+  return { segments, placementWarnings: warnings };
+}
 
 export function canonicalQuestionFingerprint(value: string): string {
   let hash = 2166136261;
@@ -56,7 +91,7 @@ function appendMathText(target: HTMLElement, value: string) {
     if (segment.type === "text") { target.append(document.createTextNode(segment.value)); continue; }
     if (segment.type === "invalid-math") { const invalid = createElement("span", "question-export-surface__invalid-math"); invalid.textContent = "수식 형식 확인 필요"; target.append(invalid); continue; }
     const math = createElement("span", segment.displayMode ? "question-export-surface__math question-export-surface__math--display" : "question-export-surface__math");
-    try { math.innerHTML = katex.renderToString(segment.expression, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
+    try { math.innerHTML = katex.renderToString(segment.expression, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "html" }); }
     catch { math.textContent = "수식 형식 확인 필요"; math.className = "question-export-surface__invalid-math"; }
     target.append(math);
   }
@@ -80,6 +115,13 @@ async function waitForImages(surface: HTMLElement) {
   await document.fonts?.ready;
 }
 
+async function buildExportStyle(): Promise<string> {
+  // Keep export styling independent from the live theme and DOM. KaTeX's HTML
+  // output is intentionally paired with the small subset of layout rules it
+  // needs for SVG foreignObject rasterization.
+  return `.question-export-surface{box-sizing:border-box;white-space:normal}.question-export-surface .katex{font:normal 1.1em KaTeX_Main,Times New Roman,serif;line-height:1.2;text-indent:0}.question-export-surface .katex-display{display:block;margin:1em 0;text-align:center}.question-export-surface .katex-html{display:inline-block}.question-export-surface__choice{display:flex;gap:12px;align-items:flex-start}.question-export-surface__choice-marker{flex:0 0 auto;font-weight:600}.question-export-surface__choice-content{min-width:0}.question-export-surface__invalid-math{color:#9f1239;font-weight:600}.question-export-surface__math{display:inline-block}.question-export-surface__math--display{display:block;margin:12px 0;text-align:center}`;
+}
+
 /** Builds a deterministic canonical export surface, independent from live study UI. */
 export async function renderCanonicalQuestionToPng(content: QuestionPngCompositionContent, options: QuestionPngOptions): Promise<Blob> {
   const figures = new Map(content.figures.map((figure) => [figure.id, figure]));
@@ -90,9 +132,14 @@ export async function renderCanonicalQuestionToPng(content: QuestionPngCompositi
   const surface = createElement("article", "question-export-surface");
   surface.style.cssText = `position:fixed;left:-100000px;top:0;width:900px;padding:48px;box-sizing:border-box;background:${options.background === "white" ? "#fff" : "transparent"};color:#111827;font:400 18px/1.65 Pretendard,Arial,sans-serif;`;
   const heading = createElement("header", "question-export-surface__header"); heading.textContent = `${content.question.questionNumber}번`; surface.append(heading);
-  const segments = content.question.contentSegments?.length ? content.question.contentSegments : [{ id: "question-text", type: "text" as const, text: content.question.questionText }];
+  const composition = buildQuestionExportComposition(content.question);
+  const segments = composition.segments;
   segments.forEach((segment) => appendSegment(surface, segment, figures, images));
-  if (content.question.choices.length) { const choices = createElement("ol", "question-export-surface__choices"); content.question.choices.forEach((choice) => { const item = document.createElement("li"); appendMathText(item, choice); choices.append(item); }); surface.append(choices); }
+  if (content.question.choices.length) {
+    const choices = createElement("div", "question-export-surface__choices");
+    content.question.choices.forEach((choice) => { const item = createElement("div", "question-export-surface__choice"); const parsed = parseChoice(choice); const marker = createElement("span", "question-export-surface__choice-marker"); marker.textContent = parsed.marker; const body = createElement("span", "question-export-surface__choice-content"); appendMathText(body, parsed.content); item.append(marker, body); choices.append(item); });
+    surface.append(choices);
+  }
   const appendExtra = (label: string, value?: string) => { if (!value?.trim()) return; const extra = createElement("section", "question-export-surface__extra"); const title = createElement("strong"); title.textContent = label; extra.append(title); const body = document.createElement("div"); appendMathText(body, value); extra.append(body); surface.append(extra); };
   if (options.scope !== "question") appendExtra("정답", content.answer);
   if (options.scope === "question_answer_explanation") appendExtra("해설", content.explanation);
@@ -101,7 +148,9 @@ export async function renderCanonicalQuestionToPng(content: QuestionPngCompositi
     await waitForImages(surface);
     const width = Math.ceil(surface.getBoundingClientRect().width); const height = Math.ceil(surface.getBoundingClientRect().height);
     const serialized = surface.cloneNode(true) as HTMLElement;
-    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * options.scale}" height="${height * options.scale}" viewBox="0 0 ${width} ${height}"><foreignObject width="100%" height="100%">${new XMLSerializer().serializeToString(serialized)}</foreignObject></svg>`;
+    const style = document.createElement("style"); style.textContent = await buildExportStyle(); serialized.insertBefore(style, serialized.firstChild);
+    serialized.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width * options.scale}" height="${height * options.scale}" viewBox="0 0 ${width} ${height}"><foreignObject xmlns="http://www.w3.org/1999/xhtml" width="100%" height="100%">${new XMLSerializer().serializeToString(serialized)}</foreignObject></svg>`;
     const image = new Image(); const svgUrl = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml;charset=utf-8" }));
     try { await new Promise<void>((resolve, reject) => { image.onload = () => resolve(); image.onerror = () => reject(new Error("문항 PNG 미리보기를 만들지 못했습니다.")); image.src = svgUrl; }); const canvas = document.createElement("canvas"); canvas.width = width * options.scale; canvas.height = height * options.scale; const context = canvas.getContext("2d"); if (!context) throw new Error("PNG canvas를 초기화하지 못했습니다."); if (options.background === "white") { context.fillStyle = "#fff"; context.fillRect(0, 0, canvas.width, canvas.height); } context.drawImage(image, 0, 0, canvas.width, canvas.height); return await new Promise<Blob>((resolve, reject) => canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("문항 PNG를 만들지 못했습니다.")), "image/png")); } finally { URL.revokeObjectURL(svgUrl); }
   } finally { surface.remove(); }

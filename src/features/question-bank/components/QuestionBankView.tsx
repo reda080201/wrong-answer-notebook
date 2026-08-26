@@ -54,6 +54,10 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   const items = useMemo(() => buildQuestionBankItems(entries), [entries]);
   const filtered = useMemo(() => sortQuestionBankItems(filterQuestionBankItems(items, filters), sort), [items, filters, sort]);
   useEffect(() => {
+    if (narrowViewport) return;
+    setDetailItem((current) => current && filtered.some((item) => item.id === current.id) ? current : (filtered[0] ?? null));
+  }, [filtered, narrowViewport]);
+  useEffect(() => {
     const nextFilters = filtersFromPreferences(preferences?.recentFilters);
     const nextSort = preferences?.lastSort ?? "updated";
     const nextPresets = preferences?.savedPresets ?? [];

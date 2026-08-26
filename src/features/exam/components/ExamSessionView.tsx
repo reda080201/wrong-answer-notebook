@@ -9,6 +9,7 @@ import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
 import Dialog from "../../../shared/ui/Dialog";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
+import { parseChoice } from "../../../utils/choice";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -24,11 +25,6 @@ interface ExamSessionViewProps {
   onOpenChatGptSettings?: () => void;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
-}
-
-export function parseChoice(choice: string) {
-  const match = choice.trim().match(/^(①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[A-Ea-e][.)])\s*(.*)$/);
-  return match ? { marker: match[1], content: match[2] } : { marker: "", content: choice };
 }
 
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
