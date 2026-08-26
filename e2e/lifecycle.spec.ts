@@ -21,7 +21,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     await expect(page.getByRole("complementary", { name: "답안지" })).toBeVisible();
     await expect(page.locator(".real-exam-paper .real-exam-question")).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "문제 2", exact: true })).toHaveCount(0);
-    await expect(page.locator(".exam-session-close")).toHaveAttribute("aria-label", "시험 닫기");
+    await expect(page.getByRole("button", { name: "시험 닫기", exact: true })).toHaveAttribute("aria-label", "시험 닫기");
 
     await page
       .getByRole("group", { name: "1번 선택지", exact: true })

@@ -3,6 +3,7 @@ import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, Questio
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { resolveQuestionAssets } from "../../../utils/questionAssets";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 export interface ExamSessionCreationOptions {
@@ -10,6 +11,7 @@ export interface ExamSessionCreationOptions {
   timeLimitMinutes?: number;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
 export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
@@ -27,6 +29,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
     });
+    const assets = resolveQuestionAssets(entry, block);
     return {
       id: `${entry.id}-${number}`,
       questionNumber: number,
@@ -38,8 +41,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       conditions: structuredClone(block.conditions),
       equations: structuredClone(block.equations),
       choices: structuredClone(block.choices),
-      questionImages: [],
-      sourcePageImages: structuredClone(entry.sourcePageImages ?? []),
+      questionImages: structuredClone([...assets.sourceCrops.map((crop) => crop.image), ...assets.figureAssets]),
+      sourcePageImages: structuredClone(assets.sourcePages),
       figures: structuredClone(figures),
       contentSegments: block.contentSegments
         ? structuredClone(block.contentSegments)
@@ -70,6 +73,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     deadlineAt: timeLimitMinutes ? new Date(now.getTime() + timeLimitMinutes * 60_000).toISOString() : undefined,
     showTimer: mode === "real" ? options.showTimer !== false : undefined,
     answerSheetOpen: mode === "real" ? options.answerSheetOpen !== false : undefined,
+    answerSheetLayout: mode === "real" ? options.answerSheetLayout ?? "auto" : undefined,
     questions: snapshots,
     responses: [],
     currentQuestionIndex: 0,

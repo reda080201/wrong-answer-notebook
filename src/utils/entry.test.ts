@@ -188,7 +188,7 @@ describe("normalizeEntry", () => {
       original: { image: "original.png", sourcePageImage: "page.png", crop: { x: 0.1, y: 0.2, width: 0.5, height: 0.4 } },
       cleaned: { image: "cleaned.png", generatedBy: "gpt", generatedAt: "2026-07-24T00:00:00Z", sourceImageHash: "abc", promptVersion: "figure-clean-v1" },
       semanticSpec: { type: "plane_geometry", points: [{ id: "A", label: "A", x: 0, y: 0 }] },
-      verification: { status: "verified", confidence: 0.96, checks: { pointLabelsMatch: true }, blockingIssues: [], warnings: [] },
+      verification: { status: "verified", confidence: 0.96, checks: { pointLabelsMatch: true }, blockingIssues: [], warnings: [], verificationSource: "local_validator" },
       preferredRepresentation: "cleaned",
     }] }));
     expect(entry.figures?.[0]).toMatchObject({ original: { image: "original.png" }, cleaned: { image: "cleaned.png" }, semanticSpec: { type: "plane_geometry" }, verification: { confidence: 0.96 }, preferredRepresentation: "cleaned" });
@@ -203,6 +203,25 @@ describe("normalizeEntry", () => {
     expect(entry.figures?.[0].cleaned?.generatedBy).toBe(generatedBy);
   });
 
+  it("keeps an unsupported cleaned generator untrusted instead of rewriting it as gpt", () => {
+    const entry = normalizeEntry(rawEntry({ entryKind: "problem_sheet", figures: [{
+      id: "generator-untrusted", questionNumber: "1", title: "", caption: "", source: "gpt_cleaned",
+      cleaned: { image: "clean.png", generatedBy: "third-party", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" } as unknown as import("../models/entry").FigureCleanedRepresentation,
+    }] }));
+    expect(entry.figures?.[0]).toMatchObject({ needsReview: true, cleaned: { image: "clean.png", untrustedGeneratedBy: "third-party" } });
+    expect(entry.figures?.[0].cleaned?.generatedBy).toBeUndefined();
+  });
+
+  it("keeps source-less verified figure records on the review path", () => {
+    const entry = normalizeEntry(rawEntry({ entryKind: "problem_sheet", figures: [{
+      id: "legacy-verified", questionNumber: "1", title: "", caption: "", source: "gpt_cleaned",
+      original: { image: "original.png" },
+      cleaned: { image: "clean.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+      verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [] },
+    }] }));
+    expect(entry.figures?.[0]).toMatchObject({ preferredRepresentation: "original", needsReview: true });
+  });
+
   it("collects source pages and learning block images", () => {
     const entry = normalizeEntry(rawEntry({
       entryKind: "lecture",
@@ -212,12 +231,33 @@ describe("normalizeEntry", () => {
     expect(getAllImageFilenames(entry)).toEqual(expect.arrayContaining(["source-page.png", "block.png"]));
   });
 
+  it("preserves multiple ordered source crops for the same question", () => {
+    const entry = normalizeEntry(rawEntry({
+      questionSourceCrops: [
+        { questionNumber: "9", image: "q9-page3.png", sourcePageImage: "page3.png" },
+        { questionNumber: "9", image: "q9-page4.png", sourcePageImage: "page4.png" },
+      ],
+    }));
+    expect(entry.questionSourceCrops?.map((crop) => crop.image)).toEqual(["q9-page3.png", "q9-page4.png"]);
+    expect(entry.questionSourceCrops?.map((crop) => crop.id)).toEqual(["legacy-crop:9:0", "legacy-crop:9:1"]);
+  });
+
+  it("keeps render verifications separate by export scope", () => {
+    const entry = normalizeEntry(rawEntry({
+      questionRenderVerification: [
+        { questionNumber: "9", canonicalFingerprint: "q-a", status: "unverified", scope: "question", rendererVersion: "question-render-v1", renderedImage: "q.png" },
+        { questionNumber: "9", canonicalFingerprint: "q-b", status: "unverified", scope: "question_answer", rendererVersion: "question-render-v1", renderedImage: "qa.png" },
+      ],
+    }));
+    expect(entry.questionRenderVerification).toHaveLength(2);
+  });
+
   it("syncs legacy image fields to a verified cleaned representation", () => {
     const entry = normalizeEntry(rawEntry({ entryKind: "problem_sheet", figures: [{
       id: "bundle-2", questionNumber: "1", title: "그래프", caption: "", source: "original", image: "original.png",
       original: { image: "original.png" },
       cleaned: { image: "cleaned.png", generatedBy: "gpt", generatedAt: "2026-07-24T00:00:00Z", sourceImageHash: "abc", promptVersion: "figure-clean-v1" },
-      verification: { status: "verified", confidence: 0.97, checks: {}, blockingIssues: [], warnings: [] },
+      verification: { status: "verified", confidence: 0.97, checks: {}, blockingIssues: [], warnings: [], verificationSource: "local_validator" },
     }] }));
     expect(entry.figures?.[0]).toMatchObject({ image: "cleaned.png", source: "gpt_cleaned", preferredRepresentation: "cleaned", needsReview: false });
   });

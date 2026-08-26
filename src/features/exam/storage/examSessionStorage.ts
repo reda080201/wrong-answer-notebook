@@ -12,6 +12,7 @@ export function normalizeExamSession(session: ExamSession): ExamSession {
     mode,
     showTimer: session.showTimer !== false,
     answerSheetOpen: session.answerSheetOpen !== false,
+    answerSheetLayout: session.answerSheetLayout === "vertical" || session.answerSheetLayout === "horizontal" ? session.answerSheetLayout : "auto",
   };
 }
 

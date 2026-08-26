@@ -47,8 +47,8 @@ export default function ImportActiveQuestionReview({
               <strong>{figure.title || `${questionNumber}번 그림`}</strong>
               {figure.caption && <p>{figure.caption}</p>}
               <small>{figure.image ? `연결됨: ${figure.image}` : figure.source === "described_only" ? "설명 도표" : "이미지 나중에 연결"}</small>
-              {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "original", image: figure.original?.image, source: "original", needsReview: false })}>원본 사용</button>}
-              {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "cleaned", image: figure.cleaned?.image, source: "gpt_cleaned", needsReview: false })}>GPT 정리본 승인</button>}
+              {figure.original?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "original", image: figure.original?.image, source: "original", needsReview: Boolean(figure.needsReview) })}>원본 사용</button>}
+              {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "cleaned", image: figure.cleaned?.image, source: "gpt_cleaned", needsReview: Boolean(figure.needsReview) })}>{figure.cleaned.generatedBy === "deterministic_cleanup" ? "자동 이미지 정리본 승인" : figure.cleaned.generatedBy === "deterministic_redraw" ? "결정론적 재구성 승인" : "AI 정리본 승인"}</button>}
               {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { preferredRepresentation: "semantic_render", needsReview: false })}>구조 렌더링 사용</button>}
               {!figure.image && <button type="button" className="btn-secondary btn-sm" onClick={() => onUpdateFigure(figure.id, { source: "described_only", needsReview: false })}>설명 도표로 유지</button>}
               <button type="button" className="btn-secondary btn-sm danger" onClick={() => onRemoveFigure(figure.id)}>도표 항목 제외</button>

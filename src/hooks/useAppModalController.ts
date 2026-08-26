@@ -18,6 +18,9 @@ export function useAppModalController() {
   } | null>(null);
   const [realExamStartEntry, setRealExamStartEntry] = useState<WrongAnswerEntry | null>(null);
   const [realExamMinutes, setRealExamMinutes] = useState(50);
+  const [realExamShowTimer, setRealExamShowTimer] = useState(true);
+  const [realExamAnswerSheetOpen, setRealExamAnswerSheetOpen] = useState(true);
+  const [realExamAnswerSheetLayout, setRealExamAnswerSheetLayout] = useState<"auto" | "vertical" | "horizontal">("auto");
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState<string | null>(null);
 
   const openSettings = useCallback((tab?: SettingsTab) => {
@@ -44,6 +47,9 @@ export function useAppModalController() {
     questionTarget, setQuestionTarget,
     realExamStartEntry, setRealExamStartEntry,
     realExamMinutes, setRealExamMinutes,
+    realExamShowTimer, setRealExamShowTimer,
+    realExamAnswerSheetOpen, setRealExamAnswerSheetOpen,
+    realExamAnswerSheetLayout, setRealExamAnswerSheetLayout,
     dismissedUpdateVersion, setDismissedUpdateVersion,
     openSettings, closeSettings,
     controller,

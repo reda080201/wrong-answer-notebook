@@ -39,4 +39,9 @@ describe("ExamPaperCompositor", () => {
     expect(screen.getByLabelText("시험지 2페이지")).toHaveTextContent("passage-question-1");
     expect(screen.getByLabelText("시험지 2페이지")).toHaveTextContent("passage-question-2");
   });
+
+  it("removes canonical target IDs from the hidden measurement tree", () => {
+    render(<ExamPaperCompositor enabled items={[{ id: "q9", node: <article id="sheet-question-canonical-9">9번</article> }]} />);
+    expect(document.querySelectorAll("#sheet-question-canonical-9")).toHaveLength(1);
+  });
 });

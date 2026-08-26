@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SheetFigureItem } from "../../../types";
-import { applyAutomaticFigurePreference, resolveFigureRepresentation, shouldReuseCleanedFigure, verifySemanticSpecAgainstText } from "./figureRepresentation";
+import { applyAutomaticFigurePreference, classifyFigureVerificationTrust, resolveFigureRepresentation, shouldReuseCleanedFigure, verifySemanticSpecAgainstText } from "./figureRepresentation";
 
 function figure(partial: Partial<SheetFigureItem> = {}): SheetFigureItem {
   return {
@@ -18,14 +18,27 @@ function figure(partial: Partial<SheetFigureItem> = {}): SheetFigureItem {
 
 describe("figure representation policy", () => {
   it("uses a highly verified cleaned image by default", () => {
-    const item = figure({ verification: { status: "verified", confidence: 0.97, checks: {}, blockingIssues: [], warnings: [] } });
+    const item = figure({ verification: { status: "verified", confidence: 0.97, checks: {}, blockingIssues: [], warnings: [], verificationSource: "local_validator" } });
     expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "cleaned", image: "cleaned.png", needsReview: false });
   });
 
   it("falls back to the original image until a cleaned image is verified", () => {
     const item = figure({ verification: { status: "needs_review", confidence: 0.85, checks: {}, blockingIssues: [], warnings: [] } });
-    expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", image: "original.png", needsReview: false });
+    expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", image: "original.png", needsReview: true });
     expect(resolveFigureRepresentation(item, { forPrint: true })).toMatchObject({ kind: "original", image: "original.png" });
+  });
+
+  it("does not automatically trust model or missing verification sources", () => {
+    for (const verificationSource of [undefined, "gpt_self_check", "second_pass_model"] as const) {
+      const item = figure({ verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [], verificationSource } });
+      expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", needsReview: true });
+    }
+    expect(classifyFigureVerificationTrust(undefined)).toBe("untrusted_missing");
+  });
+
+  it("keeps a pre-existing review flag when automatic selection falls back to original", () => {
+    const item = figure({ needsReview: true, verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [] } });
+    expect(applyAutomaticFigurePreference(item)).toMatchObject({ preferredRepresentation: "original", needsReview: true });
   });
 
   it("uses the original when verification has a blocking issue", () => {

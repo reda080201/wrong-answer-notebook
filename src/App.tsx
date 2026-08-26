@@ -118,6 +118,9 @@ function AppContent() {
     questionTarget, setQuestionTarget,
     realExamStartEntry, setRealExamStartEntry,
     realExamMinutes, setRealExamMinutes,
+    realExamShowTimer, setRealExamShowTimer,
+    realExamAnswerSheetOpen, setRealExamAnswerSheetOpen,
+    realExamAnswerSheetLayout, setRealExamAnswerSheetLayout,
     dismissedUpdateVersion, setDismissedUpdateVersion,
     controller: modalController,
   } = useAppModalController();
@@ -619,6 +622,9 @@ function AppContent() {
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
                 setRealExamStartEntry(selected);
                 setRealExamMinutes(settings.examPreferences.defaultRealExamMinutes ?? 50);
+                setRealExamShowTimer(settings.examPreferences.showTimer);
+                setRealExamAnswerSheetOpen(settings.examPreferences.realExamAnswerSheetOpen ?? true);
+                setRealExamAnswerSheetLayout(settings.examPreferences.defaultAnswerSheetLayout ?? "auto");
               } : undefined}
               startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
               startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
@@ -685,25 +691,36 @@ function AppContent() {
                     : nextQuestionMeta,
                 }))
               }
-              onPersistQuestionRender={async ({ questionNumber, blob, filename, canonicalFingerprint }) => {
+              onPersistQuestionRender={async ({ questionNumber, blob, filename, canonicalFingerprint, scope, rendererVersion }) => {
                 const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, { type: "image/png" });
                 const [savedImage] = await saveImageFiles([file]);
+                const previousImage = selected.questionRenderVerification?.find((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)?.renderedImage;
                 try {
                   await patchEntry(selected.id, (current) => ({
                     questionRenderVerification: [
-                      ...(current.questionRenderVerification ?? []).filter((item) => item.questionNumber !== questionNumber),
-                      { questionNumber, canonicalFingerprint, status: "unverified", renderedImage: savedImage },
+                      ...(current.questionRenderVerification ?? []).filter((item) => !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)),
+                      { questionNumber, canonicalFingerprint, scope, rendererVersion, status: "unverified", renderedImage: savedImage },
                     ],
                   }));
                 } catch (error) {
                   await deleteImage(savedImage).catch(() => undefined);
                   throw error;
                 }
+                if (previousImage && previousImage !== savedImage) {
+                  const referencedBySource = Boolean(
+                    selected.sourcePageImages?.includes(previousImage)
+                    || selected.questionSourceCrops?.some((crop) => crop.image === previousImage || crop.sourcePageImage === previousImage)
+                    || selected.figures?.some((figure) => figure.image === previousImage || figure.original?.image === previousImage || figure.original?.sourcePageImage === previousImage || figure.cleaned?.image === previousImage)
+                    || selected.questionRenderVerification?.some((item) => item.renderedImage === previousImage && !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion))
+                    || entries.some((entry) => entry.id !== selected.id && entry.questionRenderVerification?.some((item) => item.renderedImage === previousImage)),
+                  );
+                  if (!referencedBySource) await deleteImage(previousImage).catch(() => undefined);
+                }
               }}
-              onUpdateQuestionRenderVerification={async ({ questionNumber, status }) => {
+              onUpdateQuestionRenderVerification={async ({ questionNumber, scope, rendererVersion, status }) => {
                 await patchEntry(selected.id, (current) => ({
-                  questionRenderVerification: (current.questionRenderVerification ?? []).map((item) => item.questionNumber === questionNumber
-                    ? { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined }
+                  questionRenderVerification: (current.questionRenderVerification ?? []).map((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion
+                    ? { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined, verificationSource: status === "verified" ? "user" : undefined }
                     : item),
                 }));
               }}
@@ -829,6 +846,7 @@ function AppContent() {
         onClose={() => setRealExamStartEntry(null)}
         title="실전 모의고사 시작"
         ariaLabel="실전 모의고사 시작"
+        footer={null}
       >
         {realExamStartEntry && (
           <div className="real-exam-start-dialog">
@@ -845,6 +863,14 @@ function AppContent() {
                 {[30, 50, 80, 100].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
               </select>
             </label>
+            <label className="form-field">
+              답안지
+              <select value={selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetLayout(event.target.value as "auto" | "vertical" | "horizontal")}>
+                <option value="auto">자동</option><option value="vertical">세로</option><option value="horizontal">가로</option>
+              </select>
+            </label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.showTimer ?? realExamShowTimer} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamShowTimer(event.target.checked)} /> 타이머 표시</label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetOpen(event.target.checked)} /> 답안지 열기</label>
             <p className="form-hint">타이머와 답안지를 함께 엽니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
             <div className="dialog-actions">
               <button type="button" className="btn-secondary" onClick={() => setRealExamStartEntry(null)}>취소</button>
@@ -854,7 +880,7 @@ function AppContent() {
                 onClick={() => {
                   const entry = realExamStartEntry;
                   setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? realExamMinutes, showTimer: settings.examPreferences.showTimer, answerSheetOpen: settings.examPreferences.realExamAnswerSheetOpen });
+                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? realExamMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
                 }}
               >
                 {selectedRealSession ? "이어서 풀기" : "실전 모드 시작"}

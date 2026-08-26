@@ -122,8 +122,8 @@ interface EntryDetailProps {
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
   onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
-  onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string }) => Promise<void>;
-  onUpdateQuestionRenderVerification?: (input: { questionNumber: string; status: "unverified" | "needs_review" | "verified" }) => Promise<void>;
+  onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string; scope: "question" | "question_answer" | "question_answer_explanation"; rendererVersion: string }) => Promise<void>;
+  onUpdateQuestionRenderVerification?: (input: { questionNumber: string; scope: "question" | "question_answer" | "question_answer_explanation"; rendererVersion: string; status: "unverified" | "needs_review" | "verified" }) => Promise<void>;
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 

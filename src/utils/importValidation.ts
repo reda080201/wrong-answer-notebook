@@ -201,10 +201,18 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
   for (const [index, figure] of ((data.figures ?? []) as unknown[]).entries()) {
     if (!figure || typeof figure !== "object") continue;
     const original = (figure as Record<string, unknown>).original;
-    if (!original || typeof original !== "object") continue;
-    const crop = (original as Record<string, unknown>).crop;
-    if (crop !== undefined && !isValidNormalizedCrop(crop)) {
-      issues.push({ id: `invalid-crop-figure-${index}`, severity: "error", message: cropValidationMessage(`${String((figure as Record<string, unknown>).questionNumber ?? "문항")}번 그림 원본 crop`) });
+    if (original && typeof original === "object") {
+      const crop = (original as Record<string, unknown>).crop;
+      if (crop !== undefined && !isValidNormalizedCrop(crop)) {
+        issues.push({ id: `invalid-crop-figure-${index}`, severity: "error", message: cropValidationMessage(`${String((figure as Record<string, unknown>).questionNumber ?? "문항")}번 그림 원본 crop`) });
+      }
+    }
+    const cleaned = (figure as Record<string, unknown>).cleaned;
+    if (cleaned && typeof cleaned === "object") {
+      const generatedBy = (cleaned as Record<string, unknown>).generatedBy;
+      if (generatedBy !== "gpt" && generatedBy !== "deterministic_cleanup" && generatedBy !== "deterministic_redraw") {
+        issues.push({ id: `invalid-cleaned-generator-${index}`, severity: "warning", message: `${String((figure as Record<string, unknown>).questionNumber ?? "문항")}번 그림 정리본의 생성 주체를 확인해야 합니다.` });
+      }
     }
   }
 

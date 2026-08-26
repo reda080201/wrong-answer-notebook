@@ -75,6 +75,7 @@ export interface ExamPreferences {
   showMcpHelp: boolean;
   defaultRealExamMinutes?: number;
   realExamAnswerSheetOpen?: boolean;
+  defaultAnswerSheetLayout?: "auto" | "vertical" | "horizontal";
   warnBeforeEnd?: boolean;
   autoSubmitOnTimeExpired?: boolean;
 }

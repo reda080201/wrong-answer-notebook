@@ -3,6 +3,7 @@ import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveQuestionClassification } from "../../../utils/questionClassification";
 import { resolveProblemSource } from "../../../utils/problemSource";
+import { resolveQuestionAssets } from "../../../utils/questionAssets";
 import type { QuestionMeta, SheetAnswerItem, WrongAnswerEntry } from "../../../types";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 
@@ -23,7 +24,10 @@ function questionImages(entry: WrongAnswerEntry, number: string): string[] {
   const figures = (entry.figures ?? [])
     .filter((figure) => normalizeQuestionNumber(figure.questionNumber) === key)
     .flatMap((figure) => [figure.image, figure.original?.image, figure.cleaned?.image]);
-  return unique([...(entry.questionImages ?? []), ...figures]);
+  const crops = (entry.questionSourceCrops ?? [])
+    .filter((crop) => normalizeQuestionNumber(crop.questionNumber) === key)
+    .map((crop) => crop.image);
+  return unique([...crops, ...figures]);
 }
 
 function reviewDue(meta: QuestionMeta | undefined, now: Date): boolean {
@@ -43,12 +47,17 @@ function isMastered(entry: WrongAnswerEntry, meta?: QuestionMeta): boolean {
   return meta?.review?.phase === "archived" || (!meta && entry.mastered);
 }
 
-function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date): QuestionBankItem {
+function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, source?: { page?: number }): QuestionBankItem {
   const meta = findMeta(entry, number);
   const answer = findAnswer(entry, number);
   const classification = resolveQuestionClassification(entry, meta);
   const resolvedAnswerType = classification.answerType ?? (choices ? "multiple_choice" : "unknown");
   const images = questionImages(entry, number);
+  const sourcePages = resolveQuestionAssets(entry, {
+    questionNumber: number,
+    figureIds: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(number)).map((figure) => figure.id),
+    source,
+  }).sourcePages;
   const answerText = answer?.answer?.trim() || (entry.entryKind === "wrong_answer" ? entry.correctAnswer.trim() : "");
   const explanation = [answer?.explanation, answer?.strategy, ...(answer?.steps ?? []), ...(entry.entryKind === "wrong_answer" ? entry.explanationParts.map((part) => part.text) : [])]
     .filter((part): part is string => Boolean(part?.trim()))
@@ -68,10 +77,10 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     answer: answerText || undefined,
     explanation: explanation || undefined,
     questionImages: images,
-    sourcePageImages: [...(entry.sourcePageImages ?? [])],
+    sourcePageImages: sourcePages,
     hasAnswer: Boolean(answerText),
     hasExplanation: Boolean(explanation),
-    hasImages: images.length > 0 || (entry.sourcePageImages?.length ?? 0) > 0,
+    hasImages: images.length > 0 || sourcePages.length > 0,
     isWrong: isWrong(entry, meta),
     isMastered: isMastered(entry, meta),
     reviewDue: reviewDue(meta, now),
@@ -83,7 +92,7 @@ export function buildQuestionBankItems(entries: WrongAnswerEntry[], now = new Da
   return entries.flatMap((entry) => {
     if (entry.entryKind === "problem_sheet") {
       return getEntryQuestions(entry)
-        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now));
+        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, block.source));
     }
     if (entry.entryKind !== "wrong_answer" || !entry.question.trim()) return [];
     const number = normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber

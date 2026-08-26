@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExamPreferences, ExamSession } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
+import { IconButton } from "../../../shared/ui";
+import { X } from "lucide-react";
 import MathText from "../../../components/MathText";
 import QuestionContentView from "../../../components/QuestionContentView";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
@@ -17,13 +19,27 @@ interface RealExamSessionViewProps {
   onSubmit(session: ExamSession): void | Promise<void>;
   onSubmittingChange?(value: boolean): void;
   examPreferences?: ExamPreferences;
+  onClose(): void;
+  closeDisabled?: boolean;
 }
 
 function formatTime(seconds: number): string {
   return `${Math.floor(seconds / 60).toString().padStart(2, "0")}:${(seconds % 60).toString().padStart(2, "0")}`;
 }
 
-export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences }: RealExamSessionViewProps) {
+function resolveAnswerSheetLayout(session: ExamSession): "vertical" | "horizontal" {
+  if (session.answerSheetLayout === "vertical" || session.answerSheetLayout === "horizontal") return session.answerSheetLayout;
+  const mathOrMixed = /수학|math/i.test(session.subject)
+    || !session.questions.every((question) => isMultipleChoiceQuestion(question.questionType, question.choices));
+  return mathOrMixed ? "vertical" : "horizontal";
+}
+
+function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']"));
+}
+
+export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false }: RealExamSessionViewProps) {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -46,6 +62,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const activeQuestions = currentQuestion?.stimulusGroupId
     ? session.questions.filter((question) => question.stimulusGroupId === currentQuestion.stimulusGroupId)
     : currentQuestion ? [currentQuestion] : [];
+  const answerSheetLayout = resolveAnswerSheetLayout(session);
 
   useEffect(() => {
     if (session.status !== "in_progress" || !session.deadlineAt) return undefined;
@@ -104,11 +121,28 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     : session.questions;
 
   const navigateToQuestion = (index: number) => {
+    if (index < 0 || index >= session.questions.length) return;
     const questionNumber = session.questions[index]?.questionNumber;
     if (!questionNumber) return;
     onChange({ ...session, currentQuestionIndex: index });
     document.getElementById(sanitizeExamQuestionDomId(questionNumber))?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
+
+  useEffect(() => {
+    if (session.status !== "in_progress") return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || shouldIgnoreExamArrowNavigation(event.target)) return;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        navigateToQuestion(safeCurrentQuestionIndex - 1);
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        navigateToQuestion(safeCurrentQuestionIndex + 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [safeCurrentQuestionIndex, session.status, session.questions]);
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;
@@ -141,6 +175,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
           <strong aria-label="남은 시간">{session.deadlineAt && session.showTimer !== false && examPreferences?.showTimer !== false ? formatTime(remaining) : "시간 제한 없음"}</strong>
           <span>응답 {session.responses.filter((item) => item.response.trim()).length}/{session.questions.length}</span>
           <button type="button" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>
+          <IconButton className="real-exam-close" label="시험 닫기" onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>
         </div>
       </header>
       {expired && session.status === "in_progress" && <div className="real-exam-expired" role="alert">시간이 종료되었습니다. 답안 입력을 잠그고 제출할 수 있습니다.</div>}
@@ -169,7 +204,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
         </main>
         <aside className="real-exam-answer-sheet" aria-label="답안지">
           <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet}>{answerSheetOpen ? "접기" : "펼치기"}</button></header>
-          {answerSheetOpen && <div className="real-exam-answer-grid">{session.questions.map((question, index) => { const response = responses.get(question.questionNumber); const answered = Boolean(response?.response.trim()); const current = index === safeCurrentQuestionIndex; return <div key={question.id} className={`real-exam-answer-item ${answered ? "is-answered" : "is-unanswered"}${current ? " is-current" : ""}${response?.markedForReview ? " is-marked" : ""}`}><button type="button" className="real-exam-answer-jump" aria-current={current ? "step" : undefined} aria-label={`${question.questionNumber}번 ${answered ? "응답" : "미응답"}${response?.markedForReview ? ", 검토 표시" : ""}${current ? ", 현재 문항" : ""}`} onClick={() => navigateToQuestion(index)}><strong>{question.questionNumber}</strong><span>{answered ? "응답" : "미응답"}</span>{response?.markedForReview && <em>⚑</em>}</button>{answerSheetControl(question)}</div>; })}</div>}
+          {answerSheetOpen && <div className={`real-exam-answer-grid real-exam-answer-grid--${answerSheetLayout}`}>{session.questions.map((question, index) => { const response = responses.get(question.questionNumber); const answered = Boolean(response?.response.trim()); const current = index === safeCurrentQuestionIndex; return <div key={question.id} className={`real-exam-answer-item ${answered ? "is-answered" : "is-unanswered"}${current ? " is-current" : ""}${response?.markedForReview ? " is-marked" : ""}`}><button type="button" className="real-exam-answer-jump" aria-current={current ? "step" : undefined} aria-label={`${question.questionNumber}번 ${answered ? "응답" : "미응답"}${response?.markedForReview ? ", 검토 표시" : ""}${current ? ", 현재 문항" : ""}`} onClick={() => navigateToQuestion(index)}><strong>{question.questionNumber}</strong><span>{answered ? "응답" : "미응답"}</span>{response?.markedForReview && <em>검토</em>}</button>{answerSheetControl(question)}</div>; })}</div>}
         </aside>
       </div>
       {session.status === "in_progress" && <nav className="real-exam-navigation" aria-label="실전 문항 이동"><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex - 1)} disabled={safeCurrentQuestionIndex <= 0}>이전</button><span>{safeCurrentQuestionIndex + 1} / {session.questions.length}</span><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex + 1)} disabled={safeCurrentQuestionIndex >= session.questions.length - 1}>다음</button></nav>}

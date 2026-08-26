@@ -47,7 +47,15 @@ function FigureSegment({ figure }: { figure: SheetFigureItem }) {
   if (representation.kind === "described_only" || !representation.image) {
     return <aside className="structured-question-described-figure"><strong>도표 설명</strong><p>{figure.caption || figure.title || "이미지 없이 설명만 제공됩니다."}</p></aside>;
   }
-  const label = representation.kind === "original" ? "원본 그림" : "GPT 정리본";
+  const label = representation.kind === "original"
+    ? "원본 그림"
+    : figure.cleaned?.untrustedGeneratedBy || !figure.cleaned?.generatedBy
+      ? "정리본 · 검토 필요"
+      : figure.cleaned.generatedBy === "deterministic_cleanup"
+        ? "정리본 · 자동 이미지 정리"
+        : figure.cleaned.generatedBy === "deterministic_redraw"
+          ? "정리본 · 결정론적 재구성"
+          : "AI 정리본";
   return <figure className="structured-question-figure">
     <figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption>
     <ZoomableImageViewer filenames={[representation.image]} />

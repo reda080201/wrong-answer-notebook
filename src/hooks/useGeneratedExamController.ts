@@ -37,6 +37,7 @@ export function useGeneratedExamController({
       timeLimitMinutes: mode === "real" ? options?.timeLimitMinutes ?? exam.timeLimitMinutes ?? 50 : undefined,
       showTimer: mode === "real" ? options?.showTimer ?? true : options?.showTimer,
       answerSheetOpen: mode === "real" ? options?.answerSheetOpen ?? true : options?.answerSheetOpen,
+      answerSheetLayout: mode === "real" ? options?.answerSheetLayout ?? "auto" : options?.answerSheetLayout,
     });
     setListOpen(false);
   }, [onOpenExam]);

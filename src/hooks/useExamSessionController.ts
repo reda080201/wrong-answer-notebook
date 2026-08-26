@@ -45,6 +45,7 @@ export interface ExamOpenOptions {
   timeLimitMinutes?: number;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
 export function useExamSessionController({

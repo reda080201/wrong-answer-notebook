@@ -52,6 +52,7 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   showMcpHelp: true,
   defaultRealExamMinutes: 50,
   realExamAnswerSheetOpen: true,
+  defaultAnswerSheetLayout: "auto",
   warnBeforeEnd: true,
   autoSubmitOnTimeExpired: false,
 };
@@ -177,6 +178,10 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
       value.realExamAnswerSheetOpen === undefined
         ? DEFAULT_EXAM_PREFERENCES.realExamAnswerSheetOpen
         : Boolean(value.realExamAnswerSheetOpen),
+    defaultAnswerSheetLayout:
+      value.defaultAnswerSheetLayout === "vertical" || value.defaultAnswerSheetLayout === "horizontal"
+        ? value.defaultAnswerSheetLayout
+        : "auto",
     warnBeforeEnd:
       value.warnBeforeEnd === undefined
         ? DEFAULT_EXAM_PREFERENCES.warnBeforeEnd

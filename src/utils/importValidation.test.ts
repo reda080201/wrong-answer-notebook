@@ -74,4 +74,11 @@ describe("structured import validation", () => {
     expect(report.issues.filter((item) => item.id.startsWith("invalid-crop-"))).toHaveLength(2);
     expect(classifyImportValidationIssues(report).blocking).toHaveLength(2);
   });
+
+  it("flags an unsupported cleaned generator for review without claiming it is GPT", () => {
+    const report = validateImportedStudyData(importedData({
+      figures: [{ id: "f1", questionNumber: "1", title: "", caption: "", source: "gpt_cleaned", cleaned: { image: "clean.png", generatedBy: "unknown-tool", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" } } as never],
+    }));
+    expect(report.issues).toContainEqual(expect.objectContaining({ id: "invalid-cleaned-generator-0", severity: "warning" }));
+  });
 });
