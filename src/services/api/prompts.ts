@@ -2,7 +2,7 @@ import type { MemoTemplate, PromptTemplate } from "../../types";
 
 /** Shared GUI import contract. The parser may still accept older v2 payloads. */
 export const PROBLEM_SHEET_IMPORT_V3_PROMPT = `GUI import contract v3:
-Return one JSON object with entries[].questions[] as the external question list. Each question may include questionNumber, questionText, contentSegments, choices, conditions, equations, answer, figures, questionSourceCrops and sourcePageImages. Preserve answerKey, learningBlocks, rejectedNotes and audit at their original levels.
+Return one JSON object with entries[].questions[] as the external question list. Each question contains only questionNumber, questionText, contentSegments, choices, conditions, equations and figureIds. Keep answerKey[], figures[], questionSourceCrops[] and sourcePageImages[] at the entry level; do not nest answer or source assets inside questions[]. Preserve learningBlocks, rejectedNotes and audit at their original levels.
 The application canonicalizes entries[].questions[] into internal structuredQuestions; do not invent a canonical item when the number is unknown. Keep uncertain numbers in audit. Preserve every source crop and original/cleaned figure reference exactly, including cleaned.generatedBy values gpt, deterministic_cleanup, or deterministic_redraw. A renderedQuestionPng is a derived app artifact and must never be treated as a source crop.
 Model self-checks (gpt_self_check and second_pass_model) are needs_review, not trusted. Only an explicit user verification or a qualified local_validator with no blocking issue may be trusted. Do not auto-approve based on confidence alone. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
 
@@ -25,7 +25,7 @@ export const builtInPromptTemplates: PromptTemplate[] = [
     "entryKind": "problem_sheet",
     "title": "시험지 제목",
     "subject": "수학",
-    "questions": [{ "questionNumber": "1", "questionText": "...", "contentSegments": [], "choices": [], "figures": [], "questionSourceCrops": [] }],
+    "questions": [{ "questionNumber": "1", "questionText": "...", "contentSegments": [], "choices": [], "figureIds": [] }],
     "answerKey": [],
     "figures": [],
     "learningBlocks": [],
@@ -67,11 +67,11 @@ figure 예시:
   "original": { "image": "q01_figure_original.png", "sourcePageImage": "source_page_001.png", "crop": { "x": 0.1, "y": 0.2, "width": 0.4, "height": 0.3 } },
   "cleaned": { "image": "q01_figure_cleaned.png", "generatedBy": "gpt", "generatedAt": "2026-01-01T00:00:00Z", "sourceImageHash": "sha256:...", "promptVersion": "figure-clean-v1" },
   "semanticSpec": { "type": "function_graph", "points": [], "segments": [], "relations": [], "warnings": [], "confidence": 0.98 },
-  "verification": { "status": "verified", "confidence": 0.97, "checks": { "topologyMatch": true, "numericLabelsMatch": true, "visualLayoutPreserved": true }, "blockingIssues": [], "warnings": [], "verifier": "independent-figure-check-v1" },
-  "preferredRepresentation": "cleaned",
-  "image": "q01_figure_cleaned.png",
-  "source": "gpt_cleaned",
-  "needsReview": false
+  "verification": { "status": "needs_review", "confidence": 0.97, "checks": { "topologyMatch": true, "numericLabelsMatch": true, "visualLayoutPreserved": true }, "blockingIssues": [], "warnings": [], "verificationSource": "gpt_self_check" },
+  "preferredRepresentation": "original",
+  "image": "q01_figure_original.png",
+  "source": "original",
+  "needsReview": true
 }
 
 문제 본문·answerKey·audit·rejectedNotes·learningBlocks도 기존 import 스키마에 맞춰 함께 작성해라. tags와 최상위 difficulty는 만들지 마라.`,

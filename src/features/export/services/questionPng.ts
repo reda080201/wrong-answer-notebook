@@ -1,4 +1,5 @@
 import katex from "katex";
+import katexCss from "katex/dist/katex.min.css?inline";
 import type { QuestionContentSegment, SheetFigureItem } from "../../../types";
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { tokenizeMathForDisplay } from "../../../components/MathText";
@@ -23,7 +24,7 @@ export interface QuestionPngCompositionContent {
 }
 
 export const DEFAULT_QUESTION_PNG_OPTIONS: QuestionPngOptions = { scope: "question", background: "white", scale: 2, filename: "question.png" };
-export const QUESTION_PNG_RENDERER_VERSION = "question-render-v2";
+export const QUESTION_PNG_RENDERER_VERSION = "question-render-v3";
 
 export interface QuestionPngPreviewSignature {
   questionNumber: string;
@@ -119,7 +120,15 @@ async function buildExportStyle(): Promise<string> {
   // Keep export styling independent from the live theme and DOM. KaTeX's HTML
   // output is intentionally paired with the small subset of layout rules it
   // needs for SVG foreignObject rasterization.
-  return `.question-export-surface{box-sizing:border-box;white-space:normal}.question-export-surface .katex{font:normal 1.1em KaTeX_Main,Times New Roman,serif;line-height:1.2;text-indent:0}.question-export-surface .katex-display{display:block;margin:1em 0;text-align:center}.question-export-surface .katex-html{display:inline-block}.question-export-surface__choice{display:flex;gap:12px;align-items:flex-start}.question-export-surface__choice-marker{flex:0 0 auto;font-weight:600}.question-export-surface__choice-content{min-width:0}.question-export-surface__invalid-math{color:#9f1239;font-weight:600}.question-export-surface__math{display:inline-block}.question-export-surface__math--display{display:block;margin:12px 0;text-align:center}`;
+  const urls = [...katexCss.matchAll(/url\(([^)]+)\)/g)].map((match) => match[1].replace(/["']/g, "").trim());
+  const replacements = await Promise.all(urls.map(async (url) => {
+    const response = await fetch(new URL(url, window.location.href));
+    if (!response.ok) throw new Error("KaTeX 글꼴을 준비하지 못했습니다.");
+    const blob = await response.blob();
+    const data = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = () => reject(new Error("KaTeX 글꼴을 읽지 못했습니다.")); reader.readAsDataURL(blob); });
+    return [url, data] as const;
+  }));
+  return `.question-export-surface{box-sizing:border-box;white-space:normal}.question-export-surface__choice{display:flex;gap:12px;align-items:flex-start}.question-export-surface__choice-marker{flex:0 0 auto;font-weight:600}.question-export-surface__choice-content{min-width:0}.question-export-surface__invalid-math{color:#9f1239;font-weight:600}.question-export-surface__math{display:inline-block}.question-export-surface__math--display{display:block;margin:12px 0;text-align:center}` + replacements.reduce((css, [url, data]) => css.replaceAll(url, data), katexCss);
 }
 
 /** Builds a deterministic canonical export surface, independent from live study UI. */

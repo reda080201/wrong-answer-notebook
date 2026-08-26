@@ -52,6 +52,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const [deadlineWarning, setDeadlineWarning] = useState(false);
   const deadlineWarnedRef = useRef(false);
   const autoSubmittedRef = useRef(false);
+  const pendingScrollQuestionRef = useRef<string | null>(null);
   const expired = isExamExpired(session, new Date(now));
   const remaining = session.deadlineAt ? getRemainingExamSeconds(session.deadlineAt, new Date(now)) : 0;
   const score = session.status === "submitted" ? scoreExamSession(session) : null;
@@ -71,10 +72,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [session.deadlineAt, session.status]);
-
-  useEffect(() => {
-    setAnswerSheetOpen(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
-  }, [examPreferences?.realExamAnswerSheetOpen, session.id, session.answerSheetOpen]);
 
   const updateSession = useCallback((recipe: (current: ExamSession) => ExamSession) => {
     const next = recipe(sessionRef.current);
@@ -110,7 +107,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   }, [onSubmit, onSubmittingChange]);
 
   useEffect(() => {
-    if (session.status !== "in_progress" || !session.deadlineAt) return;
+    if (sessionRef.current.status !== "in_progress" || !sessionRef.current.deadlineAt) return;
     if (examPreferences?.warnBeforeEnd !== false && remaining > 0 && remaining <= 300 && !deadlineWarnedRef.current) {
       deadlineWarnedRef.current = true;
       setDeadlineWarning(true);
@@ -120,7 +117,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
       void submit();
     }
     if (!expired) autoSubmittedRef.current = false;
-  }, [examPreferences?.autoSubmitOnTimeExpired, examPreferences?.warnBeforeEnd, expired, remaining, session.deadlineAt, session.status, submit]);
+  }, [examPreferences?.autoSubmitOnTimeExpired, examPreferences?.warnBeforeEnd, expired, remaining, session.deadlineAt, submit]);
 
   const visibleQuestions = score && filter !== "all"
     ? session.questions.filter((question) => {
@@ -134,12 +131,21 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     if (index < 0 || index >= currentSession.questions.length) return;
     const questionNumber = currentSession.questions[index]?.questionNumber;
     if (!questionNumber) return;
+    pendingScrollQuestionRef.current = sanitizeExamQuestionDomId(questionNumber);
     updateSession((latest) => ({ ...latest, currentQuestionIndex: index }));
-    document.getElementById(sanitizeExamQuestionDomId(questionNumber))?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [updateSession]);
 
   useEffect(() => {
-    if (session.status !== "in_progress") return undefined;
+    const targetId = pendingScrollQuestionRef.current;
+    if (!targetId) return;
+    const target = document.getElementById(targetId);
+    if (!target) return;
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+    pendingScrollQuestionRef.current = null;
+  }, [safeCurrentQuestionIndex, activeQuestions]);
+
+  useEffect(() => {
+    if (sessionRef.current.status !== "in_progress") return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || shouldIgnoreExamArrowNavigation(event.target)) return;
       if (event.key === "ArrowLeft") {
@@ -152,7 +158,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigateToQuestion, safeCurrentQuestionIndex, session.status]);
+  }, [navigateToQuestion, safeCurrentQuestionIndex]);
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;
@@ -182,7 +188,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
       <header className="real-exam-header">
         <div><span>실전 모드</span><h2>{session.title}</h2></div>
         <div className="real-exam-header-status">
-          <strong aria-label="남은 시간">{session.deadlineAt && session.showTimer !== false && examPreferences?.showTimer !== false ? formatTime(remaining) : "시간 제한 없음"}</strong>
+          <strong aria-label="남은 시간">{session.deadlineAt ? (session.showTimer === false ? "타이머 숨김" : formatTime(remaining)) : "시간 제한 없음"}</strong>
           <span>응답 {session.responses.filter((item) => item.response.trim()).length}/{session.questions.length}</span>
           <button type="button" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>
           <IconButton className="real-exam-close" label="시험 닫기" onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>

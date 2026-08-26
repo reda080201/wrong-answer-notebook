@@ -24,9 +24,10 @@ const answerTypeLabel: Record<QuestionAnswerType, string> = {
 };
 
 const list = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
-const score = (value: string) => {
+const score = (value: string): number | null => {
+  if (!value.trim()) return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : undefined;
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : null;
 };
 
 export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPatchClassification, inline = false }: QuestionBankDetailProps) {

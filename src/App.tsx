@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -132,6 +132,7 @@ function AppContent() {
     ? "1~720분 사이의 정수를 입력하세요."
     : null;
   const selectedRealMinutes = realExamTimePreset === "custom" ? parsedCustomMinutes : Number(realExamTimePreset);
+  const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
   const {
     registerWorkspaceDraftFlush,
@@ -711,8 +712,16 @@ function AppContent() {
                 }))
               }
               onPersistQuestionRender={async ({ questionNumber, blob, filename, canonicalFingerprint, scope, rendererVersion }) => {
+                if (questionRenderPersistingRef.current) throw new Error("정리본 저장이 이미 진행 중입니다.");
+                questionRenderPersistingRef.current = true;
                 const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, { type: "image/png" });
-                const [savedImage] = await saveImageFiles([file]);
+                let savedImage: string;
+                try {
+                  [savedImage] = await saveImageFiles([file]);
+                } catch (error) {
+                  questionRenderPersistingRef.current = false;
+                  throw error;
+                }
                 const previousImage = selected.questionRenderVerification?.find((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)?.renderedImage;
                 try {
                   await patchEntry(selected.id, (current) => ({
@@ -723,6 +732,7 @@ function AppContent() {
                   }));
                 } catch (error) {
                   await deleteImage(savedImage).catch(() => undefined);
+                  questionRenderPersistingRef.current = false;
                   throw error;
                 }
                 if (previousImage && previousImage !== savedImage) {
@@ -733,11 +743,12 @@ function AppContent() {
                   const nextEntries = entries.map((entry) => entry.id === selected.id ? { ...entry, questionRenderVerification: nextVerification } : entry);
                   if ((collectAllImageReferences(nextEntries).get(previousImage) ?? 0) === 0) await deleteImage(previousImage).catch(() => undefined);
                 }
+                questionRenderPersistingRef.current = false;
               }}
-              onUpdateQuestionRenderVerification={async ({ questionNumber, scope, rendererVersion, status }) => {
+              onUpdateQuestionRenderVerification={async ({ questionNumber, scope, rendererVersion, status, expectedFingerprint }) => {
                 await patchEntry(selected.id, (current) => ({
                   questionRenderVerification: (current.questionRenderVerification ?? []).map((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion
-                    ? { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined, verificationSource: status === "verified" ? "user" : undefined }
+                    ? (() => { if (status === "verified" && expectedFingerprint && item.canonicalFingerprint !== expectedFingerprint) throw new Error("정리본이 변경되어 다시 확인해야 합니다."); return { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined, verificationSource: status === "verified" ? "user" : undefined }; })()
                     : item),
                 }));
               }}
@@ -897,10 +908,11 @@ function AppContent() {
               <button
                 type="button"
                 className="btn-primary"
+                disabled={!selectedRealSession && Boolean(customTimeError)}
                 onClick={() => {
                   const entry = realExamStartEntry;
-                  setRealExamStartEntry(null);
                   if (!selectedRealSession && customTimeError) return;
+                  setRealExamStartEntry(null);
                   openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? selectedRealMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
                 }}
               >
@@ -910,14 +922,15 @@ function AppContent() {
           </div>
         )}
       </Dialog>
-      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
-        <p>{closeFlushError}</p>
-        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
-        <footer className="dialog-actions">
+      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving} footer={
+        <div className="dialog-actions">
           <button type="button" className="btn-secondary" onClick={clearCloseFlushError} disabled={closeFlushSaving}>종료 취소</button>
           <button type="button" className="btn-danger" onClick={() => void closeWithoutSaving()} disabled={closeFlushSaving}>저장하지 않고 종료</button>
           <button type="button" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
-        </footer>
+        </div>
+      }>
+        <p>{closeFlushError}</p>
+        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
     </div>
     </ConceptLinkProvider>

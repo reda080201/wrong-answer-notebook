@@ -31,6 +31,37 @@ export interface EntryKindResolution {
   source: "explicit" | "import_type" | "heuristic";
 }
 
+/** Removes trust claims from untrusted GPT/ZIP input without touching persisted-load normalization. */
+export function sanitizeExternalImportTrust(entry: unknown): unknown {
+  if (!entry || typeof entry !== "object") return entry;
+  const value = structuredClone(entry) as Record<string, unknown>;
+  const sanitizeFigure = (raw: unknown) => {
+    if (!raw || typeof raw !== "object") return raw;
+    const figure = raw as Record<string, unknown>;
+    const verificationValue = figure.verification && typeof figure.verification === "object"
+      ? figure.verification as Record<string, unknown>
+      : undefined;
+    const hasTrustClaim = figure.representationSelectionSource === "user"
+      || verificationValue?.userApproved === true
+      || verificationValue?.verificationSource === "user"
+      || verificationValue?.verificationSource === "local_validator";
+    if (!hasTrustClaim) return figure;
+    const verification = figure.verification && typeof figure.verification === "object"
+      ? { ...(figure.verification as Record<string, unknown>), status: "needs_review", verificationSource: "gpt_self_check", userApproved: false }
+      : undefined;
+    return {
+      ...figure,
+      representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" : undefined,
+      preferredRepresentation: figure.original && typeof figure.original === "object" && typeof (figure.original as Record<string, unknown>).image === "string" ? "original" : figure.preferredRepresentation,
+      needsReview: true,
+      verification,
+    };
+  };
+  if (Array.isArray(value.figures)) value.figures = value.figures.map(sanitizeFigure);
+  if (Array.isArray(value.entries)) value.entries = value.entries.map((item) => sanitizeExternalImportTrust(item));
+  return value;
+}
+
 export type ImportV2Type = "problem_sheet" | "concept_entries" | "lecture" | "mixed";
 
 export interface ImportedStudyDocument {
@@ -122,7 +153,7 @@ export function parseImportedStudyText(
   fallbackSubject: Subject = "수학",
 ): ImportedStudyText {
   const result = parseImportedStudyTextInternal(input, filename, fallbackSubject);
-  return { ...result, data: normalizeImportedEntryMath(result.data) };
+  return { ...result, data: sanitizeExternalImportTrust(normalizeImportedEntryMath(result.data)) as Partial<EntryFormData> };
 }
 
 function parseImportedStudyTextInternal(
@@ -486,7 +517,7 @@ export function parseAllInOneImport(
       importType: "single",
       title: getString(parsed.title) || undefined,
       subject: normalizeSubject(parsed.subject, fallbackSubject),
-      entries: [normalizeAllInOneEntry({ ...parsed, entryKind: resolution.entryKind }, filename, fallbackSubject)],
+      entries: [normalizeAllInOneEntry(sanitizeExternalImportTrust({ ...parsed, entryKind: resolution.entryKind }) as ImportJsonShape, filename, fallbackSubject)],
       entryKindResolutions: [resolution],
     };
   }
@@ -528,7 +559,7 @@ export function parseAllInOneImport(
       title: rawEntry.title ?? (rawEntries.length === 1 ? wrapperTitle : undefined),
     };
     return normalizeAllInOneEntry(
-      withWrapperDefaults,
+      sanitizeExternalImportTrust(withWrapperDefaults) as ImportJsonShape,
       rawEntries.length === 1 ? filename : undefined,
       entrySubject,
     );
