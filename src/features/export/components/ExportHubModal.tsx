@@ -92,7 +92,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   }, [entry.answerKey, pngOptions.scope, renderFigures, resolvedQuestion, resolvedQuestionNumber]);
   const currentSignature: QuestionPngPreviewSignature = useMemo(() => ({ questionNumber: resolvedQuestionNumber, scope: pngOptions.scope, rendererVersion: QUESTION_PNG_RENDERER_VERSION, fingerprint: currentRenderFingerprint }), [currentRenderFingerprint, pngOptions.scope, resolvedQuestionNumber]);
   const currentSignatureRef = useRef(currentSignature);
-  currentSignatureRef.current = currentSignature;
+  useEffect(() => { currentSignatureRef.current = currentSignature; }, [currentSignature]);
   useEffect(() => {
     if (!pngPreviewSignature) return;
     const same = Object.keys(currentSignature).every((key) => currentSignature[key as keyof QuestionPngPreviewSignature] === pngPreviewSignature[key as keyof QuestionPngPreviewSignature]);

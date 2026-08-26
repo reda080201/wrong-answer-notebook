@@ -118,7 +118,7 @@ function AppContent() {
     settingsInitialTab, setSettingsInitialTab,
     questionTarget, setQuestionTarget,
     realExamStartEntry, setRealExamStartEntry,
-    realExamMinutes, setRealExamMinutes,
+    setRealExamMinutes,
     realExamShowTimer, setRealExamShowTimer,
     realExamAnswerSheetOpen, setRealExamAnswerSheetOpen,
     realExamAnswerSheetLayout, setRealExamAnswerSheetLayout,
