@@ -466,6 +466,7 @@ export function useAppActions({
         question: imported.question ?? "",
         questionImages: imported.questionImages ?? [],
         sourcePageImages: imported.sourcePageImages ?? [],
+        questionSourceCrops: imported.questionSourceCrops,
         entryKind,
         difficult: imported.difficult ?? false,
         difficulty: imported.difficulty ?? "none",

@@ -1,4 +1,4 @@
-import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, Subject } from "../types";
+import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, QuestionSourceCrop, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments, normalizeStructuredQuestions } from "./entry";
 import { renderStructuredQuestionsCompatibilityText } from "./entryQuestions";
@@ -16,6 +16,7 @@ import { applyAutomaticFigurePreference } from "../features/figures/services/fig
 import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty";
 import { decodeTextFile } from "../features/import/services/decodeTextFile";
 import { normalizeImportedMathCommands } from "./legacyMathCommands";
+import { isValidNormalizedCrop } from "./normalizedCrop";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -84,6 +85,7 @@ interface ImportJsonShape {
   questions?: unknown;
   questionImages?: unknown;
   sourcePageImages?: unknown;
+  questionSourceCrops?: unknown;
   summary?: unknown;
   tags?: unknown;
   memo?: unknown;
@@ -125,6 +127,111 @@ interface QuestionExportDocument {
 }
 
 const DEFAULT_TAGS: string[] = [];
+
+export interface ExternalQuestionSourceCropNormalization {
+  crops: QuestionSourceCrop[];
+  invalidQuestionNumbers: string[];
+  warnings: string[];
+}
+
+/**
+ * Normalizes source-crop evidence at the untrusted import boundary. It never
+ * changes persisted entries and deliberately refuses path-shaped asset names.
+ */
+export function normalizeExternalQuestionSourceCrops(raw: unknown): ExternalQuestionSourceCropNormalization {
+  if (!Array.isArray(raw)) return { crops: [], invalidQuestionNumbers: [], warnings: [] };
+
+  const seenIds = new Set<string>();
+  const invalidQuestionNumbers = new Set<string>();
+  const warnings: string[] = [];
+  const crops = raw.flatMap((item, index): QuestionSourceCrop[] => {
+    if (!item || typeof item !== "object") {
+      warnings.push(`원본 crop ${index + 1}의 형식이 올바르지 않아 제외했습니다.`);
+      return [];
+    }
+    const value = item as Record<string, unknown>;
+    const questionNumber = normalizeQuestionNumber(String(value.questionNumber ?? ""));
+    const image = typeof value.image === "string" ? value.image.trim() : "";
+    const sourcePageImage = typeof value.sourcePageImage === "string" ? value.sourcePageImage.trim() : undefined;
+    if (!questionNumber || !image) {
+      warnings.push(`원본 crop ${index + 1}에 문항 번호 또는 이미지가 없어 제외했습니다.`);
+      return [];
+    }
+    if (!isSafeImportAssetReference(image) || (sourcePageImage && !isSafeImportAssetReference(sourcePageImage))) {
+      throw new ImportParseError(`원본 crop ${index + 1}의 이미지 참조가 안전한 ZIP 경로가 아닙니다.`);
+    }
+    const page = typeof value.page === "number" && Number.isInteger(value.page) && value.page > 0
+      ? value.page
+      : undefined;
+    const order = typeof value.order === "number" && Number.isFinite(value.order) ? value.order : index;
+    const suppliedId = typeof value.id === "string" ? value.id.trim() : "";
+    const fallbackId = `import-crop:${questionNumber}:${order}:${stableImportCropHash(`${image}\u0000${sourcePageImage ?? ""}\u0000${page ?? ""}\u0000${index}`)}`;
+    const id = suppliedId && !seenIds.has(suppliedId) ? suppliedId : fallbackId;
+    seenIds.add(id);
+
+    const rawRect = value.cropRect && typeof value.cropRect === "object"
+      ? value.cropRect
+      : undefined;
+    const cropRect = rawRect && isValidNormalizedCrop(rawRect) ? rawRect : undefined;
+    if (rawRect && !cropRect) {
+      invalidQuestionNumbers.add(questionNumber);
+      warnings.push(`${questionNumber}번 원본 crop 좌표가 0~1 범위를 벗어나 검수가 필요합니다. 좌표는 자동 보정하지 않았습니다.`);
+    }
+    return [{ id, questionNumber, page, order, image, sourcePageImage, cropRect }];
+  });
+  return { crops, invalidQuestionNumbers: [...invalidQuestionNumbers], warnings };
+}
+
+function stableImportCropHash(value: string): string {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function markCropReviewOnStructuredQuestions(
+  questions: StructuredQuestion[] | undefined,
+  invalidQuestionNumbers: string[],
+): StructuredQuestion[] | undefined {
+  if (!questions?.length || !invalidQuestionNumbers.length) return questions;
+  const invalid = new Set(invalidQuestionNumbers);
+  return questions.map((question) => {
+    if (!invalid.has(normalizeQuestionNumber(question.questionNumber))) return question;
+    const warning = "원본 crop 좌표를 확인해야 합니다.";
+    return {
+      ...question,
+      needsReview: true,
+      warning: question.warning ? `${question.warning} ${warning}` : warning,
+    };
+  });
+}
+
+function markCropReviewOnQuestionMeta(
+  questionMeta: EntryFormData["questionMeta"] | undefined,
+  invalidQuestionNumbers: string[],
+): EntryFormData["questionMeta"] | undefined {
+  if (!invalidQuestionNumbers.length) return questionMeta;
+  const invalid = new Set(invalidQuestionNumbers);
+  const seen = new Set<string>();
+  const existing = (questionMeta ?? []).map((item) => {
+    const number = normalizeQuestionNumber(item.questionNumber);
+    seen.add(number);
+    return invalid.has(number) ? { ...item, needsReview: true } : item;
+  });
+  return [
+    ...existing,
+    ...invalidQuestionNumbers
+      .filter((number) => !seen.has(number))
+      .map((questionNumber) => ({
+        questionNumber,
+        important: false,
+        needsReview: true,
+        updatedAt: new Date().toISOString(),
+      })),
+  ];
+}
 
 export function isImportJson(value: unknown): value is ImportJsonShape {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -250,7 +357,11 @@ function parseImportedStudyTextInternal(
       }
     }
 
-    const structuredQuestions = normalizeStructuredQuestions(parsed.questions);
+    const cropNormalization = normalizeExternalQuestionSourceCrops(parsed.questionSourceCrops);
+    const structuredQuestions = markCropReviewOnStructuredQuestions(
+      normalizeStructuredQuestions(parsed.questions),
+      cropNormalization.invalidQuestionNumbers,
+    );
     const rawQuestion = getString(parsed.question) || (structuredQuestions?.length
       ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
       : "");
@@ -262,7 +373,8 @@ function parseImportedStudyTextInternal(
       answerOnlyFigures.length > 0 ||
       answerOnlyBlocks.length > 0 ||
       normalizeTextList(parsed.sourcePageImages).length > 0 ||
-      normalizeTextList(parsed.questionImages).length > 0
+      normalizeTextList(parsed.questionImages).length > 0 ||
+      cropNormalization.crops.length > 0
     )) {
       return {
         detectedFormat: "json",
@@ -277,13 +389,17 @@ function parseImportedStudyTextInternal(
           answerKey: answerOnlyKey,
           figures: answerOnlyFigures,
           learningBlocks: answerOnlyBlocks,
-          questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerOnlyKey),
+          questionMeta: markCropReviewOnQuestionMeta(
+            mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerOnlyKey),
+            cropNormalization.invalidQuestionNumbers,
+          ),
           questionContentSegments: undefined,
           importAudit: parsed.audit ? normalizeImportAudit(parsed.audit, { question: "", answerKey: answerOnlyKey, figures: answerOnlyFigures }) : undefined,
           rejectedNotes: normalizeRejectedNotes(parsed.rejectedNotes),
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
           questionImages: normalizeTextList(parsed.questionImages),
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
+          questionSourceCrops: cropNormalization.crops,
           difficult: false,
           difficulty: "none",
           difficultyScore: maxAnswerDifficultyScore(answerOnlyKey),
@@ -292,7 +408,8 @@ function parseImportedStudyTextInternal(
           annotations: [],
           mastered: false,
         },
-        entryKindResolution: resolution,
+          entryKindResolution: resolution,
+          warnings: cropNormalization.warnings,
       };
     }
     if (rawQuestion.trim()) {
@@ -338,7 +455,10 @@ function parseImportedStudyTextInternal(
           answerKey,
           figures,
           learningBlocks,
-          questionMeta: mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
+          questionMeta: markCropReviewOnQuestionMeta(
+            mergeQuestionMetaWithAnswerAnalysis(parsed.questionMeta, answerKey),
+            cropNormalization.invalidQuestionNumbers,
+          ),
           structuredQuestions,
           questionContentSegments,
           importAudit,
@@ -346,6 +466,7 @@ function parseImportedStudyTextInternal(
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
           questionImages: normalizeTextList(parsed.questionImages),
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
+          questionSourceCrops: cropNormalization.crops,
           difficult: false,
           difficulty: "none",
           difficultyScore,
@@ -354,7 +475,8 @@ function parseImportedStudyTextInternal(
           annotations: [],
           mastered: false,
         },
-        entryKindResolution: resolution,
+          entryKindResolution: resolution,
+          warnings: cropNormalization.warnings,
       };
     }
   }
@@ -513,12 +635,18 @@ export function parseAllInOneImport(
   const isWrapper = schemaVersion === "wrong-answer-notebook-import-v2" || "entries" in parsed;
   if (!isWrapper) {
     const resolution = resolveEntryKind(parsed);
+    const normalized = normalizeAllInOneEntry(
+      sanitizeExternalImportTrust({ ...parsed, entryKind: resolution.entryKind }) as ImportJsonShape,
+      filename,
+      fallbackSubject,
+    );
     return {
       importType: "single",
       title: getString(parsed.title) || undefined,
       subject: normalizeSubject(parsed.subject, fallbackSubject),
-      entries: [normalizeAllInOneEntry(sanitizeExternalImportTrust({ ...parsed, entryKind: resolution.entryKind }) as ImportJsonShape, filename, fallbackSubject)],
+      entries: [normalized.data],
       entryKindResolutions: [resolution],
+      warnings: normalized.warnings,
     };
   }
 
@@ -545,6 +673,7 @@ export function parseAllInOneImport(
   const wrapperSubject = normalizeSubject((parsed as ImportV2Wrapper).subject, fallbackSubject);
   const wrapperTitle = getString((parsed as ImportV2Wrapper).title);
   const entryKindResolutions: EntryKindResolution[] = [];
+  const warnings: string[] = [];
   const entries = rawEntries.map((rawEntry, index) => {
     if (!isImportJson(rawEntry)) throw new ImportParseError(`entries[${index}]의 형식이 올바르지 않습니다.`);
     const resolution = inferredResolutions?.[index] ?? resolveEntryKind(rawEntry, importType, index);
@@ -558,11 +687,13 @@ export function parseAllInOneImport(
       subject: rawEntry.subject ?? wrapperSubject,
       title: rawEntry.title ?? (rawEntries.length === 1 ? wrapperTitle : undefined),
     };
-    return normalizeAllInOneEntry(
+    const normalized = normalizeAllInOneEntry(
       sanitizeExternalImportTrust(withWrapperDefaults) as ImportJsonShape,
       rawEntries.length === 1 ? filename : undefined,
       entrySubject,
     );
+    warnings.push(...(normalized.warnings ?? []).map((warning) => `entries[${index}]: ${warning}`));
+    return normalized.data;
   });
 
   return {
@@ -572,6 +703,7 @@ export function parseAllInOneImport(
     subject: wrapperSubject,
     entries,
     entryKindResolutions,
+    warnings: warnings.length ? warnings : undefined,
   };
 }
 
@@ -733,12 +865,12 @@ function normalizeAllInOneEntry(
   value: ImportJsonShape,
   filename: string | undefined,
   fallbackSubject: Subject,
-): Partial<EntryFormData> {
+): Pick<ImportedStudyText, "data" | "warnings"> {
   const result = parseImportedStudyText(JSON.stringify(value), filename, fallbackSubject);
   if (result.detectedFormat !== "json") {
     throw new ImportParseError("가져올 항목을 앱 데이터로 변환하지 못했습니다.");
   }
-  return result.data;
+  return { data: result.data, warnings: result.warnings };
 }
 
 function normalizeSubject(value: unknown, fallback: Subject): Subject {

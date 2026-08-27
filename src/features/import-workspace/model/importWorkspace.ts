@@ -38,7 +38,8 @@ export interface ImportQuestionDraft {
 }
 export type ImportEntryMetadata = Partial<Pick<EntryFormData,
   "problemSource" | "importAudit" | "questionMeta" | "sheetGroup" | "tags" |
-  "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks"
+  "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks" |
+  "questionSourceCrops"
 >> & { unknownFields?: Record<string, unknown> };
 export interface ImportDraftGroup { id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }

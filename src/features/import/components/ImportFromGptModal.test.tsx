@@ -940,6 +940,51 @@ describe("ImportFromGptModal", () => {
     ));
   }, 30000);
 
+  it("keeps ordered question source crops through ZIP preview and direct save", async () => {
+    const onApply = vi.fn();
+    const zip = new JSZip();
+    zip.file("import.json", JSON.stringify({
+      schemaVersion: "wrong-answer-notebook-import-v2",
+      importType: "problem_sheet",
+      subject: "수학",
+      entries: [{
+        entryKind: "problem_sheet",
+        title: "문항 원본 crop",
+        questions: [
+          { questionNumber: "9", questionText: "9번", conditions: [], equations: [], choices: [], contentSegments: [{ id: "q9", type: "text", text: "9번" }], figureIds: [] },
+          { questionNumber: "10", questionText: "10번", conditions: [], equations: [], choices: [], contentSegments: [{ id: "q10", type: "text", text: "10번" }], figureIds: [] },
+        ],
+        questionSourceCrops: [
+          { id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "images/q9-a.png", sourcePageImage: "images/page-3.png" },
+          { id: "q9-b", questionNumber: "9", page: 4, order: 1, image: "images/q9-b.png", sourcePageImage: "images/page-4.png" },
+          { id: "q10-a", questionNumber: "10", page: 5, order: 0, image: "images/q10-a.png", sourcePageImage: "images/page-5.png" },
+        ],
+        audit: { expectedQuestionNumbers: ["9", "10"], detectedQuestionNumbers: ["9", "10"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 },
+      }],
+    }));
+    for (const name of ["images/q9-a.png", "images/q9-b.png", "images/q10-a.png", "images/page-3.png", "images/page-4.png", "images/page-5.png"]) {
+      zip.file(name, new Uint8Array([137, 80, 78, 71]));
+    }
+    const file = new File([await zip.generateAsync({ type: "blob" })], "crops.zip", { type: "application/zip" });
+
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={onApply} />);
+    fireEvent.change(screen.getByLabelText("올인원 가져오기"), { target: { files: [file] } });
+    expect(await screen.findByDisplayValue("문항 원본 crop")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
+
+    await waitFor(() => expect(onApply).toHaveBeenCalledWith(
+      expect.objectContaining({
+        questionSourceCrops: [
+          expect.objectContaining({ id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "images/q9-a.png", sourcePageImage: "images/page-3.png" }),
+          expect.objectContaining({ id: "q9-b", questionNumber: "9", page: 4, order: 1, image: "images/q9-b.png", sourcePageImage: "images/page-4.png" }),
+          expect.objectContaining({ id: "q10-a", questionNumber: "10", page: 5, order: 0, image: "images/q10-a.png", sourcePageImage: "images/page-5.png" }),
+        ],
+      }),
+      undefined,
+      expect.arrayContaining([expect.objectContaining({ name: "q9-a.png" }), expect.objectContaining({ name: "q9-b.png" })]),
+    ));
+  }, 30000);
+
   it("opens a single v2 wrapper as an editable problem sheet preview", async () => {
     const onApply = vi.fn();
     const onApplyEntries = vi.fn();

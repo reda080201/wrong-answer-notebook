@@ -62,6 +62,36 @@ describe("import workspace image separation", () => {
     expect(result.sourcePageImages).toEqual(["source-page.png"]);
   });
 
+  it("keeps entry-level source crops distinct from question and page images", () => {
+    const result = questionDraftToEntryData({
+      id: "group-crops",
+      title: "원본 crop 시험지",
+      entryMetadata: {
+        questionSourceCrops: [
+          { id: "crop-q9-a", questionNumber: "9", page: 3, order: 0, image: "q9-a.png", sourcePageImage: "page-3.png" },
+          { id: "crop-q10", questionNumber: "10", page: 4, order: 0, image: "q10.png", sourcePageImage: "page-4.png" },
+        ],
+      },
+      questions: [{
+        ...draft(),
+        displayQuestionNumber: "9",
+        sourceQuestionNumber: "9",
+        questionImageAssets: ["question-9.png"],
+        sourcePageAssets: ["page-3.png"],
+      }],
+      answerItems: [],
+      sourceFileIds: [],
+      userConfirmed: true,
+    });
+
+    expect(result.questionImages).toEqual(["question-9.png"]);
+    expect(result.sourcePageImages).toEqual(["page-3.png"]);
+    expect(result.questionSourceCrops).toEqual([
+      expect.objectContaining({ id: "crop-q9-a", questionNumber: "9", image: "q9-a.png" }),
+      expect.objectContaining({ id: "crop-q10", questionNumber: "10", image: "q10.png" }),
+    ]);
+  });
+
   it("round-trips two structured questions and keeps an edited question", () => {
     const result = questionDraftToEntryData({
       id: "group-structured",
