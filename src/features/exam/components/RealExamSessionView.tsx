@@ -3,14 +3,13 @@ import type { ExamPreferences, ExamSession } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import { IconButton } from "../../../shared/ui";
 import { X } from "lucide-react";
-import MathText from "../../../components/MathText";
 import QuestionContentView from "../../../components/QuestionContentView";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
 import { sanitizeExamQuestionDomId } from "../services/examDom";
-import { parseChoice } from "../../../utils/choice";
+import ExamResponseEditor from "./ExamResponseEditor";
 import "./RealExamSessionView.css";
 
 interface RealExamSessionViewProps {
@@ -62,9 +61,9 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const currentQuestionIndex = session.currentQuestionIndex ?? 0;
   const safeCurrentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, session.questions.length - 1));
   const currentQuestion = session.questions[safeCurrentQuestionIndex];
-  const activeQuestions = currentQuestion?.stimulusGroupId
+  const activeQuestions = useMemo(() => currentQuestion?.stimulusGroupId
     ? session.questions.filter((question) => question.stimulusGroupId === currentQuestion.stimulusGroupId)
-    : currentQuestion ? [currentQuestion] : [];
+    : currentQuestion ? [currentQuestion] : [], [currentQuestion, session.questions]);
   const answerSheetLayout = resolveAnswerSheetLayout(session);
 
   useEffect(() => {
@@ -166,23 +165,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     updateSession((latest) => ({ ...latest, answerSheetOpen: next }));
   };
 
-  const answerSheetControl = (question: ExamSession["questions"][number]) => {
-    const response = responses.get(question.questionNumber);
-    const disabled = session.status === "submitted" || expired;
-    if (isMultipleChoiceQuestion(question.questionType, question.choices)) {
-      return <div className="real-exam-answer-sheet-choices" role="group" aria-label={`${question.questionNumber}번 답안 선택`}>
-        {question.choices.map((choice) => {
-          const parsed = parseChoice(choice);
-          const selected = response?.response === parsed.marker || response?.response === parsed.content;
-          return <button key={choice} type="button" aria-pressed={selected} disabled={disabled} onClick={() => changeResponse(question.questionNumber, { response: parsed.marker || parsed.content })}>{parsed.marker}</button>;
-        })}
-      </div>;
-    }
-    return question.questionType === "essay"
-      ? <textarea aria-label={`${question.questionNumber}번 답안`} value={response?.response ?? ""} disabled={disabled} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} />
-      : <input aria-label={`${question.questionNumber}번 답안`} value={response?.response ?? ""} disabled={disabled} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} />;
-  };
-
   return (
     <section className="real-exam-session" aria-label="실전 모의고사">
       <header className="real-exam-header">
@@ -201,7 +183,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
           {activeQuestions.map((question) => {
             const index = session.questions.indexOf(question);
             const response = responses.get(question.questionNumber);
-            const multipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices);
             return (
               <article key={question.id} id={sanitizeExamQuestionDomId(question.questionNumber)} className="real-exam-question">
                 <header><h3>문제 {question.questionNumber}</h3><span>{index + 1} / {session.questions.length}</span></header>
@@ -212,7 +193,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
                   </section>
                 )}
                 <QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
-                {multipleChoice ? <div className="real-exam-choices" role="group" aria-label={`${question.questionNumber}번 선택지`}>{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button key={choice} type="button" aria-pressed={selected} disabled={session.status === "submitted" || expired} onClick={() => changeResponse(question.questionNumber, { response: parsed.marker || parsed.content })}><b>{parsed.marker}</b><MathText text={parsed.content} /></button>; })}</div> : <label>답안<input value={response?.response ?? ""} disabled={session.status === "submitted" || expired} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} /></label>}
+                <ExamResponseEditor question={question} response={response} disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} />
                 <label className="real-exam-review"><input type="checkbox" checked={response?.markedForReview ?? false} disabled={session.status === "submitted" || expired} onChange={(event) => changeResponse(question.questionNumber, { markedForReview: event.target.checked })} /> 검토 표시</label>
               </article>
             );
@@ -220,7 +201,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
         </main>
         <aside className="real-exam-answer-sheet" aria-label="답안지">
           <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet}>{answerSheetOpen ? "접기" : "펼치기"}</button></header>
-          {answerSheetOpen && <div className={`real-exam-answer-grid real-exam-answer-grid--${answerSheetLayout}`}>{session.questions.map((question, index) => { const response = responses.get(question.questionNumber); const answered = Boolean(response?.response.trim()); const current = index === safeCurrentQuestionIndex; return <div key={question.id} className={`real-exam-answer-item ${answered ? "is-answered" : "is-unanswered"}${current ? " is-current" : ""}${response?.markedForReview ? " is-marked" : ""}`}><button type="button" className="real-exam-answer-jump" aria-current={current ? "step" : undefined} aria-label={`${question.questionNumber}번 ${answered ? "응답" : "미응답"}${response?.markedForReview ? ", 검토 표시" : ""}${current ? ", 현재 문항" : ""}`} onClick={() => navigateToQuestion(index)}><strong>{question.questionNumber}</strong><span>{answered ? "응답" : "미응답"}</span>{response?.markedForReview && <em>검토</em>}</button>{answerSheetControl(question)}</div>; })}</div>}
+          {answerSheetOpen && <div className={`real-exam-answer-grid real-exam-answer-grid--${answerSheetLayout}`}>{session.questions.map((question, index) => { const response = responses.get(question.questionNumber); const answered = Boolean(response?.response.trim()); const current = index === safeCurrentQuestionIndex; return <div key={question.id} className={`real-exam-answer-item ${answered ? "is-answered" : "is-unanswered"}${current ? " is-current" : ""}${response?.markedForReview ? " is-marked" : ""}`}><button type="button" className="real-exam-answer-jump" aria-current={current ? "step" : undefined} aria-label={`${question.questionNumber}번 ${answered ? "응답" : "미응답"}${response?.markedForReview ? ", 검토 표시" : ""}${current ? ", 현재 문항" : ""}`} onClick={() => navigateToQuestion(index)}><strong>{question.questionNumber}</strong><span>{answered ? "응답" : "미응답"}</span>{response?.markedForReview && <em>검토</em>}</button><ExamResponseEditor question={question} response={response} compact disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} /></div>; })}</div>}
         </aside>
       </div>
       {session.status === "in_progress" && <nav className="real-exam-navigation" aria-label="실전 문항 이동"><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex - 1)} disabled={safeCurrentQuestionIndex <= 0}>이전</button><span>{safeCurrentQuestionIndex + 1} / {session.questions.length}</span><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex + 1)} disabled={safeCurrentQuestionIndex >= session.questions.length - 1}>다음</button></nav>}

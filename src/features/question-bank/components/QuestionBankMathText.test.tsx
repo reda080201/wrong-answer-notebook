@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import QuestionBankCard from "./QuestionBankCard";
@@ -36,6 +36,11 @@ describe("Question Bank math rendering", () => {
   it("renders question, answer, and explanation through MathText in detail", () => {
     const { container } = render(<QuestionBankDetail item={item} onClose={vi.fn()} onOpenQuestion={vi.fn()} />);
     expect(container.querySelectorAll(".math-fragment")).toHaveLength(3);
+  });
+
+  it("displays an explicit zero importance score", () => {
+    render(<QuestionBankDetail item={{ ...item, classification: { ...item.classification, importanceScore: 0 } }} onClose={vi.fn()} onOpenQuestion={vi.fn()} />);
+    expect(screen.getByText("0/5")).toBeInTheDocument();
   });
 });
 

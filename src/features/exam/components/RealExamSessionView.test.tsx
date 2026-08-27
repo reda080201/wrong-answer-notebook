@@ -3,35 +3,27 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExamSession } from "../../../types";
 import RealExamSessionView from "./RealExamSessionView";
 
-function session(overrides: Partial<ExamSession> = {}): ExamSession {
+function createEssaySession(): ExamSession {
   return {
-    id: "real-1", entryId: "entry-1", title: "실전 시험", subject: "수학", status: "in_progress", mode: "real",
-    questions: [
-      { id: "q1", questionNumber: "1", questionType: "multiple_choice", question: "첫 문항", choices: ["① 1", "② 2"], questionImages: [], sourcePageImages: [], figures: [] },
-      { id: "q2", questionNumber: "2", questionType: "short_answer", question: "둘째 문항", choices: [], questionImages: [], sourcePageImages: [], figures: [] },
-    ], responses: [], currentQuestionIndex: 0, startedAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z", answerSheetOpen: true, answerSheetLayout: "auto", ...overrides,
+    id: "real-session-1", entryId: "entry-1", title: "서술형 실전 테스트", subject: "국어", status: "in_progress",
+    questions: [{ id: "question-1", questionNumber: "1", questionType: "essay", question: "다음 물음에 답하시오.", choices: [], questionImages: [], figures: [] }],
+    responses: [], currentQuestionIndex: 0, answerSheetOpen: true,
+    startedAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
   };
 }
 
-describe("RealExamSessionView", () => {
-  it("renders only the active question and answer sheet navigation changes it", () => {
+describe("RealExamSessionView response editors", () => {
+  it("uses a textarea for essay answers in both the paper and answer sheet", () => {
+    render(<RealExamSessionView session={createEssaySession()} onChange={vi.fn()} onSubmit={vi.fn()} onClose={vi.fn()} />);
+    const editors = screen.getAllByRole("textbox", { name: "1번 답안" });
+    expect(editors).toHaveLength(2);
+    expect(editors.every((element) => element.tagName === "TEXTAREA")).toBe(true);
+  });
+
+  it("uses the same response update contract from the answer sheet", () => {
     const onChange = vi.fn();
-    render(<RealExamSessionView session={session()} onChange={onChange} onSubmit={vi.fn()} onClose={vi.fn()} />);
-    expect(screen.getByText("첫 문항")).toBeInTheDocument();
-    expect(screen.queryByText("둘째 문항")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: /2번 미응답/ }));
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ currentQuestionIndex: 1 }));
-  });
-
-  it("uses vertical rows for mixed exams and exposes the 44px close control", () => {
-    render(<RealExamSessionView session={session()} onChange={vi.fn()} onSubmit={vi.fn()} onClose={vi.fn()} />);
-    expect(document.querySelector(".real-exam-answer-grid--vertical")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "시험 닫기" })).toBeInTheDocument();
-  });
-
-  it("uses horizontal answer sheets only for all multiple-choice sessions", () => {
-    const questions = session().questions.map((question) => ({ ...question, questionType: "multiple_choice" as const }));
-    render(<RealExamSessionView session={session({ questions, subject: "영어" })} onChange={vi.fn()} onSubmit={vi.fn()} onClose={vi.fn()} />);
-    expect(document.querySelector(".real-exam-answer-grid--horizontal")).toBeTruthy();
+    render(<RealExamSessionView session={createEssaySession()} onChange={onChange} onSubmit={vi.fn()} onClose={vi.fn()} />);
+    fireEvent.change(screen.getAllByRole("textbox", { name: "1번 답안" })[1], { target: { value: "답안" } });
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ responses: [expect.objectContaining({ questionNumber: "1", response: "답안" })] }));
   });
 });

@@ -164,10 +164,12 @@ export function renderWikiLinksInNodes(
         });
 
         // Clone the element with new children containing wiki link nodes
-        return cloneElement(node, undefined, children);
+        return cloneElement(node, { key: node.key ?? `wiki-mark-${idx}` }, children);
       }
     }
 
-    return node;
+    return isValidElement(node)
+      ? cloneElement(node, { key: node.key ?? `wiki-node-${idx}` })
+      : node;
   });
 }
