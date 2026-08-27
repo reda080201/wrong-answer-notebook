@@ -880,6 +880,7 @@ function AppContent() {
           <div className="real-exam-start-dialog">
             <p className="form-hint">{realExamStartEntry.title}</p>
             <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            {examStartError?.entryId === realExamStartEntry.id && <p className="form-error" role="alert">{examStartError.message}</p>}
             {selectedRealSession?.deadlineAt && (
               <p className="form-hint" role="status">
                 진행 중인 실전 모의고사 · 남은 시간 {Math.floor(getRemainingExamSeconds(selectedRealSession.deadlineAt) / 60).toString().padStart(2, "0")}:{(getRemainingExamSeconds(selectedRealSession.deadlineAt) % 60).toString().padStart(2, "0")}
@@ -912,8 +913,8 @@ function AppContent() {
                 onClick={() => {
                   const entry = realExamStartEntry;
                   if (!selectedRealSession && customTimeError) return;
-                  setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? selectedRealMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
+                  const result = openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? selectedRealMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
+                  if (result.ok) setRealExamStartEntry(null);
                 }}
               >
                 {selectedRealSession ? "이어서 풀기" : "실전 모드 시작"}

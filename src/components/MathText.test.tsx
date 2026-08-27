@@ -57,4 +57,11 @@ describe("MathText", () => {
     expect(screen.getByText("적분값은", { exact: false })).toBeInTheDocument();
     expect(screen.getByText("이다.", { exact: false })).toBeInTheDocument();
   });
+
+  it("supports adjacent raw commands without consuming ordinary paths", () => {
+    const { container } = render(<MathText text={String.raw`2\times3, x\ge0, A\subset B https://example.com/times3 C:\\times3 /usr/bin/frac 3/4`} />);
+    expect(container.querySelectorAll(".katex")).toHaveLength(3);
+    expect(screen.getByText(/https:\/\/example\.com\/times3/)).toBeInTheDocument();
+    expect(screen.getByText(/3\/4/)).toBeInTheDocument();
+  });
 });

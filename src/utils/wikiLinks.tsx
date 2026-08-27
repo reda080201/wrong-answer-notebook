@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, type ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
 import MathText from "../components/MathText";
 import { useConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
 import type { ConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
@@ -75,7 +75,7 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets, concept
     }
     if (last === 0) return <MathText key={key} text={raw} />;
     if (last < raw.length) nodes.push(<MathText key={`${key}-text-end`} text={raw.slice(last)} />);
-    return <>{nodes}</>;
+    return <Fragment key={key}>{nodes}</Fragment>;
   };
 
   return (

@@ -152,9 +152,18 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const units = useMemo(() => learningHubUnits(items), [items]);
   const thinkers = useMemo(() => learningHubThinkers(items), [items]);
   useEffect(() => {
-    if (!highlightedBlock) return;
-    document.getElementById(`learning-block-${highlightedBlock.entryId}-${highlightedBlock.blockId}`)?.scrollIntoView({ block: "center" });
-  }, [highlightedBlock]);
+    const highlightedKey = highlightedBlock ? `${highlightedBlock.entryId}:${highlightedBlock.blockId}` : null;
+    setSelectedBlockKey((current) => {
+      if (highlightedKey && filtered.some((item) => `${item.sourceEntryId}:${item.block.id}` === highlightedKey)) return highlightedKey;
+      if (current && filtered.some((item) => `${item.sourceEntryId}:${item.block.id}` === current)) return current;
+      return filtered[0] ? `${filtered[0].sourceEntryId}:${filtered[0].block.id}` : null;
+    });
+  }, [filtered, highlightedBlock]);
+  useEffect(() => {
+    if (!selectedBlockKey) return;
+    const [entryId, blockId] = selectedBlockKey.split(":");
+    document.getElementById(`learning-block-${entryId}-${blockId}`)?.scrollIntoView?.({ block: "center" });
+  }, [selectedBlockKey]);
   const set = <K extends keyof LearningHubFilters>(key: K, value: LearningHubFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
   const activeFilterChips = [
     filters.search ? { key: "search", label: `검색: ${filters.search}`, clear: () => set("search", "") } : null,

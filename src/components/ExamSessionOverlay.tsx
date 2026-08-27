@@ -60,6 +60,9 @@ export default function ExamSessionOverlay({
     examPreferences={examPreferences}
     onClose={onClose}
     closeDisabled={submitting || saving}
+    saveError={saveError}
+    saving={saving}
+    onRetrySave={onRetrySave}
   /> : <ExamSessionView
     session={session}
     examPreferences={examPreferences}
@@ -77,7 +80,7 @@ export default function ExamSessionOverlay({
 
   const overlay = (
     <div className={`exam-session-overlay${generated ? " exam-session-overlay--generated" : ""}${session.mode === "real" ? " exam-session-overlay--real" : ""}`}>
-      {saveError && (
+      {saveError && session.mode !== "real" && (
         <div className="exam-session-save-error" role="alert">
           <span>진행 상태 저장 실패: {saveError}</span>
           <button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button>

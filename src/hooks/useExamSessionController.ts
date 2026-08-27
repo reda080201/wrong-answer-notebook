@@ -48,6 +48,10 @@ export interface ExamOpenOptions {
   answerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
+export type ExamOpenResult =
+  | { ok: true; session: ExamSession }
+  | { ok: false; code: "sessions_not_loaded" | "no_questions" | "missing_answers"; message: string };
+
 export function useExamSessionController({
   existingEntries = EMPTY_ENTRIES,
   commitExamSubmission,
@@ -180,33 +184,38 @@ export function useExamSessionController({
     setSaveError(null);
   }, []);
 
-  const open = useCallback((entry: WrongAnswerEntry, options: ExamOpenOptions | ExamSession = {}) => {
+  const open = useCallback((entry: WrongAnswerEntry, options: ExamOpenOptions | ExamSession = {}): ExamOpenResult => {
     const normalizedOptions: ExamOpenOptions = "status" in options
       ? { mode: options.mode ?? "practice", resumable: options }
       : options;
     setStartError(null);
     if (!loadedRef.current) {
-      setStartError({ entryId: entry.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
-      return;
+      const message = loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.";
+      setStartError({ entryId: entry.id, message });
+      return { ok: false, code: "sessions_not_loaded", message };
     }
     setActiveGeneratedExam(null);
     if (normalizedOptions.resumable) {
-      setSession(normalizedOptions.resumable);
-      return;
+      const resumed = normalizeExamSession(normalizedOptions.resumable);
+      setSession(resumed);
+      return { ok: true, session: resumed };
     }
     const next = createExamSession(entry, new Date(), normalizedOptions);
     if (!next.questions.length) {
-      setStartError({ entryId: entry.id, message: "감지된 문항이 없어 모의고사를 시작할 수 없습니다. 문제 번호 형식을 확인해 주세요." });
-      return;
+      const message = "감지된 문항이 없어 모의고사를 시작할 수 없습니다. 문제 번호 형식을 확인해 주세요.";
+      setStartError({ entryId: entry.id, message });
+      return { ok: false, code: "no_questions", message };
     }
     const missingAnswers = next.questions
       .filter((question) => !question.correctAnswer?.trim())
       .map((question) => question.questionNumber);
     if (missingAnswers.length) {
-      setStartError({ entryId: entry.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.` });
-      return;
+      const message = `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.`;
+      setStartError({ entryId: entry.id, message });
+      return { ok: false, code: "missing_answers", message };
     }
     setSession(next);
+    return { ok: true, session: next };
   }, [loadError]);
 
   const openGenerated = useCallback((exam: GeneratedExam, options: ExamOpenOptions = {}) => {

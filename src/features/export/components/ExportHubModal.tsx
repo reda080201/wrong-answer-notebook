@@ -16,6 +16,7 @@ import QuestionRenderComparisonPanel from "./QuestionRenderComparisonPanel";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getImageUrl } from "../../../api";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 
 interface ExportHubModalProps {
   entry: WrongAnswerEntry;
@@ -83,7 +84,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   const printModel = useMemo(() => buildExamPrintModel({ entry, questionNumbers: scopeResult.questionNumbers, preferences: examPrintPreferences, preset: examPrintPreferences.preset, scope }), [entry, scopeResult.questionNumbers, examPrintPreferences, scope]);
   const resolvedQuestionNumber = normalizeQuestionNumber(currentQuestionNumber ?? scopeResult.questionNumbers[0] ?? "");
   const resolvedQuestion = useMemo(() => getEntryQuestions(entry).find((item) => normalizeQuestionNumber(item.questionNumber) === resolvedQuestionNumber) ?? null, [entry, resolvedQuestionNumber]);
-  const renderFigures = useMemo(() => (entry.figures ?? []).filter((figure) => resolvedQuestion?.figureIds.includes(figure.id) || normalizeQuestionNumber(figure.questionNumber) === resolvedQuestionNumber), [entry.figures, resolvedQuestion?.figureIds, resolvedQuestionNumber]);
+  const renderFigures = useMemo(() => resolvedQuestion ? resolveQuestionFigures(entry, resolvedQuestion) : [], [entry, resolvedQuestion]);
   const currentRenderFingerprint = useMemo(() => {
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === resolvedQuestionNumber);
     return resolvedQuestion

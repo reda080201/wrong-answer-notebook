@@ -50,7 +50,9 @@ function readBalanced(value: string, start: number): number {
 
 function readRawCommand(value: string, start: number): { end: number; raw: string } | null {
   const previous = value[start - 1];
-  if (!isBoundary(value, start) && !(value[start] === "\\" && /[)\]}]/.test(previous ?? ""))) return null;
+  const isBackslashCommand = value[start] === "\\" && previous !== "\\" && previous !== "/" && !(previous === ":" && /[A-Za-z]:$/.test(value.slice(Math.max(0, start - 2), start)));
+  const isSlashCommand = value[start] === "/" && (isBoundary(value, start) || /[0-9)\]}]/.test(previous ?? ""));
+  if (!isBackslashCommand && !isSlashCommand) return null;
   const match = value.slice(start + 1).match(/^(begin\{([A-Za-z]+)\}|[A-Za-z]+)/);
   if (!match) return null;
   const command = match[1];

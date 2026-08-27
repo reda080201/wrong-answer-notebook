@@ -20,4 +20,10 @@ describe("resolveQuestionAssets", () => {
     expect(assets.figureAssets).not.toContain("figure-10.png");
     expect(assets.sourcePages).toEqual(["page-2.png"]);
   });
+
+  it("does not use a stale question number when canonical figure IDs exist", () => {
+    const assets = resolveQuestionAssets({ ...entry, structuredQuestions: [{ questionNumber: "9", questionText: "", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: ["f-9"] }] } as WrongAnswerEntry, { questionNumber: "9", figureIds: ["f-9"], source: {} });
+    expect(assets.figureAssets).toContain("figure-9.png");
+    expect(assets.figureAssets).not.toContain("figure-10.png");
+  });
 });

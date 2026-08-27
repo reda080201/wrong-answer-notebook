@@ -8,6 +8,8 @@ import type { QuestionBlock } from "../../../utils/textLayout";
 import { resolveExamPrintContentOptions } from "./examPrintPresets";
 import { buildExamPrintFilenameBase } from "./exportFilename";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 
 const AUTO_COLUMNS_MIN_QUESTIONS = 4;
 const AUTO_COLUMNS_MAX_QUESTION_CHARACTERS = 520;
@@ -15,9 +17,8 @@ const WIDE_TABLE_MIN_COLUMNS = 4;
 const WIDE_TABLE_MAX_CELL_CHARACTERS = 28;
 
 function figuresForQuestion(entry: WrongAnswerEntry, questionNumber: string): SheetFigureItem[] {
-  return (entry.figures ?? []).filter(
-    (figure) => normalizeQuestionNumber(figure.questionNumber) === questionNumber,
-  );
+  const question = getEntryQuestions(entry).find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
+  return question ? resolveQuestionFigures(entry, question) : [];
 }
 
 function buildSegments(entry: WrongAnswerEntry, questionNumber: string): ExamPrintQuestionModel["segments"] {

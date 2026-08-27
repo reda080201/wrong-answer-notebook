@@ -188,11 +188,16 @@ export async function getImageUrl(filename: string): Promise<string> {
 }
 
 function cacheImageUrl(filename: string, url: string): void {
+  const revokeIfOwned = (value: string | undefined) => {
+    if (value?.startsWith("blob:") && value !== url) URL.revokeObjectURL(value);
+  };
+  revokeIfOwned(imageUrlCache.get(filename));
   imageUrlCache.delete(filename);
   imageUrlCache.set(filename, url);
   while (imageUrlCache.size > IMAGE_URL_CACHE_LIMIT) {
     const oldest = imageUrlCache.keys().next().value;
     if (oldest === undefined) return;
+    revokeIfOwned(imageUrlCache.get(oldest));
     imageUrlCache.delete(oldest);
   }
 }

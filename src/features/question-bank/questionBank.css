@@ -19,6 +19,7 @@
 .question-bank-card { position: relative; min-width: 0; min-height: 72px; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
 .question-bank-card__main { width: 100%; min-height: 72px; border: 0; padding: var(--space-3) 64px var(--space-3) var(--space-4); text-align: left; color: inherit; background: transparent; cursor: pointer; }
 .question-bank-card__main:hover { background: var(--surface-hover); }
+.question-bank-card.is-selected .question-bank-card__main { background: var(--surface-hover); }
 .question-bank-card__main > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .question-bank-card__main > header span { flex: 0 0 auto; color: var(--accent); font-size: 12px; }
 .question-bank-card__number { margin-right: var(--space-2); color: var(--accent); }
@@ -26,9 +27,8 @@
 .question-bank-card__main > p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--text); line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .question-bank-card__main > footer { justify-content: flex-start; margin-top: var(--space-1); color: var(--text-muted); font-size: 12px; }
 .question-bank-card__warning { color: var(--warning); font-weight: 700; }
-.question-bank-card__detail { position: absolute; right: var(--space-2); top: 50%; width: 42px; height: 32px; transform: translateY(-50%); border: 0; background: transparent; color: var(--accent); cursor: pointer; opacity: 0; }
-.question-bank-card:hover .question-bank-card__detail,
-.question-bank-card:focus-within .question-bank-card__detail { opacity: 1; }
+.question-bank-card__detail { position: absolute; right: var(--space-2); top: 50%; width: 42px; height: 32px; transform: translateY(-50%); border: 0; background: transparent; color: var(--accent); cursor: pointer; }
+.question-bank-card.is-selected { box-shadow: inset 3px 0 0 var(--accent); background: var(--surface-hover); }
 .question-bank-detail { display: grid; gap: var(--space-4); min-width: min(640px, 80vw); }
 .question-bank-inspector { min-width: 0; max-height: calc(100dvh - 220px); overflow: auto; padding: var(--space-4); border-left: 1px solid var(--border); background: var(--surface); }
 .question-bank-inspector .question-bank-detail { min-width: 0; }

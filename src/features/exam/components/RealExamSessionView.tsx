@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExamPreferences, ExamSession } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import { IconButton } from "../../../shared/ui";
-import { X } from "lucide-react";
+import { PanelRightOpen, X } from "lucide-react";
 import QuestionContentView from "../../../components/QuestionContentView";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 import { scoreExamSession } from "../services/examScoring";
@@ -20,6 +20,9 @@ interface RealExamSessionViewProps {
   examPreferences?: ExamPreferences;
   onClose(): void;
   closeDisabled?: boolean;
+  saveError?: string | null;
+  saving?: boolean;
+  onRetrySave?(): void;
 }
 
 function formatTime(seconds: number): string {
@@ -38,7 +41,7 @@ function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
   return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']"));
 }
 
-export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false }: RealExamSessionViewProps) {
+export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave }: RealExamSessionViewProps) {
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -176,6 +179,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
           <IconButton className="real-exam-close" label="시험 닫기" onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>
         </div>
       </header>
+      {saveError && <div className="exam-session-save-error" role="alert"><span>진행 상태 저장 실패: {saveError}</span><button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button></div>}
       {expired && session.status === "in_progress" && <div className="real-exam-expired" role="alert">시간이 종료되었습니다. 답안 입력을 잠그고 제출할 수 있습니다.</div>}
       {deadlineWarning && !expired && <div className="real-exam-warning" role="status">시험 종료까지 5분 이내입니다.</div>}
       <div className={`real-exam-layout${answerSheetOpen ? "" : " real-exam-layout--sheet-collapsed"}`}>
@@ -200,7 +204,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
           })}
         </main>
         <aside className="real-exam-answer-sheet" aria-label="답안지">
-          <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet}>{answerSheetOpen ? "접기" : "펼치기"}</button></header>
+          {answerSheetOpen ? <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet} aria-label="답안지 접기">접기</button></header> : <div className="real-exam-answer-sheet-rail"><IconButton label="답안지 펼치기" onClick={toggleAnswerSheet}><PanelRightOpen size={20} /></IconButton></div>}
           {answerSheetOpen && <div className={`real-exam-answer-grid real-exam-answer-grid--${answerSheetLayout}`}>{session.questions.map((question, index) => { const response = responses.get(question.questionNumber); const answered = Boolean(response?.response.trim()); const current = index === safeCurrentQuestionIndex; return <div key={question.id} className={`real-exam-answer-item ${answered ? "is-answered" : "is-unanswered"}${current ? " is-current" : ""}${response?.markedForReview ? " is-marked" : ""}`}><button type="button" className="real-exam-answer-jump" aria-current={current ? "step" : undefined} aria-label={`${question.questionNumber}번 ${answered ? "응답" : "미응답"}${response?.markedForReview ? ", 검토 표시" : ""}${current ? ", 현재 문항" : ""}`} onClick={() => navigateToQuestion(index)}><strong>{question.questionNumber}</strong><span>{answered ? "응답" : "미응답"}</span>{response?.markedForReview && <em>검토</em>}</button><ExamResponseEditor question={question} response={response} compact disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} /></div>; })}</div>}
         </aside>
       </div>

@@ -15,12 +15,12 @@ describe("QuestionBankView", () => {
   it("filters projected questions and opens the exact question target", () => {
     const onOpenQuestion = vi.fn();
     render(<QuestionBankView entries={[entry]} onOpenQuestion={onOpenQuestion} />);
-    expect(screen.getByRole("button", { name: "기출 시험 1번 열기" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "기출 시험 1번 검사기 선택" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "필터" }));
     fireEvent.change(screen.getByLabelText("문제 은행 검색"), { target: { value: "없는 개념" } });
     expect(screen.getByText("조건에 맞는 문항이 없습니다.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "필터 초기화" }));
-    fireEvent.click(screen.getByRole("button", { name: "기출 시험 1번 열기" }));
+    fireEvent.click(screen.getByRole("button", { name: "기출 시험 1번 문제 열기" }));
     expect(onOpenQuestion).toHaveBeenCalledWith(expect.objectContaining({ entryId: "sheet", questionNumber: "1" }));
   });
 

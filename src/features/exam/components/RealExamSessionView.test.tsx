@@ -13,6 +13,16 @@ function createEssaySession(): ExamSession {
 }
 
 describe("RealExamSessionView response editors", () => {
+  it("uses a dedicated 72px expand rail when the answer sheet is collapsed", () => {
+    const onChange = vi.fn();
+    const session = { ...createEssaySession(), answerSheetOpen: false };
+    render(<RealExamSessionView session={session} onChange={onChange} onSubmit={vi.fn()} onClose={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "답안지 펼치기" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "답안지" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "답안지 펼치기" }));
+    expect(screen.getByRole("heading", { name: "답안지" })).toBeInTheDocument();
+  });
+
   it("uses a textarea for essay answers in both the paper and answer sheet", () => {
     render(<RealExamSessionView session={createEssaySession()} onChange={vi.fn()} onSubmit={vi.fn()} onClose={vi.fn()} />);
     const editors = screen.getAllByRole("textbox", { name: "1번 답안" });
