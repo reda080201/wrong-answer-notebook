@@ -102,7 +102,7 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-          ], [activeSection, questionBank?.active, questionBank?.total, sectionEntries, stats]);
+          ], [activeSection, questionBank, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
     void navigationController.requestNavigation({ section, entryId: null });
   };
