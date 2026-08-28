@@ -15,11 +15,44 @@ export interface ResolvedFigureRepresentation {
   reason: string;
 }
 
+export type FigureVerificationTrust =
+  | "trusted_user"
+  | "trusted_local"
+  | "untrusted_model"
+  | "untrusted_missing";
+
+export function classifyFigureVerificationTrust(
+  verification?: FigureVerification,
+): FigureVerificationTrust {
+  if (verification?.verificationSource === "user") return "trusted_user";
+  if (verification?.verificationSource === "local_validator") return "trusted_local";
+  if (verification?.verificationSource === "gpt_self_check" || verification?.verificationSource === "second_pass_model") return "untrusted_model";
+  return "untrusted_missing";
+}
+
+function canAutomaticallyTrust(verification?: FigureVerification): boolean {
+  const trust = classifyFigureVerificationTrust(verification);
+  if (trust === "trusted_user") return true;
+  return trust === "trusted_local"
+    && verification?.status === "verified"
+    && verification.blockingIssues.length === 0
+    && verification.confidence >= 0.95;
+}
+
+function cleanedReason(figure: SheetFigureItem, verified: boolean): string {
+  if (figure.cleaned?.untrustedGeneratedBy || !figure.cleaned?.generatedBy) return "정리본 · 검토 필요";
+  const label = figure.cleaned.generatedBy === "deterministic_cleanup"
+    ? "정리본 · 자동 이미지 정리"
+    : figure.cleaned.generatedBy === "deterministic_redraw"
+      ? "정리본 · 결정론적 재구성"
+      : "AI 정리본";
+  return verified ? label : `${label} · 검토 필요`;
+}
+
 export function automaticPreferredRepresentation(figure: SheetFigureItem): FigurePreferredRepresentation {
   const verification = figure.verification;
-  // Legacy saved entries have no source marker; preserve their existing policy.
-  const trustedVerification = verification?.verificationSource !== "gpt_self_check";
-  if (figure.cleaned?.image && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0 && verification.confidence >= 0.95) {
+  const trustedVerification = canAutomaticallyTrust(verification);
+  if (figure.cleaned?.image && figure.cleaned.generatedBy && !figure.cleaned.untrustedGeneratedBy && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0 && verification.confidence >= 0.95) {
     return "cleaned";
   }
   if (figure.semanticSpec && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0) {
@@ -43,13 +76,13 @@ export function resolveFigureRepresentation(
   const printRequiresVerified = options.forPrint && !userSelected;
 
   if (preferred === "cleaned" && figure.cleaned?.image) {
-    const verified = Boolean(verification && verification.blockingIssues.length === 0 && verification.confidence >= 0.95);
+    const verified = canAutomaticallyTrust(verification);
     if (!printRequiresVerified || verified) {
       return {
         kind: "cleaned",
         image: figure.cleaned.image,
-        needsReview: !verified,
-        reason: verified ? "검증된 GPT 정리본" : "검토가 필요한 GPT 정리본",
+        needsReview: Boolean(figure.needsReview) || !verified,
+        reason: cleanedReason(figure, verified),
       };
     }
   }
@@ -57,8 +90,9 @@ export function resolveFigureRepresentation(
     return { kind: "semantic_render", needsReview: !userSelected && verification?.status !== "verified", reason: userSelected ? "사용자가 선택한 구조 렌더링" : "검증된 구조 렌더링" };
   }
   const originalImage = figure.original?.image ?? (figure.source === "original" ? figure.image : undefined);
-  if (originalImage) return { kind: "original", image: originalImage, needsReview: false, reason: "원본 이미지" };
-  if (figure.image) return { kind: figure.source === "gpt_cleaned" ? "cleaned" : "original", image: figure.image, needsReview: Boolean(figure.needsReview), reason: "기존 이미지" };
+  const cleanedNeedsReview = Boolean(figure.cleaned?.image && !canAutomaticallyTrust(verification));
+  if (originalImage) return { kind: "original", image: originalImage, needsReview: Boolean(figure.needsReview || cleanedNeedsReview), reason: "원본 이미지" };
+  if (figure.image) return { kind: figure.source === "gpt_cleaned" ? "cleaned" : "original", image: figure.image, needsReview: Boolean(figure.needsReview || cleanedNeedsReview), reason: "기존 이미지" };
   return { kind: "described_only", needsReview: true, reason: "표시할 이미지가 없습니다." };
 }
 
@@ -72,7 +106,7 @@ export function applyAutomaticFigurePreference(figure: SheetFigureItem): SheetFi
     source: resolved.kind === "cleaned" ? "gpt_cleaned" : resolved.kind === "original" ? "original" : "described_only",
     preferredRepresentation,
     representationSelectionSource: "automatic",
-    needsReview: resolved.needsReview,
+    needsReview: Boolean(figure.needsReview) || resolved.needsReview,
   };
 }
 

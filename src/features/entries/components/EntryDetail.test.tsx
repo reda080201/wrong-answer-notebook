@@ -844,7 +844,6 @@ describe("EntryDetail sheet layout", () => {
     const bar = screen.getByLabelText("학습 빠른 조작");
     expect(bar).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("크게 보기");
     expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 다시" })).not.toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
@@ -902,7 +901,7 @@ describe("EntryDetail sheet layout", () => {
     expect(localStorage.getItem("wrong-answer-study-control-compact")).toBe("false");
   });
 
-  it("uses NextActionButton for the primary theater action", async () => {
+  it("keeps the compact dock free of the removed giant theater CTA", async () => {
     const onReview = vi.fn(() => new Promise<void>(() => undefined));
     render(
       <EntryDetail
@@ -919,12 +918,9 @@ describe("EntryDetail sheet layout", () => {
     );
 
     const bar = screen.getByLabelText("학습 빠른 조작");
-    expect(within(bar).getByRole("button", { name: "하단 다음 행동" })).toHaveTextContent("크게 보기");
+    expect(within(bar).queryByRole("button", { name: "하단 다음 행동" })).not.toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
-
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 다음 행동" }));
-
-    expect(await screen.findByRole("dialog", { name: "문제 크게 보기" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 도구 열기" })).toBeInTheDocument();
     expect(onReview).not.toHaveBeenCalled();
   });
 

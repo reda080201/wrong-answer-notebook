@@ -33,8 +33,8 @@ describe("exam session foundation", () => {
     const session = createExamSession(normalizedEntry);
     expect(session.questions[0]?.correctAnswer).toBe("②");
     expect(session.questions[0]?.figures).toHaveLength(1);
-    expect(session.questions[0]?.questionImages).toEqual([]);
-    expect(session.questions[0]?.sourcePageImages).toEqual(["problem.png"]);
+    expect(session.questions[0]?.questionImages).toEqual(["figure.png"]);
+    expect(session.questions[0]?.sourcePageImages).toEqual([]);
   });
 
   it("projects structured question semantics into a detached exam snapshot", () => {

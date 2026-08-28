@@ -1,11 +1,19 @@
 import type { MemoTemplate, PromptTemplate } from "../../types";
 
+/** Shared GUI import contract. The parser may still accept older v2 payloads. */
+export const PROBLEM_SHEET_IMPORT_V3_PROMPT = `GUI import contract v3:
+Return one JSON object with entries[].questions[] as the external question list. Each question contains only questionNumber, questionText, contentSegments, choices, conditions, equations and figureIds. Keep answerKey[], figures[], questionSourceCrops[] and sourcePageImages[] at the entry level; do not nest answer or source assets inside questions[]. Preserve learningBlocks, rejectedNotes and audit at their original levels.
+The application canonicalizes entries[].questions[] into internal structuredQuestions; do not invent a canonical item when the number is unknown. Keep uncertain numbers in audit. Preserve every source crop and original/cleaned figure reference exactly, including cleaned.generatedBy values gpt, deterministic_cleanup, or deterministic_redraw. A renderedQuestionPng is a derived app artifact and must never be treated as a source crop.
+Model self-checks (gpt_self_check and second_pass_model) are needs_review, not trusted. Only an explicit user verification or a qualified local_validator with no blocking issue may be trusted. Do not auto-approve based on confidence alone. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
+
 export const builtInPromptTemplates: PromptTemplate[] = [
   {
     id: "builtin-sheet-png-package",
     name: "시험지+답안지+PNG 패키지",
     builtIn: true,
-    content: `사진 속 문제지와 답안지를 분석해 wrong-answer-notebook-import-v2 형식의 import.json과 실제 PNG/JPG/WebP 자산으로 구성된 패키지를 만들어줘.
+    content: `${PROBLEM_SHEET_IMPORT_V3_PROMPT}
+
+사진 속 문제지와 답안지를 분석해 wrong-answer-notebook-import-v2 형식의 import.json과 실제 PNG/JPG/WebP 자산으로 구성된 패키지를 만들어줘.
 
 표준 출력은 반드시 다음 wrapper 구조를 따른다.
 {
@@ -17,7 +25,7 @@ export const builtInPromptTemplates: PromptTemplate[] = [
     "entryKind": "problem_sheet",
     "title": "시험지 제목",
     "subject": "수학",
-    "question": "...",
+    "questions": [{ "questionNumber": "1", "questionText": "...", "contentSegments": [], "choices": [], "figureIds": [] }],
     "answerKey": [],
     "figures": [],
     "learningBlocks": [],
@@ -35,13 +43,16 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 2. 각 crop을 image-to-image로 정리해 cleaned PNG를 생성한다. 새 도형으로 재해석하지 말고 구도, 종횡비, 점과 라벨, 선분·곡선·원·축, 수치, 실선·점선, 열린점·닫힌점, 직각·평행·같은 길이 표시, 음영을 유지하고 손글씨와 촬영 노이즈만 제거한다.
 3. 원본을 독립적으로 다시 분석해 semanticSpec을 만든다. 모르는 관계는 추측하지 말고 confidence와 warnings를 남긴다.
 4. 원본 crop, cleaned PNG, semanticSpec, 문제 본문, 선택지를 독립 재검증해 verification을 작성한다. 생성 단계의 설명을 검증 결과로 복사하지 마라.
-5. confidence >= 0.95이고 blockingIssues가 없으면 preferredRepresentation="cleaned", image는 cleaned 파일명, source="gpt_cleaned", needsReview=false로 설정한다. 그렇지 않으면 preferredRepresentation="original", image는 original crop 파일명, source="original", needsReview=true로 설정한다.
+5. 모델 confidence만으로 자동 신뢰하지 마라. gpt_self_check와 second_pass_model은 blockingIssues가 없어도 needsReview로 유지한다. 명시적 user 승인 또는 blocking issue가 없고 신뢰 조건을 충족한 local_validator만 cleaned를 자동 선택할 수 있다. 그 외에는 preferredRepresentation="original", image는 original crop 파일명, source="original", needsReview=true로 설정한다.
 
 필수 규칙:
  - import.json은 순수 JSON 객체 하나만 출력하고 base64 이미지, data URL, raw HTML/SVG, script, iframe은 넣지 마라.
- - figures[] 배열의 각 항목에 original, cleaned, semanticSpec, verification, preferredRepresentation을 별도 필드로 보존한다. 기존 image/source/needsReview도 반드시 함께 넣어 하위 호환한다.
+- figures[] 배열의 각 항목에 original, cleaned, semanticSpec, verification, preferredRepresentation을 별도 필드로 보존한다. 기존 image/source/needsReview도 반드시 함께 넣어 하위 호환한다.
+- cleaned.generatedBy는 실제 입력값을 그대로 보존하며 허용값은 "gpt", "deterministic_cleanup", "deterministic_redraw" 중 하나다. deterministic_cleanup 또는 deterministic_redraw를 gpt로 바꾸지 마라.
+- original.crop은 정규화 좌표 {x, y, width, height}이며 x/y는 0 이상 1 이하, width/height는 0 초과 1 이하, x+width와 y+height는 1 이하여야 한다. 범위를 벗어나면 clamp하지 말고 needsReview=true와 구체적인 검증 경고를 남겨라.
+- questionSourceCrops[].image와 figures[].original.image/cleaned.image는 원본·정리본 source asset 참조다. 앱이 canonical DOM에서 만든 renderedQuestionPng는 파생 artifact이며 source crop으로 기록하거나 원본을 덮어쓰지 마라.
  - 파일명은 실제 ZIP 파일명과 대소문자까지 일치시킨다. 예: graph_1.png. original.image와 cleaned.image가 있으면 둘 다 ZIP에 포함한다.
-- 문제 번호가 불확실하거나 검증이 실패하면 questionNumber를 비우고 needsReview=true로 표시한다.
+- 문제 번호가 불확실하거나 검증에 실패해도 번호를 추측하거나 빈 번호의 import-ready canonical 문항을 만들지 마라. 해당 불확실성은 audit와 review 데이터에 보존한다.
 - 손글씨와 학생 풀이 흔적은 문제·답안에 넣지 말고 rejectedNotes에 기록한다.
 - audit에는 예상/감지/누락/불확실 번호와 needsReviewCount를 기록한다.
 - semanticSpec은 function_graph, coordinate_geometry, plane_geometry, solid_geometry, probability_tree, table, venn_diagram, number_line, sequence_diagram, custom_math_diagram 중 하나를 사용한다.
@@ -56,11 +67,11 @@ figure 예시:
   "original": { "image": "q01_figure_original.png", "sourcePageImage": "source_page_001.png", "crop": { "x": 0.1, "y": 0.2, "width": 0.4, "height": 0.3 } },
   "cleaned": { "image": "q01_figure_cleaned.png", "generatedBy": "gpt", "generatedAt": "2026-01-01T00:00:00Z", "sourceImageHash": "sha256:...", "promptVersion": "figure-clean-v1" },
   "semanticSpec": { "type": "function_graph", "points": [], "segments": [], "relations": [], "warnings": [], "confidence": 0.98 },
-  "verification": { "status": "verified", "confidence": 0.97, "checks": { "topologyMatch": true, "numericLabelsMatch": true, "visualLayoutPreserved": true }, "blockingIssues": [], "warnings": [], "verifier": "independent-figure-check-v1" },
-  "preferredRepresentation": "cleaned",
-  "image": "q01_figure_cleaned.png",
-  "source": "gpt_cleaned",
-  "needsReview": false
+  "verification": { "status": "needs_review", "confidence": 0.97, "checks": { "topologyMatch": true, "numericLabelsMatch": true, "visualLayoutPreserved": true }, "blockingIssues": [], "warnings": [], "verificationSource": "gpt_self_check" },
+  "preferredRepresentation": "original",
+  "image": "q01_figure_original.png",
+  "source": "original",
+  "needsReview": true
 }
 
 문제 본문·answerKey·audit·rejectedNotes·learningBlocks도 기존 import 스키마에 맞춰 함께 작성해라. tags와 최상위 difficulty는 만들지 마라.`,
@@ -97,7 +108,7 @@ figure 예시:
 - 오답 원인은 추측이 약하면 unknown만 쓰거나 causes를 비워둬.
 - 난이도는 answerKey[].difficulty에만 넣고, 확실히 판단 가능한 문항에만 "low", "medium", "high" 중 하나로 넣어줘.
 - 근거가 부족하면 difficulty 필드를 생략해줘. 모든 문항에 같은 difficulty를 반복해서 채우지 마.
-- 답안 번호가 불확실하면 questionNumber를 추측하지 말고 빈 문자열로 두고 needsReview를 true로 표시해줘.
+- 답안 번호가 불확실하면 questionNumber를 추측하지 말고 import-ready canonical 문항을 만들지 말며, 불확실성을 audit와 review 데이터에 보존해줘.
 - 모르는 값은 추측하지 말고 빈 문자열이나 빈 배열로 둬.
 - tags 필드는 만들지 마.
 - 최상위 difficulty 필드는 만들지 마.

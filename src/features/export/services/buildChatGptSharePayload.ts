@@ -1,6 +1,7 @@
 import type { ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { resolveQuestionAssets } from "../../../utils/questionAssets";
 import type { ChatGptSharePayload } from "../types";
 
 export function buildChatGptSharePayload(options: {
@@ -18,15 +19,16 @@ export function buildChatGptSharePayload(options: {
     const sessionQuestion = options.examSession?.questions.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const response = options.examSession?.responses.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const answer = options.entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
+    const assets = block ? resolveQuestionAssets(options.entry, block) : undefined;
     const images: string[] = [];
     if (options.preferences.shareQuestionImages) {
       for (const figure of options.entry.figures ?? []) {
         if (normalizeQuestionNumber(figure.questionNumber) === questionNumber && figure.image) images.push(figure.image);
       }
-      for (const image of sessionQuestion?.questionImages ?? []) images.push(image);
+      for (const image of assets?.sourceCrops.map((crop) => crop.image) ?? sessionQuestion?.questionImages ?? []) images.push(image);
     }
     if (options.preferences.shareSourcePageImages) {
-      for (const image of sessionQuestion?.sourcePageImages ?? options.entry.questionImages ?? []) images.push(image);
+      for (const image of assets?.sourcePages ?? sessionQuestion?.sourcePageImages ?? []) images.push(image);
     }
     return {
       questionNumber,

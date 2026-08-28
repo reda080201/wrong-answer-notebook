@@ -1,11 +1,17 @@
-import { Children, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Children, cloneElement, isValidElement, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import "./ExamPaperCompositor.css";
 
 export type ExamPaperLayout = "auto" | "single" | "columns";
 export interface ExamPaperItem { id: string; node: ReactNode; groupId?: string; }
 interface ExamPaperCompositorProps { enabled: boolean; children?: ReactNode; items?: ExamPaperItem[]; layout?: ExamPaperLayout; }
-interface PaperPage { items: ExamPaperItem[]; }
-const A4_CONTENT_HEIGHT = 1000;
+interface PaperPage { columns: ExamPaperItem[][]; }
+const A4_CONTENT_HEIGHT = 985;
+
+function withoutDomIds(node: ReactNode): ReactNode {
+  if (!isValidElement<{ id?: string; children?: ReactNode }>(node)) return node;
+  const children = node.props.children === undefined ? undefined : Children.map(node.props.children, withoutDomIds);
+  return cloneElement(node, { id: undefined }, children);
+}
 
 function groupsFor(items: ExamPaperItem[]) {
   const groups: ExamPaperItem[][] = [];
@@ -17,18 +23,27 @@ function groupsFor(items: ExamPaperItem[]) {
   return groups;
 }
 
-function packPages(items: ExamPaperItem[], heights: Map<string, number>): PaperPage[] {
+function packPages(items: ExamPaperItem[], heights: Map<string, number>, columnCount: 1 | 2): PaperPage[] {
   const pages: PaperPage[] = [];
-  let current: ExamPaperItem[] = [];
+  let current: ExamPaperItem[][] = Array.from({ length: columnCount }, () => []);
+  let column = 0;
   let used = 0;
   for (const group of groupsFor(items)) {
     const groupHeight = group.reduce((total, item) => total + (heights.get(item.id) ?? A4_CONTENT_HEIGHT), 0);
-    if (current.length > 0 && used + groupHeight > A4_CONTENT_HEIGHT) { pages.push({ items: current }); current = []; used = 0; }
-    current.push(...group); used += groupHeight;
-    if (used >= A4_CONTENT_HEIGHT) { pages.push({ items: current }); current = []; used = 0; }
+    if (current[column].length > 0 && used + groupHeight > A4_CONTENT_HEIGHT) {
+      column += 1;
+      used = 0;
+      if (column >= columnCount) { pages.push({ columns: current }); current = Array.from({ length: columnCount }, () => []); column = 0; }
+    }
+    current[column].push(...group); used += groupHeight;
+    if (used >= A4_CONTENT_HEIGHT) {
+      column += 1;
+      used = 0;
+      if (column >= columnCount) { pages.push({ columns: current }); current = Array.from({ length: columnCount }, () => []); column = 0; }
+    }
   }
-  if (current.length) pages.push({ items: current });
-  return pages.length ? pages : [{ items: [] }];
+  if (current.some((itemsInColumn) => itemsInColumn.length)) pages.push({ columns: current });
+  return pages.length ? pages : [{ columns: Array.from({ length: columnCount }, () => []) }];
 }
 
 /** Hidden layout measurement produces the same reusable A4 page model for screen and print. */
@@ -38,6 +53,9 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const [heights, setHeights] = useState<Map<string, number>>(() => new Map());
   useLayoutEffect(() => {
     if (!enabled || !measureRef.current) return;
+    // Composite children can create IDs internally; measurement DOM must never
+    // participate in navigation target lookup.
+    for (const element of measureRef.current.querySelectorAll<HTMLElement>("[id]")) element.removeAttribute("id");
     const next = new Map<string, number>();
     for (const element of measureRef.current.querySelectorAll<HTMLElement>("[data-paper-measure-id]")) {
       const id = element.dataset.paperMeasureId;
@@ -46,12 +64,13 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     setHeights((current) => current.size === next.size && [...next].every(([id, height]) => current.get(id) === height) ? current : next);
   }, [enabled, items]);
   if (!enabled) return <>{items.map((item) => item.node)}</>;
-  const pages = packPages(items, heights);
-  const resolvedLayout = layout === "auto" ? "columns" : layout;
+  const resolvedLayout = layout === "auto" ? (typeof window !== "undefined" && window.innerWidth >= 1440 ? "columns" : "single") : layout;
+  const columnCount = resolvedLayout === "columns" ? 2 : 1;
+  const pages = packPages(items, heights, columnCount);
   return <>
     <div className={`exam-paper-compositor exam-paper-compositor--${resolvedLayout}`} data-layout={layout}>
-      {pages.map((page, index) => <section className="exam-paper-page" key={`exam-page-${index}`} aria-label={`시험지 ${index + 1}페이지`}><div className="exam-paper-page__columns">{page.items.map((item) => <div className="exam-paper-page__item" key={item.id}>{item.node}</div>)}</div><footer className="exam-paper-page__number" aria-hidden="true">{index + 1}</footer></section>)}
+      {pages.map((page, index) => <section className="exam-paper-page" key={`exam-page-${index}`} aria-label={`시험지 ${index + 1}페이지`}><div className="exam-paper-page__columns">{page.columns.map((columnItems, columnIndex) => <div className="exam-paper-page__column" key={`exam-page-${index}-column-${columnIndex}`}>{columnItems.map((item) => <div className="exam-paper-page__item" key={item.id}>{item.node}</div>)}</div>)}</div><footer className="exam-paper-page__number" aria-hidden="true">{index + 1}</footer></section>)}
     </div>
-    <div className={`exam-paper-measure exam-paper-measure--${resolvedLayout}`} ref={measureRef} aria-hidden="true">{items.map((item) => <div key={item.id} data-paper-measure-id={item.id}>{item.node}</div>)}</div>
+    <div className={`exam-paper-measure exam-paper-measure--${resolvedLayout}`} ref={measureRef} aria-hidden="true">{items.map((item) => <div key={item.id} data-paper-measure-id={item.id}>{withoutDomIds(item.node)}</div>)}</div>
   </>;
 }

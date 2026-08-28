@@ -122,6 +122,8 @@ interface EntryDetailProps {
   questionBankItems?: QuestionBankItem[];
   onSimilarQuestionLinksChange?: (entry: WrongAnswerEntry, links: WrongAnswerEntry["similarQuestionLinks"]) => Promise<void>;
   onApplyGptSolutionRoundtrip?: (entry: WrongAnswerEntry, patch: Pick<WrongAnswerEntry, "answerKey" | "learningBlocks">) => Promise<void>;
+  onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string; scope: "question" | "question_answer" | "question_answer_explanation"; rendererVersion: string }) => Promise<void>;
+  onUpdateQuestionRenderVerification?: (input: { questionNumber: string; scope: "question" | "question_answer" | "question_answer_explanation"; rendererVersion: string; status: "unverified" | "needs_review" | "verified"; expectedFingerprint?: string }) => Promise<void>;
   gptSolutionDraftStore?: GptSolutionRoundtripDraftStore;
 }
 
@@ -239,6 +241,8 @@ export default function EntryDetail({
   questionBankItems = [],
   onSimilarQuestionLinksChange,
   onApplyGptSolutionRoundtrip,
+  onPersistQuestionRender,
+  onUpdateQuestionRenderVerification,
   gptSolutionDraftStore,
 }: EntryDetailProps) {
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
@@ -2226,6 +2230,8 @@ export default function EntryDetail({
           initialScope={exportHubScope}
           selectionOnly={exportSelectionOnly}
           onToast={(message) => pushToast(message, "success")}
+          onPersistQuestionRender={onPersistQuestionRender}
+          onUpdateQuestionRenderVerification={onUpdateQuestionRenderVerification}
           onStartSolutionRoundtrip={onApplyGptSolutionRoundtrip && gptSolutionDraftStore?.ready ? async (input) => {
             const now = new Date().toISOString();
             const draft: GptSolutionRoundtripDraft = {

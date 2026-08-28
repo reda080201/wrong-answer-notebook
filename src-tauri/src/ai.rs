@@ -245,6 +245,15 @@ fn remove_legacy_ai_provider_key(app: &tauri::AppHandle) {
     }
 }
 
+fn is_legacy_gemini_provider(provider: AiProviderType) -> bool {
+    matches!(
+        provider,
+        AiProviderType::GoogleGemini
+            | AiProviderType::GeminiFlashLite
+            | AiProviderType::Gemini35Flash
+    )
+}
+
 fn stored_ai_provider_key(provider: AiProviderType) -> Result<Option<String>, String> {
     match ai_provider_key_entry(provider)?.get_password() {
         Ok(key) => {
@@ -256,7 +265,9 @@ fn stored_ai_provider_key(provider: AiProviderType) -> Result<Option<String>, St
             }
         }
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(error) => Err(format!("저장된 Gemini API key를 읽지 못했습니다: {error}")),
+        Err(error) => Err(format!(
+            "저장된 AI 제공자 API key를 읽지 못했습니다: {error}"
+        )),
     }
 }
 
@@ -282,9 +293,13 @@ fn save_stored_ai_provider_key(
     ai_provider_key_entry(provider)?
         .set_password(api_key)
         .map_err(|error| {
-            format!("Gemini API key를 OS 보안 저장소에 저장하지 못했습니다: {error}")
+            format!("AI 제공자 API key를 OS 보안 저장소에 저장하지 못했습니다: {error}")
         })?;
-    remove_legacy_ai_provider_key(app);
+    // The legacy file belongs only to the historical Gemini credential. Do not
+    // erase it when another provider is configured.
+    if is_legacy_gemini_provider(provider) {
+        remove_legacy_ai_provider_key(app);
+    }
     Ok(())
 }
 
@@ -294,11 +309,15 @@ fn clear_stored_ai_provider_key(
 ) -> Result<(), String> {
     match ai_provider_key_entry(provider)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => {
-            remove_legacy_ai_provider_key(app);
+            // The legacy file is a Gemini-only credential. Remove it only
+            // after the corresponding Gemini keyring operation completed.
+            if is_legacy_gemini_provider(provider) {
+                remove_legacy_ai_provider_key(app);
+            }
             Ok(())
         }
         Err(error) => Err(format!(
-            "저장된 Gemini API key를 삭제하지 못했습니다: {error}"
+            "저장된 AI 제공자 API key를 삭제하지 못했습니다: {error}"
         )),
     }
 }
@@ -1024,5 +1043,13 @@ mod tests {
         assert_eq!(request.candidates[0].candidate_id, "candidate:1");
         assert_eq!(request.candidates[0].has_explanation, true);
         assert!(validate_similar_question_ranking_request(&request).is_ok());
+    }
+
+    #[test]
+    fn only_gemini_key_migration_can_remove_the_legacy_credential() {
+        assert!(is_legacy_gemini_provider(AiProviderType::GoogleGemini));
+        assert!(is_legacy_gemini_provider(AiProviderType::GeminiFlashLite));
+        assert!(!is_legacy_gemini_provider(AiProviderType::OpenAi));
+        assert!(!is_legacy_gemini_provider(AiProviderType::OpenRouter));
     }
 }

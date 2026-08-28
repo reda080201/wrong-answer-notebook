@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { downloadMarkdown } from "../../../utils/exportEntry";
 import { buildGptExportPayload } from "../../../utils/gptExport";
@@ -11,7 +11,12 @@ import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
 import Dialog from "../../../shared/ui/Dialog";
-import { DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, renderQuestionNodeToPng, type QuestionPngOptions } from "../services/questionPng";
+import { buildQuestionRenderDescriptor, buildQuestionRenderFingerprint, DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, QUESTION_PNG_RENDERER_VERSION, type QuestionPngOptions, type QuestionPngPreviewSignature } from "../services/questionPng";
+import QuestionRenderComparisonPanel from "./QuestionRenderComparisonPanel";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { getImageUrl } from "../../../api";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 
 interface ExportHubModalProps {
   entry: WrongAnswerEntry;
@@ -31,6 +36,8 @@ interface ExportHubModalProps {
   initialView?: ExportHubView;
   initialScope?: ExportScopeMode;
   onToast?: (message: string) => void;
+  onPersistQuestionRender?: (input: { questionNumber: string; blob: Blob; filename: string; canonicalFingerprint: string; scope: QuestionPngOptions["scope"]; rendererVersion: string }) => Promise<void>;
+  onUpdateQuestionRenderVerification?: (input: { questionNumber: string; scope: QuestionPngOptions["scope"]; rendererVersion: string; status: "unverified" | "needs_review" | "verified"; expectedFingerprint?: string }) => Promise<void>;
   onStartSolutionRoundtrip?: (input: {
     purpose: GptSolutionPurpose;
     questionNumbers: string[];
@@ -58,6 +65,8 @@ export default function ExportHubModal(props: ExportHubModalProps) {
     initialView = "home",
     initialScope,
     onToast,
+    onPersistQuestionRender,
+    onUpdateQuestionRenderVerification,
     onStartSolutionRoundtrip,
     selectionOnly = false,
   } = props;
@@ -69,8 +78,33 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   const [pngBlob, setPngBlob] = useState<Blob | null>(null);
   const [pngError, setPngError] = useState<string | null>(null);
   const [pngBusy, setPngBusy] = useState(false);
+  const [pngFingerprint, setPngFingerprint] = useState<string | null>(null);
+  const [pngPreviewSignature, setPngPreviewSignature] = useState<QuestionPngPreviewSignature | null>(null);
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
   const printModel = useMemo(() => buildExamPrintModel({ entry, questionNumbers: scopeResult.questionNumbers, preferences: examPrintPreferences, preset: examPrintPreferences.preset, scope }), [entry, scopeResult.questionNumbers, examPrintPreferences, scope]);
+  const resolvedQuestionNumber = normalizeQuestionNumber(currentQuestionNumber ?? scopeResult.questionNumbers[0] ?? "");
+  const resolvedQuestion = useMemo(() => getEntryQuestions(entry).find((item) => normalizeQuestionNumber(item.questionNumber) === resolvedQuestionNumber) ?? null, [entry, resolvedQuestionNumber]);
+  const renderFigures = useMemo(() => resolvedQuestion ? resolveQuestionFigures(entry, resolvedQuestion) : [], [entry, resolvedQuestion]);
+  const currentRenderFingerprint = useMemo(() => {
+    const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === resolvedQuestionNumber);
+    return resolvedQuestion
+      ? buildQuestionRenderFingerprint(buildQuestionRenderDescriptor({ question: resolvedQuestion, figures: renderFigures, answer: answer?.answer, explanation: answer?.explanation, scope: pngOptions.scope }))
+      : buildQuestionRenderFingerprint({ rendererVersion: QUESTION_PNG_RENDERER_VERSION, scope: pngOptions.scope, questionNumber: resolvedQuestionNumber });
+  }, [entry.answerKey, pngOptions.scope, renderFigures, resolvedQuestion, resolvedQuestionNumber]);
+  const currentSignature: QuestionPngPreviewSignature = useMemo(() => ({ questionNumber: resolvedQuestionNumber, scope: pngOptions.scope, rendererVersion: QUESTION_PNG_RENDERER_VERSION, fingerprint: currentRenderFingerprint }), [currentRenderFingerprint, pngOptions.scope, resolvedQuestionNumber]);
+  const currentSignatureRef = useRef(currentSignature);
+  useEffect(() => { currentSignatureRef.current = currentSignature; }, [currentSignature]);
+  useEffect(() => {
+    if (!pngPreviewSignature) return;
+    const same = Object.keys(currentSignature).every((key) => currentSignature[key as keyof QuestionPngPreviewSignature] === pngPreviewSignature[key as keyof QuestionPngPreviewSignature]);
+    if (!same) {
+      if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl);
+      setPngPreviewUrl(null);
+      setPngBlob(null);
+      setPngFingerprint(null);
+      setPngPreviewSignature(null);
+    }
+  }, [currentSignature, pngPreviewSignature, pngPreviewUrl]);
 
   const copyText = async (text: string, message: string) => {
     await navigator.clipboard.writeText(text);
@@ -104,13 +138,19 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   };
   useEffect(() => () => { if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl); }, [pngPreviewUrl]);
   const renderQuestionPng = async () => {
-    const number = currentQuestionNumber ?? scopeResult.questionNumbers[0];
-    const target = number ? document.getElementById(`sheet-question-canonical-${number}`) : null;
-    if (!target) { setPngError("현재 문항의 정리본 surface를 찾지 못했습니다. 문항별 화면에서 다시 시도해 주세요."); return; }
+    const number = resolvedQuestionNumber;
+    if (!number || !resolvedQuestion) { setPngError("현재 canonical 문항을 찾지 못했습니다."); return; }
     setPngBusy(true); setPngError(null);
+    const capturedSignature = currentSignatureRef.current;
     try {
-      const blob = await renderQuestionNodeToPng(target, pngOptions);
+      const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
+      const { renderCanonicalQuestionToPng } = await import("../services/questionPng");
+      const blob = await renderCanonicalQuestionToPng({ question: resolvedQuestion, figures: renderFigures, answer: answer?.answer, explanation: answer?.explanation, resolveImageUrl: getImageUrl }, pngOptions);
+      const current = currentSignatureRef.current;
+      if (!Object.keys(capturedSignature).every((key) => capturedSignature[key as keyof QuestionPngPreviewSignature] === current[key as keyof QuestionPngPreviewSignature])) return;
       setPngBlob(blob);
+      setPngFingerprint(capturedSignature.fingerprint);
+      setPngPreviewSignature(capturedSignature);
       setPngPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
     } catch (error) { setPngError(error instanceof Error ? error.message : "문항 PNG를 만들지 못했습니다."); } finally { setPngBusy(false); }
   };
@@ -156,7 +196,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
           </div>
         ) : null}
         {view === "questions" ? <div className="export-hub-misc-actions"><p>현재 범위의 문제 본문·선지·그림만 내보냅니다. 정답, 해설, 답안, 메모는 제외됩니다.</p><button type="button" className="btn-secondary" onClick={() => void exportQuestionZip()}>문항 ZIP 다운로드</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("json")}>JSON 복사</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("markdown")}>Markdown 복사</button><button type="button" className="btn-secondary" onClick={() => void exportQuestions("text")}>텍스트 복사</button><button type="button" className="btn-secondary" onClick={() => setView("home")}>뒤로</button></div> : null}
-        {view === "question-png" ? <section className="export-question-png"><p>앱 도구 모음과 사용자 메모를 제외한 현재 문항만 PNG로 렌더합니다. 다운로드는 entry를 변경하지 않습니다.</p><label>배경<select value={pngOptions.background} onChange={(event) => setPngOptions((current) => ({ ...current, background: event.target.value as QuestionPngOptions["background"] }))}><option value="white">흰색</option><option value="transparent">투명</option></select></label><label>배율<select value={pngOptions.scale} onChange={(event) => setPngOptions((current) => ({ ...current, scale: Number(event.target.value) as QuestionPngOptions["scale"] }))}>{([1, 2, 3] as const).map((scale) => <option key={scale} value={scale}>{scale}x</option>)}</select></label><label>파일명<input value={pngOptions.filename} onChange={(event) => setPngOptions((current) => ({ ...current, filename: event.target.value }))} /></label><div className="dialog-actions"><button type="button" className="btn-primary" disabled={pngBusy} onClick={() => void renderQuestionPng()}>{pngBusy ? "렌더링 중..." : "미리보기 만들기"}</button><button type="button" className="btn-secondary" disabled={!pngBlob} onClick={() => pngBlob && downloadQuestionPng(pngBlob, pngOptions.filename)}>PNG 저장</button><button type="button" className="btn-secondary" onClick={() => setView("home")}>뒤로</button></div>{pngError && <p className="form-error" role="alert">{pngError}</p>}{pngPreviewUrl && <img className="export-question-png__preview" src={pngPreviewUrl} alt="정리본 문항 PNG 미리보기" />}</section> : null}
+        {view === "question-png" ? <section className="export-question-png"><p>canonical 문항을 고정 조판 surface에서 다시 렌더합니다. 원본 crop과는 별도의 파생 이미지이며 다운로드는 entry를 변경하지 않습니다.</p><label>범위<select aria-label="PNG 포함 범위" value={pngOptions.scope} onChange={(event) => setPngOptions((current) => ({ ...current, scope: event.target.value as QuestionPngOptions["scope"] }))}><option value="question">문제만</option><option value="question_answer">문제 + 정답</option><option value="question_answer_explanation">문제 + 정답 + 해설</option></select></label><label>배경<select value={pngOptions.background} onChange={(event) => setPngOptions((current) => ({ ...current, background: event.target.value as QuestionPngOptions["background"] }))}><option value="white">흰색</option><option value="transparent">투명</option></select></label><label>배율<select value={pngOptions.scale} onChange={(event) => setPngOptions((current) => ({ ...current, scale: Number(event.target.value) as QuestionPngOptions["scale"] }))}>{([2, 3] as const).map((scale) => <option key={scale} value={scale}>{scale}x</option>)}</select></label><label>파일명<input value={pngOptions.filename} onChange={(event) => setPngOptions((current) => ({ ...current, filename: event.target.value }))} /></label><div className="dialog-actions"><button type="button" className="btn-primary" disabled={pngBusy} onClick={() => void renderQuestionPng()}>{pngBusy ? "렌더링 중..." : "미리보기 만들기"}</button><button type="button" className="btn-secondary" disabled={!pngBlob || !pngPreviewSignature} onClick={() => pngBlob && pngPreviewSignature && downloadQuestionPng(pngBlob, pngOptions.filename)}>PNG 저장</button><button type="button" className="btn-secondary" disabled={!pngBlob || !pngFingerprint || !pngPreviewSignature || !onPersistQuestionRender} onClick={() => { if (resolvedQuestionNumber && pngBlob && pngFingerprint && pngPreviewSignature && onPersistQuestionRender) void onPersistQuestionRender({ questionNumber: resolvedQuestionNumber, blob: pngBlob, filename: pngOptions.filename, canonicalFingerprint: pngFingerprint, scope: pngPreviewSignature.scope, rendererVersion: pngPreviewSignature.rendererVersion }); }}>정리본 보관</button><button type="button" className="btn-secondary" onClick={() => setView("home")}>뒤로</button></div>{pngError && <p className="form-error" role="alert">{pngError}</p>}{pngPreviewUrl && <img className="export-question-png__preview" src={pngPreviewUrl} alt="정리본 문항 PNG 미리보기" />}<QuestionRenderComparisonPanel entry={entry} questionNumber={resolvedQuestionNumber} scope={pngOptions.scope} rendererVersion={QUESTION_PNG_RENDERER_VERSION} currentFingerprint={currentRenderFingerprint} onVerificationChange={(status, expectedFingerprint) => resolvedQuestionNumber && onUpdateQuestionRenderVerification ? onUpdateQuestionRenderVerification({ questionNumber: resolvedQuestionNumber, scope: pngOptions.scope, rendererVersion: QUESTION_PNG_RENDERER_VERSION, status, expectedFingerprint }) : undefined} /></section> : null}
         {view === "exam-pdf" ? (
           <ExamPdfOptions
             preferences={examPrintPreferences}

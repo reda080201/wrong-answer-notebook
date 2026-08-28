@@ -3,9 +3,9 @@ import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export interface QuestionMetaPatch {
   classification: QuestionClassification;
-  difficultyScore?: number;
-  importanceScore?: number;
-  qualityScore?: number;
+  difficultyScore?: number | null;
+  importanceScore?: number | null;
+  qualityScore?: number | null;
 }
 
 export function patchQuestionClassification(
@@ -23,11 +23,11 @@ export function patchQuestionClassification(
     matched = true;
     return [{
       ...meta,
-      difficultyScore: patch.difficultyScore ?? meta.difficultyScore,
+      difficultyScore: patch.difficultyScore === undefined ? meta.difficultyScore : patch.difficultyScore ?? undefined,
       rating: {
         ...meta.rating,
-        importanceScore: patch.importanceScore ?? meta.rating?.importanceScore,
-        qualityScore: patch.qualityScore ?? meta.rating?.qualityScore,
+        importanceScore: patch.importanceScore === undefined ? meta.rating?.importanceScore : patch.importanceScore ?? undefined,
+        qualityScore: patch.qualityScore === undefined ? meta.rating?.qualityScore : patch.qualityScore ?? undefined,
       },
       classification: patch.classification,
       updatedAt,
@@ -36,10 +36,10 @@ export function patchQuestionClassification(
     questionNumber: normalized,
     important: false,
     needsReview: false,
-    difficultyScore: patch.difficultyScore,
+    difficultyScore: patch.difficultyScore ?? undefined,
     rating: {
-      importanceScore: patch.importanceScore,
-      qualityScore: patch.qualityScore,
+      importanceScore: patch.importanceScore ?? undefined,
+      qualityScore: patch.qualityScore ?? undefined,
     },
     classification: patch.classification,
     updatedAt,

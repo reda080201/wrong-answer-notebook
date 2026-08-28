@@ -420,6 +420,46 @@ describe("useAppActions", () => {
       );
     });
 
+    it("preserves staged question source crops through the final canonical save form", async () => {
+      const addEntries = vi.fn(async () => ["saved-id"]);
+      vi.mocked(api.saveImportAssetFiles).mockResolvedValue({
+        savedFilenames: ["img-q9-a.png", "img-q9-b.png", "img-page-3.png", "img-page-4.png"],
+        savedAssets: [],
+        sourceToSaved: {
+          "images/q9-a.png": "img-q9-a.png",
+          "images/q9-b.png": "img-q9-b.png",
+          "images/page-3.png": "img-page-3.png",
+          "images/page-4.png": "img-page-4.png",
+        },
+      });
+      vi.mocked(api.rewriteImportAssetReferences).mockImplementation((data) => ({
+        ...data,
+        questionSourceCrops: data.questionSourceCrops?.map((crop) => ({
+          ...crop,
+          image: crop.image.replace("images/", "img-"),
+          sourcePageImage: crop.sourcePageImage?.replace("images/", "img-"),
+        })),
+      }));
+      const { result } = createHook({ addEntries });
+      const crops = [
+        { id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "images/q9-a.png", sourcePageImage: "images/page-3.png" },
+        { id: "q9-b", questionNumber: "9", page: 4, order: 1, image: "images/q9-b.png", sourcePageImage: "images/page-4.png" },
+      ];
+
+      await act(async () => {
+        await result.current.handleImportedEntriesApply([
+          createMockFormData({ entryKind: "problem_sheet", questionSourceCrops: crops }),
+        ], [new File(["a"], "q9-a.png", { type: "image/png" })]);
+      });
+
+      expect(addEntries).toHaveBeenCalledWith([expect.objectContaining({
+        questionSourceCrops: [
+          expect.objectContaining({ id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "img-q9-a.png", sourcePageImage: "img-page-3.png" }),
+          expect.objectContaining({ id: "q9-b", questionNumber: "9", page: 4, order: 1, image: "img-q9-b.png", sourcePageImage: "img-page-4.png" }),
+        ],
+      })]);
+    });
+
     it("fills missing subject with default", async () => {
       const addEntries = vi.fn(async () => ["id"]);
       const { result } = createHook({ addEntries });

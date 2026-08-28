@@ -62,6 +62,11 @@ describe("builtInPromptTemplates", () => {
     expect(prompt?.content).toContain('"entryKind": "problem_sheet"');
     expect(prompt?.content).toContain("figures");
     expect(prompt?.content).toContain("graph_1.png");
+    expect(prompt?.content).toContain('"deterministic_cleanup"');
+    expect(prompt?.content).toContain('"deterministic_redraw"');
+    expect(prompt?.content).toContain("questionSourceCrops[].image");
+    expect(prompt?.content).toContain("renderedQuestionPng");
+    expect(prompt?.content).toContain("clamp하지 말고");
     expect(prompt?.content).toContain("base64 이미지");
     expect(prompt?.content).not.toContain('"tags"');
   });

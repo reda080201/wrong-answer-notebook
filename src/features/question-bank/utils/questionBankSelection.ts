@@ -11,6 +11,10 @@ export function filtersForPreferences(filters: QuestionBankFilters): QuestionBan
   ) as QuestionBankStoredFilters;
 }
 
+function naturalQuestionOrder(left: QuestionBankItem, right: QuestionBankItem): number {
+  return left.questionNumber.localeCompare(right.questionNumber, "ko", { numeric: true }) || left.id.localeCompare(right.id);
+}
+
 export function sortQuestionBankItems(items: QuestionBankItem[], sort: QuestionBankSort): QuestionBankItem[] {
   const score = (item: QuestionBankItem) => sort === "difficulty"
     ? item.classification.difficultyScore ?? -1
@@ -21,7 +25,7 @@ export function sortQuestionBankItems(items: QuestionBankItem[], sort: QuestionB
         : sort === "review_due"
           ? item.reviewDue ? 1 : 0
           : Date.parse(item.updatedAt) || 0;
-  return [...items].sort((left, right) => score(right) - score(left) || left.id.localeCompare(right.id));
+  return [...items].sort((left, right) => score(right) - score(left) || naturalQuestionOrder(left, right));
 }
 
 function seededRandom(seed: string): () => number {

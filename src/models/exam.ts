@@ -83,6 +83,7 @@ export interface ExamSession {
   deadlineAt?: string;
   showTimer?: boolean;
   answerSheetOpen?: boolean;
+  answerSheetLayout?: "auto" | "vertical" | "horizontal";
   submittedAt?: string;
   score?: ExamSessionScore;
 }

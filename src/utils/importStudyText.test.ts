@@ -28,6 +28,57 @@ describe("importStudyText", () => {
     });
   });
 
+  describe("external question source crops", () => {
+    const cropPayload = {
+      entryKind: "problem_sheet",
+      title: "원본 crop 시험지",
+      subject: "수학",
+      questions: [
+        { questionNumber: "9", questionText: "9번 문제", conditions: [], equations: [], choices: [], contentSegments: [{ id: "q9-text", type: "text", text: "9번 문제" }], figureIds: [] },
+        { questionNumber: "10", questionText: "10번 문제", conditions: [], equations: [], choices: [], contentSegments: [{ id: "q10-text", type: "text", text: "10번 문제" }], figureIds: [] },
+      ],
+      questionSourceCrops: [
+        { id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "images/q9-a.png", sourcePageImage: "images/page-3.png", cropRect: { x: 0, y: 0, width: 1, height: 1 } },
+        { questionNumber: "9", page: 4, order: 1, image: "images/q9-b.png", sourcePageImage: "images/page-4.png" },
+        { id: "q10-a", questionNumber: "10", page: 5, order: 0, image: "images/q10-a.png", sourcePageImage: "images/page-5.png" },
+      ],
+    };
+
+    it("preserves ordered entry-level crops in single JSON and marks invalid coordinates for review", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        ...cropPayload,
+        questionSourceCrops: [...cropPayload.questionSourceCrops, { questionNumber: "9", image: "images/q9-invalid.png", cropRect: { x: 0.8, y: 0.8, width: 0.5, height: 0.5 } }],
+      }));
+      expect(result.data.questionSourceCrops).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: "q9-a", questionNumber: "9", page: 3, order: 0, image: "images/q9-a.png" }),
+        expect.objectContaining({ questionNumber: "9", page: 4, order: 1, image: "images/q9-b.png" }),
+        expect.objectContaining({ id: "q10-a", questionNumber: "10", page: 5, order: 0, image: "images/q10-a.png" }),
+      ]));
+      expect(result.data.questionSourceCrops?.find((crop) => crop.image === "images/q9-invalid.png")?.cropRect).toBeUndefined();
+      expect(result.data.structuredQuestions?.find((question) => question.questionNumber === "9")).toMatchObject({ needsReview: true });
+      expect(result.warnings).toEqual(expect.arrayContaining([expect.stringContaining("좌표") ]));
+    });
+
+    it("keeps crops for v2 and multi-entry imports without crossing question identities", () => {
+      const result = parseAllInOneImport(JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [cropPayload, { ...cropPayload, title: "두 번째", questionSourceCrops: [cropPayload.questionSourceCrops[2]] }],
+      }));
+      expect(result.entries[0].questionSourceCrops?.filter((crop) => crop.questionNumber === "9")).toHaveLength(2);
+      expect(result.entries[0].questionSourceCrops?.filter((crop) => crop.questionNumber === "10")).toEqual([
+        expect.objectContaining({ id: "q10-a", image: "images/q10-a.png" }),
+      ]);
+      expect(result.entries[1].questionSourceCrops).toEqual([
+        expect.objectContaining({ questionNumber: "10", image: "images/q10-a.png" }),
+      ]);
+    });
+
+    it.each(["/images/q9.png", "C:/images/q9.png", "images/../q9.png", "images\\q9.png"])("rejects unsafe crop paths: %s", (image) => {
+      expect(() => parseImportedStudyText(JSON.stringify({ ...cropPayload, questionSourceCrops: [{ questionNumber: "9", image }] }))).toThrow(ImportParseError);
+    });
+  });
+
   describe("JSON parse enhancements", () => {
     it("normalizes legacy math commands in imported question and answer text", () => {
       const source = JSON.stringify({

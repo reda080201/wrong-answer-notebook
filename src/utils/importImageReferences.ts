@@ -18,6 +18,7 @@ export function collectEntryImportImageReferences(entry: Partial<EntryFormData>)
   return [
     ...(entry.questionImages ?? []),
     ...(entry.sourcePageImages ?? []),
+    ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]),
     ...(entry.figures ?? []).flatMap(collectFigureImageReferences),
     ...(entry.explanationParts ?? []).flatMap((part) => part.images ?? []),
     ...(entry.learningBlocks ?? []).flatMap((block) => block.images ?? []),
@@ -68,6 +69,11 @@ export function mapEntryImportImageReferences(
     ...entry,
     questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
+    questionSourceCrops: (entry.questionSourceCrops ?? []).flatMap((crop) => {
+      const image = map(crop.image);
+      if (!image) return [];
+      return [{ ...crop, image, sourcePageImage: crop.sourcePageImage ? map(crop.sourcePageImage) : undefined }];
+    }),
     explanationParts: (entry.explanationParts ?? []).map((part) => ({
       ...part,
       images: (part.images ?? []).map(map).filter((image): image is string => Boolean(image)),

@@ -9,6 +9,8 @@ import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
 import Dialog from "../../../shared/ui/Dialog";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
+import { parseChoice } from "../../../utils/choice";
+export { parseChoice } from "../../../utils/choice";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -24,11 +26,6 @@ interface ExamSessionViewProps {
   onOpenChatGptSettings?: () => void;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
-}
-
-export function parseChoice(choice: string) {
-  const match = choice.trim().match(/^(①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[A-Ea-e][.)])\s*(.*)$/);
-  return match ? { marker: match[1], content: match[2] } : { marker: "", content: choice };
 }
 
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
@@ -118,6 +115,6 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     <Dialog open={navigatorOpen} onClose={() => setNavigatorOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="문항 이동"><div className="exam-result-grid">{session.questions.map((item, index) => <button key={item.id} type="button" aria-current={index === session.currentQuestionIndex ? "page" : undefined} onClick={() => { onChange({ ...session, currentQuestionIndex: index }); setNavigatorOpen(false); }}>{item.questionNumber}</button>)}</div></Dialog>
     {helpOpen && <ExamHelpDialog onClose={() => setHelpOpen(false)} />}
     <Dialog open={consentOpen} onClose={() => setConsentOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="GPT 전송 동의"><p>{onAskGpt ? "현재 문제, 내 답, 풀이 메모를 전송합니다." : "현재 문제는 로컬 MCP 브리지에만 공개됩니다."}</p>{onAskGpt && <button type="button" onClick={() => { onAskGpt({ question: question.question, response: response?.response ?? "", scratchNote: response?.scratchNote ?? "" }); setConsentOpen(false); }}>전송</button>}<button type="button" onClick={() => setConsentOpen(false)}>닫기</button></Dialog>
-    <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}<footer><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></footer></Dialog>
+    <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<div className="dialog-footer-actions"><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></div>}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}</Dialog>
   </section>;
 }

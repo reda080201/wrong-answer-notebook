@@ -24,9 +24,10 @@ const answerTypeLabel: Record<QuestionAnswerType, string> = {
 };
 
 const list = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
-const score = (value: string) => {
+const score = (value: string): number | null => {
+  if (!value.trim()) return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : undefined;
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(100, parsed)) : null;
 };
 
 export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPatchClassification, inline = false }: QuestionBankDetailProps) {
@@ -94,7 +95,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   const content = item && <div className="question-bank-detail">
       <div className="question-bank-card__chips"><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span><span>{item.subject}</span>{item.classification.unit && <span>{item.classification.unit}</span>}{item.classification.subunit && <span>{item.classification.subunit}</span>}</div>
       <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>
-      <dl><div><dt>난이도</dt><dd>{difficultyScoreLabel(item.classification.difficultyScore)}</dd></div><div><dt>중요도</dt><dd>{item.classification.importanceScore ? `${Math.ceil(item.classification.importanceScore / 20)}/5` : "미지정"}</dd></div><div><dt>품질</dt><dd>{item.classification.qualityScore ?? "미지정"}</dd></div><div><dt>답 유형</dt><dd>{answerTypeLabel[item.classification.answerType ?? "unknown"]}</dd></div></dl>
+      <dl><div><dt>난이도</dt><dd>{difficultyScoreLabel(item.classification.difficultyScore)}</dd></div><div><dt>중요도</dt><dd>{item.classification.importanceScore !== undefined && item.classification.importanceScore !== null ? `${Math.ceil(item.classification.importanceScore / 20)}/5` : "미지정"}</dd></div><div><dt>품질</dt><dd>{item.classification.qualityScore ?? "미지정"}</dd></div><div><dt>답 유형</dt><dd>{answerTypeLabel[item.classification.answerType ?? "unknown"]}</dd></div></dl>
       <section><h4>정답</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.answer ?? "연결되지 않음")} /></p></section>
       <section><h4>해설</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.explanation ?? "연결되지 않음")} /></p></section>
       {onPatchClassification && <section className="question-bank-detail__classification"><h4>분류 편집</h4>

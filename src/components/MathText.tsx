@@ -17,13 +17,19 @@ function isBoundary(value: string, index: number): boolean {
 
 function findClosingDelimiter(value: string, start: number, opener: string): number {
   const closer = opener === "$$" ? "$$" : opener === "\\[" ? "\\]" : opener === "\\(" ? "\\)" : "$";
-  let escaped = false;
   for (let index = start + opener.length; index < value.length; index += 1) {
-    if (escaped) { escaped = false; continue; }
-    if (value[index] === "\\") { escaped = true; continue; }
-    if (value.startsWith(closer, index)) return index;
+    // TeX closers are real delimiters, not escaped literals. Check them before
+    // the generic backslash rule so \\) and \\] terminate their opener.
+    if (value.startsWith(closer, index) && (closer !== "$" || countBackslashes(value, index) % 2 === 0)) return index;
+    if (value[index] === "\\" && value[index + 1] === "\\") { index += 1; continue; }
   }
   return -1;
+}
+
+function countBackslashes(value: string, index: number): number {
+  let count = 0;
+  for (let cursor = index - 1; cursor >= 0 && value[cursor] === "\\"; cursor -= 1) count += 1;
+  return count;
 }
 
 function invalidEnd(value: string, start: number, opener: string): number {
@@ -44,7 +50,9 @@ function readBalanced(value: string, start: number): number {
 
 function readRawCommand(value: string, start: number): { end: number; raw: string } | null {
   const previous = value[start - 1];
-  if (!isBoundary(value, start) && !(value[start] === "\\" && /[)\]}]/.test(previous ?? ""))) return null;
+  const isBackslashCommand = value[start] === "\\" && previous !== "\\" && previous !== "/" && !(previous === ":" && /[A-Za-z]:$/.test(value.slice(Math.max(0, start - 2), start)));
+  const isSlashCommand = value[start] === "/" && (isBoundary(value, start) || /[0-9)\]}]/.test(previous ?? ""));
+  if (!isBackslashCommand && !isSlashCommand) return null;
   const match = value.slice(start + 1).match(/^(begin\{([A-Za-z]+)\}|[A-Za-z]+)/);
   if (!match) return null;
   const command = match[1];

@@ -6,6 +6,7 @@ import Dialog from "../shared/ui/Dialog";
 import "./TextReviewPanel.css";
 import StructuredQuestionReviewEditor from "../features/import/components/StructuredQuestionReviewEditor";
 import { normalizeImportImageKey } from "../utils/importImageReferences";
+import { resolveQuestionAssets } from "../utils/questionAssets";
 
 function stableIdPart(value: string): string {
   const normalized = value.trim().replace(/[^a-zA-Z0-9_-]+/g, "-");
@@ -97,6 +98,11 @@ export default function TextReviewPanel({
   const structuredSourceImages = useMemo(() => {
     if (!activeStructuredQuestion) return [];
     const questionNumber = activeStructuredQuestion.questionNumber;
+    const assets = resolveQuestionAssets(entry, {
+      questionNumber,
+      figureIds: activeStructuredQuestion.figureIds,
+      source: activeStructuredQuestion.source,
+    });
     const linkedFigures = (entry.figures ?? []).filter((figure) =>
       activeStructuredQuestion.figureIds.includes(figure.id) ||
       figure.questionNumber === questionNumber,
@@ -111,19 +117,17 @@ export default function TextReviewPanel({
       ? normalizeImportImageKey(activeStructuredQuestion.source.reference)
       : null;
     const referencedImages = reference
-      ? [...entry.questionImages, ...(entry.sourcePageImages ?? [])].filter(
+      ? [...assets.sourcePages, ...assets.sourceCrops.map((crop) => crop.image)].filter(
           (image) => normalizeImportImageKey(image) === reference,
         )
       : [];
-    const pageImage = activeStructuredQuestion.source?.page
-      ? entry.sourcePageImages?.[activeStructuredQuestion.source.page - 1]
-      : undefined;
     return [...new Set([
+      ...assets.sourceCrops.map((crop) => crop.image),
       ...figureImages,
       ...referencedImages,
-      ...(pageImage ? [pageImage] : []),
+      ...assets.sourcePages,
     ])];
-  }, [activeStructuredQuestion, entry.figures, entry.questionImages, entry.sourcePageImages]);
+  }, [activeStructuredQuestion, entry]);
 
   const handleSave = async () => {
     setSaving(true);

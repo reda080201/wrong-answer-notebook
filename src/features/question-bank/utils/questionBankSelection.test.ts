@@ -26,4 +26,11 @@ describe("question bank selection", () => {
     expect(sortQuestionBankItems(items, "difficulty")[0].questionNumber).toBe("3");
     expect(sortQuestionBankItems(items, "review_due")[0].questionNumber).toBe("2");
   });
+
+  it("uses natural canonical question order as the equal-score tie breaker", () => {
+    const tied = ["1", "10", "11", "2", "9"].map((questionNumber) => ({
+      ...items[0], id: `entry:${questionNumber}`, questionNumber, updatedAt: "2026-01-01T00:00:00.000Z",
+    }));
+    expect(sortQuestionBankItems(tied, "updated").map((item) => item.questionNumber)).toEqual(["1", "2", "9", "10", "11"]);
+  });
 });

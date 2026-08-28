@@ -9,15 +9,6 @@ export interface StudyNextAction {
   onExecute: () => void;
 }
 
-interface NextActionButtonProps {
-  hideAnswers: boolean;
-  canGoNext: boolean;
-  reviewSaving: ReviewResult | null;
-  nextStudyAction?: StudyNextAction;
-  onToggleAnswers: () => void;
-  onNext: () => void;
-  onReviewGood: () => void;
-}
 
 interface StudyControlBarProps {
   isSheet: boolean;
@@ -44,65 +35,6 @@ interface StudyControlBarProps {
   onQuickMemoTextChange: (text: string) => void;
   onQuickMemoSubmit: () => void;
   onOpenGptExport?: () => void;
-}
-
-function NextActionButton({
-  hideAnswers,
-  canGoNext,
-  reviewSaving,
-  nextStudyAction,
-  onToggleAnswers,
-  onNext,
-  onReviewGood,
-}: NextActionButtonProps) {
-  if (reviewSaving !== null) {
-    return (
-      <button type="button" className="study-next-action" aria-label="하단 다음 행동" disabled>
-        저장 중...
-      </button>
-    );
-  }
-
-  if (nextStudyAction) {
-    return (
-      <button
-        type="button"
-        className="study-next-action"
-        aria-label="하단 다음 행동"
-        onClick={nextStudyAction.onExecute}
-        disabled={nextStudyAction.disabled}
-      >
-        {nextStudyAction.label}
-      </button>
-    );
-  }
-
-  if (hideAnswers) {
-    return (
-      <button type="button" className="study-next-action" aria-label="하단 다음 행동" onClick={onToggleAnswers}>
-        정답 보기
-      </button>
-    );
-  }
-
-  if (canGoNext) {
-    return (
-      <button type="button" className="study-next-action" aria-label="하단 다음 행동" onClick={onNext}>
-        다음 문제
-      </button>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      className="study-next-action"
-      aria-label="하단 다음 행동"
-      onClick={onReviewGood}
-    >
-      맞음으로 기록
-    </button>
-  );
 }
 
 export default function StudyControlBar({
@@ -166,22 +98,7 @@ export default function StudyControlBar({
           </button>
         )}
 
-        {!isConcept && (
-          <div className="study-next-action-wrap">
-            <NextActionButton
-              hideAnswers={hideAnswers}
-              canGoNext={canGoNext}
-              reviewSaving={reviewSaving}
-              nextStudyAction={nextStudyAction}
-              onToggleAnswers={onToggleAnswers}
-              onNext={onNext}
-              onReviewGood={() => onReview("good")}
-            />
-            <span className="study-control-counter">
-              {isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}
-            </span>
-          </div>
-        )}
+        {!isConcept && <span className="study-control-counter">{isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}</span>}
 
         {!isConcept && (
           <button
@@ -194,6 +111,9 @@ export default function StudyControlBar({
             다음
           </button>
         )}
+
+        {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}</button>}
+        {onOpenGptExport && !isConcept && <button type="button" className="study-control-nav-button" onClick={onOpenGptExport}>AI</button>}
 
         <button
           type="button"
@@ -286,9 +206,16 @@ export default function StudyControlBar({
         >
           메모
         </button>
-        {onOpenGptExport && !isConcept && (
-          <button type="button" className="study-memo-toggle" onClick={onOpenGptExport}>
-            GPT에게 보내기
+        <button
+          type="button"
+          className="study-memo-toggle"
+          onClick={() => window.dispatchEvent(new CustomEvent("wrong-answer:restore-study-zoom"))}
+        >
+          줌 컨트롤 다시 표시
+        </button>
+        {nextStudyAction && !isConcept && (
+          <button type="button" className="study-memo-toggle" onClick={nextStudyAction?.onExecute} disabled={!nextStudyAction || nextStudyAction.disabled}>
+            {nextStudyAction?.label ?? "다음 행동"}
           </button>
         )}
         <button

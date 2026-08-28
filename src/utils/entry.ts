@@ -28,6 +28,7 @@ import type {
 } from "../types";
 import { normalizeMistakeAnalysis } from "./mistakeAnalysis";
 import { normalizeImportAudit, normalizeRejectedNotes, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
+import { isValidNormalizedCrop } from "./normalizedCrop";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
 import { isMultipleChoiceQuestion, normalizeStructuredQuestionType } from "./structuredQuestionType";
 import { normalizeReviewState, isValidIsoDate } from "./reviewNormalization";
@@ -517,22 +518,39 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
   return raw
     .filter((item) => Boolean(item && typeof item === "object"))
     .map((item) => item as Partial<SheetFigureItem>)
-    .map((item) => ({
+    .map((item) => {
+      const cleaned = normalizeFigureCleaned(item.cleaned);
+      const verification = normalizeFigureVerification(item.verification);
+      const invalidCleanedGenerator = Boolean(
+        cleaned?.untrustedGeneratedBy || (item.cleaned && typeof item.cleaned === "object" && !("generatedBy" in item.cleaned)),
+      );
+      const untrustedVerification = Boolean(
+        verification?.status === "verified"
+          && verification.verificationSource !== "user"
+          && verification.verificationSource !== "local_validator",
+      );
+      return {
       id: item.id || uuidv4(),
       questionNumber: `${item.questionNumber ?? ""}`.trim(),
       title: `${item.title ?? ""}`.trim(),
       caption: `${item.caption ?? ""}`.trim(),
       image: item.image ? `${item.image}`.trim() : undefined,
       source: isFigureSource(item.source) ? item.source : "gpt_cleaned",
-      needsReview: Boolean(item.needsReview),
+      needsReview: Boolean(item.needsReview || invalidCleanedGenerator || untrustedVerification || (() => {
+        const original = item.original as unknown;
+        if (!original || typeof original !== "object") return false;
+        const crop = (original as Record<string, unknown>).crop;
+        return crop !== undefined && !isValidNormalizedCrop(crop);
+      })()),
       original: normalizeFigureOriginal(item.original),
-      cleaned: normalizeFigureCleaned(item.cleaned),
+      cleaned,
       semanticSpec: normalizeDiagramSemanticSpec(item.semanticSpec),
-      verification: normalizeFigureVerification(item.verification),
+      verification,
       preferredRepresentation: item.preferredRepresentation === "cleaned" || item.preferredRepresentation === "semantic_render" || item.preferredRepresentation === "original" ? item.preferredRepresentation : undefined,
       representationSelectionSource: item.representationSelectionSource === "user" ? "user" as const : item.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
       placement: normalizeFigurePlacement(item.placement),
-    }))
+      };
+    })
     .filter((item) => item.questionNumber || item.title || item.caption || item.image || item.original?.image || item.cleaned?.image || item.semanticSpec)
     .map(applyAutomaticFigurePreference);
 }
@@ -540,18 +558,30 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
 function normalizeQuestionSourceCrops(raw: unknown): WrongAnswerEntry["questionSourceCrops"] {
   if (!Array.isArray(raw)) return undefined;
   const seen = new Set<string>();
-  const crops = raw.flatMap((item) => {
+  const crops = raw.flatMap((item, index) => {
     if (!item || typeof item !== "object") return [];
     const value = item as Record<string, unknown>;
     const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
     const image = typeof value.image === "string" ? value.image.trim() : "";
-    if (!questionNumber || !image || seen.has(questionNumber)) return [];
-    seen.add(questionNumber);
+    if (!questionNumber || !image) return [];
+    const id = typeof value.id === "string" && value.id.trim()
+      ? value.id.trim()
+      : `legacy-crop:${questionNumber}:${index}`;
+    if (seen.has(id)) return [];
+    seen.add(id);
     const rawRect = value.cropRect && typeof value.cropRect === "object" ? value.cropRect as Record<string, unknown> : undefined;
-    const cropRect = rawRect && [rawRect.x, rawRect.y, rawRect.width, rawRect.height].every((part) => typeof part === "number" && Number.isFinite(part))
-      ? { x: Number(rawRect.x), y: Number(rawRect.y), width: Number(rawRect.width), height: Number(rawRect.height) }
+    const cropRect = rawRect && isValidNormalizedCrop(rawRect)
+      ? rawRect
       : undefined;
-    return [{ questionNumber, image, sourcePageImage: typeof value.sourcePageImage === "string" && value.sourcePageImage.trim() ? value.sourcePageImage.trim() : undefined, cropRect }];
+    return [{
+      id,
+      questionNumber,
+      page: typeof value.page === "number" && Number.isInteger(value.page) && value.page > 0 ? value.page : undefined,
+      order: typeof value.order === "number" && Number.isFinite(value.order) ? value.order : index,
+      image,
+      sourcePageImage: typeof value.sourcePageImage === "string" && value.sourcePageImage.trim() ? value.sourcePageImage.trim() : undefined,
+      cropRect,
+    }];
   });
   return crops.length ? crops : undefined;
 }
@@ -565,9 +595,14 @@ function normalizeQuestionRenderVerification(raw: unknown): WrongAnswerEntry["qu
     const questionNumber = normalizeQuestionNumber(`${value.questionNumber ?? ""}`);
     const canonicalFingerprint = typeof value.canonicalFingerprint === "string" ? value.canonicalFingerprint.trim() : "";
     const status = value.status;
-    if (!questionNumber || !canonicalFingerprint || seen.has(questionNumber) || (status !== "unverified" && status !== "needs_review" && status !== "verified")) return [];
-    seen.add(questionNumber);
-    return [{ questionNumber, canonicalFingerprint, status: status as "unverified" | "needs_review" | "verified", verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined, renderedImage: typeof value.renderedImage === "string" && value.renderedImage.trim() ? value.renderedImage.trim() : undefined }];
+    if (!questionNumber || !canonicalFingerprint || (status !== "unverified" && status !== "needs_review" && status !== "verified")) return [];
+    const scope: "question" | "question_answer" | "question_answer_explanation" = value.scope === "question_answer" || value.scope === "question_answer_explanation" ? value.scope : "question";
+    const rendererVersion = typeof value.rendererVersion === "string" && value.rendererVersion.trim() ? value.rendererVersion.trim() : undefined;
+    const key = `${questionNumber}:${scope}:${rendererVersion ?? "legacy"}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    const verificationSource: "user" | undefined = value.verificationSource === "user" ? "user" : undefined;
+    return [{ questionNumber, canonicalFingerprint, scope, rendererVersion, status: rendererVersion ? status as "unverified" | "needs_review" | "verified" : "needs_review", verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined, verificationSource, renderedImage: typeof value.renderedImage === "string" && value.renderedImage.trim() ? value.renderedImage.trim() : undefined }];
   });
   return records.length ? records : undefined;
 }
@@ -577,8 +612,8 @@ function normalizeFigureOriginal(raw: unknown): SheetFigureItem["original"] {
   const value = raw as Record<string, unknown>;
   if (typeof value.image !== "string" || !value.image.trim()) return undefined;
   const crop = value.crop && typeof value.crop === "object" ? value.crop as Record<string, unknown> : undefined;
-  const normalizedCrop = crop && [crop.x, crop.y, crop.width, crop.height].every((item) => typeof item === "number" && Number.isFinite(item))
-    ? { x: Number(crop.x), y: Number(crop.y), width: Number(crop.width), height: Number(crop.height) }
+  const normalizedCrop = crop && isValidNormalizedCrop(crop)
+    ? crop
     : undefined;
   return { image: value.image.trim(), sourcePageImage: typeof value.sourcePageImage === "string" ? value.sourcePageImage.trim() || undefined : undefined, crop: normalizedCrop };
 }
@@ -587,7 +622,20 @@ function normalizeFigureCleaned(raw: unknown): SheetFigureItem["cleaned"] {
   if (!raw || typeof raw !== "object") return undefined;
   const value = raw as Record<string, unknown>;
   if (typeof value.image !== "string" || !value.image.trim() || typeof value.sourceImageHash !== "string" || typeof value.promptVersion !== "string") return undefined;
-  return { image: value.image.trim(), generatedBy: "gpt", generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : "", sourceImageHash: value.sourceImageHash, promptVersion: value.promptVersion };
+  const generatedBy = value.generatedBy === "gpt" || value.generatedBy === "deterministic_cleanup" || value.generatedBy === "deterministic_redraw"
+    ? value.generatedBy
+    : undefined;
+  const untrustedGeneratedBy = typeof value.generatedBy === "string" && value.generatedBy.trim() && !generatedBy
+    ? value.generatedBy.trim()
+    : undefined;
+  return {
+    image: value.image.trim(),
+    generatedBy,
+    untrustedGeneratedBy,
+    generatedAt: typeof value.generatedAt === "string" ? value.generatedAt : "",
+    sourceImageHash: value.sourceImageHash,
+    promptVersion: value.promptVersion,
+  };
 }
 
 function normalizeDiagramSemanticSpec(raw: unknown): SheetFigureItem["semanticSpec"] {
@@ -908,10 +956,24 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
     (entryKind === "problem_sheet" ? maxAnswerDifficultyScore(answerKey) : undefined);
   const figures = normalizeFigures(rest.figures);
   const storedStructured = normalizeStoredStructuredQuestions(rest.structuredQuestions);
-  const structuredQuestions = scrubRejectedNotesFromStructuredQuestions(
+  const scrubbedStructuredQuestions = scrubRejectedNotesFromStructuredQuestions(
     storedStructured.questions,
     normalizeRejectedNotes(rest.rejectedNotes),
   );
+  const invalidCropNumbers = new Set(
+    (Array.isArray(rest.questionSourceCrops) ? rest.questionSourceCrops : [])
+      .filter((item) => item && typeof item === "object")
+      .flatMap((item) => {
+        const value = item as unknown as Record<string, unknown>;
+        return value.cropRect !== undefined && !isValidNormalizedCrop(value.cropRect)
+          ? [normalizeQuestionNumber(`${value.questionNumber ?? ""}`)]
+          : [];
+      })
+      .filter(Boolean),
+  );
+  const structuredQuestions = scrubbedStructuredQuestions?.map((item) => invalidCropNumbers.has(item.questionNumber)
+    ? { ...item, needsReview: true, warning: [item.warning, "원본 crop 좌표를 확인해야 합니다."].filter(Boolean).join(" ") }
+    : item);
   const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
   const canonical = canonicalizeQuestionMistakeAnalysis(
     answerKey,
@@ -997,7 +1059,7 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromSupplementalResources = (entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   const fromQuestionVisuals = [
-    ...(entry.questionSourceCrops ?? []).map((crop) => crop.image),
+    ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]).filter((image): image is string => Boolean(image)),
     ...(entry.questionRenderVerification ?? []).map((record) => record.renderedImage).filter((image): image is string => Boolean(image)),
   ];
   return [
@@ -1012,6 +1074,15 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
       ...(entry.images ?? []),
     ]),
   ];
+}
+
+/** Counts every image reference before a derived asset is removed. */
+export function collectAllImageReferences(entries: WrongAnswerEntry[]): Map<string, number> {
+  const references = new Map<string, number>();
+  for (const entry of entries) {
+    for (const filename of getAllImageFilenames(entry)) references.set(filename, (references.get(filename) ?? 0) + 1);
+  }
+  return references;
 }
 
 export function hasEntryContent(

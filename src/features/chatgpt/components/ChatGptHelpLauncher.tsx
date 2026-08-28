@@ -75,6 +75,22 @@ export default function ChatGptHelpLauncher({
     if (copied && preferences.openChatGptAfterCopy) await handleOpenChatGpt();
   };
 
+  const handleSendToMcpTunnel = async () => {
+    setStatus(null);
+    try {
+      await onSyncContext({
+        shareUserResponse: preferences.shareUserResponse,
+        shareScratchNote: preferences.shareScratchNote,
+        shareQuestionImages: preferences.shareQuestionImages,
+        shareSourcePageImages: preferences.shareSourcePageImages,
+      });
+      if (onCheckLocalMcp) await onCheckLocalMcp();
+      setStatus("MCP 문맥 동기화를 완료했습니다. 편집한 프롬프트는 자동 전송되지 않습니다.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "MCP 문맥 동기화에 실패했습니다.");
+    }
+  };
+
   return (
     <div className="chatgpt-help-launcher">
       <button type="button" className="btn-secondary" onClick={() => setOpen((value) => !value)}>
@@ -82,6 +98,7 @@ export default function ChatGptHelpLauncher({
       </button>
       <Dialog open={open} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={() => setOpen(false)} footer={<div className="chatgpt-help-actions">
         <button type="button" className="btn-secondary" onClick={() => void syncAndCopy()}>질문 복사</button>
+        <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 문맥 동기화</button>
         <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
         <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>질문 복사 후 ChatGPT 열기</button>
         {onOpenSettings && <button type="button" className="btn-secondary" onClick={onOpenSettings}>연결 설정</button>}

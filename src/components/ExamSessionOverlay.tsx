@@ -1,4 +1,6 @@
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../types";
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { SettingsTab } from "./SettingsModal";
 import ExamSessionView from "../features/exam/components/ExamSessionView";
 import RealExamSessionView from "../features/exam/components/RealExamSessionView";
@@ -44,35 +46,48 @@ export default function ExamSessionOverlay({
   saveError,
   onRetrySave,
 }: ExamSessionOverlayProps) {
-  return (
-    <div className={`exam-session-overlay${generated ? " exam-session-overlay--generated" : ""}`}>
-      {saveError && (
+  useEffect(() => {
+    if (session.mode !== "real") return undefined;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previous; };
+  }, [session.mode]);
+  const content = session.mode === "real" ? <RealExamSessionView
+    session={session}
+    onChange={onChange}
+    onSubmittingChange={onSubmittingChange}
+    onSubmit={onSubmit}
+    examPreferences={examPreferences}
+    onClose={onClose}
+    closeDisabled={submitting || saving}
+    saveError={saveError}
+    saving={saving}
+    onRetrySave={onRetrySave}
+  /> : <ExamSessionView
+    session={session}
+    examPreferences={examPreferences}
+    onOpenSettings={onOpenSettings}
+    chatGptPreferences={chatGptPreferences}
+    onChatGptPreferencesChange={onChatGptPreferencesChange}
+    onSyncChatGptContext={onSyncChatGptContext}
+    onOpenChatGptSettings={onOpenChatGptSettings}
+    onCheckLocalMcp={onCheckLocalMcp}
+    remoteMcpConfigured={remoteMcpConfigured}
+    onChange={onChange}
+    onSubmittingChange={onSubmittingChange}
+    onSubmit={onSubmit}
+  />;
+
+  const overlay = (
+    <div className={`exam-session-overlay${generated ? " exam-session-overlay--generated" : ""}${session.mode === "real" ? " exam-session-overlay--real" : ""}`}>
+      {saveError && session.mode !== "real" && (
         <div className="exam-session-save-error" role="alert">
           <span>진행 상태 저장 실패: {saveError}</span>
           <button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button>
         </div>
       )}
-      <button type="button" onClick={() => void onClose()} disabled={submitting || saving}>시험 닫기</button>
-      {session.mode === "real" ? <RealExamSessionView
-        session={session}
-        onChange={onChange}
-        onSubmittingChange={onSubmittingChange}
-        onSubmit={onSubmit}
-        examPreferences={examPreferences}
-      /> : <ExamSessionView
-        session={session}
-        examPreferences={examPreferences}
-        onOpenSettings={onOpenSettings}
-        chatGptPreferences={chatGptPreferences}
-        onChatGptPreferencesChange={onChatGptPreferencesChange}
-        onSyncChatGptContext={onSyncChatGptContext}
-        onOpenChatGptSettings={onOpenChatGptSettings}
-        onCheckLocalMcp={onCheckLocalMcp}
-        remoteMcpConfigured={remoteMcpConfigured}
-        onChange={onChange}
-        onSubmittingChange={onSubmittingChange}
-        onSubmit={onSubmit}
-      />}
+      {content}
     </div>
   );
+  return session.mode === "real" ? createPortal(overlay, document.body) : overlay;
 }

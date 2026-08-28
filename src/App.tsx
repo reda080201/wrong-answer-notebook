@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -8,7 +8,7 @@ import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
-import { createPreUpdateBackup } from "./api";
+import { createPreUpdateBackup, deleteImage, saveImageFiles } from "./api";
 import { syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
@@ -17,6 +17,7 @@ import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
+import { collectAllImageReferences } from "./utils/entry";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
@@ -117,10 +118,21 @@ function AppContent() {
     settingsInitialTab, setSettingsInitialTab,
     questionTarget, setQuestionTarget,
     realExamStartEntry, setRealExamStartEntry,
-    realExamMinutes, setRealExamMinutes,
+    setRealExamMinutes,
+    realExamShowTimer, setRealExamShowTimer,
+    realExamAnswerSheetOpen, setRealExamAnswerSheetOpen,
+    realExamAnswerSheetLayout, setRealExamAnswerSheetLayout,
     dismissedUpdateVersion, setDismissedUpdateVersion,
     controller: modalController,
   } = useAppModalController();
+  const [realExamTimePreset, setRealExamTimePreset] = useState<"30" | "50" | "80" | "100" | "custom">("50");
+  const [realExamCustomMinutes, setRealExamCustomMinutes] = useState("50");
+  const parsedCustomMinutes = Number(realExamCustomMinutes);
+  const customTimeError = realExamTimePreset === "custom" && (!Number.isInteger(parsedCustomMinutes) || parsedCustomMinutes < 1 || parsedCustomMinutes > 720)
+    ? "1~720분 사이의 정수를 입력하세요."
+    : null;
+  const selectedRealMinutes = realExamTimePreset === "custom" ? parsedCustomMinutes : Number(realExamTimePreset);
+  const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
   const {
     registerWorkspaceDraftFlush,
@@ -419,6 +431,21 @@ function AppContent() {
   const selectedRealSession = selected
     ? savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode === "real")
     : undefined;
+  const openNewRealExamDialog = () => {
+    const defaultMinutes = settings.examPreferences.defaultRealExamMinutes ?? 50;
+    if ([30, 50, 80, 100].includes(defaultMinutes)) {
+      setRealExamTimePreset(String(defaultMinutes) as "30" | "50" | "80" | "100");
+      setRealExamCustomMinutes(String(defaultMinutes));
+    } else {
+      setRealExamTimePreset("custom");
+      setRealExamCustomMinutes(String(defaultMinutes));
+    }
+    setRealExamMinutes(defaultMinutes);
+    setRealExamShowTimer(settings.examPreferences.showTimer);
+    setRealExamAnswerSheetOpen(settings.examPreferences.realExamAnswerSheetOpen ?? true);
+    setRealExamAnswerSheetLayout(settings.examPreferences.defaultAnswerSheetLayout ?? "auto");
+    setRealExamStartEntry(selected);
+  };
   const availableUpdate = updater.state.status === "available" ? updater.state : null;
   const openConceptLearningBlock = (entryId: string, blockId: string) => {
     void (async () => {
@@ -617,8 +644,7 @@ function AppContent() {
                 openExamSession(selected, { mode: "practice", resumable: selectedPracticeSession });
               } : undefined}
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
-                setRealExamStartEntry(selected);
-                setRealExamMinutes(settings.examPreferences.defaultRealExamMinutes ?? 50);
+                openNewRealExamDialog();
               } : undefined}
               startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
               startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
@@ -685,6 +711,47 @@ function AppContent() {
                     : nextQuestionMeta,
                 }))
               }
+              onPersistQuestionRender={async ({ questionNumber, blob, filename, canonicalFingerprint, scope, rendererVersion }) => {
+                if (questionRenderPersistingRef.current) throw new Error("정리본 저장이 이미 진행 중입니다.");
+                questionRenderPersistingRef.current = true;
+                const file = new File([blob], filename.endsWith(".png") ? filename : `${filename}.png`, { type: "image/png" });
+                let savedImage: string;
+                try {
+                  [savedImage] = await saveImageFiles([file]);
+                } catch (error) {
+                  questionRenderPersistingRef.current = false;
+                  throw error;
+                }
+                const previousImage = selected.questionRenderVerification?.find((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)?.renderedImage;
+                try {
+                  await patchEntry(selected.id, (current) => ({
+                    questionRenderVerification: [
+                      ...(current.questionRenderVerification ?? []).filter((item) => !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)),
+                      { questionNumber, canonicalFingerprint, scope, rendererVersion, status: "unverified", renderedImage: savedImage },
+                    ],
+                  }));
+                } catch (error) {
+                  await deleteImage(savedImage).catch(() => undefined);
+                  questionRenderPersistingRef.current = false;
+                  throw error;
+                }
+                if (previousImage && previousImage !== savedImage) {
+                  const nextVerification = [
+                    ...(selected.questionRenderVerification ?? []).filter((item) => !(item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion)),
+                    { questionNumber, canonicalFingerprint, scope, rendererVersion, status: "unverified" as const, renderedImage: savedImage },
+                  ];
+                  const nextEntries = entries.map((entry) => entry.id === selected.id ? { ...entry, questionRenderVerification: nextVerification } : entry);
+                  if ((collectAllImageReferences(nextEntries).get(previousImage) ?? 0) === 0) await deleteImage(previousImage).catch(() => undefined);
+                }
+                questionRenderPersistingRef.current = false;
+              }}
+              onUpdateQuestionRenderVerification={async ({ questionNumber, scope, rendererVersion, status, expectedFingerprint }) => {
+                await patchEntry(selected.id, (current) => ({
+                  questionRenderVerification: (current.questionRenderVerification ?? []).map((item) => item.questionNumber === questionNumber && (item.scope ?? "question") === scope && (item.rendererVersion ?? "legacy") === rendererVersion
+                    ? (() => { if (status === "verified" && expectedFingerprint && item.canonicalFingerprint !== expectedFingerprint) throw new Error("정리본이 변경되어 다시 확인해야 합니다."); return { ...item, status, verifiedAt: status === "verified" ? new Date().toISOString() : undefined, verificationSource: status === "verified" ? "user" : undefined }; })()
+                    : item),
+                }));
+              }}
               initialQuestionTarget={
                 questionTarget?.entryId === selected.id ? questionTarget : null
               }
@@ -807,11 +874,13 @@ function AppContent() {
         onClose={() => setRealExamStartEntry(null)}
         title="실전 모의고사 시작"
         ariaLabel="실전 모의고사 시작"
+        footer={null}
       >
         {realExamStartEntry && (
           <div className="real-exam-start-dialog">
             <p className="form-hint">{realExamStartEntry.title}</p>
             <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            {examStartError?.entryId === realExamStartEntry.id && <p className="form-error" role="alert">{examStartError.message}</p>}
             {selectedRealSession?.deadlineAt && (
               <p className="form-hint" role="status">
                 진행 중인 실전 모의고사 · 남은 시간 {Math.floor(getRemainingExamSeconds(selectedRealSession.deadlineAt) / 60).toString().padStart(2, "0")}:{(getRemainingExamSeconds(selectedRealSession.deadlineAt) % 60).toString().padStart(2, "0")}
@@ -819,20 +888,33 @@ function AppContent() {
             )}
             <label className="form-field">
               제한 시간
-              <select value={selectedRealSession?.timeLimitMinutes ?? realExamMinutes} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamMinutes(Number(event.target.value))}>
-                {[30, 50, 80, 100].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+              <select value={selectedRealSession ? String(selectedRealSession.timeLimitMinutes ?? 50) : (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
+                {["30", "50", "80", "100"].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
+                {selectedRealSession && ![30, 50, 80, 100].includes(selectedRealSession.timeLimitMinutes ?? 50) && <option value={String(selectedRealSession.timeLimitMinutes)}>{selectedRealSession.timeLimitMinutes}분 (기존 설정)</option>}
+                <option value="custom">사용자 지정</option>
+              </select>
+              {!selectedRealSession && realExamTimePreset === "custom" && <><input aria-label="사용자 지정 제한 시간" type="number" min="1" max="720" step="1" value={realExamCustomMinutes} onChange={(event) => setRealExamCustomMinutes(event.target.value)} />{customTimeError && <span className="form-error" role="alert">{customTimeError}</span>}</>}
+            </label>
+            <label className="form-field">
+              답안지
+              <select value={selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetLayout(event.target.value as "auto" | "vertical" | "horizontal")}>
+                <option value="auto">자동</option><option value="vertical">세로</option><option value="horizontal">가로</option>
               </select>
             </label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.showTimer ?? realExamShowTimer} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamShowTimer(event.target.checked)} /> 타이머 표시</label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetOpen(event.target.checked)} /> 답안지 열기</label>
             <p className="form-hint">타이머와 답안지를 함께 엽니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
             <div className="dialog-actions">
               <button type="button" className="btn-secondary" onClick={() => setRealExamStartEntry(null)}>취소</button>
               <button
                 type="button"
                 className="btn-primary"
+                disabled={!selectedRealSession && Boolean(customTimeError)}
                 onClick={() => {
                   const entry = realExamStartEntry;
-                  setRealExamStartEntry(null);
-                  openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? realExamMinutes, showTimer: settings.examPreferences.showTimer, answerSheetOpen: settings.examPreferences.realExamAnswerSheetOpen });
+                  if (!selectedRealSession && customTimeError) return;
+                  const result = openExamSession(entry, { mode: "real", resumable: selectedRealSession, timeLimitMinutes: selectedRealSession?.timeLimitMinutes ?? selectedRealMinutes, showTimer: selectedRealSession?.showTimer ?? realExamShowTimer, answerSheetOpen: selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen, answerSheetLayout: selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout });
+                  if (result.ok) setRealExamStartEntry(null);
                 }}
               >
                 {selectedRealSession ? "이어서 풀기" : "실전 모드 시작"}
@@ -841,14 +923,15 @@ function AppContent() {
           </div>
         )}
       </Dialog>
-      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving}>
-        <p>{closeFlushError}</p>
-        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
-        <footer className="dialog-actions">
+      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving} footer={
+        <div className="dialog-actions">
           <button type="button" className="btn-secondary" onClick={clearCloseFlushError} disabled={closeFlushSaving}>종료 취소</button>
           <button type="button" className="btn-danger" onClick={() => void closeWithoutSaving()} disabled={closeFlushSaving}>저장하지 않고 종료</button>
           <button type="button" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
-        </footer>
+        </div>
+      }>
+        <p>{closeFlushError}</p>
+        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
     </div>
     </ConceptLinkProvider>

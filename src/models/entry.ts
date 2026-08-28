@@ -178,7 +178,10 @@ export interface FigureOriginalRepresentation {
 
 export interface FigureCleanedRepresentation {
   image: string;
-  generatedBy: "gpt";
+  /** Present only when the producer supplied a supported, trustworthy value. */
+  generatedBy?: "gpt" | "deterministic_cleanup" | "deterministic_redraw";
+  /** Preserves an unsupported producer label without promoting it to a trusted enum. */
+  untrustedGeneratedBy?: string;
   generatedAt: string;
   sourceImageHash: string;
   promptVersion: string;
@@ -255,7 +258,11 @@ export interface FigureVerification {
 
 /** A crop remains an immutable reference to the imported source-page asset. */
 export interface QuestionSourceCrop {
+  /** Stable per-crop identity. A question can legitimately span multiple pages. */
+  id?: string;
   questionNumber: string;
+  page?: number;
+  order?: number;
   image: string;
   sourcePageImage?: string;
   cropRect?: NormalizedCrop;
@@ -265,8 +272,11 @@ export interface QuestionSourceCrop {
 export interface QuestionRenderVerification {
   questionNumber: string;
   canonicalFingerprint: string;
+  scope?: "question" | "question_answer" | "question_answer_explanation";
+  rendererVersion?: string;
   status: "unverified" | "needs_review" | "verified";
   verifiedAt?: string;
+  verificationSource?: "user";
   renderedImage?: string;
 }
 
