@@ -34,8 +34,8 @@ describe("Question Bank math rendering", () => {
   });
 
   it("renders question, answer, and explanation through MathText in detail", () => {
-    const { container } = render(<QuestionBankDetail item={item} onClose={vi.fn()} onOpenQuestion={vi.fn()} />);
-    expect(container.querySelectorAll(".math-fragment")).toHaveLength(3);
+    render(<QuestionBankDetail item={item} onClose={vi.fn()} onOpenQuestion={vi.fn()} />);
+    expect(document.querySelectorAll(".math-fragment")).toHaveLength(3);
   });
 
   it("displays an explicit zero importance score", () => {

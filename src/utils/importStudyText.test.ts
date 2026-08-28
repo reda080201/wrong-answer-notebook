@@ -4,6 +4,7 @@ import {
   parseImportedStudyText,
   ImportParseError,
   isSafeImportAssetReference,
+  normalizeExternalQuestionSourceCrops,
 } from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
@@ -12,6 +13,7 @@ import { getEntryQuestions } from "./entryQuestions";
 import { createExamSession } from "../features/exam/services/examSession";
 import { normalizeEntry } from "./entry";
 import type { WrongAnswerEntry } from "../types";
+import { mapEntryImportImageReferences } from "./importImageReferences";
 
 describe("importStudyText", () => {
   describe("ZIP asset references", () => {
@@ -80,6 +82,27 @@ describe("importStudyText", () => {
   });
 
   describe("JSON parse enhancements", () => {
+    it("preserves entry-level source crops through single and v2 imports", () => {
+      const crops = [
+        { id: "q9-a", questionNumber: "9", image: "images/q09-a.png", sourcePageImage: "images/page-003.png", page: 3, order: 0 },
+        { id: "q9-b", questionNumber: "9", image: "images/q09-b.png", sourcePageImage: "images/page-004.png", page: 4, order: 1 },
+        { id: "q10", questionNumber: "10", image: "images/q10.png", page: 4, order: 0 },
+      ];
+      const single = parseImportedStudyText(JSON.stringify({ entryKind: "problem_sheet", question: "9. 문제\n10. 문제", questions: [{ questionNumber: "9", questionText: "문제", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: [] }], questionSourceCrops: crops }));
+      expect(single.data.questionSourceCrops).toEqual(crops);
+      const mapped = mapEntryImportImageReferences(single.data, (filename) => `persisted/${filename.split("/").pop()}`);
+      expect(mapped.questionSourceCrops?.filter((crop) => crop.questionNumber === "9")).toMatchObject([
+        { id: "q9-a", questionNumber: "9", order: 0, page: 3, image: "persisted/q09-a.png", sourcePageImage: "persisted/page-003.png" },
+        { id: "q9-b", questionNumber: "9", order: 1, page: 4, image: "persisted/q09-b.png", sourcePageImage: "persisted/page-004.png" },
+      ]);
+      const wrapper = parseAllInOneImport(JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: [{ entryKind: "problem_sheet", question: "9. 문제", questions: [{ questionNumber: "9", questionText: "문제", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: [] }], questionSourceCrops: crops.slice(0, 2) }] }));
+      expect(wrapper.entries[0]?.questionSourceCrops).toEqual(crops.slice(0, 2));
+    });
+
+    it("does not clamp invalid crop rectangles and rejects unsafe assets", () => {
+      expect(normalizeExternalQuestionSourceCrops([{ questionNumber: "9", image: "q9.png", cropRect: { x: -1, y: 0, width: 2, height: 1 } }]).crops[0]?.cropRect).toBeUndefined();
+      expect(() => normalizeExternalQuestionSourceCrops([{ questionNumber: "9", image: "../q9.png" }])).toThrow(ImportParseError);
+    });
     it("normalizes legacy math commands in imported question and answer text", () => {
       const source = JSON.stringify({
         entryKind: "problem_sheet",

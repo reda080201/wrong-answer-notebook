@@ -62,7 +62,7 @@ describe("ExamSessionView", () => {
         onSubmit={vi.fn()}
       />);
 
-      expect(screen.getByRole("group", { name: "선택지" })).toBeInTheDocument();
+      expect(screen.getByRole("group", { name: "1번 선택지" })).toBeInTheDocument();
       expect(screen.queryByLabelText("내 답")).not.toBeInTheDocument();
     },
   );
@@ -75,7 +75,7 @@ describe("ExamSessionView", () => {
     }] })} onChange={vi.fn()} onSubmit={vi.fn()} />);
 
     expect(screen.getByText("객관식 문항에 선택지가 없어 검토가 필요합니다.")).toBeInTheDocument();
-    expect(screen.queryByLabelText("선택지")).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "1번 선택지" })).toBeInTheDocument();
     expect(screen.queryByLabelText("내 답")).not.toBeInTheDocument();
   });
 

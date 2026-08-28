@@ -32,7 +32,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     await expect(page.getByRole("heading", { name: "문제 20", exact: true })).toBeVisible();
     const answerSheet = page.getByRole("complementary", { name: "답안지" });
     await answerSheet.getByRole("button", { name: "접기" }).click();
-    await expect(answerSheet.getByRole("button", { name: "펼치기" })).toBeVisible();
+    await expect(answerSheet.getByRole("button", { name: "답안지 펼치기" })).toBeVisible();
 
     await expect.poll(async () => page.evaluate(() => {
       const sessions = JSON.parse(localStorage.getItem("wrong-answer-exam-sessions") ?? "[]") as Array<{ responses?: Array<{ questionNumber: string }> }>;
@@ -49,7 +49,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     const resumeDialog = page.getByRole("dialog", { name: "실전 모의고사 시작" });
     await expect(resumeDialog).toContainText("진행 중인 실전 모의고사");
     await resumeDialog.getByRole("button", { name: "이어서 풀기" }).click();
-    await page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "펼치기" }).click();
+    await page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "답안지 펼치기" }).click();
     await expect(page.getByLabel("2번 답안", { exact: true })).toHaveValue("short-2");
     await expect(page.getByRole("button", { name: /^20번 미응답/ })).toBeVisible();
 

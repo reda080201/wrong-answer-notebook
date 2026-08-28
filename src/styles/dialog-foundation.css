@@ -5,6 +5,15 @@
   mask-image: linear-gradient(#000 70%, transparent);
 }
 
+/* Shared dialog surface; feature classes are additive. */
+.modal-backdrop { position: fixed; inset: 0; z-index: var(--z-dialog); display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: rgb(15 23 42 / 48%); }
+.modal-card { width: min(100%, 480px); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface-primary); color: var(--ink-primary); box-shadow: var(--shadow-dialog); }
+.modal-card > .dialog-body { padding: var(--space-5); line-height: 1.6; }
+.modal-card > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--line-subtle); }
+.modal-card > .dialog-header h2 { margin: 0; font-size: 19px; }
+.modal-card > .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--line-subtle); }
+@media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: 14px; } }
+
 .import-modal {
   width: min(1180px, calc(100vw - var(--space-6)));
   height: min(860px, calc(100dvh - var(--space-6)));

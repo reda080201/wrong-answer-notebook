@@ -36,6 +36,7 @@ interface AppSidebarProps {
     typeof import("../utils/conceptAnalytics").buildLearningDashboardStats
   >;
   subjects: { order: string[]; filter: string | null; counts: Record<string, number>; sectionEntryCount: number; move(fromIndex: number, toIndex: number): void; select(subject: string | null): void };
+  questionBank?: { active: boolean; total: number; subjectCounts: Record<string, number> };
   actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
   destinations: { learningHubOpen: boolean; questionBankOpen: boolean; libraryOpen: boolean };
   shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
@@ -55,11 +56,14 @@ export default function AppSidebar({
   stats,
   learningStats,
   subjects,
+  questionBank,
   actions,
   destinations,
   shell,
 }: AppSidebarProps) {
   const { order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount } = subjects;
+  const visibleSubjectCounts = questionBank?.active ? questionBank.subjectCounts : subjectCounts;
+  const visibleSubjectTotal = questionBank?.active ? questionBank.total : sectionEntryCount;
   const { openNew, openImport, openLearningImport, openExamBuilder: onOpenExamBuilder } = actions;
   const { learningHubOpen, questionBankOpen, libraryOpen } = destinations;
   const { collapsed, onCollapsedChange } = shell;
@@ -67,7 +71,9 @@ export default function AppSidebar({
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
   );
-  const sidebarStats = useMemo(() => activeSection === "problem_sheet"
+  const sidebarStats = useMemo(() => questionBank?.active
+      ? [["전체 문항", questionBank.total]]
+      : activeSection === "problem_sheet"
       ? [
           ["시험지", sectionEntries.length],
           ["총 문항", sectionEntries.reduce((sum, entry) => sum + getQuestionCount(entry), 0)],
@@ -96,7 +102,7 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-          ], [activeSection, sectionEntries, stats]);
+          ], [activeSection, questionBank, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
     void navigationController.requestNavigation({ section, entryId: null });
   };
@@ -205,8 +211,8 @@ export default function AppSidebar({
         <SubjectList
           subjectOrder={subjectOrder}
           subjectFilter={subjectFilter}
-          subjectCounts={subjectCounts}
-          totalCount={sectionEntryCount}
+          subjectCounts={visibleSubjectCounts}
+          totalCount={visibleSubjectTotal}
             onSelect={subjects.select}
             onReorder={subjects.move}
         />

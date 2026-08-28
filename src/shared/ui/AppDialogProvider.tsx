@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import Dialog from "./Dialog";
 
 interface ConfirmOptions {
@@ -6,6 +6,7 @@ interface ConfirmOptions {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  variant?: "default" | "destructive";
 }
 
 interface PromptOptions {
@@ -33,6 +34,7 @@ const AppDialogContext = createContext<AppDialogContextValue>({
 export function AppDialogProvider({ children }: { children: ReactNode }) {
   const [request, setRequest] = useState<Request | null>(null);
   const [promptValue, setPromptValue] = useState("");
+  const promptInputRef = useRef<HTMLInputElement>(null);
 
   const close = useCallback((value: boolean | string | null) => {
     const current = request;
@@ -58,10 +60,28 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
     <AppDialogContext.Provider value={value}>
       {children}
       {request && (
-        <Dialog open onClose={() => close(request.kind === "confirm" ? false : null)} title={title} className="app-dialog-card">
+        <Dialog
+          open
+          onClose={() => close(request.kind === "confirm" ? false : null)}
+          title={title}
+          className="app-dialog-card"
+          size="sm"
+          initialFocusRef={request.kind === "prompt" ? promptInputRef : undefined}
+          footer={(
+            <>
+              <button type="button" className="btn-secondary" data-dialog-initial-focus={request.kind === "confirm" || undefined} onClick={() => close(request.kind === "confirm" ? false : null)}>
+                {request.options.cancelLabel ?? "취소"}
+              </button>
+              <button type="button" className={request.kind === "confirm" && request.options.variant === "destructive" ? "btn-danger" : undefined} onClick={() => close(request.kind === "confirm" ? true : promptValue)}>
+                {request.options.confirmLabel ?? "확인"}
+              </button>
+            </>
+          )}
+        >
           <p>{request.options.message}</p>
           {request.kind === "prompt" && (
             <input
+              ref={promptInputRef}
               autoFocus
               value={promptValue}
               onChange={(event) => setPromptValue(event.target.value)}
@@ -70,14 +90,6 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
               }}
             />
           )}
-          <footer className="dialog-actions">
-            <button type="button" className="btn-secondary" onClick={() => close(request.kind === "confirm" ? false : null)}>
-              {request.options.cancelLabel ?? "취소"}
-            </button>
-            <button type="button" onClick={() => close(request.kind === "confirm" ? true : promptValue)}>
-              {request.options.confirmLabel ?? "확인"}
-            </button>
-          </footer>
         </Dialog>
       )}
     </AppDialogContext.Provider>

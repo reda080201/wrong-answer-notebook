@@ -73,6 +73,7 @@ describe("Dialog", () => {
 
     const dialog = screen.getByRole("dialog", { name: "슬롯 dialog" });
     expect(dialog).toHaveClass("dialog-size-xl");
+    expect(dialog).toHaveClass("modal-card");
     expect(screen.getByText("추가 헤더")).toBeInTheDocument();
     expect(screen.getByText("내용")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "저장" })).toBeInTheDocument();
