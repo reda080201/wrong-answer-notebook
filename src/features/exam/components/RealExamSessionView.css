@@ -1,5 +1,7 @@
-.exam-session-overlay--real { position: fixed; inset: 0; z-index: 120; overflow: hidden; background: var(--app-bg); }
-.exam-session-overlay--real { box-sizing: border-box; padding: 0; border: 0; }
+.exam-session-overlay { position: fixed; inset: 0; z-index: var(--z-dialog, 120); display: grid; min-width: 0; min-height: 0; overflow: hidden; background: var(--app-bg); }
+.exam-session-overlay, .exam-session-overlay--real { box-sizing: border-box; padding: 0; border: 0; }
+.exam-session-overlay > .exam-session-view { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; width: min(100%, 1100px); min-width: 0; min-height: 0; margin: 0 auto; overflow: auto; padding: clamp(12px, 2vw, 28px); }
+.exam-session-overlay > .exam-session-view .exam-question-navigation { position: sticky; bottom: 0; z-index: 2; min-height: 50px; margin-inline: calc(clamp(12px, 2vw, 28px) * -1); padding-inline: clamp(12px, 2vw, 28px); background: var(--surface); }
 .real-exam-session { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100dvh; min-height: 0; background: var(--app-bg); }
 .real-exam-header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 68px; padding: var(--space-3) clamp(16px, 3vw, 42px); background: var(--surface); border-bottom: 1px solid var(--border); }
 .real-exam-header h2, .real-exam-header p { margin: 0; }

@@ -100,7 +100,7 @@ describe("importStudyText", () => {
     });
 
     it("does not clamp invalid crop rectangles and rejects unsafe assets", () => {
-      expect(normalizeExternalQuestionSourceCrops([{ questionNumber: "9", image: "q9.png", cropRect: { x: -1, y: 0, width: 2, height: 1 } }])[0]?.cropRect).toBeUndefined();
+      expect(normalizeExternalQuestionSourceCrops([{ questionNumber: "9", image: "q9.png", cropRect: { x: -1, y: 0, width: 2, height: 1 } }]).crops[0]?.cropRect).toBeUndefined();
       expect(() => normalizeExternalQuestionSourceCrops([{ questionNumber: "9", image: "../q9.png" }])).toThrow(ImportParseError);
     });
     it("normalizes legacy math commands in imported question and answer text", () => {

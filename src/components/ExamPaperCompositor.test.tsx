@@ -44,4 +44,15 @@ describe("ExamPaperCompositor", () => {
     render(<ExamPaperCompositor enabled items={[{ id: "q9", node: <article id="sheet-question-canonical-9">9번</article> }]} />);
     expect(document.querySelectorAll("#sheet-question-canonical-9")).toHaveLength(1);
   });
+
+  it("isolates an item taller than a printable column instead of clipping it", () => {
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      const height = this.textContent === "long" ? 1200 : 180;
+      return { width: 280, height, top: 0, left: 0, right: 280, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    render(<ExamPaperCompositor enabled layout="columns" items={[item("short"), item("long"), item("after")]} />);
+
+    expect(screen.getByText("long").closest(".exam-paper-page")).toHaveClass("exam-paper-page--oversized");
+    expect(screen.getByText("after").closest(".exam-paper-page")).not.toBe(screen.getByText("long").closest(".exam-paper-page"));
+  });
 });

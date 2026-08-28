@@ -47,11 +47,10 @@ export default function ExamSessionOverlay({
   onRetrySave,
 }: ExamSessionOverlayProps) {
   useEffect(() => {
-    if (session.mode !== "real") return undefined;
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
-  }, [session.mode]);
+  }, []);
   const content = session.mode === "real" ? <RealExamSessionView
     session={session}
     onChange={onChange}
@@ -76,6 +75,7 @@ export default function ExamSessionOverlay({
     onChange={onChange}
     onSubmittingChange={onSubmittingChange}
     onSubmit={onSubmit}
+    onClose={onClose}
   />;
 
   const overlay = (
@@ -89,5 +89,5 @@ export default function ExamSessionOverlay({
       {content}
     </div>
   );
-  return session.mode === "real" ? createPortal(overlay, document.body) : overlay;
+  return createPortal(overlay, document.body);
 }

@@ -80,7 +80,9 @@
 .question-theater-dock__secondary { grid-column: 3; justify-content: flex-end; }
 
 @media (max-width: 1100px) {
-  .question-theater-dock { align-items: stretch; flex-direction: column; }
+  .question-theater-dock { grid-template-columns: 1fr; align-items: stretch; }
+  .question-theater-dock__primary { grid-column: 1; }
+  .question-theater-dock__secondary { grid-column: 1; justify-content: space-between; }
   .question-theater-dock__primary,
   .question-theater-dock__secondary { justify-content: space-between; }
 }
