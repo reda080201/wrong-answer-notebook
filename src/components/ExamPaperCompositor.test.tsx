@@ -52,7 +52,9 @@ describe("ExamPaperCompositor", () => {
     });
     render(<ExamPaperCompositor enabled layout="columns" items={[item("short"), item("long"), item("after")]} />);
 
-    expect(screen.getByText("long").closest(".exam-paper-page")).toHaveClass("exam-paper-page--oversized");
-    expect(screen.getByText("after").closest(".exam-paper-page")).not.toBe(screen.getByText("long").closest(".exam-paper-page"));
+    const oversizedPage = screen.getByLabelText("시험지 2페이지");
+    expect(oversizedPage).toHaveClass("exam-paper-page--oversized");
+    expect(oversizedPage).toHaveTextContent("long");
+    expect(screen.getByLabelText("시험지 3페이지")).toHaveTextContent("after");
   });
 });
