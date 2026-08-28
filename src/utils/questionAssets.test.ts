@@ -10,7 +10,7 @@ describe("resolveQuestionAssets", () => {
     ], questionSourceCrops: [
       { id: "crop-9", questionNumber: "9", order: 0, image: "q9.png" },
       { id: "crop-10", questionNumber: "10", order: 0, image: "q10.png" },
-    ] } as WrongAnswerEntry;
+    ] } as unknown as WrongAnswerEntry;
     expect(resolveQuestionAssets(entry, { questionNumber: "9", figureIds: ["f9"] }).figures.map((figure) => figure.id)).toEqual(["f9"]);
     expect(resolveQuestionAssets(entry, { questionNumber: "9", figureIds: ["f9"] }).questionImages).toEqual(["q9.png"]);
   });
