@@ -39,7 +39,6 @@ export default function ExamSessionOverlay({
   onSubmittingChange,
   onSubmit,
   onClose,
-  submitting,
   saving,
   saveError,
   onRetrySave,
@@ -52,12 +51,12 @@ export default function ExamSessionOverlay({
           <button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button>
         </div>
       )}
-      <button type="button" onClick={() => void onClose()} disabled={submitting || saving}>시험 닫기</button>
       {session.mode === "real" ? <RealExamSessionView
         session={session}
         onChange={onChange}
         onSubmittingChange={onSubmittingChange}
         onSubmit={onSubmit}
+        onClose={() => void onClose()}
         examPreferences={examPreferences}
       /> : <ExamSessionView
         session={session}
@@ -72,6 +71,7 @@ export default function ExamSessionOverlay({
         onChange={onChange}
         onSubmittingChange={onSubmittingChange}
         onSubmit={onSubmit}
+        onClose={() => void onClose()}
       />}
     </div>
   );

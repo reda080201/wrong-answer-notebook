@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import "../../styles/dialog-shell.css";
 
 const FOCUSABLE_SELECTOR = [
@@ -9,6 +10,7 @@ const FOCUSABLE_SELECTOR = [
   "textarea:not([disabled])",
   '[tabindex]:not([tabindex="-1"])',
 ].join(", ");
+let nextDialogLayer = 0;
 
 export type DialogSize = "sm" | "md" | "lg" | "xl" | "fullscreen";
 export type DialogScrollMode = "body" | "custom";
@@ -30,6 +32,7 @@ export interface DialogProps {
   footer?: ReactNode;
   bodyClassName?: string;
   scrollMode?: DialogScrollMode;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export default function Dialog({
@@ -49,12 +52,14 @@ export default function Dialog({
   footer,
   bodyClassName,
   scrollMode = "body",
+  initialFocusRef,
 }: DialogProps) {
   const generatedTitleId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeDisabledRef = useRef(closeDisabled);
   const onCloseRef = useRef(onClose);
+  const [dialogLayer] = useState(() => ++nextDialogLayer);
 
   useEffect(() => {
     closeDisabledRef.current = closeDisabled;
@@ -70,12 +75,16 @@ export default function Dialog({
     const dialog = dialogRef.current;
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
     const frame = window.requestAnimationFrame(() => {
-      const autoFocusTarget = dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
+      const autoFocusTarget = initialFocusRef?.current ?? dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
       (autoFocusTarget ?? focusable()[0] ?? dialog)?.focus();
     });
     const handleKeyDown = (event: KeyboardEvent) => {
-      const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'));
-      if (openDialogs.at(-1) !== dialog) return;
+      const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-dialog-layer]'));
+      const topmost = openDialogs.reduce<HTMLElement | null>((current, candidate) => {
+        if (!current) return candidate;
+        return Number(candidate.dataset.dialogLayer) > Number(current.dataset.dialogLayer) ? candidate : current;
+      }, null);
+      if (topmost !== dialog) return;
       if (event.key === "Escape") {
         if (closeDisabledRef.current) return;
         event.preventDefault();
@@ -106,14 +115,14 @@ export default function Dialog({
       document.removeEventListener("keydown", handleKeyDown, true);
       previousFocus?.focus();
     };
-  }, [open]);
+  }, [initialFocusRef, open]);
 
   if (!open) return null;
 
-  const resolvedClassName = [className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
+  const resolvedClassName = ["modal-card", className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
   const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
 
-  return (
+  const dialogTree = (
     <div
       className={backdropClassName}
       role="presentation"
@@ -129,6 +138,7 @@ export default function Dialog({
         aria-label={resolvedTitleId ? undefined : ariaLabel}
         aria-labelledby={resolvedTitleId}
         aria-busy={busy || undefined}
+        data-dialog-layer={dialogLayer}
         tabIndex={-1}
       >
         {(header || titleNode) && <header className="dialog-header">{titleNode}{header}</header>}
@@ -137,4 +147,5 @@ export default function Dialog({
       </div>
     </div>
   );
+  return createPortal(dialogTree, document.body);
 }

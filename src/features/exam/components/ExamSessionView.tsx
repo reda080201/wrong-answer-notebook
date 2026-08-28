@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../../../types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { scoreExamSession } from "../services/examScoring";
@@ -24,6 +25,7 @@ interface ExamSessionViewProps {
   onOpenChatGptSettings?: () => void;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
+  onClose?: () => void;
 }
 
 export function parseChoice(choice: string) {
@@ -35,7 +37,7 @@ function ExamHelpDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onClose={onClose} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="시험 도움말"><header><h3>시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></Dialog>;
 }
 
-export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt, examPreferences, onOpenSettings, chatGptPreferences, onChatGptPreferencesChange, onSyncChatGptContext, onOpenChatGptSettings, onCheckLocalMcp, remoteMcpConfigured }: ExamSessionViewProps) {
+export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt, examPreferences, onOpenSettings, chatGptPreferences, onChatGptPreferencesChange, onSyncChatGptContext, onOpenChatGptSettings, onCheckLocalMcp, remoteMcpConfigured, onClose }: ExamSessionViewProps) {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -93,7 +95,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     ? session.questions.reduce((sum, item) => sum + (item.points ?? 0), 0)
     : undefined;
   return <section className="exam-session-view" aria-label="문제 풀기 응시">
-    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button></div></header>
+    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button>{onClose && <button type="button" className="ui-icon-button" onClick={onClose} aria-label="시험 닫기" title="시험 닫기" disabled={submitting}><X size={20} aria-hidden="true" /></button>}</div></header>
     <article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{questionWarning && <p className="exam-question-warning">{questionWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
       {isMultipleChoice ? <div className="exam-choice-list" role="group" aria-label="선택지">{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button type="button" key={choice} className={selected ? "exam-choice is-selected" : "exam-choice"} aria-pressed={selected} disabled={isSubmitted} onClick={() => selectChoice(parsed.marker || parsed.content)}><span className="choice-marker">{parsed.marker}</span><span className="choice-content"><MathText text={parsed.content} /></span></button>; })}</div> : <label className="exam-answer-field">내 답<input value={response?.response ?? ""} onChange={(event) => update({ response: event.target.value })} disabled={isSubmitted} /></label>}
       {(examPreferences?.showOriginalPages !== false) && (question.sourcePageImages?.length ?? 0) > 0 && <details className="exam-source-pages"><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
@@ -118,6 +120,6 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
     <Dialog open={navigatorOpen} onClose={() => setNavigatorOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="문항 이동"><div className="exam-result-grid">{session.questions.map((item, index) => <button key={item.id} type="button" aria-current={index === session.currentQuestionIndex ? "page" : undefined} onClick={() => { onChange({ ...session, currentQuestionIndex: index }); setNavigatorOpen(false); }}>{item.questionNumber}</button>)}</div></Dialog>
     {helpOpen && <ExamHelpDialog onClose={() => setHelpOpen(false)} />}
     <Dialog open={consentOpen} onClose={() => setConsentOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="GPT 전송 동의"><p>{onAskGpt ? "현재 문제, 내 답, 풀이 메모를 전송합니다." : "현재 문제는 로컬 MCP 브리지에만 공개됩니다."}</p>{onAskGpt && <button type="button" onClick={() => { onAskGpt({ question: question.question, response: response?.response ?? "", scratchNote: response?.scratchNote ?? "" }); setConsentOpen(false); }}>전송</button>}<button type="button" onClick={() => setConsentOpen(false)}>닫기</button></Dialog>
-    <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}<footer><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></footer></Dialog>
+    <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>{submitting ? "제출 중…" : "제출하고 채점"}</button></>}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{warnUnanswered && unanswered.length > 0 && <p>미응답: {unanswered.join(", ")}번</p>}{submitError && <p className="form-error" role="alert">{submitError}</p>}</Dialog>
   </section>;
 }
