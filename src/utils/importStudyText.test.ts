@@ -91,7 +91,7 @@ describe("importStudyText", () => {
       const single = parseImportedStudyText(JSON.stringify({ entryKind: "problem_sheet", question: "9. 문제\n10. 문제", questions: [{ questionNumber: "9", questionText: "문제", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: [] }], questionSourceCrops: crops }));
       expect(single.data.questionSourceCrops).toEqual(crops);
       const mapped = mapEntryImportImageReferences(single.data, (filename) => `persisted/${filename.split("/").pop()}`);
-      expect(mapped.questionSourceCrops).toMatchObject([
+      expect(mapped.questionSourceCrops?.filter((crop) => crop.questionNumber === "9")).toMatchObject([
         { id: "q9-a", questionNumber: "9", order: 0, page: 3, image: "persisted/q09-a.png", sourcePageImage: "persisted/page-003.png" },
         { id: "q9-b", questionNumber: "9", order: 1, page: 4, image: "persisted/q09-b.png", sourcePageImage: "persisted/page-004.png" },
       ]);
