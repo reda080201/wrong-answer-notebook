@@ -17,11 +17,11 @@ interface ExamResponseEditorProps {
 
 export default function ExamResponseEditor({ question, value, disabled = false, compact = false, onChange }: ExamResponseEditorProps) {
   if (isMultipleChoiceQuestion(question.questionType, question.choices)) {
-    return <div className={`${compact ? "real-exam-answer-sheet-choices" : "exam-choice-list"} exam-response-choices${compact ? " exam-response-choices--compact" : ""}`} role="group" aria-label={`${question.questionNumber}번 답안 선택`}>
+    return <div className={`${compact ? "real-exam-answer-sheet-choices" : "exam-choice-list"} exam-response-choices${compact ? " exam-response-choices--compact" : ""}`} role="group" aria-label={compact ? `${question.questionNumber}번 답안 선택` : "선택지"}>
       {question.choices.map((choice) => {
         const parsed = parseChoice(choice);
         const answer = parsed.marker || parsed.content;
-        return <button key={choice} type="button" className={compact ? undefined : "exam-choice"} aria-pressed={value === parsed.marker || value === parsed.content} disabled={disabled} onClick={() => onChange(answer)}>
+        return <button key={choice} type="button" className={compact ? undefined : "exam-choice"} aria-label={`${parsed.marker || "답"} ${parsed.content}`.trim()} aria-pressed={value === parsed.marker || value === parsed.content} disabled={disabled} onClick={() => onChange(answer)}>
           <span className={compact ? undefined : "choice-marker"}>{parsed.marker || "답"}</span>
           {!compact && <span className="choice-content"><MathText text={parsed.content} /></span>}
         </button>;

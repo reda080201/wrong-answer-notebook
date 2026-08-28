@@ -24,7 +24,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
     const stimulus = legacyBlock ? stimuli.filter((item) => item.start < legacyBlock.start && item.end <= legacyBlock.start).at(-1) : undefined;
-    const assets = resolveQuestionAssets(entry, { questionNumber: number, figureIds: block.figureIds, sourcePage: block.source?.page });
+    const hasCanonicalQuestion = entry.structuredQuestions?.some((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber) === true;
+    const assets = resolveQuestionAssets(entry, { questionNumber: number, figureIds: hasCanonicalQuestion ? block.figureIds : undefined, sourcePage: block.source?.page });
     const figures = assets.figures.map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
@@ -41,7 +42,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       equations: structuredClone(block.equations),
       choices: structuredClone(block.choices),
       questionImages: structuredClone(assets.questionImages),
-      sourcePageImages: structuredClone(assets.sourcePageImages),
+      sourcePageImages: structuredClone(assets.sourcePageImages.length ? assets.sourcePageImages : (entry.sourcePageImages ?? [])),
       figures: structuredClone(figures),
       contentSegments: block.contentSegments
         ? structuredClone(block.contentSegments)
