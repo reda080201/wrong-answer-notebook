@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { X } from "lucide-react";
 import { writeUiStorageValue } from "../services/uiStorage";
 import type { Annotation, AnnotationTool, QuestionMeta, ReviewResult, SheetAnswerItem, SheetFigureItem } from "../types";
 import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textLayout";
@@ -172,8 +173,8 @@ export default function QuestionTheaterView({
               {difficultyScoreLabel(difficultyScore)}
             </span>
           )}
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="문제 크게 보기 닫기">
-            나가기
+          <button type="button" className="ui-icon-button" onClick={onClose} aria-label="문제 크게 보기 닫기" title="닫기">
+            <X size={20} aria-hidden="true" />
           </button>
         </header>
         {scoreEditorOpen && onDifficultyScoreChange && (
