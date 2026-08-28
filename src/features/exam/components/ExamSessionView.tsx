@@ -5,11 +5,11 @@ import type { SettingsTab } from "../../../components/SettingsModal";
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import QuestionContentView from "../../../components/QuestionContentView";
-import MathText from "../../../components/MathText";
 import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ChatGptHelpLauncher from "../../chatgpt/components/ChatGptHelpLauncher";
 import Dialog from "../../../shared/ui/Dialog";
-import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
+import ExamResponseEditor from "./ExamResponseEditor";
+export { parseChoice } from "./ExamResponseEditor";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -26,11 +26,6 @@ interface ExamSessionViewProps {
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
   onClose?: () => void;
-}
-
-export function parseChoice(choice: string) {
-  const match = choice.trim().match(/^(①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[A-Ea-e][.)])\s*(.*)$/);
-  return match ? { marker: match[1], content: match[2] } : { marker: "", content: choice };
 }
 
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
@@ -70,8 +65,6 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
       onSubmittingChange?.(false);
     }
   };
-  const isMultipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices)
-    && question.choices.every((choice) => Boolean(parseChoice(choice).marker));
   const questionWarning = question.warning ?? question.sourceWarning;
   const showNavigator = examPreferences?.showNavigator !== false;
   const warnUnanswered = examPreferences?.warnUnansweredOnSubmit !== false;
@@ -97,7 +90,7 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
   return <section className="exam-session-view" aria-label="문제 풀기 응시">
     <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button>{onClose && <button type="button" className="ui-icon-button" onClick={onClose} aria-label="시험 닫기" title="시험 닫기" disabled={submitting}><X size={20} aria-hidden="true" /></button>}</div></header>
     <article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{questionWarning && <p className="exam-question-warning">{questionWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
-      {isMultipleChoice ? <div className="exam-choice-list" role="group" aria-label="선택지">{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button type="button" key={choice} className={selected ? "exam-choice is-selected" : "exam-choice"} aria-pressed={selected} disabled={isSubmitted} onClick={() => selectChoice(parsed.marker || parsed.content)}><span className="choice-marker">{parsed.marker}</span><span className="choice-content"><MathText text={parsed.content} /></span></button>; })}</div> : <label className="exam-answer-field">내 답<input value={response?.response ?? ""} onChange={(event) => update({ response: event.target.value })} disabled={isSubmitted} /></label>}
+      <ExamResponseEditor question={question} value={response?.response ?? ""} disabled={isSubmitted} onChange={selectChoice} />
       {(examPreferences?.showOriginalPages !== false) && (question.sourcePageImages?.length ?? 0) > 0 && <details className="exam-source-pages"><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
       {examPreferences?.showScratchNote !== false && <label className="exam-note-field">풀이 메모<textarea value={response?.scratchNote ?? ""} onChange={(event) => update({ scratchNote: event.target.value })} disabled={isSubmitted} /></label>}
     </article>

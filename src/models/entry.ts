@@ -255,7 +255,10 @@ export interface FigureVerification {
 
 /** A crop remains an immutable reference to the imported source-page asset. */
 export interface QuestionSourceCrop {
+  id?: string;
   questionNumber: string;
+  page?: number;
+  order?: number;
   image: string;
   sourcePageImage?: string;
   cropRect?: NormalizedCrop;

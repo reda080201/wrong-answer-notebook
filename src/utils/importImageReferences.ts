@@ -68,6 +68,11 @@ export function mapEntryImportImageReferences(
     ...entry,
     questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
+    questionSourceCrops: (entry.questionSourceCrops ?? []).flatMap((crop) => {
+      const image = map(crop.image);
+      const sourcePageImage = crop.sourcePageImage ? map(crop.sourcePageImage) : undefined;
+      return image ? [{ ...crop, image, sourcePageImage }] : [];
+    }),
     explanationParts: (entry.explanationParts ?? []).map((part) => ({
       ...part,
       images: (part.images ?? []).map(map).filter((image): image is string => Boolean(image)),

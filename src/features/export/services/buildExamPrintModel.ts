@@ -1,4 +1,4 @@
-import type { ExamPrintPreferences, ExamPrintPreset, SheetFigureItem, WrongAnswerEntry } from "../../../types";
+import type { ExamPrintPreferences, ExamPrintPreset, WrongAnswerEntry } from "../../../types";
 import { getEntryTitle } from "../../../utils/entry";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { parseQuestionText } from "../../../utils/textLayout";
@@ -8,17 +8,12 @@ import type { QuestionBlock } from "../../../utils/textLayout";
 import { resolveExamPrintContentOptions } from "./examPrintPresets";
 import { buildExamPrintFilenameBase } from "./exportFilename";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
+import { resolveQuestionAssets } from "../../../utils/questionAssets";
 
 const AUTO_COLUMNS_MIN_QUESTIONS = 4;
 const AUTO_COLUMNS_MAX_QUESTION_CHARACTERS = 520;
 const WIDE_TABLE_MIN_COLUMNS = 4;
 const WIDE_TABLE_MAX_CELL_CHARACTERS = 28;
-
-function figuresForQuestion(entry: WrongAnswerEntry, questionNumber: string): SheetFigureItem[] {
-  return (entry.figures ?? []).filter(
-    (figure) => normalizeQuestionNumber(figure.questionNumber) === questionNumber,
-  );
-}
 
 function buildSegments(entry: WrongAnswerEntry, questionNumber: string): ExamPrintQuestionModel["segments"] {
   const stored = entry.questionContentSegments?.[questionNumber];
@@ -37,7 +32,7 @@ function buildSegments(entry: WrongAnswerEntry, questionNumber: string): ExamPri
     else if (body.kind === "condition") segments.push({ id, type: "condition", label: body.label, text: body.text });
     else segments.push({ id, type: "text", text: body.text });
   }
-  const figures = figuresForQuestion(entry, questionNumber);
+  const figures = resolveQuestionAssets(entry, { questionNumber }).figures;
   for (const figure of figures.filter((item) => item.placement?.afterSegmentId).sort((a, b) => (a.placement?.order ?? 0) - (b.placement?.order ?? 0))) {
     const after = figure.placement?.afterSegmentId;
     const index = segments.findIndex((segment) => segment.id === after);
@@ -138,7 +133,8 @@ export function buildExamPrintModel(options: {
     const block = blocks.find(
       (item) => normalizeQuestionNumber(String(item.displayNumber || item.numberLabel || "")) === normalizedQuestionNumber,
     );
-    const figures = figuresForQuestion(options.entry, questionNumber).filter((figure) => {
+    const structured = options.entry.structuredQuestions?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedQuestionNumber);
+    const figures = resolveQuestionAssets(options.entry, { questionNumber, figureIds: structured?.figureIds }).figures.filter((figure) => {
       if (figure.source === "described_only") return Boolean(figure.caption || figure.title);
       return content.includeFigures;
     });

@@ -4,6 +4,7 @@ import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
+import { resolveQuestionAssets } from "../../../utils/questionAssets";
 
 export interface ExamSessionCreationOptions {
   mode?: ExamMode;
@@ -23,7 +24,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
     const stimulus = legacyBlock ? stimuli.filter((item) => item.start < legacyBlock.start && item.end <= legacyBlock.start).at(-1) : undefined;
-    const figures = (entry.figures?.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizedNumber) ?? []).map((figure) => {
+    const assets = resolveQuestionAssets(entry, { questionNumber: number, figureIds: block.figureIds, sourcePage: block.source?.page });
+    const figures = assets.figures.map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
     });
@@ -38,8 +40,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       conditions: structuredClone(block.conditions),
       equations: structuredClone(block.equations),
       choices: structuredClone(block.choices),
-      questionImages: [],
-      sourcePageImages: structuredClone(entry.sourcePageImages ?? []),
+      questionImages: structuredClone(assets.questionImages),
+      sourcePageImages: structuredClone(assets.sourcePageImages),
       figures: structuredClone(figures),
       contentSegments: block.contentSegments
         ? structuredClone(block.contentSegments)

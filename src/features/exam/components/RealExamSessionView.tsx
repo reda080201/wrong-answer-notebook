@@ -2,14 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PanelRightClose, PanelRightOpen, X } from "lucide-react";
 import type { ExamPreferences, ExamSession } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
-import MathText from "../../../components/MathText";
 import QuestionContentView from "../../../components/QuestionContentView";
-import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
 import { sanitizeExamQuestionDomId } from "../services/examDom";
-import { parseChoice } from "./ExamSessionView";
+import ExamResponseEditor from "./ExamResponseEditor";
 import "./RealExamSessionView.css";
 
 interface RealExamSessionViewProps {
@@ -29,7 +27,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
-  const [answerSheetOpen, setAnswerSheetOpen] = useState(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
+  const answerSheetOpen = session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true;
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState<"all" | "wrong" | "unanswered" | "marked">("all");
   const [selectedResultNumber, setSelectedResultNumber] = useState<string | null>(null);
@@ -54,10 +52,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [session.deadlineAt, session.status]);
-
-  useEffect(() => {
-    setAnswerSheetOpen(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
-  }, [examPreferences?.realExamAnswerSheetOpen, session.id, session.answerSheetOpen]);
 
   const changeResponse = (questionNumber: string, patch: { response?: string; markedForReview?: boolean }) => {
     const current = responses.get(questionNumber);
@@ -122,26 +116,10 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;
-    setAnswerSheetOpen(next);
     onChange({ ...session, answerSheetOpen: next });
   };
 
-  const answerSheetControl = (question: ExamSession["questions"][number]) => {
-    const response = responses.get(question.questionNumber);
-    const disabled = session.status === "submitted" || expired;
-    if (isMultipleChoiceQuestion(question.questionType, question.choices)) {
-      return <div className="real-exam-answer-sheet-choices" role="group" aria-label={`${question.questionNumber}번 답안 선택`}>
-        {question.choices.map((choice) => {
-          const parsed = parseChoice(choice);
-          const selected = response?.response === parsed.marker || response?.response === parsed.content;
-          return <button key={choice} type="button" aria-pressed={selected} disabled={disabled} onClick={() => changeResponse(question.questionNumber, { response: parsed.marker || parsed.content })}>{parsed.marker}</button>;
-        })}
-      </div>;
-    }
-    return question.questionType === "essay"
-      ? <textarea aria-label={`${question.questionNumber}번 답안`} value={response?.response ?? ""} disabled={disabled} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} />
-      : <input aria-label={`${question.questionNumber}번 답안`} value={response?.response ?? ""} disabled={disabled} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} />;
-  };
+  const answerSheetControl = (question: ExamSession["questions"][number]) => <ExamResponseEditor question={question} value={responses.get(question.questionNumber)?.response ?? ""} compact disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} />;
 
   return (
     <section className="real-exam-session" aria-label="실전 모의고사">
@@ -161,7 +139,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
           {activeQuestions.map((question) => {
             const index = session.questions.indexOf(question);
             const response = responses.get(question.questionNumber);
-            const multipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices);
             return (
               <article key={question.id} id={sanitizeExamQuestionDomId(question.questionNumber)} className="real-exam-question">
                 <header><h3>문제 {question.questionNumber}</h3><span>{index + 1} / {session.questions.length}</span></header>
@@ -172,7 +149,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
                   </section>
                 )}
                 <QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
-                {multipleChoice ? <div className="real-exam-choices" role="group" aria-label={`${question.questionNumber}번 선택지`}>{question.choices.map((choice) => { const parsed = parseChoice(choice); const selected = response?.response === parsed.marker || response?.response === parsed.content; return <button key={choice} type="button" aria-pressed={selected} disabled={session.status === "submitted" || expired} onClick={() => changeResponse(question.questionNumber, { response: parsed.marker || parsed.content })}><b>{parsed.marker}</b><MathText text={parsed.content} /></button>; })}</div> : <label>답안<input value={response?.response ?? ""} disabled={session.status === "submitted" || expired} onChange={(event) => changeResponse(question.questionNumber, { response: event.target.value })} /></label>}
+                <ExamResponseEditor question={question} value={response?.response ?? ""} disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} />
                 <label className="real-exam-review"><input type="checkbox" checked={response?.markedForReview ?? false} disabled={session.status === "submitted" || expired} onChange={(event) => changeResponse(question.questionNumber, { markedForReview: event.target.checked })} /> 검토 표시</label>
               </article>
             );
