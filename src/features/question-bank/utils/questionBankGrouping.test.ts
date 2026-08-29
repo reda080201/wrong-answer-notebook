@@ -5,7 +5,7 @@ import { groupQuestionBankItems } from "./questionBankGrouping";
 const item = (id: string, unit?: string, sourceLabel?: string, updatedAt = "2026-01-01") => ({
   id, entryId: id, entryTitle: `자료 ${id}`, entryKind: "problem_sheet", questionNumber: id,
   subject: "수학", questionText: id, source: { type: "past_exam", sourceLabel },
-  classification: { unit }, questionImages: [], sourcePageImages: [],
+  classification: { subject: "수학", sourceType: "past_exam", isPastExam: true, unit }, questionImages: [], sourcePageImages: [],
   hasAnswer: true, hasExplanation: true, hasImages: false, isWrong: false, isImportant: id === "2", isMastered: false,
   reviewDue: false, updatedAt,
 } satisfies QuestionBankItem);

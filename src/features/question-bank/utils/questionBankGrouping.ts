@@ -17,7 +17,7 @@ export function groupQuestionBankItems(items: QuestionBankItem[], mode: Question
     return [{ key: "recent", label: "최근 학습", items: [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }];
   }
   if (mode === "important") {
-    const important = items.filter((item) => item.isImportant);
+    const important = items.filter((item) => item.isImportant === true);
     return [{ key: "important", label: "중요 문제", items: important }];
   }
 
