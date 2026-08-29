@@ -39,6 +39,10 @@
 .real-exam-answer-item.is-unanswered { background: color-mix(in srgb, var(--warning) 7%, var(--surface)); }
 .real-exam-answer-item.is-current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .real-exam-answer-item.is-marked { outline: 2px solid var(--review); outline-offset: -2px; }
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-answered,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-unanswered,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-current,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-marked { background: transparent; box-shadow: none; }
 .real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); min-height: 50px; padding: var(--space-2) var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-answer-jump { display: grid; justify-items: start; gap: 2px; border: 0 !important; padding: 2px !important; text-align: start; }
 .real-exam-answer-jump em { font-style: normal; color: var(--review); font-size: var(--font-size-meta); }

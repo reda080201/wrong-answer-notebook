@@ -43,6 +43,15 @@
   .toolbar .search-input { min-width: 180px; }
   .problem-sheet-primary-controls .detail-search-inline { max-width: 240px; }
 }
+
+/* Short viewports reserve the available height for the question itself. */
+@media (max-height: 900px) {
+  .detail-toolbar--problem-sheet { max-height: 88px; overflow: hidden; }
+  .detail-toolbar--problem-sheet .problem-sheet-secondary-controls { display: none; }
+  .detail-content--problem-sheet, .problem-sheet-content { min-height: 60dvh; }
+  .study-control-bar { max-height: 52px; }
+  .study-control-row--secondary { display: none; }
+}
 /* The closed study dock deliberately reserves only one compact command row. */
 .study-control-bar { padding: 2px var(--space-3); box-shadow: none; }
 .study-control-row--primary { min-height: 48px; }

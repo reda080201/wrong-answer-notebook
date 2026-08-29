@@ -37,6 +37,7 @@ interface AppSidebarProps {
   >;
   subjects: { order: string[]; filter: string | null; counts: Record<string, number>; sectionEntryCount: number; move(fromIndex: number, toIndex: number): void; select(subject: string | null): void };
   questionBank?: { active: boolean; total: number; subjectCounts: Record<string, number> };
+  learningHub?: { active: boolean; total: number; subjectCounts: Record<string, number> };
   actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
   destination: SidebarDestination;
   shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
@@ -63,13 +64,25 @@ export default function AppSidebar({
   learningStats,
   subjects,
   questionBank,
+  learningHub,
   actions,
   destination,
   shell,
 }: AppSidebarProps) {
   const { order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount } = subjects;
-  const visibleSubjectCounts = questionBank?.active ? questionBank.subjectCounts : subjectCounts;
-  const visibleSubjectTotal = questionBank?.active ? questionBank.total : sectionEntryCount;
+  const isQuestionBank = destination.type === "question_bank";
+  const isLearningHub = destination.type === "learning_hub";
+  const isLibraryDestination = destination.type === "library";
+  const visibleSubjectCounts = isQuestionBank
+    ? questionBank?.subjectCounts ?? {}
+    : isLearningHub
+      ? learningHub?.subjectCounts ?? {}
+      : subjectCounts;
+  const visibleSubjectTotal = isQuestionBank
+    ? questionBank?.total ?? 0
+    : isLearningHub
+      ? learningHub?.total ?? 0
+      : sectionEntryCount;
   const { openNew, openImport, openLearningImport, openExamBuilder: onOpenExamBuilder } = actions;
   const isSectionDestination = destination.type === "section";
   const destinationSection = isSectionDestination ? destination.section : null;
@@ -78,8 +91,10 @@ export default function AppSidebar({
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
   );
-  const sidebarStats = useMemo(() => questionBank?.active
-      ? [["전체 문항", questionBank.total]]
+  const sidebarStats = useMemo(() => isQuestionBank
+      ? [["전체 문항", questionBank?.total ?? 0]]
+      : isLearningHub
+        ? [["학습 항목", learningHub?.total ?? 0]]
       : activeSection === "problem_sheet"
       ? [
           ["시험지", sectionEntries.length],
@@ -109,7 +124,7 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-          ], [activeSection, questionBank, sectionEntries, stats]);
+          ], [activeSection, isQuestionBank, isLearningHub, questionBank, learningHub, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
     void navigationController.requestNavigation({ section, entryId: null });
   };
@@ -189,7 +204,7 @@ export default function AppSidebar({
         </>
       </div>
 
-      {!collapsed && <details className="sidebar-summary">
+      {!collapsed && !isLibraryDestination && <details className="sidebar-summary">
         <summary>요약</summary>
         <dl>{sidebarStats.slice(0, 5).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </details>}
@@ -213,7 +228,7 @@ export default function AppSidebar({
         </div>
       </div>}
 
-      {!collapsed && <div className="filter-section app-sidebar-scroll-region">
+      {!collapsed && !isLibraryDestination && <div className="filter-section app-sidebar-scroll-region">
         <h3>과목</h3>
         <SubjectList
           subjectOrder={subjectOrder}

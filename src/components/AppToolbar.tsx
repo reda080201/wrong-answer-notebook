@@ -1,4 +1,5 @@
 import type { ListFilter, SortKey, EntryKind } from "../types";
+import Menu from "../shared/ui/Menu";
 import {
   type DifficultyFilter,
   type DifficultyScoreFilter,
@@ -122,29 +123,15 @@ export default function AppToolbar({
           </button>
         ))}
       </div>
-      {showReviewLauncher && <div className="review-launcher">
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => startReview("today")}
-        >
-          오늘 복습
-        </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => startReview(activeSection === "problem_sheet" ? "important" : "random")}
-        >
+      {showReviewLauncher && <Menu label="복습" triggerAriaLabel="복습 메뉴" className="review-launcher">
+        <button type="button" onClick={() => startReview("today")}>오늘 복습</button>
+        <button type="button" onClick={() => startReview(activeSection === "problem_sheet" ? "important" : "random")}>
           {activeSection === "problem_sheet" ? "중요 문제 복습" : "랜덤 복습"}
         </button>
-        <button
-          type="button"
-          className="btn-secondary"
-          onClick={() => startReview("difficult")}
-        >
+        <button type="button" onClick={() => startReview("difficult")}>
           {activeSection === "problem_sheet" ? "어려운 문항 복습" : "어려움 집중"}
         </button>
-      </div>}
+      </Menu>}
       <button type="button" className="toolbar-settings-button" onClick={onOpenSettings}>
         ⚙ 설정
       </button>

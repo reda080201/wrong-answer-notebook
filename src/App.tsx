@@ -31,6 +31,7 @@ import { useAppNavigationController } from "./hooks/useAppNavigationController";
 import { usePersistenceCoordinator } from "./hooks/usePersistenceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
+import { projectLearningBlocks } from "./features/learning/utils/learningHub";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
 import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
@@ -470,6 +471,13 @@ function AppContent() {
     for (const item of items) counts[item.subject] = (counts[item.subject] ?? 0) + 1;
     return { total: items.length, counts };
   }, [entries]);
+  const learningHubSidebar = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of projectLearningBlocks(entries)) {
+      counts[item.sourceSubject] = (counts[item.sourceSubject] ?? 0) + 1;
+    }
+    return { total: Object.values(counts).reduce((sum, count) => sum + count, 0), counts };
+  }, [entries]);
   const sidebarDestination = useMemo<SidebarDestination>(() => {
     if (showLearningHub) return { type: "learning_hub" };
     if (showQuestionBank) return { type: "question_bank" };
@@ -488,6 +496,7 @@ function AppContent() {
         learningStats={learningStats}
         subjects={{ order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount, move: moveSubject, select: setSubjectFilter }}
         questionBank={{ active: showQuestionBank, total: questionBankSidebar.total, subjectCounts: questionBankSidebar.counts }}
+        learningHub={{ active: showLearningHub, total: learningHubSidebar.total, subjectCounts: learningHubSidebar.counts }}
         actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
         destination={sidebarDestination}
         shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}

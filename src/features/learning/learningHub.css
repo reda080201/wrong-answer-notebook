@@ -3,7 +3,7 @@
 .learning-hub-heading span { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .learning-hub-heading h2 { margin: var(--space-1) 0; font-size: 24px; }
 .learning-hub-heading p { margin: 0; color: var(--text-muted); }
-.learning-hub-heading strong { min-width: 64px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); background: var(--surface); text-align: center; }
+.learning-hub-heading strong { color: var(--text-muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .learning-hub-source-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-3); }
 .learning-hub-source-actions button { border: 1px solid var(--border); background: var(--accent-soft); color: var(--accent); padding: var(--space-2) var(--space-3); cursor: pointer; }
 .learning-hub-filters, .learning-hub-active-filters { max-width: 1320px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: var(--space-2); }
@@ -24,11 +24,15 @@
 .learning-hub-menu { display: flex; flex-wrap: wrap; gap: var(--space-1); justify-content: flex-end; }
 .learning-hub-card button:disabled { cursor: wait; opacity: .55; }
 .learning-hub-meta { margin: 0 0 var(--space-3); color: var(--text-muted); font-size: 12px; }
+.learning-hub-status--needs_review { color: var(--warning); font-weight: 600; }
+.learning-hub-status--reviewed { color: var(--success); font-weight: 600; }
 .learning-hub-content { line-height: 1.65; }
 .learning-hub-content--preview { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; line-clamp: 3; }
 .learning-hub-disclosure { margin-top: var(--space-2); color: var(--accent); }
 .learning-hub-card-details { min-width: 0; }
-.learning-hub-card:not(:hover):not(:focus-within) .learning-hub-menu { opacity: 0; }
+.learning-hub-menu { display: flex; flex: 0 0 auto; }
+.learning-hub-quality-flag { margin-left: var(--space-2); color: var(--warning); font-size: 12px; font-weight: 600; }
+.learning-hub-menu > .btn-icon { width: 36px; height: 36px; }
 .learning-hub-card h4, .learning-hub-card h5 { margin: var(--space-4) 0 var(--space-1); font-size: 13px; }
 .learning-hub-card ul { margin: 0; padding-left: var(--space-5); }
 .learning-hub-warning { border-left: 3px solid var(--warning); padding-left: var(--space-3); }

@@ -2,10 +2,12 @@ import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { AiProviderStatus, LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
-import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, learningHubThinkers, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
+import { DEFAULT_LEARNING_HUB_FILTERS, filterLearningBlocks, isLowQualityLearningTitle, learningHubThinkers, learningHubUnits, projectLearningBlocks, type LearningHubFilters, type LearningHubItem } from "../utils/learningHub";
 import type { QuestionBankItem } from "../../question-bank/model/questionBankTypes";
 import SimilarQuestionLinksPanel from "../../question-bank/components/SimilarQuestionLinksPanel";
 import Dialog from "../../../shared/ui/Dialog";
+import Menu from "../../../shared/ui/Menu";
+import { MoreHorizontal } from "lucide-react";
 
 const DOMAIN_LABELS: Record<LearningSubjectDomain | "all", string> = {
   all: "모든 과목",
@@ -111,15 +113,15 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   return <article id={`learning-block-${item.sourceEntryId}-${block.id}`} className={`learning-hub-card${highlighted ? " learning-hub-card--highlighted" : ""}`} aria-busy={busy || undefined}>
     <header>
       <div><span className="learning-hub-chip">{DOMAIN_LABELS[item.domain]}</span><span className="learning-hub-chip">{TYPE_LABELS[block.type]}</span><span className="learning-hub-chip">{IMPORTANCE_LABELS[block.importance ?? "reference"]}</span></div>
-      <div className="learning-hub-menu" aria-label={`${block.title || "학습 카드"} 작업`}>
+      <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel={`${block.title || "학습 항목"} 작업`} className="learning-hub-menu">
         <button type="button" onClick={() => setEditing((value) => !value)} disabled={busy}>수정</button>
         <button type="button" onClick={() => void mutate(() => onUpdateBlock(item.sourceEntryId, block.id, { reviewStatus: "reviewed" }))} disabled={busy || block.reviewStatus === "reviewed"}>검토 완료</button>
         <button type="button" onClick={() => void mutate(() => onDuplicateBlock(item.sourceEntryId, block.id))} disabled={busy}>복제</button>
         <button type="button" onClick={() => void mutate(() => onDeleteBlock(item.sourceEntryId, block.id))} disabled={busy}>삭제</button>
-      </div>
+      </Menu>
     </header>
-    <h3>{block.title || "학습 내용"}</h3>
-    <p className="learning-hub-meta">{item.sourceSubject} · {block.unit ?? "단원 미분류"} · {REVIEW_LABELS[block.reviewStatus ?? "draft"]} · {new Date(item.sourceEntry.updatedAt).toLocaleDateString("ko-KR")}</p>
+    <h3>{block.title || "제목 없는 학습 항목"}{isLowQualityLearningTitle(block.title) && <span className="learning-hub-quality-flag">검토 필요</span>}</h3>
+    <p className="learning-hub-meta">{item.sourceSubject} · {block.unit ?? "단원 미분류"} · <span className={`learning-hub-status learning-hub-status--${block.reviewStatus ?? "draft"}`}>{REVIEW_LABELS[block.reviewStatus ?? "draft"]}</span> · {new Date(item.sourceEntry.updatedAt).toLocaleDateString("ko-KR")}</p>
     {actionError && !editing && <div className="form-error" role="alert">{actionError}<button type="button" className="btn-secondary" onClick={retry} disabled={busy}>다시 저장</button></div>}
     {editing ? <BlockEditor item={item} onSave={async (patch) => {
       const saved = await mutate(() => onUpdateBlock(item.sourceEntryId, block.id, patch));
@@ -185,7 +187,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const [candidateSearch, setCandidateSearch] = useState("");
   const visibleCandidates = candidateEntries.filter((entry) => entry.title.toLocaleLowerCase("ko").includes(candidateSearch.toLocaleLowerCase("ko")));
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong>{filtered.length}개</strong></header>
+    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></header>
     {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="시험지 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}</div></Dialog>}
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
