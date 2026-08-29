@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
-import AppSidebar from "./components/AppSidebar";
+import AppSidebar, { type SidebarDestination } from "./components/AppSidebar";
 import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
@@ -470,6 +470,12 @@ function AppContent() {
     for (const item of items) counts[item.subject] = (counts[item.subject] ?? 0) + 1;
     return { total: items.length, counts };
   }, [entries]);
+  const sidebarDestination = useMemo<SidebarDestination>(() => {
+    if (showLearningHub) return { type: "learning_hub" };
+    if (showQuestionBank) return { type: "question_bank" };
+    if (showLibraryExplorer) return { type: "library" };
+    return { type: "section", section: activeSection };
+  }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -483,7 +489,7 @@ function AppContent() {
         subjects={{ order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount, move: moveSubject, select: setSubjectFilter }}
         questionBank={{ active: showQuestionBank, total: questionBankSidebar.total, subjectCounts: questionBankSidebar.counts }}
         actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
-        destinations={{ learningHubOpen: showLearningHub, questionBankOpen: showQuestionBank, libraryOpen: showLibraryExplorer }}
+        destination={sidebarDestination}
         shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
       />
 
