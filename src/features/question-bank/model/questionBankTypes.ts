@@ -26,6 +26,7 @@ export interface QuestionBankItem {
   hasExplanation: boolean;
   hasImages: boolean;
   isWrong: boolean;
+  isImportant: boolean;
   isMastered: boolean;
   reviewDue: boolean;
   updatedAt: string;

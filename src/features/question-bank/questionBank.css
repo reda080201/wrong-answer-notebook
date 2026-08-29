@@ -51,6 +51,9 @@
 .question-bank-actions input, .question-bank-actions select { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 45%, transparent); }
 .question-bank-card__chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .question-bank-card__chips span { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; }
+.question-bank-group { min-width: 0; }
+.question-bank-group > h3 { display: flex; justify-content: space-between; margin: 0; padding: 8px 12px; color: var(--text-muted); background: var(--surface-soft); font-size: 12px; font-weight: 600; }
+.question-bank-group > h3 span { font-variant-numeric: tabular-nums; }
 .question-bank-picked { margin: var(--space-3) 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--accent); background: var(--surface-soft); font-size: 13px; }
 .question-bank-presets { margin: var(--space-4); padding: var(--space-3); border-top: 1px solid var(--border); }
 .question-bank-presets > * { margin: var(--space-1); }
