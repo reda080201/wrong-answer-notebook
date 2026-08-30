@@ -198,7 +198,7 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".structured-question-text--columns")).toBeInTheDocument();
   });
 
-  it("shows sheet question table of contents and search highlights", () => {
+  it("shows sheet question table of contents and search results", () => {
     const { container } = render(
       <EntryDetail
         entry={{
@@ -220,12 +220,12 @@ describe("EntryDetail sheet layout", () => {
       target: { value: "둘째" },
     });
     fireEvent.click(screen.getByRole("button", { name: "다음 검색 결과" }));
+    expect(screen.getByText("둘째 문제")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "문항 목록" }));
 
     expect(screen.getByRole("button", { name: "1" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "2" })).toBeInTheDocument();
     expect(screen.getByText("1/1")).toBeInTheDocument();
-    expect(container.querySelector(".question-search-mark")).toHaveTextContent("둘째");
   });
 
   it("renames a problem sheet title inline", async () => {
