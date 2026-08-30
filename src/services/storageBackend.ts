@@ -7,6 +7,7 @@ import type {
   GeneratedExam,
   WrongAnswerEntry,
   ReviewSession,
+  PendingDeletion,
 } from "../types";
 import type { LibraryFolder } from "../models/library";
 import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
@@ -44,6 +45,8 @@ export interface StorageBackend {
   saveGptSolutionDrafts(drafts: GptSolutionRoundtripDraft[]): Promise<void>;
   loadReviewSessions?(): Promise<ReviewSession[]>;
   saveReviewSessions?(sessions: ReviewSession[]): Promise<void>;
+  loadPendingDeletions?(): Promise<PendingDeletion[]>;
+  savePendingDeletions?(deletions: PendingDeletion[]): Promise<void>;
   loadImportWorkspaceDraft(): Promise<ImportWorkspace | null>;
   saveImportWorkspaceDraft(draft: ImportWorkspace): Promise<void>;
   clearImportWorkspaceDraft(): Promise<void>;
@@ -58,6 +61,7 @@ type StoreName =
   | "library-folders"
   | "gpt-solution-drafts"
   | "review-sessions"
+  | "pending-deletions"
   | "import-workspace-draft";
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
@@ -110,6 +114,8 @@ const tauriBackend: StorageBackend = {
   saveGptSolutionDrafts: (drafts) => invoke("save_gpt_solution_roundtrip_drafts", { drafts }),
   loadReviewSessions: async () => (await invoke<ReviewSession[]>("load_review_sessions")).map(normalizeReviewSession),
   saveReviewSessions: (sessions) => invoke("save_review_sessions", { sessions }),
+  loadPendingDeletions: () => invoke("load_pending_deletions"),
+  savePendingDeletions: (deletions) => invoke("save_pending_deletions", { deletions }),
   async loadImportWorkspaceDraft() {
     const remote = await invoke<ImportWorkspace | null>("load_import_workspace_draft");
     if (remote) return remote;
@@ -140,6 +146,8 @@ const proxyBackend: StorageBackend = {
   saveGptSolutionDrafts: (drafts) => proxySave("gpt-solution-drafts", drafts),
   loadReviewSessions: async () => (await proxyLoad<ReviewSession[]>("review-sessions")).map(normalizeReviewSession),
   saveReviewSessions: (sessions) => proxySave("review-sessions", sessions),
+  loadPendingDeletions: () => proxyLoad("pending-deletions"),
+  savePendingDeletions: (deletions) => proxySave("pending-deletions", deletions),
   async loadImportWorkspaceDraft() {
     const remote = await proxyLoad<ImportWorkspace | null>("import-workspace-draft");
     if (remote) return remote;
@@ -186,6 +194,8 @@ const isolatedBrowserBackend: StorageBackend = {
   async saveGptSolutionDrafts(drafts) { writeStorageJson(localStorage, GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY, drafts); },
   async loadReviewSessions() { return arrayOrThrow(readStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, Array.isArray) ?? [], "복습 세션").map(normalizeReviewSession); },
   async saveReviewSessions(sessions) { writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, sessions.map(normalizeReviewSession)); },
+  async loadPendingDeletions() { return arrayOrThrow(readStorageJson(localStorage, "wrong-answer-pending-deletions", Array.isArray) ?? [], "삭제 대기 항목"); },
+  async savePendingDeletions(deletions) { writeStorageJson(localStorage, "wrong-answer-pending-deletions", deletions); },
   async loadImportWorkspaceDraft() { return readStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, isImportWorkspace); },
   async saveImportWorkspaceDraft(draft) { writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, draft); },
   async clearImportWorkspaceDraft() { localStorage.removeItem(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY); },
