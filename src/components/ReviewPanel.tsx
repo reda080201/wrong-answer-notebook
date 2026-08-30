@@ -112,7 +112,7 @@ export default function ReviewPanel({
     [reviewItems.length, index],
   );
 
-  const handleReview = async (result: ReviewResult) => {
+  const handleReview = useCallback(async (result: ReviewResult) => {
     if (!current || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
@@ -131,7 +131,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  };
+  }, [current, onReview, reviewItems.length]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {

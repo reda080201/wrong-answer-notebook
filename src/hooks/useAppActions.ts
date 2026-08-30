@@ -82,6 +82,7 @@ interface UseAppActionsOptions {
     removedImages: string[],
   ) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
+  deleteEntryWithUndo?: (id: string) => Promise<import("../types").PendingDeletion>;
   patchEntry: (
     id: string,
     partial: EntryPatch,
@@ -122,6 +123,7 @@ export function useAppActions({
   addEntriesWithImportAssetSession,
   updateEntry,
   deleteEntry,
+  deleteEntryWithUndo,
   patchEntry,
   patchEntryWithImportAssetSession,
   refresh,
@@ -674,7 +676,8 @@ export function useAppActions({
     const entry = entries.find((item) => item.id === entryId);
     if (!entry) return;
     if (!(await confirm({ title: "항목 삭제", message: `"${getEntryTitle(entry)}"을(를) 삭제할까요? 첨부 이미지도 함께 삭제됩니다.`, confirmLabel: "삭제" }))) return;
-    await deleteEntry(entryId);
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(entryId);
+    else await deleteEntry(entryId);
     if (selected?.id === entryId) setSelectedId(null);
   };
 
@@ -714,7 +717,8 @@ export function useAppActions({
   const handleDelete = async () => {
     if (!selected) return;
     if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
-    await deleteEntry(selected.id);
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(selected.id);
+    else await deleteEntry(selected.id);
     setSelectedId(null);
   };
 

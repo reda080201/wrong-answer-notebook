@@ -10,6 +10,8 @@ import {
   saveEntries,
 } from "../api";
 import type { EntryFormData, ExamSession, ExamSubmissionTransactionResult, WrongAnswerEntry } from "../types";
+import type { PendingDeletion } from "../types";
+import { getStorageBackend } from "../services/storageBackend";
 import { getAllImageFilenames } from "../utils/entry";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
@@ -363,6 +365,45 @@ export function useEntries() {
     [deleteImagesBestEffort, enqueueMutation],
   );
 
+  const deleteEntryWithUndo = useCallback(async (id: string): Promise<PendingDeletion> => {
+    const pendingStore = getStorageBackend();
+    const loadPending = pendingStore.loadPendingDeletions;
+    const savePending = pendingStore.savePendingDeletions;
+    if (!loadPending || !savePending) throw new Error("현재 저장소는 삭제 복구를 지원하지 않습니다.");
+    const currentEntry = entriesRef.current.find((entry) => entry.id === id);
+    if (!currentEntry) throw new Error("삭제할 항목을 찾을 수 없습니다.");
+    const now = Date.now();
+    const pending: PendingDeletion = {
+      id: uuidv4(),
+      entry: currentEntry,
+      originalIndex: entriesRef.current.indexOf(currentEntry),
+      imageReferences: getAllImageFilenames(currentEntry),
+      requestedAt: new Date(now).toISOString(),
+      finalizeAfter: new Date(now + 10_000).toISOString(),
+    };
+    await savePending([...(await loadPending()), pending]);
+    try {
+      await enqueueMutation((current) => ({ next: current.filter((entry) => entry.id !== id), value: undefined }));
+      return pending;
+    } catch (error) {
+      await savePending((await loadPending()).filter((item) => item.id !== pending.id)).catch(() => undefined);
+      throw error;
+    }
+  }, [enqueueMutation]);
+
+  const restorePendingDeletion = useCallback(async (pending: PendingDeletion) => {
+    await enqueueMutation((current) => {
+      if (current.some((entry) => entry.id === pending.entry.id)) return { next: current, value: undefined };
+      const next = [...current];
+      next.splice(Math.max(0, Math.min(pending.originalIndex, next.length)), 0, pending.entry);
+      return { next, value: undefined };
+    });
+    const backend = getStorageBackend();
+    const loadPending = backend.loadPendingDeletions;
+    const savePending = backend.savePendingDeletions;
+    if (loadPending && savePending) await savePending((await loadPending()).filter((item) => item.id !== pending.id));
+  }, [enqueueMutation]);
+
   const toggleMastered = useCallback(
     async (id: string) => {
       try {
@@ -435,6 +476,8 @@ export function useEntries() {
     patchEntry,
     patchEntryWithImportAssetSession,
     deleteEntry,
+    deleteEntryWithUndo,
+    restorePendingDeletion,
     toggleMastered,
     toggleDifficult,
     refresh,

@@ -192,7 +192,7 @@ const isolatedBrowserBackend: StorageBackend = {
   async saveLibraryFolders(folders) { writeStorageJson(localStorage, LIBRARY_FOLDERS_STORAGE_KEY, folders); },
   async loadGptSolutionDrafts() { return arrayOrThrow(readStorageJson(localStorage, GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY, Array.isArray) ?? [], "GPT 해설 초안"); },
   async saveGptSolutionDrafts(drafts) { writeStorageJson(localStorage, GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY, drafts); },
-  async loadReviewSessions() { return arrayOrThrow(readStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, Array.isArray) ?? [], "복습 세션").map(normalizeReviewSession); },
+  async loadReviewSessions() { return (arrayOrThrow<ReviewSession>(readStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, Array.isArray) ?? [], "복습 세션")).map(normalizeReviewSession); },
   async saveReviewSessions(sessions) { writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, sessions.map(normalizeReviewSession)); },
   async loadPendingDeletions() { return arrayOrThrow(readStorageJson(localStorage, "wrong-answer-pending-deletions", Array.isArray) ?? [], "삭제 대기 항목"); },
   async savePendingDeletions(deletions) { writeStorageJson(localStorage, "wrong-answer-pending-deletions", deletions); },
