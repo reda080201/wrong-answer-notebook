@@ -844,7 +844,7 @@ mod tests {
         let images = directory.path().join("images");
         std::fs::create_dir_all(&images).unwrap();
         let store = NotebookStore::new(directory.path().join("entries.json"), images.clone());
-        store.save_entries(&[entry.clone()]).unwrap();
+        store.save_entries(std::slice::from_ref(&entry)).unwrap();
         let assets = directory.path().join("staged-assets");
         std::fs::create_dir_all(&assets).unwrap();
         std::fs::write(assets.join("new-image.png"), [1_u8, 2, 3]).unwrap();
@@ -874,7 +874,7 @@ mod tests {
         let images = directory.path().join("images");
         std::fs::create_dir_all(&images).unwrap();
         let store = NotebookStore::new(directory.path().join("entries.json"), images.clone());
-        store.save_entries(&[entry.clone()]).unwrap();
+        store.save_entries(std::slice::from_ref(&entry)).unwrap();
         let assets = directory.path().join("staged-assets");
         std::fs::create_dir_all(&assets).unwrap();
         std::fs::write(assets.join("new-image.png"), [1_u8, 2, 3]).unwrap();

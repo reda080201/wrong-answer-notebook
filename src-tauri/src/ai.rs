@@ -1052,7 +1052,7 @@ mod tests {
             Some("03")
         );
         assert_eq!(request.candidates[0].candidate_id, "candidate:1");
-        assert_eq!(request.candidates[0].has_explanation, true);
+        assert!(request.candidates[0].has_explanation);
         assert!(validate_similar_question_ranking_request(&request).is_ok());
     }
 
