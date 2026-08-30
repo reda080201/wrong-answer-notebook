@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { FileImage, FileText, Upload, X } from "lucide-react";
-import type { LearningBlock, LectureSourceType } from "../types";
+import type { LearningBlock, LectureSourceType, SheetFigureItem } from "../types";
 import type { EntryFormData } from "../types";
 import {
   parseLectureImportText,
@@ -15,12 +15,42 @@ import MathText from "./MathText";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 import Dialog from "../shared/ui/Dialog";
 
+export type LearningImportIssueSeverity = "blocking" | "review_required" | "informational";
+
+export interface LearningImportIssue {
+  severity: LearningImportIssueSeverity;
+  message: string;
+  path?: string;
+}
+
+export interface LearningImportAnalysis {
+  title?: string;
+  blocks: LearningBlock[];
+  sourcePageImages: string[];
+  figures: SheetFigureItem[];
+  counts: {
+    questions: number;
+    images: number;
+    machineChecked: number;
+    needsReview: number;
+  };
+  issues: LearningImportIssue[];
+}
+
+export interface LearningImportMeta {
+  title: string;
+  sourceType: LectureSourceType;
+  sourcePageImages?: string[];
+  figures?: SheetFigureItem[];
+  issues?: LearningImportIssue[];
+}
+
 interface LearningImportModalProps {
   onClose: () => void;
-  onApply: (blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType }) => Promise<void> | void;
+  onApply: (blocks: LearningBlock[], meta: LearningImportMeta) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   mode?: "append" | "lecture";
-  onVisualFile?: (file: File) => Promise<{ blocks: LearningBlock[]; title?: string }>;
+  onVisualFile?: (file: File) => Promise<LearningImportAnalysis>;
 }
 
 export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append", onVisualFile }: LearningImportModalProps) {
@@ -35,10 +65,13 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"visual" | "file" | "text">("file");
   const [visualFileName, setVisualFileName] = useState<string | null>(null);
+  const [visualAnalysis, setVisualAnalysis] = useState<LearningImportAnalysis | null>(null);
+  const [showReviewOnly, setShowReviewOnly] = useState(false);
   const visualInputRef = useRef<HTMLInputElement>(null);
 
   const parseText = (text: string, filename?: string) => {
     try {
+      setVisualAnalysis(null);
       const conceptValue = tryParseConceptKnowledgeText(text);
       if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
         setConceptImportValue(conceptValue);
@@ -60,6 +93,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const handleFile = async (file?: File) => {
     if (!file) return;
     try {
+      setVisualAnalysis(null);
       const parsed = await readLectureImportFile(file);
       const text = await file.text();
       const conceptValue = tryParseConceptKnowledgeText(text);
@@ -92,9 +126,11 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       setSaving(true);
       const parsed = await onVisualFile(file);
       setBlocks(parsed.blocks);
-      setMeta((current) => ({ ...current, title: parsed.title || file.name.replace(/\.[^.]+$/, "") }));
+      setVisualAnalysis(parsed);
+      setMeta((current) => ({ ...current, title: parsed.title || file.name.replace(/\.[^.]+$/, ""), sourceType: "json" }));
     } catch (err) {
       setBlocks([]);
+      setVisualAnalysis(null);
       setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
     } finally {
       setSaving(false);
@@ -105,7 +141,16 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
     if (!blocks.length) return;
     setSaving(true);
     try {
-      await onApply(blocks, meta);
+      if (visualAnalysis?.issues.some((issue) => issue.severity === "blocking")) {
+        setError("저장 전에 차단된 검토 항목을 해결해야 합니다.");
+        return;
+      }
+      await onApply(blocks, {
+        ...meta,
+        sourcePageImages: visualAnalysis?.sourcePageImages,
+        figures: visualAnalysis?.figures,
+        issues: visualAnalysis?.issues,
+      });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "특강 저장에 실패했습니다.");
@@ -163,6 +208,15 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
 
           <section className="learning-import-preview" aria-label="특강 미리보기">
             <h3>미리보기</h3>
+            {visualAnalysis && (
+              <div className="learning-import-analysis" aria-label="자동 분석 요약">
+                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 확인 {visualAnalysis.counts.machineChecked}개 · 검토 필요 {visualAnalysis.counts.needsReview}개</p>
+                {visualAnalysis.issues.length > 0 && <button type="button" className="btn-ghost" onClick={() => setShowReviewOnly((value) => !value)}>{showReviewOnly ? "전체 보기" : "검토 필요만 보기"}</button>}
+                {visualAnalysis.issues.filter((issue) => !showReviewOnly || issue.severity !== "informational").map((issue, index) => (
+                  <p key={`${issue.path ?? "issue"}-${index}`} className={`form-${issue.severity === "blocking" ? "error" : "hint"}`}>{issue.path ? `${issue.path}: ` : ""}{issue.message}</p>
+                ))}
+              </div>
+            )}
             {blocks.length ? (
               <div className="learning-import-blocks">
                 {blocks.map((block) => (

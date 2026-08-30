@@ -24,6 +24,7 @@ import type {
   IntegrityReport,
   LearningBlock,
   LectureSourceType,
+  SheetFigureItem,
   MemoTemplate,
   PromptTemplate,
   ReviewResult,
@@ -387,7 +388,7 @@ export function useAppActions({
 
   const createLectureEntry = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
     linkedEntryIds: string[] = [],
   ) => {
     const subject: Subject =
@@ -401,6 +402,7 @@ export function useAppActions({
       title: meta.title.trim() || "특강자료",
       question: "",
       questionImages: [],
+      sourcePageImages: meta.sourcePageImages ?? [],
       entryKind: "lecture",
       difficult: false,
       difficulty: "none",
@@ -411,7 +413,7 @@ export function useAppActions({
       memo: "",
       tags: ["특강자료"],
       answerKey: [],
-      figures: [],
+      figures: meta.figures ?? [],
       mistakeAnalysis: { causes: [] },
       mastered: false,
       learningBlocks: blocks,
@@ -509,7 +511,7 @@ export function useAppActions({
 
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
   ) => {
     if (activeSection === "lecture" || !selected) {
       await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
@@ -517,6 +519,8 @@ export function useAppActions({
     }
     await patchEntry(selected.id, (current) => ({
       learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+      sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
+      figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
     }));
   };
 

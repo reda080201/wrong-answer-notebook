@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
@@ -9,6 +10,7 @@ import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/d
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
+import { isEditableCommandTarget, reviewCommands } from "../utils/reviewCommands";
 
 interface ReviewPanelProps {
   title: string;
@@ -45,6 +47,7 @@ export default function ReviewPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
+  const revealedRef = useRef(false);
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
@@ -58,6 +61,10 @@ export default function ReviewPanel({
   useEffect(() => {
     savingRef.current = saving;
   }, [saving]);
+
+  useEffect(() => {
+    revealedRef.current = revealed;
+  }, [revealed]);
 
   const requestClose = useCallback(() => {
     if (!savingRef.current) onClose();
@@ -126,12 +133,43 @@ export default function ReviewPanel({
     }
   };
 
+  useEffect(() => {
+    const onCommand = (event: KeyboardEvent) => {
+      if (savingRef.current || event.metaKey || event.ctrlKey || event.altKey || isEditableCommandTarget(event.target)) return;
+      if (event.key === " " || event.code === "Space") {
+        if (!revealedRef.current && current) {
+          event.preventDefault();
+          setRevealed(true);
+        }
+        return;
+      }
+      const command = reviewCommands.find((candidate) => candidate.key === event.key);
+      if (!command) return;
+      if (command.result && revealedRef.current && current) {
+        event.preventDefault();
+        void handleReview(command.result);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setIndex((value) => Math.max(0, value - 1));
+        setRevealed(false);
+      } else if (event.key === "ArrowRight" && index < reviewItems.length - 1) {
+        event.preventDefault();
+        setIndex((value) => value + 1);
+        setRevealed(false);
+      }
+    };
+    document.addEventListener("keydown", onCommand);
+    return () => document.removeEventListener("keydown", onCommand);
+  }, [current, index, reviewItems.length, handleReview]);
+
   const currentEntry = current?.entry;
   const sheetQuestion =
     current?.kind === "sheet-question"
       ? resolveSheetQuestion(current.entry, current.questionNumber)
       : null;
-  return (
+  return createPortal((
     <div ref={panelRef} className="review-panel" role="dialog" aria-modal="true" aria-label={title} aria-busy={saving} tabIndex={-1}>
       <div className="review-panel-header">
         <div>
@@ -230,7 +268,7 @@ export default function ReviewPanel({
                   ))}
                 </div>
               )}
-              <div className="review-actions">
+              <div className="review-actions" aria-label="복습 평가">
                 {(["again", "hard", "good"] as const).map((result) => (
                   <button
                     key={result}
@@ -248,7 +286,7 @@ export default function ReviewPanel({
         </div>
       )}
     </div>
-  );
+  ), document.body);
 }
 
 function resolveSheetQuestion(entry: WrongAnswerEntry, questionNumber: string) {
