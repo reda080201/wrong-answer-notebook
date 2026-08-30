@@ -34,6 +34,7 @@ const STORE_NAMES: &[&str] = &[
     "generated-exams",
     "library-folders",
     "gpt-solution-drafts",
+    "review-sessions",
     "import-workspace-draft",
 ];
 
@@ -61,6 +62,7 @@ fn store_path(root: &Path, name: &str) -> BridgeResult<PathBuf> {
         "generated-exams" => "generated-exams.json",
         "library-folders" => "library-folders.json",
         "gpt-solution-drafts" => "gpt-solution-drafts.json",
+        "review-sessions" => "review-sessions.json",
         "import-workspace-draft" => "import-workspace-draft.json",
         "entries" => "entries.json",
         _ => return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into())),
@@ -101,6 +103,7 @@ fn validate_store(name: &str, value: &Value) -> Result<(), String> {
         "generated-exams" => validate_persistent_store_value("generated-exams.json", value),
         "library-folders" => validate_persistent_store_value("library-folders.json", value),
         "gpt-solution-drafts" => validate_persistent_store_value("gpt-solution-drafts.json", value),
+        "review-sessions" => validate_persistent_store_value("review-sessions.json", value),
         "import-workspace-draft" => value
             .is_null()
             .then_some(())
