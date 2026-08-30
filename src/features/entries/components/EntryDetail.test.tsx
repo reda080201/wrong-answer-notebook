@@ -199,7 +199,7 @@ describe("EntryDetail sheet layout", () => {
   });
 
   it("shows sheet question table of contents and search results", () => {
-    const { container } = render(
+    render(
       <EntryDetail
         entry={{
           ...sheetEntry,
