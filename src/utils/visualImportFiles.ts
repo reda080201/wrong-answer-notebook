@@ -32,7 +32,7 @@ export async function rasterizeVisualImportFile(file: File): Promise<File[]> {
     canvas.height = Math.ceil(viewport.height);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("PDF 페이지 캔버스를 준비하지 못했습니다.");
-    await page.render({ canvasContext: context, viewport }).promise;
+    await page.render({ canvas, canvasContext: context, viewport }).promise;
     pages.push(await canvasToFile(canvas, `${baseName}-page-${String(pageNumber).padStart(3, "0")}.png`));
   }
   return pages;
