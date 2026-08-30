@@ -144,6 +144,7 @@ pub(crate) fn vision_image_mime(filename: &str) -> Result<&'static str, String> 
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn gemini_inline_data_part(mime_type: &str, bytes: &[u8]) -> serde_json::Value {
     serde_json::json!({
         "inline_data": {

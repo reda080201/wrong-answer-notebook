@@ -19,6 +19,7 @@ import type {
   ReviewItem,
   Subject,
   WrongAnswerEntry,
+  ReviewSession,
 } from "../types";
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
@@ -55,7 +56,7 @@ interface AppModalsProps {
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
   importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"]): Promise<void> };
   learningImport: { show: boolean; setShow(show: boolean): void; apply(blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: import("../types").SheetFigureItem[] }): Promise<void> };
-  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void> };
+  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void>; session?: ReviewSession; saveSession?: (session: ReviewSession) => Promise<void> };
   navigation: { setActiveSection(section: EntryKind): void; setSelectedId(id: string | null): void; handleWikiLinkClick(target: string): void; existingTargets: Set<string> };
   supplemental: { target?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null; closeImport(): void; applyMerge(payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }): Promise<void>; managerEntry?: WrongAnswerEntry | null; closeManager(): void; rename(entryId: string, resourceId: string, title: string): Promise<void>; remove(entryId: string, resourceId: string): Promise<void>; linkTarget?: WrongAnswerEntry | null; linkCandidates: WrongAnswerEntry[]; closeLink(): void; link(entryId: string, source: WrongAnswerEntry): Promise<void> };
 }
@@ -69,7 +70,7 @@ export default function AppModals({
   const { value: settings, saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate, open: onOpenSettings } = settingsGroup;
   const { show: showImportModal, mode: importMode, solutionSourceEntry, fallbackSubject: importFallbackSubject, close: closeImportModal, apply: handleImportApply, applyEntries: handleImportedEntriesApply } = importFlow;
   const { show: showLearningImportModal, setShow: setShowLearningImportModal, apply: handleLearningImportApply } = learningImport;
-  const { mode: reviewMode, seed: reviewSeed, setMode: setReviewMode, handle: handleReview } = review;
+  const { mode: reviewMode, seed: reviewSeed, setMode: setReviewMode, handle: handleReview, session: reviewSession, saveSession: saveReviewSession } = review;
   const { setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets } = navigation;
   const { target: supplementalTarget, closeImport: onCloseSupplementalImport, applyMerge: applySupplementalMerge, managerEntry: supplementalManagerEntry, closeManager: onCloseSupplementalManager, rename: renameSupplementalResource, remove: deleteSupplementalResource, linkTarget: supplementalLinkTarget, linkCandidates: supplementalLinkCandidates, closeLink: onCloseSupplementalLink, link: onLinkLearningEntry } = supplemental;
   const openSettings = onOpenSettings ?? modalController?.settings.open;
@@ -321,6 +322,7 @@ export default function AppModals({
       )}
       {reviewMode && (
         <ReviewPanel
+          mode={reviewMode}
           title={
             reviewMode === "today"
               ? "오늘 복습"
@@ -340,6 +342,8 @@ export default function AppModals({
           }}
           onWikiLinkClick={handleWikiLinkClick}
           existingTargets={existingTargets}
+          session={reviewSession}
+          onSessionSave={saveReviewSession}
         />
       )}
     </>

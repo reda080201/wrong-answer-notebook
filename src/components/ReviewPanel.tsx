@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { ReviewItem, ReviewResult, ReviewSession, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -14,6 +14,7 @@ import { isEditableCommandTarget, reviewCommands } from "../utils/reviewCommands
 
 interface ReviewPanelProps {
   title: string;
+  mode?: ReviewSession["mode"];
   entries?: WrongAnswerEntry[];
   items?: ReviewItem[];
   onClose: () => void;
@@ -21,6 +22,8 @@ interface ReviewPanelProps {
   onOpenEntry: (entry: WrongAnswerEntry) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  session?: ReviewSession;
+  onSessionSave?: (session: ReviewSession) => Promise<void>;
 }
 
 const resultLabels: Record<ReviewResult, string> = {
@@ -31,6 +34,7 @@ const resultLabels: Record<ReviewResult, string> = {
 
 export default function ReviewPanel({
   title,
+  mode,
   entries,
   items,
   onClose,
@@ -38,8 +42,10 @@ export default function ReviewPanel({
   onOpenEntry,
   onWikiLinkClick,
   existingTargets,
+  session,
+  onSessionSave,
 }: ReviewPanelProps) {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(session?.currentIndex ?? 0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -48,15 +54,40 @@ export default function ReviewPanel({
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
   const revealedRef = useRef(false);
+  const sessionIdRef = useRef(session?.id ?? `review-${crypto.randomUUID()}`);
+  const sessionStartedAtRef = useRef(session?.createdAt ?? new Date().toISOString());
+  const completedKeysRef = useRef<string[]>(session?.completedItemKeys ?? []);
+  const reviewEventsRef = useRef(session?.reviewEvents ?? []);
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
   );
+  const sessionInitializedRef = useRef(false);
   useEffect(() => {
-    setIndex(0);
+    setIndex(session?.currentIndex ?? 0);
     setRevealed(false);
-    setReviewStats({ again: 0, hard: 0, good: 0 });
-  }, [reviewItems]);
+    if (!session) setReviewStats({ again: 0, hard: 0, good: 0 });
+  }, [reviewItems, session]);
+
+  useEffect(() => {
+    if (sessionInitializedRef.current || !onSessionSave || !reviewItems.length) return;
+    sessionInitializedRef.current = true;
+    void onSessionSave({
+      id: sessionIdRef.current,
+      mode: mode ?? "random",
+      itemRefs: reviewItems.map((item) => item.kind === "sheet-question"
+        ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
+        : { kind: item.kind, entryId: item.entry.id }),
+      currentIndex: session?.currentIndex ?? 0,
+      completedItemKeys: completedKeysRef.current,
+      reviewEvents: reviewEventsRef.current,
+      createdAt: sessionStartedAtRef.current,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => {
+      // A review panel must remain usable when an optional session store is unavailable.
+      sessionInitializedRef.current = false;
+    });
+  }, [mode, onSessionSave, reviewItems, session]);
 
   useEffect(() => {
     savingRef.current = saving;
@@ -120,6 +151,34 @@ export default function ReviewPanel({
     try {
       await onReview(current, result);
       if (!mountedRef.current) return;
+      const itemKey = current.kind === "sheet-question"
+        ? `${current.entry.id}:${normalizeQuestionNumber(current.questionNumber)}`
+        : current.entry.id;
+      if (!completedKeysRef.current.includes(itemKey)) completedKeysRef.current = [...completedKeysRef.current, itemKey];
+      reviewEventsRef.current = [...reviewEventsRef.current, {
+        id: crypto.randomUUID(),
+        reviewedAt: new Date().toISOString(),
+        result,
+        nextDueAt: null,
+        intervalDays: 0,
+      }];
+      if (onSessionSave) {
+        const nextIndex = Math.min(index + 1, reviewItems.length);
+        const updatedAt = new Date().toISOString();
+        await onSessionSave({
+          id: sessionIdRef.current,
+          mode: mode ?? "random",
+          itemRefs: reviewItems.map((item) => item.kind === "sheet-question"
+            ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
+            : { kind: item.kind, entryId: item.entry.id }),
+          currentIndex: nextIndex,
+          completedItemKeys: completedKeysRef.current,
+          reviewEvents: reviewEventsRef.current,
+          createdAt: sessionStartedAtRef.current,
+          updatedAt,
+          ...(nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
+        });
+      }
       setReviewStats((stats) => ({ ...stats, [result]: stats[result] + 1 }));
       setRevealed(false);
       setIndex((value) => Math.min(value + 1, reviewItems.length));
@@ -131,7 +190,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [current, onReview, reviewItems.length]);
+  }, [current, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {

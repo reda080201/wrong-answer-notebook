@@ -835,7 +835,16 @@ function AppContent() {
         settings={{ value: settings, saveTemplate: actions.saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate: actions.savePromptTemplate, open: openSettings }}
         importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply }}
         learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
-        review={{ mode: actions.reviewMode, seed: actions.reviewSeed, setMode: actions.setReviewMode, handle: actions.handleReview }}
+        review={{
+          mode: actions.reviewMode,
+          seed: actions.reviewSeed,
+          setMode: actions.setReviewMode,
+          handle: actions.handleReview,
+          session: actions.reviewMode
+            ? reviewSessions.sessions.find((candidate) => !candidate.completedAt && candidate.mode === actions.reviewMode && candidate.itemRefs.some((ref) => actions.reviewSeed.some((item) => item.entry.id === ref.entryId)))
+            : undefined,
+          saveSession: reviewSessions.save,
+        }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
         supplemental={{ target: (() => {
           if (!actions.supplementalTarget) return null;

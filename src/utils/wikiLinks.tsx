@@ -145,7 +145,7 @@ export function renderWikiLinksInNodes(
           const label = part.label ?? "";
           return renderLink(target, label, `wiki-str-${idx}-${part.index}`);
         }
-        return part.raw;
+        return <Fragment key={`wiki-str-${idx}-${part.index}`}>{part.raw}</Fragment>;
       });
     }
 
@@ -160,7 +160,7 @@ export function renderWikiLinksInNodes(
             const label = part.label ?? "";
             return renderLink(target, label, `wiki-mark-child-${idx}-${part.index}`);
           }
-          return part.raw;
+          return <Fragment key={`wiki-mark-child-${idx}-${part.index}`}>{part.raw}</Fragment>;
         });
 
         // Clone the element with new children containing wiki link nodes
