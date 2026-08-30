@@ -46,6 +46,7 @@ import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
+import { useReviewSessions } from "./hooks/useReviewSessions";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -182,6 +183,7 @@ function AppContent() {
   } = generatedExamController;
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
+  const reviewSessions = useReviewSessions();
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
     examSaveTimerRef,
@@ -193,6 +195,7 @@ function AppContent() {
     flushImportWorkspaceDraft: flushTransientWrites,
     flushLibraryFolders: library.flush,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushReviewSessions: reviewSessions.flush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
