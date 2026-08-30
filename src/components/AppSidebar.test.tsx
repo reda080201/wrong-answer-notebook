@@ -20,7 +20,7 @@ const baseProps = {
   learningStats: { recentReviewCount: 0, topCauses: [], weakConcepts: [] } as never,
   subjects: { order: [], filter: null, counts: {}, sectionEntryCount: 0, move: vi.fn(), select: vi.fn() },
   actions: { openNew: vi.fn(), openImport: vi.fn(), openLearningImport: vi.fn() },
-  destinations: { learningHubOpen: false, questionBankOpen: false, libraryOpen: false },
+  destination: { type: "section" as const, section: "wrong_answer" as const },
   shell: { collapsed: false, onCollapsedChange: vi.fn() },
 };
 
@@ -46,5 +46,17 @@ describe("AppSidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "앱 사이드바 펼치기" }));
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
     expect(baseProps.navigationController.requestNavigation).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["learning_hub", "학습 허브"],
+    ["question_bank", "문제 은행"],
+    ["library", "보관함"],
+  ] as const)("exposes exactly one active destination for %s", (type, label) => {
+    render(<AppSidebar {...baseProps} destination={{ type }} />);
+
+    expect(screen.getAllByRole("button", { current: "page" })).toHaveLength(1);
+    expect(screen.getByRole("button", { name: label, current: "page" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /새 오답/ })).not.toBeInTheDocument();
   });
 });

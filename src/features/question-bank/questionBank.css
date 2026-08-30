@@ -4,7 +4,7 @@
 .question-bank-view__header h2 { margin: 0; font-size: 22px; }
 .question-bank-view__header p { margin: var(--space-1) 0 0; color: var(--text-muted); }
 .question-bank-view__header > strong { font-variant-numeric: tabular-nums; color: var(--text-muted); }
-.question-bank-filters { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); background: var(--panel-bg); border-radius: var(--radius-panel); }
+.question-bank-filters { display: grid; gap: var(--space-3); padding: 0; border: 0; background: transparent; }
 .question-bank-filter-search input { width: 100%; min-width: 0; }
 .question-bank-filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(142px, 1fr)); gap: var(--space-2); }
 .question-bank-filter { display: grid; gap: var(--space-1); color: var(--text-muted); font-size: 12px; }
@@ -17,18 +17,18 @@
 .question-bank-workspace { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 32vw, 480px); gap: var(--space-4); margin-top: var(--space-4); min-height: 0; }
 .question-bank-workspace--list-only { grid-template-columns: minmax(0, 1fr); }
 .question-bank-list { display: grid; grid-template-columns: minmax(0, 1fr); gap: 1px; background: var(--border); }
-.question-bank-card { position: relative; min-width: 0; min-height: 72px; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
-.question-bank-card__main { width: 100%; min-height: 72px; border: 0; padding: var(--space-3) 64px var(--space-3) var(--space-4); text-align: left; color: inherit; background: transparent; cursor: pointer; }
+.question-bank-card { position: relative; min-width: 0; height: 80px; min-height: 76px; max-height: 88px; border: 0; border-radius: 0; background: var(--surface); overflow: hidden; }
+.question-bank-card__main { display: grid; grid-template-rows: auto minmax(0, 1fr); align-content: center; gap: 4px; width: 100%; height: 100%; border: 0; padding: 8px 56px 8px 16px; text-align: left; color: inherit; background: transparent; cursor: pointer; }
 .question-bank-card__main:hover { background: var(--surface-hover); }
 .question-bank-card.is-selected .question-bank-card__main { background: var(--surface-hover); }
-.question-bank-card__main > header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.question-bank-card__main > header strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .question-bank-card__main > header span { flex: 0 0 auto; color: var(--accent); font-size: 12px; }
 .question-bank-card__number { margin-right: var(--space-2); color: var(--accent); }
 .question-bank-card__meta { display: flex; gap: var(--space-2); margin: var(--space-1) 0; color: var(--text-muted); font-size: 12px; }
-.question-bank-card__main > p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--text); line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.question-bank-card__main > footer { justify-content: flex-start; margin-top: var(--space-1); color: var(--text-muted); font-size: 12px; }
+.question-bank-card__main > p { min-width: 0; margin: 0; overflow: hidden; color: var(--text); line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
 .question-bank-card__warning { color: var(--warning); font-weight: 700; }
-.question-bank-card__detail { position: absolute; right: var(--space-2); top: 50%; width: 42px; height: 32px; transform: translateY(-50%); border: 0; background: transparent; color: var(--accent); cursor: pointer; }
+.question-bank-card__detail { position: absolute; right: 8px; top: 50%; display: grid; place-items: center; width: 40px; height: 40px; transform: translateY(-50%); border: 1px solid transparent; border-radius: var(--radius-control); background: transparent; color: var(--accent); cursor: pointer; white-space: nowrap; }
+.question-bank-card__detail:hover, .question-bank-card__detail:focus-visible { border-color: var(--border); background: var(--surface-hover); }
 .question-bank-card.is-selected { box-shadow: inset 3px 0 0 var(--accent); background: var(--surface-hover); }
 .question-bank-detail { display: grid; gap: var(--space-4); min-width: min(640px, 80vw); }
 .question-bank-inspector { min-width: 0; max-height: calc(100dvh - 220px); overflow: auto; padding: var(--space-4); border-left: 1px solid var(--border); background: var(--surface); }
@@ -37,6 +37,7 @@
 .question-bank-detail__question { margin: 0; padding: var(--space-3); white-space: pre-wrap; font: inherit; line-height: 1.6; background: var(--surface-soft); border: 1px solid var(--border); }
 .question-bank-detail dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); margin: 0; }
 .question-bank-detail dl div { padding: var(--space-2); border: 1px solid var(--border); }
+.question-bank-detail__empty-metrics { margin: 0; padding: var(--space-3); color: var(--text-muted); border: 1px dashed var(--border); }
 .question-bank-detail dt { color: var(--text-muted); font-size: 12px; }
 .question-bank-detail dd { margin: var(--space-1) 0 0; }
 .question-bank-detail section h4 { margin: 0 0 var(--space-1); font-size: 14px; }
@@ -45,7 +46,14 @@
 .question-bank-search { flex: 1 1 280px; }
 .question-bank-search input { width: 100%; min-width: 0; }
 .question-bank-actions label, .question-bank-detail__classification label { display: grid; gap: var(--space-1); font-size: 12px; color: var(--text-muted); }
-.question-bank-actions input, .question-bank-actions select, .question-bank-detail__classification input { min-height: var(--control-height-compact); padding: var(--space-1) var(--space-2); }
+.question-bank-actions input, .question-bank-actions select, .question-bank-detail__classification input { min-height: var(--control-height-compact); padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: inherit; }
+.question-bank-actions input:hover, .question-bank-actions select:hover, .question-bank-actions input:focus-visible, .question-bank-actions select:focus-visible { border-color: var(--accent); outline: none; }
+.question-bank-actions input, .question-bank-actions select { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 45%, transparent); }
+.question-bank-card__chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.question-bank-card__chips span { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; }
+.question-bank-group { min-width: 0; }
+.question-bank-group > h3 { display: flex; justify-content: space-between; margin: 0; padding: 8px 12px; color: var(--text-muted); background: var(--surface-soft); font-size: 12px; font-weight: 600; }
+.question-bank-group > h3 span { font-variant-numeric: tabular-nums; }
 .question-bank-picked { margin: var(--space-3) 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--accent); background: var(--surface-soft); font-size: 13px; }
 .question-bank-presets { margin: var(--space-4); padding: var(--space-3); border-top: 1px solid var(--border); }
 .question-bank-presets > * { margin: var(--space-1); }

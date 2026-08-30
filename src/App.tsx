@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
-import AppSidebar from "./components/AppSidebar";
+import AppSidebar, { type SidebarDestination } from "./components/AppSidebar";
 import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
@@ -31,6 +31,7 @@ import { useAppNavigationController } from "./hooks/useAppNavigationController";
 import { usePersistenceCoordinator } from "./hooks/usePersistenceCoordinator";
 import LearningCandidateReviewModal from "./features/learning/components/LearningCandidateReviewModal";
 import { buildQuestionBankItems } from "./features/question-bank/utils/buildQuestionBankItems";
+import { projectLearningBlocks } from "./features/learning/utils/learningHub";
 import ConceptLinkProvider from "./features/learning/components/ConceptLinkProvider";
 import NotebookKnowledgeWorkspace from "./components/NotebookKnowledgeWorkspace";
 import LibraryExplorer from "./features/library/components/LibraryExplorer";
@@ -45,6 +46,7 @@ import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
+import { useReviewSessions } from "./hooks/useReviewSessions";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -69,6 +71,7 @@ function AppContent() {
     addEntriesWithImportAssetSession,
     updateEntry,
     deleteEntry,
+    deleteEntryWithUndo,
     toggleMastered,
     toggleDifficult,
     patchEntry,
@@ -181,6 +184,7 @@ function AppContent() {
   } = generatedExamController;
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
+  const reviewSessions = useReviewSessions();
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
     examSaveTimerRef,
@@ -192,6 +196,7 @@ function AppContent() {
     flushImportWorkspaceDraft: flushTransientWrites,
     flushLibraryFolders: library.flush,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
+    flushReviewSessions: reviewSessions.flush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
@@ -296,6 +301,7 @@ function AppContent() {
     addEntriesWithImportAssetSession,
     updateEntry,
     deleteEntry,
+    deleteEntryWithUndo,
     patchEntry,
     patchEntryWithImportAssetSession,
     refresh,
@@ -470,6 +476,19 @@ function AppContent() {
     for (const item of items) counts[item.subject] = (counts[item.subject] ?? 0) + 1;
     return { total: items.length, counts };
   }, [entries]);
+  const learningHubSidebar = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const item of projectLearningBlocks(entries)) {
+      counts[item.sourceSubject] = (counts[item.sourceSubject] ?? 0) + 1;
+    }
+    return { total: Object.values(counts).reduce((sum, count) => sum + count, 0), counts };
+  }, [entries]);
+  const sidebarDestination = useMemo<SidebarDestination>(() => {
+    if (showLearningHub) return { type: "learning_hub" };
+    if (showQuestionBank) return { type: "question_bank" };
+    if (showLibraryExplorer) return { type: "library" };
+    return { type: "section", section: activeSection };
+  }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -482,8 +501,9 @@ function AppContent() {
         learningStats={learningStats}
         subjects={{ order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount, move: moveSubject, select: setSubjectFilter }}
         questionBank={{ active: showQuestionBank, total: questionBankSidebar.total, subjectCounts: questionBankSidebar.counts }}
+        learningHub={{ active: showLearningHub, total: learningHubSidebar.total, subjectCounts: learningHubSidebar.counts }}
         actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
-        destinations={{ learningHubOpen: showLearningHub, questionBankOpen: showQuestionBank, libraryOpen: showLibraryExplorer }}
+        destination={sidebarDestination}
         shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
       />
 
@@ -815,7 +835,16 @@ function AppContent() {
         settings={{ value: settings, saveTemplate: actions.saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate: actions.savePromptTemplate, open: openSettings }}
         importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply }}
         learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
-        review={{ mode: actions.reviewMode, seed: actions.reviewSeed, setMode: actions.setReviewMode, handle: actions.handleReview }}
+        review={{
+          mode: actions.reviewMode,
+          seed: actions.reviewSeed,
+          setMode: actions.setReviewMode,
+          handle: actions.handleReview,
+          session: actions.reviewMode
+            ? reviewSessions.sessions.find((candidate) => !candidate.completedAt && candidate.mode === actions.reviewMode && candidate.itemRefs.some((ref) => actions.reviewSeed.some((item) => item.entry.id === ref.entryId)))
+            : undefined,
+          saveSession: reviewSessions.save,
+        }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
         supplemental={{ target: (() => {
           if (!actions.supplementalTarget) return null;

@@ -26,6 +26,8 @@ export interface QuestionBankItem {
   hasExplanation: boolean;
   hasImages: boolean;
   isWrong: boolean;
+  /** Derived for new projections; legacy test/consumer fixtures may omit it. */
+  isImportant?: boolean;
   isMastered: boolean;
   reviewDue: boolean;
   updatedAt: string;

@@ -82,6 +82,7 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     hasExplanation: Boolean(explanation),
     hasImages: images.length > 0 || sourcePages.length > 0,
     isWrong: isWrong(entry, meta),
+    isImportant: meta?.important === true,
     isMastered: isMastered(entry, meta),
     reviewDue: reviewDue(meta, now),
     updatedAt: entry.updatedAt,

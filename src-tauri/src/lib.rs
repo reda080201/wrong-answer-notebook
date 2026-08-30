@@ -340,6 +340,53 @@ fn save_gpt_solution_roundtrip_drafts(
     write_json_atomic(&app_dir(&app)?.join("gpt-solution-drafts.json"), &drafts)
 }
 
+#[tauri::command]
+fn load_review_sessions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("review-sessions.json");
+    let value = load_array_json_file(
+        &path,
+        "복습 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )?;
+    validate_persistent_store_value("review-sessions.json", &value)?;
+    Ok(value)
+}
+
+#[tauri::command]
+fn save_review_sessions(app: tauri::AppHandle, sessions: serde_json::Value) -> Result<(), String> {
+    let path = app_dir(&app)?.join("review-sessions.json");
+    validate_persistent_store_value("review-sessions.json", &sessions)?;
+    save_array_json_file(
+        &path,
+        &sessions,
+        "복습 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
+}
+
+#[tauri::command]
+fn load_pending_deletions(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("pending-deletions.json");
+    let value = load_array_json_file(
+        &path,
+        "삭제 대기 항목 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )?;
+    validate_persistent_store_value("pending-deletions.json", &value)?;
+    Ok(value)
+}
+
+#[tauri::command]
+fn save_pending_deletions(
+    app: tauri::AppHandle,
+    deletions: serde_json::Value,
+) -> Result<(), String> {
+    let path = app_dir(&app)?.join("pending-deletions.json");
+    validate_persistent_store_value("pending-deletions.json", &deletions)?;
+    save_array_json_file(
+        &path,
+        &deletions,
+        "삭제 대기 항목 형식이 올바르지 않습니다. 배열이어야 합니다.",
+    )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LibraryFolder {
@@ -439,6 +486,61 @@ pub(crate) fn validate_persistent_store_value(
                 {
                     return Err(
                         "GPT 해설 초안의 requestedQuestionNumbers는 배열이어야 합니다.".into(),
+                    );
+                }
+            }
+            Ok(())
+        }
+        "review-sessions.json" => {
+            for item in items {
+                let object = item
+                    .as_object()
+                    .ok_or_else(|| "복습 세션 항목이 객체가 아닙니다.".to_string())?;
+                for key in ["id", "mode", "createdAt", "updatedAt"] {
+                    if object
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .is_none()
+                    {
+                        return Err(format!("복습 세션의 {key} 값이 올바르지 않습니다."));
+                    }
+                }
+                for key in ["itemRefs", "completedItemKeys", "reviewEvents"] {
+                    if !object.get(key).is_some_and(serde_json::Value::is_array) {
+                        return Err(format!("복습 세션의 {key} 값은 배열이어야 합니다."));
+                    }
+                }
+            }
+            Ok(())
+        }
+        "pending-deletions.json" => {
+            for item in items {
+                let object = item
+                    .as_object()
+                    .ok_or_else(|| "삭제 대기 항목이 객체가 아닙니다.".to_string())?;
+                for key in ["id", "requestedAt", "finalizeAfter"] {
+                    if object
+                        .get(key)
+                        .and_then(serde_json::Value::as_str)
+                        .map(str::trim)
+                        .filter(|value| !value.is_empty())
+                        .is_none()
+                    {
+                        return Err(format!("삭제 대기 항목의 {key} 값이 올바르지 않습니다."));
+                    }
+                }
+                if !object
+                    .get("entry")
+                    .is_some_and(serde_json::Value::is_object)
+                    || !object
+                        .get("imageReferences")
+                        .is_some_and(serde_json::Value::is_array)
+                {
+                    return Err(
+                        "삭제 대기 항목의 entry 또는 imageReferences 값이 올바르지 않습니다."
+                            .into(),
                     );
                 }
             }
@@ -626,6 +728,7 @@ fn save_settings(app: tauri::AppHandle, settings: serde_json::Value) -> Result<(
 }
 
 #[cfg(test)]
+#[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
     use crate::images::{
@@ -1010,6 +1113,10 @@ pub fn run() {
             save_generated_exams,
             load_gpt_solution_roundtrip_drafts,
             save_gpt_solution_roundtrip_drafts,
+            load_review_sessions,
+            save_review_sessions,
+            load_pending_deletions,
+            save_pending_deletions,
             load_library_folders,
             save_library_folders,
             load_import_workspace_draft,

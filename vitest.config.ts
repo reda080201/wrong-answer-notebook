@@ -10,10 +10,11 @@ export default defineConfig({
     exclude: ["e2e/**", "node_modules/**"],
     testTimeout: 30000,
     hookTimeout: 30000,
-    pool: "threads",
+    // A single fork is more reliable than a long-lived worker thread on Windows.
+    pool: "forks",
     minWorkers: 1,
     fileParallelism: false,
     maxWorkers: 1,
-    singleThread: true,
+    singleFork: true,
   },
 });

@@ -35,6 +35,13 @@ export const DEFAULT_LEARNING_HUB_FILTERS: LearningHubFilters = {
   lifeEthicsKinds: [],
 };
 
+const LOW_QUALITY_TITLES = new Set(["instruction", "in'sight", "insight", "concept", "learning", "note", "summary"]);
+
+export function isLowQualityLearningTitle(title: string | undefined): boolean {
+  const normalized = title?.trim().toLocaleLowerCase("en-US") ?? "";
+  return normalized.length === 0 || LOW_QUALITY_TITLES.has(normalized);
+}
+
 export function projectLearningBlocks(entries: WrongAnswerEntry[]): LearningHubItem[] {
   return entries.flatMap((sourceEntry) => (sourceEntry.learningBlocks ?? []).map((block) => ({
     block,

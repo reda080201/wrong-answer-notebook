@@ -37,10 +37,17 @@ interface AppSidebarProps {
   >;
   subjects: { order: string[]; filter: string | null; counts: Record<string, number>; sectionEntryCount: number; move(fromIndex: number, toIndex: number): void; select(subject: string | null): void };
   questionBank?: { active: boolean; total: number; subjectCounts: Record<string, number> };
+  learningHub?: { active: boolean; total: number; subjectCounts: Record<string, number> };
   actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
-  destinations: { learningHubOpen: boolean; questionBankOpen: boolean; libraryOpen: boolean };
+  destination: SidebarDestination;
   shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
 }
+
+export type SidebarDestination =
+  | { type: "section"; section: EntryKind }
+  | { type: "learning_hub" }
+  | { type: "question_bank" }
+  | { type: "library" };
 
 const sectionTabs = [
   ["wrong_answer", "오답노트", NotebookPen],
@@ -57,22 +64,37 @@ export default function AppSidebar({
   learningStats,
   subjects,
   questionBank,
+  learningHub,
   actions,
-  destinations,
+  destination,
   shell,
 }: AppSidebarProps) {
   const { order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount } = subjects;
-  const visibleSubjectCounts = questionBank?.active ? questionBank.subjectCounts : subjectCounts;
-  const visibleSubjectTotal = questionBank?.active ? questionBank.total : sectionEntryCount;
+  const isQuestionBank = destination.type === "question_bank";
+  const isLearningHub = destination.type === "learning_hub";
+  const isLibraryDestination = destination.type === "library";
+  const visibleSubjectCounts = isQuestionBank
+    ? questionBank?.subjectCounts ?? {}
+    : isLearningHub
+      ? learningHub?.subjectCounts ?? {}
+      : subjectCounts;
+  const visibleSubjectTotal = isQuestionBank
+    ? questionBank?.total ?? 0
+    : isLearningHub
+      ? learningHub?.total ?? 0
+      : sectionEntryCount;
   const { openNew, openImport, openLearningImport, openExamBuilder: onOpenExamBuilder } = actions;
-  const { learningHubOpen, questionBankOpen, libraryOpen } = destinations;
+  const isSectionDestination = destination.type === "section";
+  const destinationSection = isSectionDestination ? destination.section : null;
   const { collapsed, onCollapsedChange } = shell;
   const sectionEntries = useMemo(
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
   );
-  const sidebarStats = useMemo(() => questionBank?.active
-      ? [["전체 문항", questionBank.total]]
+  const sidebarStats = useMemo(() => isQuestionBank
+      ? [["전체 문항", questionBank?.total ?? 0]]
+      : isLearningHub
+        ? [["학습 항목", learningHub?.total ?? 0]]
       : activeSection === "problem_sheet"
       ? [
           ["시험지", sectionEntries.length],
@@ -102,7 +124,7 @@ export default function AppSidebar({
               ["전체", stats.total],
               ["복습 필요", stats.pending],
               ["어려움", stats.difficult],
-          ], [activeSection, questionBank, sectionEntries, stats]);
+          ], [activeSection, isQuestionBank, isLearningHub, questionBank, learningHub, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
     void navigationController.requestNavigation({ section, entryId: null });
   };
@@ -127,8 +149,8 @@ export default function AppSidebar({
           <button
             key={key}
             type="button"
-            className={`section-tab-btn ${activeSection === key ? "active" : ""}`}
-            aria-current={activeSection === key ? "page" : undefined}
+            className={`section-tab-btn ${destinationSection === key ? "active" : ""}`}
+            aria-current={destinationSection === key ? "page" : undefined}
             aria-label={label}
             title={collapsed ? label : undefined}
             onClick={() => {
@@ -143,8 +165,8 @@ export default function AppSidebar({
         {(
           <button
             type="button"
-            className={`section-tab-btn ${learningHubOpen ? "active" : ""}`}
-            aria-current={learningHubOpen ? "page" : undefined}
+            className={`section-tab-btn ${destination.type === "learning_hub" ? "active" : ""}`}
+            aria-current={destination.type === "learning_hub" ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
             onClick={() => void navigationController.openLearningHub()}
@@ -156,8 +178,8 @@ export default function AppSidebar({
         {(
           <button
             type="button"
-            className={`section-tab-btn ${questionBankOpen ? "active" : ""}`}
-            aria-current={questionBankOpen ? "page" : undefined}
+            className={`section-tab-btn ${destination.type === "question_bank" ? "active" : ""}`}
+            aria-current={destination.type === "question_bank" ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
             onClick={() => void navigationController.openQuestionBank()}
@@ -169,8 +191,8 @@ export default function AppSidebar({
         {(
           <button
             type="button"
-            className={`section-tab-btn ${libraryOpen ? "active" : ""}`}
-            aria-current={libraryOpen ? "page" : undefined}
+            className={`section-tab-btn ${destination.type === "library" ? "active" : ""}`}
+            aria-current={destination.type === "library" ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
             onClick={() => void navigationController.openLibrary()}
@@ -182,12 +204,12 @@ export default function AppSidebar({
         </>
       </div>
 
-      {!collapsed && <details className="sidebar-summary">
+      {!collapsed && !isLibraryDestination && <details className="sidebar-summary">
         <summary>요약</summary>
         <dl>{sidebarStats.slice(0, 5).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </details>}
 
-      {!collapsed && activeSection === "wrong_answer" && <div className="learning-insights">
+      {!collapsed && destinationSection === "wrong_answer" && <div className="learning-insights">
         <div className="learning-insight">
           <span>7일 복습</span>
           <strong>{learningStats.recentReviewCount}</strong>
@@ -206,7 +228,7 @@ export default function AppSidebar({
         </div>
       </div>}
 
-      {!collapsed && <div className="filter-section app-sidebar-scroll-region">
+      {!collapsed && !isLibraryDestination && <div className="filter-section app-sidebar-scroll-region">
         <h3>과목</h3>
         <SubjectList
           subjectOrder={subjectOrder}
@@ -219,15 +241,15 @@ export default function AppSidebar({
       </div>}
 
       <div className="sidebar-footer">
-        {!collapsed && <button type="button" className="btn-new" onClick={activeSection === "problem_sheet" ? openImport : openNew}>
-          + {activeSection === "problem_sheet" ? "시험지 가져오기" : `새 ${entryKindName(activeSection)} 추가`}
+        {!collapsed && isSectionDestination && <button type="button" className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : openNew}>
+          + {destinationSection === "problem_sheet" ? "시험지 가져오기" : destination.type === "section" ? `새 ${entryKindName(destination.section)} 추가` : ""}
         </button>}
-        {!collapsed && activeSection !== "wrong_answer" && (
+        {!collapsed && isSectionDestination && destinationSection !== "wrong_answer" && (
           <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="추가 작업">
-            {activeSection === "problem_sheet" && onOpenExamBuilder && (
+            {destinationSection === "problem_sheet" && onOpenExamBuilder && (
               <button type="button" onClick={onOpenExamBuilder}>모의고사 만들기</button>
             )}
-            {activeSection === "lecture" && (
+            {destinationSection === "lecture" && (
               <button type="button" onClick={openLearningImport}>HTML/MD/JSON 가져오기</button>
             )}
           </Menu>

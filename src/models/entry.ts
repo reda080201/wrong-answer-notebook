@@ -438,6 +438,16 @@ export interface WrongAnswerEntry {
   mastered: boolean;
 }
 
+/** Deferred deletion preserves the exact entry and its assets for a short undo window. */
+export interface PendingDeletion {
+  id: string;
+  entry: WrongAnswerEntry;
+  originalIndex: number;
+  imageReferences: string[];
+  requestedAt: string;
+  finalizeAfter: string;
+}
+
 export type EntryFormData = Omit<
   WrongAnswerEntry,
   "id" | "createdAt" | "updatedAt" | "images" | "explanation" | "explanationImages"

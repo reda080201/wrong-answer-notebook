@@ -83,6 +83,8 @@ export default function QuestionTheaterView({
   onClose,
 }: QuestionTheaterViewProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const questionPaneRef = useRef<HTMLElement>(null);
+  const solutionPaneRef = useRef<HTMLElement>(null);
   const dragCleanupRef = useRef<(() => void) | null>(null);
   const [solutionOpen, setSolutionOpen] = useState(false);
   const [splitRatio, setSplitRatio] = useState(loadSplitRatio);
@@ -91,6 +93,16 @@ export default function QuestionTheaterView({
   const difficultyScore = normalizeDifficultyScore(questionMeta?.difficultyScore) ?? resolveAnswerDifficultyScore(answer);
   const conceptContext = sourceEntry ? buildConceptLinkContext(sourceEntry, questionMeta?.questionNumber ?? answer?.questionNumber) : undefined;
   const [draftScore, setDraftScore] = useState(`${difficultyScore ?? ""}`);
+
+  // Reset only the newly selected question. Toggling the solution keeps the
+  // question position while giving the newly mounted inspector a clean start.
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => {
+      if (questionPaneRef.current) questionPaneRef.current.scrollTop = 0;
+      if (solutionPaneRef.current) solutionPaneRef.current.scrollTop = 0;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [questionBlock.numberLabel, questionBlock.displayNumber, questionIndex]);
 
   const updateSplitRatio = (clientX: number, container: HTMLElement) => {
     const rect = container.getBoundingClientRect();
@@ -223,7 +235,7 @@ export default function QuestionTheaterView({
           className={`question-theater-main ${solutionOpen && solutionPresentation === "split" ? "question-theater-main--split" : ""}`}
           style={solutionOpen && solutionPresentation === "split" ? { ["--question-split-ratio" as string]: `${splitRatio}%` } : undefined}
         >
-          <section className="question-theater-question-pane">
+          <section ref={questionPaneRef} className="question-theater-question-pane">
             {questionMeta?.important && (
             <div className="question-theater-bookmark-note">
               <strong>중요 표시된 문제</strong>
@@ -253,7 +265,7 @@ export default function QuestionTheaterView({
                 aria-label="문제와 해설 영역 크기 조절"
                 onPointerDown={startDividerDrag}
               />
-              <aside className="question-theater-solution-pane" aria-label="현재 문제 해설">
+              <aside ref={solutionPaneRef} className="question-theater-solution-pane" aria-label="현재 문제 해설">
                 <div className="question-theater-solution-actions">
                   <button type="button" className="btn-secondary" onClick={onToggleAnswers}>
                     {hideAnswers ? "정답 보기" : "정답 가리기"}

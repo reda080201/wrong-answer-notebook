@@ -1,8 +1,8 @@
 import EntryForm from "../features/entries/components/EntryForm";
 import ImportFromGptModal from "../features/import/components/ImportFromGptModal";
-import LearningImportModal from "./LearningImportModal";
+import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
-import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
+import { deleteImage, discardImportAssetSession, generateImportWithAi, saveImportAssetFiles, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
@@ -19,6 +19,7 @@ import type {
   ReviewItem,
   Subject,
   WrongAnswerEntry,
+  ReviewSession,
 } from "../types";
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
@@ -31,6 +32,8 @@ import type { AnswerMergeResolution } from "../features/supplemental-resources/s
 import type { ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
 import { normalizeChoice } from "../features/import-workspace/model/importWorkspace";
 import { parseQuestionText } from "../utils/textLayout";
+import { parseLectureImportText } from "../utils/learningContent";
+import { rasterizeVisualImportFile } from "../utils/visualImportFiles";
 import { normalizeQuestionNumber } from "../utils/questionMeta";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 import type { AppModalControllerGroup } from "../hooks/useAppModalController";
@@ -52,8 +55,8 @@ interface AppModalsProps {
   form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
   importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"]): Promise<void> };
-  learningImport: { show: boolean; setShow(show: boolean): void; apply(blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType }): Promise<void> };
-  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void> };
+  learningImport: { show: boolean; setShow(show: boolean): void; apply(blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: import("../types").SheetFigureItem[] }): Promise<void> };
+  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void>; session?: ReviewSession; saveSession?: (session: ReviewSession) => Promise<void> };
   navigation: { setActiveSection(section: EntryKind): void; setSelectedId(id: string | null): void; handleWikiLinkClick(target: string): void; existingTargets: Set<string> };
   supplemental: { target?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null; closeImport(): void; applyMerge(payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }): Promise<void>; managerEntry?: WrongAnswerEntry | null; closeManager(): void; rename(entryId: string, resourceId: string, title: string): Promise<void>; remove(entryId: string, resourceId: string): Promise<void>; linkTarget?: WrongAnswerEntry | null; linkCandidates: WrongAnswerEntry[]; closeLink(): void; link(entryId: string, source: WrongAnswerEntry): Promise<void> };
 }
@@ -67,7 +70,7 @@ export default function AppModals({
   const { value: settings, saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate, open: onOpenSettings } = settingsGroup;
   const { show: showImportModal, mode: importMode, solutionSourceEntry, fallbackSubject: importFallbackSubject, close: closeImportModal, apply: handleImportApply, applyEntries: handleImportedEntriesApply } = importFlow;
   const { show: showLearningImportModal, setShow: setShowLearningImportModal, apply: handleLearningImportApply } = learningImport;
-  const { mode: reviewMode, seed: reviewSeed, setMode: setReviewMode, handle: handleReview } = review;
+  const { mode: reviewMode, seed: reviewSeed, setMode: setReviewMode, handle: handleReview, session: reviewSession, saveSession: saveReviewSession } = review;
   const { setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets } = navigation;
   const { target: supplementalTarget, closeImport: onCloseSupplementalImport, applyMerge: applySupplementalMerge, managerEntry: supplementalManagerEntry, closeManager: onCloseSupplementalManager, rename: renameSupplementalResource, remove: deleteSupplementalResource, linkTarget: supplementalLinkTarget, linkCandidates: supplementalLinkCandidates, closeLink: onCloseSupplementalLink, link: onLinkLearningEntry } = supplemental;
   const openSettings = onOpenSettings ?? modalController?.settings.open;
@@ -160,6 +163,48 @@ export default function AppModals({
       );
     } finally {
       setSupplementalCleanupBusy(false);
+    }
+  };
+
+  const analyzeLearningVisualFile = async (file: File): Promise<LearningImportAnalysis> => {
+    const visualFiles = await rasterizeVisualImportFile(file);
+    if (!visualFiles.every((candidate) => candidate.type.startsWith("image/"))) {
+      throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
+    }
+
+    const saved = await saveImportAssetFiles(visualFiles);
+    const sourcePageImages = saved.savedFilenames;
+    try {
+      const prompt = [
+        "이미지에서 학습 자료를 추출해 JSON으로 반환하세요.",
+        "learningBlocks 배열만 만들고, 확실하지 않은 제목/내용은 reviewStatus를 needs_review로 표시하세요.",
+        "원본 이미지의 내용은 추측하지 말고, 사용자 검증 또는 verified 상태를 생성하지 마세요.",
+      ].join("\n");
+      const response = await generateImportWithAi(prompt, "이미지/PDF 기반 특강 자료를 분석하세요.", sourcePageImages);
+      const parsed = parseLectureImportText(response, file.name);
+      const genericTitle = /^(instruction|in'?sight|insight|concept|summary)$/i.test(parsed.title.trim());
+      const blocks = parsed.blocks.map((block) => ({
+        ...block,
+        reviewStatus: genericTitle || block.reviewStatus === "reviewed" ? "needs_review" : block.reviewStatus ?? "draft",
+      }));
+      return {
+        title: parsed.title,
+        blocks,
+        sourcePageImages,
+        figures: [],
+        counts: {
+          questions: 0,
+          images: sourcePageImages.length,
+          machineChecked: blocks.filter((block) => block.reviewStatus !== "needs_review").length,
+          needsReview: blocks.filter((block) => block.reviewStatus === "needs_review").length + (genericTitle ? 1 : 0),
+        },
+        issues: genericTitle
+          ? [{ severity: "review_required", path: "title", message: "일반적인 자동 제목입니다. 원문에 맞는 제목인지 확인하세요." }]
+          : [],
+      };
+    } catch (error) {
+      await Promise.all(sourcePageImages.map((filename) => deleteImage(filename).catch(() => undefined)));
+      throw error;
     }
   };
 
@@ -272,10 +317,12 @@ export default function AppModals({
           onApply={handleLearningImportApply}
           onApplyEntries={handleImportedEntriesApply}
           mode={activeSection === "lecture" ? "lecture" : "append"}
+          onVisualFile={analyzeLearningVisualFile}
         />
       )}
       {reviewMode && (
         <ReviewPanel
+          mode={reviewMode}
           title={
             reviewMode === "today"
               ? "오늘 복습"
@@ -295,6 +342,8 @@ export default function AppModals({
           }}
           onWikiLinkClick={handleWikiLinkClick}
           existingTargets={existingTargets}
+          session={reviewSession}
+          onSessionSave={saveReviewSession}
         />
       )}
     </>

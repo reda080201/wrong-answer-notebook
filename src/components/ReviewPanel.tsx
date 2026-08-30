@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReviewItem, ReviewResult, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import { createPortal } from "react-dom";
+import type { ReviewItem, ReviewResult, ReviewSession, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -9,9 +10,11 @@ import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/d
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
+import { isEditableCommandTarget, reviewCommands } from "../utils/reviewCommands";
 
 interface ReviewPanelProps {
   title: string;
+  mode?: ReviewSession["mode"];
   entries?: WrongAnswerEntry[];
   items?: ReviewItem[];
   onClose: () => void;
@@ -19,6 +22,8 @@ interface ReviewPanelProps {
   onOpenEntry: (entry: WrongAnswerEntry) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
+  session?: ReviewSession;
+  onSessionSave?: (session: ReviewSession) => Promise<void>;
 }
 
 const resultLabels: Record<ReviewResult, string> = {
@@ -29,6 +34,7 @@ const resultLabels: Record<ReviewResult, string> = {
 
 export default function ReviewPanel({
   title,
+  mode,
   entries,
   items,
   onClose,
@@ -36,8 +42,10 @@ export default function ReviewPanel({
   onOpenEntry,
   onWikiLinkClick,
   existingTargets,
+  session,
+  onSessionSave,
 }: ReviewPanelProps) {
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(session?.currentIndex ?? 0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -45,19 +53,49 @@ export default function ReviewPanel({
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
+  const revealedRef = useRef(false);
+  const sessionIdRef = useRef(session?.id ?? `review-${crypto.randomUUID()}`);
+  const sessionStartedAtRef = useRef(session?.createdAt ?? new Date().toISOString());
+  const completedKeysRef = useRef<string[]>(session?.completedItemKeys ?? []);
+  const reviewEventsRef = useRef(session?.reviewEvents ?? []);
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
   );
+  const sessionInitializedRef = useRef(false);
   useEffect(() => {
-    setIndex(0);
+    setIndex(session?.currentIndex ?? 0);
     setRevealed(false);
-    setReviewStats({ again: 0, hard: 0, good: 0 });
-  }, [reviewItems]);
+    if (!session) setReviewStats({ again: 0, hard: 0, good: 0 });
+  }, [reviewItems, session]);
+
+  useEffect(() => {
+    if (sessionInitializedRef.current || !onSessionSave || !reviewItems.length) return;
+    sessionInitializedRef.current = true;
+    void onSessionSave({
+      id: sessionIdRef.current,
+      mode: mode ?? "random",
+      itemRefs: reviewItems.map((item) => item.kind === "sheet-question"
+        ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
+        : { kind: item.kind, entryId: item.entry.id }),
+      currentIndex: session?.currentIndex ?? 0,
+      completedItemKeys: completedKeysRef.current,
+      reviewEvents: reviewEventsRef.current,
+      createdAt: sessionStartedAtRef.current,
+      updatedAt: new Date().toISOString(),
+    }).catch(() => {
+      // A review panel must remain usable when an optional session store is unavailable.
+      sessionInitializedRef.current = false;
+    });
+  }, [mode, onSessionSave, reviewItems, session]);
 
   useEffect(() => {
     savingRef.current = saving;
   }, [saving]);
+
+  useEffect(() => {
+    revealedRef.current = revealed;
+  }, [revealed]);
 
   const requestClose = useCallback(() => {
     if (!savingRef.current) onClose();
@@ -105,7 +143,7 @@ export default function ReviewPanel({
     [reviewItems.length, index],
   );
 
-  const handleReview = async (result: ReviewResult) => {
+  const handleReview = useCallback(async (result: ReviewResult) => {
     if (!current || savingRef.current) return;
     savingRef.current = true;
     setSaving(true);
@@ -113,6 +151,34 @@ export default function ReviewPanel({
     try {
       await onReview(current, result);
       if (!mountedRef.current) return;
+      const itemKey = current.kind === "sheet-question"
+        ? `${current.entry.id}:${normalizeQuestionNumber(current.questionNumber)}`
+        : current.entry.id;
+      if (!completedKeysRef.current.includes(itemKey)) completedKeysRef.current = [...completedKeysRef.current, itemKey];
+      reviewEventsRef.current = [...reviewEventsRef.current, {
+        id: crypto.randomUUID(),
+        reviewedAt: new Date().toISOString(),
+        result,
+        nextDueAt: null,
+        intervalDays: 0,
+      }];
+      if (onSessionSave) {
+        const nextIndex = Math.min(index + 1, reviewItems.length);
+        const updatedAt = new Date().toISOString();
+        await onSessionSave({
+          id: sessionIdRef.current,
+          mode: mode ?? "random",
+          itemRefs: reviewItems.map((item) => item.kind === "sheet-question"
+            ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
+            : { kind: item.kind, entryId: item.entry.id }),
+          currentIndex: nextIndex,
+          completedItemKeys: completedKeysRef.current,
+          reviewEvents: reviewEventsRef.current,
+          createdAt: sessionStartedAtRef.current,
+          updatedAt,
+          ...(nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
+        });
+      }
       setReviewStats((stats) => ({ ...stats, [result]: stats[result] + 1 }));
       setRevealed(false);
       setIndex((value) => Math.min(value + 1, reviewItems.length));
@@ -124,14 +190,45 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  };
+  }, [current, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
+
+  useEffect(() => {
+    const onCommand = (event: KeyboardEvent) => {
+      if (savingRef.current || event.metaKey || event.ctrlKey || event.altKey || isEditableCommandTarget(event.target)) return;
+      if (event.key === " " || event.code === "Space") {
+        if (!revealedRef.current && current) {
+          event.preventDefault();
+          setRevealed(true);
+        }
+        return;
+      }
+      const command = reviewCommands.find((candidate) => candidate.key === event.key);
+      if (!command) return;
+      if (command.result && revealedRef.current && current) {
+        event.preventDefault();
+        void handleReview(command.result);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setIndex((value) => Math.max(0, value - 1));
+        setRevealed(false);
+      } else if (event.key === "ArrowRight" && index < reviewItems.length - 1) {
+        event.preventDefault();
+        setIndex((value) => value + 1);
+        setRevealed(false);
+      }
+    };
+    document.addEventListener("keydown", onCommand);
+    return () => document.removeEventListener("keydown", onCommand);
+  }, [current, index, reviewItems.length, handleReview]);
 
   const currentEntry = current?.entry;
   const sheetQuestion =
     current?.kind === "sheet-question"
       ? resolveSheetQuestion(current.entry, current.questionNumber)
       : null;
-  return (
+  return createPortal((
     <div ref={panelRef} className="review-panel" role="dialog" aria-modal="true" aria-label={title} aria-busy={saving} tabIndex={-1}>
       <div className="review-panel-header">
         <div>
@@ -230,7 +327,7 @@ export default function ReviewPanel({
                   ))}
                 </div>
               )}
-              <div className="review-actions">
+              <div className="review-actions" aria-label="복습 평가">
                 {(["again", "hard", "good"] as const).map((result) => (
                   <button
                     key={result}
@@ -248,7 +345,7 @@ export default function ReviewPanel({
         </div>
       )}
     </div>
-  );
+  ), document.body);
 }
 
 function resolveSheetQuestion(entry: WrongAnswerEntry, questionNumber: string) {

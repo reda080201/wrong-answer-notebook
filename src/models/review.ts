@@ -93,3 +93,22 @@ export interface ReviewAttempt {
 export type ReviewItem =
   | { kind: "entry"; entry: WrongAnswerEntry }
   | { kind: "sheet-question"; entry: WrongAnswerEntry; questionNumber: string };
+
+/** Persisted manual-review progress keeps canonical references, never copied content. */
+export interface ReviewSessionItemRef {
+  kind: "entry" | "sheet-question";
+  entryId: string;
+  questionNumber?: string;
+}
+
+export interface ReviewSession {
+  id: string;
+  mode: "today" | "random" | "difficult" | "important";
+  itemRefs: ReviewSessionItemRef[];
+  currentIndex: number;
+  completedItemKeys: string[];
+  reviewEvents: ReviewEvent[];
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+}

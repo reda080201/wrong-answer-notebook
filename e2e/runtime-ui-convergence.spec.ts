@@ -136,6 +136,8 @@ test.describe("runtime/UI convergence", () => {
     await page.getByRole("button", { name: "학습 허브", exact: true }).click();
     const learningHub = page.getByRole("region", { name: "학습 허브" });
     await expect(learningHub).toBeVisible();
+    await expect(page.locator(".app-sidebar [aria-current='page']")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /새 오답/ })).toHaveCount(0);
     await expect(learningHub.getByRole("button", { name: "자세히" })).toBeVisible();
     await expect(learningHub.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
     await page.screenshot({ path: testInfo.outputPath("learning-hub-compact.png"), fullPage: true });
@@ -143,10 +145,39 @@ test.describe("runtime/UI convergence", () => {
     await page.getByRole("button", { name: "문제 은행", exact: true }).click();
     const questionBank = page.locator(".question-bank-view");
     await expect(questionBank).toBeVisible();
-    await expect(questionBank.locator(".question-bank-card").first()).toBeVisible();
+    await expect(page.locator(".app-sidebar [aria-current='page']")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /새 오답/ })).toHaveCount(0);
+    const firstRow = questionBank.locator(".question-bank-card").first();
+    await expect(firstRow).toBeVisible();
+    await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(76);
+    await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 0).toBeLessThanOrEqual(88);
+    await expect.poll(async () => firstRow.locator(".question-bank-card__detail").evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
+    const searchInput = questionBank.locator(".question-bank-search input");
+    await expect(searchInput).toBeVisible();
+    await expect.poll(async () => searchInput.evaluate((element) => ({ border: getComputedStyle(element).borderWidth, background: getComputedStyle(element).backgroundColor }))).toMatchObject({ border: "1px" });
+    const chips = questionBank.locator(".question-bank-card__chips");
+    await expect(chips).toBeVisible();
+    await expect.poll(async () => chips.evaluate((element) => ({ gap: getComputedStyle(element).gap, count: element.children.length }))).toMatchObject({ gap: "6px" });
     await expect(questionBank.locator(".katex").first()).toBeVisible();
     await expect(questionBank.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
     await page.screenshot({ path: testInfo.outputPath("question-bank-mathtext.png"), fullPage: true });
+    await page.getByRole("button", { name: "보관함", exact: true }).click();
+    await expect(page.locator(".app-sidebar [aria-current='page']")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: /새 오답/ })).toHaveCount(0);
     await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
+  });
+
+  test("captures compact study destinations across acceptance viewports", async ({ page }, testInfo) => {
+    for (const size of [{ width: 1100, height: 750 }, { width: 1366, height: 768 }, { width: 1536, height: 864 }, { width: 1920, height: 1080 }]) {
+      await page.setViewportSize(size);
+      await seedBrowserStorage(page, [syntheticLifecycleEntry]);
+      await page.goto("/", { waitUntil: "domcontentloaded" });
+      await openSyntheticSheet(page);
+      await expect(page.locator(".study-paper").first()).toBeVisible();
+      const dock = page.locator(".study-control-bar");
+      await expect(dock).toBeVisible();
+      await expect.poll(async () => (await dock.boundingBox())?.height ?? 0).toBeLessThanOrEqual(52);
+      await page.screenshot({ path: testInfo.outputPath(`problem-sheet-${size.width}x${size.height}.png`), fullPage: true });
+    }
   });
 });

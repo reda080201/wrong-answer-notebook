@@ -24,6 +24,7 @@ import type {
   IntegrityReport,
   LearningBlock,
   LectureSourceType,
+  SheetFigureItem,
   MemoTemplate,
   PromptTemplate,
   ReviewResult,
@@ -81,6 +82,7 @@ interface UseAppActionsOptions {
     removedImages: string[],
   ) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
+  deleteEntryWithUndo?: (id: string) => Promise<import("../types").PendingDeletion>;
   patchEntry: (
     id: string,
     partial: EntryPatch,
@@ -121,6 +123,7 @@ export function useAppActions({
   addEntriesWithImportAssetSession,
   updateEntry,
   deleteEntry,
+  deleteEntryWithUndo,
   patchEntry,
   patchEntryWithImportAssetSession,
   refresh,
@@ -387,7 +390,7 @@ export function useAppActions({
 
   const createLectureEntry = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
     linkedEntryIds: string[] = [],
   ) => {
     const subject: Subject =
@@ -401,6 +404,7 @@ export function useAppActions({
       title: meta.title.trim() || "특강자료",
       question: "",
       questionImages: [],
+      sourcePageImages: meta.sourcePageImages ?? [],
       entryKind: "lecture",
       difficult: false,
       difficulty: "none",
@@ -411,7 +415,7 @@ export function useAppActions({
       memo: "",
       tags: ["특강자료"],
       answerKey: [],
-      figures: [],
+      figures: meta.figures ?? [],
       mistakeAnalysis: { causes: [] },
       mastered: false,
       learningBlocks: blocks,
@@ -509,7 +513,7 @@ export function useAppActions({
 
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
   ) => {
     if (activeSection === "lecture" || !selected) {
       await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
@@ -517,6 +521,8 @@ export function useAppActions({
     }
     await patchEntry(selected.id, (current) => ({
       learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+      sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
+      figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
     }));
   };
 
@@ -670,7 +676,8 @@ export function useAppActions({
     const entry = entries.find((item) => item.id === entryId);
     if (!entry) return;
     if (!(await confirm({ title: "항목 삭제", message: `"${getEntryTitle(entry)}"을(를) 삭제할까요? 첨부 이미지도 함께 삭제됩니다.`, confirmLabel: "삭제" }))) return;
-    await deleteEntry(entryId);
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(entryId);
+    else await deleteEntry(entryId);
     if (selected?.id === entryId) setSelectedId(null);
   };
 
@@ -710,7 +717,8 @@ export function useAppActions({
   const handleDelete = async () => {
     if (!selected) return;
     if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
-    await deleteEntry(selected.id);
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(selected.id);
+    else await deleteEntry(selected.id);
     setSelectedId(null);
   };
 

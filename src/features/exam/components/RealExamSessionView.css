@@ -23,14 +23,26 @@
 .real-exam-answer-sheet-rail { display: grid; place-items: start center; min-height: 100%; padding-top: var(--space-2); }
 .real-exam-answer-sheet-rail .icon-button { width: 44px; height: 44px; }
 .real-exam-answer-grid { display: grid; gap: 8px; margin-top: var(--space-3); }
-.real-exam-answer-grid--vertical { grid-template-columns: 1fr; }
+.real-exam-answer-grid--vertical { grid-template-columns: 1fr; gap: 0; }
 .real-exam-answer-grid--horizontal { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); }
 .real-exam-answer-item { display: grid; grid-template-columns: minmax(76px, auto) minmax(0, 1fr); gap: 8px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-small); background: var(--surface); }
+.real-exam-answer-grid--vertical .real-exam-answer-item { grid-template-columns: minmax(32px, auto) minmax(0, 1fr); gap: 6px; padding: 4px 0; border-width: 0 0 1px; border-radius: 0; background: transparent; }
+.real-exam-answer-grid--vertical .real-exam-answer-jump { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.real-exam-answer-status-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: var(--text-muted); }
+.real-exam-answer-item.is-answered .real-exam-answer-status-dot { background: var(--success); }
+.real-exam-answer-item.is-current .real-exam-answer-status-dot { background: var(--accent); }
+.real-exam-answer-item.is-marked .real-exam-answer-status-dot { box-shadow: 0 0 0 2px var(--review); }
+.real-exam-answer-grid--vertical .real-exam-answer-status-label, .real-exam-answer-grid--vertical .real-exam-answer-jump em { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.real-exam-answer-grid--vertical .real-exam-answer-sheet-choices { align-items: center; }
 .real-exam-answer-grid--horizontal .real-exam-answer-item { grid-template-columns: 1fr; }
 .real-exam-answer-item.is-answered { background: color-mix(in srgb, var(--success) 10%, var(--surface)); }
 .real-exam-answer-item.is-unanswered { background: color-mix(in srgb, var(--warning) 7%, var(--surface)); }
 .real-exam-answer-item.is-current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
 .real-exam-answer-item.is-marked { outline: 2px solid var(--review); outline-offset: -2px; }
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-answered,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-unanswered,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-current,
+.real-exam-answer-grid--vertical .real-exam-answer-item.is-marked { background: transparent; box-shadow: none; }
 .real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); min-height: 50px; padding: var(--space-2) var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-answer-jump { display: grid; justify-items: start; gap: 2px; border: 0 !important; padding: 2px !important; text-align: start; }
 .real-exam-answer-jump em { font-style: normal; color: var(--review); font-size: var(--font-size-meta); }
@@ -38,6 +50,7 @@
 .real-exam-answer-sheet-choices button { padding: 4px 2px; }
 .real-exam-answer-sheet-choices button[aria-pressed="true"] { background: var(--accent); color: white; }
 .real-exam-answer-item input, .real-exam-answer-item textarea { min-width: 0; width: 100%; box-sizing: border-box; }
+.real-exam-answer-item input { min-width: 160px; }
 .real-exam-passage { margin-bottom: var(--space-4); padding: var(--space-4); background: var(--surface-soft); border-left: 3px solid var(--accent); }
 .real-exam-results { max-width: 980px; margin: 0 auto var(--space-6); padding: var(--space-5); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-result-cards { display: flex; flex-wrap: wrap; gap: 12px; }

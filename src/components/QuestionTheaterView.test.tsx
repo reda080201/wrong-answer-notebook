@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import QuestionTheaterView from "./QuestionTheaterView";
 import type { QuestionBlock } from "../utils/textLayout";
@@ -14,6 +14,14 @@ const questionBlock: QuestionBlock = {
   choices: [],
   start: 0,
   end: 8,
+};
+
+const nextQuestionBlock: QuestionBlock = {
+  ...questionBlock,
+  numberLabel: "8",
+  displayNumber: 8,
+  body: "다음 문제입니다.",
+  end: 9,
 };
 
 function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation: "dialog" | "split" = "split") {
@@ -57,6 +65,44 @@ function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation
 }
 
 describe("QuestionTheaterView", () => {
+  it("resets a newly selected question and solution pane after the next render", async () => {
+    const view = renderTheater();
+    const questionPane = view.container.querySelector<HTMLElement>(".question-theater-question-pane")!;
+    Object.defineProperty(questionPane, "scrollTop", { configurable: true, writable: true, value: 240 });
+
+    fireEvent.click(screen.getByRole("button", { name: "해설 보기" }));
+    const solutionPane = screen.getByLabelText("현재 문제 해설") as HTMLElement;
+    Object.defineProperty(solutionPane, "scrollTop", { configurable: true, writable: true, value: 180 });
+    expect(questionPane.scrollTop).toBe(240);
+
+    view.rerender(
+      <QuestionTheaterView
+        questionBlock={nextQuestionBlock}
+        questionIndex={1}
+        questionCount={2}
+        questionImages={[]}
+        figures={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        hideAnswers={false}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        onPrevious={vi.fn()}
+        onNext={vi.fn()}
+        onToggleAnswers={vi.fn()}
+        onReview={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    await waitFor(() => {
+      expect((view.container.querySelector(".question-theater-question-pane") as HTMLElement).scrollTop).toBe(0);
+      expect((view.container.querySelector(".question-theater-solution-pane") as HTMLElement | null)?.scrollTop ?? 0).toBe(0);
+    });
+  });
+
   it("opens and closes the split solution layout", () => {
     const { container } = renderTheater();
 

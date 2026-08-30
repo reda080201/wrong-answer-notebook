@@ -140,10 +140,11 @@ pub(crate) fn vision_image_mime(filename: &str) -> Result<&'static str, String> 
         "png" => Ok("image/png"),
         "jpg" | "jpeg" => Ok("image/jpeg"),
         "webp" => Ok("image/webp"),
-        _ => Err("Gemini Vision은 PNG, JPEG, WebP 이미지만 지원합니다.".into()),
+        _ => Err("AI 이미지 분석은 PNG, JPEG, WebP 이미지만 지원합니다.".into()),
     }
 }
 
+#[allow(dead_code)]
 pub(crate) fn gemini_inline_data_part(mime_type: &str, bytes: &[u8]) -> serde_json::Value {
     serde_json::json!({
         "inline_data": {
@@ -153,26 +154,23 @@ pub(crate) fn gemini_inline_data_part(mime_type: &str, bytes: &[u8]) -> serde_js
     })
 }
 
-fn build_gemini_parts(
+fn read_ai_images(
     app: &tauri::AppHandle,
-    text: String,
     image_filenames: &[String],
-) -> Result<Vec<serde_json::Value>, String> {
+) -> Result<Vec<(String, String)>, String> {
     if image_filenames.len() > MAX_AI_IMAGE_COUNT {
         return Err(format!(
             "AI 분석 이미지는 한 번에 {MAX_AI_IMAGE_COUNT}개 이하만 사용할 수 있습니다."
         ));
     }
-
-    let mut parts = vec![serde_json::json!({ "text": text })];
     let mut total_bytes = 0_u64;
+    let mut images = Vec::with_capacity(image_filenames.len());
     for filename in image_filenames {
         let mime_type = vision_image_mime(filename)?;
         let path = image_path(app, filename)?;
         if !path.exists() {
             return Err(format!("AI 분석 이미지가 없습니다: {filename}"));
         }
-
         let metadata = fs::metadata(&path).map_err(|error| error.to_string())?;
         if metadata.len() > MAX_AI_IMAGE_BYTES {
             return Err(format!(
@@ -186,7 +184,6 @@ fn build_gemini_parts(
         if total_bytes > MAX_AI_IMAGE_TOTAL_BYTES {
             return Err("AI 분석 이미지 전체 용량은 14MB 이하여야 합니다.".into());
         }
-
         let extension = Path::new(filename)
             .extension()
             .and_then(|value| value.to_str())
@@ -194,7 +191,19 @@ fn build_gemini_parts(
         validate_image_magic(&path, extension, MAX_AI_IMAGE_BYTES)?;
         let bytes = fs::read(&path)
             .map_err(|error| format!("AI 분석 이미지를 읽지 못했습니다: {error}"))?;
-        parts.push(gemini_inline_data_part(mime_type, &bytes));
+        images.push((mime_type.to_string(), BASE64_STANDARD.encode(bytes)));
+    }
+    Ok(images)
+}
+
+fn build_gemini_parts(
+    app: &tauri::AppHandle,
+    text: String,
+    image_filenames: &[String],
+) -> Result<Vec<serde_json::Value>, String> {
+    let mut parts = vec![serde_json::json!({ "text": text })];
+    for (mime_type, data) in read_ai_images(app, image_filenames)? {
+        parts.push(serde_json::json!({ "inline_data": { "mime_type": mime_type, "data": data } }));
     }
 
     Ok(parts)
@@ -607,12 +616,13 @@ pub(crate) fn generate_import_with_ai(
             )
         }
         AiProviderType::Anthropic => {
-            if !image_filenames.is_empty() {
-                return Err("Anthropic 가져오기는 현재 텍스트 입력만 지원합니다.".into());
+            let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
+            for (mime_type, data) in read_ai_images(&app, &image_filenames)? {
+                content.push(serde_json::json!({ "type": "image", "source": { "type": "base64", "media_type": mime_type, "data": data } }));
             }
             (
                 format!("{}/messages", provider_base_url(&config)),
-                serde_json::json!({ "model": config.model, "max_tokens": 4096, "temperature": 0.2, "messages": [{ "role": "user", "content": text }] }),
+                serde_json::json!({ "model": config.model, "max_tokens": 4096, "temperature": 0.2, "messages": [{ "role": "user", "content": content }] }),
                 "anthropic",
             )
         }
@@ -621,12 +631,13 @@ pub(crate) fn generate_import_with_ai(
         | AiProviderType::Groq
         | AiProviderType::OpenAiCompatible
         | AiProviderType::Manual => {
-            if !image_filenames.is_empty() {
-                return Err("선택한 provider의 가져오기는 현재 텍스트 입력만 지원합니다.".into());
+            let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
+            for (mime_type, data) in read_ai_images(&app, &image_filenames)? {
+                content.push(serde_json::json!({ "type": "image_url", "image_url": { "url": format!("data:{mime_type};base64,{data}") } }));
             }
             (
                 format!("{}/chat/completions", provider_base_url(&config)),
-                serde_json::json!({ "model": config.model, "temperature": 0.2, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": text }] }),
+                serde_json::json!({ "model": config.model, "temperature": 0.2, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": content }] }),
                 "openai",
             )
         }
@@ -636,7 +647,7 @@ pub(crate) fn generate_import_with_ai(
         .connect_timeout(Duration::from_secs(10))
         .timeout(Duration::from_secs(90))
         .build()
-        .map_err(|error| format!("Gemini HTTP client를 만들지 못했습니다: {error}"))?;
+        .map_err(|error| format!("AI 제공자 HTTP client를 만들지 못했습니다: {error}"))?;
     let response = client
         .post(url)
         .header(
@@ -673,18 +684,18 @@ pub(crate) fn generate_import_with_ai(
         )
         .json(&body)
         .send()
-        .map_err(|error| format!("Gemini 호출에 실패했습니다: {error}"))?;
+        .map_err(|error| format!("AI 제공자 호출에 실패했습니다: {error}"))?;
     let status = response.status();
     let value: serde_json::Value = response
         .json()
-        .map_err(|error| format!("Gemini 응답 JSON을 읽지 못했습니다: {error}"))?;
+        .map_err(|error| format!("AI 제공자 응답 JSON을 읽지 못했습니다: {error}"))?;
     if !status.is_success() {
         let message = value
             .get("error")
             .and_then(|error| error.get("message"))
             .and_then(|message| message.as_str())
-            .unwrap_or("Gemini API 오류");
-        return Err(format!("Gemini API 오류({status}): {message}"));
+            .unwrap_or("AI 제공자 API 오류");
+        return Err(format!("AI 제공자 API 오류({status}): {message}"));
     }
 
     match response_kind {
@@ -1041,7 +1052,7 @@ mod tests {
             Some("03")
         );
         assert_eq!(request.candidates[0].candidate_id, "candidate:1");
-        assert_eq!(request.candidates[0].has_explanation, true);
+        assert!(request.candidates[0].has_explanation);
         assert!(validate_similar_question_ranking_request(&request).is_ok());
     }
 

@@ -14,7 +14,7 @@ describe("LearningHubView", () => {
     const onOpenSource = vi.fn();
     render(<LearningHubView entries={[entry]} onOpenSource={onOpenSource} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
     expect(screen.getByText("과목별 학습 지식 허브")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /합성함수 미분/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "합성함수 미분미분" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "자세히" }));
     expect(screen.getByText("언제 사용하는가")).toBeInTheDocument();
     expect(screen.getByText("안쪽 미분 누락")).toBeInTheDocument();
@@ -31,7 +31,8 @@ describe("LearningHubView", () => {
   it("keeps a failed card action visible and retries the same operation", async () => {
     const onUpdateBlock = vi.fn().mockRejectedValueOnce(new Error("저장 실패")).mockResolvedValueOnce(undefined);
     render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={onUpdateBlock} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
-    fireEvent.click(screen.getByRole("button", { name: "검토 완료" }));
+    fireEvent.click(screen.getByRole("button", { name: "합성함수 미분 작업" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "검토 완료" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("저장 실패");
     fireEvent.click(screen.getByRole("button", { name: "다시 저장" }));
     expect(onUpdateBlock).toHaveBeenCalledTimes(2);
@@ -42,7 +43,8 @@ describe("LearningHubView", () => {
     let resolveDuplicate: (() => void) | undefined;
     const onDuplicateBlock = vi.fn(() => new Promise<void>((resolve) => { resolveDuplicate = resolve; }));
     render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
-    const duplicate = screen.getByRole("button", { name: "복제" });
+    fireEvent.click(screen.getByRole("button", { name: "합성함수 미분 작업" }));
+    const duplicate = screen.getByRole("menuitem", { name: "복제" });
     fireEvent.click(duplicate);
     fireEvent.click(duplicate);
     expect(onDuplicateBlock).toHaveBeenCalledTimes(1);
@@ -53,7 +55,8 @@ describe("LearningHubView", () => {
     const onUpdateBlock = vi.fn().mockRejectedValueOnce(new Error("디스크에 저장하지 못했습니다.")).mockResolvedValueOnce(undefined);
     render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={onUpdateBlock} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: "합성함수 미분 작업" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "수정" }));
     const title = screen.getByRole("textbox", { name: "제목" });
     fireEvent.change(title, { target: { value: "수정한 합성함수 미분" } });
     fireEvent.click(screen.getByRole("button", { name: "저장" }));
@@ -72,7 +75,8 @@ describe("LearningHubView", () => {
     const onUpdateBlock = vi.fn(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
     render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={onUpdateBlock} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "수정" }));
+    fireEvent.click(screen.getByRole("button", { name: "합성함수 미분 작업" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "수정" }));
     const form = screen.getByRole("textbox", { name: "제목" }).closest("form");
     expect(form).not.toBeNull();
     fireEvent.submit(form!);
