@@ -30,6 +30,8 @@ export interface QuestionBankItem {
   isImportant?: boolean;
   isMastered: boolean;
   reviewDue: boolean;
+  /** Last real review event; absent means this item was never reviewed. */
+  lastReviewedAt?: string;
   updatedAt: string;
 }
 

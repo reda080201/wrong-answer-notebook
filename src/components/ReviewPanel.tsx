@@ -51,6 +51,7 @@ export default function ReviewPanel({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
+  const [resumeChoice, setResumeChoice] = useState<"resume" | "restart" | null>(session ? null : "resume");
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
@@ -63,12 +64,26 @@ export default function ReviewPanel({
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
   );
+  const sessionId = session?.id;
+  const sessionIndex = session?.currentIndex ?? 0;
+  const hasSession = Boolean(session);
   const sessionInitializedRef = useRef(false);
   useEffect(() => {
-    setIndex(session?.currentIndex ?? 0);
+    setIndex(sessionIndex);
     setRevealed(false);
-    if (!session) setReviewStats({ again: 0, hard: 0, good: 0 });
-  }, [reviewItems, session]);
+    setResumeChoice(hasSession ? null : "resume");
+    if (!hasSession) setReviewStats({ again: 0, hard: 0, good: 0 });
+  }, [hasSession, reviewItems, sessionId, sessionIndex]);
+
+  const chooseResume = useCallback((choice: "resume" | "restart") => {
+    if (choice === "restart") {
+      completedKeysRef.current = [];
+      reviewEventsRef.current = [];
+      setIndex(0);
+      setReviewStats({ again: 0, hard: 0, good: 0 });
+    }
+    setResumeChoice(choice);
+  }, []);
 
   useEffect(() => {
     if (sessionInitializedRef.current || !onSessionSave || !reviewItems.length) return;
@@ -243,7 +258,18 @@ export default function ReviewPanel({
       </div>
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
 
-      {!current || !currentEntry ? (
+      {resumeChoice === null && session && (
+        <section className="review-resume-prompt" aria-label="복습 이어하기">
+          <h3>이전 복습을 이어갈까요?</h3>
+          <p>{session.completedItemKeys.length} / {reviewItems.length}개 완료</p>
+          <div className="review-resume-prompt__actions">
+            <button type="button" className="btn-secondary" onClick={() => chooseResume("restart")}>처음부터</button>
+            <button type="button" className="btn-primary" onClick={() => chooseResume("resume")}>이어서 하기</button>
+          </div>
+        </section>
+      )}
+
+      {resumeChoice === null ? null : !current || !currentEntry ? (
         reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
           <section className="review-complete" aria-label="복습 완료 요약">
             <h3>복습을 마쳤습니다</h3>

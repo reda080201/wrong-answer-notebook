@@ -23,4 +23,11 @@ describe("groupQuestionBankItems", () => {
   it("keeps only explicitly important items in important view", () => {
     expect(groupQuestionBankItems([item("1"), item("2")], "important")[0].items.map((entry) => entry.id)).toEqual(["2"]);
   });
+
+  it("separates reviewed items from items with only a modification timestamp", () => {
+    const reviewed = { ...item("1"), lastReviewedAt: "2026-02-01" };
+    const modified = item("2");
+    expect(groupQuestionBankItems([modified, reviewed], "recent").map((group) => group.label)).toEqual(["최근 학습", "최근 수정 자료"]);
+    expect(groupQuestionBankItems([modified, reviewed], "recent")[0].items[0].id).toBe("1");
+  });
 });

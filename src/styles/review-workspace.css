@@ -41,6 +41,18 @@
   border-top: 1px solid var(--border-subtle, #d8dee8);
 }
 
+.review-resume-prompt {
+  width: min(420px, calc(100% - 32px));
+  margin: 12vh auto 0;
+  padding: 24px;
+  border: 1px solid var(--border-subtle, #d8dee8);
+  background: var(--surface, #fff);
+}
+
+.review-resume-prompt h3 { margin: 0 0 8px; }
+.review-resume-prompt p { margin: 0; color: var(--text-secondary, #5b6675); }
+.review-resume-prompt__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+
 @media (max-width: 640px) {
   .review-panel-header { padding-inline: 12px; }
   .review-card, .review-complete, .review-empty { width: min(100% - 24px, 960px); }

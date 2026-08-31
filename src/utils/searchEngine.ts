@@ -131,7 +131,7 @@ export function rankSearchCandidate(candidate: SearchCandidate, query: SearchQue
                   : term.phrase ? [title, ...metadata, body, explanation] : [title, number, ...metadata, body, explanation];
     const field = fieldValues;
     const found = field.some((value) => value.includes(needle));
-    const initialFound = !found && initialNeedle.length > 0 && [title, ...metadata, body].some((value) => initials(value).includes(initialNeedle));
+    const initialFound = !found && initialNeedle.length > 0 && (term.field ? fieldValues : [title, ...metadata, body]).some((value) => initials(value).includes(initialNeedle));
     const matched = found || initialFound;
     if (term.operator === "and" && groupMatched) finishGroup();
     if (!matched) continue;
@@ -161,7 +161,7 @@ export function highlightTextSegments(value: string, query: SearchQuery | string
 }
 
 export function searchCandidateText(candidate: SearchCandidate): string {
-  return [candidate.title, candidate.number, candidate.subject, candidate.course, candidate.unit, candidate.body, candidate.explanation, ...(candidate.metadata ?? [])].filter(Boolean).join(" ");
+  return [candidate.title, candidate.number, candidate.subject, candidate.course, candidate.unit, candidate.source, ...(candidate.tag ?? []), candidate.body, candidate.explanation, ...(candidate.metadata ?? [])].filter(Boolean).join(" ");
 }
 
 export function getSearchSuggestions(candidates: SearchCandidate[], prefix: string, limit = 8): SearchSuggestion[] {
