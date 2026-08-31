@@ -15,4 +15,11 @@ describe("navigation history", () => {
     history.push(snapshot); history.push(snapshot);
     expect(history.back()).toBeNull();
   });
+  it("updates the current snapshot when a registered screen scrolls", () => {
+    const history = createNavigationHistory();
+    history.push({ destination: "question_bank", scrollTops: { list: 120 } });
+    history.updateCurrent({ destination: "question_bank", scrollTops: { list: 640 } });
+    history.push({ destination: "library" });
+    expect(history.back()).toMatchObject({ destination: "question_bank", scrollTops: { list: 640 } });
+  });
 });
