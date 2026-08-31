@@ -23,6 +23,28 @@ function getUnreferencedImages(candidates: string[], entries: WrongAnswerEntry[]
   return [...new Set(candidates)].filter((image) => !referenced.has(image));
 }
 
+/** Finalize only expired records whose entry is still absent. Failed cleanup stays retryable. */
+async function recoverExpiredPendingDeletions(entries: WrongAnswerEntry[]): Promise<void> {
+  const backend = getStorageBackend();
+  if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;
+  const pending = await backend.loadPendingDeletions();
+  const now = Date.now();
+  const remaining: PendingDeletion[] = [];
+  for (const record of pending) {
+    if (Date.parse(record.finalizeAfter) > now || entries.some((entry) => entry.id === record.entry.id)) {
+      remaining.push(record);
+      continue;
+    }
+    const candidates = getUnreferencedImages(record.imageReferences, entries);
+    let failed = false;
+    for (const image of candidates) {
+      try { await deleteImage(image); } catch { failed = true; }
+    }
+    if (failed) remaining.push(record);
+  }
+  if (remaining.length !== pending.length) await backend.savePendingDeletions(remaining);
+}
+
 export function useEntries() {
   const [entries, setEntries] = useState<WrongAnswerEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,6 +55,7 @@ export function useEntries() {
   const loadedRef = useRef(false);
   const reloadingRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
+  const pendingDeletionQueueRef = useRef<Promise<unknown>>(Promise.resolve());
   const { enqueue, drain } = useSerialTaskQueue();
 
   const clearError = useCallback(() => setError(null), []);
@@ -75,6 +98,7 @@ export function useEntries() {
       }
       entriesRef.current = data;
       setEntries(data);
+      await recoverExpiredPendingDeletions(data).catch(() => undefined);
       loadedRef.current = true;
       return true;
     } catch (err) {
@@ -365,7 +389,8 @@ export function useEntries() {
     [deleteImagesBestEffort, enqueueMutation],
   );
 
-  const deleteEntryWithUndo = useCallback(async (id: string): Promise<PendingDeletion> => {
+  const deleteEntryWithUndo = useCallback((id: string): Promise<PendingDeletion> => {
+    const operation = async (): Promise<PendingDeletion> => {
     const pendingStore = getStorageBackend();
     const loadPending = pendingStore.loadPendingDeletions;
     const savePending = pendingStore.savePendingDeletions;
@@ -389,6 +414,10 @@ export function useEntries() {
       await savePending((await loadPending()).filter((item) => item.id !== pending.id)).catch(() => undefined);
       throw error;
     }
+    };
+    const queued = pendingDeletionQueueRef.current.then(operation, operation);
+    pendingDeletionQueueRef.current = queued;
+    return queued;
   }, [enqueueMutation]);
 
   const restorePendingDeletion = useCallback(async (pending: PendingDeletion) => {
