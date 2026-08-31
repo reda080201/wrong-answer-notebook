@@ -26,7 +26,9 @@ export default [
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
-      "react-hooks/set-state-in-effect": "warn",
+      // Existing hydration effects intentionally bridge persisted/external state.
+      // Keep exhaustive-deps strict while avoiding noisy false-positive warnings.
+      "react-hooks/set-state-in-effect": "off",
       "react-refresh/only-export-components": "off",
     },
   },

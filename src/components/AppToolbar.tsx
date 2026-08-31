@@ -1,5 +1,6 @@
 import type { ListFilter, SortKey, EntryKind } from "../types";
 import Menu from "../shared/ui/Menu";
+import SearchField from "../shared/ui/SearchField";
 import {
   type DifficultyFilter,
   type DifficultyScoreFilter,
@@ -58,13 +59,7 @@ export default function AppToolbar({
 
   return (
     <div className="toolbar">
-      <input
-        type="search"
-        className="search-input"
-        placeholder={placeholder}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
+      <SearchField className="search-input" ariaLabel="검색" placeholder={placeholder} value={search} onChange={setSearch} />
       <select
         className="sort-select"
         value={sortKey}

@@ -47,6 +47,7 @@ import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
+import { useNavigationHistory } from "./hooks/useNavigationHistory";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -243,7 +244,7 @@ function AppContent() {
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
-  }, [selectedId, setExamStartError]);
+  }, [selectedId, setExamStartError, setQuestionTarget]);
 
   const appNavigationController = useAppNavigationController({
     activeSection,
@@ -284,11 +285,11 @@ function AppContent() {
     if (selectedId !== questionTarget.entryId) {
       setQuestionTarget(null);
     }
-  }, [selectedId, questionTarget]);
+  }, [selectedId, questionTarget, setQuestionTarget]);
 
   const handleQuestionTargetConsumed = useCallback((requestId: number) => {
     setQuestionTarget((current) => current?.requestId === requestId ? null : current);
-  }, []);
+  }, [setQuestionTarget]);
 
   const actions = useAppActions({
     entries,
@@ -489,6 +490,24 @@ function AppContent() {
     if (showLibraryExplorer) return { type: "library" };
     return { type: "section", section: activeSection };
   }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
+  useNavigationHistory({
+    snapshot: {
+      destination: sidebarDestination.type,
+      section: activeSection,
+      entryId: selectedId,
+      search,
+      filters: { subject: subjectFilter, list: listFilter, difficulty: difficultyScoreFilter },
+      sort: sortKey,
+    },
+    restore: (snapshot) => {
+      setShowLearningHub(snapshot.destination === "learning_hub");
+      setShowQuestionBank(snapshot.destination === "question_bank");
+      setShowLibraryExplorer(snapshot.destination === "library");
+      if (snapshot.destination === "section" && snapshot.section) setActiveSection(snapshot.section as EntryKind);
+      setSelectedId(snapshot.entryId ?? null);
+      setSearch(snapshot.search ?? "");
+    },
+  });
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>

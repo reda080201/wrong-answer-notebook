@@ -7,6 +7,7 @@ import {
 } from "./questionMeta";
 import { normalizeQuestionNumber } from "./questionMeta";
 import { difficultyScoreBand, resolveEntryDifficultyScore, type DifficultyScoreBand } from "./difficulty";
+import { rankSearchCandidate } from "./searchEngine";
 
 export type DifficultyFilter = "all" | Difficulty;
 export type DifficultyScoreFilter = "all" | Exclude<DifficultyScoreBand, "none">;
@@ -227,29 +228,11 @@ export function imageCount(entry: WrongAnswerEntry) {
 
 export function entryMatchesSearch(entry: WrongAnswerEntry, query: string) {
   if (!query.trim()) return true;
-  const q = query.toLowerCase();
-  const haystack = [
-    entry.title,
-    entry.question,
-    entry.myAnswer,
-    entry.correctAnswer,
-    collectExplanationSearchText(entry),
-    ...(entry.answerKey ?? []).flatMap((item) => [
-      item.questionNumber,
-      item.answer,
-      item.explanation,
-      ...item.importantPoints,
-    ]),
-    ...(entry.learningBlocks ?? []).flatMap((block) => [
-      block.title,
-      block.content,
-    ]),
-    ...(entry.concepts ?? []),
-    entry.memo,
-    entry.subject,
-    ...entry.tags,
-  ]
-    .join(" ")
-    .toLowerCase();
-  return haystack.includes(q);
+  return rankSearchCandidate({
+    title: entry.title,
+    subject: entry.subject,
+    body: [entry.question, entry.myAnswer, entry.correctAnswer, ...(entry.learningBlocks ?? []).map((block) => `${block.title} ${block.content}`)].join(" "),
+    explanation: collectExplanationSearchText(entry),
+    metadata: [...(entry.concepts ?? []), entry.memo, ...entry.tags, ...(entry.answerKey ?? []).flatMap((item) => [item.questionNumber, item.answer, item.explanation, ...item.importantPoints])],
+  }, query).matched;
 }

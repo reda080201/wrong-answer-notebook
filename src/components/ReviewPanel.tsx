@@ -190,7 +190,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [current, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
+  }, [current, index, mode, onReview, onSessionSave, reviewItems]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {

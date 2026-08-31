@@ -1,8 +1,5 @@
 import type { QuestionBankFilters, QuestionBankItem } from "../model/questionBankTypes";
-
-function includes(value: string | undefined, needle: string): boolean {
-  return Boolean(value?.toLocaleLowerCase("ko-KR").includes(needle.toLocaleLowerCase("ko-KR")));
-}
+import { rankSearchCandidate } from "../../../utils/searchEngine";
 
 export function filterQuestionBankItems(items: QuestionBankItem[], filters: QuestionBankFilters): QuestionBankItem[] {
   const search = filters.search.trim();
@@ -28,17 +25,14 @@ export function filterQuestionBankItems(items: QuestionBankItem[], filters: Ques
     if (filters.year !== "all" && String(item.source.examYear ?? "") !== filters.year) return false;
     if (filters.tag !== "all" && !(classification.tags ?? []).includes(filters.tag)) return false;
     if (!search) return true;
-    return [
-      item.entryTitle,
-      item.questionText,
-      item.subject,
-      classification.unit,
-      classification.subunit,
-      ...(classification.concepts ?? []),
-      ...(classification.tags ?? []),
-      item.source.sourceLabel,
-      item.source.examName,
-      item.source.seriesName,
-    ].some((value) => includes(value, search));
+    return rankSearchCandidate({
+      title: item.entryTitle,
+      number: item.questionNumber,
+      subject: item.subject,
+      unit: classification.unit,
+      body: item.questionText,
+      explanation: item.explanation,
+      metadata: [...(classification.concepts ?? []), ...(classification.tags ?? []), item.source.sourceLabel, item.source.examName, item.source.seriesName].filter((value): value is string => Boolean(value)),
+    }, search).matched;
   });
 }

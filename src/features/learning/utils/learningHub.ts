@@ -1,6 +1,7 @@
 import type { LearningBlock, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import { inferLearningSubjectDomain } from "../model/learningMetadata";
 import { normalizeThinkerName, thinkerMatches } from "./normalizeThinkerName";
+import { rankSearchCandidate } from "../../../utils/searchEngine";
 
 export interface LearningHubItem {
   block: LearningBlock;
@@ -80,7 +81,7 @@ export function getLearningBlockSearchText(item: LearningHubItem): string {
 }
 
 export function filterLearningBlocks(items: LearningHubItem[], filters: LearningHubFilters): LearningHubItem[] {
-  const search = filters.search.trim().toLocaleLowerCase("ko-KR");
+  const search = filters.search.trim();
   return items.filter((item) => {
     const { block } = item;
     if (filters.domain !== "all" && item.domain !== filters.domain) return false;
@@ -100,7 +101,13 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
       if ((metadata?.rejectedClaims?.length ?? 0) > 0 || block.choiceExamples?.some((example) => example.verdict === "incorrect")) kinds.add("incorrect_choice");
       if (!filters.lifeEthicsKinds.some((kind) => kinds.has(kind))) return false;
     }
-    return !search || getLearningBlockSearchText(item).includes(search);
+    return !search || rankSearchCandidate({
+      title: block.title,
+      unit: block.unit,
+      subject: item.sourceSubject,
+      body: block.content,
+      metadata: [...(block.keywords ?? []), ...(block.relatedConcepts ?? []), getLearningBlockSearchText(item)],
+    }, search).matched;
   });
 }
 
