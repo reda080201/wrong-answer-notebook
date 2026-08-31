@@ -13,6 +13,7 @@ export interface NavigationSnapshot {
   learningBlock?: { entryId: string; blockId: string } | null;
   libraryPath?: string[];
   scrollTop?: number;
+  scrollTops?: Record<string, number>;
 }
 
 export interface NavigationHistoryController {

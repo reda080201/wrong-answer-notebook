@@ -392,7 +392,7 @@ export function useAppActions({
 
   const createLectureEntry = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[]; assetFiles?: File[]; assetSession?: ImportAssetSessionManifest },
     linkedEntryIds: string[] = [],
   ) => {
     const subject: Subject =
@@ -401,7 +401,14 @@ export function useAppActions({
         : selected && SUBJECTS.includes(selected.subject as Subject)
           ? (selected.subject as Subject)
           : "기타";
-    const id = await addEntry({
+    let sourceToSaved: Record<string, string> = meta.assetSession?.sourceToStaged ?? {};
+    let savedFilenames: string[] = [];
+    if (!meta.assetSession && meta.assetFiles?.length) {
+      const saved = await saveImportAssetFiles(meta.assetFiles);
+      sourceToSaved = saved.sourceToSaved;
+      savedFilenames = saved.savedFilenames;
+    }
+    const form = rewriteImportAssetReferences({
       subject,
       title: meta.title.trim() || "특강자료",
       question: "",
@@ -425,9 +432,19 @@ export function useAppActions({
       linkedEntryIds,
       concepts: [],
       checklist: [],
-    });
-    setActiveSection("lecture");
-    setSelectedId(id);
+    }, sourceToSaved);
+    try {
+      const [id] = meta.assetSession?.mode === "tauri-staged"
+        ? await addEntriesWithImportAssetSession(meta.assetSession.id, [form])
+        : [await addEntry(form)];
+      setActiveSection("lecture");
+      setSelectedId(id ?? null);
+    } catch (error) {
+      if (meta.assetSession?.mode !== "tauri-staged") {
+        await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      }
+      throw error;
+    }
   };
 
   const handleImportedEntriesApply = async (
@@ -515,17 +532,36 @@ export function useAppActions({
 
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[]; assetFiles?: File[]; assetSession?: ImportAssetSessionManifest },
   ) => {
     if (activeSection === "lecture" || !selected) {
       await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
       return;
     }
-    await patchEntry(selected.id, (current) => ({
-      learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
-      sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
-      figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
-    }));
+    let sourceToSaved: Record<string, string> = meta.assetSession?.sourceToStaged ?? {};
+    let savedFilenames: string[] = [];
+    if (!meta.assetSession && meta.assetFiles?.length) {
+      const saved = await saveImportAssetFiles(meta.assetFiles);
+      sourceToSaved = saved.sourceToSaved;
+      savedFilenames = saved.savedFilenames;
+    }
+    const patch = rewriteImportAssetReferences({
+      learningBlocks: [...(selected.learningBlocks ?? []), ...blocks],
+      sourcePageImages: [...new Set([...(selected.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
+      figures: [...(selected.figures ?? []), ...(meta.figures ?? [])],
+    }, sourceToSaved);
+    try {
+      if (meta.assetSession?.mode === "tauri-staged") {
+        await patchEntryWithImportAssetSession(selected.id, selected.updatedAt, meta.assetSession.id, patch);
+      } else {
+        await patchEntry(selected.id, patch);
+      }
+    } catch (error) {
+      if (meta.assetSession?.mode !== "tauri-staged") {
+        await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
+      }
+      throw error;
+    }
   };
 
   const runIntegrity = async () => {

@@ -163,3 +163,6 @@
   color: var(--text);
   font-weight: 700;
 }
+
+.onboarding-tour__progress { margin: 0 0 var(--space-2); color: var(--text-muted); font: var(--type-helper); }
+.onboarding-tour__skip { margin-top: var(--space-3); }

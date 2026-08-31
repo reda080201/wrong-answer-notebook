@@ -51,6 +51,7 @@ import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
 import Toast from "./shared/ui/Toast";
 import ContextualHint from "./shared/ui/ContextualHint";
+import OnboardingTour from "./shared/ui/OnboardingTour";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -103,6 +104,7 @@ function AppContent() {
     memoTemplates,
   } = settingsCtx;
   const patchViewPreferences = viewPreferences.patch;
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const patchChatGptMcpPreferences = chatGptMcpPreferences.patch;
   const patchQuestionBankPreferences = questionBank.patch;
   const patchExamPrintPreferences = examPreferences.patchPrint;
@@ -525,6 +527,11 @@ function AppContent() {
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       {pendingDeletion && <div className="app-undo-snackbar" role="status"><Toast tone="info"><span>{getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.</span><button type="button" onClick={() => void restorePendingDeletion(pendingDeletion).then(() => setPendingDeletion(null))}>실행 취소</button></Toast></div>}
+      <OnboardingTour
+        open={onboardingOpen}
+        onClose={() => setOnboardingOpen(false)}
+        onComplete={() => void patchViewPreferences({ onboarding: { tourDismissed: true, completedSteps: ["add", "study", "review", "search", "inspect"] } })}
+      />
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -844,7 +851,7 @@ function AppContent() {
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
               {activeSection !== "problem_sheet" && filtered.length === 0 && <div className="empty-state-actions">
-                {activeSection === "problem_sheet" ? <button type="button" className="btn-primary" onClick={actions.openImport}>시험지 가져오기</button> : activeSection === "lecture" ? <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>특강 가져오기</button> : activeSection === "concept" ? <button type="button" className="btn-primary" onClick={actions.openNew}>개념 만들기</button> : <button type="button" className="btn-primary" onClick={actions.openNew}>첫 오답 추가</button>}
+              {activeSection === "problem_sheet" ? <button type="button" className="btn-primary" onClick={actions.openImport}>시험지 가져오기</button> : activeSection === "lecture" ? <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>특강 가져오기</button> : activeSection === "concept" ? <button type="button" className="btn-primary" onClick={actions.openNew}>개념 만들기</button> : <><button type="button" className="btn-primary" onClick={actions.openNew}>첫 오답 추가</button>{!settings.viewPreferences.onboarding?.tourDismissed && <button type="button" className="btn-ghost" onClick={() => setOnboardingOpen(true)}>시작 안내</button>}</>}
               </div>}
             </div>
           )}

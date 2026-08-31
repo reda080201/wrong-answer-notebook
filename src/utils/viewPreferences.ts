@@ -40,6 +40,7 @@ export const DEFAULT_VIEW_PREFERENCES: ViewPreferences = {
   conceptLinksEnabled: true,
   automaticConceptLinksEnabled: false,
   conceptLinkPreviewMode: "popover",
+  onboarding: {},
 };
 
 export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
@@ -139,6 +140,12 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
       ["section", navigation.section === "lectures" || navigation.section === "problems" ? navigation.section : undefined],
     ].filter(([, candidate]) => candidate !== undefined),
   ) as ViewPreferences["libraryNavigation"];
+  const onboardingValue = value.onboarding && typeof value.onboarding === "object"
+    ? value.onboarding
+    : {};
+  const completedSteps = Array.isArray(onboardingValue.completedSteps)
+    ? onboardingValue.completedSteps.filter((step): step is string => typeof step === "string").slice(0, 5)
+    : undefined;
   return {
     sheetLayout: normalizeSheetLayout(value.sheetLayout),
     fontSize: normalizeFontSize(value.fontSize),
@@ -155,6 +162,10 @@ export function normalizeViewPreferences(raw: unknown): ViewPreferences {
     conceptLinksEnabled: value.conceptLinksEnabled !== false,
     automaticConceptLinksEnabled: Boolean(value.automaticConceptLinksEnabled),
     conceptLinkPreviewMode: "popover",
+    onboarding: {
+      ...(onboardingValue.tourDismissed === true ? { tourDismissed: true } : {}),
+      ...(completedSteps?.length ? { completedSteps } : {}),
+    },
   };
 }
 

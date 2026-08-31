@@ -14,6 +14,7 @@ import {
 import MathText from "./MathText";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 import Dialog from "../shared/ui/Dialog";
+import type { ImportAssetSessionManifest } from "../features/import-workspace/model/importWorkspace";
 
 export type LearningImportIssueSeverity = "blocking" | "review_required" | "informational";
 
@@ -35,6 +36,17 @@ export interface LearningImportAnalysis {
     needsReview: number;
   };
   issues: LearningImportIssue[];
+  /** Assets are intentionally transient until the user confirms saving. */
+  assetFiles?: File[];
+  assetSession?: ImportAssetSessionManifest;
+}
+
+export interface ImportTaskProgress {
+  phase: "rasterizing" | "staging" | "analyzing" | "validating";
+  label: string;
+  current?: number;
+  total?: number;
+  indeterminate?: boolean;
 }
 
 export interface LearningImportMeta {
@@ -43,6 +55,8 @@ export interface LearningImportMeta {
   sourcePageImages?: string[];
   figures?: SheetFigureItem[];
   issues?: LearningImportIssue[];
+  assetFiles?: File[];
+  assetSession?: ImportAssetSessionManifest;
 }
 
 interface LearningImportModalProps {
@@ -50,10 +64,11 @@ interface LearningImportModalProps {
   onApply: (blocks: LearningBlock[], meta: LearningImportMeta) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   mode?: "append" | "lecture";
-  onVisualFile?: (file: File) => Promise<LearningImportAnalysis>;
+  onVisualFile?: (file: File, options: { signal: AbortSignal; onProgress(progress: ImportTaskProgress): void }) => Promise<LearningImportAnalysis>;
+  onDiscardVisualAssets?: (analysis: LearningImportAnalysis) => Promise<void>;
 }
 
-export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append", onVisualFile }: LearningImportModalProps) {
+export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append", onVisualFile, onDiscardVisualAssets }: LearningImportModalProps) {
   const [rawText, setRawText] = useState("");
   const [blocks, setBlocks] = useState<LearningBlock[]>([]);
   const [conceptImportValue, setConceptImportValue] = useState<unknown | null>(null);
@@ -67,7 +82,13 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const [visualFileName, setVisualFileName] = useState<string | null>(null);
   const [visualAnalysis, setVisualAnalysis] = useState<LearningImportAnalysis | null>(null);
   const [showReviewOnly, setShowReviewOnly] = useState(false);
+  const [progress, setProgress] = useState<ImportTaskProgress | null>(null);
   const visualInputRef = useRef<HTMLInputElement>(null);
+  const visualAbortRef = useRef<AbortController | null>(null);
+
+  const discardVisualAnalysis = async (analysis: LearningImportAnalysis | null) => {
+    if (analysis) await onDiscardVisualAssets?.(analysis);
+  };
 
   const parseText = (text: string, filename?: string) => {
     try {
@@ -122,17 +143,30 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       setError("이미지/PDF 분석 연결을 사용할 수 없습니다. 데스크톱 앱의 AI 분석 설정을 확인해 주세요.");
       return;
     }
+    const previousAnalysis = visualAnalysis;
+    visualAbortRef.current?.abort();
+    const controller = new AbortController();
+    visualAbortRef.current = controller;
     try {
       setSaving(true);
-      const parsed = await onVisualFile(file);
+      setProgress({ phase: "rasterizing", label: "원본 페이지를 준비하고 있습니다.", indeterminate: true });
+      const parsed = await onVisualFile(file, { signal: controller.signal, onProgress: setProgress });
+      if (controller.signal.aborted) {
+        await discardVisualAnalysis(parsed);
+        return;
+      }
+      await discardVisualAnalysis(previousAnalysis);
       setBlocks(parsed.blocks);
       setVisualAnalysis(parsed);
       setMeta((current) => ({ ...current, title: parsed.title || file.name.replace(/\.[^.]+$/, ""), sourceType: "json" }));
     } catch (err) {
+      if (controller.signal.aborted) return;
       setBlocks([]);
       setVisualAnalysis(null);
       setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
     } finally {
+      if (visualAbortRef.current === controller) visualAbortRef.current = null;
+      setProgress(null);
       setSaving(false);
     }
   };
@@ -150,6 +184,8 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
         sourcePageImages: visualAnalysis?.sourcePageImages,
         figures: visualAnalysis?.figures,
         issues: visualAnalysis?.issues,
+        assetFiles: visualAnalysis?.assetFiles,
+        assetSession: visualAnalysis?.assetSession,
       });
       onClose();
     } catch (err) {
@@ -160,7 +196,15 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   const requestClose = () => {
-    if (!saving) onClose();
+    visualAbortRef.current?.abort();
+    if (!saving) {
+      void discardVisualAnalysis(visualAnalysis).finally(onClose);
+    }
+  };
+
+  const cancelVisualAnalysis = () => {
+    visualAbortRef.current?.abort();
+    setProgress(null);
   };
 
   return (
@@ -179,6 +223,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
                 <Upload size={22} aria-hidden="true" /><strong>이미지 또는 PDF를 놓거나 선택하세요</strong><span>PNG, JPG, WEBP, PDF · AI가 학습 블록 후보를 추출합니다.</span>
                 {visualFileName && <small>선택됨: {visualFileName}</small>}
               </button>
+              {saving && progress && <div className="learning-import-progress" role="status"><span>{progress.label}</span>{progress.total && <span>{progress.current ?? 0} / {progress.total}</span>}<button type="button" className="btn-ghost" onClick={cancelVisualAnalysis}>분석 취소</button></div>}
             </> : <>
             {activeTab === "file" && <><label htmlFor="learning-import-file">파일 선택</label><input id="learning-import-file" type="file" accept=".html,.txt,.md,.json,text/html,text/plain,text/markdown,application/json" onChange={(event) => void handleFile(event.target.files?.[0])} /></>}
             {activeTab === "text" && <label htmlFor="learning-import-text">텍스트 붙여넣기</label>}
@@ -210,7 +255,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
             <h3>미리보기</h3>
             {visualAnalysis && (
               <div className="learning-import-analysis" aria-label="자동 분석 요약">
-                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 확인 {visualAnalysis.counts.machineChecked}개 · 검토 필요 {visualAnalysis.counts.needsReview}개</p>
+                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 추출 {visualAnalysis.counts.machineChecked}개 · 검토 필요 {visualAnalysis.counts.needsReview}개</p>
                 {visualAnalysis.issues.length > 0 && <button type="button" className="btn-ghost" onClick={() => setShowReviewOnly((value) => !value)}>{showReviewOnly ? "전체 보기" : "검토 필요만 보기"}</button>}
                 {visualAnalysis.issues.filter((issue) => !showReviewOnly || issue.severity !== "informational").map((issue, index) => (
                   <p key={`${issue.path ?? "issue"}-${index}`} className={`form-${issue.severity === "blocking" ? "error" : "hint"}`}>{issue.path ? `${issue.path}: ` : ""}{issue.message}</p>
