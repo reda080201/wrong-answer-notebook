@@ -169,8 +169,11 @@ export function getSearchSuggestions(candidates: SearchCandidate[], prefix: stri
   if (!needle) return [];
   const values: SearchSuggestion[] = [];
   for (const candidate of candidates) {
-    for (const [kind, value] of [["subject", candidate.subject], ["unit", candidate.unit], ["source", candidate.metadata?.[0]]] as const) {
+    for (const [kind, value] of [["subject", candidate.subject], ["unit", candidate.unit], ["source", candidate.source]] as const) {
       if (value && value.toLocaleLowerCase("ko-KR").includes(needle)) values.push({ value, kind });
+    }
+    for (const tag of candidate.tag ?? []) {
+      if (tag.toLocaleLowerCase("ko-KR").includes(needle)) values.push({ value: tag, kind: "tag" });
     }
   }
   return [...new Map(values.map((item) => [`${item.kind}:${item.value}`, item])).values()].slice(0, limit);

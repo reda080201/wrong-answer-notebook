@@ -13,6 +13,7 @@ import type { TransientWriteRegistration } from "../../../hooks/useAppWriteRegis
 import Dialog from "../../../shared/ui/Dialog";
 import { groupQuestionBankItems, type QuestionBankViewMode } from "../utils/questionBankGrouping";
 import SearchField from "../../../shared/ui/SearchField";
+import { getSearchSuggestions } from "../../../utils/searchEngine";
 
 interface QuestionBankViewProps {
   entries: WrongAnswerEntry[];
@@ -55,6 +56,15 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     setMaintenanceBlocked(blocked);
   }, []);
   const items = useMemo(() => buildQuestionBankItems(entries), [entries]);
+  const searchSuggestions = useMemo(() => getSearchSuggestions(items.map((item) => ({
+    title: item.entryTitle,
+    number: item.questionNumber,
+    subject: item.subject,
+    course: item.classification.curriculum,
+    unit: item.classification.unit,
+    source: item.source.sourceLabel,
+    tag: item.classification.tags,
+  })), filters.search), [filters.search, items]);
   const filtered = useMemo(() => sortQuestionBankItems(filterQuestionBankItems(items, filters), sort), [items, filters, sort]);
   useEffect(() => {
     if (narrowViewport) return;
@@ -153,7 +163,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   return <section className="question-bank-view" aria-label="문제 은행">
     <header className="question-bank-view__header"><div><h2>문제 은행</h2><p>문제지의 문항과 단일 오답을 한곳에서 찾습니다.</p></div><strong>{filtered.length} / {items.length}</strong></header>
     <div className="question-bank-actions">
-      <SearchField className="question-bank-search" value={filters.search} onChange={(search) => patchFilters({ search })} placeholder="문제 본문·자료명 검색" ariaLabel="문제 은행 검색" />
+      <SearchField className="question-bank-search" value={filters.search} onChange={(search) => patchFilters({ search })} placeholder="문제 본문·자료명 검색" ariaLabel="문제 은행 검색" suggestions={searchSuggestions} />
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
       <label>보기 기준 <select value={viewMode} onChange={(event) => setViewMode(event.target.value as QuestionBankViewMode)}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option></select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>

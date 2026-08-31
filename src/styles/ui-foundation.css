@@ -58,6 +58,10 @@
   .toolbar { gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
   .toolbar .search-input { min-width: 220px; }
   .filter-toggle--wrap { max-width: none; }
+}
+
+/* At 1100px the three-pane desktop shell still fits; below it navigation becomes a drawer. */
+@media (max-width: 1099px) {
   .app-shell { grid-template-columns: minmax(0, 1fr); }
   .app-sidebar { position: fixed; inset: 0 auto 0 0; z-index: 70; width: min(320px, calc(100vw - 44px)); min-width: min(320px, calc(100vw - 44px)); box-shadow: var(--shadow); transform: translateX(-105%); transition: transform 160ms ease; }
   .app-sidebar.app-sidebar--drawer-open { transform: translateX(0); }
