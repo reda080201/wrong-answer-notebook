@@ -43,6 +43,11 @@ export interface SearchMatch {
   rank?: SearchResultRank;
 }
 
+export interface SearchSuggestion {
+  value: string;
+  kind: "subject" | "unit" | "source" | "tag";
+}
+
 export interface TextHighlightSegment {
   value: string;
   highlighted: boolean;
@@ -143,4 +148,16 @@ export function highlightTextSegments(value: string, query: SearchQuery | string
 
 export function searchCandidateText(candidate: SearchCandidate): string {
   return [candidate.title, candidate.number, candidate.subject, candidate.course, candidate.unit, candidate.body, candidate.explanation, ...(candidate.metadata ?? [])].filter(Boolean).join(" ");
+}
+
+export function getSearchSuggestions(candidates: SearchCandidate[], prefix: string, limit = 8): SearchSuggestion[] {
+  const needle = prefix.trim().toLocaleLowerCase("ko-KR");
+  if (!needle) return [];
+  const values: SearchSuggestion[] = [];
+  for (const candidate of candidates) {
+    for (const [kind, value] of [["subject", candidate.subject], ["unit", candidate.unit], ["source", candidate.metadata?.[0]]] as const) {
+      if (value && value.toLocaleLowerCase("ko-KR").includes(needle)) values.push({ value, kind });
+    }
+  }
+  return [...new Map(values.map((item) => [`${item.kind}:${item.value}`, item])).values()].slice(0, limit);
 }

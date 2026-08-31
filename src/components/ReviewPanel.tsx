@@ -11,6 +11,7 @@ import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import { isEditableCommandTarget, reviewCommands } from "../utils/reviewCommands";
+import { reviewItemKey, reviewSeedFingerprint } from "../features/review/storage/reviewSessionIdentity";
 
 interface ReviewPanelProps {
   title: string;
@@ -81,6 +82,7 @@ export default function ReviewPanel({
       currentIndex: session?.currentIndex ?? 0,
       completedItemKeys: completedKeysRef.current,
       reviewEvents: reviewEventsRef.current,
+      seedFingerprint: reviewSeedFingerprint(mode ?? "random", reviewItems),
       createdAt: sessionStartedAtRef.current,
       updatedAt: new Date().toISOString(),
     }).catch(() => {
@@ -151,9 +153,7 @@ export default function ReviewPanel({
     try {
       await onReview(current, result);
       if (!mountedRef.current) return;
-      const itemKey = current.kind === "sheet-question"
-        ? `${current.entry.id}:${normalizeQuestionNumber(current.questionNumber)}`
-        : current.entry.id;
+      const itemKey = reviewItemKey(current);
       if (!completedKeysRef.current.includes(itemKey)) completedKeysRef.current = [...completedKeysRef.current, itemKey];
       reviewEventsRef.current = [...reviewEventsRef.current, {
         id: crypto.randomUUID(),
@@ -161,6 +161,7 @@ export default function ReviewPanel({
         result,
         nextDueAt: null,
         intervalDays: 0,
+        itemKey,
       }];
       if (onSessionSave) {
         const nextIndex = Math.min(index + 1, reviewItems.length);
@@ -174,6 +175,7 @@ export default function ReviewPanel({
           currentIndex: nextIndex,
           completedItemKeys: completedKeysRef.current,
           reviewEvents: reviewEventsRef.current,
+          seedFingerprint: reviewSeedFingerprint(mode ?? "random", reviewItems),
           createdAt: sessionStartedAtRef.current,
           updatedAt,
           ...(nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),

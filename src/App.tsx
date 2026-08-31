@@ -14,7 +14,7 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, PendingDeletion } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
 import { collectAllImageReferences } from "./utils/entry";
@@ -48,6 +48,7 @@ import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
+import Toast from "./shared/ui/Toast";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -73,6 +74,7 @@ function AppContent() {
     updateEntry,
     deleteEntry,
     deleteEntryWithUndo,
+    restorePendingDeletion,
     toggleMastered,
     toggleDifficult,
     patchEntry,
@@ -131,6 +133,7 @@ function AppContent() {
   } = useAppModalController();
   const [realExamTimePreset, setRealExamTimePreset] = useState<"30" | "50" | "80" | "100" | "custom">("50");
   const [realExamCustomMinutes, setRealExamCustomMinutes] = useState("50");
+  const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
   const parsedCustomMinutes = Number(realExamCustomMinutes);
   const customTimeError = realExamTimePreset === "custom" && (!Number.isInteger(parsedCustomMinutes) || parsedCustomMinutes < 1 || parsedCustomMinutes > 720)
     ? "1~720분 사이의 정수를 입력하세요."
@@ -322,6 +325,7 @@ function AppContent() {
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
+    onPendingDeletion: setPendingDeletion,
   });
 
   useEffect(() => {
@@ -512,6 +516,7 @@ function AppContent() {
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
+      {pendingDeletion && Date.parse(pendingDeletion.finalizeAfter) > Date.now() && <div className="app-undo-snackbar" role="status"><Toast tone="info"><span>{getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.</span><button type="button" onClick={() => void restorePendingDeletion(pendingDeletion).then(() => setPendingDeletion(null))}>실행 취소</button></Toast></div>}
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -829,6 +834,9 @@ function AppContent() {
                 왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
+              <div className="empty-state-actions">
+                {activeSection === "problem_sheet" ? <button type="button" className="btn-primary" onClick={actions.openImport}>시험지 가져오기</button> : activeSection === "lecture" ? <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>특강 가져오기</button> : activeSection === "concept" ? <button type="button" className="btn-primary" onClick={actions.openNew}>개념 만들기</button> : <button type="button" className="btn-primary" onClick={actions.openNew}>첫 오답 추가</button>}
+              </div>
             </div>
           )}
           </>}

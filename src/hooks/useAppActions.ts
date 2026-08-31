@@ -110,6 +110,7 @@ interface UseAppActionsOptions {
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
+  onPendingDeletion?: (pending: import("../types").PendingDeletion) => void;
 }
 
 export function useAppActions({
@@ -143,6 +144,7 @@ export function useAppActions({
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
+  onPendingDeletion,
 }: UseAppActionsOptions) {
   const { confirm, prompt } = useAppDialog();
   const maintenanceRef = useRef<Promise<void> | null>(null);
@@ -676,7 +678,7 @@ export function useAppActions({
     const entry = entries.find((item) => item.id === entryId);
     if (!entry) return;
     if (!(await confirm({ title: "항목 삭제", message: `"${getEntryTitle(entry)}"을(를) 삭제할까요? 첨부 이미지도 함께 삭제됩니다.`, confirmLabel: "삭제" }))) return;
-    if (deleteEntryWithUndo) await deleteEntryWithUndo(entryId);
+    if (deleteEntryWithUndo) onPendingDeletion?.(await deleteEntryWithUndo(entryId));
     else await deleteEntry(entryId);
     if (selected?.id === entryId) setSelectedId(null);
   };
@@ -717,7 +719,7 @@ export function useAppActions({
   const handleDelete = async () => {
     if (!selected) return;
     if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
-    if (deleteEntryWithUndo) await deleteEntryWithUndo(selected.id);
+    if (deleteEntryWithUndo) onPendingDeletion?.(await deleteEntryWithUndo(selected.id));
     else await deleteEntry(selected.id);
     setSelectedId(null);
   };

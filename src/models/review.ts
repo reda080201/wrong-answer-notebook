@@ -52,6 +52,8 @@ export interface ReviewEvent {
   stabilityDays?: number;
   memoryDifficulty?: number;
   lapseCount?: number;
+  /** Canonical reference identity for session-local review history. */
+  itemKey?: string;
 }
 
 export interface ReviewState {
@@ -111,4 +113,6 @@ export interface ReviewSession {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  /** Optional exact seed identity; legacy sessions remain non-resumable automatically. */
+  seedFingerprint?: string;
 }

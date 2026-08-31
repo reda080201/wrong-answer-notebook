@@ -12,6 +12,7 @@ export function normalizeReviewSession(value: ReviewSession): ReviewSession {
     currentIndex: Math.max(0, Math.min(Number.isInteger(value.currentIndex) ? value.currentIndex : 0, refs.length)),
     completedItemKeys: Array.isArray(value.completedItemKeys) ? [...new Set(value.completedItemKeys.filter((key): key is string => typeof key === "string"))] : [],
     reviewEvents: Array.isArray(value.reviewEvents) ? value.reviewEvents : [],
+    ...(typeof value.seedFingerprint === "string" && value.seedFingerprint ? { seedFingerprint: value.seedFingerprint } : {}),
   };
 }
 
