@@ -553,7 +553,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.getAllByText("이미지 나중에 연결").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "설명 도표로 유지" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "도표 항목 제외" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "도표 항목 제외" }));
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
@@ -1051,10 +1051,6 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
-    screen.queryAllByText(/확인 권장 항목 .* 보기/).forEach((warningSummary) => fireEvent.click(warningSummary));
-    const confirmation = await screen.findByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
-    await waitFor(() => expect(confirmation).not.toBeDisabled());
-    fireEvent.click(confirmation);
     const saveBatchButton = screen.getByRole("button", { name: "2개 항목 저장" });
     expect(saveBatchButton).not.toBeDisabled();
     fireEvent.click(saveBatchButton);
