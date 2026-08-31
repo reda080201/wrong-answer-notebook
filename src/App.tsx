@@ -50,6 +50,7 @@ import { useReviewSessions } from "./hooks/useReviewSessions";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
 import Toast from "./shared/ui/Toast";
+import ContextualHint from "./shared/ui/ContextualHint";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -837,6 +838,7 @@ function AppContent() {
           ) : (
             <div className="detail-panel empty-state">
               <span className="icon">{entryKindIcon(activeSection)}</span>
+              {filtered.length > 0 && <ContextualHint id={`select-${activeSection}`}>왼쪽 목록에서 자료를 선택하면 본문과 복습 도구를 열 수 있습니다.</ContextualHint>}
               <p>
                 왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
