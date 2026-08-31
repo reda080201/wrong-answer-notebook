@@ -841,9 +841,9 @@ function AppContent() {
                 왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
-              <div className="empty-state-actions">
+              {activeSection !== "problem_sheet" && filtered.length === 0 && <div className="empty-state-actions">
                 {activeSection === "problem_sheet" ? <button type="button" className="btn-primary" onClick={actions.openImport}>시험지 가져오기</button> : activeSection === "lecture" ? <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>특강 가져오기</button> : activeSection === "concept" ? <button type="button" className="btn-primary" onClick={actions.openNew}>개념 만들기</button> : <button type="button" className="btn-primary" onClick={actions.openNew}>첫 오답 추가</button>}
-              </div>
+              </div>}
             </div>
           )}
           </>}
