@@ -46,6 +46,7 @@ import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSoluti
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
 import { writeUiStorageValue } from "../../../services/uiStorage";
 import { useNotification } from "../../../shared/ui/NotificationProvider";
+import { useMutationHistory } from "../../../hooks/useMutationHistory";
 import Menu from "../../../shared/ui/Menu";
 import SimilarQuestionLinksPanel from "../../../features/question-bank/components/SimilarQuestionLinksPanel";
 import type { QuestionBankItem } from "../../../features/question-bank/model/questionBankTypes";
@@ -292,6 +293,7 @@ export default function EntryDetail({
   const [titleDraft, setTitleDraft] = useState(entry.title);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
   const { notify } = useNotification();
+  const metadataHistory = useMutationHistory();
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
@@ -515,6 +517,17 @@ export default function EntryDetail({
     notify({ message, tone });
   }, [notify]);
 
+  const runQuestionMetaMutation = useCallback(async (label: string, update: (current: QuestionMeta[]) => QuestionMeta[]) => {
+    if (!onQuestionMetaChange) return;
+    const before = normalizeQuestionMeta(entry.questionMeta);
+    const after = update(before);
+    await metadataHistory.execute({
+      label,
+      redo: () => onQuestionMetaChange(entry, after),
+      undo: () => onQuestionMetaChange(entry, before),
+    });
+  }, [entry, metadataHistory, onQuestionMetaChange]);
+
   const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode, selectionOnly = false) => {
     setExportHubView(view);
     setExportHubScope(scope ?? (selectionMode && selectedQuestionNumbers.length > 0 ? "selected" : "current"));
@@ -707,7 +720,7 @@ export default function EntryDetail({
       (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(questionNumber),
     );
     try {
-      await onQuestionMetaChange(entry, (current) => toggleQuestionImportant(current, questionNumber));
+      await runQuestionMetaMutation("문항 중요도 변경", (current) => toggleQuestionImportant(current, questionNumber));
       pushToast(
         !(changed?.important ?? false)
           ? `${normalizeQuestionNumber(questionNumber)}번 문제를 중요 표시했습니다.`
@@ -727,7 +740,7 @@ export default function EntryDetail({
     const normalized = normalizeQuestionNumber(questionNumber);
     const normalizedScore = normalizeDifficultyScore(score);
     try {
-      await onQuestionMetaChange(entry, (current) => {
+      await runQuestionMetaMutation("문항 난이도 변경", (current) => {
         const now = new Date().toISOString();
         const normalizedCurrent = normalizeQuestionMeta(current);
         const index = normalizedCurrent.findIndex(

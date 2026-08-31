@@ -59,6 +59,9 @@ export function useEntries() {
   const { enqueue, drain } = useSerialTaskQueue();
 
   const clearError = useCallback(() => setError(null), []);
+  const finalizePendingDeletions = useCallback(async () => {
+    await recoverExpiredPendingDeletions(entriesRef.current);
+  }, []);
 
   const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
     if (maintenanceBlockedRef.current) {
@@ -507,6 +510,7 @@ export function useEntries() {
     deleteEntry,
     deleteEntryWithUndo,
     restorePendingDeletion,
+    finalizePendingDeletions,
     toggleMastered,
     toggleDifficult,
     refresh,

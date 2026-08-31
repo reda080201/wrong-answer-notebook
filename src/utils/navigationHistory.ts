@@ -21,6 +21,8 @@ export interface NavigationHistoryController {
   push(snapshot: NavigationSnapshot): void;
   back(): NavigationSnapshot | null;
   forward(): NavigationSnapshot | null;
+  updateCurrent(snapshot: NavigationSnapshot): void;
+  moveTo(snapshot: NavigationSnapshot): boolean;
   clear(): void;
 }
 
@@ -39,6 +41,16 @@ export function createNavigationHistory(limit = 50): NavigationHistoryController
     },
     back() { if (index <= 0) return null; index -= 1; return stack[index] ?? null; },
     forward() { if (index >= stack.length - 1) return null; index += 1; return stack[index] ?? null; },
+    updateCurrent(snapshot) {
+      if (index < 0) return;
+      stack[index] = snapshot;
+    },
+    moveTo(snapshot) {
+      const target = stack.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(snapshot));
+      if (target < 0) return false;
+      index = target;
+      return true;
+    },
     clear() { stack.length = 0; index = -1; },
   };
 }

@@ -15,9 +15,9 @@ import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
-import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, PendingDeletion } from "./types";
+import type { ChatGptMcpPreferences, EntryKind, LearningBlock, ListFilter, McpExportContext, PendingDeletion, SortKey } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
-import { entryKindIcon, entryKindName } from "./utils/appUi";
+import { entryKindIcon, entryKindName, isDifficultyScoreFilter, isListFilterAllowedForSection, isSortKeyAllowedForSection } from "./utils/appUi";
 import { collectAllImageReferences, getEntryTitle } from "./utils/entry";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
@@ -80,6 +80,7 @@ function AppContent() {
     deleteEntry,
     deleteEntryWithUndo,
     restorePendingDeletion,
+    finalizePendingDeletions,
     toggleMastered,
     toggleDifficult,
     patchEntry,
@@ -152,9 +153,13 @@ function AppContent() {
   useEffect(() => {
     if (!pendingDeletion) return undefined;
     const remaining = Math.max(0, Date.parse(pendingDeletion.finalizeAfter) - Date.now());
-    const timer = window.setTimeout(() => setPendingDeletion((current) => current?.id === pendingDeletion.id ? null : current), remaining);
+    const timer = window.setTimeout(() => {
+      void finalizePendingDeletions().finally(() => {
+        setPendingDeletion((current) => current?.id === pendingDeletion.id ? null : current);
+      });
+    }, remaining);
     return () => window.clearTimeout(timer);
-  }, [pendingDeletion]);
+  }, [finalizePendingDeletions, pendingDeletion]);
   const parsedCustomMinutes = Number(realExamCustomMinutes);
   const customTimeError = realExamTimePreset === "custom" && (!Number.isInteger(parsedCustomMinutes) || parsedCustomMinutes < 1 || parsedCustomMinutes > 720)
     ? "1~720분 사이의 정수를 입력하세요."
@@ -531,6 +536,11 @@ function AppContent() {
       if (snapshot.destination === "section" && snapshot.section) setActiveSection(snapshot.section as EntryKind);
       setSelectedId(snapshot.entryId ?? null);
       setSearch(snapshot.search ?? "");
+      const filters = snapshot.filters ?? {};
+      if (typeof filters.subject === "string" || filters.subject === null) setSubjectFilter(filters.subject as string | null);
+      if (typeof filters.list === "string" && isListFilterAllowedForSection(snapshot.section as EntryKind, filters.list as ListFilter)) setListFilter(filters.list as ListFilter);
+      if (typeof filters.difficulty === "string" && isDifficultyScoreFilter(filters.difficulty)) setDifficultyScoreFilter(filters.difficulty);
+      if (typeof snapshot.sort === "string" && isSortKeyAllowedForSection(snapshot.section as EntryKind, snapshot.sort as SortKey)) setSortKey(snapshot.sort as SortKey);
     },
   });
 

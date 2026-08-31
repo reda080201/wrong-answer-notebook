@@ -15,32 +15,49 @@ function isEditableTarget(target: EventTarget | null) {
 export function useMutationHistory(limit = 50) {
   const undoStack = useRef<MutationCommand[]>([]);
   const redoStack = useRef<MutationCommand[]>([]);
+  const busyRef = useRef(false);
+  const mountedRef = useRef(true);
   const [state, setState] = useState({ canUndo: false, canRedo: false });
-  const sync = () => setState({ canUndo: undoStack.current.length > 0, canRedo: redoStack.current.length > 0 });
+  const sync = useCallback(() => {
+    if (mountedRef.current) setState({ canUndo: undoStack.current.length > 0, canRedo: redoStack.current.length > 0 });
+  }, []);
   const execute = useCallback(async (command: MutationCommand) => {
-    await command.redo();
-    undoStack.current = [...undoStack.current, command].slice(-limit);
-    redoStack.current = [];
-    sync();
-  }, [limit]);
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    try {
+      await command.redo();
+      undoStack.current = [...undoStack.current, command].slice(-limit);
+      redoStack.current = [];
+      sync();
+      return true;
+    } finally { busyRef.current = false; }
+  }, [limit, sync]);
   const undo = useCallback(async () => {
+    if (busyRef.current) return false;
     const command = undoStack.current.at(-1);
     if (!command) return false;
-    await command.undo();
-    undoStack.current = undoStack.current.slice(0, -1);
-    redoStack.current = [...redoStack.current, command].slice(-limit);
-    sync();
-    return true;
-  }, [limit]);
+    busyRef.current = true;
+    try {
+      await command.undo();
+      undoStack.current = undoStack.current.slice(0, -1);
+      redoStack.current = [...redoStack.current, command].slice(-limit);
+      sync();
+      return true;
+    } finally { busyRef.current = false; }
+  }, [limit, sync]);
   const redo = useCallback(async () => {
+    if (busyRef.current) return false;
     const command = redoStack.current.at(-1);
     if (!command) return false;
-    await command.redo();
-    redoStack.current = redoStack.current.slice(0, -1);
-    undoStack.current = [...undoStack.current, command].slice(-limit);
-    sync();
-    return true;
-  }, [limit]);
+    busyRef.current = true;
+    try {
+      await command.redo();
+      redoStack.current = redoStack.current.slice(0, -1);
+      undoStack.current = [...undoStack.current, command].slice(-limit);
+      sync();
+      return true;
+    } finally { busyRef.current = false; }
+  }, [limit, sync]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || isEditableTarget(event.target)) return;
@@ -51,5 +68,6 @@ export function useMutationHistory(limit = 50) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [redo, undo]);
+  useEffect(() => () => { mountedRef.current = false; }, []);
   return { ...state, execute, undo, redo };
 }
