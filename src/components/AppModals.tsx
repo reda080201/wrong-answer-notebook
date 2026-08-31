@@ -2,7 +2,7 @@ import EntryForm from "../features/entries/components/EntryForm";
 import ImportFromGptModal from "../features/import/components/ImportFromGptModal";
 import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
-import { deleteImage, discardImportAssetSession, generateImportWithAi, saveImportAssetFiles, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
+import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";

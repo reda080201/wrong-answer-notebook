@@ -42,10 +42,6 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
     const verificationValue = figure.verification && typeof figure.verification === "object"
       ? figure.verification as Record<string, unknown>
       : undefined;
-    const hasTrustClaim = figure.representationSelectionSource === "user"
-      || verificationValue?.userApproved === true
-      || verificationValue?.verificationSource === "user"
-      || verificationValue?.verificationSource === "local_validator";
     const suppliedSource = verificationValue?.verificationSource;
     const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator";
     const cleaned = figure.cleaned && typeof figure.cleaned === "object" ? figure.cleaned as Record<string, unknown> : undefined;
