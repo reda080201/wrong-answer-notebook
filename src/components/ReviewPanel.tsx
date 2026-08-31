@@ -52,6 +52,7 @@ export default function ReviewPanel({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
   const [resumeChoice, setResumeChoice] = useState<"resume" | "restart" | null>(session ? null : "resume");
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
@@ -221,6 +222,11 @@ export default function ReviewPanel({
       }
       const command = reviewCommands.find((candidate) => candidate.key === event.key);
       if (!command) return;
+      if (command.key === "?") {
+        event.preventDefault();
+        setShortcutsOpen((open) => !open);
+        return;
+      }
       if (command.result && revealedRef.current && current) {
         event.preventDefault();
         void handleReview(command.result);
@@ -257,6 +263,11 @@ export default function ReviewPanel({
         </button>
       </div>
       {saveError && <p className="form-error" role="alert">{saveError}</p>}
+
+      {shortcutsOpen && <section className="review-shortcuts" aria-label="복습 단축키">
+        <div className="review-shortcuts__head"><h3>단축키</h3><button type="button" aria-label="단축키 닫기" onClick={() => setShortcutsOpen(false)}>×</button></div>
+        <dl>{reviewCommands.filter((command) => command.key !== "?").map((command) => <div key={command.key}><dt>{command.label}</dt><dd>{command.description}</dd></div>)}</dl>
+      </section>}
 
       {resumeChoice === null && session && (
         <section className="review-resume-prompt" aria-label="복습 이어하기">

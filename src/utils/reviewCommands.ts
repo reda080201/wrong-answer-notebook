@@ -15,6 +15,7 @@ export const reviewCommands: readonly ReviewCommand[] = [
   { key: "3", label: "3", description: "맞음", result: "good" },
   { key: "ArrowLeft", label: "Left", description: "이전 문항" },
   { key: "ArrowRight", label: "Right", description: "다음 문항" },
+  { key: "?", label: "?", description: "단축키 보기" },
 ];
 
 export function isEditableCommandTarget(target: EventTarget | null): boolean {
