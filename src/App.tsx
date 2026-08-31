@@ -947,6 +947,7 @@ function AppContent() {
             restart: async () => { await updater.restart(); },
             openReleasePage: () => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); },
           }}
+          onReplayOnboarding={() => setOnboardingOpen(true)}
           onClose={() => {
             setShowSettings(false);
             setSettingsInitialTab(undefined);
