@@ -107,7 +107,7 @@ export function rankSearchCandidate(candidate: SearchCandidate, query: SearchQue
   const explanation = text(candidate.explanation);
   let score = 0;
   let best: { score: number; rank: SearchResultRank } | undefined;
-  const terms = parsed.ast ?? parsed.terms.map((term) => ({ operator: "and" as const, value: term.value, phrase: term.phrase }));
+  const terms: SearchExpression[] = parsed.ast ?? parsed.terms.map((term) => ({ operator: "and" as const, value: term.value, phrase: term.phrase }));
   let groupMatched = false;
   let groupScore = 0;
   let groupRank: { score: number; rank: SearchResultRank } | undefined;

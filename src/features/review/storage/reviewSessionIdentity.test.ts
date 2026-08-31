@@ -12,7 +12,7 @@ describe("review session identity", () => {
   it("only resumes an incomplete session with an exact ordered seed", () => {
     const items = [{ kind: "entry" as const, entry: { id: "e1" } as never }, { kind: "entry" as const, entry: { id: "e2" } as never }];
     const session = {
-      id: "s1", mode: "today" as const, itemRefs: items.map((item) => ({ kind: item.kind, entryId: item.entry.id })),
+      id: "s1", mode: "today" as const, itemRefs: [{ kind: "entry" as const, entryId: "e1" }, { kind: "entry" as const, entryId: "e2" }],
       currentIndex: 1, completedItemKeys: [], reviewEvents: [], createdAt: "", updatedAt: "",
       seedFingerprint: reviewSeedFingerprint("today", items),
     };

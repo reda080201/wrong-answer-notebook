@@ -17,7 +17,7 @@ import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext, PendingDeletion } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName } from "./utils/appUi";
-import { collectAllImageReferences } from "./utils/entry";
+import { collectAllImageReferences, getEntryTitle } from "./utils/entry";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
