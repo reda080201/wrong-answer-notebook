@@ -160,7 +160,11 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       setVisualAnalysis(parsed);
       setMeta((current) => ({ ...current, title: parsed.title || file.name.replace(/\.[^.]+$/, ""), sourceType: "json" }));
     } catch (err) {
-      if (controller.signal.aborted) return;
+      if (controller.signal.aborted) {
+        await discardVisualAnalysis(previousAnalysis);
+        return;
+      }
+      await discardVisualAnalysis(previousAnalysis);
       setBlocks([]);
       setVisualAnalysis(null);
       setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
