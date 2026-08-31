@@ -74,6 +74,7 @@ interface SettingsModalProps {
     restart: () => Promise<void>;
     openReleasePage: () => void;
   };
+  onReplayOnboarding?: () => void;
 }
 
 export default function SettingsModal({
@@ -81,6 +82,7 @@ export default function SettingsModal({
   initialTab,
   dataActions,
   updateActions,
+  onReplayOnboarding,
 }: SettingsModalProps) {
   const ctx = useSettingsContext();
   const settings = ctx.settings;
@@ -287,7 +289,7 @@ export default function SettingsModal({
             )}
 
             {activeTab === "advanced" && (
-              <SettingsAdvancedPanel />
+              <SettingsAdvancedPanel onReplayOnboarding={onReplayOnboarding} />
             )}
 
             {activeTab === "updates" && (

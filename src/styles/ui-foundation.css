@@ -50,6 +50,8 @@
 .empty-state-actions { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
 .contextual-hint { display: flex; align-items: center; gap: 10px; max-width: 420px; margin: 0 auto 14px; padding: 8px 10px; border-left: 2px solid var(--accent, #2563eb); color: var(--text-secondary, #5b6675); font-size: 13px; text-align: left; }
 .contextual-hint button { flex: 0 0 28px; min-width: 28px; min-height: 28px; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 18px; }
+.notification-stack { position: fixed; right: 20px; bottom: 20px; z-index: 95; display: grid; gap: 8px; max-width: min(420px, calc(100vw - 40px)); }
+.notification-stack .study-toast { display: flex; align-items: center; gap: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .app-sidebar, .app-sidebar *, .app-undo-snackbar, .modal-card, .modal-backdrop { transition: none !important; animation: none !important; }
 }
