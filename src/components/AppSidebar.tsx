@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import SubjectList from "./SubjectList";
 import type {
   EntryKind,
@@ -41,6 +41,7 @@ interface AppSidebarProps {
   actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
   destination: SidebarDestination;
   shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
+  drawer?: { open: boolean; onOpenChange(open: boolean): void };
 }
 
 export type SidebarDestination =
@@ -68,6 +69,7 @@ export default function AppSidebar({
   actions,
   destination,
   shell,
+  drawer,
 }: AppSidebarProps) {
   const { order: subjectOrder, filter: subjectFilter, counts: subjectCounts, sectionEntryCount } = subjects;
   const isQuestionBank = destination.type === "question_bank";
@@ -87,6 +89,25 @@ export default function AppSidebar({
   const isSectionDestination = destination.type === "section";
   const destinationSection = isSectionDestination ? destination.section : null;
   const { collapsed, onCollapsedChange } = shell;
+  const previousFocusRef = useRef<HTMLElement | null>(null);
+  const drawerOpen = drawer?.open ?? false;
+  const setDrawerOpen = drawer?.onOpenChange;
+  useEffect(() => {
+    if (!drawerOpen || !setDrawerOpen) return;
+    previousFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = requestAnimationFrame(() => document.querySelector<HTMLElement>(".app-sidebar .section-tab-btn")?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setDrawerOpen(false);
+    };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.body.style.overflow = "";
+      document.removeEventListener("keydown", onKeyDown);
+      previousFocusRef.current?.focus();
+    };
+  }, [drawerOpen, setDrawerOpen]);
   const sectionEntries = useMemo(
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
@@ -129,7 +150,7 @@ export default function AppSidebar({
     void navigationController.requestNavigation({ section, entryId: null });
   };
   return (
-    <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
+    <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}${drawer?.open ? " app-sidebar--drawer-open" : ""}`} aria-label="주요 탐색">
       <div className="logo">
         <div className="logo-icon" aria-hidden="true"><BookOpen size={18} /></div>
         {!collapsed && <h1>오답노트</h1>}
@@ -155,6 +176,7 @@ export default function AppSidebar({
             title={collapsed ? label : undefined}
             onClick={() => {
               handleSectionSelect(key);
+              drawer?.onOpenChange(false);
             }}
           >
             <Icon size={18} aria-hidden="true" />
@@ -169,7 +191,7 @@ export default function AppSidebar({
             aria-current={destination.type === "learning_hub" ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
-            onClick={() => void navigationController.openLearningHub()}
+            onClick={() => { void navigationController.openLearningHub(); drawer?.onOpenChange(false); }}
           >
             <Library size={18} aria-hidden="true" />
             {!collapsed && <span>학습 허브</span>}
@@ -182,7 +204,7 @@ export default function AppSidebar({
             aria-current={destination.type === "question_bank" ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
-            onClick={() => void navigationController.openQuestionBank()}
+            onClick={() => { void navigationController.openQuestionBank(); drawer?.onOpenChange(false); }}
           >
             <BookOpen size={18} aria-hidden="true" />
             {!collapsed && <span>문제 은행</span>}
@@ -195,7 +217,7 @@ export default function AppSidebar({
             aria-current={destination.type === "library" ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
-            onClick={() => void navigationController.openLibrary()}
+            onClick={() => { void navigationController.openLibrary(); drawer?.onOpenChange(false); }}
           >
             <Archive size={18} aria-hidden="true" />
             {!collapsed && <span>보관함</span>}

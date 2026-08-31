@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 interface ToastProps {
-  tone: "success" | "error" | "info";
+  tone: "success" | "error" | "info" | "warning";
   children: ReactNode;
 }
 

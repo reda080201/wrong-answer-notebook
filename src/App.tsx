@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { PanelLeftOpen } from "lucide-react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -105,6 +106,7 @@ function AppContent() {
   } = settingsCtx;
   const patchViewPreferences = viewPreferences.patch;
   const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState(false);
   const patchChatGptMcpPreferences = chatGptMcpPreferences.patch;
   const patchQuestionBankPreferences = questionBank.patch;
   const patchExamPrintPreferences = examPreferences.patchPrint;
@@ -532,6 +534,8 @@ function AppContent() {
         onClose={() => setOnboardingOpen(false)}
         onComplete={() => void patchViewPreferences({ onboarding: { tourDismissed: true, completedSteps: ["add", "study", "review", "search", "inspect"] } })}
       />
+      {sidebarDrawerOpen && <button type="button" className="sidebar-drawer-backdrop" aria-label="사이드바 닫기" onClick={() => setSidebarDrawerOpen(false)} />}
+      <button type="button" className="sidebar-drawer-toggle ui-icon-button" aria-label="사이드바 열기" onClick={() => setSidebarDrawerOpen(true)}><PanelLeftOpen size={18} /></button>
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -544,6 +548,7 @@ function AppContent() {
         actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
         destination={sidebarDestination}
         shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
+        drawer={{ open: sidebarDrawerOpen, onOpenChange: setSidebarDrawerOpen }}
       />
 
       <main className="main">
