@@ -48,6 +48,7 @@ import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
+import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
 import Toast from "./shared/ui/Toast";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
@@ -134,6 +135,12 @@ function AppContent() {
   const [realExamTimePreset, setRealExamTimePreset] = useState<"30" | "50" | "80" | "100" | "custom">("50");
   const [realExamCustomMinutes, setRealExamCustomMinutes] = useState("50");
   const [pendingDeletion, setPendingDeletion] = useState<PendingDeletion | null>(null);
+  useEffect(() => {
+    if (!pendingDeletion) return undefined;
+    const remaining = Math.max(0, Date.parse(pendingDeletion.finalizeAfter) - Date.now());
+    const timer = window.setTimeout(() => setPendingDeletion((current) => current?.id === pendingDeletion.id ? null : current), remaining);
+    return () => window.clearTimeout(timer);
+  }, [pendingDeletion]);
   const parsedCustomMinutes = Number(realExamCustomMinutes);
   const customTimeError = realExamTimePreset === "custom" && (!Number.isInteger(parsedCustomMinutes) || parsedCustomMinutes < 1 || parsedCustomMinutes > 720)
     ? "1~720분 사이의 정수를 입력하세요."
@@ -325,7 +332,7 @@ function AppContent() {
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
-    onPendingDeletion: setPendingDeletion,
+    onPendingDeletion: (pending) => setPendingDeletion(pending),
   });
 
   useEffect(() => {
@@ -516,7 +523,7 @@ function AppContent() {
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
-      {pendingDeletion && Date.parse(pendingDeletion.finalizeAfter) > Date.now() && <div className="app-undo-snackbar" role="status"><Toast tone="info"><span>{getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.</span><button type="button" onClick={() => void restorePendingDeletion(pendingDeletion).then(() => setPendingDeletion(null))}>실행 취소</button></Toast></div>}
+      {pendingDeletion && <div className="app-undo-snackbar" role="status"><Toast tone="info"><span>{getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.</span><button type="button" onClick={() => void restorePendingDeletion(pendingDeletion).then(() => setPendingDeletion(null))}>실행 취소</button></Toast></div>}
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -868,7 +875,7 @@ function AppContent() {
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
           session: actions.reviewMode
-            ? reviewSessions.sessions.find((candidate) => !candidate.completedAt && candidate.mode === actions.reviewMode && candidate.itemRefs.some((ref) => actions.reviewSeed.some((item) => item.entry.id === ref.entryId)))
+            ? reviewSessions.sessions.find((candidate) => canResumeReviewSession(candidate, actions.reviewMode!, actions.reviewSeed))
             : undefined,
           saveSession: reviewSessions.save,
         }}

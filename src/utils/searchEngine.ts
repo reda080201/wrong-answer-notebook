@@ -32,6 +32,11 @@ export interface SearchCandidate {
   subject?: string;
   course?: string;
   unit?: string;
+  source?: string;
+  tag?: string[];
+  important?: boolean;
+  review?: boolean;
+  difficulty?: number;
   body?: string;
   explanation?: string;
   metadata?: string[];
@@ -116,14 +121,23 @@ export function rankSearchCandidate(candidate: SearchCandidate, query: SearchQue
   for (const term of terms) {
     const needle = text(term.value);
     const initialNeedle = initials(needle.replace(/\s/g, ""));
-    const field = term.phrase ? [title, ...metadata, body, explanation] : [title, number, ...metadata, body, explanation];
+    const fieldValues = term.field === "subject" ? [text(candidate.subject)]
+      : term.field === "unit" ? [text(candidate.unit), text(candidate.course)]
+        : term.field === "source" ? [text(candidate.source)]
+          : term.field === "tag" ? (candidate.tag ?? []).map(text)
+            : term.field === "important" ? [candidate.important ? "true yes 중요 중요한" : "false no"]
+              : term.field === "review" ? [candidate.review ? "true yes 복습 예정" : "false no"]
+                : term.field === "difficulty" ? [candidate.difficulty === undefined ? "미지정" : String(candidate.difficulty)]
+                  : term.phrase ? [title, ...metadata, body, explanation] : [title, number, ...metadata, body, explanation];
+    const field = fieldValues;
     const found = field.some((value) => value.includes(needle));
     const initialFound = !found && initialNeedle.length > 0 && [title, ...metadata, body].some((value) => initials(value).includes(initialNeedle));
     const matched = found || initialFound;
     if (term.operator === "and" && groupMatched) finishGroup();
     if (!matched) continue;
     let result: { score: number; rank: SearchResultRank };
-    if (title === needle) result = { score: 1000, rank: "title-exact" };
+    if (term.field) result = { score: 600, rank: "metadata" };
+    else if (title === needle) result = { score: 1000, rank: "title-exact" };
     else if (title.includes(needle)) result = { score: title.startsWith(needle) ? 900 : 800, rank: "title-match" };
     else if (number === needle) result = { score: 700, rank: "number" };
     else if (metadata.some((value) => value.includes(needle))) result = { score: 600, rank: "metadata" };

@@ -106,6 +106,7 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
       unit: block.unit,
       subject: item.sourceSubject,
       body: block.content,
+      tag: block.keywords,
       metadata: [...(block.keywords ?? []), ...(block.relatedConcepts ?? []), getLearningBlockSearchText(item)],
     }, search).matched;
   });

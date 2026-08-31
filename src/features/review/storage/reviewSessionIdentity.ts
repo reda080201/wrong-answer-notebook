@@ -1,4 +1,4 @@
-import type { ReviewItem, ReviewSessionItemRef } from "../../../models/review";
+import type { ReviewItem, ReviewSession, ReviewSessionItemRef } from "../../../models/review";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export function reviewItemKey(item: ReviewItem | ReviewSessionItemRef): string {
@@ -11,4 +11,13 @@ export function reviewItemKey(item: ReviewItem | ReviewSessionItemRef): string {
 
 export function reviewSeedFingerprint(mode: string, items: ReviewItem[] | ReviewSessionItemRef[]): string {
   return `${mode}:${items.map(reviewItemKey).join("|")}`;
+}
+
+/** Legacy sessions without an exact seed are intentionally never auto-resumed. */
+export function canResumeReviewSession(
+  session: ReviewSession,
+  mode: ReviewSession["mode"],
+  items: ReviewItem[],
+): boolean {
+  return !session.completedAt && session.mode === mode && session.seedFingerprint === reviewSeedFingerprint(mode, items);
 }

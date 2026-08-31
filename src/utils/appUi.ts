@@ -231,6 +231,10 @@ export function entryMatchesSearch(entry: WrongAnswerEntry, query: string) {
   return rankSearchCandidate({
     title: entry.title,
     subject: entry.subject,
+    tag: entry.tags,
+    important: entry.questionMeta?.some((item) => item.important) ?? false,
+    review: Boolean(entry.review?.dueAt),
+    difficulty: resolveEntryDifficultyScore(entry),
     body: [entry.question, entry.myAnswer, entry.correctAnswer, ...(entry.learningBlocks ?? []).map((block) => `${block.title} ${block.content}`)].join(" "),
     explanation: collectExplanationSearchText(entry),
     metadata: [...(entry.concepts ?? []), entry.memo, ...entry.tags, ...(entry.answerKey ?? []).flatMap((item) => [item.questionNumber, item.answer, item.explanation, ...item.importantPoints])],

@@ -10,6 +10,8 @@ describe("searchEngine", () => {
     expect(rankSearchCandidate({ title: "미분법" }, "ㅁㅂ").matched).toBe(true);
     expect(rankSearchCandidate({ title: "적분" }, "미분 OR 적분").matched).toBe(true);
     expect(rankSearchCandidate({ title: "적분", subject: "수학" }, "subject:수학").matched).toBe(true);
+    expect(rankSearchCandidate({ title: "함수", subject: "수학", unit: "미분" }, "subject:국어").matched).toBe(false);
+    expect(rankSearchCandidate({ title: "함수", subject: "수학", unit: "미분" }, "unit:미분").matched).toBe(true);
   });
   it("keeps syntax diagnostics and safe plain-text highlighting", () => {
     expect(parseSearchQuery('"미분').syntaxError).toBeTruthy();
