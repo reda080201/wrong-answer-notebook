@@ -28,7 +28,7 @@ export function classifyFigureVerificationTrust(
   if (verification?.verificationSource === "user") return "trusted_user";
   if (verification?.verificationSource === "local_validator") return "trusted_local";
   if (verification?.verificationSource === "second_pass_model" || verification?.verificationSource === "machine_checked") return "qualified_automatic";
-  if (verification?.verificationSource === "gpt_self_check" || verification?.verificationSource === "second_pass_model") return "untrusted_model";
+  if (verification?.verificationSource === "gpt_self_check") return "untrusted_model";
   return "untrusted_missing";
 }
 
