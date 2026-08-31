@@ -6,6 +6,7 @@ import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import SemanticFigureView from "../../figures/components/SemanticFigureView";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 
 export interface StructuredQuestionContext {
   entryId?: string;
@@ -16,7 +17,7 @@ export interface StructuredQuestionContext {
 
 export interface StructuredQuestionRendererProps {
   question: ResolvedEntryQuestion;
-  entry?: Pick<WrongAnswerEntry, "figures">;
+  entry?: Pick<WrongAnswerEntry, "figures" | "structuredQuestions">;
   figures?: SheetFigureItem[];
   context?: StructuredQuestionContext;
   showQuestionLabel?: boolean;
@@ -74,7 +75,7 @@ function SegmentContent({ segment, figures }: { segment: QuestionContentSegment;
 }
 
 export default function StructuredQuestionRenderer({ question, entry, figures, context, showQuestionLabel = false }: StructuredQuestionRendererProps) {
-  const availableFigures = figures ?? entry?.figures ?? [];
+  const availableFigures = figures ?? (entry ? resolveQuestionFigures(entry, question) : []);
   const figureById = new Map(availableFigures.map((figure) => [figure.id, figure]));
   const segments = question.contentSegments?.length
     ? question.contentSegments

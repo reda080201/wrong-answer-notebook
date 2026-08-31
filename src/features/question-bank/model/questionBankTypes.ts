@@ -28,6 +28,8 @@ export interface QuestionBankItem {
   isWrong: boolean;
   /** Derived for new projections; legacy test/consumer fixtures may omit it. */
   isImportant?: boolean;
+  /** Derived from the canonical question, answer, and associated figures. */
+  needsReview?: boolean;
   isMastered: boolean;
   reviewDue: boolean;
   updatedAt: string;

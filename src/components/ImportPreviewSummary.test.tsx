@@ -1,10 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import ImportPreviewSummary from "./ImportPreviewSummary";
 
 describe("ImportPreviewSummary", () => {
-  it("renders audit metadata and reports warning confirmation", () => {
-    const onConfirmedWarningsChange = vi.fn();
+  it("renders audit metadata without turning review warnings into a save gate", () => {
 
     render(
       <ImportPreviewSummary
@@ -36,15 +35,13 @@ describe("ImportPreviewSummary", () => {
           other: [],
         }}
         reviewExpanded
-        confirmedWarnings={false}
-        onConfirmedWarningsChange={onConfirmedWarningsChange}
       />,
     );
 
     expect(screen.getByText("AI 판독 감사")).toBeInTheDocument();
     expect(screen.getByText("수학 시험지")).toBeInTheDocument();
     expect(screen.getByText("불확실 문제: 2")).toBeInTheDocument();
-    fireEvent.click(screen.getByLabelText("손글씨/도표 연결 위험 항목을 확인했습니다."));
-    expect(onConfirmedWarningsChange).toHaveBeenCalledWith(true);
+    expect(screen.getByText("검토 권장")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });

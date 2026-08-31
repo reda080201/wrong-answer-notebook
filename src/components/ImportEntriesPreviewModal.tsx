@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { EntryFormData } from "../types";
 import type { ImportedStudyDocument } from "../utils/importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
@@ -24,8 +24,6 @@ export default function ImportEntriesPreviewModal({
   onApplyEntries,
 }: ImportEntriesPreviewModalProps) {
   const [saving, setSaving] = useState(false);
-  const [confirmedWarnings, setConfirmedWarnings] = useState(false);
-  const [viewedWarningGroups, setViewedWarningGroups] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const rows = useMemo(
     () => document.entries.map((entry, index) => {
@@ -39,16 +37,8 @@ export default function ImportEntriesPreviewModal({
   );
   const blockingCount = rows.reduce((sum, row) => sum + row.policy.blocking.length, 0);
   const confirmableCount = rows.reduce((sum, row) => sum + row.policy.confirmable.length, 0);
-  const confirmableRows = rows.filter((row) => row.policy.confirmable.length > 0);
-  const allWarningsViewed = confirmableRows.every((row) => viewedWarningGroups.has(row.index));
-
-  useEffect(() => {
-    setViewedWarningGroups(new Set());
-    setConfirmedWarnings(false);
-  }, [document]);
-
   const handleApply = async () => {
-    if (blockingCount || (confirmableCount > 0 && (!allWarningsViewed || !confirmedWarnings)) || saving) return;
+    if (blockingCount || saving) return;
     setSaving(true);
     setError(null);
     try {
@@ -105,10 +95,8 @@ export default function ImportEntriesPreviewModal({
                 <p key={issue.id} className="form-warning">적용 불가: {issue.message}</p>
               ))}
               {policy.confirmable.length > 0 && (
-                <details
-                  onToggle={(event) => { if (event.currentTarget.open) setViewedWarningGroups((current) => new Set(current).add(index)); }}
-                >
-                  <summary className="form-hint" onClick={() => setViewedWarningGroups((current) => new Set(current).add(index))}>확인 권장 항목 {policy.confirmable.length}개 보기</summary>
+                <details>
+                  <summary className="form-hint">검토 권장 항목 {policy.confirmable.length}개 보기</summary>
                   {policy.confirmable.map((issue) => <p key={issue.id} className="form-warning">{issue.message}</p>)}
                 </details>
               )}
@@ -116,12 +104,7 @@ export default function ImportEntriesPreviewModal({
           ))}
         </section>
 
-        {confirmableCount > 0 && (
-          <label className="settings-checkbox import-warning-confirmation">
-            <input type="checkbox" checked={confirmedWarnings} onChange={(event) => setConfirmedWarnings(event.target.checked)} disabled={saving || !allWarningsViewed} />
-            {allWarningsViewed ? "확인 권장 항목을 모두 확인했습니다." : `확인 ${viewedWarningGroups.size} / ${confirmableRows.length}개 항목을 펼쳐 보세요.`} ({confirmableCount}개)
-          </label>
-        )}
+        {confirmableCount > 0 && <p className="form-hint">검토 권장 {confirmableCount}개 항목은 가져온 뒤 검토 대기열에서 다시 확인할 수 있습니다.</p>}
 
         <footer className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>취소</button>
@@ -129,7 +112,7 @@ export default function ImportEntriesPreviewModal({
             type="button"
             className="btn-primary"
             onClick={handleApply}
-            disabled={Boolean(blockingCount) || (confirmableCount > 0 && (!allWarningsViewed || !confirmedWarnings)) || saving}
+            disabled={Boolean(blockingCount) || saving}
           >
             {saving ? "저장 중..." : `${document.entries.length}개 항목 저장`}
           </button>

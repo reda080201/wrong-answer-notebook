@@ -46,15 +46,31 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
       || verificationValue?.userApproved === true
       || verificationValue?.verificationSource === "user"
       || verificationValue?.verificationSource === "local_validator";
-    if (!hasTrustClaim) return figure;
-    const verification = figure.verification && typeof figure.verification === "object"
-      ? { ...(figure.verification as Record<string, unknown>), status: "needs_review", verificationSource: "gpt_self_check", userApproved: false }
+    const suppliedSource = verificationValue?.verificationSource;
+    const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator";
+    const cleaned = figure.cleaned && typeof figure.cleaned === "object" ? figure.cleaned as Record<string, unknown> : undefined;
+    const deterministicReady = cleaned?.generatedBy === "deterministic_cleanup"
+      && typeof cleaned.image === "string"
+      && cleaned.image.trim().length > 0;
+    const verifiedAutomatic = (suppliedSource === "second_pass_model" || suppliedSource === "machine_checked")
+      && verificationValue?.status === "verified"
+      && Array.isArray(verificationValue.blockingIssues)
+      && verificationValue.blockingIssues.length === 0;
+    const canRemainReady = deterministicReady || verifiedAutomatic;
+    const verification = verificationValue
+      ? {
+        ...verificationValue,
+        verificationSource: trustedClaimOnly ? "none" : verificationValue.verificationSource,
+        userApproved: false,
+        status: canRemainReady ? verificationValue.status : "needs_review",
+      }
       : undefined;
     return {
       ...figure,
       representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" : undefined,
-      preferredRepresentation: figure.original && typeof figure.original === "object" && typeof (figure.original as Record<string, unknown>).image === "string" ? "original" : figure.preferredRepresentation,
-      needsReview: true,
+      preferredRepresentation: canRemainReady ? figure.preferredRepresentation : "original",
+      processingStatus: canRemainReady ? (figure.processingStatus === "rejected" ? "rejected" : "ready") : "needs_review",
+      needsReview: !canRemainReady,
       verification,
     };
   };

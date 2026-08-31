@@ -430,6 +430,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       diagramType: normalizeLearningDiagramType(item.diagramType),
       diagramSpec: normalizeDiagramSpec(item.diagramSpec),
       needsReview: Boolean(item.needsReview),
+      processingStatus: item.processingStatus === "ready" || item.processingStatus === "needs_review" || item.processingStatus === "rejected" ? item.processingStatus : undefined,
       sourceNote: `${item.sourceNote ?? ""}`.trim(),
     }))
     .filter(
@@ -524,11 +525,6 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
       const invalidCleanedGenerator = Boolean(
         cleaned?.untrustedGeneratedBy || (item.cleaned && typeof item.cleaned === "object" && !("generatedBy" in item.cleaned)),
       );
-      const untrustedVerification = Boolean(
-        verification?.status === "verified"
-          && verification.verificationSource !== "user"
-          && verification.verificationSource !== "local_validator",
-      );
       return {
       id: item.id || uuidv4(),
       questionNumber: `${item.questionNumber ?? ""}`.trim(),
@@ -536,7 +532,10 @@ export function normalizeFigures(raw: unknown): SheetFigureItem[] {
       caption: `${item.caption ?? ""}`.trim(),
       image: item.image ? `${item.image}`.trim() : undefined,
       source: isFigureSource(item.source) ? item.source : "gpt_cleaned",
-      needsReview: Boolean(item.needsReview || invalidCleanedGenerator || untrustedVerification || (() => {
+      processingStatus: item.processingStatus === "ready" || item.processingStatus === "needs_review" || item.processingStatus === "rejected"
+        ? item.processingStatus
+        : undefined,
+      needsReview: Boolean(item.needsReview || invalidCleanedGenerator || (() => {
         const original = item.original as unknown;
         if (!original || typeof original !== "object") return false;
         const crop = (original as Record<string, unknown>).crop;
@@ -658,7 +657,7 @@ function normalizeFigureVerification(raw: unknown): SheetFigureItem["verificatio
     blockingIssues: Array.isArray(value.blockingIssues) ? structuredClone(value.blockingIssues) as NonNullable<SheetFigureItem["verification"]>["blockingIssues"] : [],
     warnings: Array.isArray(value.warnings) ? structuredClone(value.warnings) as NonNullable<SheetFigureItem["verification"]>["warnings"] : [],
     userApproved: Boolean(value.userApproved),
-    verificationSource: value.verificationSource === "gpt_self_check" || value.verificationSource === "second_pass_model" || value.verificationSource === "local_validator" || value.verificationSource === "user"
+    verificationSource: value.verificationSource === "none" || value.verificationSource === "gpt_self_check" || value.verificationSource === "second_pass_model" || value.verificationSource === "machine_checked" || value.verificationSource === "local_validator" || value.verificationSource === "user"
       ? value.verificationSource
       : undefined,
     verifiedAt: typeof value.verifiedAt === "string" ? value.verifiedAt : undefined,
@@ -776,6 +775,9 @@ export function normalizeStructuredQuestionsStrict(raw: unknown): StructuredQues
       contentSegments,
       source: source as StructuredQuestion["source"],
       needsReview: Boolean(value.needsReview) || (isMultipleChoiceQuestion(questionType, choices) && choices.length === 0),
+      processingStatus: value.processingStatus === "ready" || value.processingStatus === "needs_review" || value.processingStatus === "rejected"
+        ? value.processingStatus
+        : undefined,
       warning: isMultipleChoiceQuestion(questionType, choices) && choices.length === 0
         ? missingChoicesWarning(typeof value.warning === "string" ? value.warning.trim() || undefined : undefined)
         : typeof value.warning === "string" ? value.warning.trim() || undefined : undefined,

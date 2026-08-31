@@ -103,7 +103,7 @@ export default function AppModals({
               ? (item.figures ?? []).filter((figure) => structured.figureIds.includes(figure.id))
               : (item.figures ?? []).filter((figure) => findQuestionNumber(figure.questionNumber) === number);
             const answer = item.answerKey?.find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
-            return { id: uuidv4(), groupId, order: index, displayQuestionNumber: number, sourceQuestionNumber: structured.questionNumber, section: structured.section, questionType: structured.questionType, conditions: [...structured.conditions], equations: [...structured.equations], points: structured.points, contentSegments: structured.contentSegments.map((segment) => segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment }), choices: structured.choices.map((choice, choiceIndex) => normalizeChoice(choice, choiceIndex)), figures, questionImageAssets, sourcePageAssets, answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: structured.needsReview || structured.warning ? "needs_review" : "ready", warnings: structured.warning ? [structured.warning] : [], needsReview: structured.needsReview, warning: structured.warning, source: structured.source ? { ...structured.source } : undefined, figureIds: [...structured.figureIds] };
+            return { id: uuidv4(), groupId, order: index, displayQuestionNumber: number, sourceQuestionNumber: structured.questionNumber, section: structured.section, questionType: structured.questionType, conditions: [...structured.conditions], equations: [...structured.equations], points: structured.points, contentSegments: structured.contentSegments.map((segment) => segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment }), choices: structured.choices.map((choice, choiceIndex) => normalizeChoice(choice, choiceIndex)), figures, questionImageAssets, sourcePageAssets, answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: structured.processingStatus ?? (structured.needsReview || structured.warning ? "needs_review" : "ready"), warnings: structured.warning ? [structured.warning] : [], needsReview: structured.needsReview, warning: structured.warning, source: structured.source ? { ...structured.source } : undefined, figureIds: [...structured.figureIds] };
           })
           : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", conditions: [], equations: [], contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], questionImageAssets, sourcePageAssets, figureIds: (item.figures ?? []).map((figure) => figure.id), answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
       return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, questionSourceCrops: item.questionSourceCrops, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
@@ -172,8 +172,10 @@ export default function AppModals({
       throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
     }
 
-    const saved = await saveImportAssetFiles(visualFiles);
-    const sourcePageImages = saved.savedFilenames;
+    const staged = await stageImportAssetFiles(visualFiles);
+    if (!staged) throw new Error("이미지/PDF 분석은 데스크톱 저장소 연결에서만 사용할 수 있습니다.");
+    const sourcePageImages = Object.values(staged.sourceToStaged);
+    const assetSession = { id: staged.sessionId, mode: "tauri-staged" as const, manifestVersion: 1 as const, createdAt: new Date().toISOString(), sourceToStaged: staged.sourceToStaged, assets: staged.assets };
     try {
       const prompt = [
         "이미지에서 학습 자료를 추출해 JSON으로 반환하세요.",
@@ -192,10 +194,12 @@ export default function AppModals({
         blocks,
         sourcePageImages,
         figures: [],
+        assetSession,
         counts: {
           questions: 0,
           images: sourcePageImages.length,
-          machineChecked: blocks.filter((block) => block.reviewStatus !== "needs_review").length,
+          extracted: blocks.length,
+          machineChecked: 0,
           needsReview: blocks.filter((block) => block.reviewStatus === "needs_review").length + (genericTitle ? 1 : 0),
         },
         issues: genericTitle
@@ -203,7 +207,7 @@ export default function AppModals({
           : [],
       };
     } catch (error) {
-      await Promise.all(sourcePageImages.map((filename) => deleteImage(filename).catch(() => undefined)));
+      await discardImportAssetSession(staged.sessionId).catch(() => undefined);
       throw error;
     }
   };
@@ -316,6 +320,7 @@ export default function AppModals({
           onClose={() => setShowLearningImportModal(false)}
           onApply={handleLearningImportApply}
           onApplyEntries={handleImportedEntriesApply}
+          onDiscardAssetSession={(session) => session.mode === "tauri-staged" ? discardImportAssetSession(session.id) : undefined}
           mode={activeSection === "lecture" ? "lecture" : "append"}
           onVisualFile={analyzeLearningVisualFile}
         />

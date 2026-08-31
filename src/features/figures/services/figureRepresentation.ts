@@ -18,6 +18,7 @@ export interface ResolvedFigureRepresentation {
 export type FigureVerificationTrust =
   | "trusted_user"
   | "trusted_local"
+  | "qualified_automatic"
   | "untrusted_model"
   | "untrusted_missing";
 
@@ -26,17 +27,38 @@ export function classifyFigureVerificationTrust(
 ): FigureVerificationTrust {
   if (verification?.verificationSource === "user") return "trusted_user";
   if (verification?.verificationSource === "local_validator") return "trusted_local";
+  if (verification?.verificationSource === "second_pass_model" || verification?.verificationSource === "machine_checked") return "qualified_automatic";
   if (verification?.verificationSource === "gpt_self_check" || verification?.verificationSource === "second_pass_model") return "untrusted_model";
   return "untrusted_missing";
 }
 
-function canAutomaticallyTrust(verification?: FigureVerification): boolean {
+function hasNoBlockingIssues(verification?: FigureVerification): boolean {
+  return Boolean(verification && verification.blockingIssues.length === 0);
+}
+
+function hasRequiredSemanticChecks(figure: SheetFigureItem, verification?: FigureVerification): boolean {
+  if (!verification?.checks.topologyMatch) return false;
+  const checks = verification.checks;
+  const spec = figure.semanticSpec;
+  if (spec?.points?.length && !checks.pointLabelsMatch) return false;
+  if (spec?.numericValues?.length && !checks.numericLabelsMatch) return false;
+  if (spec?.segments?.some((segment) => segment.style) && !checks.lineStylesMatch) return false;
+  if (spec?.relations?.length && !checks.relationMarksMatch) return false;
+  if ((spec?.curves?.length || spec?.axes?.length) && !checks.graphFeaturesMatch) return false;
+  if (spec?.regions?.length && !checks.shadingMatch) return false;
+  return true;
+}
+
+function canAutomaticallyTrust(figure: SheetFigureItem): boolean {
+  const verification = figure.verification;
   const trust = classifyFigureVerificationTrust(verification);
   if (trust === "trusted_user") return true;
-  return trust === "trusted_local"
+  if (trust === "trusted_local") return verification?.status === "verified" && hasNoBlockingIssues(verification) && verification.confidence >= 0.95;
+  return trust === "qualified_automatic"
+    && figure.processingStatus === "ready"
     && verification?.status === "verified"
-    && verification.blockingIssues.length === 0
-    && verification.confidence >= 0.95;
+    && hasNoBlockingIssues(verification)
+    && hasRequiredSemanticChecks(figure, verification);
 }
 
 function cleanedReason(figure: SheetFigureItem, verified: boolean): string {
@@ -51,11 +73,15 @@ function cleanedReason(figure: SheetFigureItem, verified: boolean): string {
 
 export function automaticPreferredRepresentation(figure: SheetFigureItem): FigurePreferredRepresentation {
   const verification = figure.verification;
-  const trustedVerification = canAutomaticallyTrust(verification);
-  if (figure.cleaned?.image && figure.cleaned.generatedBy && !figure.cleaned.untrustedGeneratedBy && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0 && verification.confidence >= 0.95) {
+  const trustedVerification = canAutomaticallyTrust(figure);
+  const deterministicCleanupReady = figure.cleaned?.generatedBy === "deterministic_cleanup"
+    && figure.processingStatus === "ready"
+    && !figure.cleaned.untrustedGeneratedBy
+    && hasNoBlockingIssues(verification);
+  if (figure.cleaned?.image && figure.cleaned.generatedBy && !figure.cleaned.untrustedGeneratedBy && (deterministicCleanupReady || trustedVerification)) {
     return "cleaned";
   }
-  if (figure.semanticSpec && trustedVerification && verification?.status === "verified" && verification.blockingIssues.length === 0) {
+  if (figure.semanticSpec && trustedVerification && verification?.status === "verified" && hasNoBlockingIssues(verification)) {
     return "semantic_render";
   }
   return "original";
@@ -69,6 +95,10 @@ export function resolveFigureRepresentation(
     return { kind: "described_only", needsReview: true, reason: "이미지 없이 설명만 저장되어 있습니다." };
   }
   const verification = figure.verification;
+  if (figure.processingStatus === "rejected") {
+    const originalImage = figure.original?.image ?? (figure.source === "original" ? figure.image : undefined);
+    if (originalImage) return { kind: "original", image: originalImage, needsReview: true, reason: "원본 이미지 · 정리본 거부됨" };
+  }
   const userSelected = figure.representationSelectionSource === "user" || verification?.userApproved;
   const preferred = userSelected
     ? figure.preferredRepresentation ?? automaticPreferredRepresentation(figure)
@@ -76,7 +106,7 @@ export function resolveFigureRepresentation(
   const printRequiresVerified = options.forPrint && !userSelected;
 
   if (preferred === "cleaned" && figure.cleaned?.image) {
-    const verified = canAutomaticallyTrust(verification);
+    const verified = canAutomaticallyTrust(figure) || (figure.cleaned.generatedBy === "deterministic_cleanup" && figure.processingStatus === "ready" && hasNoBlockingIssues(verification));
     if (!printRequiresVerified || verified) {
       return {
         kind: "cleaned",
@@ -90,7 +120,7 @@ export function resolveFigureRepresentation(
     return { kind: "semantic_render", needsReview: !userSelected && verification?.status !== "verified", reason: userSelected ? "사용자가 선택한 구조 렌더링" : "검증된 구조 렌더링" };
   }
   const originalImage = figure.original?.image ?? (figure.source === "original" ? figure.image : undefined);
-  const cleanedNeedsReview = Boolean(figure.cleaned?.image && !canAutomaticallyTrust(verification));
+  const cleanedNeedsReview = figure.processingStatus === "rejected" || figure.processingStatus === "needs_review" || Boolean(figure.cleaned?.image && !canAutomaticallyTrust(figure));
   if (originalImage) return { kind: "original", image: originalImage, needsReview: Boolean(figure.needsReview || cleanedNeedsReview), reason: "원본 이미지" };
   if (figure.image) return { kind: figure.source === "gpt_cleaned" ? "cleaned" : "original", image: figure.image, needsReview: Boolean(figure.needsReview || cleanedNeedsReview), reason: "기존 이미지" };
   return { kind: "described_only", needsReview: true, reason: "표시할 이미지가 없습니다." };
@@ -106,6 +136,7 @@ export function applyAutomaticFigurePreference(figure: SheetFigureItem): SheetFi
     source: resolved.kind === "cleaned" ? "gpt_cleaned" : resolved.kind === "original" ? "original" : "described_only",
     preferredRepresentation,
     representationSelectionSource: "automatic",
+    processingStatus: figure.processingStatus ?? (resolved.needsReview ? "needs_review" : "ready"),
     needsReview: Boolean(figure.needsReview) || resolved.needsReview,
   };
 }

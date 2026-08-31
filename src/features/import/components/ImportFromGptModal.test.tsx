@@ -424,7 +424,7 @@ describe("ImportFromGptModal", () => {
     );
   });
 
-  it("allows confirmable handwriting and figure risks after confirmation", () => {
+  it("allows confirmable handwriting and figure risks without a pre-import confirmation gate", () => {
     const onApply = vi.fn();
     render(
       <ImportFromGptModal
@@ -452,10 +452,8 @@ describe("ImportFromGptModal", () => {
       },
     });
 
-    expect(screen.getByText("확인 후 적용 가능")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
-
-    fireEvent.click(screen.getByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/));
+    expect(screen.getByText("검토 권장")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
@@ -1228,7 +1226,7 @@ describe("ImportFromGptModal", () => {
     expect(onApplyEntries).not.toHaveBeenCalled();
   });
 
-  it("invalidates warning confirmation when the confirmable issue fingerprint changes", async () => {
+  it("keeps confirmable warnings importable when the draft changes", async () => {
     render(
       <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} />,
     );
@@ -1240,12 +1238,8 @@ describe("ImportFromGptModal", () => {
         figures: [{ questionNumber: "1", title: "그래프", caption: "확인 필요" }],
       }) },
     });
-    const confirmation = await screen.findByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/);
-    fireEvent.click(confirmation);
-    expect(confirmation).toBeChecked();
     fireEvent.change(screen.getByLabelText("본문"), { target: { value: "1. 문제 학생 필기" } });
-    await waitFor(() => expect(confirmation).not.toBeChecked());
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled());
   });
 
   it("opens GPT MCP settings from the import modal", () => {

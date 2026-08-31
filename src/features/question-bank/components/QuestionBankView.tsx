@@ -154,7 +154,7 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     <div className="question-bank-actions">
       <label className="question-bank-search">검색 <input type="search" value={filters.search} onChange={(event) => patchFilters({ search: event.target.value })} placeholder="문제 본문·자료명 검색" /></label>
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label>보기 기준 <select value={viewMode} onChange={(event) => setViewMode(event.target.value as QuestionBankViewMode)}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option></select></label>
+      <label>보기 기준 <select value={viewMode} onChange={(event) => setViewMode(event.target.value as QuestionBankViewMode)}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option><option value="review">검토 필요</option></select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
     </div>

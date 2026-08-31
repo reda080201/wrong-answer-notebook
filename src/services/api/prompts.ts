@@ -4,7 +4,7 @@ import type { MemoTemplate, PromptTemplate } from "../../types";
 export const PROBLEM_SHEET_IMPORT_V3_PROMPT = `GUI import contract v3:
 Return one JSON object with entries[].questions[] as the external question list. Each question contains only questionNumber, questionText, contentSegments, choices, conditions, equations and figureIds. Keep answerKey[], figures[], questionSourceCrops[] and sourcePageImages[] at the entry level; do not nest answer or source assets inside questions[]. Preserve learningBlocks, rejectedNotes and audit at their original levels.
 The application canonicalizes entries[].questions[] into internal structuredQuestions; do not invent a canonical item when the number is unknown. Keep uncertain numbers in audit. Preserve every source crop and original/cleaned figure reference exactly, including cleaned.generatedBy values gpt, deterministic_cleanup, or deterministic_redraw. A renderedQuestionPng is a derived app artifact and must never be treated as a source crop.
-Model self-checks (gpt_self_check and second_pass_model) are needs_review, not trusted. Only an explicit user verification or a qualified local_validator with no blocking issue may be trusted. Do not auto-approve based on confidence alone. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
+Use processingStatus to describe usability: PASS after an independent second pass is "ready", UNCERTAIN is "needs_review", and FAIL is "rejected". verificationSource records the evidence only; never claim "user" or "local_validator". A confidence number alone is never enough. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
 
 export const builtInPromptTemplates: PromptTemplate[] = [
   {
@@ -28,6 +28,8 @@ export const builtInPromptTemplates: PromptTemplate[] = [
     "questions": [{ "questionNumber": "1", "questionText": "...", "contentSegments": [], "choices": [], "figureIds": [] }],
     "answerKey": [],
     "figures": [],
+    "questionSourceCrops": [],
+    "sourcePageImages": [],
     "learningBlocks": [],
     "rejectedNotes": [],
     "audit": {}
@@ -43,7 +45,7 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 2. 각 crop을 image-to-image로 정리해 cleaned PNG를 생성한다. 새 도형으로 재해석하지 말고 구도, 종횡비, 점과 라벨, 선분·곡선·원·축, 수치, 실선·점선, 열린점·닫힌점, 직각·평행·같은 길이 표시, 음영을 유지하고 손글씨와 촬영 노이즈만 제거한다.
 3. 원본을 독립적으로 다시 분석해 semanticSpec을 만든다. 모르는 관계는 추측하지 말고 confidence와 warnings를 남긴다.
 4. 원본 crop, cleaned PNG, semanticSpec, 문제 본문, 선택지를 독립 재검증해 verification을 작성한다. 생성 단계의 설명을 검증 결과로 복사하지 마라.
-5. 모델 confidence만으로 자동 신뢰하지 마라. gpt_self_check와 second_pass_model은 blockingIssues가 없어도 needsReview로 유지한다. 명시적 user 승인 또는 blocking issue가 없고 신뢰 조건을 충족한 local_validator만 cleaned를 자동 선택할 수 있다. 그 외에는 preferredRepresentation="original", image는 original crop 파일명, source="original", needsReview=true로 설정한다.
+5. 모델 confidence만으로 상태를 정하지 마라. 독립 2차 비교가 PASS이고 필요한 구조 검사가 통과하면 verificationSource="second_pass_model", processingStatus="ready"로 둘 수 있다. 불확실하면 processingStatus="needs_review"와 original 우선, 실패하면 processingStatus="rejected"와 original 우선으로 둔다. user/local_validator/machine_checked를 사칭하지 마라.
 
 필수 규칙:
  - import.json은 순수 JSON 객체 하나만 출력하고 base64 이미지, data URL, raw HTML/SVG, script, iframe은 넣지 마라.
@@ -71,6 +73,7 @@ figure 예시:
   "preferredRepresentation": "original",
   "image": "q01_figure_original.png",
   "source": "original",
+  "processingStatus": "needs_review",
   "needsReview": true
 }
 

@@ -513,10 +513,32 @@ export function useAppActions({
 
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
+    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[]; assetSession?: ImportAssetSessionManifest },
   ) => {
     if (activeSection === "lecture" || !selected) {
+      if (meta.assetSession?.mode === "tauri-staged") {
+        await handleImportedEntriesApply([{
+          entryKind: "lecture",
+          subject: selected?.subject ?? "기타",
+          title: meta.title,
+          question: "",
+          questionImages: [],
+          sourcePageImages: meta.sourcePageImages ?? [],
+          figures: meta.figures ?? [],
+          learningBlocks: blocks,
+        }], [], meta.assetSession);
+        return;
+      }
       await createLectureEntry(blocks, meta, selected ? [selected.id] : []);
+      return;
+    }
+    if (meta.assetSession?.mode === "tauri-staged") {
+      await patchEntryWithImportAssetSession(selected.id, selected.updatedAt, meta.assetSession.id, (current) => ({
+        ...current,
+        learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+        sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
+        figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
+      }));
       return;
     }
     await patchEntry(selected.id, (current) => ({

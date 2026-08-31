@@ -5,6 +5,7 @@ import {
   ImportParseError,
   isSafeImportAssetReference,
   normalizeExternalQuestionSourceCrops,
+  sanitizeExternalImportTrust,
 } from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
@@ -16,6 +17,29 @@ import type { WrongAnswerEntry } from "../types";
 import { mapEntryImportImageReferences } from "./importImageReferences";
 
 describe("importStudyText", () => {
+  describe("external trust boundary", () => {
+    it("removes forged user trust while preserving qualified automatic usability", () => {
+      const sanitized = sanitizeExternalImportTrust({
+        figures: [
+          {
+            id: "cleanup", questionNumber: "1", source: "gpt_cleaned", original: { image: "original.png" },
+            cleaned: { image: "cleaned.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+            processingStatus: "ready", representationSelectionSource: "user",
+            verification: { status: "verified", confidence: 1, checks: { topologyMatch: true }, blockingIssues: [], warnings: [], verificationSource: "user", userApproved: true },
+          },
+          {
+            id: "self", questionNumber: "2", source: "gpt_cleaned", original: { image: "original-2.png" },
+            cleaned: { image: "cleaned-2.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+            processingStatus: "ready",
+            verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [], verificationSource: "user", userApproved: true },
+          },
+        ],
+      }) as { figures: Array<Record<string, unknown>> };
+      expect(sanitized.figures[0]).toMatchObject({ processingStatus: "ready", representationSelectionSource: undefined });
+      expect(sanitized.figures[0].verification).toMatchObject({ verificationSource: "none", userApproved: false });
+      expect(sanitized.figures[1]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original", needsReview: true });
+    });
+  });
   describe("ZIP asset references", () => {
     it("accepts safe nested image paths and rejects unsafe paths", () => {
       expect(isSafeImportAssetReference("images/source_page_001.png")).toBe(true);

@@ -28,12 +28,28 @@ describe("figure representation policy", () => {
     expect(resolveFigureRepresentation(item, { forPrint: true })).toMatchObject({ kind: "original", image: "original.png" });
   });
 
-  it("does not automatically trust model or missing verification sources", () => {
-    for (const verificationSource of [undefined, "gpt_self_check", "second_pass_model"] as const) {
+  it("does not automatically trust self-check or missing verification sources", () => {
+    for (const verificationSource of [undefined, "gpt_self_check"] as const) {
       const item = figure({ verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [], verificationSource } });
       expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", needsReview: true });
     }
     expect(classifyFigureVerificationTrust(undefined)).toBe("untrusted_missing");
+  });
+
+  it("uses deterministic cleanup and qualified second-pass output without claiming user approval", () => {
+    const cleanup = figure({
+      cleaned: { image: "cleanup.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+      processingStatus: "ready",
+      verification: { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [], verificationSource: "none" },
+    });
+    expect(resolveFigureRepresentation(cleanup)).toMatchObject({ kind: "cleaned", image: "cleanup.png", needsReview: false });
+
+    const secondPass = figure({
+      processingStatus: "ready",
+      verification: { status: "verified", confidence: 0.7, checks: { topologyMatch: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" },
+    });
+    expect(resolveFigureRepresentation(secondPass)).toMatchObject({ kind: "cleaned", needsReview: false });
+    expect(secondPass.verification?.verificationSource).toBe("second_pass_model");
   });
 
   it("keeps a pre-existing review flag when automatic selection falls back to original", () => {
