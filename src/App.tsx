@@ -50,7 +50,7 @@ import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFold
 import { useReviewSessions } from "./hooks/useReviewSessions";
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
-import Toast from "./shared/ui/Toast";
+import { useNotification } from "./shared/ui/NotificationProvider";
 import ContextualHint from "./shared/ui/ContextualHint";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 
@@ -65,6 +65,7 @@ export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newB
 function AppContent() {
   const storageBackendKind = getStorageBackendKind();
   const { confirm, prompt } = useAppDialog();
+  const { notify } = useNotification();
   const {
     entries,
     loading,
@@ -107,6 +108,14 @@ function AppContent() {
   const patchViewPreferences = viewPreferences.patch;
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [sidebarDrawerOpen, setSidebarDrawerOpen] = useState(false);
+  useEffect(() => {
+    if (!pendingDeletion) return;
+    notify({
+      tone: "info",
+      message: `${getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.`,
+      action: { label: "실행 취소", run: async () => { await restorePendingDeletion(pendingDeletion); setPendingDeletion(null); } },
+    });
+  }, [notify, pendingDeletion, restorePendingDeletion]);
   const patchChatGptMcpPreferences = chatGptMcpPreferences.patch;
   const patchQuestionBankPreferences = questionBank.patch;
   const patchExamPrintPreferences = examPreferences.patchPrint;
@@ -506,7 +515,7 @@ function AppContent() {
     if (showLibraryExplorer) return { type: "library" };
     return { type: "section", section: activeSection };
   }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
-  useNavigationHistory({
+  const navigationHistory = useNavigationHistory({
     snapshot: {
       destination: sidebarDestination.type,
       section: activeSection,
@@ -528,7 +537,6 @@ function AppContent() {
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
-      {pendingDeletion && <div className="app-undo-snackbar" role="status"><Toast tone="info"><span>{getEntryTitle(pendingDeletion.entry)}을 삭제했습니다.</span><button type="button" onClick={() => void restorePendingDeletion(pendingDeletion).then(() => setPendingDeletion(null))}>실행 취소</button></Toast></div>}
       <OnboardingTour
         open={onboardingOpen}
         onClose={() => setOnboardingOpen(false)}
@@ -627,6 +635,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              registerScrollRestoration={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -645,6 +654,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              registerScrollRestoration={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,

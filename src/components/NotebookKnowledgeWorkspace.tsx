@@ -24,6 +24,7 @@ interface NotebookKnowledgeWorkspaceProps {
   openCandidateReview(entryId: string): void;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  registerScrollRestoration?: (key: string, element: HTMLElement | null) => void;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -38,6 +39,7 @@ export default function NotebookKnowledgeWorkspace({
   openCandidateReview,
   aiProviderStatus,
   onOpenAiSettings,
+  registerScrollRestoration,
 }: NotebookKnowledgeWorkspaceProps) {
   if (mode === "question-bank") {
     return (
@@ -46,6 +48,7 @@ export default function NotebookKnowledgeWorkspace({
         preferences={questionBankPreferences}
         onPreferencesChange={patchQuestionBankPreferences}
         onRegisterPreferenceFlush={registerQuestionBankPreferenceFlush}
+        onRegisterScrollRestoration={registerScrollRestoration}
         onPatchQuestionClassification={(entryId, questionNumber, patch: QuestionMetaPatch) => patchEntry(entryId, (current) => ({
           questionMeta: patchQuestionClassification(current.questionMeta, questionNumber, patch),
         }))}
@@ -96,6 +99,7 @@ export default function NotebookKnowledgeWorkspace({
       onOpenCandidateReview={openCandidateReview}
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
+      onRegisterScrollRestoration={registerScrollRestoration}
     />
   );
 }

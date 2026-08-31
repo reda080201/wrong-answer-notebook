@@ -175,7 +175,10 @@ export default function AppModals({
       throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
     }
     options.onProgress({ phase: "staging", label: "원본 증거 이미지를 준비하고 있습니다.", current: 0, total: visualFiles.length });
-    const staged = await stageImportAssetFiles(visualFiles);
+    const staged = await stageImportAssetFiles(visualFiles, {
+      signal: options.signal,
+      onProgress: (current, total) => options.onProgress({ phase: "staging", label: "원본 증거 이미지를 준비하고 있습니다.", current, total }),
+    });
     if (options.signal.aborted) {
       if (staged) await discardImportAssetSession(staged.sessionId);
       throw new DOMException("분석을 취소했습니다.", "AbortError");

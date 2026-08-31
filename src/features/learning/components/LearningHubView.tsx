@@ -44,6 +44,7 @@ interface LearningHubViewProps {
   highlightedBlock?: { entryId: string; blockId: string } | null;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  onRegisterScrollRestoration?: (key: string, element: HTMLElement | null) => void;
 }
 
 function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
@@ -147,7 +148,7 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings, onRegisterScrollRestoration }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
@@ -207,7 +208,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     </Dialog>}
     <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
     {filtered.length ? <div className="learning-hub-workspace">
-      <aside className="learning-hub-outline" aria-label="학습 항목 목록">{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setSelectedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || item.block.type}</small></button>; })}</aside>
+      <aside ref={(element) => onRegisterScrollRestoration?.("learning-hub", element)} className="learning-hub-outline" aria-label="학습 항목 목록">{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setSelectedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || item.block.type}</small></button>; })}</aside>
       <main className="learning-hub-selected">{(() => { const item = filtered.find((candidate) => `${candidate.sourceEntryId}:${candidate.block.id}` === selectedBlockKey) ?? filtered[0]; return <LearningBlockCard item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />; })()}</main>
     </div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p></div>}
   </section>;

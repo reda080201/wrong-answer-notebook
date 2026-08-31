@@ -45,7 +45,7 @@ import { validateGptSolutionResponse } from "../../../features/gpt-solution-roun
 import type { GptSolutionRoundtripDraftStore } from "../../../hooks/useGptSolutionRoundtripDrafts";
 import QuickViewSettingsMenu from "../../../components/QuickViewSettingsMenu";
 import { writeUiStorageValue } from "../../../services/uiStorage";
-import Toast from "../../../shared/ui/Toast";
+import { useNotification } from "../../../shared/ui/NotificationProvider";
 import Menu from "../../../shared/ui/Menu";
 import SimilarQuestionLinksPanel from "../../../features/question-bank/components/SimilarQuestionLinksPanel";
 import type { QuestionBankItem } from "../../../features/question-bank/model/questionBankTypes";
@@ -291,7 +291,7 @@ export default function EntryDetail({
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(entry.title);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
-  const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
+  const { notify } = useNotification();
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
@@ -512,12 +512,8 @@ export default function EntryDetail({
   };
 
   const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
-    const id = uuidv4();
-    setToasts((items) => [...items, { id, message, tone }].slice(-3));
-    window.setTimeout(() => {
-      setToasts((items) => items.filter((item) => item.id !== id));
-    }, 2400);
-  }, []);
+    notify({ message, tone });
+  }, [notify]);
 
   const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode, selectionOnly = false) => {
     setExportHubView(view);
@@ -2282,11 +2278,6 @@ export default function EntryDetail({
         />
       ) : null}
 
-      {toasts.length > 0 && (
-        <div className="study-toast-stack" aria-live="polite">
-          {toasts.map((toast) => <Toast key={toast.id} tone={toast.tone}>{toast.message}</Toast>)}
-        </div>
-      )}
       {isFocusExpanded && (
         <div className="focus-floating-controls" aria-label="집중 보기 빠른 조작">
           <button type="button" onClick={() => setFocusMode("mini")}>

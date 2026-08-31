@@ -16,7 +16,12 @@ export interface ImportAssetStageResult {
   }>;
 }
 
-export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {
+export interface ImportAssetStageOptions {
+  signal?: AbortSignal;
+  onProgress?: (current: number, total: number) => void;
+}
+
+export async function stageImportAssetFiles(files: File[], options: ImportAssetStageOptions = {}): Promise<ImportAssetStageResult | null> {
   const backendKind = getStorageBackendKind();
   if (backendKind === "isolated-browser" || !files.length) return null;
   const sessionId = backendKind === "tauri"
@@ -26,6 +31,7 @@ export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetS
   const assets: ImportAssetStageResult["assets"] = [];
   try {
     for (const file of files) {
+      if (options.signal?.aborted) throw new DOMException("가져오기를 취소했습니다.", "AbortError");
       const bytes = new Uint8Array(await file.arrayBuffer());
       const result = backendKind === "tauri"
         ? await invoke<{ stagedFilename: string; sha256: string }>("stage_import_asset_bytes", {
@@ -43,6 +49,7 @@ export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetS
         sha256: result.sha256,
         lastModified: file.lastModified,
       });
+      options.onProgress?.(assets.length, files.length);
     }
     return { sessionId, sourceToStaged, assets };
   } catch (error) {
