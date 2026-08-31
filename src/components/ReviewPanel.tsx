@@ -11,6 +11,7 @@ import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
 import MathText from "./MathText";
 import { buildConceptLinkContext } from "../features/learning/utils/conceptIndex";
 import { isEditableCommandTarget, reviewCommands } from "../utils/reviewCommands";
+import { CommandRegistry } from "../utils/commandRegistry";
 import { reviewItemKey, reviewSeedFingerprint } from "../features/review/storage/reviewSessionIdentity";
 
 interface ReviewPanelProps {
@@ -210,41 +211,29 @@ export default function ReviewPanel({
     }
   }, [current, index, mode, onReview, onSessionSave, reviewItems]);
 
+  const commandRegistry = useMemo(() => {
+    const registry = new CommandRegistry();
+    registry.register({ id: "reveal", key: " ", label: "Space", description: "정답 보기", available: () => Boolean(current && !revealedRef.current), run: () => setRevealed(true) });
+    registry.register({ id: "shortcuts", key: "?", label: "?", description: "단축키 보기", run: () => setShortcutsOpen((open) => !open) });
+    for (const command of reviewCommands.filter((candidate) => candidate.result)) {
+      registry.register({ id: `review:${command.key}`, key: command.key, label: command.label, description: command.description, available: () => Boolean(current && revealedRef.current), run: () => handleReview(command.result!) });
+    }
+    registry.register({ id: "previous", key: "ArrowLeft", label: "Left", description: "이전 문항", available: () => index > 0, run: () => { setIndex((value) => Math.max(0, value - 1)); setRevealed(false); } });
+    registry.register({ id: "next", key: "ArrowRight", label: "Right", description: "다음 문항", available: () => index < reviewItems.length - 1, run: () => { setIndex((value) => value + 1); setRevealed(false); } });
+    return registry;
+  }, [current, handleReview, index, reviewItems.length]);
+
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {
       if (savingRef.current || event.metaKey || event.ctrlKey || event.altKey || isEditableCommandTarget(event.target)) return;
-      if (event.key === " " || event.code === "Space") {
-        if (!revealedRef.current && current) {
-          event.preventDefault();
-          setRevealed(true);
-        }
-        return;
-      }
-      const command = reviewCommands.find((candidate) => candidate.key === event.key);
-      if (!command) return;
-      if (command.key === "?") {
-        event.preventDefault();
-        setShortcutsOpen((open) => !open);
-        return;
-      }
-      if (command.result && revealedRef.current && current) {
-        event.preventDefault();
-        void handleReview(command.result);
-        return;
-      }
-      if (event.key === "ArrowLeft") {
-        event.preventDefault();
-        setIndex((value) => Math.max(0, value - 1));
-        setRevealed(false);
-      } else if (event.key === "ArrowRight" && index < reviewItems.length - 1) {
-        event.preventDefault();
-        setIndex((value) => value + 1);
-        setRevealed(false);
-      }
+      const key = event.key === " " || event.code === "Space" ? " " : event.key;
+      if (!commandRegistry.list().some((command) => command.key === key)) return;
+      event.preventDefault();
+      void commandRegistry.runKey(key);
     };
     document.addEventListener("keydown", onCommand);
     return () => document.removeEventListener("keydown", onCommand);
-  }, [current, index, reviewItems.length, handleReview]);
+  }, [commandRegistry]);
 
   const currentEntry = current?.entry;
   const sheetQuestion =
