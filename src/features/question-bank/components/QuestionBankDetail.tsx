@@ -7,6 +7,7 @@ import { normalizeLegacyMathCommandsForDisplay } from "../../../utils/legacyMath
 import { PROBLEM_SOURCE_LABELS } from "../../../utils/problemSource";
 import type { QuestionBankItem } from "../model/questionBankTypes";
 import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
+import { useMutationHistory } from "../../../hooks/useMutationHistory";
 
 interface QuestionBankDetailProps {
   item: QuestionBankItem | null;
@@ -44,6 +45,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasFailedPatch, setHasFailedPatch] = useState(false);
   const failedPatchRef = useRef<QuestionMetaPatch | null>(null);
+  const mutationHistory = useMutationHistory();
 
   useEffect(() => {
     setUnit(item?.classification.unit ?? "");
@@ -80,7 +82,25 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     setSaving(true);
     setSaveError(null);
     try {
-      await onPatchClassification(item.entryId, item.questionNumber, patch);
+      const previous: QuestionMetaPatch = {
+        difficultyScore: item.classification.difficultyScore ?? null,
+        importanceScore: item.classification.importanceScore ?? null,
+        qualityScore: item.classification.qualityScore ?? null,
+        classification: {
+          ...item.classification,
+          unit: item.classification.unit,
+          subunit: item.classification.subunit,
+          concepts: [...(item.classification.concepts ?? [])],
+          tags: [...(item.classification.tags ?? [])],
+          answerType: item.classification.answerType,
+          sourceType: item.classification.sourceType,
+        },
+      };
+      await mutationHistory.execute({
+        label: "문항 분류 변경",
+        redo: () => onPatchClassification(item.entryId, item.questionNumber, patch),
+        undo: () => onPatchClassification(item.entryId, item.questionNumber, previous),
+      });
       failedPatchRef.current = null;
       setHasFailedPatch(false);
     } catch (error) {
@@ -113,7 +133,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
         <label>출처 유형<select value={sourceType} onChange={(event) => setSourceType(event.target.value as ProblemSourceType)}>{Object.entries(PROBLEM_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>단원<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label>소단원<input value={subunit} onChange={(event) => setSubunit(event.target.value)} /></label><label>개념 (쉼표)<input value={concepts} onChange={(event) => setConcepts(event.target.value)} /></label><label>태그 (쉼표)<input value={tags} onChange={(event) => setTags(event.target.value)} /></label>
         {saveError && <p className="form-error" role="alert">{saveError}<button type="button" className="btn-secondary" onClick={() => { const failed = failedPatchRef.current; if (failed) void saveClassification(failed); }} disabled={saving || !hasFailedPatch}>다시 저장</button></p>}
-        <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button>
+        <div className="question-bank-detail__classification-actions"><button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button><button type="button" className="btn-ghost" onClick={() => void mutationHistory.undo()} disabled={saving || !mutationHistory.canUndo}>실행 취소</button><button type="button" className="btn-ghost" onClick={() => void mutationHistory.redo()} disabled={saving || !mutationHistory.canRedo}>다시 실행</button></div>
       </section>}
       <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>
     </div>;
