@@ -47,6 +47,11 @@ import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
+import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
+import { useNavigationHistory } from "./hooks/useNavigationHistory";
+import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
+import Snackbar from "./shared/ui/Snackbar";
+import OnboardingTour from "./shared/ui/OnboardingTour";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -72,6 +77,7 @@ function AppContent() {
     updateEntry,
     deleteEntry,
     deleteEntryWithUndo,
+    restorePendingDeletion,
     toggleMastered,
     toggleDifficult,
     patchEntry,
@@ -185,6 +191,7 @@ function AppContent() {
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
   const reviewSessions = useReviewSessions();
+  const pendingDeletionFlushRef = useRef<() => Promise<void>>(async () => undefined);
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
     examSaveTimerRef,
@@ -197,6 +204,7 @@ function AppContent() {
     flushLibraryFolders: library.flush,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
     flushReviewSessions: reviewSessions.flush,
+    flushPendingDeletions: () => pendingDeletionFlushRef.current(),
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
@@ -227,8 +235,6 @@ function AppContent() {
     setListFilter,
     sortKey,
     setSortKey,
-    difficultyFilter,
-    setDifficultyFilter,
     difficultyScoreFilter,
     setDifficultyScoreFilter,
     filtered,
@@ -240,6 +246,20 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+
+  const pendingDeletions = usePendingDeletionCoordinator({
+    entries,
+    restore: restorePendingDeletion,
+    setSelectedId,
+  });
+  useEffect(() => {
+    pendingDeletionFlushRef.current = pendingDeletions.flush;
+  }, [pendingDeletions.flush]);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
+    setOnboardingOpen(false);
+    if (dontShowAgain) void patchViewPreferences({ onboarding: { dismissed: true } });
+  }, [patchViewPreferences]);
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
@@ -284,11 +304,11 @@ function AppContent() {
     if (selectedId !== questionTarget.entryId) {
       setQuestionTarget(null);
     }
-  }, [selectedId, questionTarget]);
+  }, [selectedId, questionTarget, setQuestionTarget]);
 
   const handleQuestionTargetConsumed = useCallback((requestId: number) => {
     setQuestionTarget((current) => current?.requestId === requestId ? null : current);
-  }, []);
+  }, [setQuestionTarget]);
 
   const actions = useAppActions({
     entries,
@@ -302,6 +322,7 @@ function AppContent() {
     updateEntry,
     deleteEntry,
     deleteEntryWithUndo,
+    onPendingDeletion: pendingDeletions.record,
     patchEntry,
     patchEntryWithImportAssetSession,
     refresh,
@@ -322,6 +343,9 @@ function AppContent() {
     setActiveSection,
     setSelectedId,
   });
+  const resumableReviewSession = actions.reviewMode
+    ? reviewSessions.sessions.find((candidate) => canResumeReviewSession(candidate, actions.reviewMode!, actions.reviewSeed))
+    : undefined;
 
   useEffect(() => {
     setContextSettingsMessage(actions.settingsMessage);
@@ -489,6 +513,32 @@ function AppContent() {
     if (showLibraryExplorer) return { type: "library" };
     return { type: "section", section: activeSection };
   }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
+  const navigationSnapshot = useMemo(() => ({
+      destination: sidebarDestination.type,
+      section: activeSection,
+      selectedId,
+      search,
+      subjectFilter,
+      listFilter,
+      sortKey,
+      difficultyScoreFilter,
+  }), [activeSection, difficultyScoreFilter, listFilter, search, selectedId, sidebarDestination.type, sortKey, subjectFilter]);
+  const restoreNavigationSnapshot = useCallback((snapshot: typeof navigationSnapshot) => {
+      setActiveSection(snapshot.section as EntryKind);
+      setSelectedId(snapshot.selectedId);
+      setSearch(snapshot.search);
+      setSubjectFilter(snapshot.subjectFilter);
+      setListFilter(snapshot.listFilter as typeof listFilter);
+      setSortKey(snapshot.sortKey as typeof sortKey);
+      setDifficultyScoreFilter(snapshot.difficultyScoreFilter as typeof difficultyScoreFilter);
+      setShowLearningHub(snapshot.destination === "learning_hub");
+      setShowQuestionBank(snapshot.destination === "question_bank");
+      setShowLibraryExplorer(snapshot.destination === "library");
+  }, [setActiveSection, setDifficultyScoreFilter, setListFilter, setSearch, setSelectedId, setShowLearningHub, setShowLibraryExplorer, setShowQuestionBank, setSortKey, setSubjectFilter]);
+  const navigationHistory = useNavigationHistory({
+    snapshot: navigationSnapshot,
+    restore: restoreNavigationSnapshot,
+  });
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -537,8 +587,6 @@ function AppContent() {
           setSearch={setSearch}
           sortKey={sortKey}
           setSortKey={setSortKey}
-          difficultyFilter={difficultyFilter}
-          setDifficultyFilter={setDifficultyFilter}
           difficultyScoreFilter={difficultyScoreFilter}
           setDifficultyScoreFilter={setDifficultyScoreFilter}
           listFilter={listFilter}
@@ -555,7 +603,7 @@ function AppContent() {
           </nav>
         )}
 
-        <div className="content">
+        <div className="content" ref={navigationHistory.scrollRef("main")}>
           {showLibraryExplorer ? (
             <LibraryExplorer
               folders={library.folders}
@@ -583,6 +631,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -601,6 +650,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -810,6 +860,15 @@ function AppContent() {
                 왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
+              {activeSection === "problem_sheet" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
+              ) : activeSection === "lecture" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>첫 특강 가져오기</button>
+              ) : activeSection === "concept" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 개념 만들기</button>
+              ) : (
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 오답 추가</button>
+              )}
             </div>
           )}
           </>}
@@ -840,9 +899,7 @@ function AppContent() {
           seed: actions.reviewSeed,
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
-          session: actions.reviewMode
-            ? reviewSessions.sessions.find((candidate) => !candidate.completedAt && candidate.mode === actions.reviewMode && candidate.itemRefs.some((ref) => actions.reviewSeed.some((item) => item.entry.id === ref.entryId)))
-            : undefined,
+          session: resumableReviewSession,
           saveSession: reviewSessions.save,
         }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
@@ -852,6 +909,11 @@ function AppContent() {
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
         })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
+      {pendingDeletions.latest && (
+        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latest!)}>
+          {`"${pendingDeletions.latest.entry.title || "항목"}"을(를) 삭제했습니다.`}
+        </Snackbar>
+      )}
       {showExamBuilder && (
         <ExamBuilderWizard
           entries={entries}
@@ -899,6 +961,7 @@ function AppContent() {
             restart: async () => { await updater.restart(); },
             openReleasePage: () => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); },
           }}
+          onReplayOnboarding={() => setOnboardingOpen(true)}
           onClose={() => {
             setShowSettings(false);
             setSettingsInitialTab(undefined);
@@ -969,6 +1032,7 @@ function AppContent() {
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
+      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} />
     </div>
     </ConceptLinkProvider>
   );

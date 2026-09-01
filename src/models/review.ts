@@ -52,6 +52,8 @@ export interface ReviewEvent {
   stabilityDays?: number;
   memoryDifficulty?: number;
   lapseCount?: number;
+  /** Session-local identity; omitted on historical entry review events. */
+  itemKey?: string;
 }
 
 export interface ReviewState {
@@ -108,6 +110,8 @@ export interface ReviewSession {
   currentIndex: number;
   completedItemKeys: string[];
   reviewEvents: ReviewEvent[];
+  /** Mode plus ordered canonical item keys. Legacy sessions omit this and never auto-resume. */
+  seedFingerprint?: string;
   createdAt: string;
   updatedAt: string;
   completedAt?: string;

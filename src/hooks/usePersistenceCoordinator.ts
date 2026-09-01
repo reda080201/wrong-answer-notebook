@@ -16,6 +16,7 @@ interface UsePersistenceCoordinatorOptions {
   flushLibraryFolders: () => Promise<void>;
   flushGptSolutionDrafts: () => Promise<void>;
   flushReviewSessions?: () => Promise<void>;
+  flushPendingDeletions?: () => Promise<void>;
   flushTransientWrites: () => Promise<void>;
   setTransientWritesMaintenanceBlocked(blocked: boolean): void;
   setEntriesMaintenanceBlocked(blocked: boolean): void;
@@ -46,6 +47,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
     flushLibraryFolders: options.flushLibraryFolders,
     flushGptSolutionDrafts: options.flushGptSolutionDrafts,
     flushReviewSessions: options.flushReviewSessions,
+    flushPendingDeletions: options.flushPendingDeletions,
     flushActiveExam,
     flushTransientWrites: options.flushTransientWrites,
     setTransientWritesMaintenanceBlocked: options.setTransientWritesMaintenanceBlocked,
@@ -66,6 +68,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
     flushLibraryFolders: options.flushLibraryFolders,
     flushGptSolutionDrafts: options.flushGptSolutionDrafts,
     flushReviewSessions: options.flushReviewSessions,
+    flushPendingDeletions: options.flushPendingDeletions,
     confirmCloseWithoutSaving: options.confirmCloseWithoutSaving,
   });
   return { runMaintenanceOperation, flushActiveExam, ...closeGuard };

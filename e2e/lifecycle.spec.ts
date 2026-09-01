@@ -67,7 +67,7 @@ test.describe("synthetic real-exam lifecycle", () => {
       await expect(page.getByRole("region", { name: "실전 모의고사" })).toBeVisible();
       const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
       expect(overflow).toBeLessThanOrEqual(1);
-      await page.screenshot({ path: testInfo.outputPath(`real-exam-${viewport.width}x${viewport.height}.png`), fullPage: true });
+      await page.screenshot({ path: testInfo.outputPath(`real-exam-${viewport.width}x${viewport.height}.png`) });
     });
   }
 });
@@ -78,7 +78,7 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   await page.goto("/", { waitUntil: "domcontentloaded" });
 
   await page.getByRole("button", { name: "시험지함" }).click();
-  await page.getByRole("button", { name: "시험지 가져오기" }).click();
+  await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
   const input = page.getByLabel("올인원 가져오기");
   await input.setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
 

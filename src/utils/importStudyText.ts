@@ -46,14 +46,16 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
     const suppliedSource = verificationValue?.verificationSource;
     const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator" || suppliedSource === "machine_checked";
     const cleaned = figure.cleaned && typeof figure.cleaned === "object" ? figure.cleaned as Record<string, unknown> : undefined;
-    const deterministicReady = cleaned?.generatedBy === "deterministic_cleanup"
-      && typeof cleaned.image === "string"
-      && cleaned.image.trim().length > 0;
     const verifiedAutomatic = suppliedSource === "second_pass_model"
       && verificationValue?.status === "verified"
       && Array.isArray(verificationValue.blockingIssues)
       && verificationValue.blockingIssues.length === 0;
-    const canRemainReady = figure.processingStatus !== "rejected" && (deterministicReady || verifiedAutomatic);
+    // A package cannot claim that our local deterministic pipeline produced an
+    // image. Keep the asset for comparison, but reserve automatic selection for
+    // evidence the application can independently evaluate.
+    const claimedDeterministicGenerator = cleaned?.generatedBy === "deterministic_cleanup"
+      || cleaned?.generatedBy === "deterministic_redraw";
+    const canRemainReady = figure.processingStatus !== "rejected" && verifiedAutomatic && !claimedDeterministicGenerator;
     const verification = verificationValue
       ? {
         ...verificationValue,
@@ -65,6 +67,9 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
     return {
       ...figure,
       representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" : undefined,
+      cleaned: cleaned && claimedDeterministicGenerator
+        ? { ...cleaned, generatedBy: "gpt", untrustedGeneratedBy: cleaned.generatedBy }
+        : cleaned,
       preferredRepresentation: canRemainReady ? figure.preferredRepresentation : "original",
       processingStatus: canRemainReady && figure.processingStatus !== "rejected" ? "ready" : "needs_review",
       needsReview: Boolean(figure.needsReview) || !canRemainReady,
@@ -227,44 +232,36 @@ function normalizeExternalStructuredQuestions(raw: unknown): { questions?: Struc
   const rawItems = raw;
   const rejectedItems: ImportRejectedItem[] = [];
   const questions: StructuredQuestion[] = [];
-  const rejectedRaw: Array<{ value: unknown; index: number }> = [];
-  rawItems.forEach((value, index) => {
+  rawItems.forEach((value) => {
     const isRejected = Boolean(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).processingStatus === "rejected");
-    if (isRejected) rejectedRaw.push({ value, index });
-    else {
+    if (!isRejected) {
       // Normalize one item at a time so rejected evidence can stay in its
       // original position without weakening strict validation for accepted data.
       const normalized = normalizeStructuredQuestions([value])?.[0];
       if (normalized) questions.push(normalized);
+      return;
     }
-  });
 
-  // Keep strict validation for usable external questions. A malformed rejected
-  // item is evidence only and must not make otherwise valid imports fail.
-  for (const rejected of rejectedRaw) {
+    // Keep strict validation for usable external questions. A malformed rejected
+    // item is evidence only and must not make otherwise valid imports fail. Do
+    // this in the source loop so fallback questions retain their original order.
     let normalized: StructuredQuestion | undefined;
     try {
-      normalized = normalizeStructuredQuestions([rejected.value])?.[0];
+      normalized = normalizeStructuredQuestions([value])?.[0];
     } catch {
       normalized = undefined;
     }
     const fallback = normalized ? textOnlyRejectedQuestion(normalized) : undefined;
-    const rawValue = rejected.value && typeof rejected.value === "object" ? rejected.value as Record<string, unknown> : undefined;
+    const rawValue = value && typeof value === "object" ? value as Record<string, unknown> : undefined;
     const rawNumber = normalizeQuestionNumber(String(rawValue?.questionNumber ?? ""));
     rejectedItems.push(rawRejectedItem(
       "structured_question",
-      rawItems[rejected.index],
+      value,
       fallback ? "파생 구조가 거부되어 원문 텍스트 fallback으로 보존했습니다." : "문항 번호 또는 본문 identity를 확인할 수 없어 canonical 문항에서 제외했습니다.",
       rawNumber || undefined,
     ));
-    if (fallback) {
-      const originalIndex = rejected.index;
-      const insertAt = rawItems.slice(0, originalIndex).filter((value) => {
-        return !(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).processingStatus === "rejected");
-      }).length;
-      questions.splice(insertAt, 0, fallback);
-    }
-  }
+    if (fallback) questions.push(fallback);
+  });
 
   const seenNumbers = new Set<string>();
   for (const question of questions) {
@@ -279,9 +276,26 @@ function normalizeExternalStructuredQuestions(raw: unknown): { questions?: Struc
 function removeRejectedAnswers(raw: unknown, answers: SheetAnswerItem[]): { answers: SheetAnswerItem[]; rejectedItems: ImportRejectedItem[] } {
   const rawItems = Array.isArray(raw) ? raw : [];
   const rejectedItems: ImportRejectedItem[] = [];
-  const accepted = answers.filter((answer, index) => {
+  const rawByIdentity = new Map<string, unknown[]>();
+  const identityOf = (value: { questionNumber?: unknown; answer?: unknown; correctAnswer?: unknown }) => {
+    const number = normalizeQuestionNumber(String(value.questionNumber ?? ""));
+    const answer = String(value.answer ?? value.correctAnswer ?? "").trim();
+    return `${number}\u0000${answer}`;
+  };
+  for (const rawItem of rawItems) {
+    const value = rawItem && typeof rawItem === "object" ? rawItem as Record<string, unknown> : undefined;
+    const identity = identityOf(value ?? {});
+    if (!identity.startsWith("\u0000")) {
+      const bucket = rawByIdentity.get(identity) ?? [];
+      bucket.push(rawItem);
+      rawByIdentity.set(identity, bucket);
+    }
+  }
+  const accepted = answers.filter((answer) => {
+    const number = normalizeQuestionNumber(answer.questionNumber);
+    const rawItem = rawByIdentity.get(identityOf(answer))?.shift();
     if (answer.processingStatus !== "rejected") return true;
-    rejectedItems.push(rawRejectedItem("answer", rawItems[index], "거부된 정답은 canonical answer key에서 제외하고 audit evidence로 보존했습니다.", normalizeQuestionNumber(answer.questionNumber) || undefined));
+    rejectedItems.push(rawRejectedItem("answer", rawItem ?? { questionNumber: answer.questionNumber, answer: answer.answer }, "거부된 정답은 canonical answer key에서 제외하고 audit evidence로 보존했습니다.", number || undefined));
     return false;
   });
   return { answers: accepted, rejectedItems };
@@ -1128,7 +1142,10 @@ function normalizeImportFigures(
       (figure.cleaned?.image && !cleanedImage),
     );
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
-    const forgedAutomaticClaim = suppliedVerificationSource === "user"
+    const claimedExternalDeterministicGenerator = figure.cleaned?.generatedBy === "deterministic_cleanup"
+      || figure.cleaned?.generatedBy === "deterministic_redraw";
+    const forgedAutomaticClaim = claimedExternalDeterministicGenerator
+      || suppliedVerificationSource === "user"
       || suppliedVerificationSource === "local_validator"
       || suppliedVerificationSource === "machine_checked"
       || figure.verification?.userApproved === true
@@ -1154,10 +1171,17 @@ function normalizeImportFigures(
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || hadInvalidReference,
     };
-    if (forgedAutomaticClaim && normalized.cleaned?.generatedBy !== "deterministic_cleanup") {
+    if (forgedAutomaticClaim) {
       normalized.processingStatus = "needs_review";
       normalized.needsReview = true;
       normalized.preferredRepresentation = "original";
+      if (normalized.cleaned && claimedExternalDeterministicGenerator) {
+        normalized.cleaned = {
+          ...normalized.cleaned,
+          generatedBy: "gpt",
+          untrustedGeneratedBy: figure.cleaned?.generatedBy,
+        };
+      }
     }
     const automatic = applyAutomaticFigurePreference(normalized);
     return {

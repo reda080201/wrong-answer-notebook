@@ -253,7 +253,10 @@ function normalizeQuestionBankPreferences(raw: unknown): QuestionBankPreferences
   const lastSort = value.lastSort === "updated" || value.lastSort === "difficulty" || value.lastSort === "importance" || value.lastSort === "quality" || value.lastSort === "review_due"
     ? value.lastSort
     : "updated";
-  return { recentFilters: filters, savedPresets, lastSort };
+  const lastViewMode = value.lastViewMode === "unit" || value.lastViewMode === "source" || value.lastViewMode === "recent" || value.lastViewMode === "important" || value.lastViewMode === "review"
+    ? value.lastViewMode
+    : undefined;
+  return { recentFilters: filters, savedPresets, lastSort, lastViewMode };
 }
 
 function normalizeUpdatePreferences(raw: unknown): AppUpdatePreferences {

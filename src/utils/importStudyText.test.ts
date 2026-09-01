@@ -18,7 +18,7 @@ import { mapEntryImportImageReferences } from "./importImageReferences";
 
 describe("importStudyText", () => {
   describe("external trust boundary", () => {
-    it("removes forged user trust while preserving qualified automatic usability", () => {
+    it("downgrades external deterministic claims while retaining the comparison asset", () => {
       const sanitized = sanitizeExternalImportTrust({
         figures: [
           {
@@ -35,9 +35,32 @@ describe("importStudyText", () => {
           },
         ],
       }) as { figures: Array<Record<string, unknown>> };
-      expect(sanitized.figures[0]).toMatchObject({ processingStatus: "ready", representationSelectionSource: undefined });
+      expect(sanitized.figures[0]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original", representationSelectionSource: undefined });
+      expect(sanitized.figures[0].cleaned).toMatchObject({ image: "cleaned.png", generatedBy: "gpt", untrustedGeneratedBy: "deterministic_cleanup" });
       expect(sanitized.figures[0].verification).toMatchObject({ verificationSource: "none", userApproved: false });
       expect(sanitized.figures[1]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original", needsReview: true });
+    });
+
+    it("does not let a deterministic cleanup package auto-select its cleaned figure during parse", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "problem_sheet",
+        question: "1. 그림 문제",
+        questions: [{ questionNumber: "1", questionText: "그림 문제", conditions: [], equations: [], choices: [], contentSegments: [{ id: "q1", type: "text", text: "그림 문제" }], figureIds: ["f1"] }],
+        figures: [{
+          id: "f1", questionNumber: "1", caption: "그래프", source: "gpt_cleaned",
+          original: { image: "images/original.png" },
+          cleaned: { image: "images/cleaned.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "source", promptVersion: "v1" },
+          processingStatus: "ready",
+          preferredRepresentation: "cleaned",
+          verification: { status: "verified", confidence: 1, checks: { topologyMatch: true, visualLayoutPreserved: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" },
+        }],
+      }));
+      expect(result.data.figures?.[0]).toMatchObject({
+        processingStatus: "needs_review",
+        preferredRepresentation: "original",
+        needsReview: true,
+        cleaned: { image: "images/cleaned.png", untrustedGeneratedBy: "deterministic_cleanup" },
+      });
     });
 
     it("strips a forged machine validator claim while retaining a valid second-pass claim", () => {

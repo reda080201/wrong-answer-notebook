@@ -5,11 +5,10 @@ import {
   type DifficultyScoreFilter,
   getListFilterOptionsForSection,
   getSortOptionsForSection,
-  isDifficultyFilterVisibleForSection,
-  isDifficultyFilter,
   isDifficultyScoreFilterVisibleForSection,
   isDifficultyScoreFilter,
 } from "../utils/appUi";
+import SearchField from "../shared/ui/SearchField";
 
 interface AppToolbarProps {
   activeSection: EntryKind;
@@ -17,8 +16,9 @@ interface AppToolbarProps {
   setSearch: (value: string) => void;
   sortKey: SortKey;
   setSortKey: (value: SortKey) => void;
-  difficultyFilter: DifficultyFilter;
-  setDifficultyFilter: (value: DifficultyFilter) => void;
+  /** Compatibility-only: legacy categorical difficulty no longer affects filtering. */
+  difficultyFilter?: DifficultyFilter;
+  setDifficultyFilter?: (value: DifficultyFilter) => void;
   difficultyScoreFilter: DifficultyScoreFilter;
   setDifficultyScoreFilter: (value: DifficultyScoreFilter) => void;
   listFilter: ListFilter;
@@ -34,8 +34,6 @@ export default function AppToolbar({
   setSearch,
   sortKey,
   setSortKey,
-  difficultyFilter,
-  setDifficultyFilter,
   difficultyScoreFilter,
   setDifficultyScoreFilter,
   listFilter,
@@ -46,7 +44,6 @@ export default function AppToolbar({
 }: AppToolbarProps) {
   const sortOptions = getSortOptionsForSection(activeSection);
   const listFilterOptions = getListFilterOptionsForSection(activeSection);
-  const showDifficultyFilter = isDifficultyFilterVisibleForSection(activeSection);
   const showDifficultyScoreFilter = isDifficultyScoreFilterVisibleForSection(activeSection);
   const showReviewLauncher = activeSection === "wrong_answer" || activeSection === "problem_sheet";
   const placeholder =
@@ -58,13 +55,7 @@ export default function AppToolbar({
 
   return (
     <div className="toolbar">
-      <input
-        type="search"
-        className="search-input"
-        placeholder={placeholder}
-        value={search}
-        onChange={(event) => setSearch(event.target.value)}
-      />
+      <SearchField className="search-input" value={search} onChange={setSearch} placeholder={placeholder} ariaLabel="자료 검색" />
       <select
         className="sort-select"
         value={sortKey}
@@ -75,24 +66,6 @@ export default function AppToolbar({
           <option key={option.value} value={option.value}>{option.label}</option>
         ))}
       </select>
-      {showDifficultyFilter && <div className="difficulty-filter-wrap">
-        <select
-          className="difficulty-filter-select"
-          value={difficultyFilter}
-          onChange={(event) => {
-            if (isDifficultyFilter(event.target.value)) {
-              setDifficultyFilter(event.target.value);
-            }
-          }}
-          aria-label="난이도 필터"
-        >
-          <option value="all">모든 난이도</option>
-          <option value="high">난이도: 상</option>
-          <option value="medium">난이도: 중</option>
-          <option value="low">난이도: 하</option>
-          <option value="none">난이도: 없음</option>
-        </select>
-      </div>}
       {showDifficultyScoreFilter && <div className="difficulty-filter-wrap">
         <select
           className="difficulty-filter-select"

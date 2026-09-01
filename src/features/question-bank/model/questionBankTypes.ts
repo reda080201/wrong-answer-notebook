@@ -33,6 +33,8 @@ export interface QuestionBankItem {
   isMastered: boolean;
   reviewDue: boolean;
   updatedAt: string;
+  /** Canonical review event timestamp only; undefined means never reviewed. */
+  lastReviewedAt?: string;
 }
 
 export interface QuestionBankFilters {

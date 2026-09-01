@@ -13,8 +13,9 @@ describe("flushPendingAppWrites", () => {
       flushImportWorkspaceDraft: async () => { order.push("workspace"); },
       flushLibraryFolders: async () => { order.push("library"); },
       flushGptSolutionDrafts: async () => { order.push("gpt-drafts"); },
+      flushPendingDeletions: async () => { order.push("pending-deletions"); },
     });
-    expect(order.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "settings", "workspace"]);
+    expect(order.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "pending-deletions", "settings", "workspace"]);
   });
 
   it("flushes every store before reporting an active-exam failure", async () => {

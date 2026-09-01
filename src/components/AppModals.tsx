@@ -2,8 +2,9 @@ import EntryForm from "../features/entries/components/EntryForm";
 import ImportFromGptModal from "../features/import/components/ImportFromGptModal";
 import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
+import Dialog from "../shared/ui/Dialog";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
 import type {
@@ -91,6 +92,10 @@ export default function AppModals({
   const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
   const [supplementalCleanupError, setSupplementalCleanupError] = useState<string | null>(null);
   const [supplementalCleanupBusy, setSupplementalCleanupBusy] = useState(false);
+  const [reviewResumeChoice, setReviewResumeChoice] = useState<"pending" | "resume" | "restart">("restart");
+  useEffect(() => {
+    setReviewResumeChoice(reviewMode && reviewSession ? "pending" : "restart");
+  }, [reviewMode, reviewSession?.id]);
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -191,8 +196,13 @@ export default function AppModals({
     }
   };
 
-  const analyzeLearningVisualFile = async (file: File): Promise<LearningImportAnalysis> => {
+  const analyzeLearningVisualFile = async (file: File, signal: AbortSignal): Promise<LearningImportAnalysis> => {
+    const throwIfAborted = () => {
+      if (signal.aborted) throw new DOMException("분석을 취소했습니다.", "AbortError");
+    };
+    throwIfAborted();
     const visualFiles = await rasterizeVisualImportFile(file);
+    throwIfAborted();
     if (!visualFiles.every((candidate) => candidate.type.startsWith("image/"))) {
       throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
     }
@@ -202,12 +212,14 @@ export default function AppModals({
     const sourcePageImages = Object.values(staged.sourceToStaged);
     const assetSession = { id: staged.sessionId, mode: "tauri-staged" as const, manifestVersion: 1 as const, createdAt: new Date().toISOString(), sourceToStaged: staged.sourceToStaged, assets: staged.assets };
     try {
+      throwIfAborted();
       const prompt = [
         "이미지에서 학습 자료를 추출해 JSON으로 반환하세요.",
         "learningBlocks 배열만 만들고, 확실하지 않은 제목/내용은 reviewStatus를 needs_review로 표시하세요.",
         "원본 이미지의 내용은 추측하지 말고, 사용자 검증 또는 verified 상태를 생성하지 마세요.",
       ].join("\n");
       const response = await generateImportWithAi(prompt, "이미지/PDF 기반 특강 자료를 분석하세요.", sourcePageImages);
+      throwIfAborted();
       const parsed = parseLectureImportText(response, file.name);
       const genericTitle = /^(instruction|in'?sight|insight|concept|summary)$/i.test(parsed.title.trim());
       const blocks = parsed.blocks.map((block) => ({
@@ -226,7 +238,6 @@ export default function AppModals({
           extracted: blocks.length,
           machineChecked: 0,
           needsReview: blocks.filter((block) => block.reviewStatus === "needs_review").length + (genericTitle ? 1 : 0),
-          blocked: 0,
         },
         issues: genericTitle
           ? [{ severity: "review_required", path: "title", message: "일반적인 자동 제목입니다. 원문에 맞는 제목인지 확인하세요." }]
@@ -351,7 +362,19 @@ export default function AppModals({
           onVisualFile={analyzeLearningVisualFile}
         />
       )}
-      {reviewMode && (
+      {reviewMode && reviewSession && reviewResumeChoice === "pending" && (
+        <Dialog
+          open
+          title="복습 이어서 하기"
+          ariaLabel="복습 이어서 하기"
+          onClose={() => setReviewMode(null)}
+          footer={<><button type="button" className="btn-secondary" onClick={() => setReviewResumeChoice("restart")}>처음부터</button><button type="button" className="btn-primary" onClick={() => setReviewResumeChoice("resume")}>이어서 하기</button></>}
+        >
+          <p>{`${Math.min(reviewSession.currentIndex + 1, reviewSession.itemRefs.length)} / ${reviewSession.itemRefs.length}까지 진행한 ${reviewMode === "today" ? "오늘 복습" : "복습"} 세션이 있습니다.`}</p>
+          <p className="form-hint">현재 복습 대상과 순서가 정확히 일치하는 세션만 이어갈 수 있습니다.</p>
+        </Dialog>
+      )}
+      {reviewMode && (!reviewSession || reviewResumeChoice !== "pending") && (
         <ReviewPanel
           mode={reviewMode}
           title={
@@ -373,7 +396,7 @@ export default function AppModals({
           }}
           onWikiLinkClick={handleWikiLinkClick}
           existingTargets={existingTargets}
-          session={reviewSession}
+          session={reviewResumeChoice === "resume" ? reviewSession : undefined}
           onSessionSave={saveReviewSession}
         />
       )}

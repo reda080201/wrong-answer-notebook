@@ -60,6 +60,7 @@ export interface ViewPreferences {
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;
   conceptLinkPreviewMode?: "popover";
+  onboarding?: { dismissed?: boolean };
 }
 
 export type LectureLayout = "document" | "cards";
@@ -198,6 +199,7 @@ export interface QuestionBankPreferences {
   recentFilters?: QuestionBankStoredFilters;
   savedPresets?: QuestionBankPreset[];
   lastSort?: QuestionBankSort;
+  lastViewMode?: "unit" | "source" | "recent" | "important" | "review";
 }
 
 export interface AppUpdatePreferences {

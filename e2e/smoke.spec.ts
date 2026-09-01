@@ -13,7 +13,7 @@ test.describe("smoke", () => {
     await expect(settingsButton).toBeVisible({ timeout: 30_000 });
     await settingsButton.click();
     await expect(page.getByRole("dialog", { name: /설정/ })).toBeVisible();
-    await expect(page.getByRole("button", { name: "테마" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "일반" })).toBeVisible();
   });
 
   test("theme boot script sets data-theme before paint", async ({ page }) => {

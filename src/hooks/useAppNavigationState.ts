@@ -66,9 +66,6 @@ export function useAppNavigationState({
       if (listFilter === "due" && !getTodayReviewItems([entry]).length) {
         return false;
       }
-      if (isDifficultyFilterVisibleForSection(activeSection) && difficultyFilter !== "all" && entry.difficulty !== difficultyFilter) {
-        return false;
-      }
       if (isDifficultyScoreFilterVisibleForSection(activeSection) && !entryMatchesDifficultyScoreFilter(entry, difficultyScoreFilter)) {
         return false;
       }
@@ -80,7 +77,6 @@ export function useAppNavigationState({
     activeSection,
     subjectFilter,
     listFilter,
-    difficultyFilter,
     difficultyScoreFilter,
     search,
     sortKey,
