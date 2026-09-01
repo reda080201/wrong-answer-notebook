@@ -1,4 +1,4 @@
-import type { QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } from "../types";
+import type { ProcessingStatus, QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
 import { isMultipleChoiceQuestion } from "./structuredQuestionType";
@@ -18,6 +18,7 @@ export interface ResolvedEntryQuestion {
   choices: string[];
   contentSegments?: QuestionContentSegment[];
   needsReview?: boolean;
+  processingStatus?: ProcessingStatus;
   points?: number;
   warning?: string;
   figureIds: string[];
@@ -88,6 +89,7 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number):
     choices: [...question.choices],
     contentSegments: appendMissingSemanticSegments(question),
     needsReview: Boolean(question.needsReview || isEmptyMultipleChoice),
+    processingStatus: question.processingStatus,
     points: question.points,
     warning,
     figureIds: [...question.figureIds],

@@ -424,7 +424,7 @@ describe("ImportFromGptModal", () => {
     );
   });
 
-  it("allows confirmable handwriting and figure risks after confirmation", () => {
+  it("allows confirmable handwriting and figure risks without a pre-import confirmation gate", () => {
     const onApply = vi.fn();
     render(
       <ImportFromGptModal
@@ -452,10 +452,8 @@ describe("ImportFromGptModal", () => {
       },
     });
 
-    expect(screen.getByText("확인 후 적용 가능")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
-
-    fireEvent.click(screen.getByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/));
+    expect(screen.getByText("검토 권장")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
 
     expect(onApply).toHaveBeenCalledWith(
@@ -555,7 +553,7 @@ describe("ImportFromGptModal", () => {
     expect(screen.getAllByText("이미지 나중에 연결").length).toBeGreaterThan(0);
     expect(screen.getByRole("button", { name: "설명 도표로 유지" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "도표 항목 제외" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled();
 
     fireEvent.click(screen.getByRole("button", { name: "도표 항목 제외" }));
     fireEvent.click(screen.getByRole("button", { name: "수정 후 저장" }));
@@ -1053,10 +1051,6 @@ describe("ImportFromGptModal", () => {
     expect(await screen.findByRole("dialog", { name: "여러 항목 가져오기 미리보기" })).toBeInTheDocument();
     expect(screen.getByText("시험지 A")).toBeInTheDocument();
     expect(screen.getByText("특강 A")).toBeInTheDocument();
-    screen.queryAllByText(/확인 권장 항목 .* 보기/).forEach((warningSummary) => fireEvent.click(warningSummary));
-    const confirmation = await screen.findByLabelText(/확인 권장 항목을 모두 확인했습니다|확인 권장 항목을 모두 펼쳐 확인했습니다/);
-    await waitFor(() => expect(confirmation).not.toBeDisabled());
-    fireEvent.click(confirmation);
     const saveBatchButton = screen.getByRole("button", { name: "2개 항목 저장" });
     expect(saveBatchButton).not.toBeDisabled();
     fireEvent.click(saveBatchButton);
@@ -1228,7 +1222,7 @@ describe("ImportFromGptModal", () => {
     expect(onApplyEntries).not.toHaveBeenCalled();
   });
 
-  it("invalidates warning confirmation when the confirmable issue fingerprint changes", async () => {
+  it("keeps confirmable warnings importable when the draft changes", async () => {
     render(
       <ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} />,
     );
@@ -1240,12 +1234,8 @@ describe("ImportFromGptModal", () => {
         figures: [{ questionNumber: "1", title: "그래프", caption: "확인 필요" }],
       }) },
     });
-    const confirmation = await screen.findByLabelText(/손글씨\/도표 연결 위험 항목을 확인했습니다/);
-    fireEvent.click(confirmation);
-    expect(confirmation).toBeChecked();
     fireEvent.change(screen.getByLabelText("본문"), { target: { value: "1. 문제 학생 필기" } });
-    await waitFor(() => expect(confirmation).not.toBeChecked());
-    expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeDisabled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "수정 후 저장" })).toBeEnabled());
   });
 
   it("opens GPT MCP settings from the import modal", () => {

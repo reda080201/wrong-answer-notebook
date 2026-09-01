@@ -5,6 +5,7 @@ import {
   ImportParseError,
   isSafeImportAssetReference,
   normalizeExternalQuestionSourceCrops,
+  sanitizeExternalImportTrust,
 } from "./importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "./importValidation";
 import v2WrapperFixture from "../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
@@ -16,6 +17,62 @@ import type { WrongAnswerEntry } from "../types";
 import { mapEntryImportImageReferences } from "./importImageReferences";
 
 describe("importStudyText", () => {
+  describe("external trust boundary", () => {
+    it("removes forged user trust while preserving qualified automatic usability", () => {
+      const sanitized = sanitizeExternalImportTrust({
+        figures: [
+          {
+            id: "cleanup", questionNumber: "1", source: "gpt_cleaned", original: { image: "original.png" },
+            cleaned: { image: "cleaned.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+            processingStatus: "ready", representationSelectionSource: "user",
+            verification: { status: "verified", confidence: 1, checks: { topologyMatch: true }, blockingIssues: [], warnings: [], verificationSource: "user", userApproved: true },
+          },
+          {
+            id: "self", questionNumber: "2", source: "gpt_cleaned", original: { image: "original-2.png" },
+            cleaned: { image: "cleaned-2.png", generatedBy: "gpt", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+            processingStatus: "ready",
+            verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [], verificationSource: "user", userApproved: true },
+          },
+        ],
+      }) as { figures: Array<Record<string, unknown>> };
+      expect(sanitized.figures[0]).toMatchObject({ processingStatus: "ready", representationSelectionSource: undefined });
+      expect(sanitized.figures[0].verification).toMatchObject({ verificationSource: "none", userApproved: false });
+      expect(sanitized.figures[1]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original", needsReview: true });
+    });
+
+    it("strips a forged machine validator claim while retaining a valid second-pass claim", () => {
+      const sanitized = sanitizeExternalImportTrust({ figures: [
+        { id: "machine", questionNumber: "1", original: { image: "original.png" }, cleaned: { image: "cleaned.png", generatedBy: "gpt" }, processingStatus: "ready", verification: { status: "verified", confidence: 1, blockingIssues: [], warnings: [], verificationSource: "machine_checked" } },
+        { id: "second", questionNumber: "2", original: { image: "original-2.png" }, cleaned: { image: "cleaned-2.png", generatedBy: "gpt" }, semanticSpec: { type: "function_graph" }, processingStatus: "ready", verification: { status: "verified", confidence: 1, checks: { topologyMatch: true, visualLayoutPreserved: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" } },
+      ] }) as { figures: Array<Record<string, unknown>> };
+      expect(sanitized.figures[0].verification).toMatchObject({ verificationSource: "none" });
+      expect(sanitized.figures[0]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original" });
+      expect(sanitized.figures[1].verification).toMatchObject({ verificationSource: "second_pass_model" });
+      expect(sanitized.figures[1]).toMatchObject({ processingStatus: "ready" });
+    });
+  });
+
+  describe("rejected external material", () => {
+    it("keeps safe rejected question text as review fallback and excludes rejected answers", () => {
+      const result = parseImportedStudyText(JSON.stringify({
+        entryKind: "problem_sheet",
+        questions: [{ questionNumber: "9", questionText: "원문 문제", conditions: ["파생 조건"], equations: ["x=1"], choices: ["① 보기"], contentSegments: [{ id: "s", type: "text", text: "원문 문제" }], figureIds: [], processingStatus: "rejected" }],
+        answerKey: [{ questionNumber: "9", answer: "①", processingStatus: "rejected" }],
+      }));
+      expect(result.data.structuredQuestions?.[0]).toMatchObject({ questionNumber: "9", questionText: "원문 문제", choices: [], processingStatus: "needs_review" });
+      expect(result.data.answerKey).toHaveLength(0);
+      expect(result.data.importAudit?.rejectedItems).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "structured_question", questionNumber: "9" }),
+        expect.objectContaining({ kind: "answer", questionNumber: "9" }),
+      ]));
+    });
+
+    it("does not create a canonical question without trustworthy identity", () => {
+      const result = parseImportedStudyText(JSON.stringify({ entryKind: "problem_sheet", questions: [{ questionNumber: "", questionText: "번호 없는 문제", contentSegments: [], choices: [], conditions: [], equations: [], figureIds: [], processingStatus: "rejected" }] }));
+      expect(result.data.structuredQuestions ?? []).toHaveLength(0);
+      expect(result.data.importAudit?.rejectedItems).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "structured_question" })]));
+    });
+  });
   describe("ZIP asset references", () => {
     it("accepts safe nested image paths and rejects unsafe paths", () => {
       expect(isSafeImportAssetReference("images/source_page_001.png")).toBe(true);

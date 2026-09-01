@@ -1,6 +1,6 @@
 import type { QuestionBankItem } from "../model/questionBankTypes";
 
-export type QuestionBankViewMode = "unit" | "source" | "recent" | "important";
+export type QuestionBankViewMode = "unit" | "source" | "recent" | "important" | "review";
 
 export interface QuestionBankGroup {
   key: string;
@@ -19,6 +19,9 @@ export function groupQuestionBankItems(items: QuestionBankItem[], mode: Question
   if (mode === "important") {
     const important = items.filter((item) => item.isImportant === true);
     return [{ key: "important", label: "중요 문제", items: important }];
+  }
+  if (mode === "review") {
+    return [{ key: "review", label: "검토 필요", items: items.filter((item) => item.needsReview) }];
   }
 
   const groups = new Map<string, QuestionBankItem[]>();

@@ -17,8 +17,6 @@ interface ImportPreviewSummaryProps {
   validationReport: ImportValidationReport | null;
   validationPolicy: ImportValidationClassification;
   reviewExpanded: boolean;
-  confirmedWarnings: boolean;
-  onConfirmedWarningsChange: (confirmed: boolean) => void;
 }
 
 export default function ImportPreviewSummary({
@@ -34,8 +32,6 @@ export default function ImportPreviewSummary({
   validationReport,
   validationPolicy,
   reviewExpanded,
-  confirmedWarnings,
-  onConfirmedWarningsChange,
 }: ImportPreviewSummaryProps) {
   const hasBlockingIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableIssues = validationPolicy.confirmable.length > 0;
@@ -103,7 +99,7 @@ export default function ImportPreviewSummary({
           )}
           {hasConfirmableIssues && (
             <div className="import-validation-section import-validation-section--confirmable">
-              <strong>확인 후 적용 가능</strong>
+              <strong>검토 권장</strong>
               {validationPolicy.confirmable.slice(0, 6).map((issue) => (
                 <p key={issue.id} className="import-validation-issue import-validation-issue--error">{issue.message}</p>
               ))}
@@ -113,17 +109,6 @@ export default function ImportPreviewSummary({
             <p key={issue.id} className={`import-validation-issue import-validation-issue--${issue.severity}`}>{issue.message}</p>
           ))}
         </details>
-      )}
-
-      {!hasBlockingIssues && hasConfirmableIssues && (
-        <label className="settings-checkbox import-danger-confirm">
-          <input
-            type="checkbox"
-            checked={confirmedWarnings}
-            onChange={(event) => onConfirmedWarningsChange(event.target.checked)}
-          />
-          손글씨/도표 연결 위험 항목을 확인했습니다.
-        </label>
       )}
     </>
   );

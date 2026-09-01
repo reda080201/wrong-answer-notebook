@@ -54,7 +54,6 @@ import TextReviewSplitView from "./TextReviewSplitView";
 import StructuredQuestionReviewEditor from "./StructuredQuestionReviewEditor";
 import { renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
 import {
-  getStructuredValidationFingerprint,
   removeFigureFromImportDraft,
 } from "../services/importDraftCanonical";
 import ImportReviewWorkspace from "./ImportReviewWorkspace";
@@ -332,7 +331,6 @@ export default function ImportFromGptModal({
   const [entryKindResolution, setEntryKindResolution] = useState<EntryKindResolution | null>(null);
   const [importWarnings, setImportWarnings] = useState<string[]>([]);
   const [batchImport, setBatchImport] = useState<ImportedStudyDocument | null>(null);
-  const [confirmedValidationFingerprint, setConfirmedValidationFingerprint] = useState<string | null>(null);
   const [structuredReviewError, setStructuredReviewError] = useState<string | null>(null);
   const [expectedQuestionInput, setExpectedQuestionInput] = useState("");
   const [dismissedConceptPreviewKey, setDismissedConceptPreviewKey] = useState("");
@@ -414,7 +412,6 @@ export default function ImportFromGptModal({
     setDraft(next);
     setActiveReviewQuestionIndex(0);
     setStructuredReviewError(null);
-    setConfirmedValidationFingerprint(null);
   }, [draftOverride, expectedQuestionNumbers, parsed]);
 
   useEffect(() => {
@@ -474,12 +471,6 @@ export default function ImportFromGptModal({
   );
   const hasBlockingValidationIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableValidationIssues = validationPolicy.confirmable.length > 0;
-  const validationFingerprint = useMemo(
-    () => getStructuredValidationFingerprint(validationPolicy.confirmable),
-    [validationPolicy.confirmable],
-  );
-  const confirmedValidationErrors = hasConfirmableValidationIssues
-    && confirmedValidationFingerprint === validationFingerprint;
   const hasSupplementalContent = Boolean(
     draft?.answerKey?.length ||
     draft?.explanationParts?.some((part) => part.text.trim() || part.images.length) ||
@@ -507,10 +498,9 @@ export default function ImportFromGptModal({
     if (!hasDraftContent) return isSupplementalMode ? "추가할 정답·해설·그림·원본 페이지가 없습니다." : draft?.entryKind === "lecture" ? "본문이나 특강 블록이 없습니다." : "본문이나 특강 블록이 없습니다.";
     if (structuredReviewError) return structuredReviewError;
     if (hasBlockingValidationIssues) return "누락 문항 검증 오류가 있습니다.";
-    if (hasConfirmableValidationIssues && !confirmedValidationErrors) return "위험 항목 확인 체크가 필요합니다.";
     if (zipProgress) return "ZIP 이미지 연결이 완료되지 않았습니다.";
     return null;
-  }, [confirmedValidationErrors, draft, hasBlockingValidationIssues, hasConfirmableValidationIssues, hasDraftContent, hasStructuredSupplementalContent, isSupplementalMode, structuredReviewError, supplementalMode, zipProgress]);
+  }, [draft, hasBlockingValidationIssues, hasDraftContent, hasStructuredSupplementalContent, isSupplementalMode, structuredReviewError, supplementalMode, zipProgress]);
   const canApply = !applyBlockReason;
   const aiImageFilenames = isSolutionMode && sourceEntry ? sourceEntry.questionImages : images;
   const detectedFormat = draftOverride || batchImport ? "json" : parsed?.detectedFormat;
@@ -778,12 +768,10 @@ export default function ImportFromGptModal({
         figure.id === id ? { ...figure, ...patch } : figure,
       ),
     }));
-    setConfirmedValidationFingerprint(null);
   };
 
   const removeFigure = (id: string) => {
     setDraft((current) => current ? removeFigureFromImportDraft(current, id) : current);
-    setConfirmedValidationFingerprint(null);
   };
 
   const apply = async () => {
@@ -795,10 +783,6 @@ export default function ImportFromGptModal({
     const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft));
     if (finalPolicy.blocking.length > 0) {
       setError("누락 문제가 있어 적용할 수 없습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.");
-      return;
-    }
-    if (finalPolicy.confirmable.length > 0 && !confirmedValidationErrors) {
-      setError("손글씨/도표 연결 위험 항목을 확인한 뒤 체크박스를 선택해야 적용할 수 있습니다.");
       return;
     }
     const supplementalImages = isSupplementalMode
@@ -852,17 +836,14 @@ export default function ImportFromGptModal({
     }
     const normalizedDraft = canonicalizeImportDraftForSave(draft);
     const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft));
-    if (finalPolicy.blocking.length || (finalPolicy.confirmable.length && !confirmedValidationErrors)) {
-      setError(finalPolicy.blocking.length
-        ? "차단 항목을 해결한 뒤 저장할 수 있습니다."
-        : "확인이 필요한 항목을 검토한 뒤 체크박스를 선택해 주세요.");
+    if (finalPolicy.blocking.length) {
+      setError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
       return;
     }
     await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
   };
 
   const updateLegacyQuestionText = (value: string) => {
-    setConfirmedValidationFingerprint(null);
     setDraft((current) => {
       setStructuredReviewError(null);
       return { ...current, question: value };
@@ -1053,7 +1034,6 @@ export default function ImportFromGptModal({
                   value={expectedQuestionInput}
                   onChange={(event) => {
                     setExpectedQuestionInput(event.target.value);
-                    setConfirmedValidationFingerprint(null);
                   }}
                   placeholder="예: 1-20 또는 1,2,3,5"
                 />
@@ -1298,7 +1278,6 @@ export default function ImportFromGptModal({
                         const value = event.target.value as EntryFormData["entryKind"];
                         setDraft((current) => current ? { ...current, entryKind: value } : current);
                         setEntryKindResolution({ entryKind: value, source: "explicit" });
-                        setConfirmedValidationFingerprint(null);
                       }}
                     >
                       <option value="problem_sheet">문제지</option>
@@ -1327,10 +1306,6 @@ export default function ImportFromGptModal({
                     validationReport={validationReport}
                     validationPolicy={validationPolicy}
                     reviewExpanded={importReviewExpanded}
-                    confirmedWarnings={confirmedValidationErrors}
-                    onConfirmedWarningsChange={(confirmed) => {
-                      setConfirmedValidationFingerprint(confirmed ? validationFingerprint : null);
-                    }}
                   />
 
                   {isSolutionMode && (
@@ -1393,7 +1368,6 @@ export default function ImportFromGptModal({
                       id="import-question"
                       questions={draft.structuredQuestions}
                       onChange={(questions) => {
-                        setConfirmedValidationFingerprint(null);
                         setStructuredReviewError(null);
                         setDraft((current) => ({
                           ...current,
@@ -1656,7 +1630,7 @@ export default function ImportFromGptModal({
         title={`${draft?.title?.trim() || "가져온 자료"} 검수`}
         onClose={() => setReviewWorkspaceOpen(false)}
         summary={draft ? `${questionCount}문항 · 답안 ${answerKey.length}개 · 그림 ${figures.length}개` : undefined}
-        status={hasBlockingValidationIssues ? "수정 필요" : hasConfirmableValidationIssues && !confirmedValidationErrors ? "확인 필요" : "저장 가능"}
+        status={hasBlockingValidationIssues ? "수정 필요" : hasConfirmableValidationIssues ? "검토 권장" : "저장 가능"}
         structuredQuestions={draft?.structuredQuestions}
         activeQuestionIndex={activeReviewQuestionIndex}
         onActiveQuestionChange={setActiveReviewQuestionIndex}
@@ -1701,7 +1675,6 @@ export default function ImportFromGptModal({
               disabled={quickSaving}
               onChange={([updatedQuestion]) => {
                 if (!updatedQuestion) return;
-                setConfirmedValidationFingerprint(null);
                 setStructuredReviewError(null);
                 setDraft((current) => {
                   if (!current) return current;

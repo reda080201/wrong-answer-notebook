@@ -14,6 +14,7 @@ import {
 import MathText from "./MathText";
 import ConceptImportPreviewModal from "./ConceptImportPreviewModal";
 import Dialog from "../shared/ui/Dialog";
+import type { ImportAssetSessionManifest } from "../features/import-workspace/model/importWorkspace";
 
 export type LearningImportIssueSeverity = "blocking" | "review_required" | "informational";
 
@@ -31,10 +32,12 @@ export interface LearningImportAnalysis {
   counts: {
     questions: number;
     images: number;
+    extracted: number;
     machineChecked: number;
     needsReview: number;
   };
   issues: LearningImportIssue[];
+  assetSession?: ImportAssetSessionManifest;
 }
 
 export interface LearningImportMeta {
@@ -43,6 +46,7 @@ export interface LearningImportMeta {
   sourcePageImages?: string[];
   figures?: SheetFigureItem[];
   issues?: LearningImportIssue[];
+  assetSession?: ImportAssetSessionManifest;
 }
 
 interface LearningImportModalProps {
@@ -51,9 +55,10 @@ interface LearningImportModalProps {
   onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   mode?: "append" | "lecture";
   onVisualFile?: (file: File) => Promise<LearningImportAnalysis>;
+  onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
 }
 
-export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append", onVisualFile }: LearningImportModalProps) {
+export default function LearningImportModal({ onClose, onApply, onApplyEntries, mode = "append", onVisualFile, onDiscardAssetSession }: LearningImportModalProps) {
   const [rawText, setRawText] = useState("");
   const [blocks, setBlocks] = useState<LearningBlock[]>([]);
   const [conceptImportValue, setConceptImportValue] = useState<unknown | null>(null);
@@ -116,6 +121,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
 
   const handleVisualFile = async (file?: File) => {
     if (!file) return;
+    if (visualAnalysis?.assetSession) await onDiscardAssetSession?.(visualAnalysis.assetSession);
     setVisualFileName(file.name);
     setError(null);
     if (!onVisualFile) {
@@ -150,6 +156,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
         sourcePageImages: visualAnalysis?.sourcePageImages,
         figures: visualAnalysis?.figures,
         issues: visualAnalysis?.issues,
+        assetSession: visualAnalysis?.assetSession,
       });
       onClose();
     } catch (err) {
@@ -160,7 +167,10 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   const requestClose = () => {
-    if (!saving) onClose();
+    if (saving) return;
+    const assetSession = visualAnalysis?.assetSession;
+    if (assetSession) void Promise.resolve(onDiscardAssetSession?.(assetSession)).finally(onClose);
+    else onClose();
   };
 
   return (
@@ -210,7 +220,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
             <h3>미리보기</h3>
             {visualAnalysis && (
               <div className="learning-import-analysis" aria-label="자동 분석 요약">
-                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 확인 {visualAnalysis.counts.machineChecked}개 · 검토 필요 {visualAnalysis.counts.needsReview}개</p>
+                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 추출 {visualAnalysis.counts.extracted}개 · 검토 권장 {visualAnalysis.counts.needsReview}개{visualAnalysis.counts.machineChecked ? ` · 로컬 검증 ${visualAnalysis.counts.machineChecked}개` : ""}</p>
                 {visualAnalysis.issues.length > 0 && <button type="button" className="btn-ghost" onClick={() => setShowReviewOnly((value) => !value)}>{showReviewOnly ? "전체 보기" : "검토 필요만 보기"}</button>}
                 {visualAnalysis.issues.filter((issue) => !showReviewOnly || issue.severity !== "informational").map((issue, index) => (
                   <p key={`${issue.path ?? "issue"}-${index}`} className={`form-${issue.severity === "blocking" ? "error" : "hint"}`}>{issue.path ? `${issue.path}: ` : ""}{issue.message}</p>

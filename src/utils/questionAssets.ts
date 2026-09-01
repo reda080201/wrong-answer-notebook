@@ -14,7 +14,7 @@ const unique = (values: Array<string | undefined>) => [
 
 /** Canonical figure IDs win; question-number matching is legacy-only. */
 export function resolveQuestionFigures(
-  entry: WrongAnswerEntry,
+  entry: Pick<WrongAnswerEntry, "figures" | "structuredQuestions">,
   question: Pick<ResolvedEntryQuestion, "questionNumber" | "figureIds">,
 ) {
   const number = normalizeQuestionNumber(question.questionNumber);

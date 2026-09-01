@@ -66,6 +66,10 @@ export type QuestionDifficultySource = "manual" | "imported" | "heuristic" | "ge
 
 export type QuestionAnswerType = "multiple_choice" | "short_answer" | "essay" | "unknown";
 
+/** Usability is independent from who verified an imported item. */
+export type ProcessingStatus = "ready" | "needs_review" | "rejected";
+export type VerificationSource = "none" | "gpt_self_check" | "second_pass_model" | "machine_checked" | "local_validator" | "user";
+
 /**
  * 문항 단위의 분류 정보입니다. 점수는 기존 QuestionMeta 위치를 canonical source로 사용합니다.
  */
@@ -107,6 +111,7 @@ export interface SheetAnswerItem {
   diagramType?: LearningDiagramType;
   diagramSpec?: DiagramSpec;
   needsReview?: boolean;
+  processingStatus?: ProcessingStatus;
   sourceNote?: string;
 }
 
@@ -148,6 +153,7 @@ export interface SheetFigureItem {
   image?: string;
   source: "original" | "gpt_cleaned" | "described_only";
   needsReview?: boolean;
+  processingStatus?: ProcessingStatus;
   original?: FigureOriginalRepresentation;
   cleaned?: FigureCleanedRepresentation;
   semanticSpec?: DiagramSemanticSpec;
@@ -251,7 +257,7 @@ export interface FigureVerification {
   blockingIssues: FigureVerificationIssue[];
   warnings: FigureVerificationIssue[];
   userApproved?: boolean;
-  verificationSource?: "gpt_self_check" | "second_pass_model" | "local_validator" | "user";
+  verificationSource?: VerificationSource;
   verifiedAt?: string;
   verifier?: string;
 }
@@ -327,6 +333,7 @@ export interface StructuredQuestion {
   contentSegments: QuestionContentSegment[];
   source?: StructuredQuestionSource;
   needsReview?: boolean;
+  processingStatus?: ProcessingStatus;
   warning?: string;
   figureIds: string[];
 }
@@ -361,6 +368,15 @@ export interface ImportAudit {
   uncertainQuestionNumbers: string[];
   handwritingExcluded: boolean;
   needsReviewCount: number;
+  /** External material that was kept as audit evidence but excluded from canonical truth. */
+  rejectedItems?: ImportRejectedItem[];
+}
+
+export interface ImportRejectedItem {
+  kind: "structured_question" | "answer" | "figure";
+  questionNumber?: string;
+  reason: string;
+  raw: unknown;
 }
 
 export interface QuestionRating {
