@@ -60,6 +60,7 @@ export interface ViewPreferences {
   conceptLinksEnabled?: boolean;
   automaticConceptLinksEnabled?: boolean;
   conceptLinkPreviewMode?: "popover";
+  onboarding?: { dismissed?: boolean };
 }
 
 export type LectureLayout = "document" | "cards";

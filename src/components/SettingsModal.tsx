@@ -79,6 +79,7 @@ interface SettingsModalProps {
     restart: () => Promise<void>;
     openReleasePage: () => void;
   };
+  onReplayOnboarding?: () => void;
 }
 
 export default function SettingsModal({
@@ -86,6 +87,7 @@ export default function SettingsModal({
   initialTab,
   dataActions,
   updateActions,
+  onReplayOnboarding,
 }: SettingsModalProps) {
   const ctx = useSettingsContext();
   const settings = ctx.settings;
@@ -282,6 +284,7 @@ export default function SettingsModal({
               <>
               <SettingsAdvancedPanel />
               <SettingsUpdatesPanel state={updateState} onCheck={() => void onCheckForUpdate()} onInstall={() => void onInstallUpdate()} onRestart={() => void onRestartAfterUpdate()} onOpenRelease={onOpenReleasePage} preferences={settings.updatePreferences} onPatch={(patch) => void onPatchUpdatePreferences(patch)} />
+              {onReplayOnboarding && <section className="settings-panel-section"><h3>도움말</h3><p className="form-hint">핵심 화면과 가져오기 흐름을 다시 안내합니다.</p><button type="button" className="btn-secondary" onClick={onReplayOnboarding}>시작 안내 다시 보기</button></section>}
               </>
             )}
           </section>

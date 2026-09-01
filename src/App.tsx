@@ -51,6 +51,7 @@ import { canResumeReviewSession } from "./features/review/storage/reviewSessionI
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
+import OnboardingTour from "./shared/ui/OnboardingTour";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -252,6 +253,14 @@ function AppContent() {
     setSelectedId,
   });
   pendingDeletionFlushRef.current = pendingDeletions.flush;
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
+  useEffect(() => {
+    if (!loading && entries.length === 0 && !settings.viewPreferences.onboarding?.dismissed) setOnboardingOpen(true);
+  }, [entries.length, loading, settings.viewPreferences.onboarding?.dismissed]);
+  const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
+    setOnboardingOpen(false);
+    if (dontShowAgain) void patchViewPreferences({ onboarding: { dismissed: true } });
+  }, [patchViewPreferences]);
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
@@ -953,6 +962,7 @@ function AppContent() {
             restart: async () => { await updater.restart(); },
             openReleasePage: () => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); },
           }}
+          onReplayOnboarding={() => setOnboardingOpen(true)}
           onClose={() => {
             setShowSettings(false);
             setSettingsInitialTab(undefined);
@@ -1023,6 +1033,7 @@ function AppContent() {
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
+      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} />
     </div>
     </ConceptLinkProvider>
   );
