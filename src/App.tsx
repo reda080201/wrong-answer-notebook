@@ -252,11 +252,10 @@ function AppContent() {
     restore: restorePendingDeletion,
     setSelectedId,
   });
-  pendingDeletionFlushRef.current = pendingDeletions.flush;
-  const [onboardingOpen, setOnboardingOpen] = useState(false);
   useEffect(() => {
-    if (!loading && entries.length === 0 && !settings.viewPreferences.onboarding?.dismissed) setOnboardingOpen(true);
-  }, [entries.length, loading, settings.viewPreferences.onboarding?.dismissed]);
+    pendingDeletionFlushRef.current = pendingDeletions.flush;
+  }, [pendingDeletions.flush]);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
     setOnboardingOpen(false);
     if (dontShowAgain) void patchViewPreferences({ onboarding: { dismissed: true } });
@@ -305,11 +304,11 @@ function AppContent() {
     if (selectedId !== questionTarget.entryId) {
       setQuestionTarget(null);
     }
-  }, [selectedId, questionTarget]);
+  }, [selectedId, questionTarget, setQuestionTarget]);
 
   const handleQuestionTargetConsumed = useCallback((requestId: number) => {
     setQuestionTarget((current) => current?.requestId === requestId ? null : current);
-  }, []);
+  }, [setQuestionTarget]);
 
   const actions = useAppActions({
     entries,

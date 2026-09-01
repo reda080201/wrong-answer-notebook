@@ -26,7 +26,9 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
   const scrollContainers = useRef(new Map<string, HTMLElement>());
   const pendingScroll = useRef<Record<string, number>>({});
   const latestSnapshot = useRef(snapshot);
-  latestSnapshot.current = snapshot;
+  useEffect(() => {
+    latestSnapshot.current = snapshot;
+  }, [snapshot]);
 
   const withScroll = useCallback((): NavigationSnapshot => ({
     ...latestSnapshot.current,
