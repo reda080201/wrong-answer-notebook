@@ -64,6 +64,7 @@ import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
 import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
+import FeatureErrorBoundary from "../../../components/FeatureErrorBoundary";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 interface ImportFromGptModalProps {
@@ -1625,6 +1626,7 @@ export default function ImportFromGptModal({
       >
         <pre className="import-prompt-full" tabIndex={0}>{activePromptContent}</pre>
       </Dialog>
+      <FeatureErrorBoundary featureName="가져오기 검수">
       <ImportReviewWorkspace
         open={reviewWorkspaceOpen && Boolean(draft)}
         title={`${draft?.title?.trim() || "가져온 자료"} 검수`}
@@ -1729,6 +1731,7 @@ export default function ImportFromGptModal({
           </section>
         )}
       </ImportReviewWorkspace>
+      </FeatureErrorBoundary>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}
