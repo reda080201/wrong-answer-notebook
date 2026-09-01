@@ -68,6 +68,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   });
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [activeTab, setActiveTab] = useState<"visual" | "file" | "text">("file");
   const [visualFileName, setVisualFileName] = useState<string | null>(null);
   const [visualAnalysis, setVisualAnalysis] = useState<LearningImportAnalysis | null>(null);
@@ -177,7 +178,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
 
   const handleApply = async () => {
     if (!blocks.length) return;
-    setSaving(true);
+    setApplying(true);
     try {
       if (visualAnalysis?.issues.some((issue) => issue.severity === "blocking")) {
         setError("저장 전에 차단된 검토 항목을 해결해야 합니다.");
@@ -194,7 +195,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
     } catch (err) {
       setError(err instanceof Error ? err.message : "특강 저장에 실패했습니다.");
     } finally {
-      setSaving(false);
+      setApplying(false);
     }
   };
 
@@ -203,6 +204,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       visualAnalysisAbortRef.current?.abort();
       return;
     }
+    if (applying) return;
     if (cleanupBusy) return;
     void discardVisualAnalysis().then((discarded) => {
       if (discarded) onClose();
@@ -210,7 +212,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   return (
-    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={cleanupBusy} busy={cleanupBusy} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={cleanupBusy} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={cleanupBusy}>{saving ? "분석 취소" : "취소"}</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || cleanupBusy}>{saving ? "분석 중..." : "특강 저장"}</button></>}>
+    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={cleanupBusy || applying} busy={cleanupBusy || applying} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={cleanupBusy || applying} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={cleanupBusy || applying}>{saving ? "분석 취소" : "취소"}</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || applying || cleanupBusy}>{saving ? "분석 중..." : applying ? "저장 중..." : "특강 저장"}</button></>}>
         <nav className="learning-import-tabs" aria-label="특강 가져오기 방식">
           <button type="button" className={activeTab === "visual" ? "active" : ""} aria-pressed={activeTab === "visual"} onClick={() => setActiveTab("visual")}><FileImage size={16} aria-hidden="true" /> 이미지/PDF</button>
           <button type="button" className={activeTab === "file" ? "active" : ""} aria-pressed={activeTab === "file"} onClick={() => void discardVisualAnalysis().then((discarded) => { if (discarded) setActiveTab("file"); })}><FileText size={16} aria-hidden="true" /> 파일</button>

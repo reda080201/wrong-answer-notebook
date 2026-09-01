@@ -14,7 +14,7 @@ describe("groupQuestionBankItems", () => {
   it("projects the same items by unit and source without duplication", () => {
     const items = [item("10", "미분", "지인선 N제"), item("2", "적분", "지인선 N제"), item("1")];
     expect(groupQuestionBankItems(items, "unit").map((group) => [group.label, group.items.length])).toEqual([
-      ["미분류", 1], ["미분", 1], ["적분", 1],
+      ["미분류", 1], ["수학 · 미분", 1], ["수학 · 적분", 1],
     ]);
     expect(groupQuestionBankItems(items, "source").map((group) => group.items.length)).toEqual([1, 2]);
     expect(groupQuestionBankItems(items, "unit").flatMap((group) => group.items)).toHaveLength(items.length);
