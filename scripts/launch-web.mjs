@@ -137,6 +137,8 @@ try {
     env: {
       ...process.env,
       WRONG_ANSWER_DESKTOP_PROXY: "1",
+      VITE_STORAGE_MODE: "desktop-shared",
+      VITE_SOURCE_PREVIEW: "1",
       VITE_DESKTOP_STORAGE_BRIDGE_URL: `http://127.0.0.1:${port}`,
       VITE_DESKTOP_STORAGE_BRIDGE_TOKEN: token,
     },

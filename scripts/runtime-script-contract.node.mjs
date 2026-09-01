@@ -21,21 +21,30 @@ test("normal user launchers only resolve and start the installed application", a
   assert.doesNotMatch(`${run}\n${desktop}`, userLauncherBuildTerms);
 });
 
-test("developer-only launchers own dependency synchronization and the external Cargo target", async () => {
-  const [desktop, web, webLauncher] = await Promise.all([
+test("developer-only launchers separate shared and isolated Web storage modes", async () => {
+  const [desktop, web, isolatedWeb, packageJson, webLauncher, isolatedLauncher] = await Promise.all([
     readFile(path.join(root, "run-dev.bat"), "utf8"),
     readFile(path.join(root, "run-web.bat"), "utf8"),
+    readFile(path.join(root, "run-web-isolated.bat"), "utf8"),
+    readFile(path.join(root, "package.json"), "utf8"),
     readFile(path.join(root, "scripts", "launch-web.mjs"), "utf8"),
+    readFile(path.join(root, "scripts", "launch-web-isolated.mjs"), "utf8"),
   ]);
-  for (const script of [desktop, web]) {
-    assert.match(script, /CARGO_TARGET_DIR=.*WrongAnswerNotebookDev\\cargo-target/);
-  }
+  assert.match(desktop, /CARGO_TARGET_DIR=.*WrongAnswerNotebookDev\\cargo-target/);
   assert.match(desktop, /sync-dependencies\.mjs/);
   assert.match(desktop, /npm run dev:desktop/);
   assert.match(web, /launch-web\.mjs/);
+  assert.match(web, /MODE=WEB-DESKTOP-SHARED/);
+  assert.match(isolatedWeb, /npm run dev:isolated/);
+  const scripts = JSON.parse(packageJson).scripts;
+  assert.equal(scripts.dev, "node scripts/launch-web.mjs");
+  assert.equal(scripts["dev:isolated"], "node scripts/launch-web-isolated.mjs");
   assert.match(webLauncher, /synchronizeDependencies/);
   assert.match(webLauncher, /developmentCargoTargetDir/);
+  assert.match(webLauncher, /VITE_STORAGE_MODE: "desktop-shared"/);
   assert.match(webLauncher, /openBrowser\("http:\/\/127\.0\.0\.1:1420"\)/);
+  assert.match(isolatedLauncher, /VITE_STORAGE_MODE: "isolated-browser"/);
+  assert.doesNotMatch(isolatedLauncher, /VITE_DESKTOP_STORAGE_BRIDGE_TOKEN/);
 });
 
 test("development Cargo target defaults outside the source checkout", () => {
