@@ -1,4 +1,4 @@
-import { createContext, useContext, ReactNode, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, ReactNode, useMemo, useState } from "react";
 import type {
   AppSettings,
   AiProviderStatus,
@@ -165,6 +165,8 @@ export interface SettingsContextValue {
 }
 
 const SettingsContext = createContext<SettingsContextValue | null>(null);
+const noop = () => undefined;
+const noopAsync = async () => undefined;
 
 export interface SettingsProviderProps {
   children: ReactNode;
@@ -190,19 +192,23 @@ export function SettingsProvider({
   children,
   settingsMessage: initialSettingsMessage = null,
   integrityReport = null,
-  handleBackup = async () => undefined,
-  handleRestore = async () => undefined,
-  handleCleanupOrphans = async () => undefined,
-  handleRunIntegrity = async () => undefined,
+  handleBackup = noopAsync,
+  handleRestore = noopAsync,
+  handleCleanupOrphans = noopAsync,
+  handleRunIntegrity = noopAsync,
   updateState,
-  onCheckForUpdate = async () => undefined,
-  onInstallUpdate = async () => undefined,
-  onRestartAfterUpdate = async () => undefined,
-  onOpenReleasePage = () => undefined,
+  onCheckForUpdate = noopAsync,
+  onInstallUpdate = noopAsync,
+  onRestartAfterUpdate = noopAsync,
+  onOpenReleasePage = noop,
 }: SettingsProviderProps) {
   const settingsHook = useSettings();
   const { theme, setTheme } = useTheme();
   const [settingsMessage, setSettingsMessage] = useState<string | null>(initialSettingsMessage);
+  const persistMcpBridge = useCallback(
+    async (next: McpBridgeSettings) => settingsHook.patchSettings({ mcpBridge: next }),
+    [settingsHook.patchSettings],
+  );
 
   const aiProvider = useAiProviderSettings({
     aiProvider: settingsHook.settings.aiProvider,
@@ -212,8 +218,7 @@ export function SettingsProvider({
   
   const mcpBridge = useMcpBridgeSettings({
     mcpBridge: settingsHook.settings.mcpBridge,
-    persistMcpBridge: async (next) =>
-      settingsHook.patchSettings({ mcpBridge: next }),
+    persistMcpBridge,
     setSettingsMessage,
   });
 
@@ -351,11 +356,56 @@ export function SettingsProvider({
       },
     }),
     [
-      settingsHook,
+      settingsHook.settings,
+      settingsHook.settingsError,
+      settingsHook.settingsSaveState,
+      settingsHook.patchSettings,
+      settingsHook.setSettings,
+      settingsHook.refreshSettings,
+      settingsHook.flushSettings,
+      settingsHook.setSettingsMaintenanceBlocked,
+      settingsHook.clearSettingsError,
+      settingsHook.retrySettingsSave,
+      settingsHook.patchViewPreferences,
+      settingsHook.patchExamPreferences,
+      settingsHook.patchExamPrintPreferences,
+      settingsHook.patchImagePreferences,
+      settingsHook.patchGptMcpPreferences,
+      settingsHook.patchChatGptMcpPreferences,
+      settingsHook.upsertTemplate,
+      settingsHook.removeTemplate,
+      settingsHook.upsertPromptTemplate,
+      settingsHook.removePromptTemplate,
+      settingsHook.upsertMemoTemplate,
+      settingsHook.removeMemoTemplate,
+      settingsHook.setLastImportTemplate,
+      settingsHook.patchUpdatePreferences,
+      settingsHook.patchQuestionBankPreferences,
       theme,
       setTheme,
-      aiProvider,
-      mcpBridge,
+      aiProvider.aiProviderStatus,
+      aiProvider.aiProviderStatusLoading,
+      aiProvider.aiProviderStatusError,
+      aiProvider.aiProviderKeyInput,
+      aiProvider.setAiProviderKeyInput,
+      aiProvider.updateAiProviderConfig,
+      aiProvider.storeAiProviderKey,
+      aiProvider.removeAiProviderKey,
+      aiProvider.testAiProvider,
+      mcpBridge.mcpBridgeSettings,
+      mcpBridge.mcpBridgeStatus,
+      mcpBridge.mcpBridgePortInput,
+      mcpBridge.setMcpBridgePortInput,
+      mcpBridge.pairingSession,
+      mcpBridge.isMcpBridgePairingPending,
+      mcpBridge.isMcpBridgeConnectionTesting,
+      mcpBridge.isMcpBridgeBrowserBlocked,
+      mcpBridge.updateMcpBridgeConfig,
+      mcpBridge.applyMcpBridgePort,
+      mcpBridge.testMcpBridgeConnection,
+      mcpBridge.createPairing,
+      mcpBridge.rotateCredential,
+      mcpBridge.disconnectClients,
       settingsMessage,
       integrityReport,
       handleBackup,

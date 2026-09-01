@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import {
   clearAiProviderKey,
@@ -55,7 +55,7 @@ export function useAiProviderSettings({
     void refreshAiProviderStatus();
   }, [aiProvider, refreshAiProviderStatus]);
 
-  const updateAiProviderConfig = async (patch: Partial<AiProviderSettings>) => {
+  const updateAiProviderConfig = useCallback(async (patch: Partial<AiProviderSettings>) => {
     const requestId = ++statusRequestRef.current;
     setAiProviderStatus(null);
     setAiProviderStatusLoading(true);
@@ -86,9 +86,9 @@ export function useAiProviderSettings({
     } finally {
       if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false);
     }
-  };
+  }, [aiProvider, refreshSettings, setSettingsMessage]);
 
-  const storeAiProviderKey = async () => {
+  const storeAiProviderKey = useCallback(async () => {
     if (!aiProviderKeyInput.trim()) {
       setSettingsMessage("저장할 API key를 입력하세요.");
       return;
@@ -115,9 +115,9 @@ export function useAiProviderSettings({
         keyError instanceof Error ? keyError.message : "API key 저장에 실패했습니다.",
       );
     } finally { if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false); }
-  };
+  }, [aiProviderKeyInput, refreshSettings, setSettingsMessage]);
 
-  const removeAiProviderKey = async () => {
+  const removeAiProviderKey = useCallback(async () => {
     const requestId = ++statusRequestRef.current;
     setAiProviderStatus(null);
     setAiProviderStatusLoading(true);
@@ -139,9 +139,9 @@ export function useAiProviderSettings({
         keyError instanceof Error ? keyError.message : "API key 삭제에 실패했습니다.",
       );
     } finally { if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false); }
-  };
+  }, [refreshSettings, setSettingsMessage]);
 
-  const testAiProvider = async () => {
+  const testAiProvider = useCallback(async () => {
     setAiProviderStatusLoading(true);
     setAiProviderStatusError(null);
     try {
@@ -155,9 +155,9 @@ export function useAiProviderSettings({
     } finally {
       setAiProviderStatusLoading(false);
     }
-  };
+  }, [setSettingsMessage]);
 
-  return {
+  return useMemo(() => ({
     aiProviderStatus,
     aiProviderStatusLoading,
     aiProviderStatusError,
@@ -169,5 +169,15 @@ export function useAiProviderSettings({
     removeAiProviderKey,
     testAiProvider,
     isAiProviderDesktopAvailable: isTauri(),
-  };
+  }), [
+    aiProviderStatus,
+    aiProviderStatusLoading,
+    aiProviderStatusError,
+    refreshAiProviderStatus,
+    aiProviderKeyInput,
+    updateAiProviderConfig,
+    storeAiProviderKey,
+    removeAiProviderKey,
+    testAiProvider,
+  ]);
 }
