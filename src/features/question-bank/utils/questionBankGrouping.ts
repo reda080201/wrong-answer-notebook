@@ -14,7 +14,12 @@ function compareLabel(a: string, b: string): number {
 
 export function groupQuestionBankItems(items: QuestionBankItem[], mode: QuestionBankViewMode): QuestionBankGroup[] {
   if (mode === "recent") {
-    return [{ key: "recent", label: "최근 학습", items: [...items].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) }];
+    const reviewed = items.filter((item) => item.lastReviewedAt).sort((a, b) => b.lastReviewedAt!.localeCompare(a.lastReviewedAt!));
+    const modified = items.filter((item) => !item.lastReviewedAt).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return [
+      ...(reviewed.length ? [{ key: "recent", label: "최근 학습", items: reviewed }] : []),
+      ...(modified.length ? [{ key: "modified", label: "최근 수정 자료", items: modified }] : []),
+    ];
   }
   if (mode === "important") {
     const important = items.filter((item) => item.isImportant === true);
@@ -27,7 +32,11 @@ export function groupQuestionBankItems(items: QuestionBankItem[], mode: Question
   const groups = new Map<string, QuestionBankItem[]>();
   for (const item of items) {
     const label = mode === "unit"
-      ? item.classification.unit?.trim() || "미분류"
+      ? (() => {
+        const subject = item.subject.trim() || "미분류";
+        const unit = item.classification.unit?.trim();
+        return unit ? [subject, unit].join(" · ") : "미분류";
+      })()
       : item.source.sourceLabel?.trim() || item.source.seriesName?.trim() || item.entryTitle || "미분류 자료";
     const group = groups.get(label) ?? [];
     group.push(item);

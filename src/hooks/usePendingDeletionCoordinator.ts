@@ -21,13 +21,6 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
 
-  const save = useCallback(async (next: PendingDeletion[]) => {
-    const writer = getStorageBackend().savePendingDeletions;
-    if (!writer) throw new Error("현재 저장소는 삭제 복구를 지원하지 않습니다.");
-    await writer(next);
-    setPending(next);
-  }, []);
-
   const finalizeExpired = useCallback(async () => {
     const backend = getStorageBackend();
     if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;

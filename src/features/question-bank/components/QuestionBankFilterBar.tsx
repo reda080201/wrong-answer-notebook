@@ -1,6 +1,7 @@
 import type { ChangeEvent, ReactNode } from "react";
 import { PROBLEM_SOURCE_LABELS } from "../../../utils/problemSource";
 import type { QuestionBankFilters, QuestionBankItem } from "../model/questionBankTypes";
+import SearchField from "../../../shared/ui/SearchField";
 
 interface QuestionBankFilterBarProps {
   items: QuestionBankItem[];
@@ -49,7 +50,7 @@ export default function QuestionBankFilterBar({ items, filters, onChange, onRese
   ].filter(Boolean) as Array<{ label: string; patch: Partial<QuestionBankFilters> }>;
 
   return <section className="question-bank-filters" aria-label="문제 은행 필터">
-    <div className="question-bank-filter-search"><input value={filters.search} onChange={(event) => onChange({ search: event.target.value })} placeholder="문제, 단원, 개념, 출처 검색" aria-label="문제 은행 검색" /><button type="button" className="btn-secondary" disabled={disabled} onClick={onReset}>초기화</button></div>
+    <div className="question-bank-filter-search"><SearchField value={filters.search} onChange={(search) => onChange({ search })} placeholder="문제, 단원, 개념, 출처 검색" ariaLabel="문제 은행 검색" /><button type="button" className="btn-secondary" disabled={disabled} onClick={onReset}>필터 초기화</button></div>
     <div className="question-bank-filter-grid">
       <Select label="과목" value={filters.subject} disabled={disabled} onChange={(subject) => onChange({ subject })}><option value="all">전체 과목</option>{subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}</Select>
       <Select label="출처" value={filters.sourceType} disabled={disabled} onChange={(sourceType) => onChange({ sourceType: sourceType as QuestionBankFilters["sourceType"] })}><option value="all">전체 출처</option>{Object.entries(PROBLEM_SOURCE_LABELS).map(([type, label]) => <option key={type} value={type}>{label}</option>)}</Select>

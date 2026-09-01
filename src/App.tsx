@@ -47,6 +47,7 @@ import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
+import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
 
@@ -230,8 +231,6 @@ function AppContent() {
     setListFilter,
     sortKey,
     setSortKey,
-    difficultyFilter,
-    setDifficultyFilter,
     difficultyScoreFilter,
     setDifficultyScoreFilter,
     filtered,
@@ -332,6 +331,9 @@ function AppContent() {
     setActiveSection,
     setSelectedId,
   });
+  const resumableReviewSession = actions.reviewMode
+    ? reviewSessions.sessions.find((candidate) => canResumeReviewSession(candidate, actions.reviewMode!, actions.reviewSeed))
+    : undefined;
 
   useEffect(() => {
     setContextSettingsMessage(actions.settingsMessage);
@@ -547,8 +549,6 @@ function AppContent() {
           setSearch={setSearch}
           sortKey={sortKey}
           setSortKey={setSortKey}
-          difficultyFilter={difficultyFilter}
-          setDifficultyFilter={setDifficultyFilter}
           difficultyScoreFilter={difficultyScoreFilter}
           setDifficultyScoreFilter={setDifficultyScoreFilter}
           listFilter={listFilter}
@@ -850,9 +850,7 @@ function AppContent() {
           seed: actions.reviewSeed,
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
-          session: actions.reviewMode
-            ? reviewSessions.sessions.find((candidate) => !candidate.completedAt && candidate.mode === actions.reviewMode && candidate.itemRefs.some((ref) => actions.reviewSeed.some((item) => item.entry.id === ref.entryId)))
-            : undefined,
+          session: resumableReviewSession,
           saveSession: reviewSessions.save,
         }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}

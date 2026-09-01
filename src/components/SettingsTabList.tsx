@@ -1,12 +1,10 @@
-import type { SettingsTab } from "./SettingsModal";
-
-interface SettingsTabListProps {
-  activeTab: SettingsTab;
-  tabs: ReadonlyArray<readonly [SettingsTab, string]>;
-  onSelect: (tab: SettingsTab) => void;
+interface SettingsTabListProps<T extends string> {
+  activeTab: T;
+  tabs: ReadonlyArray<readonly [T, string]>;
+  onSelect: (tab: T) => void;
 }
 
-export default function SettingsTabList({ activeTab, tabs, onSelect }: SettingsTabListProps) {
+export default function SettingsTabList<T extends string>({ activeTab, tabs, onSelect }: SettingsTabListProps<T>) {
   return (
     <nav aria-label="설정 섹션">
       <ul className="settings-navigation-list">

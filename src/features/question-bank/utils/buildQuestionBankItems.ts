@@ -81,6 +81,7 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     isMastered: isMastered(entry, meta),
     reviewDue: reviewDue(meta, now),
     updatedAt: entry.updatedAt,
+    lastReviewedAt: meta?.review?.lastReviewedAt ?? entry.review?.lastReviewedAt,
   };
 }
 

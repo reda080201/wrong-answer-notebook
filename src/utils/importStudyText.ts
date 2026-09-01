@@ -232,7 +232,7 @@ function normalizeExternalStructuredQuestions(raw: unknown): { questions?: Struc
   const rawItems = raw;
   const rejectedItems: ImportRejectedItem[] = [];
   const questions: StructuredQuestion[] = [];
-  rawItems.forEach((value, index) => {
+  rawItems.forEach((value) => {
     const isRejected = Boolean(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).processingStatus === "rejected");
     if (!isRejected) {
       // Normalize one item at a time so rejected evidence can stay in its

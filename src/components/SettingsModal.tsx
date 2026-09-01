@@ -42,20 +42,25 @@ export type SettingsTab =
   | "advanced"
   | "updates";
 
-const SETTINGS_TABS: Array<[SettingsTab, string]> = [
-  ["theme", "테마"],
-  ["ai", "AI 설정"],
+type SettingsCategory = "general" | "view" | "study" | "ai_connection" | "data" | "advanced";
+
+const SETTINGS_CATEGORIES: Array<[SettingsCategory, string]> = [
+  ["general", "일반"],
   ["view", "보기"],
-  ["library", "보관함"],
-  ["exam", "시험"],
-  ["images", "이미지"],
-  ["gpt-mcp", "GPT·MCP"],
-  ["chatgpt", "ChatGPT 연결"],
-  ["data", "데이터 관리"],
-  ["templates", "템플릿"],
+  ["study", "학습"],
+  ["ai_connection", "AI & 연결"],
+  ["data", "데이터"],
   ["advanced", "고급"],
-  ["updates", "업데이트"],
 ];
+
+function categoryForTab(tab: SettingsTab): SettingsCategory {
+  if (tab === "ai" || tab === "gpt-mcp" || tab === "chatgpt") return "ai_connection";
+  if (tab === "theme") return "general";
+  if (tab === "view" || tab === "images") return "view";
+  if (tab === "library" || tab === "exam" || tab === "templates") return "study";
+  if (tab === "data") return "data";
+  return "advanced";
+}
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -136,9 +141,9 @@ export default function SettingsModal({
 
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
-  const [activeTab, setActiveTab] = useState<SettingsTab>(initialTab ?? "theme");
+  const [activeCategory, setActiveCategory] = useState<SettingsCategory>(categoryForTab(initialTab ?? "theme"));
   useEffect(() => {
-    if (initialTab) setActiveTab(initialTab);
+    if (initialTab) setActiveCategory(categoryForTab(initialTab));
   }, [initialTab]);
   const patchView = async (patch: Partial<ViewPreferences>) => {
     await ctx.viewPreferences.patch(patch);
@@ -215,63 +220,45 @@ export default function SettingsModal({
         {settingsSaveState === "error" && retrySettingsSave && <button type="button" className="btn-secondary" onClick={() => void retrySettingsSave()}>설정 다시 저장</button>}
 
         <div className="settings-modal-body">
-          <nav className="settings-modal-tabs" aria-label="설정 탭">
-            <SettingsTabList activeTab={activeTab} tabs={SETTINGS_TABS} onSelect={setActiveTab} />
-          </nav>
+          <div className="settings-modal-tabs">
+            <SettingsTabList activeTab={activeCategory} tabs={SETTINGS_CATEGORIES} onSelect={setActiveCategory} />
+          </div>
 
           <section className="settings-modal-panel">
-            {activeTab === "theme" && (
+            {activeCategory === "general" && (
               <SettingsThemePanel theme={theme} onThemeChange={setTheme} />
             )}
 
-            {activeTab === "ai" && (
+            {activeCategory === "ai_connection" && (
+              <>
               <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} />
-            )}
-
-            {activeTab === "view" && (
-              <SettingsViewPanel
-                preferences={settings.viewPreferences}
-                onPatch={patchView}
-              />
-            )}
-
-            {activeTab === "library" && (
-              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), ...patch } })} />
-            )}
-
-            {activeTab === "exam" && (
-              <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />
-            )}
-
-            {activeTab === "images" && (
-              <SettingsImagesPanel preferences={settings.imagePreferences} onPatch={(patch) => void patchImages(patch)} />
-            )}
-
-            {activeTab === "gpt-mcp" && (
               <SettingsMcpPanel preferences={settings.gptMcpPreferences} onPatch={patchGptMcp} bridgePanel={renderMcpBridgePanel()} />
-            )}
-
-            {activeTab === "chatgpt" && (
               <SettingsChatGptPanel
                 preferences={settings.chatGptMcpPreferences}
                 status={mcpBridgeStatus}
                 onPatch={patchChatGpt}
                 onSaveRemoteBaseUrl={async (raw) => {
-                  try {
-                    await saveRemoteBaseUrl(raw);
-                  } catch (error) {
-                    setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다.");
-                  }
+                  try { await saveRemoteBaseUrl(raw); } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."); }
                 }}
                 bridgePanel={renderMcpBridgePanel()}
               />
+              </>
             )}
 
-            {activeTab === "data" && (
-              <SettingsDataPanel settings={settings} report={integrityReport} onBackup={() => void handleBackup()} onRestore={() => void handleRestore()} onIntegrity={() => void runIntegrity()} onCleanup={() => void handleCleanupOrphans()} onAutoBackupChange={(enabled) => void patchSettings({ autoBackup: { ...settings.autoBackup, enabled } })} />
+            {activeCategory === "view" && (
+              <>
+              <SettingsViewPanel
+                preferences={settings.viewPreferences}
+                onPatch={patchView}
+              />
+              <SettingsImagesPanel preferences={settings.imagePreferences} onPatch={(patch) => void patchImages(patch)} />
+              </>
             )}
 
-            {activeTab === "templates" && (
+            {activeCategory === "study" && (
+              <>
+              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), ...patch } })} />
+              <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />
               <SettingsTemplatesPanel
                 templates={settings.templates}
                 promptTemplates={settings.promptTemplates}
@@ -284,14 +271,18 @@ export default function SettingsModal({
                 deleteMemoTemplate={deleteMemoTemplate}
                 onError={setSettingsMessage}
               />
+              </>
             )}
 
-            {activeTab === "advanced" && (
+            {activeCategory === "data" && (
+              <SettingsDataPanel settings={settings} report={integrityReport} onBackup={() => void handleBackup()} onRestore={() => void handleRestore()} onIntegrity={() => void runIntegrity()} onCleanup={() => void handleCleanupOrphans()} onAutoBackupChange={(enabled) => void patchSettings({ autoBackup: { ...settings.autoBackup, enabled } })} />
+            )}
+
+            {activeCategory === "advanced" && (
+              <>
               <SettingsAdvancedPanel />
-            )}
-
-            {activeTab === "updates" && (
               <SettingsUpdatesPanel state={updateState} onCheck={() => void onCheckForUpdate()} onInstall={() => void onInstallUpdate()} onRestart={() => void onRestartAfterUpdate()} onOpenRelease={onOpenReleasePage} preferences={settings.updatePreferences} onPatch={(patch) => void onPatchUpdatePreferences(patch)} />
+              </>
             )}
           </section>
         </div>

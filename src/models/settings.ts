@@ -198,6 +198,7 @@ export interface QuestionBankPreferences {
   recentFilters?: QuestionBankStoredFilters;
   savedPresets?: QuestionBankPreset[];
   lastSort?: QuestionBankSort;
+  lastViewMode?: "unit" | "source" | "recent" | "important" | "review";
 }
 
 export interface AppUpdatePreferences {

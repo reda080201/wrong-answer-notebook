@@ -12,6 +12,7 @@ import type { QuestionMetaPatch } from "../utils/patchQuestionClassification";
 import type { TransientWriteRegistration } from "../../../hooks/useAppWriteRegistrations";
 import Dialog from "../../../shared/ui/Dialog";
 import { groupQuestionBankItems, type QuestionBankViewMode } from "../utils/questionBankGrouping";
+import SearchField from "../../../shared/ui/SearchField";
 
 interface QuestionBankViewProps {
   entries: WrongAnswerEntry[];
@@ -25,7 +26,7 @@ interface QuestionBankViewProps {
 export default function QuestionBankView({ entries, onOpenQuestion, preferences, onPreferencesChange, onRegisterPreferenceFlush, onPatchQuestionClassification }: QuestionBankViewProps) {
   const [filters, setFilters] = useState<QuestionBankFilters>(() => filtersFromPreferences(preferences?.recentFilters));
   const [sort, setSort] = useState<QuestionBankSort>(preferences?.lastSort ?? "updated");
-  const [viewMode, setViewMode] = useState<QuestionBankViewMode>("unit");
+  const [viewMode, setViewMode] = useState<QuestionBankViewMode>(preferences?.lastViewMode ?? "unit");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [picked, setPicked] = useState<QuestionBankItem[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -70,7 +71,8 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
     }
     setFilters((current) => JSON.stringify(filtersForPreferences(current)) === JSON.stringify(filtersForPreferences(nextFilters)) ? current : nextFilters);
     setSort((current) => current === nextSort ? current : nextSort);
-  }, [preferences?.lastSort, preferences?.recentFilters, preferences?.savedPresets]);
+    setViewMode((current) => preferences?.lastViewMode ?? current);
+  }, [preferences?.lastSort, preferences?.recentFilters, preferences?.savedPresets, preferences?.lastViewMode]);
   useEffect(() => {
     filtersRef.current = filters;
     sortRef.current = sort;
@@ -152,9 +154,9 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   return <section className="question-bank-view" aria-label="문제 은행">
     <header className="question-bank-view__header"><div><h2>문제 은행</h2><p>문제지의 문항과 단일 오답을 한곳에서 찾습니다.</p></div><strong>{filtered.length} / {items.length}</strong></header>
     <div className="question-bank-actions">
-      <label className="question-bank-search">검색 <input type="search" value={filters.search} onChange={(event) => patchFilters({ search: event.target.value })} placeholder="문제 본문·자료명 검색" /></label>
+      <label className="question-bank-search">검색 <SearchField value={filters.search} onChange={(search) => patchFilters({ search })} placeholder="문제 본문·자료명 검색" ariaLabel="문제 은행 빠른 검색" /></label>
       <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label>보기 기준 <select value={viewMode} onChange={(event) => setViewMode(event.target.value as QuestionBankViewMode)}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option><option value="review">검토 필요</option></select></label>
+      <label>보기 기준 <select value={viewMode} onChange={(event) => { const next = event.target.value as QuestionBankViewMode; setViewMode(next); savePreferences({ lastViewMode: next }); }}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option><option value="review">검토 필요</option></select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
     </div>
