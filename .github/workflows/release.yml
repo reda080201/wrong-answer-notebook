@@ -27,6 +27,8 @@ jobs:
           cache: npm
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
       - run: npm run version:check
       - name: Verify signing secret
         shell: pwsh
@@ -65,12 +67,15 @@ jobs:
       - run: npm run check:tauri-contract
       - run: npm run test
       - run: npm run build
+      - run: npm run test:e2e
       - run: cargo fmt --check
         working-directory: src-tauri
       - run: cargo check
         working-directory: src-tauri
       - run: cargo test
         working-directory: src-tauri
+      - name: Tauri compile smoke
+        run: npm run tauri -- build --no-bundle
       - name: Publish signed Tauri release
         uses: tauri-apps/tauri-action@v1
         env:

@@ -48,6 +48,7 @@ import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
 import { canResumeReviewSession } from "./features/review/storage/reviewSessionIdentity";
+import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
 
@@ -501,6 +502,30 @@ function AppContent() {
     if (showLibraryExplorer) return { type: "library" };
     return { type: "section", section: activeSection };
   }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
+  const navigationHistory = useNavigationHistory({
+    snapshot: {
+      destination: sidebarDestination.type,
+      section: activeSection,
+      selectedId,
+      search,
+      subjectFilter,
+      listFilter,
+      sortKey,
+      difficultyScoreFilter,
+    },
+    restore: (snapshot) => {
+      setActiveSection(snapshot.section as EntryKind);
+      setSelectedId(snapshot.selectedId);
+      setSearch(snapshot.search);
+      setSubjectFilter(snapshot.subjectFilter);
+      setListFilter(snapshot.listFilter as typeof listFilter);
+      setSortKey(snapshot.sortKey as typeof sortKey);
+      setDifficultyScoreFilter(snapshot.difficultyScoreFilter as typeof difficultyScoreFilter);
+      setShowLearningHub(snapshot.destination === "learning_hub");
+      setShowQuestionBank(snapshot.destination === "question_bank");
+      setShowLibraryExplorer(snapshot.destination === "library");
+    },
+  });
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -565,7 +590,7 @@ function AppContent() {
           </nav>
         )}
 
-        <div className="content">
+        <div className="content" ref={(element) => { navigationHistory.registerScrollRestoration("main", element); }}>
           {showLibraryExplorer ? (
             <LibraryExplorer
               folders={library.folders}
@@ -820,6 +845,15 @@ function AppContent() {
                 왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
+              {activeSection === "problem_sheet" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.openImport("import")}>첫 시험지 가져오기</button>
+              ) : activeSection === "lecture" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>첫 특강 가져오기</button>
+              ) : activeSection === "concept" ? (
+                <button type="button" className="btn-primary" onClick={() => actions.handleQuickConceptCreate()}>첫 개념 만들기</button>
+              ) : (
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 오답 추가</button>
+              )}
             </div>
           )}
           </>}
