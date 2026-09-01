@@ -4,14 +4,17 @@ import type { MemoTemplate, PromptTemplate } from "../../types";
 export const PROBLEM_SHEET_IMPORT_V3_PROMPT = `GUI import contract v3:
 Return one JSON object with entries[].questions[] as the external question list. Each question contains only questionNumber, questionText, contentSegments, choices, conditions, equations and figureIds. Keep answerKey[], figures[], questionSourceCrops[] and sourcePageImages[] at the entry level; do not nest answer or source assets inside questions[]. Preserve learningBlocks, rejectedNotes and audit at their original levels.
 The application canonicalizes entries[].questions[] into internal structuredQuestions; do not invent a canonical item when the number is unknown. Keep uncertain numbers in audit. Preserve every source crop and original/cleaned figure reference exactly, including cleaned.generatedBy values gpt, deterministic_cleanup, or deterministic_redraw. A renderedQuestionPng is a derived app artifact and must never be treated as a source crop.
-Use processingStatus to describe usability: PASS after an independent second pass is "ready", UNCERTAIN is "needs_review", and FAIL is "rejected". verificationSource records the evidence only; never claim "user" or "local_validator". A confidence number alone is never enough. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
+Use processingStatus to describe usability: PASS after an independent second pass is "ready", UNCERTAIN is "needs_review", and FAIL is "rejected". verificationSource records the evidence only; never claim "user", "local_validator", or "machine_checked". A confidence number alone is never enough. All referenced ZIP assets must exist and paths must be relative, non-absolute, and traversal-free.`;
+
+/** Compatibility export for callers that still reference the former name. */
+export const PROBLEM_SHEET_IMPORT_PROMPT = PROBLEM_SHEET_IMPORT_V3_PROMPT;
 
 export const builtInPromptTemplates: PromptTemplate[] = [
   {
     id: "builtin-sheet-png-package",
     name: "시험지+답안지+PNG 패키지",
     builtIn: true,
-    content: `${PROBLEM_SHEET_IMPORT_V3_PROMPT}
+    content: `${PROBLEM_SHEET_IMPORT_PROMPT}
 
 사진 속 문제지와 답안지를 분석해 wrong-answer-notebook-import-v2 형식의 import.json과 실제 PNG/JPG/WebP 자산으로 구성된 패키지를 만들어줘.
 
@@ -59,6 +62,12 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 - audit에는 예상/감지/누락/불확실 번호와 needsReviewCount를 기록한다.
 - semanticSpec은 function_graph, coordinate_geometry, plane_geometry, solid_geometry, probability_tree, table, venn_diagram, number_line, sequence_diagram, custom_math_diagram 중 하나를 사용한다.
 - answerKey와 learningBlocks의 diagramSpec은 실제 학습에 필요한 경우에만 만든다.
+
+처리 결과 예시는 다음 세 가지를 따른다.
+- deterministic cleanup 성공: { "processingStatus": "ready", "verificationSource": "none", "preferredRepresentation": "cleaned" }
+- 독립 2차 검증 성공: { "processingStatus": "ready", "verificationSource": "second_pass_model", "preferredRepresentation": "cleaned" }
+- 불확실 또는 실패: { "processingStatus": "needs_review", "verificationSource": "gpt_self_check", "preferredRepresentation": "original", "needsReview": true }
+user, local_validator, machine_checked는 외부 package에서 사용하지 마라. 실제 앱의 사용자 승인과 local validator 실행만 해당 신뢰 주체를 생성할 수 있다.
 
 figure 예시:
 {

@@ -33,13 +33,19 @@ export function classifyFigureVerificationTrust(
 }
 
 function hasNoBlockingIssues(verification?: FigureVerification): boolean {
-  return Boolean(verification && verification.blockingIssues.length === 0);
+  return !verification || verification.blockingIssues.length === 0;
+}
+
+function hasNoLocalWarnings(verification?: FigureVerification): boolean {
+  return !verification || verification.warnings.length === 0;
 }
 
 function hasRequiredSemanticChecks(figure: SheetFigureItem, verification?: FigureVerification): boolean {
   if (!verification?.checks.topologyMatch) return false;
+  if (!verification.checks.visualLayoutPreserved) return false;
   const checks = verification.checks;
   const spec = figure.semanticSpec;
+  if (!spec) return false;
   if (spec?.points?.length && !checks.pointLabelsMatch) return false;
   if (spec?.numericValues?.length && !checks.numericLabelsMatch) return false;
   if (spec?.segments?.some((segment) => segment.style) && !checks.lineStylesMatch) return false;
@@ -53,11 +59,12 @@ function canAutomaticallyTrust(figure: SheetFigureItem): boolean {
   const verification = figure.verification;
   const trust = classifyFigureVerificationTrust(verification);
   if (trust === "trusted_user") return true;
-  if (trust === "trusted_local") return verification?.status === "verified" && hasNoBlockingIssues(verification) && verification.confidence >= 0.95;
+  if (trust === "trusted_local") return verification?.status === "verified" && hasNoBlockingIssues(verification) && hasNoLocalWarnings(verification) && verification.confidence >= 0.95;
   return trust === "qualified_automatic"
     && figure.processingStatus === "ready"
     && verification?.status === "verified"
     && hasNoBlockingIssues(verification)
+    && hasNoLocalWarnings(verification)
     && hasRequiredSemanticChecks(figure, verification);
 }
 
@@ -77,7 +84,9 @@ export function automaticPreferredRepresentation(figure: SheetFigureItem): Figur
   const deterministicCleanupReady = figure.cleaned?.generatedBy === "deterministic_cleanup"
     && figure.processingStatus === "ready"
     && !figure.cleaned.untrustedGeneratedBy
-    && hasNoBlockingIssues(verification);
+    && !figure.needsReview
+    && hasNoBlockingIssues(verification)
+    && hasNoLocalWarnings(verification);
   if (figure.cleaned?.image && figure.cleaned.generatedBy && !figure.cleaned.untrustedGeneratedBy && (deterministicCleanupReady || trustedVerification)) {
     return "cleaned";
   }
@@ -106,7 +115,7 @@ export function resolveFigureRepresentation(
   const printRequiresVerified = options.forPrint && !userSelected;
 
   if (preferred === "cleaned" && figure.cleaned?.image) {
-    const verified = canAutomaticallyTrust(figure) || (figure.cleaned.generatedBy === "deterministic_cleanup" && figure.processingStatus === "ready" && hasNoBlockingIssues(verification));
+    const verified = canAutomaticallyTrust(figure) || (figure.cleaned.generatedBy === "deterministic_cleanup" && figure.processingStatus === "ready" && !figure.needsReview && hasNoBlockingIssues(verification) && hasNoLocalWarnings(verification));
     if (!printRequiresVerified || verified) {
       return {
         kind: "cleaned",

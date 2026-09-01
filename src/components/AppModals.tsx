@@ -31,6 +31,7 @@ import type { SupplementalImportMode } from "../features/supplemental-resources/
 import type { AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
 import type { ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
 import { normalizeChoice } from "../features/import-workspace/model/importWorkspace";
+import { resolveImportProcessingStatus, toImportDraftStatus } from "../utils/importProcessingStatus";
 import { parseQuestionText } from "../utils/textLayout";
 import { parseLectureImportText } from "../utils/learningContent";
 import { rasterizeVisualImportFile } from "../utils/visualImportFiles";
@@ -55,7 +56,18 @@ interface AppModalsProps {
   form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
   importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"]): Promise<void> };
-  learningImport: { show: boolean; setShow(show: boolean): void; apply(blocks: LearningBlock[], meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: import("../types").SheetFigureItem[] }): Promise<void> };
+  learningImport: {
+    show: boolean;
+    setShow(show: boolean): void;
+    apply(blocks: LearningBlock[], meta: {
+      title: string;
+      sourceType: LectureSourceType;
+      sourcePageImages?: string[];
+      figures?: import("../types").SheetFigureItem[];
+      issues?: import("./LearningImportModal").LearningImportIssue[];
+      assetSession?: ImportWorkspace["assetSession"];
+    }): Promise<void>;
+  };
   review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void>; session?: ReviewSession; saveSession?: (session: ReviewSession) => Promise<void> };
   navigation: { setActiveSection(section: EntryKind): void; setSelectedId(id: string | null): void; handleWikiLinkClick(target: string): void; existingTargets: Set<string> };
   supplemental: { target?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null; closeImport(): void; applyMerge(payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }): Promise<void>; managerEntry?: WrongAnswerEntry | null; closeManager(): void; rename(entryId: string, resourceId: string, title: string): Promise<void>; remove(entryId: string, resourceId: string): Promise<void>; linkTarget?: WrongAnswerEntry | null; linkCandidates: WrongAnswerEntry[]; closeLink(): void; link(entryId: string, source: WrongAnswerEntry): Promise<void> };
@@ -94,7 +106,10 @@ export default function AppModals({
           const number = findQuestionNumber(block.numberLabel) || String(block.displayNumber);
           const figures = (item.figures ?? []).filter((figure) => findQuestionNumber(figure.questionNumber) === number);
           const answer = item.answerKey?.find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
-          return { id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, conditions: [], equations: [], contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures, questionImageAssets, sourcePageAssets, figureIds: figures.map((figure) => figure.id), answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: "ready", warnings: [] };
+          const meta = (item.questionMeta ?? []).find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
+          const localNeedsReview = Boolean(meta?.needsReview || answer?.needsReview || answer?.processingStatus === "needs_review" || answer?.processingStatus === "rejected" || figures.some((figure) => figure.needsReview || figure.processingStatus === "needs_review" || figure.processingStatus === "rejected"));
+          const status = resolveImportProcessingStatus({ localNeedsReview });
+          return { id: uuidv4(), groupId, order: index, displayQuestionNumber: String(block.displayNumber), sourceQuestionNumber: block.numberLabel, conditions: [], equations: [], contentSegments: block.bodySegments.map((segment, segmentIndex) => ({ id: `segment-${segmentIndex + 1}`, type: segment.kind === "condition" ? "condition" : "text", text: segment.text, ...(segment.kind === "condition" ? { label: segment.label } : {}) } as never)), choices: block.choices.map((choice, choiceIndex) => normalizeChoice(`${choice.marker} ${choice.text}`, choiceIndex)), figures, questionImageAssets, sourcePageAssets, figureIds: figures.map((figure) => figure.id), answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: toImportDraftStatus(status), warnings: localNeedsReview ? ["문항 또는 연결 자산의 로컬 검증 결과를 확인해야 합니다."] : [], needsReview: localNeedsReview };
         })
         : structuredQuestions.length
           ? structuredQuestions.map((structured, index) => {
@@ -103,13 +118,16 @@ export default function AppModals({
               ? (item.figures ?? []).filter((figure) => structured.figureIds.includes(figure.id))
               : (item.figures ?? []).filter((figure) => findQuestionNumber(figure.questionNumber) === number);
             const answer = item.answerKey?.find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
-            const importStatus = structured.processingStatus === "ready"
-              ? "ready"
-              : structured.processingStatus === "needs_review" || structured.processingStatus === "rejected"
-                ? "needs_review"
-                : structured.needsReview || structured.warning
-                  ? "needs_review"
-                  : "ready";
+            const meta = (item.questionMeta ?? []).find((candidate) => findQuestionNumber(candidate.questionNumber) === number);
+            const figuresNeedReview = figures.some((figure) => figure.needsReview || figure.processingStatus === "needs_review" || figure.processingStatus === "rejected");
+            const resolvedStatus = resolveImportProcessingStatus({
+              externalStatus: structured.processingStatus,
+              legacyNeedsReview: structured.needsReview,
+              localNeedsReview: Boolean(structured.needsReview || structured.warning || meta?.needsReview || answer?.needsReview || answer?.processingStatus === "needs_review" || answer?.processingStatus === "rejected" || figuresNeedReview),
+            });
+            // A rejected external structure is either excluded or converted to
+            // a text-only review fallback before it reaches this workspace.
+            const importStatus = toImportDraftStatus(resolvedStatus);
             return { id: uuidv4(), groupId, order: index, displayQuestionNumber: number, sourceQuestionNumber: structured.questionNumber, section: structured.section, questionType: structured.questionType, conditions: [...structured.conditions], equations: [...structured.equations], points: structured.points, contentSegments: structured.contentSegments.map((segment) => segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment }), choices: structured.choices.map((choice, choiceIndex) => normalizeChoice(choice, choiceIndex)), figures, questionImageAssets, sourcePageAssets, answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: importStatus, warnings: structured.warning ? [structured.warning] : [], needsReview: structured.needsReview, warning: structured.warning, source: structured.source ? { ...structured.source } : undefined, figureIds: [...structured.figureIds] };
           })
           : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", conditions: [], equations: [], contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], questionImageAssets, sourcePageAssets, figureIds: (item.figures ?? []).map((figure) => figure.id), answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
@@ -208,6 +226,7 @@ export default function AppModals({
           extracted: blocks.length,
           machineChecked: 0,
           needsReview: blocks.filter((block) => block.reviewStatus === "needs_review").length + (genericTitle ? 1 : 0),
+          blocked: 0,
         },
         issues: genericTitle
           ? [{ severity: "review_required", path: "title", message: "일반적인 자동 제목입니다. 원문에 맞는 제목인지 확인하세요." }]

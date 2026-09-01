@@ -368,6 +368,15 @@ export interface ImportAudit {
   uncertainQuestionNumbers: string[];
   handwritingExcluded: boolean;
   needsReviewCount: number;
+  /** External material that was kept as audit evidence but excluded from canonical truth. */
+  rejectedItems?: ImportRejectedItem[];
+}
+
+export interface ImportRejectedItem {
+  kind: "structured_question" | "answer" | "figure";
+  questionNumber?: string;
+  reason: string;
+  raw: unknown;
 }
 
 export interface QuestionRating {

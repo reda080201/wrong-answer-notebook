@@ -166,7 +166,8 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
     choices: item.choices.map((choice) => `${choice.marker} ${choice.content}`.trim()),
     contentSegments,
     ...(item.source ? { source: { ...item.source } } : {}),
-    ...(item.needsReview !== undefined ? { needsReview: item.needsReview } : {}),
+    ...(item.needsReview !== undefined || item.status !== "ready" ? { needsReview: Boolean(item.needsReview || item.status !== "ready") } : {}),
+    ...(item.status === "invalid" ? { processingStatus: "rejected" as const } : item.status !== "ready" ? { processingStatus: "needs_review" as const } : {}),
     ...(item.warning ? { warning: item.warning } : {}),
     figureIds: [...(item.figureIds ?? [])],
   };

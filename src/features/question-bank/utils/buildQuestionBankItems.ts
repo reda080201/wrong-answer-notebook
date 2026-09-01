@@ -37,7 +37,7 @@ function isMastered(entry: WrongAnswerEntry, meta?: QuestionMeta): boolean {
   return meta?.review?.phase === "archived" || (!meta && entry.mastered);
 }
 
-function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, source?: { page?: number }, figureIds: string[] = []): QuestionBankItem {
+function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, source?: { page?: number }, figureIds: string[] = [], questionStatus?: ResolvedEntryQuestion["processingStatus"], questionNeedsReview = false): QuestionBankItem {
   const meta = findMeta(entry, number);
   const answer = findAnswer(entry, number);
   const classification = resolveQuestionClassification(entry, meta);
@@ -46,11 +46,12 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     questionNumber: number,
     figureIds,
     source,
-  } satisfies Pick<ResolvedEntryQuestion, "questionNumber" | "figureIds" | "source">;
+    processingStatus: questionStatus,
+  } satisfies Pick<ResolvedEntryQuestion, "questionNumber" | "figureIds" | "source" | "processingStatus">;
   const assets = resolveQuestionAssets(entry, resolvedQuestion);
   const images = unique([...assets.sourceCrops.map((crop) => crop.image), ...assets.figureAssets]);
   const sourcePages = assets.sourcePages;
-  const figuresNeedReview = resolveQuestionFigures(entry, resolvedQuestion).some((figure) => figure.processingStatus === "needs_review" || figure.needsReview);
+  const figuresNeedReview = resolveQuestionFigures(entry, resolvedQuestion).some((figure) => figure.processingStatus === "needs_review" || figure.processingStatus === "rejected" || figure.needsReview);
   const answerText = answer?.answer?.trim() || (entry.entryKind === "wrong_answer" ? entry.correctAnswer.trim() : "");
   const explanation = [answer?.explanation, answer?.strategy, ...(answer?.steps ?? []), ...(entry.entryKind === "wrong_answer" ? entry.explanationParts.map((part) => part.text) : [])]
     .filter((part): part is string => Boolean(part?.trim()))
@@ -76,7 +77,7 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     hasImages: images.length > 0 || sourcePages.length > 0,
     isWrong: isWrong(entry, meta),
     isImportant: meta?.important === true,
-    needsReview: Boolean(meta?.needsReview || answer?.needsReview || figuresNeedReview),
+    needsReview: Boolean(meta?.needsReview || answer?.needsReview || answer?.processingStatus === "needs_review" || answer?.processingStatus === "rejected" || questionNeedsReview || questionStatus === "needs_review" || questionStatus === "rejected" || figuresNeedReview),
     isMastered: isMastered(entry, meta),
     reviewDue: reviewDue(meta, now),
     updatedAt: entry.updatedAt,
@@ -87,7 +88,7 @@ export function buildQuestionBankItems(entries: WrongAnswerEntry[], now = new Da
   return entries.flatMap((entry) => {
     if (entry.entryKind === "problem_sheet") {
       return getEntryQuestions(entry)
-        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, block.source, block.figureIds));
+        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, block.source, block.figureIds, block.processingStatus, block.needsReview));
     }
     if (entry.entryKind !== "wrong_answer" || !entry.question.trim()) return [];
     const number = normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber

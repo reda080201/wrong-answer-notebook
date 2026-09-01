@@ -46,7 +46,8 @@ describe("figure representation policy", () => {
 
     const secondPass = figure({
       processingStatus: "ready",
-      verification: { status: "verified", confidence: 0.7, checks: { topologyMatch: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" },
+      semanticSpec: { type: "function_graph" },
+      verification: { status: "verified", confidence: 0.7, checks: { topologyMatch: true, visualLayoutPreserved: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" },
     });
     expect(resolveFigureRepresentation(secondPass)).toMatchObject({ kind: "cleaned", needsReview: false });
     expect(secondPass.verification?.verificationSource).toBe("second_pass_model");
@@ -60,6 +61,15 @@ describe("figure representation policy", () => {
   it("uses the original when verification has a blocking issue", () => {
     const item = figure({ verification: { status: "rejected", confidence: 0.99, checks: {}, blockingIssues: [{ type: "wrong_label", message: "P 라벨 누락" }], warnings: [] } });
     expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", image: "original.png" });
+  });
+
+  it("lets a local warning override an externally ready cleaned preference", () => {
+    const item = figure({
+      processingStatus: "ready",
+      cleaned: { image: "cleanup.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
+      verification: { status: "verified", confidence: 1, checks: {}, blockingIssues: [], warnings: [{ type: "other", message: "배치 확인 필요" }], verificationSource: "local_validator" },
+    });
+    expect(resolveFigureRepresentation(item)).toMatchObject({ kind: "original", image: "original.png", needsReview: true });
   });
 
   it("does not overwrite a user-approved cleaned selection", () => {

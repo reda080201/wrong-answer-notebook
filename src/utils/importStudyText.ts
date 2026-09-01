@@ -1,4 +1,4 @@
-import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, LectureSourceType, QuestionContentSegment, QuestionSourceCrop, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../types";
+import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, ImportRejectedItem, LectureSourceType, QuestionContentSegment, QuestionSourceCrop, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments, normalizeStructuredQuestions } from "./entry";
 import { renderStructuredQuestionsCompatibilityText } from "./entryQuestions";
@@ -17,6 +17,7 @@ import { maxAnswerDifficultyScore, normalizeDifficultyScore } from "./difficulty
 import { decodeTextFile } from "../features/import/services/decodeTextFile";
 import { normalizeImportedMathCommands } from "./legacyMathCommands";
 import { isValidNormalizedCrop } from "./normalizedCrop";
+import { resolveImportProcessingStatus } from "./importProcessingStatus";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -43,20 +44,20 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
       ? figure.verification as Record<string, unknown>
       : undefined;
     const suppliedSource = verificationValue?.verificationSource;
-    const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator";
+    const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator" || suppliedSource === "machine_checked";
     const cleaned = figure.cleaned && typeof figure.cleaned === "object" ? figure.cleaned as Record<string, unknown> : undefined;
     const deterministicReady = cleaned?.generatedBy === "deterministic_cleanup"
       && typeof cleaned.image === "string"
       && cleaned.image.trim().length > 0;
-    const verifiedAutomatic = (suppliedSource === "second_pass_model" || suppliedSource === "machine_checked")
+    const verifiedAutomatic = suppliedSource === "second_pass_model"
       && verificationValue?.status === "verified"
       && Array.isArray(verificationValue.blockingIssues)
       && verificationValue.blockingIssues.length === 0;
-    const canRemainReady = deterministicReady || verifiedAutomatic;
+    const canRemainReady = figure.processingStatus !== "rejected" && (deterministicReady || verifiedAutomatic);
     const verification = verificationValue
       ? {
         ...verificationValue,
-        verificationSource: trustedClaimOnly ? "none" : verificationValue.verificationSource,
+        verificationSource: trustedClaimOnly ? "none" : (verificationValue.verificationSource === "gpt_self_check" || verificationValue.verificationSource === "second_pass_model" ? verificationValue.verificationSource : "none"),
         userApproved: false,
         status: canRemainReady ? verificationValue.status : "needs_review",
       }
@@ -65,8 +66,8 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
       ...figure,
       representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" : undefined,
       preferredRepresentation: canRemainReady ? figure.preferredRepresentation : "original",
-      processingStatus: canRemainReady ? (figure.processingStatus === "rejected" ? "rejected" : "ready") : "needs_review",
-      needsReview: !canRemainReady,
+      processingStatus: canRemainReady && figure.processingStatus !== "rejected" ? "ready" : "needs_review",
+      needsReview: Boolean(figure.needsReview) || !canRemainReady,
       verification,
     };
   };
@@ -194,6 +195,98 @@ export function normalizeExternalQuestionSourceCrops(raw: unknown): ExternalQues
   return { crops, invalidQuestionNumbers: [...invalidQuestionNumbers], warnings };
 }
 
+function rawRejectedItem(kind: ImportRejectedItem["kind"], value: unknown, reason: string, questionNumber?: string): ImportRejectedItem {
+  return { kind, questionNumber, reason, raw: structuredClone(value) };
+}
+
+function textOnlyRejectedQuestion(question: StructuredQuestion): StructuredQuestion | undefined {
+  const questionNumber = normalizeQuestionNumber(question.questionNumber);
+  const questionText = question.questionText.trim() || question.contentSegments
+    .filter((segment) => segment.type === "text")
+    .map((segment) => segment.text)
+    .join(" ")
+    .trim();
+  if (!questionNumber || !questionText) return undefined;
+  return {
+    ...question,
+    questionNumber,
+    questionText,
+    conditions: [],
+    equations: [],
+    choices: [],
+    contentSegments: [{ id: `rejected-original:${questionNumber}`, type: "text", text: questionText }],
+    figureIds: [],
+    needsReview: true,
+    processingStatus: "needs_review",
+    warning: [question.warning, "구조화 결과가 거부되어 원문 텍스트만 보존했습니다."].filter(Boolean).join(" "),
+  };
+}
+
+function normalizeExternalStructuredQuestions(raw: unknown): { questions?: StructuredQuestion[]; rejectedItems: ImportRejectedItem[] } {
+  if (!Array.isArray(raw)) return { questions: normalizeStructuredQuestions(raw), rejectedItems: [] };
+  const rawItems = raw;
+  const rejectedItems: ImportRejectedItem[] = [];
+  const questions: StructuredQuestion[] = [];
+  const rejectedRaw: Array<{ value: unknown; index: number }> = [];
+  rawItems.forEach((value, index) => {
+    const isRejected = Boolean(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).processingStatus === "rejected");
+    if (isRejected) rejectedRaw.push({ value, index });
+    else {
+      // Normalize one item at a time so rejected evidence can stay in its
+      // original position without weakening strict validation for accepted data.
+      const normalized = normalizeStructuredQuestions([value])?.[0];
+      if (normalized) questions.push(normalized);
+    }
+  });
+
+  // Keep strict validation for usable external questions. A malformed rejected
+  // item is evidence only and must not make otherwise valid imports fail.
+  for (const rejected of rejectedRaw) {
+    let normalized: StructuredQuestion | undefined;
+    try {
+      normalized = normalizeStructuredQuestions([rejected.value])?.[0];
+    } catch {
+      normalized = undefined;
+    }
+    const fallback = normalized ? textOnlyRejectedQuestion(normalized) : undefined;
+    const rawValue = rejected.value && typeof rejected.value === "object" ? rejected.value as Record<string, unknown> : undefined;
+    const rawNumber = normalizeQuestionNumber(String(rawValue?.questionNumber ?? ""));
+    rejectedItems.push(rawRejectedItem(
+      "structured_question",
+      rawItems[rejected.index],
+      fallback ? "파생 구조가 거부되어 원문 텍스트 fallback으로 보존했습니다." : "문항 번호 또는 본문 identity를 확인할 수 없어 canonical 문항에서 제외했습니다.",
+      rawNumber || undefined,
+    ));
+    if (fallback) {
+      const originalIndex = rejected.index;
+      const insertAt = rawItems.slice(0, originalIndex).filter((value) => {
+        return !(value && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).processingStatus === "rejected");
+      }).length;
+      questions.splice(insertAt, 0, fallback);
+    }
+  }
+
+  const seenNumbers = new Set<string>();
+  for (const question of questions) {
+    if (seenNumbers.has(question.questionNumber)) {
+      throw new ImportParseError(`duplicates question number ${question.questionNumber}`);
+    }
+    seenNumbers.add(question.questionNumber);
+  }
+  return { questions: questions.length ? questions : undefined, rejectedItems };
+}
+
+function removeRejectedAnswers(raw: unknown, answers: SheetAnswerItem[]): { answers: SheetAnswerItem[]; rejectedItems: ImportRejectedItem[] } {
+  const rawItems = Array.isArray(raw) ? raw : [];
+  const rejectedItems: ImportRejectedItem[] = [];
+  const accepted = answers.filter((answer, index) => {
+    if (answer.processingStatus !== "rejected") return true;
+    rejectedItems.push(rawRejectedItem("answer", rawItems[index], "거부된 정답은 canonical answer key에서 제외하고 audit evidence로 보존했습니다.", normalizeQuestionNumber(answer.questionNumber) || undefined));
+    return false;
+  });
+  return { answers: accepted, rejectedItems };
+}
+
 function stableImportCropHash(value: string): string {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -215,6 +308,11 @@ function markCropReviewOnStructuredQuestions(
     return {
       ...question,
       needsReview: true,
+      processingStatus: resolveImportProcessingStatus({
+        externalStatus: question.processingStatus,
+        legacyNeedsReview: question.needsReview,
+        localNeedsReview: true,
+      }),
       warning: question.warning ? `${question.warning} ${warning}` : warning,
     };
   });
@@ -370,14 +468,18 @@ function parseImportedStudyTextInternal(
     }
 
     const cropNormalization = normalizeExternalQuestionSourceCrops(parsed.questionSourceCrops);
+    const structuredResult = normalizeExternalStructuredQuestions(parsed.questions);
     const structuredQuestions = markCropReviewOnStructuredQuestions(
-      normalizeStructuredQuestions(parsed.questions),
+      structuredResult.questions,
       cropNormalization.invalidQuestionNumbers,
     );
     const rawQuestion = getString(parsed.question) || (structuredQuestions?.length
       ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
       : "");
-    const answerOnlyKey = scrubRejectedNotesFromAnswers(normalizeAnswerKey(parsed.answerKey), normalizeRejectedNotes(parsed.rejectedNotes));
+    const normalizedAnswers = scrubRejectedNotesFromAnswers(normalizeAnswerKey(parsed.answerKey), normalizeRejectedNotes(parsed.rejectedNotes));
+    const answerResult = removeRejectedAnswers(parsed.answerKey, normalizedAnswers);
+    const answerOnlyKey = answerResult.answers;
+    const rejectedItems = [...structuredResult.rejectedItems, ...answerResult.rejectedItems];
     const answerOnlyBlocks = normalizeLearningBlocks(parsed.learningBlocks);
     const answerOnlyFigures = normalizeImportFigures(parsed.figures, answerOnlyKey, answerOnlyBlocks);
     if (!rawQuestion.trim() && (
@@ -386,7 +488,8 @@ function parseImportedStudyTextInternal(
       answerOnlyBlocks.length > 0 ||
       normalizeTextList(parsed.sourcePageImages).length > 0 ||
       normalizeTextList(parsed.questionImages).length > 0 ||
-      cropNormalization.crops.length > 0
+      cropNormalization.crops.length > 0 ||
+      rejectedItems.length > 0
     )) {
       return {
         detectedFormat: "json",
@@ -406,7 +509,7 @@ function parseImportedStudyTextInternal(
             cropNormalization.invalidQuestionNumbers,
           ),
           questionContentSegments: undefined,
-          importAudit: parsed.audit ? normalizeImportAudit(parsed.audit, { question: "", answerKey: answerOnlyKey, figures: answerOnlyFigures }) : undefined,
+          importAudit: normalizeImportAudit({ ...(parsed.audit && typeof parsed.audit === "object" ? parsed.audit : {}), rejectedItems }, { question: "", answerKey: answerOnlyKey, figures: answerOnlyFigures }),
           rejectedNotes: normalizeRejectedNotes(parsed.rejectedNotes),
           mistakeAnalysis: normalizeMistakeAnalysis(parsed.mistakeAnalysis),
           questionImages: normalizeTextList(parsed.questionImages),
@@ -433,11 +536,13 @@ function parseImportedStudyTextInternal(
           : undefined)
         ?? contentSegmentsFromQuestionTokens(rawQuestion);
       const importantNotes = splitImportantNotes(parsed.importantNotes);
-      const answerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
+      const normalizedAnswerKey = scrubRejectedNotesFromAnswers(applyQuestionMetadata(
         attachQuestionNotes(normalizeAnswerKey(parsed.answerKey), importantNotes.questionNotes),
         parsed.difficultyByQuestion,
         question,
       ), rejectedNotes);
+      const answerResult = removeRejectedAnswers(parsed.answerKey, normalizedAnswerKey);
+      const answerKey = answerResult.answers;
       const concepts = normalizeTextList(parsed.concepts);
       const difficultyScore =
         normalizeDifficultyScore(parsed.difficultyScore) ??
@@ -449,7 +554,7 @@ function parseImportedStudyTextInternal(
         ...importantNotes.globalNotes,
         ...concepts.map((concept) => `연결 개념: [[${concept}]]`),
       ]), rejectedNotes);
-      const importAudit = normalizeImportAudit(parsed.audit, {
+      const importAudit = normalizeImportAudit({ ...(parsed.audit && typeof parsed.audit === "object" ? parsed.audit : {}), rejectedItems: answerResult.rejectedItems.length || structuredResult.rejectedItems.length ? [...structuredResult.rejectedItems, ...answerResult.rejectedItems] : undefined }, {
         question: questionWithConceptLinks,
         answerKey,
         figures,
@@ -1002,6 +1107,7 @@ function normalizeImportFigures(
     };
   }) : value;
   return normalizeFigures(adapted).map((figure) => {
+    const suppliedVerificationSource = figure.verification?.verificationSource;
     const safe = (filename: string | undefined) => filename && isSafeImportAssetReference(filename) ? filename : undefined;
     const image = safe(figure.image);
     const originalImage = safe(figure.original?.image);
@@ -1022,6 +1128,11 @@ function normalizeImportFigures(
       (figure.cleaned?.image && !cleanedImage),
     );
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
+    const forgedAutomaticClaim = suppliedVerificationSource === "user"
+      || suppliedVerificationSource === "local_validator"
+      || suppliedVerificationSource === "machine_checked"
+      || figure.verification?.userApproved === true
+      || figure.representationSelectionSource === "user";
     const normalized = {
       ...figure,
       original,
@@ -1029,20 +1140,32 @@ function normalizeImportFigures(
       // External JSON may describe a user decision, but only an in-app click can create one.
       representationSelectionSource: figure.representationSelectionSource === "automatic" ? "automatic" as const : undefined,
       verification: figure.verification
-        ? { ...figure.verification, userApproved: false, verificationSource: "gpt_self_check" as const }
+        ? {
+          ...figure.verification,
+          userApproved: false,
+          verificationSource: forgedAutomaticClaim
+            ? "gpt_self_check" as const
+            : figure.verification.verificationSource === "second_pass_model" || figure.verification.verificationSource === "gpt_self_check"
+            ? figure.verification.verificationSource
+            : "none" as const,
+        }
         : undefined,
       image,
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || hadInvalidReference,
     };
+    if (forgedAutomaticClaim && normalized.cleaned?.generatedBy !== "deterministic_cleanup") {
+      normalized.processingStatus = "needs_review";
+      normalized.needsReview = true;
+      normalized.preferredRepresentation = "original";
+    }
     const automatic = applyAutomaticFigurePreference(normalized);
     return {
       ...automatic,
-      // A GPT self-check is informative only; it cannot authorize a cleaned/semantic representation.
-      image: automatic.original?.image ?? automatic.image,
-      source: automatic.original?.image ? "original" : automatic.source,
-      preferredRepresentation: automatic.original?.image ? "original" : automatic.preferredRepresentation,
-      needsReview: automatic.original?.image || automatic.cleaned?.image || automatic.semanticSpec ? true : automatic.needsReview,
+      image: automatic.image,
+      source: automatic.source,
+      preferredRepresentation: automatic.preferredRepresentation,
+      needsReview: automatic.needsReview,
     };
   });
 }

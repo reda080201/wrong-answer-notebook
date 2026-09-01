@@ -74,4 +74,16 @@ describe("question bank projection", () => {
     entry.questionMeta![0].questionNumber = "01";
     expect(buildQuestionBankItems([entry])[0].isWrong).toBe(true);
   });
+
+  it("projects structured, answer, and canonical figure review states", () => {
+    const entry = sheet();
+    entry.structuredQuestions = [{
+      questionNumber: "1", questionText: "구조화 문항", conditions: [], equations: [], choices: [],
+      contentSegments: [{ id: "text-1", type: "text", text: "구조화 문항" }], figureIds: ["f1"],
+      processingStatus: "ready",
+    }];
+    entry.answerKey = [{ id: "a1", questionNumber: "1", answer: "②", explanation: "", importantPoints: [], processingStatus: "needs_review" }];
+    entry.figures = [{ id: "f1", questionNumber: "1", title: "", caption: "", source: "original", image: "f1.png", processingStatus: "rejected", original: { image: "f1-original.png" } }];
+    expect(buildQuestionBankItems([entry])[0].needsReview).toBe(true);
+  });
 });

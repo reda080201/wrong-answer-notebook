@@ -1,4 +1,4 @@
-import type { EntryFormData, ImportAudit, SheetAnswerItem, SheetFigureItem, StructuredQuestion, QuestionContentSegment } from "../types";
+import type { EntryFormData, ImportAudit, ImportRejectedItem, SheetAnswerItem, SheetFigureItem, StructuredQuestion, QuestionContentSegment } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeQuestionNumber } from "./questionMeta";
 import { isMultipleChoiceQuestion, normalizeStructuredQuestionType } from "./structuredQuestionType";
@@ -250,5 +250,12 @@ export function normalizeImportAudit(
     uncertainQuestionNumbers: uncertain,
     handwritingExcluded: source.handwritingExcluded === true,
     needsReviewCount: calculateNeedsReviewCount(answers, figures, missing, uncertain, structuredQuestions ?? []),
+    rejectedItems: Array.isArray(source.rejectedItems)
+      ? source.rejectedItems.filter((item): item is ImportRejectedItem => Boolean(
+        item && typeof item === "object" &&
+        (((item as { kind?: unknown }).kind === "structured_question") || ((item as { kind?: unknown }).kind === "answer") || ((item as { kind?: unknown }).kind === "figure")) &&
+        typeof (item as { reason?: unknown }).reason === "string",
+      ))
+      : undefined,
   };
 }
