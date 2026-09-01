@@ -88,7 +88,7 @@ test.describe("runtime/UI convergence", () => {
     await settingsButton.click();
     const settingsPanel = page.locator(".settings-modal-panel");
     await expect(settingsPanel).toBeVisible();
-    await page.getByRole("button", { name: "GPT·MCP", exact: true }).click();
+    await page.getByRole("button", { name: "AI & 연결", exact: true }).click();
 
     await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollHeight - element.clientHeight))
       .toBeGreaterThan(0);
@@ -112,7 +112,7 @@ test.describe("runtime/UI convergence", () => {
 
     const sidebarFooter = page.locator(".sidebar-footer");
     await expect(sidebarFooter).toBeInViewport();
-    await expect(page.getByRole("button", { name: /시험지 가져오기/ })).toBeInViewport();
+    await expect(page.getByRole("button", { name: "+ 시험지 가져오기", exact: true })).toBeInViewport();
     await expect(documentHorizontalOverflow(page)).resolves.toBeLessThanOrEqual(1);
   });
 
@@ -152,9 +152,9 @@ test.describe("runtime/UI convergence", () => {
     await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(76);
     await expect.poll(async () => (await firstRow.boundingBox())?.height ?? 0).toBeLessThanOrEqual(88);
     await expect.poll(async () => firstRow.locator(".question-bank-card__detail").evaluate((element) => getComputedStyle(element).whiteSpace)).toBe("nowrap");
-    const searchInput = questionBank.locator(".question-bank-search input");
-    await expect(searchInput).toBeVisible();
-    await expect.poll(async () => searchInput.evaluate((element) => ({ border: getComputedStyle(element).borderWidth, background: getComputedStyle(element).backgroundColor }))).toMatchObject({ border: "1px" });
+    const searchField = questionBank.locator(".question-bank-search .ui-search-field");
+    await expect(searchField).toBeVisible();
+    await expect.poll(async () => searchField.evaluate((element) => ({ border: getComputedStyle(element).borderWidth, background: getComputedStyle(element).backgroundColor }))).toMatchObject({ border: "1px" });
     const chips = questionBank.locator(".question-bank-card__chips");
     await expect(chips).toBeVisible();
     await expect.poll(async () => chips.evaluate((element) => ({ gap: getComputedStyle(element).gap, count: element.children.length }))).toMatchObject({ gap: "6px" });
