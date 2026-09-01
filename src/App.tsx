@@ -47,6 +47,8 @@ import { getRemainingExamSeconds } from "./features/exam/services/realExam";
 import { getStorageBackendKind } from "./services/storageBackend";
 import { useLibraryFolderActions } from "./features/library/hooks/useLibraryFolderActions";
 import { useReviewSessions } from "./hooks/useReviewSessions";
+import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
+import Snackbar from "./shared/ui/Snackbar";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -72,6 +74,7 @@ function AppContent() {
     updateEntry,
     deleteEntry,
     deleteEntryWithUndo,
+    restorePendingDeletion,
     toggleMastered,
     toggleDifficult,
     patchEntry,
@@ -241,6 +244,12 @@ function AppContent() {
     sectionEntryCount,
   } = navigation;
 
+  const pendingDeletions = usePendingDeletionCoordinator({
+    entries,
+    restore: restorePendingDeletion,
+    setSelectedId,
+  });
+
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
   }, [selectedId, setExamStartError]);
@@ -302,6 +311,7 @@ function AppContent() {
     updateEntry,
     deleteEntry,
     deleteEntryWithUndo,
+    onPendingDeletion: pendingDeletions.record,
     patchEntry,
     patchEntryWithImportAssetSession,
     refresh,
@@ -852,6 +862,11 @@ function AppContent() {
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
         })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
+      {pendingDeletions.latest && (
+        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latest!)}>
+          {`"${pendingDeletions.latest.entry.title || "항목"}"을(를) 삭제했습니다.`}
+        </Snackbar>
+      )}
       {showExamBuilder && (
         <ExamBuilderWizard
           entries={entries}

@@ -72,11 +72,33 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const [visualFileName, setVisualFileName] = useState<string | null>(null);
   const [visualAnalysis, setVisualAnalysis] = useState<LearningImportAnalysis | null>(null);
   const [showReviewOnly, setShowReviewOnly] = useState(false);
+  const [cleanupBusy, setCleanupBusy] = useState(false);
+  const [cleanupError, setCleanupError] = useState<string | null>(null);
   const visualInputRef = useRef<HTMLInputElement>(null);
 
-  const parseText = (text: string, filename?: string) => {
-    try {
+  const discardVisualAnalysis = async () => {
+    const assetSession = visualAnalysis?.assetSession;
+    if (!assetSession) {
       setVisualAnalysis(null);
+      return true;
+    }
+    setCleanupBusy(true);
+    setCleanupError(null);
+    try {
+      await onDiscardAssetSession?.(assetSession);
+      setVisualAnalysis(null);
+      return true;
+    } catch (err) {
+      setCleanupError(err instanceof Error ? `임시 분석 자산을 정리하지 못했습니다. ${err.message}` : "임시 분석 자산을 정리하지 못했습니다.");
+      return false;
+    } finally {
+      setCleanupBusy(false);
+    }
+  };
+
+  const parseText = async (text: string, filename?: string) => {
+    try {
+      if (!(await discardVisualAnalysis())) return;
       const conceptValue = tryParseConceptKnowledgeText(text);
       if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
         setConceptImportValue(conceptValue);
@@ -98,7 +120,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const handleFile = async (file?: File) => {
     if (!file) return;
     try {
-      setVisualAnalysis(null);
+      if (!(await discardVisualAnalysis())) return;
       const parsed = await readLectureImportFile(file);
       const text = await file.text();
       const conceptValue = tryParseConceptKnowledgeText(text);
@@ -121,7 +143,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
 
   const handleVisualFile = async (file?: File) => {
     if (!file) return;
-    if (visualAnalysis?.assetSession) await onDiscardAssetSession?.(visualAnalysis.assetSession);
+    if (!(await discardVisualAnalysis())) return;
     setVisualFileName(file.name);
     setError(null);
     if (!onVisualFile) {
@@ -167,18 +189,18 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   const requestClose = () => {
-    if (saving) return;
-    const assetSession = visualAnalysis?.assetSession;
-    if (assetSession) void Promise.resolve(onDiscardAssetSession?.(assetSession)).finally(onClose);
-    else onClose();
+    if (saving || cleanupBusy) return;
+    void discardVisualAnalysis().then((discarded) => {
+      if (discarded) onClose();
+    });
   };
 
   return (
-    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving} busy={saving} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={saving} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={saving}>취소</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving}>{saving ? "저장 중..." : "특강 저장"}</button></>}>
+    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving || cleanupBusy} busy={saving || cleanupBusy} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={saving || cleanupBusy} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={saving || cleanupBusy}>취소</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || cleanupBusy}>{saving ? "저장 중..." : "특강 저장"}</button></>}>
         <nav className="learning-import-tabs" aria-label="특강 가져오기 방식">
           <button type="button" className={activeTab === "visual" ? "active" : ""} aria-pressed={activeTab === "visual"} onClick={() => setActiveTab("visual")}><FileImage size={16} aria-hidden="true" /> 이미지/PDF</button>
-          <button type="button" className={activeTab === "file" ? "active" : ""} aria-pressed={activeTab === "file"} onClick={() => setActiveTab("file")}><FileText size={16} aria-hidden="true" /> 파일</button>
-          <button type="button" className={activeTab === "text" ? "active" : ""} aria-pressed={activeTab === "text"} onClick={() => setActiveTab("text")}><span aria-hidden="true">T</span> 텍스트 붙여넣기</button>
+          <button type="button" className={activeTab === "file" ? "active" : ""} aria-pressed={activeTab === "file"} onClick={() => void discardVisualAnalysis().then((discarded) => { if (discarded) setActiveTab("file"); })}><FileText size={16} aria-hidden="true" /> 파일</button>
+          <button type="button" className={activeTab === "text" ? "active" : ""} aria-pressed={activeTab === "text"} onClick={() => void discardVisualAnalysis().then((discarded) => { if (discarded) setActiveTab("text"); })}><span aria-hidden="true">T</span> 텍스트 붙여넣기</button>
         </nav>
 
         <div className="learning-import-grid">
@@ -205,7 +227,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
               value={rawText}
               onChange={(event) => {
                 setRawText(event.target.value);
-                parseText(event.target.value);
+                void parseText(event.target.value);
               }}
               placeholder="HTML, Markdown, 텍스트, learningBlocks JSON을 붙여넣으세요."
             />
@@ -214,6 +236,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
             </p>
             </>}
             {error && <div className="form-error">{error}</div>}
+            {cleanupError && <div className="form-error">{cleanupError} <button type="button" className="btn-ghost" onClick={() => void discardVisualAnalysis()} disabled={cleanupBusy}>정리 다시 시도</button></div>}
           </section>
 
           <section className="learning-import-preview" aria-label="특강 미리보기">

@@ -462,6 +462,8 @@ export interface PendingDeletion {
   imageReferences: string[];
   requestedAt: string;
   finalizeAfter: string;
+  /** Restores the focused entry after an in-app Undo. Legacy records omit it. */
+  wasSelected?: boolean;
 }
 
 export type EntryFormData = Omit<

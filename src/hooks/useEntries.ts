@@ -365,7 +365,7 @@ export function useEntries() {
     [deleteImagesBestEffort, enqueueMutation],
   );
 
-  const deleteEntryWithUndo = useCallback(async (id: string): Promise<PendingDeletion> => {
+  const deleteEntryWithUndo = useCallback(async (id: string, wasSelected = false): Promise<PendingDeletion> => {
     const pendingStore = getStorageBackend();
     const loadPending = pendingStore.loadPendingDeletions;
     const savePending = pendingStore.savePendingDeletions;
@@ -380,6 +380,7 @@ export function useEntries() {
       imageReferences: getAllImageFilenames(currentEntry),
       requestedAt: new Date(now).toISOString(),
       finalizeAfter: new Date(now + 10_000).toISOString(),
+      wasSelected,
     };
     await savePending([...(await loadPending()), pending]);
     try {

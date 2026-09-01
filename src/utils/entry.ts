@@ -624,9 +624,13 @@ function normalizeFigureCleaned(raw: unknown): SheetFigureItem["cleaned"] {
   const generatedBy = value.generatedBy === "gpt" || value.generatedBy === "deterministic_cleanup" || value.generatedBy === "deterministic_redraw"
     ? value.generatedBy
     : undefined;
-  const untrustedGeneratedBy = typeof value.generatedBy === "string" && value.generatedBy.trim() && !generatedBy
-    ? value.generatedBy.trim()
+  const suppliedUntrustedGenerator = typeof value.untrustedGeneratedBy === "string" && value.untrustedGeneratedBy.trim()
+    ? value.untrustedGeneratedBy.trim()
     : undefined;
+  const untrustedGeneratedBy = suppliedUntrustedGenerator
+    ?? (typeof value.generatedBy === "string" && value.generatedBy.trim() && !generatedBy
+      ? value.generatedBy.trim()
+      : undefined);
   return {
     image: value.image.trim(),
     generatedBy,
