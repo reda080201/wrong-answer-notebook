@@ -14,7 +14,7 @@ function command(name, args, env) {
 
 try {
   await synchronizeDependencies(root);
-  const vite = command("npm", ["run", "dev:web", "--", "--host", "127.0.0.1"], {
+  const vite = command("npm", ["run", "dev:web", "--", ...process.argv.slice(2)], {
     ...process.env,
     VITE_STORAGE_MODE: "isolated-browser",
     VITE_SOURCE_PREVIEW: "1",

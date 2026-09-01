@@ -44,6 +44,7 @@ test("developer-only launchers separate shared and isolated Web storage modes", 
   assert.match(webLauncher, /VITE_STORAGE_MODE: "desktop-shared"/);
   assert.match(webLauncher, /openBrowser\("http:\/\/127\.0\.0\.1:1420"\)/);
   assert.match(isolatedLauncher, /VITE_STORAGE_MODE: "isolated-browser"/);
+  assert.match(isolatedLauncher, /process\.argv\.slice\(2\)/);
   assert.doesNotMatch(isolatedLauncher, /VITE_DESKTOP_STORAGE_BRIDGE_TOKEN/);
 });
 
