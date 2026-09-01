@@ -196,8 +196,13 @@ export default function AppModals({
     }
   };
 
-  const analyzeLearningVisualFile = async (file: File): Promise<LearningImportAnalysis> => {
+  const analyzeLearningVisualFile = async (file: File, signal: AbortSignal): Promise<LearningImportAnalysis> => {
+    const throwIfAborted = () => {
+      if (signal.aborted) throw new DOMException("분석을 취소했습니다.", "AbortError");
+    };
+    throwIfAborted();
     const visualFiles = await rasterizeVisualImportFile(file);
+    throwIfAborted();
     if (!visualFiles.every((candidate) => candidate.type.startsWith("image/"))) {
       throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
     }
@@ -207,12 +212,14 @@ export default function AppModals({
     const sourcePageImages = Object.values(staged.sourceToStaged);
     const assetSession = { id: staged.sessionId, mode: "tauri-staged" as const, manifestVersion: 1 as const, createdAt: new Date().toISOString(), sourceToStaged: staged.sourceToStaged, assets: staged.assets };
     try {
+      throwIfAborted();
       const prompt = [
         "이미지에서 학습 자료를 추출해 JSON으로 반환하세요.",
         "learningBlocks 배열만 만들고, 확실하지 않은 제목/내용은 reviewStatus를 needs_review로 표시하세요.",
         "원본 이미지의 내용은 추측하지 말고, 사용자 검증 또는 verified 상태를 생성하지 마세요.",
       ].join("\n");
       const response = await generateImportWithAi(prompt, "이미지/PDF 기반 특강 자료를 분석하세요.", sourcePageImages);
+      throwIfAborted();
       const parsed = parseLectureImportText(response, file.name);
       const genericTitle = /^(instruction|in'?sight|insight|concept|summary)$/i.test(parsed.title.trim());
       const blocks = parsed.blocks.map((block) => ({

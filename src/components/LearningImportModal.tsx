@@ -54,7 +54,7 @@ interface LearningImportModalProps {
   onApply: (blocks: LearningBlock[], meta: LearningImportMeta) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[]) => Promise<void> | void;
   mode?: "append" | "lecture";
-  onVisualFile?: (file: File) => Promise<LearningImportAnalysis>;
+  onVisualFile?: (file: File, signal: AbortSignal) => Promise<LearningImportAnalysis>;
   onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
 }
 
@@ -75,6 +75,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const [cleanupBusy, setCleanupBusy] = useState(false);
   const [cleanupError, setCleanupError] = useState<string | null>(null);
   const visualInputRef = useRef<HTMLInputElement>(null);
+  const visualAnalysisAbortRef = useRef<AbortController | null>(null);
 
   const discardVisualAnalysis = async () => {
     const assetSession = visualAnalysis?.assetSession;
@@ -151,16 +152,25 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       return;
     }
     try {
+      const controller = new AbortController();
+      visualAnalysisAbortRef.current = controller;
       setSaving(true);
-      const parsed = await onVisualFile(file);
+      const parsed = await onVisualFile(file, controller.signal);
+      if (controller.signal.aborted) {
+        if (parsed.assetSession) await onDiscardAssetSession?.(parsed.assetSession);
+        return;
+      }
       setBlocks(parsed.blocks);
       setVisualAnalysis(parsed);
       setMeta((current) => ({ ...current, title: parsed.title || file.name.replace(/\.[^.]+$/, ""), sourceType: "json" }));
     } catch (err) {
       setBlocks([]);
       setVisualAnalysis(null);
-      setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
+      }
     } finally {
+      visualAnalysisAbortRef.current = null;
       setSaving(false);
     }
   };
@@ -189,14 +199,18 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   const requestClose = () => {
-    if (saving || cleanupBusy) return;
+    if (saving) {
+      visualAnalysisAbortRef.current?.abort();
+      return;
+    }
+    if (cleanupBusy) return;
     void discardVisualAnalysis().then((discarded) => {
       if (discarded) onClose();
     });
   };
 
   return (
-    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={saving || cleanupBusy} busy={saving || cleanupBusy} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={saving || cleanupBusy} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={saving || cleanupBusy}>취소</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || cleanupBusy}>{saving ? "저장 중..." : "특강 저장"}</button></>}>
+    <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={cleanupBusy} busy={cleanupBusy} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={cleanupBusy} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={cleanupBusy}>{saving ? "분석 취소" : "취소"}</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || cleanupBusy}>{saving ? "분석 중..." : "특강 저장"}</button></>}>
         <nav className="learning-import-tabs" aria-label="특강 가져오기 방식">
           <button type="button" className={activeTab === "visual" ? "active" : ""} aria-pressed={activeTab === "visual"} onClick={() => setActiveTab("visual")}><FileImage size={16} aria-hidden="true" /> 이미지/PDF</button>
           <button type="button" className={activeTab === "file" ? "active" : ""} aria-pressed={activeTab === "file"} onClick={() => void discardVisualAnalysis().then((discarded) => { if (discarded) setActiveTab("file"); })}><FileText size={16} aria-hidden="true" /> 파일</button>

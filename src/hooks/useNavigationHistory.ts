@@ -24,6 +24,7 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
   const restoringRef = useRef(false);
   const firstRef = useRef(true);
   const scrollContainers = useRef(new Map<string, HTMLElement>());
+  const pendingScroll = useRef<Record<string, number>>({});
   const latestSnapshot = useRef(snapshot);
   latestSnapshot.current = snapshot;
 
@@ -32,6 +33,7 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
     scrollTop: Object.fromEntries([...scrollContainers.current.entries()].map(([key, element]) => [key, element.scrollTop])),
   }), []);
 
+  const snapshotKey = JSON.stringify(snapshot);
   useEffect(() => {
     const next = withScroll();
     if (restoringRef.current) {
@@ -45,30 +47,42 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
     } else {
       window.history.pushState({ [HISTORY_KEY]: next }, "");
     }
-  }, [snapshot, withScroll]);
+  }, [snapshotKey, withScroll]);
 
   useEffect(() => {
     const onPopState = (event: PopStateEvent) => {
       const value = event.state?.[HISTORY_KEY] as NavigationSnapshot | undefined;
       if (!value) return;
       restoringRef.current = true;
+      pendingScroll.current = value.scrollTop ?? {};
       restore(value);
-      window.requestAnimationFrame(() => {
-        for (const [key, top] of Object.entries(value.scrollTop ?? {})) {
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        for (const [key, top] of Object.entries(pendingScroll.current)) {
           const element = scrollContainers.current.get(key);
           if (element) element.scrollTop = top;
         }
-      });
+      }));
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [restore]);
 
   const registerScrollRestoration = useCallback((key: string, element: HTMLElement | null) => {
-    if (!element) return () => undefined;
+    if (!element) {
+      scrollContainers.current.delete(key);
+      return () => undefined;
+    }
     scrollContainers.current.set(key, element);
+    const savedTop = pendingScroll.current[key];
+    if (typeof savedTop === "number") {
+      window.requestAnimationFrame(() => { element.scrollTop = savedTop; });
+    }
     return () => { scrollContainers.current.delete(key); };
   }, []);
 
-  return { registerScrollRestoration };
+  const scrollRef = useCallback((key: string) => (element: HTMLElement | null) => {
+    registerScrollRestoration(key, element);
+  }, [registerScrollRestoration]);
+
+  return { registerScrollRestoration, scrollRef };
 }

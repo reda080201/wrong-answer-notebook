@@ -276,18 +276,24 @@ function normalizeExternalStructuredQuestions(raw: unknown): { questions?: Struc
 function removeRejectedAnswers(raw: unknown, answers: SheetAnswerItem[]): { answers: SheetAnswerItem[]; rejectedItems: ImportRejectedItem[] } {
   const rawItems = Array.isArray(raw) ? raw : [];
   const rejectedItems: ImportRejectedItem[] = [];
-  const rawByNumber = new Map<string, unknown[]>();
+  const rawByIdentity = new Map<string, unknown[]>();
+  const identityOf = (value: { questionNumber?: unknown; answer?: unknown; correctAnswer?: unknown }) => {
+    const number = normalizeQuestionNumber(String(value.questionNumber ?? ""));
+    const answer = String(value.answer ?? value.correctAnswer ?? "").trim();
+    return `${number}\u0000${answer}`;
+  };
   for (const rawItem of rawItems) {
     const value = rawItem && typeof rawItem === "object" ? rawItem as Record<string, unknown> : undefined;
-    const number = normalizeQuestionNumber(String(value?.questionNumber ?? ""));
-    if (!number) continue;
-    const bucket = rawByNumber.get(number) ?? [];
-    bucket.push(rawItem);
-    rawByNumber.set(number, bucket);
+    const identity = identityOf(value ?? {});
+    if (!identity.startsWith("\u0000")) {
+      const bucket = rawByIdentity.get(identity) ?? [];
+      bucket.push(rawItem);
+      rawByIdentity.set(identity, bucket);
+    }
   }
   const accepted = answers.filter((answer) => {
     const number = normalizeQuestionNumber(answer.questionNumber);
-    const rawItem = rawByNumber.get(number)?.shift();
+    const rawItem = rawByIdentity.get(identityOf(answer))?.shift();
     if (answer.processingStatus !== "rejected") return true;
     rejectedItems.push(rawRejectedItem("answer", rawItem ?? { questionNumber: answer.questionNumber, answer: answer.answer }, "거부된 정답은 canonical answer key에서 제외하고 audit evidence로 보존했습니다.", number || undefined));
     return false;
@@ -1136,7 +1142,10 @@ function normalizeImportFigures(
       (figure.cleaned?.image && !cleanedImage),
     );
     const canDescribe = Boolean(figure.caption.trim()) || hasDiagramForQuestion(figure.questionNumber, answerKey, learningBlocks);
-    const forgedAutomaticClaim = suppliedVerificationSource === "user"
+    const claimedExternalDeterministicGenerator = figure.cleaned?.generatedBy === "deterministic_cleanup"
+      || figure.cleaned?.generatedBy === "deterministic_redraw";
+    const forgedAutomaticClaim = claimedExternalDeterministicGenerator
+      || suppliedVerificationSource === "user"
       || suppliedVerificationSource === "local_validator"
       || suppliedVerificationSource === "machine_checked"
       || figure.verification?.userApproved === true
@@ -1162,10 +1171,17 @@ function normalizeImportFigures(
       source: image ? figure.source : canDescribe ? "described_only" : figure.source,
       needsReview: figure.needsReview || hadInvalidReference,
     };
-    if (forgedAutomaticClaim && normalized.cleaned?.generatedBy !== "deterministic_cleanup") {
+    if (forgedAutomaticClaim) {
       normalized.processingStatus = "needs_review";
       normalized.needsReview = true;
       normalized.preferredRepresentation = "original";
+      if (normalized.cleaned && claimedExternalDeterministicGenerator) {
+        normalized.cleaned = {
+          ...normalized.cleaned,
+          generatedBy: "gpt",
+          untrustedGeneratedBy: figure.cleaned?.generatedBy,
+        };
+      }
     }
     const automatic = applyAutomaticFigurePreference(normalized);
     return {

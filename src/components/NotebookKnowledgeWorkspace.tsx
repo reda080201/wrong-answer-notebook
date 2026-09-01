@@ -24,6 +24,7 @@ interface NotebookKnowledgeWorkspaceProps {
   openCandidateReview(entryId: string): void;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  onRegisterScrollContainer?(key: string, element: HTMLElement | null): void;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -38,6 +39,7 @@ export default function NotebookKnowledgeWorkspace({
   openCandidateReview,
   aiProviderStatus,
   onOpenAiSettings,
+  onRegisterScrollContainer,
 }: NotebookKnowledgeWorkspaceProps) {
   if (mode === "question-bank") {
     return (
@@ -53,6 +55,7 @@ export default function NotebookKnowledgeWorkspace({
           const entry = entries.find((candidate) => candidate.id === item.entryId);
           if (entry) openEntry(entry, item.questionNumber);
         }}
+        onRegisterScrollContainer={onRegisterScrollContainer}
       />
     );
   }
@@ -96,6 +99,7 @@ export default function NotebookKnowledgeWorkspace({
       onOpenCandidateReview={openCandidateReview}
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
+      onRegisterScrollContainer={onRegisterScrollContainer}
     />
   );
 }

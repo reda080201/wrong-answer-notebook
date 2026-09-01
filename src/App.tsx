@@ -190,6 +190,7 @@ function AppContent() {
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
   const reviewSessions = useReviewSessions();
+  const pendingDeletionFlushRef = useRef<() => Promise<void>>(async () => undefined);
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
     examSaveTimerRef,
@@ -202,6 +203,7 @@ function AppContent() {
     flushLibraryFolders: library.flush,
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
     flushReviewSessions: reviewSessions.flush,
+    flushPendingDeletions: () => pendingDeletionFlushRef.current(),
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
@@ -249,6 +251,7 @@ function AppContent() {
     restore: restorePendingDeletion,
     setSelectedId,
   });
+  pendingDeletionFlushRef.current = pendingDeletions.flush;
 
   useEffect(() => {
     setExamStartError((current) => current?.entryId === selectedId ? current : null);
@@ -502,8 +505,7 @@ function AppContent() {
     if (showLibraryExplorer) return { type: "library" };
     return { type: "section", section: activeSection };
   }, [activeSection, showLearningHub, showLibraryExplorer, showQuestionBank]);
-  const navigationHistory = useNavigationHistory({
-    snapshot: {
+  const navigationSnapshot = useMemo(() => ({
       destination: sidebarDestination.type,
       section: activeSection,
       selectedId,
@@ -512,8 +514,8 @@ function AppContent() {
       listFilter,
       sortKey,
       difficultyScoreFilter,
-    },
-    restore: (snapshot) => {
+  }), [activeSection, difficultyScoreFilter, listFilter, search, selectedId, sidebarDestination.type, sortKey, subjectFilter]);
+  const restoreNavigationSnapshot = useCallback((snapshot: typeof navigationSnapshot) => {
       setActiveSection(snapshot.section as EntryKind);
       setSelectedId(snapshot.selectedId);
       setSearch(snapshot.search);
@@ -524,7 +526,10 @@ function AppContent() {
       setShowLearningHub(snapshot.destination === "learning_hub");
       setShowQuestionBank(snapshot.destination === "question_bank");
       setShowLibraryExplorer(snapshot.destination === "library");
-    },
+  }, [setActiveSection, setDifficultyScoreFilter, setListFilter, setSearch, setSelectedId, setShowLearningHub, setShowLibraryExplorer, setShowQuestionBank, setSortKey, setSubjectFilter]);
+  const navigationHistory = useNavigationHistory({
+    snapshot: navigationSnapshot,
+    restore: restoreNavigationSnapshot,
   });
 
   return (
@@ -590,7 +595,7 @@ function AppContent() {
           </nav>
         )}
 
-        <div className="content" ref={(element) => { navigationHistory.registerScrollRestoration("main", element); }}>
+        <div className="content" ref={navigationHistory.scrollRef("main")}>
           {showLibraryExplorer ? (
             <LibraryExplorer
               folders={library.folders}
@@ -618,6 +623,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -636,6 +642,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -846,11 +853,11 @@ function AppContent() {
                 <br />새 {entryKindName(activeSection)}를 추가하세요.
               </p>
               {activeSection === "problem_sheet" ? (
-                <button type="button" className="btn-primary" onClick={() => actions.openImport("import")}>첫 시험지 가져오기</button>
+                <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
               ) : activeSection === "lecture" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>첫 특강 가져오기</button>
               ) : activeSection === "concept" ? (
-                <button type="button" className="btn-primary" onClick={() => actions.handleQuickConceptCreate()}>첫 개념 만들기</button>
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 개념 만들기</button>
               ) : (
                 <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 오답 추가</button>
               )}

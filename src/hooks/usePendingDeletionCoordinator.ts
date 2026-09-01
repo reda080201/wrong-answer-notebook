@@ -29,10 +29,13 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
     const retained: PendingDeletion[] = [];
     let failure: string | null = null;
     for (const record of records) {
-      if (Date.parse(record.finalizeAfter) > now || entriesRef.current.some((entry) => entry.id === record.entry.id)) {
+      if (Date.parse(record.finalizeAfter) > now) {
         retained.push(record);
         continue;
       }
+      // A restored entry owns its images again, so its already-expired pending
+      // record is no longer actionable and must not survive another startup.
+      if (entriesRef.current.some((entry) => entry.id === record.entry.id)) continue;
       const references = new Set(entriesRef.current.flatMap(getAllImageFilenames));
       try {
         for (const image of record.imageReferences) {
