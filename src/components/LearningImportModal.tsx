@@ -35,6 +35,7 @@ export interface LearningImportAnalysis {
     extracted: number;
     machineChecked: number;
     needsReview: number;
+    blocked: number;
   };
   issues: LearningImportIssue[];
   assetSession?: ImportAssetSessionManifest;
@@ -259,8 +260,8 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
             <h3>미리보기</h3>
             {visualAnalysis && (
               <div className="learning-import-analysis" aria-label="자동 분석 요약">
-                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 추출 {visualAnalysis.counts.extracted}개 · 검토 권장 {visualAnalysis.counts.needsReview}개{visualAnalysis.counts.machineChecked ? ` · 로컬 검증 ${visualAnalysis.counts.machineChecked}개` : ""}</p>
-                {visualAnalysis.issues.length > 0 && <button type="button" className="btn-ghost" onClick={() => setShowReviewOnly((value) => !value)}>{showReviewOnly ? "전체 보기" : "검토 필요만 보기"}</button>}
+                <p>문항 {visualAnalysis.counts.questions}개 · 이미지 {visualAnalysis.counts.images}개 · 자동 추출 {visualAnalysis.counts.extracted}개 · 검토 권장 {visualAnalysis.counts.needsReview}개 · 차단 {visualAnalysis.counts.blocked}개</p>
+                {visualAnalysis.issues.length > 0 && <button type="button" className="btn-ghost" onClick={() => setShowReviewOnly((value) => !value)}>{showReviewOnly ? "전체 보기" : "검토 권장만 보기"}</button>}
                 {visualAnalysis.issues.filter((issue) => !showReviewOnly || issue.severity !== "informational").map((issue, index) => (
                   <p key={`${issue.path ?? "issue"}-${index}`} className={`form-${issue.severity === "blocking" ? "error" : "hint"}`}>{issue.path ? `${issue.path}: ` : ""}{issue.message}</p>
                 ))}
