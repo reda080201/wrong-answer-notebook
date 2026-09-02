@@ -503,6 +503,10 @@ export function useAppActions({
       const ids = assetSession?.mode === "tauri-staged"
         ? await addEntriesWithImportAssetSession(assetSession.id, forms)
         : await addEntries(forms);
+      setShowImportModal(false);
+      setSolutionSourceEntry(undefined);
+      setImportMode("import");
+      setPendingImportFiles([]);
       setActiveSection(forms[0].entryKind);
       setSelectedId(ids[0] ?? null);
     } catch (error) {
