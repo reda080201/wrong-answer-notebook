@@ -6,6 +6,7 @@ import {
   normalizeRejectedNotes,
   removeRejectedNotes,
   scrubRejectedNotesFromContentSegments,
+  scrubRejectedNotesFromContentSegmentMap,
   scrubRejectedNotesFromAnswers,
   scrubRejectedNotesFromStructuredQuestions,
 } from "../../../utils/importAudit";
@@ -21,7 +22,7 @@ export function canonicalizeImportDraftForSave(data: Partial<EntryFormData>): Pa
     ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
     : cleanQuestionText(removeRejectedNotes(data.question ?? "", rejectedNotes));
   const answerKey = scrubRejectedNotesFromAnswers(data.answerKey ?? [], rejectedNotes);
-  const questionContentSegments = scrubRejectedNotesFromContentSegments(
+  const questionContentSegments = scrubRejectedNotesFromContentSegmentMap(
     data.questionContentSegments,
     rejectedNotes,
   );

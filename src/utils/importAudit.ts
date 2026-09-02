@@ -123,7 +123,22 @@ export function scrubRejectedNotesFromContentSegments(
   segments: QuestionContentSegment[] | undefined,
   rejectedNotes: string[],
 ): QuestionContentSegment[] | undefined {
-  return segments?.map((segment) => scrubRejectedNotesFromSegment(segment, rejectedNotes));
+  return Array.isArray(segments)
+    ? segments.map((segment) => scrubRejectedNotesFromSegment(segment, rejectedNotes))
+    : segments;
+}
+
+export function scrubRejectedNotesFromContentSegmentMap(
+  segments: Record<string, QuestionContentSegment[]> | undefined,
+  rejectedNotes: string[],
+): Record<string, QuestionContentSegment[]> | undefined {
+  if (!segments || Array.isArray(segments)) return segments;
+  return Object.fromEntries(
+    Object.entries(segments).map(([questionNumber, questionSegments]) => [
+      questionNumber,
+      scrubRejectedNotesFromContentSegments(questionSegments, rejectedNotes) ?? [],
+    ]),
+  );
 }
 
 export function scrubRejectedNotesFromStructuredQuestions(
