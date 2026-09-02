@@ -4,7 +4,8 @@
   "version": "1.0.2",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node scripts/launch-web.mjs",
+    "dev:isolated": "node scripts/launch-web-isolated.mjs",
     "dev:web": "vite",
     "dev:desktop": "tauri dev",
     "build": "tsc -b && vite build",
