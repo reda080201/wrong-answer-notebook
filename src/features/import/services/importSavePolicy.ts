@@ -5,7 +5,6 @@ import {
   normalizeImportAudit,
   normalizeRejectedNotes,
   removeRejectedNotes,
-  scrubRejectedNotesFromContentSegments,
   scrubRejectedNotesFromContentSegmentMap,
   scrubRejectedNotesFromAnswers,
   scrubRejectedNotesFromStructuredQuestions,
