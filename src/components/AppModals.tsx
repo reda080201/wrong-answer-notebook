@@ -238,6 +238,7 @@ export default function AppModals({
           extracted: blocks.length,
           machineChecked: 0,
           needsReview: blocks.filter((block) => block.reviewStatus === "needs_review").length + (genericTitle ? 1 : 0),
+          blocked: 0,
         },
         issues: genericTitle
           ? [{ severity: "review_required", path: "title", message: "일반적인 자동 제목입니다. 원문에 맞는 제목인지 확인하세요." }]
