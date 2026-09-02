@@ -72,3 +72,20 @@ export async function hasBrowserImage(key: string): Promise<boolean> {
   return (await getBrowserImage(key)) !== null;
 }
 
+export async function listBrowserImages(): Promise<Record<string, string>> {
+  if (!supportsIndexedDb()) {
+    return Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""]));
+  }
+  const db = await openDatabase();
+  const images = await new Promise<Record<string, string>>((resolve, reject) => {
+    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+    const keysRequest = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAllKeys();
+    request.onsuccess = () => {
+      keysRequest.onsuccess = () => resolve(Object.fromEntries(keysRequest.result.map((key, index) => [String(key), typeof request.result[index] === "string" ? request.result[index] : ""])));
+      keysRequest.onerror = () => reject(keysRequest.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+    };
+    request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+  });
+  db.close();
+  return images;
+}

@@ -934,6 +934,26 @@ mod tests {
     }
 
     #[test]
+    fn conditional_entry_save_rejects_a_stale_revision() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = NotebookStore::new(
+            directory.path().join("entries.json"),
+            directory.path().join("images"),
+        );
+        let first = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"첫 내용", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"a", "mastered":false
+        }])).unwrap();
+        store.save_entries(&first).unwrap();
+        let revision = store.entries_revision().unwrap();
+        let mut second = first.clone();
+        second[0].memo = "다른 창의 수정".to_owned();
+        store.save_entries(&second).unwrap();
+        let error = store.save_entries_if_revision(&first, &revision).unwrap_err();
+        assert!(error.contains("다른 실행 창"));
+        assert_eq!(store.load_entries().unwrap()[0].memo, "다른 창의 수정");
+    }
+
+    #[test]
     fn staged_entry_commit_keeps_assets_staged_when_the_review_baseline_is_stale() {
         let entry = parse_entries_value(json!([{
             "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"baseline", "mastered":false
