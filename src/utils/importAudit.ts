@@ -102,7 +102,7 @@ function missingChoicesWarning(warning: string | undefined): string {
   return warning.includes(message) ? warning : `${warning} ${message}`;
 }
 
-function scrubStructuredSegment(segment: QuestionContentSegment, rejectedNotes: string[]): QuestionContentSegment {
+export function scrubRejectedNotesFromSegment(segment: QuestionContentSegment, rejectedNotes: string[]): QuestionContentSegment {
   if (segment.type === "text" || segment.type === "condition") {
     return {
       ...segment,
@@ -117,6 +117,28 @@ function scrubStructuredSegment(segment: QuestionContentSegment, rejectedNotes: 
     return { ...segment, rows: segment.rows.map((row) => row.map((cell) => removeRejectedNotes(cell, rejectedNotes))) };
   }
   return { ...segment };
+}
+
+export function scrubRejectedNotesFromContentSegments(
+  segments: QuestionContentSegment[] | undefined,
+  rejectedNotes: string[],
+): QuestionContentSegment[] | undefined {
+  return Array.isArray(segments)
+    ? segments.map((segment) => scrubRejectedNotesFromSegment(segment, rejectedNotes))
+    : segments;
+}
+
+export function scrubRejectedNotesFromContentSegmentMap(
+  segments: Record<string, QuestionContentSegment[]> | undefined,
+  rejectedNotes: string[],
+): Record<string, QuestionContentSegment[]> | undefined {
+  if (!segments || Array.isArray(segments)) return segments;
+  return Object.fromEntries(
+    Object.entries(segments).map(([questionNumber, questionSegments]) => [
+      questionNumber,
+      scrubRejectedNotesFromContentSegments(questionSegments, rejectedNotes) ?? [],
+    ]),
+  );
 }
 
 export function scrubRejectedNotesFromStructuredQuestions(
@@ -150,7 +172,7 @@ export function scrubRejectedNotesFromStructuredQuestions(
       conditions: question.conditions.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),
       equations: question.equations.map((item) => removeRejectedNotes(item, rejectedNotes)).filter(Boolean),
       choices,
-      contentSegments: question.contentSegments.map((segment) => scrubStructuredSegment(segment, rejectedNotes)),
+      contentSegments: question.contentSegments.map((segment) => scrubRejectedNotesFromSegment(segment, rejectedNotes)),
       source: question.source
         ? {
             ...question.source,

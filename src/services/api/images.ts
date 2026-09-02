@@ -5,6 +5,7 @@ import { IMPORT_LIMITS } from "../../features/import/services/importLimits";
 import { mapEntryImportImageReferences, normalizeImportImageKey } from "../../utils/importImageReferences";
 import { errorMessage } from "./shared";
 import { getStorageBackendKind, proxyRequest } from "../storageBackend";
+import { deleteBrowserImage, getBrowserImage, putBrowserImage } from "./browserImageStore";
 
 export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
@@ -82,7 +83,7 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
       }
       const dataUrl = await fileToDataUrl(file);
       const key = createBrowserImageKey(file.name);
-      localStorage.setItem(key, dataUrl);
+      await putBrowserImage(key, dataUrl);
       names.push(key);
     }
   } catch (error) {
@@ -160,7 +161,7 @@ export async function getImageUrl(filename: string): Promise<string> {
 
   const backendKind = getStorageBackendKind();
   if (backendKind === "isolated-browser") {
-    return localStorage.getItem(filename) ?? "";
+    return await getBrowserImage(filename) ?? "";
   }
   if (backendKind === "desktop-proxy") {
     const response = await fetch(`${import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL}/v1/images/${encodeURIComponent(filename)}`, {
@@ -218,8 +219,8 @@ export function clearImageUrlCache(filename?: string): void {
 export async function deleteImage(filename: string): Promise<void> {
   try {
     clearImageUrlCache(filename);
-    if (getStorageBackendKind() === "isolated-browser" && localStorage.getItem(filename)) {
-      localStorage.removeItem(filename);
+    if (getStorageBackendKind() === "isolated-browser") {
+      await deleteBrowserImage(filename);
       return;
     }
     if (getStorageBackendKind() === "desktop-proxy") {

@@ -21,6 +21,7 @@ import {
 } from "./shared";
 import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
+import { listBrowserImages } from "./browserImageStore";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -56,10 +57,10 @@ export interface RestoreBackupResult {
   warnings: string[];
 }
 
-function readBrowserBackupSnapshot(
+async function readBrowserBackupSnapshot(
   fallbackEntries: WrongAnswerEntry[],
   fallbackSettings: AppSettings,
-): Omit<BrowserBackupPayloadV2, "meta"> {
+): Promise<Omit<BrowserBackupPayloadV2, "meta">> {
   const storedEntries = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   const storedSettings = readStorageJson(localStorage, SETTINGS_STORAGE_KEY, isUnknownStorageValue);
   const entries = storedEntries === null ? fallbackEntries : parseStoredEntries(storedEntries);
@@ -75,11 +76,7 @@ function readBrowserBackupSnapshot(
   return {
     entries,
     settings: storedSettings === null ? fallbackSettings : normalizeSettings(storedSettings as AppSettings),
-    browserImages: Object.fromEntries(
-      Object.keys(localStorage)
-        .filter((key) => key.startsWith("img_"))
-        .map((key) => [key, localStorage.getItem(key) ?? ""]),
-    ),
+    browserImages: await listBrowserImages(),
     examSessions: readBrowserArray<ExamSession>(EXAM_SESSIONS_STORAGE_KEY, "모의고사 세션"),
     generatedExams: readBrowserArray<GeneratedExam>(GENERATED_EXAMS_STORAGE_KEY, "생성 모의고사"),
     libraryFolders: readBrowserValue(LIBRARY_FOLDERS_STORAGE_KEY, isLibraryFolderArray, "폴더 목록", []),
@@ -287,7 +284,7 @@ export async function createBackupAtDestination(
     await invoke("create_backup_zip", { backupPath });
     return `백업을 저장했습니다: ${backupPath}`;
   }
-  const snapshot = readBrowserBackupSnapshot(entries, settings);
+  const snapshot = await readBrowserBackupSnapshot(entries, settings);
   const payload: BackupPayload = {
     meta: { version: 2, createdAt: new Date().toISOString(), source: "browser" },
     ...snapshot,
@@ -371,8 +368,9 @@ export async function previewOrphanImages(): Promise<OrphanImagePreview> {
   const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   const entries = stored === null ? [] : parseStoredEntries(stored);
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
-  const filenames = Object.keys(localStorage).filter((key) => key.startsWith("img_") && !referenced.has(key));
-  const totalBytes = filenames.reduce((sum, filename) => sum + (localStorage.getItem(filename)?.length ?? 0), 0);
+  const browserImages = await listBrowserImages();
+  const filenames = Object.keys(browserImages).filter((key) => !referenced.has(key));
+  const totalBytes = filenames.reduce((sum, filename) => sum + (browserImages[filename]?.length ?? 0), 0);
   return { filenames, totalBytes };
 }
 
@@ -385,9 +383,11 @@ export async function cleanupOrphanImages(): Promise<number> {
   const entries = stored === null ? [] : parseStoredEntries(stored);
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   let removed = 0;
-  for (const key of Object.keys(localStorage)) {
-    if (key.startsWith("img_") && !referenced.has(key)) {
-      localStorage.removeItem(key);
+  const browserImages = await listBrowserImages();
+  for (const key of Object.keys(browserImages)) {
+    if (!referenced.has(key)) {
+      const { deleteBrowserImage } = await import("./browserImageStore");
+      await deleteBrowserImage(key);
       clearImageUrlCache(key);
       removed += 1;
     }

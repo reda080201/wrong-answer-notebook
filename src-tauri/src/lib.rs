@@ -164,6 +164,38 @@ fn load_entries(
     store.load_entries()
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EntriesSnapshot {
+    entries: Vec<WrongAnswerEntry>,
+    revision: String,
+}
+
+#[tauri::command]
+fn load_entries_snapshot(
+    app: tauri::AppHandle,
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+) -> Result<EntriesSnapshot, String> {
+    exam_submission::reconcile_exam_submission(
+        &store,
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
+    Ok(EntriesSnapshot {
+        entries: store.load_entries()?,
+        revision: store.entries_revision()?,
+    })
+}
+
+#[tauri::command]
+fn save_entries_if_revision(
+    store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
+    entries: Vec<WrongAnswerEntry>,
+    expected_revision: String,
+) -> Result<String, String> {
+    store.save_entries_if_revision(&entries, &expected_revision)
+}
+
 #[tauri::command]
 fn save_entries(
     app: tauri::AppHandle,
@@ -1105,6 +1137,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             load_entries,
+            load_entries_snapshot,
+            save_entries_if_revision,
             save_entries,
             load_exam_sessions,
             save_exam_sessions,

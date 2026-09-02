@@ -24,6 +24,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::{Component, Path, PathBuf},
     sync::Arc,
+    time::{Duration, SystemTime},
 };
 
 const EXACT_ORIGIN: &str = "http://127.0.0.1:1420";
@@ -38,6 +39,7 @@ const STORE_NAMES: &[&str] = &[
     "pending-deletions",
     "import-workspace-draft",
 ];
+const IMPORT_ASSET_SESSION_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
 
 #[derive(Clone)]
 struct BridgeState {
@@ -204,15 +206,35 @@ async fn save_store(
         return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into()));
     }
     validate_store(&name, &value).map_err(invalid)?;
+    if name == "entries" {
+        let entries = crate::notebook_store::parse_entries_value(value).map_err(invalid)?;
+        state.store.save_entries(&entries).map_err(internal)?;
+        return Ok(Json(json!({ "ok": true })));
+    }
     with_file_lock(&state.data_dir, || {
-        if name == "entries" {
-            let entries = crate::notebook_store::parse_entries_value(value).map_err(invalid)?;
-            state.store.save_entries(&entries).map_err(internal)?;
-        } else {
-            write_json_atomic(&store_path(&state.data_dir, &name)?, &value).map_err(internal)?;
-        }
+        write_json_atomic(&store_path(&state.data_dir, &name)?, &value).map_err(internal)?;
         Ok(Json(json!({ "ok": true })))
     })
+}
+
+async fn load_entries_snapshot(State(state): State<BridgeState>) -> BridgeResult<Json<Value>> {
+    with_file_lock(&state.data_dir, || {
+        let entries = state.store.load_entries().map_err(internal)?;
+        let revision = state.store.entries_revision().map_err(internal)?;
+        Ok(Json(json!({ "entries": entries, "revision": revision })))
+    })
+}
+
+async fn save_entries_if_revision(
+    State(state): State<BridgeState>,
+    Json(payload): Json<EntriesRevisionPayload>,
+) -> BridgeResult<Json<Value>> {
+    let entries = crate::notebook_store::parse_entries_value(payload.entries).map_err(invalid)?;
+    let revision = state
+        .store
+        .save_entries_if_revision(&entries, &payload.expected_revision)
+        .map_err(internal)?;
+    Ok(Json(json!({ "revision": revision })))
 }
 
 async fn clear_store(
@@ -477,6 +499,61 @@ async fn discard_import_session(
     Ok(Json(json!({ "ok": true })))
 }
 
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CleanupImportSessionsPayload {
+    #[serde(default)]
+    protected_session_ids: Vec<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EntriesRevisionPayload {
+    entries: Value,
+    expected_revision: String,
+}
+
+fn cleanup_stale_import_sessions(root: &Path, protected: &[String]) -> Result<usize, String> {
+    if !root.exists() {
+        return Ok(0);
+    }
+    let protected: std::collections::HashSet<&str> = protected.iter().map(String::as_str).collect();
+    let now = SystemTime::now();
+    let mut removed = 0;
+    for item in fs::read_dir(root).map_err(|error| error.to_string())? {
+        let path = item.map_err(|error| error.to_string())?.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(id) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if protected.contains(id) {
+            continue;
+        }
+        let modified = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(now);
+        if now.duration_since(modified).unwrap_or_default() >= IMPORT_ASSET_SESSION_MAX_AGE {
+            fs::remove_dir_all(path).map_err(|error| error.to_string())?;
+            removed += 1;
+        }
+    }
+    Ok(removed)
+}
+
+async fn cleanup_stale_import_sessions_route(
+    State(state): State<BridgeState>,
+    Json(payload): Json<CleanupImportSessionsPayload>,
+) -> BridgeResult<Json<Value>> {
+    let removed = cleanup_stale_import_sessions(
+        &state.data_dir.join("import-workspaces"),
+        &payload.protected_session_ids,
+    )
+    .map_err(internal)?;
+    Ok(Json(json!({ "removed": removed })))
+}
+
 async fn save_image(
     State(state): State<BridgeState>,
     Json(upload): Json<ImageUpload>,
@@ -565,6 +642,7 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
         .parse()
         .map_err(|_| "storage bridge port가 올바르지 않습니다.".to_string())?;
     fs::create_dir_all(data_dir.join("images")).map_err(|error| error.to_string())?;
+    let _ = cleanup_stale_import_sessions(&data_dir.join("import-workspaces"), &[]);
     let state = BridgeState {
         store: Arc::new(NotebookStore::new(
             data_dir.join("entries.json"),
@@ -575,6 +653,8 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
     };
     let app = Router::new()
         .route("/v1/health", get(health))
+        .route("/v1/entries/snapshot", get(load_entries_snapshot))
+        .route("/v1/entries/conditional", post(save_entries_if_revision))
         .route(
             "/v1/stores/{store}",
             get(load_store).put(save_store).delete(clear_store),
@@ -609,6 +689,10 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
         .route(
             "/v1/import-sessions/{session_id}",
             axum::routing::delete(discard_import_session),
+        )
+        .route(
+            "/v1/import-sessions/cleanup",
+            post(cleanup_stale_import_sessions_route),
         )
         .layer(middleware::from_fn_with_state(state.clone(), auth))
         .with_state(state);

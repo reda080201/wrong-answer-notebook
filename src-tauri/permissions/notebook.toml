@@ -3,7 +3,9 @@ identifier = "notebook-commands"
 description = "오답노트 데이터 및 이미지 명령"
 commands.allow = [
   "load_entries",
+  "load_entries_snapshot",
   "save_entries",
+  "save_entries_if_revision",
   "load_exam_sessions",
   "save_exam_sessions",
   "submit_exam_transaction",

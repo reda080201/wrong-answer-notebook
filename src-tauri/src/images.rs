@@ -271,8 +271,7 @@ pub(crate) fn save_images_from_dialog(app: tauri::AppHandle) -> Result<Vec<Strin
         return Err("파일을 선택하지 않았습니다.".into());
     }
 
-    let mut saved_filenames = Vec::new();
-
+    let mut validated_paths = Vec::with_capacity(file_paths.len());
     for file_path in file_paths {
         // Canonicalize path to prevent directory traversal attacks
         let canonical_path = file_path
@@ -293,13 +292,27 @@ pub(crate) fn save_images_from_dialog(app: tauri::AppHandle) -> Result<Vec<Strin
         // Validate image header/magic bytes
         validate_image_magic(&canonical_path, &ext, MAX_IMPORT_IMAGE_BYTES)?;
 
-        // Generate unique filename for storage
-        let filename = format!("{}.{}", Uuid::new_v4(), ext);
-        let dest = image_path(&app, &filename)?;
+        validated_paths.push((canonical_path, ext));
+    }
 
-        // Copy file to images directory
-        fs::copy(&canonical_path, &dest).map_err(|e| e.to_string())?;
-        saved_filenames.push(filename);
+    let mut saved_filenames = Vec::with_capacity(validated_paths.len());
+    let result = (|| -> Result<(), String> {
+        for (canonical_path, ext) in validated_paths {
+            let filename = format!("{}.{}", Uuid::new_v4(), ext);
+            let dest = image_path(&app, &filename)?;
+
+            fs::copy(&canonical_path, &dest).map_err(|e| e.to_string())?;
+            saved_filenames.push(filename);
+        }
+        Ok(())
+    })();
+    if let Err(error) = result {
+        for filename in &saved_filenames {
+            if let Ok(path) = image_path(&app, filename) {
+                let _ = fs::remove_file(path);
+            }
+        }
+        return Err(error);
     }
 
     Ok(saved_filenames)

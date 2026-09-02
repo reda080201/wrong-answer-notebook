@@ -30,6 +30,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "gpt-solution-drafts.json",
     "library-folders.json",
     "import-workspace-draft.json",
+    "review-sessions.json",
     "data-schema.json",
 ];
 
@@ -546,6 +547,7 @@ pub(crate) fn restore_backup_zip(
 mod tests {
     use super::{
         build_backup_meta, rollback_restore_paths_with_targets, validate_optional_store_json,
+        PERSISTENT_DATA_FILES,
     };
 
     #[test]
@@ -627,5 +629,11 @@ mod tests {
                 .and_then(serde_json::Value::as_bool),
             Some(true)
         );
+    }
+
+    #[test]
+    fn review_sessions_are_in_the_persistent_backup_set() {
+        assert!(PERSISTENT_DATA_FILES.contains(&"review-sessions.json"));
+        assert!(!PERSISTENT_DATA_FILES.contains(&"pending-deletions.json"));
     }
 }

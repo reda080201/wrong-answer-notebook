@@ -5,7 +5,9 @@
 //! desktop application commands.
 
 use crate::WrongAnswerEntry;
+use fs2::FileExt;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -26,6 +28,24 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
             .into_iter()
             .flat_map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned)),
     );
+    for field in ["questionSourceCrops", "questionRenderVerification"] {
+        referenced.extend(
+            entry
+                .extra
+                .get(field)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flat_map(|items| {
+                    items.iter().flat_map(|item| {
+                        ["image", "sourcePageImage", "renderedImage"]
+                            .into_iter()
+                            .filter_map(move |key| {
+                                item.get(key).and_then(Value::as_str).map(str::to_owned)
+                            })
+                    })
+                }),
+        );
+    }
     referenced.extend(
         entry
             .explanation_parts
@@ -144,7 +164,27 @@ impl NotebookStore {
             .write_lock
             .lock()
             .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        operation()
+        let lock_path = self
+            .entries_path
+            .parent()
+            .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?
+            .join(".desktop-storage.lock");
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let file_lock = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(lock_path)
+            .map_err(|error| error.to_string())?;
+        file_lock
+            .lock_exclusive()
+            .map_err(|error| error.to_string())?;
+        let result = operation();
+        let _ = file_lock.unlock();
+        result
     }
 
     /// Accepts the historical array format and the current schema-v2 wrapper.
@@ -160,12 +200,31 @@ impl NotebookStore {
         parse_entries_value(value)
     }
 
+    pub fn entries_revision(&self) -> Result<String, String> {
+        if !self.entries_path.exists() {
+            return Ok(String::new());
+        }
+        let bytes = fs::read(&self.entries_path).map_err(|error| error.to_string())?;
+        Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
+
     pub fn save_entries(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        self.write_entries_locked(entries)
+        self.with_write_lock(|| self.write_entries_locked(entries))
+    }
+
+    pub fn save_entries_if_revision(
+        &self,
+        entries: &[WrongAnswerEntry],
+        expected_revision: &str,
+    ) -> Result<String, String> {
+        self.with_write_lock(|| {
+            let current_revision = self.entries_revision()?;
+            if current_revision != expected_revision {
+                return Err("다른 실행 창에서 노트가 변경되었습니다. 최신 내용을 다시 불러온 뒤 저장해 주세요.".to_owned());
+            }
+            self.write_entries_locked(entries)?;
+            self.entries_revision()
+        })
     }
 
     /// Promotes one staged import session only if the target entry still matches the
@@ -690,9 +749,9 @@ fn is_view_item(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_search_text, matched_snippet, normalize_question_number, parse_entries_value,
-        parse_question_blocks, parse_versioned_entries_value, NotebookStore,
-        ENTRIES_SCHEMA_VERSION,
+        collect_entry_image_filenames, entry_search_text, matched_snippet,
+        normalize_question_number, parse_entries_value, parse_question_blocks,
+        parse_versioned_entries_value, NotebookStore, ENTRIES_SCHEMA_VERSION,
     };
     use crate::SheetFigureItem;
     use serde_json::json;
@@ -809,6 +868,23 @@ mod tests {
     }
 
     #[test]
+    fn image_reference_collector_protects_crops_and_rendered_verification_assets() {
+        let entries = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
+            "questionSourceCrops":[
+                {"id":"crop-1","questionNumber":"1","image":"crop.png","sourcePageImage":"page.png"}
+            ],
+            "questionRenderVerification":[
+                {"questionNumber":"1","scope":"question","rendererVersion":"v3","renderedImage":"rendered.png"}
+            ]
+        }])).unwrap();
+        let referenced = collect_entry_image_filenames(&entries[0]);
+        assert!(referenced.contains("crop.png"));
+        assert!(referenced.contains("page.png"));
+        assert!(referenced.contains("rendered.png"));
+    }
+
+    #[test]
     fn store_round_trip_keeps_figure_fields_and_unknown_nested_data() {
         let entries = parse_entries_value(json!([{
             "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
@@ -860,6 +936,28 @@ mod tests {
         assert!(images.join("new-image.png").exists());
         assert!(!assets.join("new-image.png").exists());
         assert_eq!(store.load_entries().unwrap()[0].memo, "병합됨");
+    }
+
+    #[test]
+    fn conditional_entry_save_rejects_a_stale_revision() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = NotebookStore::new(
+            directory.path().join("entries.json"),
+            directory.path().join("images"),
+        );
+        let first = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"첫 내용", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"a", "mastered":false
+        }])).unwrap();
+        store.save_entries(&first).unwrap();
+        let revision = store.entries_revision().unwrap();
+        let mut second = first.clone();
+        second[0].memo = "다른 창의 수정".to_owned();
+        store.save_entries(&second).unwrap();
+        let error = store
+            .save_entries_if_revision(&first, &revision)
+            .unwrap_err();
+        assert!(error.contains("다른 실행 창"));
+        assert_eq!(store.load_entries().unwrap()[0].memo, "다른 창의 수정");
     }
 
     #[test]
