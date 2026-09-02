@@ -37,7 +37,7 @@ export const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace
 export interface StorageBackend {
   readonly kind: StorageBackendKind;
   loadEntries(): Promise<WrongAnswerEntry[]>;
-  saveEntries(entries: WrongAnswerEntry[], expectedRevision?: string): Promise<void>;
+  saveEntries(entries: WrongAnswerEntry[], expectedRevision?: string): Promise<void | string>;
   loadEntriesSnapshot?(): Promise<EntriesSnapshot>;
   loadSettings(): Promise<AppSettings | null>;
   saveSettings(settings: AppSettings): Promise<void>;
@@ -109,8 +109,7 @@ const tauriBackend: StorageBackend = {
   loadEntries: () => invoke("load_entries"),
   saveEntries: async (entries, expectedRevision) => {
     if (expectedRevision !== undefined) {
-      await invoke("save_entries_if_revision", { entries, expectedRevision });
-      return;
+      return invoke<string>("save_entries_if_revision", { entries, expectedRevision });
     }
     await invoke("save_entries", { entries });
   },
@@ -148,8 +147,7 @@ const proxyBackend: StorageBackend = {
   loadEntries: () => proxyLoad("entries"),
   saveEntries: async (entries, expectedRevision) => {
     if (expectedRevision !== undefined) {
-      await proxyRequest("/v1/entries/conditional", { method: "POST", body: JSON.stringify({ entries, expectedRevision }) });
-      return;
+      return proxyRequest<{ revision: string }>("/v1/entries/conditional", { method: "POST", body: JSON.stringify({ entries, expectedRevision }) }).then((result) => result.revision);
     }
     await proxySave("entries", entries);
   },

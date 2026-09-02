@@ -26,10 +26,8 @@ export async function loadEntries(): Promise<WrongAnswerEntry[]> {
 export async function saveEntries(entries: WrongAnswerEntry[]): Promise<void> {
   try {
     const backend = getStorageBackend();
-    await backend.saveEntries(entries, loadedEntriesRevision);
-    if (backend.loadEntriesSnapshot) {
-      loadedEntriesRevision = (await backend.loadEntriesSnapshot()).revision;
-    }
+    const nextRevision = await backend.saveEntries(entries, loadedEntriesRevision);
+    if (typeof nextRevision === "string") loadedEntriesRevision = nextRevision;
   } catch (error) {
     throw new Error(errorMessage(error, "노트를 저장하지 못했습니다."), {
       cause: error,

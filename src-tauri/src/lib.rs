@@ -173,8 +173,14 @@ struct EntriesSnapshot {
 
 #[tauri::command]
 fn load_entries_snapshot(
+    app: tauri::AppHandle,
     store: tauri::State<'_, Arc<notebook_store::NotebookStore>>,
 ) -> Result<EntriesSnapshot, String> {
+    exam_submission::reconcile_exam_submission(
+        &store,
+        &app_dir(&app)?.join("exam-sessions.json"),
+        &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )?;
     Ok(EntriesSnapshot { entries: store.load_entries()?, revision: store.entries_revision()? })
 }
 
