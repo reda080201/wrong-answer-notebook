@@ -5,9 +5,9 @@
 //! desktop application commands.
 
 use crate::WrongAnswerEntry;
+use fs2::FileExt;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use fs2::FileExt;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -39,7 +39,9 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
                     items.iter().flat_map(|item| {
                         ["image", "sourcePageImage", "renderedImage"]
                             .into_iter()
-                            .filter_map(move |key| item.get(key).and_then(Value::as_str).map(str::to_owned))
+                            .filter_map(move |key| {
+                                item.get(key).and_then(Value::as_str).map(str::to_owned)
+                            })
                     })
                 }),
         );
@@ -176,7 +178,9 @@ impl NotebookStore {
             .write(true)
             .open(lock_path)
             .map_err(|error| error.to_string())?;
-        file_lock.lock_exclusive().map_err(|error| error.to_string())?;
+        file_lock
+            .lock_exclusive()
+            .map_err(|error| error.to_string())?;
         let result = operation();
         let _ = file_lock.unlock();
         result
@@ -948,7 +952,9 @@ mod tests {
         let mut second = first.clone();
         second[0].memo = "다른 창의 수정".to_owned();
         store.save_entries(&second).unwrap();
-        let error = store.save_entries_if_revision(&first, &revision).unwrap_err();
+        let error = store
+            .save_entries_if_revision(&first, &revision)
+            .unwrap_err();
         assert!(error.contains("다른 실행 창"));
         assert_eq!(store.load_entries().unwrap()[0].memo, "다른 창의 수정");
     }

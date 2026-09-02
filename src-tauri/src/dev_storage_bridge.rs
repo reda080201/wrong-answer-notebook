@@ -230,7 +230,8 @@ async fn save_entries_if_revision(
     Json(payload): Json<EntriesRevisionPayload>,
 ) -> BridgeResult<Json<Value>> {
     let entries = crate::notebook_store::parse_entries_value(payload.entries).map_err(invalid)?;
-    let revision = state.store
+    let revision = state
+        .store
         .save_entries_if_revision(&entries, &payload.expected_revision)
         .map_err(internal)?;
     Ok(Json(json!({ "revision": revision })))
@@ -521,10 +522,18 @@ fn cleanup_stale_import_sessions(root: &Path, protected: &[String]) -> Result<us
     let mut removed = 0;
     for item in fs::read_dir(root).map_err(|error| error.to_string())? {
         let path = item.map_err(|error| error.to_string())?.path();
-        if !path.is_dir() { continue; }
-        let Some(id) = path.file_name().and_then(|name| name.to_str()) else { continue; };
-        if protected.contains(id) { continue; }
-        let modified = fs::metadata(&path).and_then(|metadata| metadata.modified()).unwrap_or(now);
+        if !path.is_dir() {
+            continue;
+        }
+        let Some(id) = path.file_name().and_then(|name| name.to_str()) else {
+            continue;
+        };
+        if protected.contains(id) {
+            continue;
+        }
+        let modified = fs::metadata(&path)
+            .and_then(|metadata| metadata.modified())
+            .unwrap_or(now);
         if now.duration_since(modified).unwrap_or_default() >= IMPORT_ASSET_SESSION_MAX_AGE {
             fs::remove_dir_all(path).map_err(|error| error.to_string())?;
             removed += 1;
@@ -540,7 +549,8 @@ async fn cleanup_stale_import_sessions_route(
     let removed = cleanup_stale_import_sessions(
         &state.data_dir.join("import-workspaces"),
         &payload.protected_session_ids,
-    ).map_err(internal)?;
+    )
+    .map_err(internal)?;
     Ok(Json(json!({ "removed": removed })))
 }
 
@@ -680,7 +690,10 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
             "/v1/import-sessions/{session_id}",
             axum::routing::delete(discard_import_session),
         )
-        .route("/v1/import-sessions/cleanup", post(cleanup_stale_import_sessions_route))
+        .route(
+            "/v1/import-sessions/cleanup",
+            post(cleanup_stale_import_sessions_route),
+        )
         .layer(middleware::from_fn_with_state(state.clone(), auth))
         .with_state(state);
     let runtime = tokio::runtime::Runtime::new().map_err(|error| error.to_string())?;
