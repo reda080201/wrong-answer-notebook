@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { defaultSettings, errorMessage, loadSettings, saveSettings } from "../api";
 import type {
   AppSettings,
@@ -318,7 +318,9 @@ export function useSettings() {
     maintenanceBlockedRef.current = blocked;
   }, []);
 
-  return {
+  const clearSettingsError = useCallback(() => setSettingsError(null), []);
+
+  return useMemo(() => ({
     settings,
     settingsError,
     settingsSaveState,
@@ -343,6 +345,32 @@ export function useSettings() {
     retrySettingsSave,
     flushSettings,
     setSettingsMaintenanceBlocked,
-    clearSettingsError: () => setSettingsError(null),
-  };
+    clearSettingsError,
+  }), [
+    settings,
+    settingsError,
+    settingsSaveState,
+    updateSettings,
+    patchSettings,
+    patchViewPreferences,
+    patchExamPreferences,
+    patchExamPrintPreferences,
+    patchImagePreferences,
+    patchGptMcpPreferences,
+    patchChatGptMcpPreferences,
+    upsertTemplate,
+    removeTemplate,
+    upsertPromptTemplate,
+    removePromptTemplate,
+    upsertMemoTemplate,
+    removeMemoTemplate,
+    setLastImportTemplate,
+    patchUpdatePreferences,
+    patchQuestionBankPreferences,
+    refreshSettings,
+    retrySettingsSave,
+    flushSettings,
+    setSettingsMaintenanceBlocked,
+    clearSettingsError,
+  ]);
 }
