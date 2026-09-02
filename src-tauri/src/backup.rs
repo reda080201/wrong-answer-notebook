@@ -302,6 +302,7 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         | "generated-exams.json"
         | "gpt-solution-drafts.json"
         | "library-folders.json"
+        | "review-sessions.json"
             if !value.is_array() =>
         {
             Err(format!(
@@ -311,7 +312,8 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         "exam-sessions.json"
         | "generated-exams.json"
         | "gpt-solution-drafts.json"
-        | "library-folders.json" => crate::validate_persistent_store_value(name, &value)
+        | "library-folders.json"
+        | "review-sessions.json" => crate::validate_persistent_store_value(name, &value)
             .map_err(|error| format!("백업의 {name} 형식이 올바르지 않습니다: {error}")),
         "import-workspace-draft.json" if !value.is_object() => {
             Err("백업의 가져오기 작업실 초안은 객체여야 합니다.".into())
@@ -556,10 +558,12 @@ mod tests {
         assert!(validate_optional_store_json("generated-exams.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("gpt-solution-drafts.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("library-folders.json", br#"[]"#).is_ok());
+        assert!(validate_optional_store_json("review-sessions.json", br#"[]"#).is_ok());
         assert!(validate_optional_store_json("exam-sessions.json", br#"{}"#).is_err());
         assert!(validate_optional_store_json("generated-exams.json", b"{").is_err());
         assert!(validate_optional_store_json("gpt-solution-drafts.json", b"{}").is_err());
         assert!(validate_optional_store_json("library-folders.json", b"{}").is_err());
+        assert!(validate_optional_store_json("review-sessions.json", b"{}").is_err());
         assert!(validate_optional_store_json("exam-sessions.json", br#"[{}]"#).is_err());
         assert!(validate_optional_store_json("generated-exams.json", br#"[{}]"#).is_err());
         assert!(validate_optional_store_json("gpt-solution-drafts.json", br#"[{}]"#).is_err());

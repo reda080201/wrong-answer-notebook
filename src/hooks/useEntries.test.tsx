@@ -11,6 +11,7 @@ vi.mock("../api", () => ({
     error instanceof Error ? `${fallback} (${error.message})` : fallback,
   loadEntries: vi.fn(),
   saveEntries: vi.fn(),
+  updateLoadedEntriesRevision: vi.fn(),
 }));
 
 import {
@@ -71,8 +72,8 @@ describe("useEntries", () => {
     vi.mocked(loadEntries).mockResolvedValue([entry]);
     vi.mocked(saveEntries).mockResolvedValue(undefined);
     vi.mocked(deleteImage).mockResolvedValue(undefined);
-    vi.mocked(commitImportAssetSessionEntry).mockResolvedValue([]);
-    vi.mocked(commitImportAssetSessionEntries).mockResolvedValue([]);
+    vi.mocked(commitImportAssetSessionEntry).mockResolvedValue({ sessionId: "test", filenames: [], revision: "test-revision" });
+    vi.mocked(commitImportAssetSessionEntries).mockResolvedValue({ sessionId: "test", filenames: [], revision: "test-revision" });
     vi.mocked(commitExamSubmission).mockResolvedValue({
       entries: [entry],
       sessions: [],
@@ -151,6 +152,7 @@ describe("useEntries", () => {
       entries: [{ ...entry, id: "derived", title: "시험 오답" }],
       sessions: [],
       addedEntryIds: ["derived"],
+      revision: "",
     });
     const { result } = renderHook(() => useEntries());
     await waitFor(() => expect(result.current.loading).toBe(false));

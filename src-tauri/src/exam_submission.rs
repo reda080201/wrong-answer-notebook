@@ -26,6 +26,7 @@ pub struct ExamSubmissionTransactionResult {
     pub entries: Vec<WrongAnswerEntry>,
     pub sessions: Value,
     pub added_entry_ids: Vec<String>,
+    pub revision: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -395,6 +396,7 @@ pub fn submit_exam_transaction(
             entries,
             sessions,
             added_entry_ids,
+            revision: store.entries_revision()?,
         })
     })
 }

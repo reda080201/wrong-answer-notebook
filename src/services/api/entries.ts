@@ -6,6 +6,10 @@ import { reconcileBrowserExamSubmissionJournal } from "./examSubmission";
 
 let loadedEntriesRevision: string | undefined;
 
+export function updateLoadedEntriesRevision(revision: string | undefined): void {
+  if (revision !== undefined) loadedEntriesRevision = revision;
+}
+
 export async function loadEntries(): Promise<WrongAnswerEntry[]> {
   try {
     const backend = getStorageBackend();

@@ -8,6 +8,7 @@ import {
   errorMessage,
   loadEntries,
   saveEntries,
+  updateLoadedEntriesRevision,
 } from "../api";
 import type { EntryFormData, ExamSession, ExamSubmissionTransactionResult, WrongAnswerEntry } from "../types";
 import type { PendingDeletion } from "../types";
@@ -205,6 +206,7 @@ export function useEntries() {
         setError(null);
         const task = enqueue(async () => {
           const result = await commitExamSubmissionTransaction({ submittedSession, derivedEntries });
+          updateLoadedEntriesRevision(result.revision);
           entriesRef.current = result.entries;
           setEntries(result.entries);
           return result;
@@ -241,7 +243,8 @@ export function useEntries() {
         const task = enqueue(async () => {
           if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
           if (!loadedRef.current) throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
-          await commitImportAssetSessionEntries(sessionId, added);
+          const committed = await commitImportAssetSessionEntries(sessionId, added);
+          updateLoadedEntriesRevision(committed.revision);
           const next = [...added, ...entriesRef.current];
           entriesRef.current = next;
           setEntries(next);
@@ -326,7 +329,8 @@ export function useEntries() {
           }
           const patch = typeof partial === "function" ? partial(existing) : partial;
           const updated = { ...existing, ...patch, updatedAt: now };
-          await commitImportAssetSessionEntry(sessionId, id, expectedUpdatedAt, updated);
+          const committed = await commitImportAssetSessionEntry(sessionId, id, expectedUpdatedAt, updated);
+          updateLoadedEntriesRevision(committed.revision);
           const next = current.map((entry) => (entry.id === id ? updated : entry));
           entriesRef.current = next;
           setEntries(next);

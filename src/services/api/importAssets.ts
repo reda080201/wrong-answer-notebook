@@ -16,6 +16,12 @@ export interface ImportAssetStageResult {
   }>;
 }
 
+export interface ImportAssetCommitResult {
+  sessionId: string;
+  filenames: string[];
+  revision?: string;
+}
+
 export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {
   const backendKind = getStorageBackendKind();
   if (backendKind === "isolated-browser" || !files.length) return null;
@@ -95,43 +101,43 @@ export async function commitImportAssetSessionEntry(
   entryId: string,
   expectedUpdatedAt: string,
   entry: WrongAnswerEntry,
-): Promise<string[]> {
+): Promise<ImportAssetCommitResult> {
   if (getStorageBackendKind() === "desktop-proxy") {
-    const result = await proxyRequest<{ filenames: string[] }>(`/v1/import-sessions/${sessionId}/entry`, {
+    const result = await proxyRequest<ImportAssetCommitResult>(`/v1/import-sessions/${sessionId}/entry`, {
       method: "POST", body: JSON.stringify({ entryId, expectedUpdatedAt, entry }),
     });
-    return result.filenames;
+    return result;
   }
   if (!isTauri()) {
     throw new Error("staged 가져오기 자산은 데스크톱 앱에서만 저장할 수 있습니다.");
   }
-  const result = await invoke<{ filenames: string[] }>("commit_import_asset_session_entry", {
+  const result = await invoke<ImportAssetCommitResult>("commit_import_asset_session_entry", {
     sessionId,
     entryId,
     expectedUpdatedAt,
     entry,
   });
-  return result.filenames;
+  return result;
 }
 
 export async function commitImportAssetSessionEntries(
   sessionId: string,
   entries: WrongAnswerEntry[],
-): Promise<string[]> {
+): Promise<ImportAssetCommitResult> {
   if (getStorageBackendKind() === "desktop-proxy") {
-    const result = await proxyRequest<{ filenames: string[] }>(`/v1/import-sessions/${sessionId}/entries`, {
+    const result = await proxyRequest<ImportAssetCommitResult>(`/v1/import-sessions/${sessionId}/entries`, {
       method: "POST", body: JSON.stringify(entries),
     });
-    return result.filenames;
+    return result;
   }
   if (!isTauri()) {
     throw new Error("staged 가져오기 자산은 데스크톱 앱에서만 저장할 수 있습니다.");
   }
-  const result = await invoke<{ filenames: string[] }>("commit_import_asset_session_entries", {
+  const result = await invoke<ImportAssetCommitResult>("commit_import_asset_session_entries", {
     sessionId,
     entries,
   });
-  return result.filenames;
+  return result;
 }
 
 export async function discardImportAssetSession(sessionId: string): Promise<void> {

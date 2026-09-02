@@ -1,4 +1,4 @@
-use crate::notebook_store::NotebookStore;
+use crate::notebook_store::{with_shared_storage_lock, NotebookStore, StagedCommitResult};
 use crate::{
     app_dir, images_dir, save_import_image_bytes_to_dir, validate_image_filename, WrongAnswerEntry,
 };
@@ -52,6 +52,7 @@ pub(crate) struct ImportAssetSessionValidationResult {
 pub(crate) struct ImportAssetCommitResult {
     session_id: String,
     filenames: Vec<String>,
+    revision: Option<String>,
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
@@ -194,43 +195,47 @@ pub(crate) fn commit_import_asset_session(
     if !assets_dir.exists() {
         return Err("가져오기 자산 session을 찾을 수 없습니다.".into());
     }
-    let destination = images_dir(&app)?;
-    let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
-    let result = (|| -> Result<(), String> {
-        for item in fs::read_dir(&assets_dir).map_err(|error| error.to_string())? {
-            let source = item.map_err(|error| error.to_string())?.path();
-            if !source.is_file() {
-                continue;
+    let data_root = app_dir(&app)?;
+    with_shared_storage_lock(&data_root, || {
+        let destination = images_dir(&app)?;
+        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+        let result = (|| -> Result<(), String> {
+            for item in fs::read_dir(&assets_dir).map_err(|error| error.to_string())? {
+                let source = item.map_err(|error| error.to_string())?.path();
+                if !source.is_file() {
+                    continue;
+                }
+                let filename = source
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_string())?
+                    .to_string();
+                validate_image_filename(&filename)?;
+                let target = destination.join(&filename);
+                if target.exists() {
+                    return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+                }
+                fs::rename(&source, &target).map_err(|error| error.to_string())?;
+                moved.push((source, target));
             }
-            let filename = source
-                .file_name()
-                .and_then(|name| name.to_str())
-                .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_string())?
-                .to_string();
-            validate_image_filename(&filename)?;
-            let target = destination.join(&filename);
-            if target.exists() {
-                return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+            Ok(())
+        })();
+        if let Err(error) = result {
+            for (source, target) in moved.iter().rev() {
+                let _ = fs::rename(target, source);
             }
-            fs::rename(&source, &target).map_err(|error| error.to_string())?;
-            moved.push((source, target));
+            return Err(error);
         }
-        Ok(())
-    })();
-    if let Err(error) = result {
-        for (source, target) in moved.iter().rev() {
-            let _ = fs::rename(target, source);
-        }
-        return Err(error);
-    }
-    let filenames = moved
-        .iter()
-        .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_string))
-        .collect();
-    let _ = fs::remove_dir_all(&root);
-    Ok(ImportAssetCommitResult {
-        session_id,
-        filenames,
+        let filenames = moved
+            .iter()
+            .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_string))
+            .collect();
+        let _ = fs::remove_dir_all(&root);
+        Ok(ImportAssetCommitResult {
+            session_id,
+            filenames,
+            revision: None,
+        })
     })
 }
 
@@ -244,7 +249,7 @@ pub(crate) fn commit_import_asset_session_entry(
     entry: WrongAnswerEntry,
 ) -> Result<ImportAssetCommitResult, String> {
     let root = import_asset_session_root(&app, &session_id)?;
-    let filenames = store.commit_staged_entry_update(
+    let committed: StagedCommitResult = store.commit_staged_entry_update(
         &root.join("assets"),
         &entry_id,
         &expected_updated_at,
@@ -254,7 +259,8 @@ pub(crate) fn commit_import_asset_session_entry(
     let _ = fs::remove_dir_all(&root);
     Ok(ImportAssetCommitResult {
         session_id,
-        filenames,
+        filenames: committed.filenames,
+        revision: Some(committed.revision),
     })
 }
 
@@ -266,12 +272,13 @@ pub(crate) fn commit_import_asset_session_entries(
     entries: Vec<WrongAnswerEntry>,
 ) -> Result<ImportAssetCommitResult, String> {
     let root = import_asset_session_root(&app, &session_id)?;
-    let filenames = store.commit_staged_entries_add(&root.join("assets"), entries)?;
+    let committed = store.commit_staged_entries_add(&root.join("assets"), entries)?;
     // Both image promotion and entries persistence succeeded. Cleanup is best effort.
     let _ = fs::remove_dir_all(&root);
     Ok(ImportAssetCommitResult {
         session_id,
-        filenames,
+        filenames: committed.filenames,
+        revision: Some(committed.revision),
     })
 }
 

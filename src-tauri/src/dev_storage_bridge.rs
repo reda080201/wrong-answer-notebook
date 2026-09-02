@@ -218,6 +218,14 @@ async fn save_store(
 }
 
 async fn load_entries_snapshot(State(state): State<BridgeState>) -> BridgeResult<Json<Value>> {
+    exam_submission::reconcile_exam_submission(
+        &state.store,
+        &state.data_dir.join("exam-sessions.json"),
+        &state
+            .data_dir
+            .join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
+    )
+    .map_err(internal)?;
     with_file_lock(&state.data_dir, || {
         let entries = state.store.load_entries().map_err(internal)?;
         let revision = state.store.entries_revision().map_err(internal)?;
@@ -453,12 +461,14 @@ async fn commit_import_entries(
     Json(entries): Json<Vec<crate::WrongAnswerEntry>>,
 ) -> BridgeResult<Json<Value>> {
     let root = import_session_root(&state, &session_id)?;
-    let filenames = state
+    let committed = state
         .store
         .commit_staged_entries_add(&root.join("assets"), entries)
         .map_err(internal)?;
     let _ = fs::remove_dir_all(root);
-    Ok(Json(json!({ "filenames": filenames })))
+    Ok(Json(
+        json!({ "filenames": committed.filenames, "revision": committed.revision }),
+    ))
 }
 
 async fn commit_import_assets_only(
@@ -475,7 +485,7 @@ async fn commit_import_entry(
     Json(payload): Json<CommitEntryPayload>,
 ) -> BridgeResult<Json<Value>> {
     let root = import_session_root(&state, &session_id)?;
-    let filenames = state
+    let committed = state
         .store
         .commit_staged_entry_update(
             &root.join("assets"),
@@ -485,7 +495,9 @@ async fn commit_import_entry(
         )
         .map_err(internal)?;
     let _ = fs::remove_dir_all(root);
-    Ok(Json(json!({ "filenames": filenames })))
+    Ok(Json(
+        json!({ "filenames": committed.filenames, "revision": committed.revision }),
+    ))
 }
 
 async fn discard_import_session(
@@ -540,6 +552,28 @@ fn cleanup_stale_import_sessions(root: &Path, protected: &[String]) -> Result<us
         }
     }
     Ok(removed)
+}
+
+fn protected_workspace_session_ids(path: &Path) -> Vec<String> {
+    if !path.exists() {
+        return Vec::new();
+    }
+    let value = match fs::read(path)
+        .ok()
+        .and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok())
+    {
+        Some(value) => value,
+        None => {
+            eprintln!("가져오기 작업실 초안을 읽지 못해 staged session을 보호하지 못했습니다.");
+            return Vec::new();
+        }
+    };
+    value
+        .get("assetSession")
+        .and_then(|session| session.get("id"))
+        .and_then(Value::as_str)
+        .map(|id| vec![id.to_owned()])
+        .unwrap_or_default()
 }
 
 async fn cleanup_stale_import_sessions_route(
@@ -642,7 +676,8 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
         .parse()
         .map_err(|_| "storage bridge port가 올바르지 않습니다.".to_string())?;
     fs::create_dir_all(data_dir.join("images")).map_err(|error| error.to_string())?;
-    let _ = cleanup_stale_import_sessions(&data_dir.join("import-workspaces"), &[]);
+    let protected = protected_workspace_session_ids(&data_dir.join("import-workspace-draft.json"));
+    let _ = cleanup_stale_import_sessions(&data_dir.join("import-workspaces"), &protected);
     let state = BridgeState {
         store: Arc::new(NotebookStore::new(
             data_dir.join("entries.json"),

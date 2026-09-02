@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, WrongAnswerEntry } from "../../types";
+import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
 import type { ImportWorkspace } from "../../features/import-workspace/model/importWorkspace";
 import { isGptSolutionRoundtripDraftArray, type GptSolutionRoundtripDraft } from "../../features/gpt-solution-roundtrip/model";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
@@ -21,7 +21,8 @@ import {
 } from "./shared";
 import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
-import { listBrowserImages } from "./browserImageStore";
+import { listBrowserImages, replaceBrowserImages } from "./browserImageStore";
+import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../../features/review/storage/reviewSessionStorage";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -48,6 +49,7 @@ export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
   libraryFolders: LibraryFolder[];
   gptSolutionDrafts: GptSolutionRoundtripDraft[];
   importWorkspaceDraft: ImportWorkspace | null;
+  reviewSessions?: ReviewSession[];
 }
 
 export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
@@ -87,6 +89,7 @@ async function readBrowserBackupSnapshot(
       [],
     ),
     importWorkspaceDraft,
+    reviewSessions: readBrowserValue(REVIEW_SESSIONS_STORAGE_KEY, isReviewSessionArray, "복습 세션", []).map(normalizeReviewSession),
   };
 }
 
@@ -156,6 +159,31 @@ function isGeneratedExamArray(value: unknown): value is GeneratedExam[] {
     && isRecord(item.generationReport));
 }
 
+function isReviewSessionArray(value: unknown): value is ReviewSession[] {
+  return Array.isArray(value) && value.every((item) => isRecord(item)
+    && typeof item.id === "string"
+    && ["today", "random", "difficult", "important"].includes(String(item.mode))
+    && Array.isArray(item.itemRefs)
+    && item.itemRefs.every((ref) => isRecord(ref)
+      && (ref.kind === "entry" || ref.kind === "sheet-question")
+      && typeof ref.entryId === "string"
+      && (ref.questionNumber === undefined || typeof ref.questionNumber === "string"))
+    && typeof item.currentIndex === "number"
+    && Number.isInteger(item.currentIndex)
+    && item.currentIndex >= 0
+    && item.currentIndex <= item.itemRefs.length
+    && Array.isArray(item.completedItemKeys)
+    && item.completedItemKeys.every((key) => typeof key === "string")
+    && Array.isArray(item.reviewEvents)
+    && item.reviewEvents.every((event) => isRecord(event)
+      && typeof event.id === "string"
+      && typeof event.reviewedAt === "string"
+      && (event.result === "again" || event.result === "hard" || event.result === "good"))
+    && typeof item.createdAt === "string"
+    && typeof item.updatedAt === "string"
+    && (item.seedFingerprint === undefined || typeof item.seedFingerprint === "string"));
+}
+
 function isBrowserBackupPayload(value: unknown): value is BackupPayload {
   if (!value || typeof value !== "object") return false;
   const payload = value as Partial<BackupPayload>;
@@ -170,6 +198,7 @@ function isBrowserBackupPayload(value: unknown): value is BackupPayload {
     && isGeneratedExamArray(v2.generatedExams)
     && isLibraryFolderArray(v2.libraryFolders)
     && isGptSolutionRoundtripDraftArray(v2.gptSolutionDrafts)
+    && (v2.reviewSessions === undefined || isReviewSessionArray(v2.reviewSessions))
     && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft));
 }
 
@@ -184,11 +213,12 @@ function restoreBrowserStorageSnapshot(snapshot: Map<string, string | null>): vo
  * Browser backups span entries, settings, and image keys. Keep their writes
  * all-or-nothing so quota failures cannot leave a mixed point-in-time state.
  */
-export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBackupResult {
+export async function applyBrowserBackupAtomically(payload: BackupPayload): Promise<RestoreBackupResult> {
   if (getStorageBackendKind() !== "isolated-browser") throw new Error("브라우저 백업 복원은 격리 브라우저 저장소에서만 사용할 수 있습니다.");
   if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
 
   const v2Payload = payload.meta.version === 2 ? payload as BrowserBackupPayloadV2 : null;
+  const previousImages = await listBrowserImages();
   const managedKeys = new Set([
     ENTRIES_STORAGE_KEY,
     SETTINGS_STORAGE_KEY,
@@ -201,6 +231,7 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
     managedKeys.add(LIBRARY_FOLDERS_STORAGE_KEY);
     managedKeys.add(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY);
     managedKeys.add(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY);
+    managedKeys.add(REVIEW_SESSIONS_STORAGE_KEY);
   }
   const previous = new Map([...managedKeys].map((key) => [key, localStorage.getItem(key)]));
 
@@ -211,9 +242,7 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
       entries: payload.entries,
     });
     writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalizeSettings(payload.settings));
-    for (const [key, image] of Object.entries(payload.browserImages)) {
-      localStorage.setItem(key, image);
-    }
+    await replaceBrowserImages(payload.browserImages);
     if (v2Payload) {
       writeStorageJson(localStorage, EXAM_SESSIONS_STORAGE_KEY, v2Payload.examSessions);
       writeStorageJson(localStorage, GENERATED_EXAMS_STORAGE_KEY, v2Payload.generatedExams);
@@ -222,11 +251,13 @@ export function applyBrowserBackupAtomically(payload: BackupPayload): RestoreBac
       if (v2Payload.importWorkspaceDraft) {
         writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
       }
+      writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, (v2Payload.reviewSessions ?? []).map(normalizeReviewSession));
     }
     clearImageUrlCache();
   } catch (error) {
     try {
       restoreBrowserStorageSnapshot(previous);
+      await replaceBrowserImages(previousImages);
       clearImageUrlCache();
     } catch (rollbackError) {
       throw new Error("백업 복원과 원래 데이터 복구에 모두 실패했습니다.", {
