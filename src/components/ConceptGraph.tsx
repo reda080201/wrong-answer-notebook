@@ -70,8 +70,14 @@ export default function ConceptGraph({ entries, focusEntry, onOpenEntry }: Conce
           className={`concept-graph-node concept-graph-node--${node.kind}`}
           transform={`translate(${node.x} ${node.y})`}
           onClick={() => node.entryId && onOpenEntry(node.entryId)}
+          onKeyDown={(event) => {
+            if (!node.entryId || (event.key !== "Enter" && event.key !== " ")) return;
+            event.preventDefault();
+            onOpenEntry(node.entryId);
+          }}
           tabIndex={node.entryId ? 0 : -1}
           role={node.entryId ? "button" : "img"}
+          aria-label={node.entryId ? `${node.label} 항목 열기` : node.label}
         >
           <circle r={node.entryId === focusEntry?.id ? 30 : 24} />
           <text textAnchor="middle" dominantBaseline="middle">

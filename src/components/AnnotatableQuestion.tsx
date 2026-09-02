@@ -955,6 +955,13 @@ function AnnotatableImage({
     }
   };
 
+  const handleEraseKeyDown = (event: React.KeyboardEvent, annId: string) => {
+    if (memoMode && activeTool === "erase" && (event.key === "Enter" || event.key === " ")) {
+      event.preventDefault();
+      handleEraseClick(annId);
+    }
+  };
+
   if (imageError) {
     return <div className="image-fill-error">이미지를 불러올 수 없습니다</div>;
   }
@@ -983,7 +990,11 @@ function AnnotatableImage({
             width: `${ann.width * 100}%`,
             height: `${ann.height * 100}%`,
           }}
+          role={memoMode && activeTool === "erase" ? "button" : undefined}
+          tabIndex={memoMode && activeTool === "erase" ? 0 : undefined}
+          aria-label={memoMode && activeTool === "erase" ? "이미지 주석 지우기" : undefined}
           onClick={() => handleEraseClick(ann.id)}
+          onKeyDown={(event) => handleEraseKeyDown(event, ann.id)}
         />
       ))}
       {drawing && activeTool !== "erase" && (

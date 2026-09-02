@@ -21,4 +21,13 @@ describe("ImageGallery", () => {
       await screen.findByText("이미지를 불러올 수 없습니다"),
     ).toBeInTheDocument();
   });
+
+  it("uses a button with contextual alternative text to open an image", async () => {
+    vi.mocked(getImageUrl).mockResolvedValue("blob:figure");
+
+    render(<ImageGallery filenames={["graph.png"]} alt="함수 그래프" />);
+
+    const trigger = await screen.findByRole("button", { name: "함수 그래프 이미지 열기" });
+    expect(trigger.querySelector("img")).toHaveAttribute("alt", "함수 그래프");
+  });
 });
