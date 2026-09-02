@@ -6,6 +6,7 @@ import { normalizeEntry } from "../../../utils/entry";
 import { getEntryQuestions, renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
 import { updateStructuredQuestionSegment } from "./structuredQuestionSegments";
 import { getStructuredValidationFingerprint, removeFigureFromImportDraft } from "./importDraftCanonical";
+import { canonicalizeImportDraftForSave } from "./importSavePolicy";
 
 const question: StructuredQuestion = {
   questionNumber: "1",
@@ -74,5 +75,26 @@ describe("structured import draft canonical helpers", () => {
     expect(JSON.stringify(reloaded.structuredQuestions)).not.toContain("학생 필기");
     expect(JSON.stringify(createExamSession(reloaded).questions)).not.toContain("학생 필기");
     expect(JSON.stringify(payload)).not.toContain("학생 필기");
+  });
+
+  it("scrubs rejected notes from legacy content segments before projection", () => {
+    const saved = canonicalizeImportDraftForSave({
+      question: "1. 문제",
+      questionContentSegments: {
+        "1": [
+          { id: "text", type: "text", text: "본문 학생 필기" },
+          { id: "condition", type: "condition", text: "조건 학생 필기", label: "메모" },
+          { id: "equation", type: "equation", latex: "x=학생 필기", display: true },
+          { id: "table", type: "table", rows: [["셀 학생 필기"]] },
+        ],
+      },
+      rejectedNotes: ["학생 필기"],
+    });
+    const reloaded = normalizeEntry({
+      ...entryWith([]),
+      question: saved.question ?? "",
+      questionContentSegments: saved.questionContentSegments,
+    });
+    expect(JSON.stringify(getEntryQuestions(reloaded))).not.toContain("학생 필기");
   });
 });

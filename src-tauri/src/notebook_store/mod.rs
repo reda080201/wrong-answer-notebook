@@ -26,6 +26,22 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
             .into_iter()
             .flat_map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned)),
     );
+    for field in ["questionSourceCrops", "questionRenderVerification"] {
+        referenced.extend(
+            entry
+                .extra
+                .get(field)
+                .and_then(Value::as_array)
+                .into_iter()
+                .flat_map(|items| {
+                    items.iter().flat_map(|item| {
+                        ["image", "sourcePageImage", "renderedImage"]
+                            .into_iter()
+                            .filter_map(move |key| item.get(key).and_then(Value::as_str).map(str::to_owned))
+                    })
+                }),
+        );
+    }
     referenced.extend(
         entry
             .explanation_parts
@@ -806,6 +822,23 @@ mod tests {
         assert_eq!(figure.extra["future"]["nested"], true);
         let written = serde_json::to_value(&entries).unwrap();
         assert_eq!(written[0]["figures"][0]["future"]["nested"], true);
+    }
+
+    #[test]
+    fn image_reference_collector_protects_crops_and_rendered_verification_assets() {
+        let entries = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"1. 문제", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"b", "mastered":false,
+            "questionSourceCrops":[
+                {"id":"crop-1","questionNumber":"1","image":"crop.png","sourcePageImage":"page.png"}
+            ],
+            "questionRenderVerification":[
+                {"questionNumber":"1","scope":"question","rendererVersion":"v3","renderedImage":"rendered.png"}
+            ]
+        }])).unwrap();
+        let referenced = collect_entry_image_filenames(&entries[0]);
+        assert!(referenced.contains("crop.png"));
+        assert!(referenced.contains("page.png"));
+        assert!(referenced.contains("rendered.png"));
     }
 
     #[test]

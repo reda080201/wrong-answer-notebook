@@ -30,6 +30,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "gpt-solution-drafts.json",
     "library-folders.json",
     "import-workspace-draft.json",
+    "review-sessions.json",
     "data-schema.json",
 ];
 

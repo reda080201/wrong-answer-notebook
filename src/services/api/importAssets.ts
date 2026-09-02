@@ -69,6 +69,13 @@ export async function validateImportAssetSession(
 }
 
 export async function cleanupStaleImportAssetSessions(protectedSessionIds: string[] = []): Promise<number> {
+  if (getStorageBackendKind() === "desktop-proxy") {
+    const result = await proxyRequest<{ removed: number }>("/v1/import-sessions/cleanup", {
+      method: "POST",
+      body: JSON.stringify({ protectedSessionIds }),
+    });
+    return result.removed;
+  }
   if (!isTauri()) return 0;
   return invoke<number>("cleanup_stale_import_asset_sessions", { protectedSessionIds });
 }
