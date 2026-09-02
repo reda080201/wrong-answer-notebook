@@ -748,9 +748,9 @@ fn is_view_item(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        entry_search_text, matched_snippet, normalize_question_number, parse_entries_value,
-        parse_question_blocks, parse_versioned_entries_value, NotebookStore,
-        ENTRIES_SCHEMA_VERSION,
+        collect_entry_image_filenames, entry_search_text, matched_snippet,
+        normalize_question_number, parse_entries_value, parse_question_blocks,
+        parse_versioned_entries_value, NotebookStore, ENTRIES_SCHEMA_VERSION,
     };
     use crate::SheetFigureItem;
     use serde_json::json;

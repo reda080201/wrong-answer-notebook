@@ -547,6 +547,7 @@ pub(crate) fn restore_backup_zip(
 mod tests {
     use super::{
         build_backup_meta, rollback_restore_paths_with_targets, validate_optional_store_json,
+        PERSISTENT_DATA_FILES,
     };
 
     #[test]
