@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileImage, FileText, Upload, X } from "lucide-react";
 import type { LearningBlock, LectureSourceType, SheetFigureItem } from "../types";
 import type { EntryFormData } from "../types";
@@ -78,6 +78,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const [cleanupError, setCleanupError] = useState<string | null>(null);
   const visualInputRef = useRef<HTMLInputElement>(null);
   const visualAnalysisAbortRef = useRef<AbortController | null>(null);
+  const visualGenerationRef = useRef(0);
 
   const discardVisualAnalysis = async () => {
     const assetSession = visualAnalysis?.assetSession;
@@ -146,6 +147,9 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
 
   const handleVisualFile = async (file?: File) => {
     if (!file) return;
+    visualAnalysisAbortRef.current?.abort();
+    const generation = visualGenerationRef.current + 1;
+    visualGenerationRef.current = generation;
     if (!(await discardVisualAnalysis())) return;
     setVisualFileName(file.name);
     setError(null);
@@ -158,7 +162,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       visualAnalysisAbortRef.current = controller;
       setSaving(true);
       const parsed = await onVisualFile(file, controller.signal);
-      if (controller.signal.aborted) {
+      if (controller.signal.aborted || generation !== visualGenerationRef.current) {
         if (parsed.assetSession) await onDiscardAssetSession?.(parsed.assetSession);
         return;
       }
@@ -172,8 +176,10 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
         setError(err instanceof Error ? err.message : "이미지/PDF에서 학습 내용을 추출하지 못했습니다.");
       }
     } finally {
-      visualAnalysisAbortRef.current = null;
-      setSaving(false);
+      if (generation === visualGenerationRef.current) {
+        visualAnalysisAbortRef.current = null;
+        setSaving(false);
+      }
     }
   };
 
@@ -203,6 +209,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const requestClose = () => {
     if (saving) {
       visualAnalysisAbortRef.current?.abort();
+      visualGenerationRef.current += 1;
       return;
     }
     if (applying) return;
@@ -211,6 +218,11 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       if (discarded) onClose();
     });
   };
+
+  useEffect(() => () => {
+    visualGenerationRef.current += 1;
+    visualAnalysisAbortRef.current?.abort();
+  }, []);
 
   return (
     <Dialog open onClose={requestClose} className="learning-import-modal" ariaLabel="특강 가져오기" closeDisabled={cleanupBusy || applying} busy={cleanupBusy || applying} title={mode === "lecture" ? "특강자료 가져오기" : "특강 내용 가져오기"} header={<button type="button" className="ui-icon-button" onClick={requestClose} disabled={cleanupBusy || applying} aria-label="특강 가져오기 닫기" title="닫기"><X size={18} aria-hidden="true" /></button>} footer={<><button type="button" className="btn-secondary" onClick={requestClose} disabled={cleanupBusy || applying}>{saving ? "분석 취소" : "취소"}</button><button type="button" className="btn-primary" onClick={handleApply} disabled={!blocks.length || saving || applying || cleanupBusy}>{saving ? "분석 중..." : applying ? "저장 중..." : "특강 저장"}</button></>}>

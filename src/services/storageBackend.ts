@@ -27,12 +27,18 @@ import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../features
 
 export type StorageBackendKind = "tauri" | "desktop-proxy" | "isolated-browser";
 
+export interface EntriesSnapshot {
+  entries: WrongAnswerEntry[];
+  revision: string;
+}
+
 export const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
 export interface StorageBackend {
   readonly kind: StorageBackendKind;
   loadEntries(): Promise<WrongAnswerEntry[]>;
-  saveEntries(entries: WrongAnswerEntry[]): Promise<void>;
+  saveEntries(entries: WrongAnswerEntry[], expectedRevision?: string): Promise<void>;
+  loadEntriesSnapshot?(): Promise<EntriesSnapshot>;
   loadSettings(): Promise<AppSettings | null>;
   saveSettings(settings: AppSettings): Promise<void>;
   loadExamSessions(): Promise<ExamSession[]>;
@@ -101,7 +107,14 @@ async function proxySave(name: StoreName, value: unknown): Promise<void> {
 const tauriBackend: StorageBackend = {
   kind: "tauri",
   loadEntries: () => invoke("load_entries"),
-  saveEntries: (entries) => invoke("save_entries", { entries }),
+  saveEntries: async (entries, expectedRevision) => {
+    if (expectedRevision !== undefined) {
+      await invoke("save_entries_if_revision", { entries, expectedRevision });
+      return;
+    }
+    await invoke("save_entries", { entries });
+  },
+  async loadEntriesSnapshot() { return invoke<EntriesSnapshot>("load_entries_snapshot"); },
   loadSettings: () => invoke("load_settings"),
   saveSettings: (settings) => invoke("save_settings", { settings }),
   loadExamSessions: () => invoke("load_exam_sessions"),
@@ -133,7 +146,14 @@ const tauriBackend: StorageBackend = {
 const proxyBackend: StorageBackend = {
   kind: "desktop-proxy",
   loadEntries: () => proxyLoad("entries"),
-  saveEntries: (entries) => proxySave("entries", entries),
+  saveEntries: async (entries, expectedRevision) => {
+    if (expectedRevision !== undefined) {
+      await proxyRequest("/v1/entries/conditional", { method: "POST", body: JSON.stringify({ entries, expectedRevision }) });
+      return;
+    }
+    await proxySave("entries", entries);
+  },
+  async loadEntriesSnapshot() { return proxyRequest<EntriesSnapshot>("/v1/entries/snapshot"); },
   loadSettings: () => proxyLoad("settings"),
   saveSettings: (settings) => proxySave("settings", settings),
   loadExamSessions: () => proxyLoad("exam-sessions"),

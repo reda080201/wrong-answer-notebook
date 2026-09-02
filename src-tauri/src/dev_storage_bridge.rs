@@ -206,15 +206,34 @@ async fn save_store(
         return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into()));
     }
     validate_store(&name, &value).map_err(invalid)?;
+    if name == "entries" {
+        let entries = crate::notebook_store::parse_entries_value(value).map_err(invalid)?;
+        state.store.save_entries(&entries).map_err(internal)?;
+        return Ok(Json(json!({ "ok": true })));
+    }
     with_file_lock(&state.data_dir, || {
-        if name == "entries" {
-            let entries = crate::notebook_store::parse_entries_value(value).map_err(invalid)?;
-            state.store.save_entries(&entries).map_err(internal)?;
-        } else {
-            write_json_atomic(&store_path(&state.data_dir, &name)?, &value).map_err(internal)?;
-        }
+        write_json_atomic(&store_path(&state.data_dir, &name)?, &value).map_err(internal)?;
         Ok(Json(json!({ "ok": true })))
     })
+}
+
+async fn load_entries_snapshot(State(state): State<BridgeState>) -> BridgeResult<Json<Value>> {
+    with_file_lock(&state.data_dir, || {
+        let entries = state.store.load_entries().map_err(internal)?;
+        let revision = state.store.entries_revision().map_err(internal)?;
+        Ok(Json(json!({ "entries": entries, "revision": revision })))
+    })
+}
+
+async fn save_entries_if_revision(
+    State(state): State<BridgeState>,
+    Json(payload): Json<EntriesRevisionPayload>,
+) -> BridgeResult<Json<Value>> {
+    let entries = crate::notebook_store::parse_entries_value(payload.entries).map_err(invalid)?;
+    let revision = state.store
+        .save_entries_if_revision(&entries, &payload.expected_revision)
+        .map_err(internal)?;
+    Ok(Json(json!({ "revision": revision })))
 }
 
 async fn clear_store(
@@ -486,6 +505,13 @@ struct CleanupImportSessionsPayload {
     protected_session_ids: Vec<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct EntriesRevisionPayload {
+    entries: Value,
+    expected_revision: String,
+}
+
 fn cleanup_stale_import_sessions(root: &Path, protected: &[String]) -> Result<usize, String> {
     if !root.exists() {
         return Ok(0);
@@ -617,6 +643,8 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
     };
     let app = Router::new()
         .route("/v1/health", get(health))
+        .route("/v1/entries/snapshot", get(load_entries_snapshot))
+        .route("/v1/entries/conditional", post(save_entries_if_revision))
         .route(
             "/v1/stores/{store}",
             get(load_store).put(save_store).delete(clear_store),

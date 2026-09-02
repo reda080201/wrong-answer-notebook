@@ -6,6 +6,8 @@
 
 use crate::WrongAnswerEntry;
 use serde_json::Value;
+use sha2::{Digest, Sha256};
+use fs2::FileExt;
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -160,7 +162,24 @@ impl NotebookStore {
             .write_lock
             .lock()
             .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        operation()
+        let lock_path = self
+            .entries_path
+            .parent()
+            .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?
+            .join(".desktop-storage.lock");
+        if let Some(parent) = lock_path.parent() {
+            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+        }
+        let file_lock = fs::OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(lock_path)
+            .map_err(|error| error.to_string())?;
+        file_lock.lock_exclusive().map_err(|error| error.to_string())?;
+        let result = operation();
+        let _ = file_lock.unlock();
+        result
     }
 
     /// Accepts the historical array format and the current schema-v2 wrapper.
@@ -176,12 +195,31 @@ impl NotebookStore {
         parse_entries_value(value)
     }
 
+    pub fn entries_revision(&self) -> Result<String, String> {
+        if !self.entries_path.exists() {
+            return Ok(String::new());
+        }
+        let bytes = fs::read(&self.entries_path).map_err(|error| error.to_string())?;
+        Ok(format!("{:x}", Sha256::digest(bytes)))
+    }
+
     pub fn save_entries(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        self.write_entries_locked(entries)
+        self.with_write_lock(|| self.write_entries_locked(entries))
+    }
+
+    pub fn save_entries_if_revision(
+        &self,
+        entries: &[WrongAnswerEntry],
+        expected_revision: &str,
+    ) -> Result<String, String> {
+        self.with_write_lock(|| {
+            let current_revision = self.entries_revision()?;
+            if current_revision != expected_revision {
+                return Err("다른 실행 창에서 노트가 변경되었습니다. 최신 내용을 다시 불러온 뒤 저장해 주세요.".to_owned());
+            }
+            self.write_entries_locked(entries)?;
+            self.entries_revision()
+        })
     }
 
     /// Promotes one staged import session only if the target entry still matches the

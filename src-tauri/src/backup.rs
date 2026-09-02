@@ -629,4 +629,10 @@ mod tests {
             Some(true)
         );
     }
+
+    #[test]
+    fn review_sessions_are_in_the_persistent_backup_set() {
+        assert!(PERSISTENT_DATA_FILES.contains(&"review-sessions.json"));
+        assert!(!PERSISTENT_DATA_FILES.contains(&"pending-deletions.json"));
+    }
 }
