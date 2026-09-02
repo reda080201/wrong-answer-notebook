@@ -174,6 +174,7 @@ impl NotebookStore {
         }
         let file_lock = fs::OpenOptions::new()
             .create(true)
+            .truncate(false)
             .read(true)
             .write(true)
             .open(lock_path)
