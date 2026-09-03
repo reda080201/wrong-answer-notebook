@@ -566,7 +566,7 @@ describe("useAppActions", () => {
       const discardActiveSessionAfterRestore = vi.fn();
       vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
       vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
-      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      vi.mocked(api.applyBrowserBackupAtomically).mockResolvedValue({ restored: true, warnings: [] });
       const { result } = createHook({ refreshExamSessions, discardActiveSessionAfterRestore });
 
       await act(async () => {
@@ -581,7 +581,7 @@ describe("useAppActions", () => {
       const refreshExamSessions = vi.fn(async () => false);
       vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
       vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
-      vi.mocked(api.applyBrowserBackupAtomically).mockReturnValue({ restored: true, warnings: [] });
+      vi.mocked(api.applyBrowserBackupAtomically).mockResolvedValue({ restored: true, warnings: [] });
       const { result } = createHook({ refreshExamSessions });
 
       await expect(result.current.handleRestore()).rejects.toThrow("시험 세션");

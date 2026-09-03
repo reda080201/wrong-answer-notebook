@@ -600,7 +600,7 @@ export function useAppActions({
         const payload = await restoreBackupFromSource(source);
         let restoreResult = payload;
         if (payload && "entries" in payload) {
-          restoreResult = applyBrowserBackupAtomically(payload);
+          restoreResult = await applyBrowserBackupAtomically(payload);
         }
         discardActiveSessionAfterRestore?.();
         const reloads = await Promise.all([

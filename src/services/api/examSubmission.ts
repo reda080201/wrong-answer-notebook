@@ -41,7 +41,7 @@ function entryKey(entry: WrongAnswerEntry): string | null {
 function resultFromRaw(entriesRaw: string, sessionsRaw: string, addedEntryIds: string[]): ExamSubmissionTransactionResult {
   const entries = parseStoredEntries(JSON.parse(entriesRaw)).map(normalizeEntry);
   const sessions = parseSessions(sessionsRaw);
-  return { entries, sessions, addedEntryIds };
+  return { entries, sessions, addedEntryIds, revision: undefined };
 }
 
 /** Roll a crashed browser transaction forward. Multi-tab coordination is intentionally separate. */
@@ -114,6 +114,7 @@ export async function commitExamSubmission(input: ExamSubmissionTransactionInput
         entries: result.entries.map(normalizeEntry),
         sessions: result.sessions,
         addedEntryIds: result.addedEntryIds,
+        revision: result.revision,
       };
     }
     return commitBrowserExamSubmission(input);

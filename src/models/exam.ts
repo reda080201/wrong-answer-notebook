@@ -97,6 +97,7 @@ export interface ExamSubmissionTransactionResult {
   entries: WrongAnswerEntry[];
   sessions: ExamSession[];
   addedEntryIds: string[];
+  revision?: string;
 }
 
 export interface ActiveExamContext {

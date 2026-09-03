@@ -21,6 +21,30 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
+async function migrateLegacyBrowserImages(): Promise<void> {
+  if (!supportsIndexedDb()) return;
+  const legacy = Object.fromEntries(
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("img_"))
+      .map((key) => [key, localStorage.getItem(key)])
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+  );
+  if (!Object.keys(legacy).length) return;
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    for (const [key, value] of Object.entries(legacy)) store.put(value, key);
+    transaction.oncomplete = () => {
+      for (const key of Object.keys(legacy)) localStorage.removeItem(key);
+      resolve();
+    };
+    transaction.onerror = () => reject(transaction.error ?? new Error("기존 브라우저 이미지 이전에 실패했습니다."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("기존 브라우저 이미지 이전이 중단되었습니다."));
+  });
+  db.close();
+}
+
 export async function putBrowserImage(key: string, value: string): Promise<void> {
   if (!supportsIndexedDb()) {
     localStorage.setItem(key, value);
@@ -68,6 +92,27 @@ export async function deleteBrowserImage(key: string): Promise<void> {
   localStorage.removeItem(key);
 }
 
+export async function replaceBrowserImages(images: Record<string, string>): Promise<void> {
+  if (!supportsIndexedDb()) {
+    for (const key of Object.keys(localStorage).filter((key) => key.startsWith("img_"))) localStorage.removeItem(key);
+    for (const [key, value] of Object.entries(images)) localStorage.setItem(key, value);
+    return;
+  }
+  await migrateLegacyBrowserImages();
+  const db = await openDatabase();
+  await new Promise<void>((resolve, reject) => {
+    const transaction = db.transaction(STORE_NAME, "readwrite");
+    const store = transaction.objectStore(STORE_NAME);
+    store.clear();
+    for (const [key, value] of Object.entries(images)) store.put(value, key);
+    transaction.oncomplete = () => resolve();
+    transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지 복원에 실패했습니다."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("브라우저 이미지 복원이 중단되었습니다."));
+  });
+  db.close();
+  for (const key of Object.keys(localStorage).filter((key) => key.startsWith("img_"))) localStorage.removeItem(key);
+}
+
 export async function hasBrowserImage(key: string): Promise<boolean> {
   return (await getBrowserImage(key)) !== null;
 }
@@ -76,15 +121,24 @@ export async function listBrowserImages(): Promise<Record<string, string>> {
   if (!supportsIndexedDb()) {
     return Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""]));
   }
+  await migrateLegacyBrowserImages();
   const db = await openDatabase();
   const images = await new Promise<Record<string, string>>((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
-    const keysRequest = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAllKeys();
-    request.onsuccess = () => {
-      keysRequest.onsuccess = () => resolve(Object.fromEntries(keysRequest.result.map((key, index) => [String(key), typeof request.result[index] === "string" ? request.result[index] : ""])));
-      keysRequest.onerror = () => reject(keysRequest.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+    const transaction = db.transaction(STORE_NAME, "readonly");
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.getAll();
+    const keysRequest = store.getAllKeys();
+    let values: unknown[] | undefined;
+    let keys: IDBValidKey[] | undefined;
+    const finish = () => {
+      if (!values || !keys) return;
+      resolve(Object.fromEntries(keys.map((key, index) => [String(key), typeof values?.[index] === "string" ? values[index] as string : ""])));
     };
+    request.onsuccess = () => { values = request.result; finish(); };
+    keysRequest.onsuccess = () => { keys = keysRequest.result; finish(); };
     request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+    keysRequest.onerror = () => reject(keysRequest.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+    transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
   });
   db.close();
   return images;

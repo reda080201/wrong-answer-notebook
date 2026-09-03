@@ -15,6 +15,36 @@ use std::sync::Mutex;
 
 pub const ENTRIES_SCHEMA_VERSION: u32 = 2;
 
+#[derive(Debug, Clone)]
+pub struct StagedCommitResult {
+    pub filenames: Vec<String>,
+    pub revision: String,
+}
+
+/// Cross-process lock shared by Tauri mutations and the desktop preview bridge.
+/// The lock lives beside the entries document so both runtimes serialize the
+/// same data directory even when they have different process-local mutexes.
+pub(crate) fn with_shared_storage_lock<T>(
+    root: &Path,
+    operation: impl FnOnce() -> Result<T, String>,
+) -> Result<T, String> {
+    fs::create_dir_all(root).map_err(|error| error.to_string())?;
+    let lock_path = root.join(".desktop-storage.lock");
+    let file_lock = fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .map_err(|error| error.to_string())?;
+    file_lock
+        .lock_exclusive()
+        .map_err(|error| error.to_string())?;
+    let result = operation();
+    let _ = file_lock.unlock();
+    result
+}
+
 pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String> {
     let mut referenced = HashSet::new();
     referenced.extend(entry.question_images.iter().cloned());
@@ -164,27 +194,11 @@ impl NotebookStore {
             .write_lock
             .lock()
             .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        let lock_path = self
+        let root = self
             .entries_path
             .parent()
-            .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?
-            .join(".desktop-storage.lock");
-        if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-        }
-        let file_lock = fs::OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .read(true)
-            .write(true)
-            .open(lock_path)
-            .map_err(|error| error.to_string())?;
-        file_lock
-            .lock_exclusive()
-            .map_err(|error| error.to_string())?;
-        let result = operation();
-        let _ = file_lock.unlock();
-        result
+            .ok_or_else(|| "저장 경로를 확인할 수 없습니다.".to_owned())?;
+        with_shared_storage_lock(root, operation)
     }
 
     /// Accepts the historical array format and the current schema-v2 wrapper.
@@ -235,60 +249,63 @@ impl NotebookStore {
         entry_id: &str,
         expected_updated_at: &str,
         next_entry: WrongAnswerEntry,
-    ) -> Result<Vec<String>, String> {
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        if !assets_dir.exists() {
-            return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
-        }
-
-        let mut entries = self.load_entries()?;
-        let index = entries
-            .iter()
-            .position(|entry| entry.id == entry_id)
-            .ok_or_else(|| "대상 문제지를 찾을 수 없습니다.".to_owned())?;
-        if entries[index].updated_at != expected_updated_at {
-            return Err(
-                "대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요.".to_owned(),
-            );
-        }
-
-        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
-        let result = (|| -> Result<(), String> {
-            for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
-                let source = item.map_err(|error| error.to_string())?.path();
-                if !source.is_file() {
-                    continue;
-                }
-                let filename = source
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
-                    .to_owned();
-                let target = self.images_path.join(&filename);
-                if target.exists() {
-                    return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
-                }
-                fs::rename(&source, &target).map_err(|error| error.to_string())?;
-                moved.push((source, target));
+    ) -> Result<StagedCommitResult, String> {
+        self.with_write_lock(|| {
+            if !assets_dir.exists() {
+                return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
             }
-            entries[index] = next_entry;
-            self.write_entries_locked(&entries)
-        })();
-
-        if let Err(error) = result {
-            for (source, target) in moved.iter().rev() {
-                let _ = fs::rename(target, source);
+            let mut entries = self.load_entries()?;
+            let index = entries
+                .iter()
+                .position(|entry| entry.id == entry_id)
+                .ok_or_else(|| "대상 문제지를 찾을 수 없습니다.".to_owned())?;
+            if entries[index].updated_at != expected_updated_at {
+                return Err(
+                    "대상 문제지가 저장 중 변경되었습니다. 병합 내용을 다시 확인해 주세요."
+                        .to_owned(),
+                );
             }
-            return Err(error);
-        }
+            let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+            let result = (|| -> Result<String, String> {
+                for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
+                    let source = item.map_err(|error| error.to_string())?.path();
+                    if !source.is_file() {
+                        continue;
+                    }
+                    let filename = source
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
+                        .to_owned();
+                    let target = self.images_path.join(&filename);
+                    if target.exists() {
+                        return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+                    }
+                    fs::rename(&source, &target).map_err(|error| error.to_string())?;
+                    moved.push((source, target));
+                }
+                entries[index] = next_entry;
+                self.write_entries_locked(&entries)?;
+                self.entries_revision()
+            })();
 
-        Ok(moved
-            .iter()
-            .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
-            .collect())
+            let revision = match result {
+                Ok(revision) => revision,
+                Err(error) => {
+                    for (source, target) in moved.iter().rev() {
+                        let _ = fs::rename(target, source);
+                    }
+                    return Err(error);
+                }
+            };
+            Ok(StagedCommitResult {
+                filenames: moved
+                    .iter()
+                    .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
+                    .collect(),
+                revision,
+            })
+        })
     }
 
     /// Adds imported entries and promotes their staged assets as one locked operation.
@@ -297,50 +314,53 @@ impl NotebookStore {
         &self,
         assets_dir: &Path,
         added_entries: Vec<WrongAnswerEntry>,
-    ) -> Result<Vec<String>, String> {
-        let _guard = self
-            .write_lock
-            .lock()
-            .map_err(|_| "노트 저장 잠금을 얻지 못했습니다.".to_owned())?;
-        if !assets_dir.exists() {
-            return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
-        }
-
-        let mut entries = self.load_entries()?;
-        let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
-        let result = (|| -> Result<(), String> {
-            for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
-                let source = item.map_err(|error| error.to_string())?.path();
-                if !source.is_file() {
-                    continue;
-                }
-                let filename = source
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
-                    .to_owned();
-                let target = self.images_path.join(&filename);
-                if target.exists() {
-                    return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
-                }
-                fs::rename(&source, &target).map_err(|error| error.to_string())?;
-                moved.push((source, target));
+    ) -> Result<StagedCommitResult, String> {
+        self.with_write_lock(|| {
+            if !assets_dir.exists() {
+                return Err("가져오기 자산 session을 찾을 수 없습니다.".to_owned());
             }
-            entries.splice(0..0, added_entries);
-            self.write_entries_locked(&entries)
-        })();
+            let mut entries = self.load_entries()?;
+            let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
+            let result = (|| -> Result<String, String> {
+                for item in fs::read_dir(assets_dir).map_err(|error| error.to_string())? {
+                    let source = item.map_err(|error| error.to_string())?.path();
+                    if !source.is_file() {
+                        continue;
+                    }
+                    let filename = source
+                        .file_name()
+                        .and_then(|name| name.to_str())
+                        .ok_or_else(|| "staged 이미지 파일명을 읽지 못했습니다.".to_owned())?
+                        .to_owned();
+                    let target = self.images_path.join(&filename);
+                    if target.exists() {
+                        return Err(format!("이미지 파일명이 이미 사용 중입니다: {filename}"));
+                    }
+                    fs::rename(&source, &target).map_err(|error| error.to_string())?;
+                    moved.push((source, target));
+                }
+                entries.splice(0..0, added_entries);
+                self.write_entries_locked(&entries)?;
+                self.entries_revision()
+            })();
 
-        if let Err(error) = result {
-            for (source, target) in moved.iter().rev() {
-                let _ = fs::rename(target, source);
-            }
-            return Err(error);
-        }
-
-        Ok(moved
-            .iter()
-            .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
-            .collect())
+            let revision = match result {
+                Ok(revision) => revision,
+                Err(error) => {
+                    for (source, target) in moved.iter().rev() {
+                        let _ = fs::rename(target, source);
+                    }
+                    return Err(error);
+                }
+            };
+            Ok(StagedCommitResult {
+                filenames: moved
+                    .iter()
+                    .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
+                    .collect(),
+                revision,
+            })
+        })
     }
 
     pub fn get_entry(&self, entry_id: &str) -> Result<Option<WrongAnswerEntry>, String> {
@@ -932,7 +952,8 @@ mod tests {
             .commit_staged_entry_update(&assets, "e1", "baseline", next)
             .unwrap();
 
-        assert_eq!(filenames, vec!["new-image.png"]);
+        assert_eq!(filenames.filenames, vec!["new-image.png"]);
+        assert_eq!(filenames.revision, store.entries_revision().unwrap());
         assert!(images.join("new-image.png").exists());
         assert!(!assets.join("new-image.png").exists());
         assert_eq!(store.load_entries().unwrap()[0].memo, "병합됨");
@@ -1013,7 +1034,8 @@ mod tests {
             .commit_staged_entries_add(&assets, vec![added])
             .unwrap();
 
-        assert_eq!(filenames, vec!["new-image.png"]);
+        assert_eq!(filenames.filenames, vec!["new-image.png"]);
+        assert_eq!(filenames.revision, store.entries_revision().unwrap());
         assert!(images.join("new-image.png").exists());
         assert!(!assets.join("new-image.png").exists());
         assert_eq!(store.load_entries().unwrap()[0].id, "e2");
