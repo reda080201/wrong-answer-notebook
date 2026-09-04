@@ -13,7 +13,9 @@ function command(name, args, env) {
 }
 
 try {
-  await synchronizeDependencies(root);
+  // CI installs dependencies in its dedicated step. Re-running npm ci here
+  // delays Vite beyond Playwright's web-server readiness window.
+  if (!process.env.CI) await synchronizeDependencies(root);
   const vite = command("npm", ["run", "dev:web", "--", ...process.argv.slice(2)], {
     ...process.env,
     VITE_STORAGE_MODE: "isolated-browser",
