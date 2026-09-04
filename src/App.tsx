@@ -52,6 +52,7 @@ import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
+import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -539,9 +540,18 @@ function AppContent() {
     snapshot: navigationSnapshot,
     restore: restoreNavigationSnapshot,
   });
+  const appCommands = useMemo<AppCommand[]>(() => [
+    { id: "new-entry", label: "새 오답 추가", hint: "Ctrl/Cmd+N", onExecute: actions.openNew },
+    { id: "import", label: "시험지 가져오기", hint: "Ctrl/Cmd+I", onExecute: actions.openImport },
+    { id: "question-bank", label: "문제 은행", onExecute: () => void appNavigationController.openQuestionBank() },
+    { id: "learning-hub", label: "학습 허브", onExecute: () => void appNavigationController.openLearningHub() },
+    { id: "today-review", label: "오늘 복습", hint: "R", onExecute: () => actions.startReview("today") },
+    { id: "settings", label: "설정", onExecute: () => openSettings() },
+  ], [actions.openImport, actions.openNew, actions.startReview, appNavigationController, openSettings]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
+    <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
         navigationController={appNavigationController}

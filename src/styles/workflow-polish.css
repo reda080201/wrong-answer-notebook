@@ -1,0 +1,51 @@
+.command-palette > input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border-strong, #c6cbd3);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.command-palette [role="listbox"] {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+}
+
+.command-palette [role="option"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.command-palette [role="option"]:hover,
+.command-palette [role="option"]:focus-visible {
+  border-color: var(--accent, #5267c7);
+  background: var(--surface-subtle, #f3f5f8);
+}
+
+.command-palette [role="option"] small {
+  color: var(--text-muted, #667085);
+}
+
+.sidebar-collapsed-create {
+  width: 40px;
+  height: 40px;
+}
+
+.onboarding-tour-actions {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
