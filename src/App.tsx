@@ -53,6 +53,7 @@ import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordin
 import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
+import { NotificationProvider } from "./shared/ui/NotificationProvider";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -1060,8 +1061,10 @@ function AppContent() {
  */
 export default function App() {
   return (
-    <SettingsProvider>
-      <AppContent />
-    </SettingsProvider>
+    <NotificationProvider>
+      <SettingsProvider>
+        <AppContent />
+      </SettingsProvider>
+    </NotificationProvider>
   );
 }

@@ -49,3 +49,17 @@
   gap: 8px;
   margin: 16px 0;
 }
+.notification-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast, 100);
+  display: grid;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+.notification-stack > div { position: relative; display: flex; align-items: center; gap: 6px; }
+.notification-dismiss { width: 32px; height: 32px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.command-shortcuts { display: grid; gap: 10px; }
+.command-shortcuts p { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 12px; margin: 0; }
+.command-shortcuts kbd { border: 1px solid var(--border-subtle, #d0d5dd); border-radius: 4px; padding: 4px 6px; text-align: center; background: var(--surface-subtle, #f6f7f9); }

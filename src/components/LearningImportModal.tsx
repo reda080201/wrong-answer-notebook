@@ -79,6 +79,17 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const visualInputRef = useRef<HTMLInputElement>(null);
   const visualAnalysisAbortRef = useRef<AbortController | null>(null);
   const visualGenerationRef = useRef(0);
+  const mountedRef = useRef(true);
+
+  const discardAssetSession = async (assetSession: string) => {
+    try {
+      await onDiscardAssetSession?.(assetSession);
+      return true;
+    } catch (err) {
+      if (mountedRef.current) setCleanupError(err instanceof Error ? `임시 분석 자산을 정리하지 못했습니다. ${err.message}` : "임시 분석 자산을 정리하지 못했습니다.");
+      return false;
+    }
+  };
 
   const discardVisualAnalysis = async () => {
     const assetSession = visualAnalysis?.assetSession;
@@ -89,9 +100,9 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
     setCleanupBusy(true);
     setCleanupError(null);
     try {
-      await onDiscardAssetSession?.(assetSession);
-      setVisualAnalysis(null);
-      return true;
+      const discarded = await discardAssetSession(assetSession);
+      if (discarded) setVisualAnalysis(null);
+      return discarded;
     } catch (err) {
       setCleanupError(err instanceof Error ? `임시 분석 자산을 정리하지 못했습니다. ${err.message}` : "임시 분석 자산을 정리하지 못했습니다.");
       return false;
@@ -163,7 +174,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       setSaving(true);
       const parsed = await onVisualFile(file, controller.signal);
       if (controller.signal.aborted || generation !== visualGenerationRef.current) {
-        if (parsed.assetSession) await onDiscardAssetSession?.(parsed.assetSession);
+        if (parsed.assetSession) await discardAssetSession(parsed.assetSession);
         return;
       }
       setBlocks(parsed.blocks);
@@ -220,6 +231,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   };
 
   useEffect(() => () => {
+    mountedRef.current = false;
     visualGenerationRef.current += 1;
     visualAnalysisAbortRef.current?.abort();
   }, []);

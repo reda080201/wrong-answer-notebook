@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Dialog from "./Dialog";
+import { reviewCommands } from "../../utils/reviewCommands";
 
 export interface AppCommand {
   id: string;
@@ -17,6 +18,7 @@ function isEditableTarget(target: EventTarget | null) {
 
 export default function CommandPalette({ commands }: { commands: AppCommand[] }) {
   const [open, setOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [query, setQuery] = useState("");
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -34,6 +36,11 @@ export default function CommandPalette({ commands }: { commands: AppCommand[] })
         }
       }
       if (isEditableTarget(event.target)) return;
+      if (event.key === "?") {
+        event.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
       if (event.key.toLowerCase() === "r") {
         commands.find((item) => item.id === "today-review")?.onExecute();
         return;
@@ -45,7 +52,7 @@ export default function CommandPalette({ commands }: { commands: AppCommand[] })
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [commands]);
   const filtered = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("ko-KR");
     if (!normalized) return commands;
@@ -54,12 +61,17 @@ export default function CommandPalette({ commands }: { commands: AppCommand[] })
   useEffect(() => {
     if (!open) setQuery("");
   }, [open]);
-  return <Dialog open={open} size="sm" ariaLabel="명령 팔레트" title="명령 팔레트" onClose={() => setOpen(false)}>
+  return <>
+  <Dialog open={open} size="sm" ariaLabel="명령 팔레트" title="명령 팔레트" onClose={() => setOpen(false)}>
     <div className="command-palette" data-dialog-editing="true">
       <input autoFocus type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="명령 검색" aria-label="명령 검색" />
       <div role="listbox" aria-label="명령 목록">
         {filtered.length ? filtered.map((command) => <button key={command.id} type="button" role="option" onClick={() => { setOpen(false); command.onExecute(); }}><span>{command.label}</span>{command.hint && <small>{command.hint}</small>}</button>) : <p className="empty-state">일치하는 명령이 없습니다.</p>}
       </div>
     </div>
-  </Dialog>;
+  </Dialog>
+  <Dialog open={helpOpen} size="sm" ariaLabel="키보드 단축키" title="키보드 단축키" onClose={() => setHelpOpen(false)}>
+    <div className="command-shortcuts">{reviewCommands.map((command) => <p key={command.key}><kbd>{command.label}</kbd><span>{command.description}</span></p>)}</div>
+  </Dialog>
+  </>;
 }
