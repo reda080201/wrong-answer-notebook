@@ -185,16 +185,39 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   );
   const [candidatePickerOpen, setCandidatePickerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [bulkReviewBusy, setBulkReviewBusy] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState("");
-  const visibleCandidates = candidateEntries.filter((entry) => entry.title.toLocaleLowerCase("ko").includes(candidateSearch.toLocaleLowerCase("ko")));
+  const candidateQuery = candidateSearch.trim().toLocaleLowerCase("ko");
+  const visibleCandidates = candidateEntries.filter((entry) => {
+    if (!candidateQuery) return true;
+    const searchable = [
+      entry.title,
+      entry.subject,
+      entry.sheetGroup?.groupTitle,
+      entry.sheetGroup?.partTitle,
+      ...(entry.tags ?? []),
+      ...(entry.questionMeta ?? []).map((meta) => meta.questionNumber),
+    ].filter(Boolean).join(" ").toLocaleLowerCase("ko");
+    return searchable.includes(candidateQuery);
+  });
+  const reviewVisibleItems = async () => {
+    if (bulkReviewBusy) return;
+    setBulkReviewBusy(true);
+    try {
+      await Promise.all(filtered.filter((item) => item.block.reviewStatus === "needs_review").map((item) => onUpdateBlock(item.sourceEntryId, item.block.id, { reviewStatus: "reviewed" })));
+    } finally {
+      setBulkReviewBusy(false);
+    }
+  };
   return <section className="learning-hub" aria-label="학습 허브">
     <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></header>
-    {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="시험지 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}</div></Dialog>}
+    {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="제목·과목·단원·태그 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}{!visibleCandidates.length && <div className="empty-state"><p>답안 정보가 있는 시험지를 찾지 못했습니다.</p><p className="form-hint">문항 답안이 연결된 자료만 학습 후보로 만들 수 있습니다.</p></div>}</div></Dialog>}
     <div className="learning-hub-filters">
       <input aria-label="학습 내용 검색" value={filters.search} onChange={(event) => set("search", event.target.value)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
       <select aria-label="자료 종류 필터" value={filters.type} onChange={(event) => set("type", event.target.value as LearningHubFilters["type"])}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
+      {filters.reviewStatus === "needs_review" && <button type="button" className="btn-secondary" onClick={() => void reviewVisibleItems()} disabled={bulkReviewBusy}>{bulkReviewBusy ? "검토 처리 중..." : "현재 표시된 항목 모두 검토 완료"}</button>}
     </div>
     {filtersOpen && <Dialog open size="md" ariaLabel="학습 허브 필터" onClose={() => setFiltersOpen(false)} title="학습 허브 필터" footer={<><button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>초기화</button><button type="button" className="btn-primary" onClick={() => setFiltersOpen(false)}>적용</button></>}>
       <div className="learning-hub-advanced-filters">
