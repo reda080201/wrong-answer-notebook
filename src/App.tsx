@@ -632,6 +632,12 @@ function AppContent() {
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
+              onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
+                const itemEntry = entries.find((entry) => entry.id === item.entryId);
+                return itemEntry?.entryKind === "problem_sheet"
+                  ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
+                  : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
+              }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -723,6 +729,7 @@ function AppContent() {
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
                 openNewRealExamDialog();
               } : undefined}
+              onStartReview={() => actions.startSelectionReview([{ kind: "entry", entry: selected }])}
               startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
               startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
               onEdit={actions.openEdit}
@@ -1032,7 +1039,7 @@ function AppContent() {
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
-      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} />
+      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} onStartNew={actions.openNew} onImport={actions.openImport} />
     </div>
     </ConceptLinkProvider>
   );

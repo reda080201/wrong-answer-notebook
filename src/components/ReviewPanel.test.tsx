@@ -49,7 +49,7 @@ describe("ReviewPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "맞음" }));
 
     await waitFor(() => {
-      expect(onReview).toHaveBeenCalledWith({ kind: "entry", entry }, "good");
+      expect(onReview).toHaveBeenCalledWith({ kind: "entry", entry }, expect.objectContaining({ result: "good", eventId: expect.any(String) }));
     });
   }, 30000);
 
@@ -100,7 +100,7 @@ describe("ReviewPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));
     await waitFor(() => {
-      expect(onReview).toHaveBeenCalledWith({ kind: "sheet-question", entry: sheet, questionNumber: "1" }, "hard");
+      expect(onReview).toHaveBeenCalledWith({ kind: "sheet-question", entry: sheet, questionNumber: "1" }, expect.objectContaining({ result: "hard", eventId: expect.any(String) }));
     });
   }, 30000);
 

@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import type { ChatGptMcpPreferences } from "../../types";
 import type { McpBridgeRuntimeStatus } from "../../hooks/useMcpBridgeSettings";
 
@@ -7,10 +6,9 @@ interface SettingsChatGptPanelProps {
   status: McpBridgeRuntimeStatus | null;
   onPatch(patch: Partial<ChatGptMcpPreferences>): Promise<void>;
   onSaveRemoteBaseUrl(raw: string): Promise<void>;
-  bridgePanel: ReactNode;
 }
 
-export default function SettingsChatGptPanel({ preferences, status, onPatch, onSaveRemoteBaseUrl, bridgePanel }: SettingsChatGptPanelProps) {
+export default function SettingsChatGptPanel({ preferences, status, onPatch, onSaveRemoteBaseUrl }: SettingsChatGptPanelProps) {
   const ready = status?.status === "listening" || status?.status === "connected";
   return <div className="settings-pref-panel chatgpt-connection-center">
     <h3>ChatGPT와 오답노트 연결</h3>
@@ -27,6 +25,5 @@ export default function SettingsChatGptPanel({ preferences, status, onPatch, onS
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareScratchNote} onChange={(event) => void onPatch({ shareScratchNote: event.target.checked })} /> 풀이 메모 공유</label>
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPatch({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지 공유</label>
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareSourcePageImages} onChange={(event) => void onPatch({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지 공유</label>
-    {bridgePanel}
   </div>;
 }

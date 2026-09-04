@@ -28,6 +28,7 @@ import type {
   MemoTemplate,
   PromptTemplate,
   ReviewResult,
+  ReviewSubmission,
   ReviewItem,
   Subject,
   WrongAnswerEntry,
@@ -55,7 +56,7 @@ import { allowedFieldsForSupplementalMode, filterSupplementalData, supplementalK
 import { useAppDialog } from "../shared/ui/AppDialogProvider";
 import type { EntryPatch } from "./useEntries";
 
-type ReviewMode = "today" | "random" | "difficult" | "important";
+type ReviewMode = "today" | "random" | "difficult" | "important" | "selection";
 type ImportMode = "import" | "solution";
 
 function shuffleReviewItems(items: ReviewItem[]): ReviewItem[] {
@@ -308,15 +309,21 @@ export function useAppActions({
           ? getImportantQuestionReviewItems(entries)
         : mode === "difficult"
           ? getDifficultReviewItems(entries)
-          : shuffleReviewItems(getRandomReviewItems(entries));
+        : shuffleReviewItems(getRandomReviewItems(entries));
     setReviewSeed(candidates);
     setReviewMode(mode);
   };
 
+  const startSelectionReview = (items: ReviewItem[]) => {
+    setReviewSeed(items);
+    setReviewMode("selection");
+  };
+
   const handleReview = async (
     itemOrEntry: ReviewItem | WrongAnswerEntry,
-    result: ReviewResult,
+    submission: ReviewSubmission | ReviewResult,
   ) => {
+    const result = typeof submission === "string" ? submission : submission.result;
     const item: ReviewItem =
       "kind" in itemOrEntry
         ? itemOrEntry
@@ -333,6 +340,7 @@ export function useAppActions({
             result,
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
+            typeof submission === "string" ? undefined : submission,
           ),
           reviewAttempts: [
             ...(current.reviewAttempts ?? []),
@@ -353,7 +361,7 @@ export function useAppActions({
     }
     const entry = item.entry;
     await patchEntry(entry.id, (current) => {
-      const next = applyReviewResult(current, result);
+      const next = applyReviewResult(current, result, new Date(), typeof submission === "string" ? undefined : submission);
       return {
         review: next.review,
         mastered: next.mastered,
@@ -906,6 +914,7 @@ export function useAppActions({
     deleteMemoTemplate,
     addMemoTemplate,
     startReview,
+    startSelectionReview,
     handleReview,
     handleQuickMemo,
     handleLearningBlocksChange,

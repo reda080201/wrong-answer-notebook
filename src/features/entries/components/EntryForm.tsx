@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, MistakeCauseType, ReviewStrategy, WrongAnswerEntry } from "../../../types";
 import { hasEntryContent } from "../../../utils/entry";
@@ -13,6 +13,7 @@ import { normalizeDifficultyScore } from "../../../utils/difficulty";
 import { SUBJECTS } from "../../../types";
 import ImageField from "../../../components/ImageField";
 import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
+import Dialog from "../../../shared/ui/Dialog";
 import {
   createEntryDraftFromEntry,
   createEmptyEntryDraft,
@@ -99,27 +100,34 @@ export default function EntryForm({
   const [removedImages, setRemovedImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const initialSignatureRef = useRef("");
   const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(false);
 
   useEffect(() => {
+    let nextForm: EntryFormData;
     if (entry) {
-      setForm(createEntryDraftFromEntry(entry));
+      nextForm = createEntryDraftFromEntry(entry);
+      setForm(nextForm);
       setDifficultyScoreTouched(entry.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
     } else {
-      setForm(mergeEntryDraft({
+      nextForm = mergeEntryDraft({
         ...initialData,
         entryKind: initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer",
         title: initialData?.title ?? prefilledTitle ?? "",
         difficulty: initialData?.difficulty ?? "none",
         difficultyScore: initialData?.difficultyScore,
         explanationParts: initialData?.explanationParts ?? [emptyPart()],
-      }, createEmptyEntryDraft(initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer")));
+      }, createEmptyEntryDraft(initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer"));
+      setForm(nextForm);
       setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
     }
+    initialSignatureRef.current = JSON.stringify(nextForm);
+    setDiscardConfirmOpen(false);
   }, [entry, defaultEntryKind, prefilledTitle, initialData]);
 
   const trackRemove = (filename: string, wasPersisted: boolean) => {
@@ -375,9 +383,27 @@ export default function EntryForm({
           ? "특강 추가"
         : "오답 추가";
 
+  const isDirty = () => JSON.stringify(form) !== initialSignatureRef.current || removedImages.length > 0;
+
   const handleClose = () => {
-    if (!saving) onClose();
+    if (saving) return;
+    if (isDirty()) {
+      setDiscardConfirmOpen(true);
+      return;
+    }
+    onClose();
   };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        handleClose();
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  });
 
   return (
     <div className="form-overlay" onClick={handleClose}>
@@ -1263,6 +1289,16 @@ export default function EntryForm({
           </div>
         </form>
       </div>
+      <Dialog
+        open={discardConfirmOpen}
+        size="sm"
+        title="작성 중인 내용이 있습니다"
+        ariaLabel="작성 중인 내용 확인"
+        onClose={() => setDiscardConfirmOpen(false)}
+        footer={<><button type="button" className="btn-secondary" onClick={() => setDiscardConfirmOpen(false)}>계속 작성</button><button type="button" className="btn-danger" onClick={() => { setDiscardConfirmOpen(false); onClose(); }}>변경사항 버리고 닫기</button></>}
+      >
+        <p>아직 저장하지 않은 내용이 사라집니다.</p>
+      </Dialog>
     </div>
   );
 }

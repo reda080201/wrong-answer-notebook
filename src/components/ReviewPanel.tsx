@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ReviewItem, ReviewResult, ReviewSession, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { ReviewItem, ReviewResult, ReviewSession, ReviewSubmission, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -19,7 +19,7 @@ interface ReviewPanelProps {
   entries?: WrongAnswerEntry[];
   items?: ReviewItem[];
   onClose: () => void;
-  onReview: (item: ReviewItem, result: ReviewResult) => Promise<void>;
+  onReview: (item: ReviewItem, submission: ReviewSubmission) => Promise<void>;
   onOpenEntry: (entry: WrongAnswerEntry) => void;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
@@ -51,6 +51,7 @@ export default function ReviewPanel({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
+  const [editingCompleted, setEditingCompleted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
@@ -140,29 +141,44 @@ export default function ReviewPanel({
     };
   }, [requestClose]);
   const current = reviewItems[index] ?? null;
+  const completedEvent = current
+    ? reviewEventsRef.current.find((event) => event.itemKey === reviewItemKey(current))
+    : undefined;
   const progress = useMemo(
     () => (reviewItems.length > 0 ? `${Math.min(index + 1, reviewItems.length)} / ${reviewItems.length}` : "0 / 0"),
     [reviewItems.length, index],
   );
 
+  useEffect(() => {
+    setEditingCompleted(false);
+  }, [current ? reviewItemKey(current) : ""]);
+
   const handleReview = useCallback(async (result: ReviewResult) => {
-    if (!current || savingRef.current) return;
+    if (!current || savingRef.current || (completedEvent && !editingCompleted)) return;
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     try {
-      await onReview(current, result);
+      const eventId = completedEvent?.id ?? crypto.randomUUID();
+      await onReview(current, {
+        result,
+        eventId,
+        replacementEventId: completedEvent?.id,
+      });
       if (!mountedRef.current) return;
       const itemKey = reviewItemKey(current);
       if (!completedKeysRef.current.includes(itemKey)) completedKeysRef.current = [...completedKeysRef.current, itemKey];
-      reviewEventsRef.current = [...reviewEventsRef.current, {
-        id: crypto.randomUUID(),
+      const nextEvent = {
+        id: eventId,
         reviewedAt: new Date().toISOString(),
         result,
         nextDueAt: null,
         intervalDays: 0,
         itemKey,
-      }];
+      };
+      reviewEventsRef.current = completedEvent
+        ? reviewEventsRef.current.map((event) => event.id === completedEvent.id ? nextEvent : event)
+        : [...reviewEventsRef.current, nextEvent];
       if (onSessionSave) {
         const nextIndex = Math.min(index + 1, reviewItems.length);
         const updatedAt = new Date().toISOString();
@@ -181,7 +197,12 @@ export default function ReviewPanel({
           ...(nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
         });
       }
-      setReviewStats((stats) => ({ ...stats, [result]: stats[result] + 1 }));
+      setReviewStats((stats) => {
+        const next = { ...stats };
+        if (completedEvent) next[completedEvent.result] -= 1;
+        next[result] += 1;
+        return next;
+      });
       setRevealed(false);
       setIndex((value) => Math.min(value + 1, reviewItems.length));
     } catch (error) {
@@ -192,7 +213,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [current, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
+  }, [completedEvent, current, editingCompleted, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {
@@ -206,7 +227,7 @@ export default function ReviewPanel({
       }
       const command = reviewCommands.find((candidate) => candidate.key === event.key);
       if (!command) return;
-      if (command.result && revealedRef.current && current) {
+      if (command.result && revealedRef.current && current && (!completedEvent || editingCompleted)) {
         event.preventDefault();
         void handleReview(command.result);
         return;
@@ -223,7 +244,7 @@ export default function ReviewPanel({
     };
     document.addEventListener("keydown", onCommand);
     return () => document.removeEventListener("keydown", onCommand);
-  }, [current, index, reviewItems.length, handleReview]);
+  }, [completedEvent, current, editingCompleted, index, reviewItems.length, handleReview]);
 
   const currentEntry = current?.entry;
   const sheetQuestion =
@@ -329,13 +350,19 @@ export default function ReviewPanel({
                   ))}
                 </div>
               )}
+              {completedEvent && !editingCompleted && (
+                <div className="review-completed-state" role="status">
+                  <span>이 세션에서 {resultLabels[completedEvent.result]}으로 평가했습니다.</span>
+                  <button type="button" className="btn-secondary btn-sm" onClick={() => setEditingCompleted(true)} disabled={saving}>평가 수정</button>
+                </div>
+              )}
               <div className="review-actions" aria-label="복습 평가">
                 {(["again", "hard", "good"] as const).map((result) => (
                   <button
                     key={result}
                     type="button"
                     className={`review-result review-result--${result}`}
-                    disabled={saving}
+                    disabled={saving || Boolean(completedEvent && !editingCompleted)}
                     onClick={() => handleReview(result)}
                   >
                     {resultLabels[result]}
