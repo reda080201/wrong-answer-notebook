@@ -1,0 +1,65 @@
+.command-palette > input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--border-strong, #c6cbd3);
+  border-radius: 6px;
+  background: var(--surface, #fff);
+  padding: 0 12px;
+  font: inherit;
+}
+
+.command-palette [role="listbox"] {
+  display: grid;
+  gap: 4px;
+  margin-top: 12px;
+  max-height: min(50vh, 360px);
+  overflow-y: auto;
+}
+
+.command-palette [role="option"] {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+}
+
+.command-palette [role="option"]:hover,
+.command-palette [role="option"]:focus-visible {
+  border-color: var(--accent, #5267c7);
+  background: var(--surface-subtle, #f3f5f8);
+}
+
+.command-palette [role="option"] small {
+  color: var(--text-muted, #667085);
+}
+
+.sidebar-collapsed-create {
+  width: 40px;
+  height: 40px;
+}
+
+.onboarding-tour-actions {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+.notification-stack {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: var(--z-toast, 100);
+  display: grid;
+  gap: 8px;
+  max-width: min(420px, calc(100vw - 32px));
+}
+.notification-stack > div { position: relative; display: flex; align-items: center; gap: 6px; }
+.notification-dismiss { width: 32px; height: 32px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.command-shortcuts { display: grid; gap: 10px; }
+.command-shortcuts p { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 12px; margin: 0; }
+.command-shortcuts kbd { border: 1px solid var(--border-subtle, #d0d5dd); border-radius: 4px; padding: 4px 6px; text-align: center; background: var(--surface-subtle, #f6f7f9); }

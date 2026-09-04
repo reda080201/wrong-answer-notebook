@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { realpathSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 
@@ -10,6 +11,10 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   clearScreen: false,
   server: {
+    fs: {
+      // Allow a dependency junction used by local worktrees without sharing Vite's cache.
+      allow: [process.cwd(), realpathSync("node_modules")],
+    },
     port: 1420,
     strictPort: true,
     host: host || false,

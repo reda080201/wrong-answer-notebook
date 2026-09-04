@@ -52,6 +52,8 @@ import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
+import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
+import { NotificationProvider } from "./shared/ui/NotificationProvider";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -539,9 +541,18 @@ function AppContent() {
     snapshot: navigationSnapshot,
     restore: restoreNavigationSnapshot,
   });
+  const appCommands = useMemo<AppCommand[]>(() => [
+    { id: "new-entry", label: "새 오답 추가", hint: "Ctrl/Cmd+N", onExecute: actions.openNew },
+    { id: "import", label: "시험지 가져오기", hint: "Ctrl/Cmd+I", onExecute: actions.openImport },
+    { id: "question-bank", label: "문제 은행", onExecute: () => void appNavigationController.openQuestionBank() },
+    { id: "learning-hub", label: "학습 허브", onExecute: () => void appNavigationController.openLearningHub() },
+    { id: "today-review", label: "오늘 복습", hint: "R", onExecute: () => actions.startReview("today") },
+    { id: "settings", label: "설정", onExecute: () => openSettings() },
+  ], [actions.openImport, actions.openNew, actions.startReview, appNavigationController, openSettings]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
+    <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
         navigationController={appNavigationController}
@@ -632,6 +643,12 @@ function AppContent() {
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
+              onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
+                const itemEntry = entries.find((entry) => entry.id === item.entryId);
+                return itemEntry?.entryKind === "problem_sheet"
+                  ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
+                  : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
+              }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -723,6 +740,7 @@ function AppContent() {
               onStartRealExam={selected.entryKind === "problem_sheet" ? () => {
                 openNewRealExamDialog();
               } : undefined}
+              onStartReview={() => actions.startSelectionReview([{ kind: "entry", entry: selected }])}
               startExamLabel={selectedPracticeSession ? "이어서 풀기" : "문제 풀기"}
               startRealExamLabel={selectedRealSession ? "실전 이어서" : "실전 모드"}
               onEdit={actions.openEdit}
@@ -1032,7 +1050,7 @@ function AppContent() {
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
-      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} />
+      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} onStartNew={actions.openNew} onImport={actions.openImport} />
     </div>
     </ConceptLinkProvider>
   );
@@ -1043,8 +1061,10 @@ function AppContent() {
  */
 export default function App() {
   return (
-    <SettingsProvider>
-      <AppContent />
-    </SettingsProvider>
+    <NotificationProvider>
+      <SettingsProvider>
+        <AppContent />
+      </SettingsProvider>
+    </NotificationProvider>
   );
 }

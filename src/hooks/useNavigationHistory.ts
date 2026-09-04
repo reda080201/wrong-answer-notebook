@@ -75,11 +75,23 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
       return () => undefined;
     }
     scrollContainers.current.set(key, element);
+    const onScroll = () => {
+      const state = window.history.state?.[HISTORY_KEY] as NavigationSnapshot | undefined;
+      if (!state) return;
+      window.history.replaceState({ [HISTORY_KEY]: {
+        ...state,
+        scrollTop: { ...(state.scrollTop ?? {}), [key]: element.scrollTop },
+      } }, "");
+    };
+    element.addEventListener("scroll", onScroll, { passive: true });
     const savedTop = pendingScroll.current[key];
     if (typeof savedTop === "number") {
       window.requestAnimationFrame(() => { element.scrollTop = savedTop; });
     }
-    return () => { scrollContainers.current.delete(key); };
+    return () => {
+      element.removeEventListener("scroll", onScroll);
+      if (scrollContainers.current.get(key) === element) scrollContainers.current.delete(key);
+    };
   }, []);
 
   const scrollRef = useCallback((key: string) => (element: HTMLElement | null) => {

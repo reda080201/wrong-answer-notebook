@@ -83,6 +83,7 @@ interface EntryDetailProps {
   onOpenPrint?: () => void;
   onStartExam?: () => void;
   onStartRealExam?: () => void;
+  onStartReview?: (entry: WrongAnswerEntry) => void;
   startExamLabel?: string;
   startRealExamLabel?: string;
   examSession?: ExamSession | null;
@@ -213,6 +214,7 @@ export default function EntryDetail({
   onOpenPrint,
   onStartExam,
   onStartRealExam,
+  onStartReview,
   startExamLabel = "문제 풀기",
   startRealExamLabel = "실전 모드",
   examSession,
@@ -1605,6 +1607,7 @@ export default function EntryDetail({
               focusAvailable={isFocusable}
               onModeChange={handleStudyModeChange}
               onStartFocus={openFocusMode}
+              onStartReview={() => onStartReview?.(entry)}
             />
           )}
           <h3 className="section-heading">

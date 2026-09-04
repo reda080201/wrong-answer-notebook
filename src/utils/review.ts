@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
-import type { ReviewItem, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
+import type { ReviewEvent, ReviewItem, ReviewResult, ReviewState, ReviewSubmission, WrongAnswerEntry } from "../types";
 import { resolveEntryDifficultyScore } from "./difficulty";
 import { recommendedStrategyForAnalysis } from "./mistakeAnalysis";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "./questionMeta";
@@ -22,11 +22,14 @@ export function applyReviewResult(
   entry: WrongAnswerEntry,
   result: ReviewResult,
   reviewedAt = new Date(),
+  submission?: Pick<ReviewSubmission, "eventId" | "replacementEventId">,
 ): WrongAnswerEntry {
   const cause = entry.mistakeAnalysis?.primaryCause ?? entry.mistakeAnalysis?.causes[0]?.type;
-  const next = calculateNextReview(entry.review, result, reviewedAt, cause);
+  const history = (entry.review?.history ?? []).filter((event) => event.id !== submission?.replacementEventId);
+  const previous = replayReviewHistory(history);
+  const next = calculateNextReview(previous, result, reviewedAt, cause);
   const event = {
-    id: uuidv4(),
+    id: submission?.eventId ?? uuidv4(),
     reviewedAt: reviewedAt.toISOString(),
     result,
     nextDueAt: next.nextDueAt,
@@ -43,7 +46,7 @@ export function applyReviewResult(
     lastReviewedAt: event.reviewedAt,
     intervalDays: next.intervalDays,
     streak: next.streak,
-    history: [...(entry.review?.history ?? []), event],
+    history: [...history, event],
     stabilityDays: next.stabilityDays,
     memoryDifficulty: next.memoryDifficulty,
     lapseCount: next.lapseCount,
@@ -58,6 +61,28 @@ export function applyReviewResult(
     review,
     mastered: false,
   };
+}
+
+function replayReviewHistory(history: ReviewEvent[]): ReviewState | undefined {
+  let state: ReviewState | undefined;
+  history.forEach((event, index) => {
+    const next = calculateNextReview(state, event.result, new Date(event.reviewedAt), event.causeSnapshot?.[0]);
+    state = {
+      dueAt: next.nextDueAt,
+      lastReviewedAt: event.reviewedAt,
+      intervalDays: next.intervalDays,
+      streak: next.streak,
+      history: history.slice(0, index + 1),
+      stabilityDays: next.stabilityDays,
+      memoryDifficulty: next.memoryDifficulty,
+      lapseCount: next.lapseCount,
+      repetitionCount: next.repetitionCount,
+      phase: next.phase,
+      preLapseStabilityDays: next.preLapseStabilityDays,
+      relearningStep: next.relearningStep,
+    };
+  });
+  return state;
 }
 
 export function isDueForReview(entry: WrongAnswerEntry, now = new Date()): boolean {
