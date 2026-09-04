@@ -23,26 +23,39 @@ export interface SearchMatch extends SearchCandidate {
 
 const FIELD_NAMES = new Set<SearchField>(["subject", "unit", "source", "tag"]);
 
-function tokenize(value: string): string[] {
-  const tokens: string[] = [];
-  const pattern = /"([^"\\]*(?:\\.[^"\\]*)*)"|([^\s]+)/g;
-  for (const match of value.matchAll(pattern)) tokens.push(match[1] !== undefined ? match[1].replaceAll('\\"', '"') : match[2]);
+function tokenize(value: string): Array<{ value: string; phrase: boolean }> {
+  const tokens: Array<{ value: string; phrase: boolean }> = [];
+  let index = 0;
+  while (index < value.length) {
+    while (/\s/.test(value[index] ?? "")) index += 1;
+    if (index >= value.length) break;
+    let token = "";
+    let phrase = false;
+    let quoted = false;
+    for (; index < value.length; index += 1) {
+      const char = value[index];
+      if (char === '"') { quoted = !quoted; phrase = true; continue; }
+      if (/\s/.test(char) && !quoted) break;
+      token += char;
+    }
+    if (token) tokens.push({ value: token, phrase });
+  }
   return tokens;
 }
 
 export function parseSearchQuery(raw: string): SearchQuery {
   const groups: SearchTerm[][] = [[]];
   for (const token of tokenize(raw.trim())) {
-    if (token.toLocaleUpperCase("ko-KR") === "OR") {
+    if (token.value.toLocaleUpperCase("ko-KR") === "OR") {
       groups.push([]);
       continue;
     }
-    const fieldMatch = token.match(/^(subject|unit|source|tag):(.*)$/i);
+    const fieldMatch = token.value.match(/^(subject|unit|source|tag):(.*)$/i);
     const field = fieldMatch && FIELD_NAMES.has(fieldMatch[1].toLocaleLowerCase() as SearchField)
       ? fieldMatch[1].toLocaleLowerCase() as SearchField
       : undefined;
-    const value = fieldMatch ? fieldMatch[2] : token;
-    if (value) groups.at(-1)?.push({ value, field, phrase: token.startsWith('"') });
+    const value = fieldMatch ? fieldMatch[2].replace(/^"|"$/g, "") : token.value;
+    if (value) groups.at(-1)?.push({ value, field, phrase: token.phrase || Boolean(fieldMatch?.[2].startsWith('"')) });
   }
   return { groups: groups.filter((group) => group.length > 0), raw };
 }

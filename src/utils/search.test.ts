@@ -8,6 +8,7 @@ describe("shared search", () => {
   ];
   it("supports fields, AND/OR and Korean initials", () => {
     expect(parseSearchQuery('subject:수학 "미분의 극값"').groups).toHaveLength(1);
+    expect(parseSearchQuery('subject:"자연 과학"').groups[0]?.[0]).toMatchObject({ field: "subject", value: "자연 과학", phrase: true });
     expect(rankSearchCandidates(candidates, "ㅁㅂ").map((item) => item.id)).toEqual(["a"]);
     expect(rankSearchCandidates(candidates, "unit:미분 OR unit:경우").map((item) => item.id)).toEqual(["a", "b"]);
   });
