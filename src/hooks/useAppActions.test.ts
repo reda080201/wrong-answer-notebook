@@ -65,7 +65,11 @@ vi.mock("../utils/questionMeta", () => ({
 }));
 
 vi.mock("../utils/importImageReferences", () => ({
-  collectEntryImportImageReferences: vi.fn(() => []),
+  collectEntryImportImageReferences: vi.fn((entry: { questionImages?: string[]; sourcePageImages?: string[] }) => [
+    ...(entry.questionImages ?? []),
+    ...(entry.sourcePageImages ?? []),
+  ]),
+  normalizeImportImageKey: vi.fn((value: string) => value.replace(/\\/g, "/").split("/").pop()),
 }));
 
 vi.mock("../features/supplemental-resources/services/mergeAnswerKey", () => ({
@@ -488,6 +492,33 @@ describe("useAppActions", () => {
 
       expect(addEntries).not.toHaveBeenCalled();
     });
+
+    it("filters assetFiles to only include assets referenced by importedEntries", async () => {
+      const saveImportAssetFiles = vi.mocked(api.saveImportAssetFiles);
+      saveImportAssetFiles.mockResolvedValueOnce({
+        savedFilenames: ["img-a.png"],
+        savedAssets: [],
+        sourceToSaved: { "img-a.png": "img-a.png" },
+      });
+
+      const entryA: Partial<EntryFormData> = {
+        title: "Entry A",
+        entryKind: "wrong_answer",
+        questionImages: ["img-a.png"],
+      };
+
+      const fileA = new File(["a"], "img-a.png", { type: "image/png" });
+      const fileB = new File(["b"], "img-b.png", { type: "image/png" });
+
+      const addEntries = vi.fn(async () => ["new-id"]);
+      const { result } = createHook({ addEntries });
+
+      await act(async () => {
+        await result.current.handleImportedEntriesApply([entryA], [fileA, fileB]);
+      });
+
+      expect(saveImportAssetFiles).toHaveBeenCalledWith([fileA]);
+    });
   });
 
   describe("applySupplementalMerge", () => {
@@ -669,6 +700,101 @@ describe("useAppActions", () => {
         expect(updated.reviewAttempts[0]).toHaveProperty("confidence");
         expect(updated.reviewAttempts[0]).toHaveProperty("result");
       }
+    });
+
+    it("replaces existing review attempt when rating is edited instead of appending", async () => {
+      const existingAttempt = {
+        id: "att-1",
+        eventId: "event-1",
+        entryId: "entry-1",
+        reviewedAt: "2026-09-01T00:00:00.000Z",
+        correct: true,
+        confidence: "medium" as const,
+        result: "good" as const,
+      };
+      const entry = createMockEntry({
+        id: "entry-1",
+        reviewAttempts: [existingAttempt],
+      });
+
+      let capturedPatch: ((current: WrongAnswerEntry) => Partial<WrongAnswerEntry>) | null = null;
+      const patchEntry = vi.fn(async (_id: string, fn: EntryPatch) => {
+        if (typeof fn === "function") {
+          capturedPatch = fn;
+        }
+      });
+      const { result } = createHook({ entries: [entry], patchEntry });
+
+      await act(async () => {
+        await result.current.handleReview(entry, {
+          result: "good",
+          eventId: "event-1",
+          replacementEventId: "event-1",
+        });
+      });
+
+      expect(capturedPatch).toBeTruthy();
+      if (!capturedPatch) throw new Error("review patch was not captured");
+      const updated = (capturedPatch as (current: WrongAnswerEntry) => Partial<WrongAnswerEntry>)(entry);
+      expect(updated.reviewAttempts).toHaveLength(1);
+      expect(updated.reviewAttempts?.[0]).toEqual(expect.objectContaining({
+        id: "att-1",
+        eventId: "event-1",
+          result: "good",
+        confidence: "high",
+        correct: true,
+      }));
+    });
+
+    it("replaces existing sheet question review attempt when rating is edited", async () => {
+      const existingAttempt = {
+        id: "att-sq-1",
+        eventId: "event-sheet-1",
+        entryId: "sheet-entry-1",
+        questionNumber: "3",
+        reviewedAt: "2026-09-01T00:00:00.000Z",
+        correct: false,
+        confidence: "low" as const,
+        result: "again" as const,
+      };
+      const entry = createMockEntry({
+        id: "sheet-entry-1",
+        entryKind: "problem_sheet",
+        questionMeta: [{ questionNumber: "3", important: false, updatedAt: "2026-09-01T00:00:00.000Z", mistakeAnalysis: { causes: [], primaryCause: "calculation" } }],
+        reviewAttempts: [existingAttempt],
+      });
+
+      let capturedPatch: ((current: WrongAnswerEntry) => Partial<WrongAnswerEntry>) | null = null;
+      const patchEntry = vi.fn(async (_id: string, fn: EntryPatch) => {
+        if (typeof fn === "function") {
+          capturedPatch = fn;
+        }
+      });
+      const { result } = createHook({ entries: [entry], patchEntry });
+
+      await act(async () => {
+        await result.current.handleReview(
+          { kind: "sheet-question", entry, questionNumber: "3" },
+          {
+            result: "good",
+            eventId: "event-sheet-1",
+            replacementEventId: "event-sheet-1",
+          },
+        );
+      });
+
+      expect(capturedPatch).toBeTruthy();
+      if (!capturedPatch) throw new Error("review patch was not captured");
+      const updated = (capturedPatch as (current: WrongAnswerEntry) => Partial<WrongAnswerEntry>)(entry);
+      expect(updated.reviewAttempts).toHaveLength(1);
+      expect(updated.reviewAttempts?.[0]).toEqual(expect.objectContaining({
+        id: "att-sq-1",
+        eventId: "event-sheet-1",
+        questionNumber: "3",
+        result: "good",
+        confidence: "high",
+        correct: true,
+      }));
     });
   });
 

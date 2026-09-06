@@ -26,7 +26,11 @@ export function applyReviewResult(
 ): WrongAnswerEntry {
   const cause = entry.mistakeAnalysis?.primaryCause ?? entry.mistakeAnalysis?.causes[0]?.type;
   const history = (entry.review?.history ?? []).filter((event) => event.id !== submission?.replacementEventId);
-  const previous = replayReviewHistory(history);
+  const previous = history.length > 0
+    ? replayReviewHistory(history)
+    : submission?.replacementEventId
+      ? undefined
+      : entry.review;
   const next = calculateNextReview(previous, result, reviewedAt, cause);
   const event = {
     id: submission?.eventId ?? uuidv4(),

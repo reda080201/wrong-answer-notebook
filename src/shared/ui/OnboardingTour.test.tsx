@@ -13,4 +13,14 @@ describe("OnboardingTour", () => {
     fireEvent.click(screen.getByRole("button", { name: "건너뛰기" }));
     expect(onDismiss).toHaveBeenCalledWith(true);
   });
+
+  it("onOpenQuestionBank button in step 0 triggers the callback", () => {
+    const onOpenQuestionBank = vi.fn();
+    render(<OnboardingTour open onDismiss={vi.fn()} onOpenQuestionBank={onOpenQuestionBank} />);
+    // Step 0 shows the action buttons including 문제 은행 둘러보기
+    const btn = screen.getByRole("button", { name: "문제 은행 둘러보기" });
+    expect(btn).toBeInTheDocument();
+    fireEvent.click(btn);
+    expect(onOpenQuestionBank).toHaveBeenCalledTimes(1);
+  });
 });

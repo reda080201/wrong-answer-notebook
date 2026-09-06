@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import type { EntryFormData } from "../types";
 import type { ImportedStudyDocument } from "../utils/importStudyText";
 import { classifyImportValidationIssues, validateImportedStudyData } from "../utils/importValidation";
+import { collectEntryImportImageReferences, normalizeImportImageKey } from "../utils/importImageReferences";
 import { parseQuestionText } from "../utils/textLayout";
 import Dialog from "../shared/ui/Dialog";
 
@@ -36,19 +37,28 @@ export default function ImportEntriesPreviewModal({
     }),
     [document.entries],
   );
-  const blockingCount = rows.reduce((sum, row) => sum + row.policy.blocking.length, 0);
-  const confirmableCount = rows.reduce((sum, row) => sum + row.policy.confirmable.length, 0);
+  const blockedRowCount = rows.filter((row) => row.policy.blocking.length > 0).length;
+  const blockingIssueCount = rows.reduce((sum, row) => sum + row.policy.blocking.length, 0);
+  const userExcludedCount = rows.filter((row) => excludedIndexes.has(row.index) && row.policy.blocking.length === 0).length;
+  const confirmableRowCount = rows.filter((row) => row.policy.confirmable.length > 0).length;
   const includedRows = rows.filter((row) => !excludedIndexes.has(row.index) && row.policy.blocking.length === 0);
-  const excludedCount = rows.length - includedRows.length;
+  const saveableRowCount = includedRows.length;
   const handleApply = async () => {
     if (!includedRows.length || saving) return;
     setSaving(true);
     setError(null);
     try {
+      const selectedEntries = includedRows.map((row) => row.entry);
       if (document.assetFiles?.length) {
-        await onApplyEntries(includedRows.map((row) => row.entry), document.assetFiles);
+        const referencedKeys = new Set(
+          selectedEntries.flatMap(collectEntryImportImageReferences).map(normalizeImportImageKey),
+        );
+        const relevantAssetFiles = document.assetFiles.filter((file) =>
+          referencedKeys.has(normalizeImportImageKey(file.name)),
+        );
+        await onApplyEntries(selectedEntries, relevantAssetFiles);
       } else {
-        await onApplyEntries(includedRows.map((row) => row.entry));
+        await onApplyEntries(selectedEntries);
       }
       onClose();
     } catch (applyError) {
@@ -71,9 +81,9 @@ export default function ImportEntriesPreviewModal({
           <button type="button" className="btn-icon" onClick={onClose} disabled={saving}>닫기</button>
         </header>
 
-        {blockingCount > 0 && (
+        {blockedRowCount > 0 && (
           <div className="form-error" role="alert">
-            적용 불가 항목 {blockingCount}개는 이번 저장에서 제외됩니다. 나머지 항목은 계속 가져올 수 있습니다.
+            적용 불가 항목 {blockedRowCount}개(차단 이슈 {blockingIssueCount}개)는 이번 저장에서 제외됩니다. 나머지 항목은 계속 가져올 수 있습니다.
           </div>
         )}
         {error && <div className="form-error" role="alert">{error}</div>}
@@ -108,7 +118,7 @@ export default function ImportEntriesPreviewModal({
           ))}
         </section>
 
-        <p className="form-hint">전체 {rows.length}개 · 저장 가능 {includedRows.length}개 · 확인 필요 {confirmableCount}개 · 제외됨 {excludedCount}개</p>
+        <p className="form-hint">전체 {rows.length}개 · 저장 {saveableRowCount}개 · 확인 필요 {confirmableRowCount}개 · 적용 불가 {blockedRowCount}개 · 직접 제외 {userExcludedCount}개</p>
 
         <footer className="modal-actions">
           <button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>취소</button>
@@ -118,7 +128,7 @@ export default function ImportEntriesPreviewModal({
             onClick={handleApply}
             disabled={!includedRows.length || saving}
           >
-            {saving ? "저장 중..." : `${includedRows.length}개 항목 저장`}
+            {saving ? "저장 중..." : `${saveableRowCount}개 항목 저장`}
           </button>
         </footer>
     </Dialog>

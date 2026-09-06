@@ -81,7 +81,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
   const visualGenerationRef = useRef(0);
   const mountedRef = useRef(true);
 
-  const discardAssetSession = async (assetSession: string) => {
+  const discardAssetSession = async (assetSession: ImportAssetSessionManifest) => {
     try {
       await onDiscardAssetSession?.(assetSession);
       return true;

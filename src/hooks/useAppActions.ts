@@ -50,7 +50,8 @@ import {
   getTodayReviewItems,
 } from "../utils/review";
 import { applyQuestionReviewResult, normalizeQuestionMeta, normalizeQuestionNumber } from "../utils/questionMeta";
-import { collectEntryImportImageReferences } from "../utils/importImageReferences";
+import { collectEntryImportImageReferences, normalizeImportImageKey } from "../utils/importImageReferences";
+import type { ReviewAttempt } from "../models/review";
 import { applyAnswerMerge, analyzeAnswerMerge, mergeResourceLink, type AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
 import { allowedFieldsForSupplementalMode, filterSupplementalData, supplementalKindForMode, type SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { useAppDialog } from "../shared/ui/AppDialogProvider";
@@ -333,6 +334,49 @@ export function useAppActions({
         const questionMeta = normalizeQuestionMeta(current.questionMeta).find(
           (meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(item.questionNumber),
         );
+        const sub = typeof submission === "string" ? undefined : submission;
+        const normalizedQuestion = normalizeQuestionNumber(item.questionNumber);
+        const existingAttempts = current.reviewAttempts ?? [];
+        const existingIndex = existingAttempts.findIndex((att) => {
+          if (att.questionNumber !== undefined && normalizeQuestionNumber(att.questionNumber) !== normalizedQuestion) {
+            return false;
+          }
+          if (sub?.replacementEventId) {
+            if (att.eventId && (att.eventId === sub.replacementEventId || att.eventId === sub.eventId)) return true;
+            if (att.id === sub.replacementEventId) return true;
+          } else if (sub?.eventId && att.eventId === sub.eventId) {
+            return true;
+          }
+          return false;
+        });
+
+        const nextAttempts: ReviewAttempt[] = existingIndex >= 0
+          ? existingAttempts.map((att, idx) => idx === existingIndex
+            ? {
+                ...att,
+                eventId: sub?.eventId ?? att.eventId,
+                reviewedAt: new Date().toISOString(),
+                correct: result !== "again",
+                confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+                result,
+                mistakeCause: att.mistakeCause ?? questionMeta?.mistakeAnalysis?.primaryCause,
+              }
+            : att)
+          : [
+              ...existingAttempts,
+              {
+                id: uuidv4(),
+                eventId: sub?.eventId,
+                entryId: current.id,
+                questionNumber: normalizedQuestion,
+                reviewedAt: new Date().toISOString(),
+                correct: result !== "again",
+                confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+                result,
+                mistakeCause: questionMeta?.mistakeAnalysis?.primaryCause,
+              },
+            ];
+
         return {
           questionMeta: applyQuestionReviewResult(
             current.questionMeta,
@@ -340,43 +384,59 @@ export function useAppActions({
             result,
             new Date(),
             questionMeta?.mistakeAnalysis?.primaryCause,
-            typeof submission === "string" ? undefined : submission,
+            sub,
           ),
-          reviewAttempts: [
-            ...(current.reviewAttempts ?? []),
-            {
-              id: uuidv4(),
-              entryId: current.id,
-              questionNumber: normalizeQuestionNumber(item.questionNumber),
-              reviewedAt: new Date().toISOString(),
-              correct: result !== "again",
-              confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
-              result,
-              mistakeCause: questionMeta?.mistakeAnalysis?.primaryCause,
-            },
-          ],
+          reviewAttempts: nextAttempts,
         };
       });
       return;
     }
     const entry = item.entry;
     await patchEntry(entry.id, (current) => {
-      const next = applyReviewResult(current, result, new Date(), typeof submission === "string" ? undefined : submission);
+      const sub = typeof submission === "string" ? undefined : submission;
+      const next = applyReviewResult(current, result, new Date(), sub);
+      const existingAttempts = current.reviewAttempts ?? [];
+      const existingIndex = existingAttempts.findIndex((att) => {
+        if (att.questionNumber !== undefined) return false;
+        if (sub?.replacementEventId) {
+          if (att.eventId && (att.eventId === sub.replacementEventId || att.eventId === sub.eventId)) return true;
+          if (att.id === sub.replacementEventId) return true;
+        } else if (sub?.eventId && att.eventId === sub.eventId) {
+          return true;
+        }
+        return false;
+      });
+
+      const nextAttempts: ReviewAttempt[] = existingIndex >= 0
+        ? existingAttempts.map((att, idx) => idx === existingIndex
+          ? {
+              ...att,
+              eventId: sub?.eventId ?? att.eventId,
+              reviewedAt: new Date().toISOString(),
+              correct: result !== "again",
+              confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+              result,
+              mistakeCause: att.mistakeCause ?? current.mistakeAnalysis?.primaryCause,
+            }
+          : att)
+        : [
+            ...existingAttempts,
+            {
+              id: uuidv4(),
+              eventId: sub?.eventId,
+              entryId: current.id,
+              reviewedAt: new Date().toISOString(),
+              correct: result !== "again",
+              confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
+              result,
+              mistakeCause: current.mistakeAnalysis?.primaryCause,
+            },
+          ];
+
       return {
         review: next.review,
         mastered: next.mastered,
-        reviewAttempts: [
-          ...(current.reviewAttempts ?? []),
-          {
-            id: uuidv4(),
-            entryId: current.id,
-            reviewedAt: new Date().toISOString(),
-            correct: result !== "again",
-            confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
-            result,
-            mistakeCause: current.mistakeAnalysis?.primaryCause,
-          },
-        ],
+        reviewAttempts: nextAttempts,
       };
     });
   };
@@ -450,7 +510,13 @@ export function useAppActions({
       sourceToSaved = assetSession.sourceToStaged ?? {};
     }
     if (assetSession?.mode !== "tauri-staged" && assetFiles.length) {
-      const importedAssets = await saveImportAssetFiles(assetFiles);
+      const referencedImages = new Set(
+        importedEntries.flatMap(collectEntryImportImageReferences).map(normalizeImportImageKey),
+      );
+      const filesToSave = assetFiles.filter((file) =>
+        referencedImages.has(normalizeImportImageKey(file.name)),
+      );
+      const importedAssets = await saveImportAssetFiles(filesToSave);
       savedFilenames = importedAssets.savedFilenames;
       sourceToSaved = importedAssets.sourceToSaved;
     }

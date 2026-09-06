@@ -86,6 +86,7 @@ export interface ChecklistItem {
 
 export interface ReviewAttempt {
   id: string;
+  eventId?: string;
   entryId: string;
   questionNumber?: string;
   reviewedAt: string;

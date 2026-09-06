@@ -24,6 +24,45 @@ describe("QuestionBankView", () => {
     expect(onOpenQuestion).toHaveBeenCalledWith(expect.objectContaining({ entryId: "sheet", questionNumber: "1" }));
   });
 
+  it("다시 추출 button rerolls picked items and 선택 지우기 clears them", async () => {
+    const multiEntry: WrongAnswerEntry = {
+      ...entry,
+      id: "sheet-multi",
+      answerKey: [
+        { id: "a1", questionNumber: "1", answer: "②", explanation: "풀이1", importantPoints: [] },
+        { id: "a2", questionNumber: "2", answer: "③", explanation: "풀이2", importantPoints: [] },
+        { id: "a3", questionNumber: "3", answer: "①", explanation: "풀이3", importantPoints: [] },
+      ],
+      questionMeta: [
+        { questionNumber: "1", important: false, difficultyScore: 72, classification: { unit: "함수" }, updatedAt: "2026-01-01T00:00:00.000Z" },
+        { questionNumber: "2", important: false, difficultyScore: 60, classification: { unit: "미분" }, updatedAt: "2026-01-01T00:00:00.000Z" },
+        { questionNumber: "3", important: false, difficultyScore: 55, classification: { unit: "적분" }, updatedAt: "2026-01-01T00:00:00.000Z" },
+      ],
+    };
+
+    render(<QuestionBankView entries={[multiEntry]} onOpenQuestion={vi.fn()} />);
+
+    // Open filter panel and extract 10 items
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.click(screen.getByText("프리셋과 일괄 추출"));
+    fireEvent.click(screen.getByRole("button", { name: "10개 추출" }));
+
+    // Should show picked status
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다시 추출" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "선택 지우기" })).toBeInTheDocument();
+
+    // Reroll — just verify button is still there after click (different seed)
+    fireEvent.click(screen.getByRole("button", { name: "다시 추출" }));
+    expect(screen.getByRole("button", { name: "다시 추출" })).toBeInTheDocument();
+
+    // Clear picked
+    fireEvent.click(screen.getByRole("button", { name: "선택 지우기" }));
+    expect(screen.queryByRole("button", { name: "다시 추출" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "선택 지우기" })).not.toBeInTheDocument();
+  });
+
+
   it("does not persist hydrated preferences and saves a user sort change once", async () => {
     vi.useFakeTimers();
     const onPreferencesChange = vi.fn().mockResolvedValue(undefined);

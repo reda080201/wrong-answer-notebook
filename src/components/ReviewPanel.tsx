@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { ReviewItem, ReviewResult, ReviewSession, ReviewSubmission, SheetAnswerItem, WrongAnswerEntry } from "../types";
+import type { ReviewEvent, ReviewItem, ReviewResult, ReviewSession, ReviewSubmission, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
@@ -50,7 +50,8 @@ export default function ReviewPanel({
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [reviewStats, setReviewStats] = useState({ again: 0, hard: 0, good: 0 });
+  const [reviewEvents, setReviewEvents] = useState<ReviewEvent[]>(session?.reviewEvents ?? []);
+  const [completedKeys, setCompletedKeys] = useState<string[]>(session?.completedItemKeys ?? []);
   const [editingCompleted, setEditingCompleted] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
@@ -58,18 +59,40 @@ export default function ReviewPanel({
   const revealedRef = useRef(false);
   const sessionIdRef = useRef(session?.id ?? `review-${crypto.randomUUID()}`);
   const sessionStartedAtRef = useRef(session?.createdAt ?? new Date().toISOString());
-  const completedKeysRef = useRef<string[]>(session?.completedItemKeys ?? []);
-  const reviewEventsRef = useRef(session?.reviewEvents ?? []);
+  const incomingSessionKey = session ? `${session.id}:${session.updatedAt}` : "new";
+  const incomingSessionState = useMemo(
+    () => ({
+      id: session?.id,
+      createdAt: session?.createdAt,
+      currentIndex: session?.currentIndex ?? 0,
+      reviewEvents: session?.reviewEvents ?? [],
+      completedItemKeys: session?.completedItemKeys ?? [],
+    }),
+    [incomingSessionKey],
+  );
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
     [entries, items],
   );
+  const reviewStats = useMemo(() => {
+    const counts = { again: 0, hard: 0, good: 0 };
+    for (const event of reviewEvents) {
+      if (event.result in counts) {
+        counts[event.result as keyof typeof counts] += 1;
+      }
+    }
+    return counts;
+  }, [reviewEvents]);
   const sessionInitializedRef = useRef(false);
   useEffect(() => {
-    setIndex(session?.currentIndex ?? 0);
+    sessionIdRef.current = incomingSessionState.id ?? sessionIdRef.current;
+    sessionStartedAtRef.current = incomingSessionState.createdAt ?? sessionStartedAtRef.current;
+    sessionInitializedRef.current = false;
+    setIndex(incomingSessionState.currentIndex);
     setRevealed(false);
-    if (!session) setReviewStats({ again: 0, hard: 0, good: 0 });
-  }, [reviewItems, session]);
+    setReviewEvents(incomingSessionState.reviewEvents);
+    setCompletedKeys(incomingSessionState.completedItemKeys);
+  }, [incomingSessionKey, incomingSessionState]);
 
   useEffect(() => {
     if (sessionInitializedRef.current || !onSessionSave || !reviewItems.length) return;
@@ -81,8 +104,8 @@ export default function ReviewPanel({
         ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
         : { kind: item.kind, entryId: item.entry.id }),
       currentIndex: session?.currentIndex ?? 0,
-      completedItemKeys: completedKeysRef.current,
-      reviewEvents: reviewEventsRef.current,
+      completedItemKeys: session?.completedItemKeys ?? [],
+      reviewEvents: session?.reviewEvents ?? [],
       seedFingerprint: reviewSessionFingerprint(mode ?? "random", reviewItems),
       createdAt: sessionStartedAtRef.current,
       updatedAt: new Date().toISOString(),
@@ -141,9 +164,11 @@ export default function ReviewPanel({
     };
   }, [requestClose]);
   const current = reviewItems[index] ?? null;
-  const completedEvent = current
-    ? reviewEventsRef.current.find((event) => event.itemKey === reviewItemKey(current))
-    : undefined;
+  const currentItemKey = current ? reviewItemKey(current) : null;
+  const completedEvent = useMemo(
+    () => (current && currentItemKey ? reviewEvents.find((event) => event.itemKey === currentItemKey) : undefined),
+    [current, currentItemKey, reviewEvents],
+  );
   const progress = useMemo(
     () => (reviewItems.length > 0 ? `${Math.min(index + 1, reviewItems.length)} / ${reviewItems.length}` : "0 / 0"),
     [reviewItems.length, index],
@@ -151,7 +176,7 @@ export default function ReviewPanel({
 
   useEffect(() => {
     setEditingCompleted(false);
-  }, [current ? reviewItemKey(current) : ""]);
+  }, [currentItemKey]);
 
   const handleReview = useCallback(async (result: ReviewResult) => {
     if (!current || savingRef.current || (completedEvent && !editingCompleted)) return;
@@ -167,7 +192,8 @@ export default function ReviewPanel({
       });
       if (!mountedRef.current) return;
       const itemKey = reviewItemKey(current);
-      if (!completedKeysRef.current.includes(itemKey)) completedKeysRef.current = [...completedKeysRef.current, itemKey];
+      const nextKeys = completedKeys.includes(itemKey) ? completedKeys : [...completedKeys, itemKey];
+      setCompletedKeys(nextKeys);
       const nextEvent = {
         id: eventId,
         reviewedAt: new Date().toISOString(),
@@ -176,11 +202,12 @@ export default function ReviewPanel({
         intervalDays: 0,
         itemKey,
       };
-      reviewEventsRef.current = completedEvent
-        ? reviewEventsRef.current.map((event) => event.id === completedEvent.id ? nextEvent : event)
-        : [...reviewEventsRef.current, nextEvent];
+      const nextReviewEvents = completedEvent
+        ? reviewEvents.map((event) => event.id === completedEvent.id ? nextEvent : event)
+        : [...reviewEvents, nextEvent];
+      setReviewEvents(nextReviewEvents);
       if (onSessionSave) {
-        const nextIndex = Math.min(index + 1, reviewItems.length);
+        const nextIndex = editingCompleted ? index : Math.min(index + 1, reviewItems.length);
         const updatedAt = new Date().toISOString();
         await onSessionSave({
           id: sessionIdRef.current,
@@ -189,22 +216,18 @@ export default function ReviewPanel({
             ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
             : { kind: item.kind, entryId: item.entry.id }),
           currentIndex: nextIndex,
-          completedItemKeys: completedKeysRef.current,
-          reviewEvents: reviewEventsRef.current,
+          completedItemKeys: nextKeys,
+          reviewEvents: nextReviewEvents,
           seedFingerprint: reviewSessionFingerprint(mode ?? "random", reviewItems),
           createdAt: sessionStartedAtRef.current,
           updatedAt,
-          ...(nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
+          ...(!editingCompleted && nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
         });
       }
-      setReviewStats((stats) => {
-        const next = { ...stats };
-        if (completedEvent) next[completedEvent.result] -= 1;
-        next[result] += 1;
-        return next;
-      });
+      const shouldAdvance = !editingCompleted;
+      setEditingCompleted(false);
       setRevealed(false);
-      setIndex((value) => Math.min(value + 1, reviewItems.length));
+      if (shouldAdvance) setIndex((value) => Math.min(value + 1, reviewItems.length));
     } catch (error) {
       if (mountedRef.current) {
         setSaveError(error instanceof Error && error.message ? error.message : "복습 결과를 저장하지 못했습니다.");
@@ -213,7 +236,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [completedEvent, current, editingCompleted, index, mode, onReview, onSessionSave, reviewItems, reviewItems.length]);
+  }, [completedEvent, completedKeys, current, editingCompleted, index, mode, onReview, onSessionSave, reviewEvents, reviewItems]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {
@@ -258,6 +281,11 @@ export default function ReviewPanel({
           <h2>{title}</h2>
           <span>{progress}</span>
         </div>
+        <dl className="review-stats" aria-label="복습 통계">
+          <div><dt>다시</dt><dd>{reviewStats.again}</dd></div>
+          <div><dt>어려움</dt><dd>{reviewStats.hard}</dd></div>
+          <div><dt>맞음</dt><dd>{reviewStats.good}</dd></div>
+        </dl>
         <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
           닫기
         </button>

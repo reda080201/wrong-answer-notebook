@@ -24,7 +24,7 @@ describe("LearningHubView", () => {
 
   it("filters cards by combined search", () => {
     render(<LearningHubView entries={[entry]} onOpenSource={vi.fn()} onOpenCandidateReview={vi.fn()} onUpdateBlock={vi.fn().mockResolvedValue(undefined)} onDuplicateBlock={vi.fn().mockResolvedValue(undefined)} onDeleteBlock={vi.fn().mockResolvedValue(undefined)} />);
-    fireEvent.change(screen.getByRole("textbox", { name: "학습 내용 검색" }), { target: { value: "없는 문자열" } });
+    fireEvent.change(screen.getByRole("searchbox", { name: "학습 내용 검색" }), { target: { value: "없는 문자열" } });
     expect(screen.getByText("조건에 맞는 학습 카드가 없습니다.")).toBeInTheDocument();
   });
 
@@ -118,5 +118,82 @@ describe("LearningHubView", () => {
     fireEvent.click(screen.getByRole("button", { name: "칸트 필터 제거" }));
     expect(screen.queryByRole("button", { name: "칸트 필터 제거" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "롤스 필터 제거" })).toBeInTheDocument();
+  });
+
+  it("bulk review marks filtered needs_review items as reviewed in per-entry serialized order", async () => {
+    const entryA: WrongAnswerEntry = {
+      ...entry,
+      id: "entry-a",
+      learningBlocks: [
+        { id: "block-a1", type: "concept", title: "개념 A1", content: "내용 A1", reviewStatus: "needs_review" },
+        { id: "block-a2", type: "concept", title: "개념 A2", content: "내용 A2", reviewStatus: "needs_review" },
+      ],
+    };
+    const calls: string[] = [];
+    const onUpdateBlock = vi.fn(async (_entryId: string, blockId: string) => {
+      calls.push(blockId);
+    });
+
+    render(
+      <LearningHubView
+        entries={[entryA]}
+        onOpenSource={vi.fn()}
+        onOpenCandidateReview={vi.fn()}
+        onUpdateBlock={onUpdateBlock}
+        onDuplicateBlock={vi.fn().mockResolvedValue(undefined)}
+        onDeleteBlock={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    // Set filter to needs_review to show the bulk review button
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.change(screen.getByLabelText("검토 상태"), { target: { value: "needs_review" } });
+    fireEvent.click(screen.getByRole("button", { name: "적용" }));
+
+    const bulkBtn = screen.getByRole("button", { name: "현재 표시된 항목 모두 검토 완료" });
+    fireEvent.click(bulkBtn);
+
+    await waitFor(() => expect(onUpdateBlock).toHaveBeenCalledTimes(2));
+    expect(onUpdateBlock).toHaveBeenCalledWith("entry-a", "block-a1", { reviewStatus: "reviewed" });
+    expect(onUpdateBlock).toHaveBeenCalledWith("entry-a", "block-a2", { reviewStatus: "reviewed" });
+    // Per-entry serialized: a1 comes before a2
+    expect(calls.indexOf("block-a1")).toBeLessThan(calls.indexOf("block-a2"));
+  });
+
+  it("shows a retry button when bulk review partially fails and retries only failed items", async () => {
+    const failEntry: WrongAnswerEntry = {
+      ...entry,
+      id: "entry-fail",
+      learningBlocks: [
+        { id: "block-fail", type: "concept", title: "실패 블록", content: "내용", reviewStatus: "needs_review" },
+      ],
+    };
+    const onUpdateBlock = vi.fn()
+      .mockRejectedValueOnce(new Error("네트워크 오류"))
+      .mockResolvedValueOnce(undefined);
+
+    render(
+      <LearningHubView
+        entries={[failEntry]}
+        onOpenSource={vi.fn()}
+        onOpenCandidateReview={vi.fn()}
+        onUpdateBlock={onUpdateBlock}
+        onDuplicateBlock={vi.fn().mockResolvedValue(undefined)}
+        onDeleteBlock={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
+    fireEvent.change(screen.getByLabelText("검토 상태"), { target: { value: "needs_review" } });
+    fireEvent.click(screen.getByRole("button", { name: "적용" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "현재 표시된 항목 모두 검토 완료" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("1개 항목 검토 처리에 실패했습니다.");
+    const retryBtn = screen.getByRole("button", { name: "다시 시도" });
+    fireEvent.click(retryBtn);
+
+    await waitFor(() => expect(onUpdateBlock).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 });

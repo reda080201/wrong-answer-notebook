@@ -187,6 +187,8 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const [candidatePickerOpen, setCandidatePickerOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [bulkReviewBusy, setBulkReviewBusy] = useState(false);
+  const [bulkReviewError, setBulkReviewError] = useState<string | null>(null);
+  const [failedItems, setFailedItems] = useState<LearningHubItem[]>([]);
   const [candidateSearch, setCandidateSearch] = useState("");
   const candidateQuery = candidateSearch.trim().toLocaleLowerCase("ko");
   const visibleCandidates = candidateEntries.filter((entry) => {
@@ -201,14 +203,40 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     ].filter(Boolean).join(" ").toLocaleLowerCase("ko");
     return searchable.includes(candidateQuery);
   });
-  const reviewVisibleItems = async () => {
+  const reviewVisibleItems = async (itemsToProcess?: LearningHubItem[]) => {
     if (bulkReviewBusy) return;
     setBulkReviewBusy(true);
-    try {
-      await Promise.all(filtered.filter((item) => item.block.reviewStatus === "needs_review").map((item) => onUpdateBlock(item.sourceEntryId, item.block.id, { reviewStatus: "reviewed" })));
-    } finally {
+    setBulkReviewError(null);
+    const targetItems = itemsToProcess ?? filtered.filter((item) => item.block.reviewStatus === "needs_review");
+    if (!targetItems.length) {
       setBulkReviewBusy(false);
+      return;
     }
+    const grouped = new Map<string, LearningHubItem[]>();
+    for (const item of targetItems) {
+      const list = grouped.get(item.sourceEntryId) ?? [];
+      list.push(item);
+      grouped.set(item.sourceEntryId, list);
+    }
+    const failed: LearningHubItem[] = [];
+    await Promise.all(
+      Array.from(grouped.entries()).map(async ([entryId, items]) => {
+        for (const item of items) {
+          try {
+            await onUpdateBlock(entryId, item.block.id, { reviewStatus: "reviewed" });
+          } catch {
+            failed.push(item);
+          }
+        }
+      }),
+    );
+    setFailedItems(failed);
+    if (failed.length > 0) {
+      setBulkReviewError(`${failed.length}개 항목 검토 처리에 실패했습니다.`);
+    } else {
+      setBulkReviewError(null);
+    }
+    setBulkReviewBusy(false);
   };
   return <section className="learning-hub" aria-label="학습 허브">
     <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></header>
@@ -219,6 +247,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
       <select aria-label="자료 종류 필터" value={filters.type} onChange={(event) => set("type", event.target.value as LearningHubFilters["type"])}>{Object.entries(TYPE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       {filters.reviewStatus === "needs_review" && <button type="button" className="btn-secondary" onClick={() => void reviewVisibleItems()} disabled={bulkReviewBusy}>{bulkReviewBusy ? "검토 처리 중..." : "현재 표시된 항목 모두 검토 완료"}</button>}
+      {bulkReviewError && <div className="form-error" role="alert">{bulkReviewError}<button type="button" className="btn-secondary btn-sm" onClick={() => void reviewVisibleItems(failedItems)} disabled={bulkReviewBusy}>다시 시도</button></div>}
       {(filters.search || activeFilterChips.length > 0) && <button type="button" className="btn-ghost" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button>}
     </div>
     {filtersOpen && <Dialog open size="md" ariaLabel="학습 허브 필터" onClose={() => setFiltersOpen(false)} title="학습 허브 필터" footer={<><button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>초기화</button><button type="button" className="btn-primary" onClick={() => setFiltersOpen(false)}>적용</button></>}>

@@ -548,7 +548,7 @@ function AppContent() {
     { id: "learning-hub", label: "학습 허브", onExecute: () => void appNavigationController.openLearningHub() },
     { id: "today-review", label: "오늘 복습", hint: "R", onExecute: () => actions.startReview("today") },
     { id: "settings", label: "설정", onExecute: () => openSettings() },
-  ], [actions.openImport, actions.openNew, actions.startReview, appNavigationController, openSettings]);
+  ], [actions, appNavigationController, openSettings]);
 
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
@@ -1050,7 +1050,22 @@ function AppContent() {
         <p>{closeFlushError}</p>
         <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
       </Dialog>
-      <OnboardingTour open={onboardingOpen} onDismiss={dismissOnboarding} onStartNew={actions.openNew} onImport={actions.openImport} />
+      <OnboardingTour
+        open={onboardingOpen}
+        onDismiss={dismissOnboarding}
+        onStartNew={() => {
+          dismissOnboarding(false);
+          actions.openNew();
+        }}
+        onImport={() => {
+          dismissOnboarding(false);
+          actions.openImport();
+        }}
+        onOpenQuestionBank={() => {
+          dismissOnboarding(false);
+          void appNavigationController.openQuestionBank();
+        }}
+      />
     </div>
     </ConceptLinkProvider>
   );
