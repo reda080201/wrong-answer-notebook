@@ -33,6 +33,9 @@ const resultLabels: Record<ReviewResult, string> = {
   good: "맞음",
 };
 
+const EMPTY_REVIEW_EVENTS: ReviewEvent[] = [];
+const EMPTY_COMPLETED_KEYS: string[] = [];
+
 export default function ReviewPanel({
   title,
   mode,
@@ -60,15 +63,20 @@ export default function ReviewPanel({
   const sessionIdRef = useRef(session?.id ?? `review-${crypto.randomUUID()}`);
   const sessionStartedAtRef = useRef(session?.createdAt ?? new Date().toISOString());
   const incomingSessionKey = session ? `${session.id}:${session.updatedAt}` : "new";
+  const incomingSessionId = session?.id;
+  const incomingSessionCreatedAt = session?.createdAt;
+  const incomingSessionCurrentIndex = session?.currentIndex ?? 0;
+  const incomingSessionReviewEvents = session?.reviewEvents ?? EMPTY_REVIEW_EVENTS;
+  const incomingSessionCompletedKeys = session?.completedItemKeys ?? EMPTY_COMPLETED_KEYS;
   const incomingSessionState = useMemo(
     () => ({
-      id: session?.id,
-      createdAt: session?.createdAt,
-      currentIndex: session?.currentIndex ?? 0,
-      reviewEvents: session?.reviewEvents ?? [],
-      completedItemKeys: session?.completedItemKeys ?? [],
+      id: incomingSessionId,
+      createdAt: incomingSessionCreatedAt,
+      currentIndex: incomingSessionCurrentIndex,
+      reviewEvents: incomingSessionReviewEvents,
+      completedItemKeys: incomingSessionCompletedKeys,
     }),
-    [incomingSessionKey],
+    [incomingSessionCompletedKeys, incomingSessionCreatedAt, incomingSessionCurrentIndex, incomingSessionId, incomingSessionReviewEvents],
   );
   const reviewItems = useMemo<ReviewItem[]>(
     () => items ?? (entries ?? []).map((entry) => ({ kind: "entry", entry })),
@@ -174,10 +182,6 @@ export default function ReviewPanel({
     [reviewItems.length, index],
   );
 
-  useEffect(() => {
-    setEditingCompleted(false);
-  }, [currentItemKey]);
-
   const handleReview = useCallback(async (result: ReviewResult) => {
     if (!current || savingRef.current || (completedEvent && !editingCompleted)) return;
     savingRef.current = true;
@@ -257,10 +261,12 @@ export default function ReviewPanel({
       }
       if (event.key === "ArrowLeft") {
         event.preventDefault();
+        setEditingCompleted(false);
         setIndex((value) => Math.max(0, value - 1));
         setRevealed(false);
       } else if (event.key === "ArrowRight" && index < reviewItems.length - 1) {
         event.preventDefault();
+        setEditingCompleted(false);
         setIndex((value) => value + 1);
         setRevealed(false);
       }

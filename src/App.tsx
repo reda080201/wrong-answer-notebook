@@ -406,10 +406,10 @@ function AppContent() {
     runMaintenanceOperation,
   });
 
-  const openSettings = (tab?: SettingsTab) => {
+  const openSettings = useCallback((tab?: SettingsTab) => {
     setSettingsInitialTab(tab);
     setShowSettings(true);
-  };
+  }, [setSettingsInitialTab, setShowSettings]);
 
   const selectEntry = (entryId: string, section?: EntryKind) => {
     void requestNavigation({ entryId, section });
