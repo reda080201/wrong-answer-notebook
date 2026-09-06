@@ -19,6 +19,7 @@ import {
   Lightbulb,
   MoreHorizontal,
   NotebookPen,
+  Plus,
 } from "lucide-react";
 import Menu from "../shared/ui/Menu";
 import type { AppNavigationControllerGroup } from "../hooks/useAppNavigationController";
@@ -241,6 +242,13 @@ export default function AppSidebar({
       </div>}
 
       <div className="sidebar-footer">
+        {collapsed && isSectionDestination && <button
+          type="button"
+          className="ui-icon-button sidebar-collapsed-create"
+          aria-label={destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : `새 ${entryKindName(destination.section)} 추가`}
+          title={destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : `새 ${entryKindName(destination.section)} 추가`}
+          onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}
+        ><Plus size={18} aria-hidden="true" /></button>}
         {!collapsed && isSectionDestination && <button type="button" className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : openNew}>
           + {destinationSection === "problem_sheet" ? "시험지 가져오기" : destination.type === "section" ? `새 ${entryKindName(destination.section)} 추가` : ""}
         </button>}

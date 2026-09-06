@@ -138,8 +138,8 @@ export default function StudyControlBar({
             <button type="button" aria-label="하단 다시" onClick={() => onReview("again")} disabled={reviewSaving !== null}>
               ↺ 다시
             </button>
-            <button type="button" aria-label="하단 어려움" onClick={() => onReview("hard")} disabled={reviewSaving !== null}>
-              ★ 어려움
+            <button type="button" aria-label="하단 어려웠음 평가" onClick={() => onReview("hard")} disabled={reviewSaving !== null}>
+              어려웠음
             </button>
             {showSecondaryGood && (
               <button type="button" aria-label="하단 맞음" onClick={() => onReview("good")} disabled={reviewSaving !== null}>
@@ -150,10 +150,10 @@ export default function StudyControlBar({
               type="button"
               className={difficult ? "active" : ""}
               onClick={onToggleDifficult}
-              aria-label={difficult ? "하단 어려움 해제" : "하단 어려움 표시"}
+              aria-label={difficult ? "하단 어려운 문제 표시 해제" : "하단 어려운 문제로 표시"}
             aria-pressed={difficult}
           >
-              {difficult ? "★ 어려움" : "☆ 어려움"}
+              {difficult ? "★ 어려운 문제" : "☆ 어려운 문제로 표시"}
             </button>
           </div>
         )}

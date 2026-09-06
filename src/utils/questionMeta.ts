@@ -147,17 +147,37 @@ export function applyQuestionReviewResult(
   result: ReviewResult,
   reviewedAt = new Date(),
   cause?: MistakeCauseType,
+  submission?: { eventId?: string; replacementEventId?: string },
 ): QuestionMeta[] {
   const normalized = normalizeQuestionNumber(questionNumber);
   const items = normalizeQuestionMeta(current);
   const index = items.findIndex(
     (item) => normalizeQuestionNumber(item.questionNumber) === normalized,
   );
-  const previous = index >= 0 ? items[index].review : undefined;
+  const currentReview = index >= 0 ? items[index].review : undefined;
+  const history = (currentReview?.history ?? []).filter((event) => event.id !== submission?.replacementEventId);
+  let previous: ReviewState | undefined;
+  history.forEach((event, eventIndex) => {
+    const replayed = calculateNextReview(previous, event.result, new Date(event.reviewedAt), event.causeSnapshot?.[0]);
+    previous = {
+      dueAt: replayed.nextDueAt,
+      lastReviewedAt: event.reviewedAt,
+      intervalDays: replayed.intervalDays,
+      streak: replayed.streak,
+      history: history.slice(0, eventIndex + 1),
+      stabilityDays: replayed.stabilityDays,
+      memoryDifficulty: replayed.memoryDifficulty,
+      lapseCount: replayed.lapseCount,
+      repetitionCount: replayed.repetitionCount,
+      phase: replayed.phase,
+      preLapseStabilityDays: replayed.preLapseStabilityDays,
+      relearningStep: replayed.relearningStep,
+    };
+  });
   const currentCause = cause ?? items[index ?? -1]?.mistakeAnalysis?.primaryCause;
   const next = calculateNextReview(previous, result, reviewedAt, currentCause);
   const event: ReviewEvent = {
-    id: uuidv4(),
+    id: submission?.eventId ?? uuidv4(),
     reviewedAt: reviewedAt.toISOString(),
     result,
     nextDueAt: next.nextDueAt,
@@ -172,7 +192,7 @@ export function applyQuestionReviewResult(
     lastReviewedAt: event.reviewedAt,
     intervalDays: next.intervalDays,
     streak: next.streak,
-    history: [...(previous?.history ?? []), event],
+    history: [...history, event],
     stabilityDays: next.stabilityDays,
     memoryDifficulty: next.memoryDifficulty,
     lapseCount: next.lapseCount,

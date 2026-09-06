@@ -39,6 +39,13 @@ export interface MistakeAnalysis {
 
 export type ReviewResult = "again" | "hard" | "good";
 
+export interface ReviewSubmission {
+  result: ReviewResult;
+  /** Stable session event id. Reusing it makes an explicit re-rating a replacement. */
+  eventId: string;
+  replacementEventId?: string;
+}
+
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";
 
 export interface ReviewEvent {
@@ -79,6 +86,7 @@ export interface ChecklistItem {
 
 export interface ReviewAttempt {
   id: string;
+  eventId?: string;
   entryId: string;
   questionNumber?: string;
   reviewedAt: string;
@@ -105,7 +113,7 @@ export interface ReviewSessionItemRef {
 
 export interface ReviewSession {
   id: string;
-  mode: "today" | "random" | "difficult" | "important";
+  mode: "today" | "random" | "difficult" | "important" | "selection";
   itemRefs: ReviewSessionItemRef[];
   currentIndex: number;
   completedItemKeys: string[];

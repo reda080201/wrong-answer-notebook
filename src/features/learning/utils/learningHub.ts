@@ -1,6 +1,7 @@
 import type { LearningBlock, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import { inferLearningSubjectDomain } from "../model/learningMetadata";
 import { normalizeThinkerName, thinkerMatches } from "./normalizeThinkerName";
+import { rankSearchCandidates } from "../../../utils/search";
 
 export interface LearningHubItem {
   block: LearningBlock;
@@ -100,7 +101,18 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
       if ((metadata?.rejectedClaims?.length ?? 0) > 0 || block.choiceExamples?.some((example) => example.verdict === "incorrect")) kinds.add("incorrect_choice");
       if (!filters.lifeEthicsKinds.some((kind) => kinds.has(kind))) return false;
     }
-    return !search || getLearningBlockSearchText(item).includes(search);
+    if (!search) return true;
+    return rankSearchCandidates([{
+      id: `${item.sourceEntryId}:${item.block.id}`,
+      fields: {
+        title: item.block.title,
+        body: getLearningBlockSearchText(item),
+        subject: item.sourceSubject,
+        unit: [item.block.unit, item.block.subunit].filter(Boolean).join(" "),
+        source: item.sourceEntryTitle,
+        tag: item.block.keywords ?? [],
+      },
+    }], filters.search).length > 0;
   });
 }
 

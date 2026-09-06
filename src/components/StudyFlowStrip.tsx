@@ -7,6 +7,7 @@ interface StudyFlowStripProps {
   focusAvailable: boolean;
   onModeChange: (mode: DetailViewMode) => void;
   onStartFocus: () => void;
+  onStartReview?: () => void;
 }
 
 type FlowStatus = "done" | "needed" | "warning" | "available";
@@ -23,6 +24,7 @@ export default function StudyFlowStrip({
   focusAvailable,
   onModeChange,
   onStartFocus,
+  onStartReview,
 }: StudyFlowStripProps) {
   const hasQuestion = entry.question.trim() || entry.questionImages.length;
   const hasAnswer = (entry.answerKey?.length ?? 0) > 0 || entry.correctAnswer.trim();
@@ -40,7 +42,7 @@ export default function StudyFlowStrip({
     { key: "solution", label: "해설", status: hasAnswer ? "done" : "needed", onClick: () => onModeChange("solution") },
     { key: "learning", label: "특강", status: hasLearning ? "done" : "needed", onClick: () => onModeChange("learning") },
     { key: "focus", label: "집중", status: focusAvailable ? "available" : "needed", onClick: onStartFocus },
-    { key: "review", label: "복습", status: hasAuditWarning ? "warning" : hasReview ? "done" : "available", onClick: () => onModeChange(hasAuditWarning ? "analysis" : "paper") },
+    { key: "review", label: "복습", status: hasAuditWarning ? "warning" : hasReview ? "done" : "available", onClick: onStartReview ?? (() => onModeChange(hasAuditWarning ? "analysis" : "paper")) },
   ];
 
   return (

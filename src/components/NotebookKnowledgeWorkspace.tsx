@@ -8,6 +8,7 @@ import LearningHubView from "../features/learning/components/LearningHubView";
 import QuestionBankView from "../features/question-bank/components/QuestionBankView";
 import { buildQuestionBankItems } from "../features/question-bank/utils/buildQuestionBankItems";
 import { patchQuestionClassification, type QuestionMetaPatch } from "../features/question-bank/utils/patchQuestionClassification";
+import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
@@ -25,6 +26,7 @@ interface NotebookKnowledgeWorkspaceProps {
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
   onRegisterScrollContainer?(key: string, element: HTMLElement | null): void;
+  onStartReview?(items: QuestionBankItem[]): void;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -40,6 +42,7 @@ export default function NotebookKnowledgeWorkspace({
   aiProviderStatus,
   onOpenAiSettings,
   onRegisterScrollContainer,
+  onStartReview,
 }: NotebookKnowledgeWorkspaceProps) {
   if (mode === "question-bank") {
     return (
@@ -55,6 +58,7 @@ export default function NotebookKnowledgeWorkspace({
           const entry = entries.find((candidate) => candidate.id === item.entryId);
           if (entry) openEntry(entry, item.questionNumber);
         }}
+        onStartReview={onStartReview}
         onRegisterScrollContainer={onRegisterScrollContainer}
       />
     );

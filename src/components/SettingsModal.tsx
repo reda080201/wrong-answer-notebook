@@ -242,7 +242,6 @@ export default function SettingsModal({
                 onSaveRemoteBaseUrl={async (raw) => {
                   try { await saveRemoteBaseUrl(raw); } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."); }
                 }}
-                bridgePanel={renderMcpBridgePanel()}
               />
               </>
             )}

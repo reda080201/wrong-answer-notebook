@@ -36,7 +36,7 @@ describe("AppSidebar", () => {
     for (const name of ["오답노트", "개념노트", "시험지함", "특강자료", "학습 허브", "문제 은행", "보관함"]) {
       expect(screen.getByRole("button", { name })).toBeVisible();
     }
-    expect(screen.queryByRole("button", { name: /새 오답/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "새 오답 추가" })).toBeVisible();
   });
 
   it("requests an independent restore without changing navigation", () => {

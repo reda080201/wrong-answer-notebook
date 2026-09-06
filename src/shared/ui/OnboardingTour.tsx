@@ -9,14 +9,21 @@ const STEPS = [
   ["복습 흐름", "복습을 시작하면 저장된 대상과 순서가 정확히 같을 때만 이어서 하기를 제안합니다."],
 ] as const;
 
-interface OnboardingTourProps { open: boolean; onDismiss(dontShowAgain: boolean): void; }
+interface OnboardingTourProps {
+  open: boolean;
+  onDismiss(dontShowAgain: boolean): void;
+  onStartNew?: () => void;
+  onImport?: () => void;
+  onOpenQuestionBank?: () => void;
+}
 
-export default function OnboardingTour({ open, onDismiss }: OnboardingTourProps) {
+export default function OnboardingTour({ open, onDismiss, onStartNew, onImport, onOpenQuestionBank }: OnboardingTourProps) {
   const [step, setStep] = useState(0);
   const [dontShowAgain, setDontShowAgain] = useState(false);
   const [title, body] = STEPS[step];
   const last = step === STEPS.length - 1;
-  return <Dialog open={open} size="sm" ariaLabel="시작 안내" title="오답노트 시작 안내" onClose={() => onDismiss(dontShowAgain)} footer={<><button type="button" className="btn-secondary" onClick={() => onDismiss(dontShowAgain)}>건너뛰기</button><button type="button" className="btn-primary" onClick={() => last ? onDismiss(dontShowAgain) : setStep((current) => current + 1)}>{last ? "시작하기" : "다음"}</button></>}>
-    <section className="onboarding-tour"><p className="form-hint">{step + 1} / {STEPS.length}</p><h3>{title}</h3><p>{body}</p><label><input type="checkbox" checked={dontShowAgain} onChange={(event) => setDontShowAgain(event.target.checked)} /> 다시 보지 않기</label></section>
+  const action = step === 0 ? onStartNew : step === 1 ? onOpenQuestionBank : step === 3 ? onImport : undefined;
+  return <Dialog open={open} size="sm" ariaLabel="시작 안내" title="오답노트 시작 안내" onClose={() => onDismiss(dontShowAgain)} footer={<><button type="button" className="btn-secondary" onClick={() => onDismiss(dontShowAgain)}>건너뛰기</button>{step > 0 && <button type="button" className="btn-secondary" onClick={() => setStep((current) => current - 1)}>이전</button>}<button type="button" className="btn-primary" onClick={() => action ? action() : last ? onDismiss(dontShowAgain) : setStep((current) => current + 1)}>{action ? "바로 시작" : last ? "시작하기" : "다음"}</button></>}>
+    <section className="onboarding-tour"><p className="form-hint">{step + 1} / {STEPS.length}</p><h3>{step === 0 ? "무엇부터 할까요?" : title}</h3><p>{body}</p>{step === 0 && <div className="onboarding-tour-actions"><button type="button" className="btn-secondary" onClick={onStartNew}>첫 오답 추가</button><button type="button" className="btn-secondary" onClick={onImport}>시험지 가져오기</button><button type="button" className="btn-secondary" onClick={onOpenQuestionBank}>문제 은행 둘러보기</button></div>}<label><input type="checkbox" checked={dontShowAgain} onChange={(event) => setDontShowAgain(event.target.checked)} /> 다시 보지 않기</label></section>
   </Dialog>;
 }

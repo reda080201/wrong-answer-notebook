@@ -848,8 +848,8 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).queryByRole("button", { name: "하단 다시" })).not.toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     expect(within(bar).getByRole("button", { name: "하단 다시" })).toHaveTextContent("↺ 다시");
-    expect(within(bar).getByRole("button", { name: "하단 어려움" })).toHaveTextContent("★ 어려움");
-    expect(within(bar).getByRole("button", { name: "하단 어려움 표시" })).toHaveTextContent("☆ 어려움");
+    expect(within(bar).getByRole("button", { name: "하단 어려웠음 평가" })).toHaveTextContent("어려웠음");
+    expect(within(bar).getByRole("button", { name: "하단 어려운 문제로 표시" })).toHaveTextContent("☆ 어려운 문제로 표시");
     expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지 더보기" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toHaveTextContent("메모");
@@ -1068,7 +1068,7 @@ describe("EntryDetail sheet layout", () => {
     fireEvent.keyDown(window, { key: "1" });
     await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledWith(expect.objectContaining({ id: "sheet-1" }), expect.any(Function)));
     expect(onReview).not.toHaveBeenCalled();
-    await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 어려움" })).not.toBeDisabled());
+    await waitFor(() => expect(within(bar).getByRole("button", { name: "하단 어려웠음 평가" })).not.toBeDisabled());
 
     fireEvent.keyDown(window, { key: "2" });
     await waitFor(() => expect(onQuestionMetaChange).toHaveBeenCalledTimes(2));
@@ -1145,7 +1145,7 @@ describe("EntryDetail sheet layout", () => {
     await waitFor(() => expect(onQuickMemo).toHaveBeenCalledWith(sheetEntry, "조건을 다시 확인"));
     expect(await screen.findByText("빠른 메모를 추가했습니다.")).toBeInTheDocument();
 
-    fireEvent.click(within(bar).getByRole("button", { name: "하단 어려움 표시" }));
+    fireEvent.click(within(bar).getByRole("button", { name: "하단 어려운 문제로 표시" }));
     expect(onToggleDifficult).toHaveBeenCalledTimes(1);
   });
 

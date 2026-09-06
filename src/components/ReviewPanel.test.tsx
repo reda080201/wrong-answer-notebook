@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { WrongAnswerEntry } from "../types";
+import type { ReviewSession, WrongAnswerEntry } from "../types";
 import ReviewPanel from "./ReviewPanel";
 
 vi.mock("../api", () => ({
@@ -27,6 +27,14 @@ const entry: WrongAnswerEntry = {
   mastered: false,
 };
 
+const entryB: WrongAnswerEntry = {
+  ...entry,
+  id: "review-2",
+  title: "복습 문제 2",
+  question: "2+2",
+  correctAnswer: "4",
+};
+
 describe("ReviewPanel", () => {
   it("reveals answer and submits self review", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
@@ -49,7 +57,7 @@ describe("ReviewPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "맞음" }));
 
     await waitFor(() => {
-      expect(onReview).toHaveBeenCalledWith({ kind: "entry", entry }, "good");
+      expect(onReview).toHaveBeenCalledWith({ kind: "entry", entry }, expect.objectContaining({ result: "good", eventId: expect.any(String) }));
     });
   }, 30000);
 
@@ -100,7 +108,7 @@ describe("ReviewPanel", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "어려움" }));
     await waitFor(() => {
-      expect(onReview).toHaveBeenCalledWith({ kind: "sheet-question", entry: sheet, questionNumber: "1" }, "hard");
+      expect(onReview).toHaveBeenCalledWith({ kind: "sheet-question", entry: sheet, questionNumber: "1" }, expect.objectContaining({ result: "hard", eventId: expect.any(String) }));
     });
   }, 30000);
 
@@ -170,5 +178,176 @@ describe("ReviewPanel", () => {
     await waitFor(() => expect(screen.getByRole("dialog")).toHaveAttribute("aria-busy", "false"));
     fireEvent.click(screen.getByRole("button", { name: "닫기" }));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("guards against duplicate rating button clicks on already reviewed items", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    const onSessionSave = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry, entryB]}
+        onClose={vi.fn()}
+        onReview={onReview}
+        onSessionSave={onSessionSave}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    await waitFor(() => expect(onReview).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByText("복습 문제 2")).toBeInTheDocument();
+
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    expect(screen.getByText("복습 문제")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+
+    const goodButton = screen.getByRole("button", { name: "맞음" });
+    expect(goodButton).toBeDisabled();
+    fireEvent.click(goodButton);
+
+    expect(onReview).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("이 세션에서 맞음으로 평가했습니다.")).toBeInTheDocument();
+  });
+
+  it("guards against duplicate rating keyboard shortcuts on already reviewed items", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry, entryB]}
+        onClose={vi.fn()}
+        onReview={onReview}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    await waitFor(() => expect(onReview).toHaveBeenCalledTimes(1));
+
+    expect(screen.getByText("복습 문제 2")).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    expect(screen.getByText("복습 문제")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+
+    fireEvent.keyDown(document, { key: "1" });
+    fireEvent.keyDown(document, { key: "2" });
+    fireEvent.keyDown(document, { key: "3" });
+
+    expect(onReview).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces existing event and updates review stats on explicit rating edit", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry, entryB]}
+        onClose={vi.fn()}
+        onReview={onReview}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    await waitFor(() => expect(onReview).toHaveBeenCalledTimes(1));
+    const firstSubmission = onReview.mock.calls[0][1];
+
+    fireEvent.keyDown(document, { key: "ArrowLeft" });
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "평가 수정" }));
+    fireEvent.click(screen.getByRole("button", { name: "어려움" }));
+    await waitFor(() => expect(onReview).toHaveBeenCalledTimes(2));
+
+    expect(onReview).toHaveBeenLastCalledWith(
+      { kind: "entry", entry },
+      expect.objectContaining({
+        result: "hard",
+        eventId: firstSubmission.eventId,
+        replacementEventId: firstSubmission.eventId,
+      }),
+    );
+
+    expect(screen.getByText("어려움").nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("맞음").nextElementSibling).toHaveTextContent("0");
+  });
+
+  it("initializes completed state and stats from resumed session and blocks unprompted ratings", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    const resumedSession: ReviewSession = {
+      id: "session-1",
+      mode: "today",
+      currentIndex: 0,
+      itemRefs: [{ kind: "entry", entryId: entry.id }],
+      completedItemKeys: ["entry:review-1"],
+      reviewEvents: [
+        {
+          id: "event-prev",
+          itemKey: "entry:review-1",
+          reviewedAt: "2026-01-01T00:00:00.000Z",
+          result: "good",
+          nextDueAt: null,
+          intervalDays: 1,
+        },
+      ],
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry]}
+        session={resumedSession}
+        onClose={vi.fn()}
+        onReview={onReview}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    expect(screen.getByText("맞음").nextElementSibling).toHaveTextContent("1");
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+
+    expect(screen.getByText("이 세션에서 맞음으로 평가했습니다.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "맞음" })).toBeDisabled();
+
+    fireEvent.keyDown(document, { key: "1" });
+    fireEvent.keyDown(document, { key: "2" });
+    fireEvent.keyDown(document, { key: "3" });
+    expect(onReview).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "평가 수정" }));
+    fireEvent.click(screen.getByRole("button", { name: "어려움" }));
+
+    await waitFor(() => {
+      expect(onReview).toHaveBeenCalledWith(
+        { kind: "entry", entry },
+        expect.objectContaining({
+          result: "hard",
+          eventId: "event-prev",
+          replacementEventId: "event-prev",
+        }),
+      );
+    });
+
+    expect(screen.getByText("어려움").nextElementSibling).toHaveTextContent("1");
+    expect(screen.getByText("맞음").nextElementSibling).toHaveTextContent("0");
+    expect(screen.getByText("다시").nextElementSibling).toHaveTextContent("0");
   });
 });

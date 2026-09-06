@@ -69,7 +69,7 @@ interface AppModalsProps {
       assetSession?: ImportWorkspace["assetSession"];
     }): Promise<void>;
   };
-  review: { mode: "today" | "random" | "difficult" | "important" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | null): void; handle(item: ReviewItem | WrongAnswerEntry, result: ReviewResult): Promise<void>; session?: ReviewSession; saveSession?: (session: ReviewSession) => Promise<void> };
+  review: { mode: "today" | "random" | "difficult" | "important" | "selection" | null; seed: ReviewItem[]; setMode(mode: "today" | "random" | "difficult" | "important" | "selection" | null): void; handle(item: ReviewItem | WrongAnswerEntry, submission: import("../types").ReviewSubmission | ReviewResult): Promise<void>; session?: ReviewSession; saveSession?: (session: ReviewSession) => Promise<void> };
   navigation: { setActiveSection(section: EntryKind): void; setSelectedId(id: string | null): void; handleWikiLinkClick(target: string): void; existingTargets: Set<string> };
   supplemental: { target?: { entry: WrongAnswerEntry; mode: SupplementalImportMode } | null; closeImport(): void; applyMerge(payload: { entryId: string; expectedUpdatedAt: string; data: Partial<EntryFormData>; mode: SupplementalImportMode; title: string; resolutions: AnswerMergeResolution[]; assetFiles: File[]; sourceFilename?: string; assetSession?: ImportWorkspace["assetSession"] }): Promise<void>; managerEntry?: WrongAnswerEntry | null; closeManager(): void; rename(entryId: string, resourceId: string, title: string): Promise<void>; remove(entryId: string, resourceId: string): Promise<void>; linkTarget?: WrongAnswerEntry | null; linkCandidates: WrongAnswerEntry[]; closeLink(): void; link(entryId: string, source: WrongAnswerEntry): Promise<void> };
 }
@@ -385,6 +385,8 @@ export default function AppModals({
                 ? "중요 문제 복습"
               : reviewMode === "difficult"
                 ? "어려움 집중"
+              : reviewMode === "selection"
+                ? "선택 문항 복습"
                 : "랜덤 복습"
           }
           items={reviewSeed}
