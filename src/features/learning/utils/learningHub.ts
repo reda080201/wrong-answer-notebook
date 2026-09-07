@@ -81,8 +81,8 @@ export function getLearningBlockSearchText(item: LearningHubItem): string {
 }
 
 export function filterLearningBlocks(items: LearningHubItem[], filters: LearningHubFilters): LearningHubItem[] {
-  const search = filters.search.trim();
-  const eligible = items.filter((item) => {
+  const search = filters.search.trim().toLocaleLowerCase("ko-KR");
+  return items.filter((item) => {
     const { block } = item;
     if (filters.domain !== "all" && item.domain !== filters.domain) return false;
     if (filters.unit !== "all" && block.unit !== filters.unit) return false;
@@ -101,20 +101,19 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
       if ((metadata?.rejectedClaims?.length ?? 0) > 0 || block.choiceExamples?.some((example) => example.verdict === "incorrect")) kinds.add("incorrect_choice");
       if (!filters.lifeEthicsKinds.some((kind) => kinds.has(kind))) return false;
     }
+    if (!search) return true;
+    return rankSearchCandidates([{
+      id: `${item.sourceEntryId}:${item.block.id}`,
+      fields: {
+        title: item.block.title,
+        body: getLearningBlockSearchText(item),
+        subject: item.sourceSubject,
+        unit: [item.block.unit, item.block.subunit].filter(Boolean).join(" "),
+        source: item.sourceEntryTitle,
+        tag: item.block.keywords ?? [],
+      },
+    }], filters.search).length > 0;
   });
-  if (!search) return eligible;
-  const matchedIds = new Set(rankSearchCandidates(eligible.map((item) => ({
-    id: `${item.sourceEntryId}:${item.block.id}`,
-    fields: {
-      title: item.block.title,
-      body: getLearningBlockSearchText(item),
-      subject: item.sourceSubject,
-      unit: [item.block.unit, item.block.subunit].filter(Boolean).join(" "),
-      source: item.sourceEntryTitle,
-      tag: item.block.keywords ?? [],
-    },
-  })), search).map((item) => item.id));
-  return eligible.filter((item) => matchedIds.has(`${item.sourceEntryId}:${item.block.id}`));
 }
 
 export function learningHubThinkers(items: LearningHubItem[]): string[] {
