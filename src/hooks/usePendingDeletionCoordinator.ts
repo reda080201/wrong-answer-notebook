@@ -14,41 +14,78 @@ interface Options {
   setSelectedId(id: string | null): void;
 }
 
+export function getProtectedPendingImageReferences(
+  records: PendingDeletion[],
+  entries: WrongAnswerEntry[],
+  currentRecordId: string,
+): Set<string> {
+  return new Set(
+    records
+      .filter((record) => record.id !== currentRecordId)
+      .filter((record) => !entries.some((entry) => entry.id === record.entry.id))
+      .flatMap((record) => record.imageReferences),
+  );
+}
+
 /** Coordinates persisted deletion records without deleting a shared image early. */
 export function usePendingDeletionCoordinator({ entries, restore, setSelectedId }: Options) {
   const entriesRef = useRef(entries);
   const [pending, setPending] = useState<PendingDeletion[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const finalizePromiseRef = useRef<Promise<void> | null>(null);
+  const retryDelayRef = useRef(1_000);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
 
   const finalizeExpired = useCallback(async () => {
-    const backend = getStorageBackend();
-    if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;
-    const records = await backend.loadPendingDeletions();
-    const now = Date.now();
-    const retained: PendingDeletion[] = [];
-    let failure: string | null = null;
-    for (const record of records) {
-      if (Date.parse(record.finalizeAfter) > now) {
-        retained.push(record);
-        continue;
-      }
-      // A restored entry owns its images again, so its already-expired pending
-      // record is no longer actionable and must not survive another startup.
-      if (entriesRef.current.some((entry) => entry.id === record.entry.id)) continue;
-      const references = new Set(entriesRef.current.flatMap(getAllImageFilenames));
-      try {
-        for (const image of record.imageReferences) {
-          if (!references.has(image)) await deleteImage(image);
+    if (finalizePromiseRef.current) return finalizePromiseRef.current;
+    const task = (async () => {
+      const backend = getStorageBackend();
+      if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;
+      const records = await backend.loadPendingDeletions();
+      const now = Date.now();
+      const retained: PendingDeletion[] = [];
+      let failure: string | null = null;
+      for (const record of records) {
+        if (Date.parse(record.finalizeAfter) > now) {
+          retained.push(record);
+          continue;
         }
-      } catch (cause) {
-        retained.push(record);
-        failure = cause instanceof Error ? `삭제 대기 이미지를 정리하지 못했습니다. ${cause.message}` : "삭제 대기 이미지를 정리하지 못했습니다.";
+        // A restored entry owns its images again, so its already-expired pending
+        // record is no longer actionable and must not survive another startup.
+        if (entriesRef.current.some((entry) => entry.id === record.entry.id)) continue;
+        const references = new Set(entriesRef.current.flatMap(getAllImageFilenames));
+        // Pending snapshots are still the source of truth while Undo is
+        // available. Keep an image alive when another pending record references
+        // it, even if that other record is also due in this pass.
+        for (const image of getProtectedPendingImageReferences(records, entriesRef.current, record.id)) {
+          references.add(image);
+        }
+        try {
+          for (const image of record.imageReferences) {
+            if (!references.has(image)) await deleteImage(image);
+          }
+        } catch (cause) {
+          retained.push(record);
+          failure = cause instanceof Error ? `삭제 대기 이미지를 정리하지 못했습니다. ${cause.message}` : "삭제 대기 이미지를 정리하지 못했습니다.";
+        }
       }
-    }
-    await backend.savePendingDeletions(retained);
-    setPending(retained);
-    setError(failure);
+      try {
+        await backend.savePendingDeletions(retained);
+      } catch (cause) {
+        failure = cause instanceof Error ? `삭제 대기 항목을 저장하지 못했습니다. ${cause.message}` : "삭제 대기 항목을 저장하지 못했습니다.";
+      }
+      setPending(retained);
+      setError(failure);
+      if (failure) {
+        retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30_000);
+      } else {
+        retryDelayRef.current = 1_000;
+      }
+    })();
+    finalizePromiseRef.current = task.finally(() => {
+      finalizePromiseRef.current = null;
+    });
+    return finalizePromiseRef.current;
   }, []);
 
   useEffect(() => {
@@ -63,9 +100,11 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
   useEffect(() => {
     const due = pending.map((record) => Date.parse(record.finalizeAfter)).filter(Number.isFinite);
     if (!due.length) return;
-    const timer = window.setTimeout(() => void finalizeExpired(), Math.max(0, Math.min(...due) - Date.now()) + 20);
+    const untilDue = Math.max(0, Math.min(...due) - Date.now());
+    const delay = error ? retryDelayRef.current : untilDue + 20;
+    const timer = window.setTimeout(() => void finalizeExpired(), delay);
     return () => window.clearTimeout(timer);
-  }, [pending, finalizeExpired]);
+  }, [error, pending, finalizeExpired]);
 
   const record = useCallback((item: PendingDeletion) => {
     setPending((current) => current.some((record) => record.id === item.id) ? current : [...current, item]);
