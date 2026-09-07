@@ -1,10 +1,9 @@
 import type { QuestionBankFilters, QuestionBankItem } from "../model/questionBankTypes";
-import { parseSearchQuery, rankSearchCandidates } from "../../../utils/search";
+import { rankSearchCandidates } from "../../../utils/search";
 
 export function filterQuestionBankItems(items: QuestionBankItem[], filters: QuestionBankFilters): QuestionBankItem[] {
   const search = filters.search.trim();
-  const parsedSearch = search ? parseSearchQuery(search) : undefined;
-  const matchedSearchIds = parsedSearch
+  const matchedSearchIds = search
     ? new Set(rankSearchCandidates(items.map((item) => ({
       id: item.id,
       fields: {
@@ -16,7 +15,7 @@ export function filterQuestionBankItems(items: QuestionBankItem[], filters: Ques
         tag: item.classification.tags ?? [],
         metadata: item.classification.concepts ?? [],
       },
-    })), parsedSearch).map((item) => item.id))
+    })), search).map((item) => item.id))
     : undefined;
   return items.filter((item) => {
     const classification = item.classification;

@@ -1,7 +1,7 @@
 import type { LearningBlock, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import { inferLearningSubjectDomain } from "../model/learningMetadata";
 import { normalizeThinkerName, thinkerMatches } from "./normalizeThinkerName";
-import { parseSearchQuery, rankSearchCandidates } from "../../../utils/search";
+import { rankSearchCandidates } from "../../../utils/search";
 
 export interface LearningHubItem {
   block: LearningBlock;
@@ -103,7 +103,6 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
     }
   });
   if (!search) return eligible;
-  const parsedSearch = parseSearchQuery(search);
   const matchedIds = new Set(rankSearchCandidates(eligible.map((item) => ({
     id: `${item.sourceEntryId}:${item.block.id}`,
     fields: {
@@ -114,7 +113,7 @@ export function filterLearningBlocks(items: LearningHubItem[], filters: Learning
       source: item.sourceEntryTitle,
       tag: item.block.keywords ?? [],
     },
-  })), parsedSearch).map((item) => item.id));
+  })), search).map((item) => item.id));
   return eligible.filter((item) => matchedIds.has(`${item.sourceEntryId}:${item.block.id}`));
 }
 
