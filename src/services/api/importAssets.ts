@@ -20,6 +20,7 @@ export interface ImportAssetCommitResult {
   sessionId: string;
   filenames: string[];
   revision?: string;
+  entries?: WrongAnswerEntry[];
 }
 
 export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {

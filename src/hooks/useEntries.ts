@@ -245,7 +245,7 @@ export function useEntries() {
           if (!loadedRef.current) throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
           const committed = await commitImportAssetSessionEntries(sessionId, added);
           updateLoadedEntriesRevision(committed.revision);
-          const next = [...added, ...entriesRef.current];
+          const next = committed.entries ?? [...added, ...entriesRef.current];
           entriesRef.current = next;
           setEntries(next);
           return added.map((entry) => entry.id);
@@ -331,7 +331,7 @@ export function useEntries() {
           const updated = { ...existing, ...patch, updatedAt: now };
           const committed = await commitImportAssetSessionEntry(sessionId, id, expectedUpdatedAt, updated);
           updateLoadedEntriesRevision(committed.revision);
-          const next = current.map((entry) => (entry.id === id ? updated : entry));
+          const next = committed.entries ?? current.map((entry) => (entry.id === id ? updated : entry));
           entriesRef.current = next;
           setEntries(next);
         });

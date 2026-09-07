@@ -181,10 +181,8 @@ fn load_entries_snapshot(
         &app_dir(&app)?.join("exam-sessions.json"),
         &app_dir(&app)?.join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
     )?;
-    Ok(EntriesSnapshot {
-        entries: store.load_entries()?,
-        revision: store.entries_revision()?,
-    })
+    let (entries, revision) = store.entries_snapshot()?;
+    Ok(EntriesSnapshot { entries, revision })
 }
 
 #[tauri::command]

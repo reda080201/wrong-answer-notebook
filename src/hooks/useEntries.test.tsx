@@ -251,6 +251,31 @@ describe("useEntries", () => {
     expect(result.current.entries[0]).toMatchObject({ memo: "staged 자료 병합" });
   });
 
+  it("adopts the authoritative snapshot returned by a staged entry patch", async () => {
+    const authoritative = [
+      { ...entry, memo: "다른 창에서 먼저 저장됨" },
+    ];
+    vi.mocked(commitImportAssetSessionEntry).mockResolvedValueOnce({
+      sessionId: "test",
+      filenames: [],
+      revision: "fresh-revision",
+      entries: authoritative,
+    });
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.patchEntryWithImportAssetSession(
+        entry.id,
+        entry.updatedAt,
+        "11111111-1111-4111-8111-111111111111",
+        { memo: "현재 창의 수정" },
+      );
+    });
+
+    expect(result.current.entries).toEqual(authoritative);
+  });
+
   it("adds imported entries through the staged-asset transaction without a separate entries write", async () => {
     const { result } = renderHook(() => useEntries());
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -268,5 +293,28 @@ describe("useEntries", () => {
       [expect.objectContaining({ title: "staged 가져오기" })],
     );
     expect(result.current.entries[0]).toMatchObject({ title: "staged 가져오기" });
+  });
+
+  it("adopts the authoritative snapshot returned by a staged entry add", async () => {
+    const authoritative = [
+      { ...entry, title: "서버 확정 항목" },
+    ];
+    vi.mocked(commitImportAssetSessionEntries).mockResolvedValueOnce({
+      sessionId: "test",
+      filenames: [],
+      revision: "fresh-revision",
+      entries: authoritative,
+    });
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.addEntriesWithImportAssetSession(
+        "11111111-1111-4111-8111-111111111111",
+        [{ ...form, title: "staged 가져오기" }],
+      );
+    });
+
+    expect(result.current.entries).toEqual(authoritative);
   });
 });

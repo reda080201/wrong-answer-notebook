@@ -19,6 +19,7 @@ pub const ENTRIES_SCHEMA_VERSION: u32 = 2;
 pub struct StagedCommitResult {
     pub filenames: Vec<String>,
     pub revision: String,
+    pub entries: Vec<WrongAnswerEntry>,
 }
 
 /// Cross-process lock shared by Tauri mutations and the desktop preview bridge.
@@ -222,6 +223,16 @@ impl NotebookStore {
         Ok(format!("{:x}", Sha256::digest(bytes)))
     }
 
+    /// Reads the document and its revision while holding the same cross-process
+    /// lock. Callers must not pair independently-read values.
+    pub fn entries_snapshot(&self) -> Result<(Vec<WrongAnswerEntry>, String), String> {
+        self.with_write_lock(|| {
+            let entries = self.load_entries()?;
+            let revision = self.entries_revision()?;
+            Ok((entries, revision))
+        })
+    }
+
     pub fn save_entries(&self, entries: &[WrongAnswerEntry]) -> Result<(), String> {
         self.with_write_lock(|| self.write_entries_locked(entries))
     }
@@ -304,6 +315,7 @@ impl NotebookStore {
                     .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
                     .collect(),
                 revision,
+                entries,
             })
         })
     }
@@ -359,6 +371,7 @@ impl NotebookStore {
                     .filter_map(|(_, target)| target.file_name()?.to_str().map(str::to_owned))
                     .collect(),
                 revision,
+                entries,
             })
         })
     }
@@ -979,6 +992,22 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("다른 실행 창"));
         assert_eq!(store.load_entries().unwrap()[0].memo, "다른 창의 수정");
+    }
+
+    #[test]
+    fn entries_snapshot_returns_document_and_revision_from_one_locked_read() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = NotebookStore::new(
+            directory.path().join("entries.json"),
+            directory.path().join("images"),
+        );
+        let entries = parse_entries_value(json!([{
+            "id":"e1", "subject":"수학", "question":"원자적 스냅샷", "myAnswer":"", "correctAnswer":"", "createdAt":"a", "updatedAt":"a", "mastered":false
+        }])).unwrap();
+        store.save_entries(&entries).unwrap();
+        let (snapshot, revision) = store.entries_snapshot().unwrap();
+        assert_eq!(snapshot[0].question, "원자적 스냅샷");
+        assert_eq!(revision, store.entries_revision().unwrap());
     }
 
     #[test]
