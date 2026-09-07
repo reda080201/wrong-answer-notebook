@@ -226,11 +226,8 @@ async fn load_entries_snapshot(State(state): State<BridgeState>) -> BridgeResult
             .join(exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
     )
     .map_err(internal)?;
-    with_file_lock(&state.data_dir, || {
-        let entries = state.store.load_entries().map_err(internal)?;
-        let revision = state.store.entries_revision().map_err(internal)?;
-        Ok(Json(json!({ "entries": entries, "revision": revision })))
-    })
+    let (entries, revision) = state.store.entries_snapshot().map_err(internal)?;
+    Ok(Json(json!({ "entries": entries, "revision": revision })))
 }
 
 async fn save_entries_if_revision(
@@ -467,7 +464,7 @@ async fn commit_import_entries(
         .map_err(internal)?;
     let _ = fs::remove_dir_all(root);
     Ok(Json(
-        json!({ "filenames": committed.filenames, "revision": committed.revision }),
+        json!({ "filenames": committed.filenames, "revision": committed.revision, "entries": committed.entries }),
     ))
 }
 

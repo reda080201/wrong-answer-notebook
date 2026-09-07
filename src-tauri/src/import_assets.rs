@@ -53,6 +53,7 @@ pub(crate) struct ImportAssetCommitResult {
     session_id: String,
     filenames: Vec<String>,
     revision: Option<String>,
+    entries: Option<Vec<WrongAnswerEntry>>,
 }
 
 pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
@@ -235,6 +236,7 @@ pub(crate) fn commit_import_asset_session(
             session_id,
             filenames,
             revision: None,
+            entries: None,
         })
     })
 }
@@ -261,6 +263,7 @@ pub(crate) fn commit_import_asset_session_entry(
         session_id,
         filenames: committed.filenames,
         revision: Some(committed.revision),
+        entries: Some(committed.entries),
     })
 }
 
@@ -279,6 +282,7 @@ pub(crate) fn commit_import_asset_session_entries(
         session_id,
         filenames: committed.filenames,
         revision: Some(committed.revision),
+        entries: Some(committed.entries),
     })
 }
 
