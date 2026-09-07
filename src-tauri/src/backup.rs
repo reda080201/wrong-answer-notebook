@@ -332,12 +332,22 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
     }
 }
 
+#[derive(Clone, Copy)]
+enum RestorePhase {
+    MovingOriginals,
+    Committing,
+}
+
 fn rollback_restore_paths_with_targets(
     moved: &[(PathBuf, PathBuf)],
     managed_targets: &[PathBuf],
+    phase: RestorePhase,
 ) -> Result<(), String> {
-    for target in managed_targets.iter().rev() {
-        remove_restore_path(target)?;
+    // Only the commit phase can have created replacement targets.
+    if matches!(phase, RestorePhase::Committing) {
+        for target in managed_targets.iter().rev() {
+            remove_restore_path(target)?;
+        }
     }
     for (original, backup) in moved.iter().rev() {
         if backup.exists() {
@@ -348,6 +358,28 @@ fn rollback_restore_paths_with_targets(
         }
     }
     Ok(())
+}
+
+fn rollback_restore_failure(
+    error: String,
+    moved: &[(PathBuf, PathBuf)],
+    managed_targets: &[PathBuf],
+    phase: RestorePhase,
+    rollback_dir: &Path,
+) -> String {
+    match rollback_restore_paths_with_targets(moved, managed_targets, phase) {
+        Err(rollback) => format!(
+            "{error} Restore rollback failed: {rollback}. Recovery files preserved at: {}",
+            rollback_dir.display()
+        ),
+        Ok(()) => match fs::remove_dir_all(rollback_dir) {
+            Ok(()) => error,
+            Err(cleanup) => format!(
+                "{error} Rollback completed, but recovery directory cleanup failed: {cleanup}. Location: {}",
+                rollback_dir.display()
+            ),
+        },
+    }
 }
 
 #[tauri::command]
@@ -461,6 +493,7 @@ pub(crate) fn restore_backup_zip(
         app_dir.join("gpt-solution-drafts.json"),
         app_dir.join("library-folders.json"),
         app_dir.join("import-workspace-draft.json"),
+        app_dir.join("review-sessions.json"),
         app_dir.join("data-schema.json"),
         image_dir.clone(),
         app_dir.join("import-workspaces"),
@@ -499,12 +532,13 @@ pub(crate) fn restore_backup_zip(
     #[allow(clippy::drop_non_drop)]
     drop(move_target);
     if let Err(error) = move_result {
-        let rollback_error = rollback_restore_paths_with_targets(&moved, &managed_targets).err();
-        let _ = fs::remove_dir_all(&rollback_dir);
-        return Err(match rollback_error {
-            Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
-            None => error,
-        });
+        return Err(rollback_restore_failure(
+            error,
+            &moved,
+            &managed_targets,
+            RestorePhase::MovingOriginals,
+            &rollback_dir,
+        ));
     }
 
     let commit_result = (|| -> Result<(), String> {
@@ -526,12 +560,13 @@ pub(crate) fn restore_backup_zip(
         Ok(())
     })();
     if let Err(error) = commit_result {
-        let rollback_error = rollback_restore_paths_with_targets(&moved, &managed_targets).err();
-        let _ = fs::remove_dir_all(&rollback_dir);
-        return Err(match rollback_error {
-            Some(rollback) => format!("{error} 복원 rollback 실패: {rollback}"),
-            None => error,
-        });
+        return Err(rollback_restore_failure(
+            error,
+            &moved,
+            &managed_targets,
+            RestorePhase::Committing,
+            &rollback_dir,
+        ));
     }
     // Data has already been restored successfully. Cleanup failure must not
     // report a false restore failure or trigger a second restore attempt.
@@ -548,8 +583,8 @@ pub(crate) fn restore_backup_zip(
 #[cfg(test)]
 mod tests {
     use super::{
-        build_backup_meta, rollback_restore_paths_with_targets, validate_optional_store_json,
-        PERSISTENT_DATA_FILES,
+        build_backup_meta, rollback_restore_failure, rollback_restore_paths_with_targets,
+        validate_optional_store_json, RestorePhase, PERSISTENT_DATA_FILES,
     };
 
     #[test]
@@ -596,6 +631,7 @@ mod tests {
         rollback_restore_paths_with_targets(
             &[(entries.clone(), rollback)],
             &[entries.clone(), generated.clone(), images.clone()],
+            RestorePhase::Committing,
         )
         .expect("rollback");
 
@@ -605,6 +641,86 @@ mod tests {
         );
         assert!(!generated.exists());
         assert!(!images.exists());
+    }
+
+    #[test]
+    fn move_failure_preserves_unmoved_originals_and_images() {
+        let directory = tempfile::tempdir().expect("temp directory");
+        let root = directory.path();
+        let rollback_dir = root.join("rollback");
+        std::fs::create_dir(&rollback_dir).expect("recovery directory");
+        let entries = root.join("entries.json");
+        let settings = root.join("settings.json");
+        let exam = root.join("exam-sessions.json");
+        let images = root.join("images");
+        std::fs::write(&entries, b"original entries").expect("entries");
+        std::fs::write(&settings, b"original settings").expect("settings");
+        std::fs::write(&exam, b"original exam").expect("exam");
+        std::fs::create_dir(&images).expect("images");
+        std::fs::write(images.join("original.png"), b"original image").expect("image");
+        let saved_entries = rollback_dir.join("entries.json");
+        std::fs::rename(&entries, &saved_entries).expect("first move");
+        // A missing destination parent fails the second move on every platform.
+        let error = std::fs::rename(&settings, rollback_dir.join("missing/settings.json"))
+            .expect_err("second move must fail");
+        let message = rollback_restore_failure(
+            error.to_string(),
+            &[(entries.clone(), saved_entries)],
+            &[
+                entries.clone(),
+                settings.clone(),
+                exam.clone(),
+                images.clone(),
+            ],
+            RestorePhase::MovingOriginals,
+            &rollback_dir,
+        );
+        assert_eq!(message, error.to_string());
+        assert_eq!(std::fs::read(entries).unwrap(), b"original entries");
+        assert_eq!(std::fs::read(settings).unwrap(), b"original settings");
+        assert_eq!(std::fs::read(exam).unwrap(), b"original exam");
+        assert_eq!(
+            std::fs::read(images.join("original.png")).unwrap(),
+            b"original image"
+        );
+        assert!(!rollback_dir.exists());
+    }
+
+    #[test]
+    fn rollback_failure_preserves_recovery_directory_in_both_phases() {
+        for phase in [RestorePhase::MovingOriginals, RestorePhase::Committing] {
+            let directory = tempfile::tempdir().expect("temp directory");
+            let root = directory.path();
+            let rollback_dir = root.join("rollback");
+            std::fs::create_dir(&rollback_dir).expect("recovery directory");
+            let saved_entries = rollback_dir.join("entries.json");
+            std::fs::write(&saved_entries, b"recoverable original").expect("original");
+            let blocked_parent = root.join("blocked");
+            std::fs::write(&blocked_parent, b"not a directory").expect("block parent");
+            let original = blocked_parent.join("entries.json");
+            let generated = root.join("generated-exams.json");
+            std::fs::write(&generated, b"replacement").expect("replacement");
+            let message = rollback_restore_failure(
+                "injected restore failure".into(),
+                &[(original, saved_entries.clone())],
+                &[generated.clone()],
+                phase,
+                &rollback_dir,
+            );
+            assert!(message.contains("injected restore failure"));
+            assert!(message.contains("Restore rollback failed"));
+            assert!(message.contains(rollback_dir.to_string_lossy().as_ref()));
+            assert!(rollback_dir.is_dir());
+            assert_eq!(
+                std::fs::read(saved_entries).unwrap(),
+                b"recoverable original"
+            );
+            assert_eq!(std::fs::read(blocked_parent).unwrap(), b"not a directory");
+            assert_eq!(
+                generated.exists(),
+                matches!(phase, RestorePhase::MovingOriginals)
+            );
+        }
     }
 
     #[test]
