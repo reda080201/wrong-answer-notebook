@@ -1,7 +1,7 @@
 import type { ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
-import { resolveQuestionAssets } from "../../../utils/questionAssets";
+import { resolveQuestionAssets, resolveQuestionFigures } from "../../../utils/questionAssets";
 import type { ChatGptSharePayload } from "../types";
 
 export function buildChatGptSharePayload(options: {
@@ -22,8 +22,8 @@ export function buildChatGptSharePayload(options: {
     const assets = block ? resolveQuestionAssets(options.entry, block) : undefined;
     const images: string[] = [];
     if (options.preferences.shareQuestionImages) {
-      for (const figure of options.entry.figures ?? []) {
-        if (normalizeQuestionNumber(figure.questionNumber) === questionNumber && figure.image) images.push(figure.image);
+      for (const figure of (block ? resolveQuestionFigures(options.entry, block) : [])) {
+        if (figure.image) images.push(figure.image);
       }
       for (const image of assets?.sourceCrops.map((crop) => crop.image) ?? sessionQuestion?.questionImages ?? []) images.push(image);
     }

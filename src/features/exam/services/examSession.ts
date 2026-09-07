@@ -3,7 +3,7 @@ import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, Questio
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
-import { resolveQuestionAssets } from "../../../utils/questionAssets";
+import { resolveQuestionAssets, resolveQuestionFigures } from "../../../utils/questionAssets";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 export interface ExamSessionCreationOptions {
@@ -25,7 +25,7 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
     const stimulus = legacyBlock ? stimuli.filter((item) => item.start < legacyBlock.start && item.end <= legacyBlock.start).at(-1) : undefined;
-    const figures = (entry.figures?.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizedNumber) ?? []).map((figure) => {
+    const figures = resolveQuestionFigures(entry, block).map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
     });

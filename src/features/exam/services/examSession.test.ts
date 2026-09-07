@@ -87,6 +87,29 @@ describe("exam session foundation", () => {
     expect(snapshot?.contentSegments?.[0]).toEqual({ id: "text-1", type: "text", text: "정답을 고르시오." });
   });
 
+  it("does not attach a stale figure by question number when canonical IDs exist", () => {
+    const canonicalEntry = {
+      ...entry,
+      question: "호환용 본문",
+      structuredQuestions: [{
+        questionNumber: "9",
+        questionText: "문항 9",
+        conditions: [],
+        equations: [],
+        choices: ["① 보기"],
+        contentSegments: [{ id: "text-9", type: "text", text: "문항 9" }],
+        figureIds: ["f9"],
+      }],
+      figures: [
+        { id: "f9", questionNumber: "9", title: "9번 그림", caption: "", image: "f9.png", source: "original" as const },
+        { id: "f10", questionNumber: "9", title: "오래된 연결", caption: "", image: "f10.png", source: "original" as const },
+      ],
+    } as WrongAnswerEntry;
+
+    const session = createExamSession(canonicalEntry);
+    expect(session.questions[0]?.figures.map((figure) => figure.id)).toEqual(["f9"]);
+  });
+
   it("normalizes common objective and numeric answer forms before scoring", () => {
     expect(normalizeExamAnswer("③")).toBe("3");
     expect(normalizeExamAnswer("3번")).toBe("3");
