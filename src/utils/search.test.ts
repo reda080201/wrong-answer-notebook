@@ -17,4 +17,20 @@ describe("shared search", () => {
       { value: "<b>", highlighted: false }, { value: "미분", highlighted: true }, { value: "</b>", highlighted: false },
     ]);
   });
+
+  it.each(["(", "[", "+", "\\int", "https://example.com/a+b"])(
+    "treats special search text literally: %s",
+    (term) => {
+      expect(() => highlightTextSegments(`앞 ${term} 뒤`, term)).not.toThrow();
+      expect(highlightTextSegments(`앞 ${term} 뒤`, term)).toEqual([
+        { value: "앞 ", highlighted: false },
+        { value: term, highlighted: true },
+        { value: " 뒤", highlighted: false },
+      ]);
+    },
+  );
+
+  it("does not treat an empty query as a wildcard", () => {
+    expect(highlightTextSegments("원문", "")).toEqual([{ value: "원문", highlighted: false }]);
+  });
 });

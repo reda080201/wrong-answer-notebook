@@ -105,7 +105,8 @@ export function rankSearchCandidates<T extends SearchCandidate>(candidates: T[],
 export function highlightTextSegments(text: string, query: string): Array<{ value: string; highlighted: boolean }> {
   const terms = parseSearchQuery(query).groups.flat().filter((term) => !term.field).map((term) => term.value).filter(Boolean);
   if (!terms.length) return [{ value: text, highlighted: false }];
-  const pattern = new RegExp(`(${terms.map((term) => term.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")).join("|")})`, "giu");
+  const escapedTerms = terms.map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const pattern = new RegExp(`(${escapedTerms.join("|")})`, "giu");
   const result: Array<{ value: string; highlighted: boolean }> = [];
   let cursor = 0;
   for (const match of text.matchAll(pattern)) {
