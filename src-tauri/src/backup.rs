@@ -703,7 +703,7 @@ mod tests {
             let message = rollback_restore_failure(
                 "injected restore failure".into(),
                 &[(original, saved_entries.clone())],
-                &[generated.clone()],
+                std::slice::from_ref(&generated),
                 phase,
                 &rollback_dir,
             );
