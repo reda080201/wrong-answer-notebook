@@ -23,7 +23,7 @@ const HISTORY_KEY = "wrong-answer-navigation";
 export function useNavigationHistory({ snapshot, restore }: Options) {
   const restoringRef = useRef(false);
   const firstRef = useRef(true);
-  const scrollContainers = useRef(new Map<string, HTMLElement>());
+  const scrollContainers = useRef(new Map<string, { element: HTMLElement; cleanup: () => void }>());
   const pendingScroll = useRef<Record<string, number>>({});
   const latestSnapshot = useRef(snapshot);
   useEffect(() => {
@@ -32,7 +32,7 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
 
   const withScroll = useCallback((): NavigationSnapshot => ({
     ...latestSnapshot.current,
-    scrollTop: Object.fromEntries([...scrollContainers.current.entries()].map(([key, element]) => [key, element.scrollTop])),
+    scrollTop: Object.fromEntries([...scrollContainers.current.entries()].map(([key, value]) => [key, value.element.scrollTop])),
   }), []);
 
   const snapshotKey = JSON.stringify(snapshot);
@@ -60,8 +60,9 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
       restore(value);
       window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
         for (const [key, top] of Object.entries(pendingScroll.current)) {
-          const element = scrollContainers.current.get(key);
-          if (element) element.scrollTop = top;
+          const value = scrollContainers.current.get(key);
+          if (value) value.element.scrollTop = top;
+          delete pendingScroll.current[key];
         }
       }));
     };
@@ -71,10 +72,10 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
 
   const registerScrollRestoration = useCallback((key: string, element: HTMLElement | null) => {
     if (!element) {
-      scrollContainers.current.delete(key);
+      scrollContainers.current.get(key)?.cleanup();
       return () => undefined;
     }
-    scrollContainers.current.set(key, element);
+    scrollContainers.current.get(key)?.cleanup();
     const onScroll = () => {
       const state = window.history.state?.[HISTORY_KEY] as NavigationSnapshot | undefined;
       if (!state) return;
@@ -84,14 +85,19 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
       } }, "");
     };
     element.addEventListener("scroll", onScroll, { passive: true });
+    const cleanup = () => {
+      element.removeEventListener("scroll", onScroll);
+      if (scrollContainers.current.get(key)?.element === element) scrollContainers.current.delete(key);
+    };
+    scrollContainers.current.set(key, { element, cleanup });
     const savedTop = pendingScroll.current[key];
     if (typeof savedTop === "number") {
-      window.requestAnimationFrame(() => { element.scrollTop = savedTop; });
+      window.requestAnimationFrame(() => {
+        element.scrollTop = savedTop;
+        delete pendingScroll.current[key];
+      });
     }
-    return () => {
-      element.removeEventListener("scroll", onScroll);
-      if (scrollContainers.current.get(key) === element) scrollContainers.current.delete(key);
-    };
+    return cleanup;
   }, []);
 
   const scrollRef = useCallback((key: string) => (element: HTMLElement | null) => {
