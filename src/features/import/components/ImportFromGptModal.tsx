@@ -340,17 +340,18 @@ export default function ImportFromGptModal({
   const [activeReviewQuestionIndex, setActiveReviewQuestionIndex] = useState(0);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const zipAbortRef = useRef<AbortController | null>(null);
   const parseErrorRef = useRef<string | null>(null);
+  const sourceDraftIdentityRef = useRef<{ initialized: boolean; value: Partial<EntryFormData> | null }>({ initialized: false, value: null });
   const preserveSupplementalImagesRef = useRef(false);
   // Supplemental drafts can be cancelled after an image was removed from the UI.
   // Keep the complete set created by this modal so those final-store files are not orphaned.
   const createdSupplementalImagesRef = useRef(new Set<string>());
   const importSaveCoordinator = useImportSaveCoordinator({
     onError: (message) => setError(message),
-    onSuccess: onClose,
   });
-  const quickSaving = importSaveCoordinator.busy;
+  const saving = importSaveCoordinator.busy;
   const rememberSupplementalImages = (filenames: string[]) => {
     if (!isSupplementalMode) return;
     filenames.forEach((filename) => createdSupplementalImagesRef.current.add(filename));
@@ -407,13 +408,31 @@ export default function ImportFromGptModal({
     setActivePromptId(defaultPromptId);
   }, [defaultPromptId]);
 
+  const sourceDraft = useMemo(
+    () => draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null,
+    [draftOverride, parsed],
+  );
+  const sourceDraftWithExpectedNumbers = useMemo(
+    () => sourceDraft ? withExpectedQuestionNumbers(sourceDraft, expectedQuestionNumbers) : null,
+    [expectedQuestionNumbers, sourceDraft],
+  );
+
   useEffect(() => {
-    const nextDraft = draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null;
-    const next = nextDraft ? withExpectedQuestionNumbers(nextDraft, expectedQuestionNumbers) : null;
-    setDraft(next);
+    if (sourceDraftIdentityRef.current.initialized && sourceDraftIdentityRef.current.value === sourceDraft) return;
+    sourceDraftIdentityRef.current = { initialized: true, value: sourceDraft };
+    setDraft(sourceDraftWithExpectedNumbers);
     setActiveReviewQuestionIndex(0);
     setStructuredReviewError(null);
-  }, [draftOverride, expectedQuestionNumbers, parsed]);
+  }, [sourceDraft, sourceDraftWithExpectedNumbers]);
+
+  useEffect(() => {
+    setDraft((current) => {
+      if (!current) return current;
+      if (expectedQuestionNumbers.length) return withExpectedQuestionNumbers(current, expectedQuestionNumbers);
+      const baselineAudit = sourceDraft?.importAudit;
+      return baselineAudit ? { ...current, importAudit: baselineAudit } : current;
+    });
+  }, [expectedQuestionNumbers, sourceDraft]);
 
   useEffect(() => {
     if (!draftOverride && !batchImport) {
@@ -798,7 +817,7 @@ export default function ImportFromGptModal({
         ? supplementalImages
         : draft.sourcePageImages ?? [],
     };
-    try {
+    const saved = await importSaveCoordinator.run(async () => {
       if (isSupplementalMode) {
         await onApply(
           nextData,
@@ -807,12 +826,10 @@ export default function ImportFromGptModal({
           [...createdSupplementalImagesRef.current],
           filename,
         );
-        preserveSupplementalImagesRef.current = true;
       } else if (!isSolutionMode && onApplyEntries) {
         // A reviewed problem sheet is already canonical import data. Sending it
         // through EntryForm would create a second, competing edit surface.
         await onApplyEntries([nextData], assetFiles);
-        onClose();
       } else {
         if (assetFiles.length > 0) {
           await onApply(nextData, isSolutionMode ? applyMode : undefined, assetFiles);
@@ -820,12 +837,10 @@ export default function ImportFromGptModal({
           await onApply(nextData, isSolutionMode ? applyMode : undefined);
         }
       }
-    } catch (applyError) {
-      setError(
-        applyError instanceof Error && applyError.message
-          ? applyError.message
-          : "가져오기 항목을 적용하지 못했습니다.",
-      );
+    });
+    if (saved) {
+      if (isSupplementalMode) preserveSupplementalImagesRef.current = true;
+      discardAndClose();
     }
   };
 
@@ -841,7 +856,8 @@ export default function ImportFromGptModal({
       setError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
       return;
     }
-    await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
+    const saved = await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
+    if (saved) discardAndClose();
   };
 
   const updateLegacyQuestionText = (value: string) => {
@@ -851,7 +867,12 @@ export default function ImportFromGptModal({
     });
   };
 
-  const handleClose = () => {
+  const isDirty = Boolean(
+    draft && sourceDraft && JSON.stringify(draft) !== JSON.stringify(sourceDraft),
+  );
+
+  const discardAndClose = () => {
+    if (saving || aiGenerating) return;
     if (isSupplementalMode && !preserveSupplementalImagesRef.current) {
       void Promise.all(
         [...createdSupplementalImagesRef.current].map((filename) =>
@@ -862,9 +883,18 @@ export default function ImportFromGptModal({
     onClose();
   };
 
+  const handleClose = () => {
+    if (saving || aiGenerating) return;
+    if (isDirty) {
+      setDiscardConfirmOpen(true);
+      return;
+    }
+    discardAndClose();
+  };
+
   return (
     <>
-      <Dialog open onClose={handleClose} className="form-modal form-modal--wide import-modal" ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "GPT 결과 가져오기"} closeDisabled={aiGenerating} busy={aiGenerating}>
+      <Dialog open onClose={handleClose} className="form-modal form-modal--wide import-modal" ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "GPT 결과 가져오기"} closeDisabled={saving || aiGenerating} busy={saving || aiGenerating}>
         <div className="form-header import-modal-header">
           <h2 id="import-modal-title">{isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? `${supplementalModeLabel(supplementalMode)} · ${sourceEntry?.title ?? "문제지"}` : "GPT 결과 가져오기"}</h2>
           <div className="import-modal-header-actions">
@@ -1356,10 +1386,11 @@ export default function ImportFromGptModal({
                   {!isSolutionMode && !isSupplementalMode && (
                     <details className="import-advanced-metadata">
                       <summary>고급 정보</summary>
-                      <label htmlFor="import-memo-compact">시험지 전체 메모</label>
-                      <textarea id="import-memo-compact" value={draft.memo ?? ""} onChange={(event) => setDraft((current) => ({ ...current, memo: event.target.value }))} />
-                      <label htmlFor="import-tags-compact">태그</label>
-                      <input id="import-tags-compact" value={(draft.tags ?? []).join(", ")} onChange={(event) => setDraft((current) => ({ ...current, tags: event.target.value.split(",").map((tag) => tag.trim()).filter(Boolean) }))} />
+                      <p className="form-hint">메모와 태그는 아래 검수 영역에서 수정합니다.</p>
+                      <dl className="import-metadata-summary">
+                        <div><dt>메모</dt><dd>{draft.memo?.trim() || "없음"}</dd></div>
+                        <div><dt>태그</dt><dd>{draft.tags?.length ? draft.tags.join(", ") : "없음"}</dd></div>
+                      </dl>
                     </details>
                   )}
 
@@ -1612,7 +1643,7 @@ export default function ImportFromGptModal({
           </div>
         </div>
 
-        <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
+        <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         {!canApply && applyBlockReason && (
           <p className="import-apply-reason" role="status">{applyBlockReason}</p>
         )}
@@ -1674,7 +1705,7 @@ export default function ImportFromGptModal({
             <StructuredQuestionReviewEditor
               id={`fullscreen-import-question-${index}`}
               questions={[activeQuestion]}
-              disabled={quickSaving}
+              disabled={saving}
               onChange={([updatedQuestion]) => {
                 if (!updatedQuestion) return;
                 setStructuredReviewError(null);
@@ -1712,7 +1743,7 @@ export default function ImportFromGptModal({
           </div>
         ) : undefined}
         footer={(
-          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} quickSaving={quickSaving} onClose={() => setReviewWorkspaceOpen(false)} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
+          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving} onClose={() => setReviewWorkspaceOpen(false)} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         )}
       >
         {error && <p className="form-save-error" role="alert">{error}</p>}
@@ -1732,6 +1763,20 @@ export default function ImportFromGptModal({
         )}
       </ImportReviewWorkspace>
       </FeatureErrorBoundary>
+      <Dialog
+        open={discardConfirmOpen}
+        title="검수 중인 변경사항이 있습니다"
+        ariaLabel="검수 변경사항 확인"
+        onClose={() => setDiscardConfirmOpen(false)}
+        footer={(
+          <>
+            <button type="button" className="btn-secondary" onClick={() => setDiscardConfirmOpen(false)}>계속 검수</button>
+            <button type="button" className="btn-danger" onClick={() => { setDiscardConfirmOpen(false); discardAndClose(); }}>변경사항 버리고 닫기</button>
+          </>
+        )}
+      >
+        <p>수정한 내용은 저장하지 않으면 사라집니다.</p>
+      </Dialog>
       {shouldShowConceptPreview && conceptImportValue && onApplyEntries && (
         <ConceptImportPreviewModal
           value={conceptImportValue}

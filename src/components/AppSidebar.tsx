@@ -249,8 +249,8 @@ export default function AppSidebar({
           title={destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : `새 ${entryKindName(destination.section)} 추가`}
           onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}
         ><Plus size={18} aria-hidden="true" /></button>}
-        {!collapsed && isSectionDestination && <button type="button" className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : openNew}>
-          + {destinationSection === "problem_sheet" ? "시험지 가져오기" : destination.type === "section" ? `새 ${entryKindName(destination.section)} 추가` : ""}
+        {!collapsed && isSectionDestination && <button type="button" className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}>
+          + {destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : destination.type === "section" ? `새 ${entryKindName(destination.section)} 추가` : ""}
         </button>}
         {!collapsed && isSectionDestination && destinationSection !== "wrong_answer" && (
           <Menu label={<MoreHorizontal size={18} />} triggerAriaLabel="추가 작업">
@@ -258,7 +258,10 @@ export default function AppSidebar({
               <button type="button" onClick={onOpenExamBuilder}>모의고사 만들기</button>
             )}
             {destinationSection === "lecture" && (
-              <button type="button" onClick={openLearningImport}>HTML/MD/JSON 가져오기</button>
+              <>
+                <button type="button" onClick={openNew}>빈 특강 만들기</button>
+                <button type="button" onClick={openLearningImport}>HTML/MD/JSON 가져오기</button>
+              </>
             )}
           </Menu>
         )}
