@@ -49,6 +49,7 @@ describe("QuestionBankView", () => {
 
     // Should show picked status
     expect(screen.getByRole("status")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "이 1개 복습 시작" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "다시 추출" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "선택 지우기" })).toBeInTheDocument();
 
@@ -159,6 +160,7 @@ describe("QuestionBankView", () => {
     act(() => registration?.setMaintenanceBlocked?.(true));
     expect(screen.getByLabelText("정렬")).toBeDisabled();
     expect(screen.getByRole("button", { name: "현재 필터 저장" })).toBeDisabled();
+    expect(screen.getByLabelText("보기 기준")).toBeDisabled();
     fireEvent.change(screen.getByLabelText("문제 은행 검색"), { target: { value: "함수" } });
     await act(async () => { vi.advanceTimersByTime(500); });
     expect(onPreferencesChange).toHaveBeenCalledTimes(1);

@@ -477,12 +477,11 @@ export default function EntryDetail({
     setSelectedQuestionNumbers([]);
     setRevealedAnswerNumbers(new Set());
     setTitleEditing(false);
-    setTitleDraft(entry.title);
-  }, [entry.id, entry.title]);
+  }, [entry.id]);
 
   useEffect(() => {
-    setTitleDraft(entry.title);
-  }, [entry.title]);
+    if (!titleEditing) setTitleDraft(entry.title);
+  }, [entry.title, titleEditing]);
 
   useEffect(() => {
     if (focusedQuestionIndex >= questionAnchors.length) {
