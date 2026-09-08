@@ -3,6 +3,20 @@ import { rankSearchCandidates } from "../../../utils/search";
 
 export function filterQuestionBankItems(items: QuestionBankItem[], filters: QuestionBankFilters): QuestionBankItem[] {
   const search = filters.search.trim();
+  const matchedSearchIds = search
+    ? new Set(rankSearchCandidates(items.map((item) => ({
+      id: item.id,
+      fields: {
+        title: item.entryTitle,
+        body: item.questionText,
+        subject: item.subject,
+        unit: [item.classification.unit, item.classification.subunit].filter(Boolean).join(" "),
+        source: [item.source.sourceLabel, item.source.examName, item.source.seriesName].filter(Boolean).join(" "),
+        tag: item.classification.tags ?? [],
+        metadata: item.classification.concepts ?? [],
+      },
+    })), search).map((item) => item.id))
+    : undefined;
   return items.filter((item) => {
     const classification = item.classification;
     if (filters.subject !== "all" && item.subject !== filters.subject) return false;
@@ -24,18 +38,6 @@ export function filterQuestionBankItems(items: QuestionBankItem[], filters: Ques
     if (filters.reviewDueOnly && !item.reviewDue) return false;
     if (filters.year !== "all" && String(item.source.examYear ?? "") !== filters.year) return false;
     if (filters.tag !== "all" && !(classification.tags ?? []).includes(filters.tag)) return false;
-    if (!search) return true;
-    return rankSearchCandidates([{
-      id: item.id,
-      fields: {
-        title: item.entryTitle,
-        body: item.questionText,
-        subject: item.subject,
-        unit: [classification.unit, classification.subunit].filter(Boolean).join(" "),
-        source: [item.source.sourceLabel, item.source.examName, item.source.seriesName].filter(Boolean).join(" "),
-        tag: classification.tags ?? [],
-        metadata: classification.concepts ?? [],
-      },
-    }], search).length > 0;
+    return !search || matchedSearchIds?.has(item.id) === true;
   });
 }
