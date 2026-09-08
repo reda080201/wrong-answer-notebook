@@ -158,11 +158,12 @@ describe("review utilities", () => {
 
   it("replaces a review event in place while preserving its original timestamp", () => {
     const first = applyReviewResult(baseEntry, "good", new Date("2026-05-01T00:00:00.000Z"));
+    const eventId = first.review!.history[0]!.id;
     const second = applyReviewResult(
       first,
       "hard",
       new Date("2026-06-01T00:00:00.000Z"),
-      { eventId: first.review?.history[0]?.id, replacementEventId: first.review?.history[0]?.id },
+      { eventId, replacementEventId: eventId },
     );
 
     expect(second.review?.history).toHaveLength(1);
