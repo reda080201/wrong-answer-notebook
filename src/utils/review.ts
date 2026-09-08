@@ -25,16 +25,20 @@ export function applyReviewResult(
   submission?: Pick<ReviewSubmission, "eventId" | "replacementEventId">,
 ): WrongAnswerEntry {
   const cause = entry.mistakeAnalysis?.primaryCause ?? entry.mistakeAnalysis?.causes[0]?.type;
-  const history = (entry.review?.history ?? []).filter((event) => event.id !== submission?.replacementEventId);
-  const previous = history.length > 0
-    ? replayReviewHistory(history)
-    : submission?.replacementEventId
-      ? undefined
-      : entry.review;
-  const next = calculateNextReview(previous, result, reviewedAt, cause);
+  const originalHistory = entry.review?.history ?? [];
+  const replacementIndex = submission?.replacementEventId
+    ? originalHistory.findIndex((event) => event.id === submission.replacementEventId)
+    : -1;
+  const historyBeforeEvent = replacementIndex >= 0 ? originalHistory.slice(0, replacementIndex) : originalHistory;
+  const previous = replacementIndex >= 0
+    ? replayReviewHistory(historyBeforeEvent)
+    : entry.review;
+  const originalEvent = replacementIndex >= 0 ? originalHistory[replacementIndex] : undefined;
+  const effectiveReviewedAt = originalEvent ? new Date(originalEvent.reviewedAt) : reviewedAt;
+  const next = calculateNextReview(previous, result, effectiveReviewedAt, cause);
   const event = {
     id: submission?.eventId ?? uuidv4(),
-    reviewedAt: reviewedAt.toISOString(),
+    reviewedAt: effectiveReviewedAt.toISOString(),
     result,
     nextDueAt: next.nextDueAt,
     intervalDays: next.intervalDays,
@@ -45,12 +49,16 @@ export function applyReviewResult(
     lapseCount: next.lapseCount,
   };
 
-  const review: ReviewState = {
+  const nextHistory = replacementIndex >= 0
+    ? originalHistory.map((item, index) => (index === replacementIndex ? event : item))
+    : [...originalHistory, event];
+  const replayed = originalHistory.length > 0 ? replayReviewHistory(nextHistory) : undefined;
+  const review: ReviewState = replayed ?? {
     dueAt: next.nextDueAt,
     lastReviewedAt: event.reviewedAt,
     intervalDays: next.intervalDays,
     streak: next.streak,
-    history: [...history, event],
+    history: nextHistory,
     stabilityDays: next.stabilityDays,
     memoryDifficulty: next.memoryDifficulty,
     lapseCount: next.lapseCount,

@@ -189,10 +189,12 @@ export default function ReviewPanel({
     setSaveError(null);
     try {
       const eventId = completedEvent?.id ?? crypto.randomUUID();
+      const reviewedAt = completedEvent?.reviewedAt ?? new Date().toISOString();
       await onReview(current, {
         result,
         eventId,
         replacementEventId: completedEvent?.id,
+        reviewedAt,
       });
       if (!mountedRef.current) return;
       const itemKey = reviewItemKey(current);
@@ -200,7 +202,7 @@ export default function ReviewPanel({
       setCompletedKeys(nextKeys);
       const nextEvent = {
         id: eventId,
-        reviewedAt: new Date().toISOString(),
+        reviewedAt,
         result,
         nextDueAt: null,
         intervalDays: 0,

@@ -27,6 +27,63 @@ export function getProtectedPendingImageReferences(
   );
 }
 
+interface FinalizationPlan {
+  retained: PendingDeletion[];
+  actionable: PendingDeletion[];
+  protectedImages: Set<string>;
+}
+
+function buildFinalizationPlan(records: PendingDeletion[], entries: WrongAnswerEntry[], now: number): FinalizationPlan {
+  const retained: PendingDeletion[] = [];
+  const actionable: PendingDeletion[] = [];
+  const liveEntryIds = new Set(entries.map((entry) => entry.id));
+  for (const record of records) {
+    if (liveEntryIds.has(record.entry.id)) continue;
+    if (Date.parse(record.finalizeAfter) > now) retained.push(record);
+    else actionable.push(record);
+  }
+  return {
+    retained,
+    actionable,
+    protectedImages: new Set([
+      ...entries.flatMap(getAllImageFilenames),
+      ...retained.flatMap((record) => record.imageReferences),
+    ]),
+  };
+}
+
+export interface PendingDeletionFinalizationResult {
+  retained: PendingDeletion[];
+  failedImages: Set<string>;
+}
+
+export async function finalizePendingDeletionRecords(
+  records: PendingDeletion[],
+  entries: WrongAnswerEntry[],
+  deleteAsset: (filename: string) => Promise<void>,
+  now = Date.now(),
+): Promise<PendingDeletionFinalizationResult> {
+  const plan = buildFinalizationPlan(records, entries, now);
+  const candidateImages = new Set(
+    plan.actionable.flatMap((record) => record.imageReferences.filter((image) => !plan.protectedImages.has(image))),
+  );
+  const failedImages = new Set<string>();
+  for (const image of candidateImages) {
+    try {
+      await deleteAsset(image);
+    } catch {
+      failedImages.add(image);
+    }
+  }
+  const retryRecords = plan.actionable
+    .map((record) => ({
+      ...record,
+      imageReferences: record.imageReferences.filter((image) => failedImages.has(image)),
+    }))
+    .filter((record) => record.imageReferences.length > 0);
+  return { retained: [...plan.retained, ...retryRecords], failedImages };
+}
+
 /** Coordinates persisted deletion records without deleting a shared image early. */
 export function usePendingDeletionCoordinator({ entries, restore, setSelectedId }: Options) {
   const entriesRef = useRef(entries);
@@ -42,37 +99,16 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
       const backend = getStorageBackend();
       if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;
       const records = await backend.loadPendingDeletions();
-      const now = Date.now();
-      const retained: PendingDeletion[] = [];
-      let failure: string | null = null;
-      for (const record of records) {
-        if (Date.parse(record.finalizeAfter) > now) {
-          retained.push(record);
-          continue;
-        }
-        // A restored entry owns its images again, so its already-expired pending
-        // record is no longer actionable and must not survive another startup.
-        if (entriesRef.current.some((entry) => entry.id === record.entry.id)) continue;
-        const references = new Set(entriesRef.current.flatMap(getAllImageFilenames));
-        // Pending snapshots are still the source of truth while Undo is
-        // available. Keep an image alive when another pending record references
-        // it, even if that other record is also due in this pass.
-        for (const image of getProtectedPendingImageReferences(records, entriesRef.current, record.id)) {
-          references.add(image);
-        }
-        try {
-          for (const image of record.imageReferences) {
-            if (!references.has(image)) await deleteImage(image);
-          }
-        } catch (cause) {
-          retained.push(record);
-          failure = cause instanceof Error ? `삭제 대기 이미지를 정리하지 못했습니다. ${cause.message}` : "삭제 대기 이미지를 정리하지 못했습니다.";
-        }
-      }
+      const result = await finalizePendingDeletionRecords(records, entriesRef.current, deleteImage);
+      let failure = result.failedImages.size > 0 ? "삭제 대기 이미지를 정리하지 못했습니다." : null;
+      const retained = result.retained;
       try {
         await backend.savePendingDeletions(retained);
       } catch (cause) {
         failure = cause instanceof Error ? `삭제 대기 항목을 저장하지 못했습니다. ${cause.message}` : "삭제 대기 항목을 저장하지 못했습니다.";
+        setError(failure);
+        retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30_000);
+        return;
       }
       setPending(retained);
       setError(failure);

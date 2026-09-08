@@ -349,13 +349,15 @@ export function useAppActions({
           }
           return false;
         });
+        const replacementAttempt = existingIndex >= 0 ? existingAttempts[existingIndex] : undefined;
+        const reviewTime = replacementAttempt ? new Date(replacementAttempt.reviewedAt) : new Date();
 
         const nextAttempts: ReviewAttempt[] = existingIndex >= 0
           ? existingAttempts.map((att, idx) => idx === existingIndex
             ? {
                 ...att,
                 eventId: sub?.eventId ?? att.eventId,
-                reviewedAt: new Date().toISOString(),
+                reviewedAt: reviewTime.toISOString(),
                 correct: result !== "again",
                 confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
                 result,
@@ -369,7 +371,7 @@ export function useAppActions({
                 eventId: sub?.eventId,
                 entryId: current.id,
                 questionNumber: normalizedQuestion,
-                reviewedAt: new Date().toISOString(),
+                reviewedAt: reviewTime.toISOString(),
                 correct: result !== "again",
                 confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
                 result,
@@ -382,7 +384,7 @@ export function useAppActions({
             current.questionMeta,
             item.questionNumber,
             result,
-            new Date(),
+            reviewTime,
             questionMeta?.mistakeAnalysis?.primaryCause,
             sub,
           ),
@@ -394,7 +396,6 @@ export function useAppActions({
     const entry = item.entry;
     await patchEntry(entry.id, (current) => {
       const sub = typeof submission === "string" ? undefined : submission;
-      const next = applyReviewResult(current, result, new Date(), sub);
       const existingAttempts = current.reviewAttempts ?? [];
       const existingIndex = existingAttempts.findIndex((att) => {
         if (att.questionNumber !== undefined) return false;
@@ -406,13 +407,16 @@ export function useAppActions({
         }
         return false;
       });
+      const replacementAttempt = existingIndex >= 0 ? existingAttempts[existingIndex] : undefined;
+      const reviewTime = replacementAttempt ? new Date(replacementAttempt.reviewedAt) : new Date();
+      const next = applyReviewResult(current, result, reviewTime, sub);
 
       const nextAttempts: ReviewAttempt[] = existingIndex >= 0
         ? existingAttempts.map((att, idx) => idx === existingIndex
           ? {
               ...att,
               eventId: sub?.eventId ?? att.eventId,
-              reviewedAt: new Date().toISOString(),
+              reviewedAt: reviewTime.toISOString(),
               correct: result !== "again",
               confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
               result,
@@ -425,7 +429,7 @@ export function useAppActions({
               id: uuidv4(),
               eventId: sub?.eventId,
               entryId: current.id,
-              reviewedAt: new Date().toISOString(),
+              reviewedAt: reviewTime.toISOString(),
               correct: result !== "again",
               confidence: result === "again" ? "low" : result === "hard" ? "medium" : "high",
               result,
