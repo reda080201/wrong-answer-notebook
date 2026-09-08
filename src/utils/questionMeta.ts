@@ -147,7 +147,7 @@ export function applyQuestionReviewResult(
   result: ReviewResult,
   reviewedAt = new Date(),
   cause?: MistakeCauseType,
-  submission?: { eventId?: string; replacementEventId?: string },
+  submission?: { eventId?: string; replacementEventId?: string; reviewedAt?: string },
 ): QuestionMeta[] {
   const normalized = normalizeQuestionNumber(questionNumber);
   const items = normalizeQuestionMeta(current);
@@ -155,30 +155,39 @@ export function applyQuestionReviewResult(
     (item) => normalizeQuestionNumber(item.questionNumber) === normalized,
   );
   const currentReview = index >= 0 ? items[index].review : undefined;
-  const history = (currentReview?.history ?? []).filter((event) => event.id !== submission?.replacementEventId);
-  let previous: ReviewState | undefined;
-  history.forEach((event, eventIndex) => {
-    const replayed = calculateNextReview(previous, event.result, new Date(event.reviewedAt), event.causeSnapshot?.[0]);
-    previous = {
-      dueAt: replayed.nextDueAt,
-      lastReviewedAt: event.reviewedAt,
-      intervalDays: replayed.intervalDays,
-      streak: replayed.streak,
-      history: history.slice(0, eventIndex + 1),
-      stabilityDays: replayed.stabilityDays,
-      memoryDifficulty: replayed.memoryDifficulty,
-      lapseCount: replayed.lapseCount,
-      repetitionCount: replayed.repetitionCount,
-      phase: replayed.phase,
-      preLapseStabilityDays: replayed.preLapseStabilityDays,
-      relearningStep: replayed.relearningStep,
-    };
-  });
+  const originalHistory = currentReview?.history ?? [];
+  const replacementIndex = submission?.replacementEventId
+    ? originalHistory.findIndex((event) => event.id === submission.replacementEventId)
+    : -1;
+  const history = replacementIndex >= 0 ? originalHistory.slice(0, replacementIndex) : originalHistory;
+  let previous: ReviewState | undefined = currentReview;
+  if (replacementIndex >= 0) {
+    previous = undefined;
+    history.forEach((event, eventIndex) => {
+      const replayed = calculateNextReview(previous, event.result, new Date(event.reviewedAt), event.causeSnapshot?.[0]);
+      previous = {
+        dueAt: replayed.nextDueAt,
+        lastReviewedAt: event.reviewedAt,
+        intervalDays: replayed.intervalDays,
+        streak: replayed.streak,
+        history: history.slice(0, eventIndex + 1),
+        stabilityDays: replayed.stabilityDays,
+        memoryDifficulty: replayed.memoryDifficulty,
+        lapseCount: replayed.lapseCount,
+        repetitionCount: replayed.repetitionCount,
+        phase: replayed.phase,
+        preLapseStabilityDays: replayed.preLapseStabilityDays,
+        relearningStep: replayed.relearningStep,
+      };
+    });
+  }
   const currentCause = cause ?? items[index ?? -1]?.mistakeAnalysis?.primaryCause;
-  const next = calculateNextReview(previous, result, reviewedAt, currentCause);
+  const originalEvent = replacementIndex >= 0 ? originalHistory[replacementIndex] : undefined;
+  const effectiveReviewedAt = originalEvent ? new Date(originalEvent.reviewedAt) : reviewedAt;
+  const next = calculateNextReview(previous, result, effectiveReviewedAt, currentCause);
   const event: ReviewEvent = {
     id: submission?.eventId ?? uuidv4(),
-    reviewedAt: reviewedAt.toISOString(),
+    reviewedAt: effectiveReviewedAt.toISOString(),
     result,
     nextDueAt: next.nextDueAt,
     intervalDays: next.intervalDays,
@@ -187,12 +196,36 @@ export function applyQuestionReviewResult(
     memoryDifficulty: next.memoryDifficulty,
     lapseCount: next.lapseCount,
   };
-  const review: ReviewState = {
+  const nextHistory = replacementIndex >= 0
+    ? originalHistory.map((item, itemIndex) => (itemIndex === replacementIndex ? event : item))
+    : [...originalHistory, event];
+  const replayed: ReviewState | undefined = originalHistory.length === 0 ? undefined : (() => {
+    let state: ReviewState | undefined;
+    nextHistory.forEach((historyEvent, historyIndex) => {
+      const replayedNext = calculateNextReview(state, historyEvent.result, new Date(historyEvent.reviewedAt), historyEvent.causeSnapshot?.[0]);
+      state = {
+        dueAt: replayedNext.nextDueAt,
+        lastReviewedAt: historyEvent.reviewedAt,
+        intervalDays: replayedNext.intervalDays,
+        streak: replayedNext.streak,
+        history: nextHistory.slice(0, historyIndex + 1),
+        stabilityDays: replayedNext.stabilityDays,
+        memoryDifficulty: replayedNext.memoryDifficulty,
+        lapseCount: replayedNext.lapseCount,
+        repetitionCount: replayedNext.repetitionCount,
+        phase: replayedNext.phase,
+        preLapseStabilityDays: replayedNext.preLapseStabilityDays,
+        relearningStep: replayedNext.relearningStep,
+      };
+    });
+    return state;
+  })();
+  const review: ReviewState = replayed ?? {
     dueAt: next.nextDueAt,
     lastReviewedAt: event.reviewedAt,
     intervalDays: next.intervalDays,
     streak: next.streak,
-    history: [...history, event],
+    history: nextHistory,
     stabilityDays: next.stabilityDays,
     memoryDifficulty: next.memoryDifficulty,
     lapseCount: next.lapseCount,
@@ -206,7 +239,7 @@ export function applyQuestionReviewResult(
     questionNumber: normalized,
     needsReview: false,
     review,
-    updatedAt: reviewedAt.toISOString(),
+    updatedAt: effectiveReviewedAt.toISOString(),
   };
   if (index >= 0) {
     return items.map((item, itemIndex) => (itemIndex === index ? nextMeta : item));

@@ -61,8 +61,10 @@ export function useNavigationHistory({ snapshot, restore }: Options) {
       window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
         for (const [key, top] of Object.entries(pendingScroll.current)) {
           const value = scrollContainers.current.get(key);
-          if (value) value.element.scrollTop = top;
-          delete pendingScroll.current[key];
+          if (value) {
+            value.element.scrollTop = top;
+            delete pendingScroll.current[key];
+          }
         }
       }));
     };

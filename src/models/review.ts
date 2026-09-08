@@ -44,6 +44,8 @@ export interface ReviewSubmission {
   /** Stable session event id. Reusing it makes an explicit re-rating a replacement. */
   eventId: string;
   replacementEventId?: string;
+  /** Correction keeps the original event timestamp for scheduler replay. */
+  reviewedAt?: string;
 }
 
 export type ReviewPhase = "learning" | "relearning" | "long_term" | "archived";

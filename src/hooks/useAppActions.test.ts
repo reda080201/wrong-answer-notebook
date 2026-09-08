@@ -740,7 +740,8 @@ describe("useAppActions", () => {
       expect(updated.reviewAttempts?.[0]).toEqual(expect.objectContaining({
         id: "att-1",
         eventId: "event-1",
-          result: "good",
+        reviewedAt: "2026-09-01T00:00:00.000Z",
+        result: "good",
         confidence: "high",
         correct: true,
       }));
@@ -791,6 +792,7 @@ describe("useAppActions", () => {
         id: "att-sq-1",
         eventId: "event-sheet-1",
         questionNumber: "3",
+        reviewedAt: "2026-09-01T00:00:00.000Z",
         result: "good",
         confidence: "high",
         correct: true,

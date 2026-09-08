@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PendingDeletion, WrongAnswerEntry } from "../types";
-import { getProtectedPendingImageReferences } from "./usePendingDeletionCoordinator";
+import { finalizePendingDeletionRecords, getProtectedPendingImageReferences } from "./usePendingDeletionCoordinator";
 
 const entry = (id: string): WrongAnswerEntry => ({
   id,
@@ -49,5 +49,68 @@ describe("pending deletion asset protection", () => {
     expect(
       getProtectedPendingImageReferences(records, [entry("entry-a")], "other"),
     ).toEqual(new Set());
+  });
+
+  it("deletes a shared asset once when all records expire in the same pass", async () => {
+    const deleteAsset = vi.fn().mockResolvedValue(undefined);
+    const result = await finalizePendingDeletionRecords(
+      [
+        pending("pending-a", "entry-a", ["shared.png", "a.png"]),
+        pending("pending-b", "entry-b", ["shared.png", "b.png"]),
+      ],
+      [],
+      deleteAsset,
+      Date.parse("2026-01-01T00:01:00.000Z"),
+    );
+
+    expect(deleteAsset).toHaveBeenCalledTimes(3);
+    expect(deleteAsset).toHaveBeenCalledWith("shared.png");
+    expect(result.retained).toEqual([]);
+  });
+
+  it("protects an unexpired record and live entry from cleanup", async () => {
+    const deleteAsset = vi.fn().mockResolvedValue(undefined);
+    const future = { ...pending("pending-b", "entry-b", ["shared.png"]), finalizeAfter: "2026-01-02T00:00:00.000Z" };
+    const result = await finalizePendingDeletionRecords(
+      [pending("pending-a", "entry-a", ["shared.png", "a.png"]), future],
+      [],
+      deleteAsset,
+      Date.parse("2026-01-01T00:01:00.000Z"),
+    );
+
+    expect(deleteAsset).toHaveBeenCalledWith("a.png");
+    expect(deleteAsset).not.toHaveBeenCalledWith("shared.png");
+    expect(result.retained).toEqual([future]);
+
+    deleteAsset.mockClear();
+    const liveResult = await finalizePendingDeletionRecords(
+      [pending("pending-a", "entry-a", ["shared.png"])],
+      [entry("entry-a")],
+      deleteAsset,
+      Date.parse("2026-01-01T00:01:00.000Z"),
+    );
+    expect(deleteAsset).not.toHaveBeenCalled();
+    expect(liveResult.retained).toEqual([]);
+  });
+
+  it("retains only failed assets for a retry pass", async () => {
+    const deleteAsset = vi.fn(async (image: string) => {
+      if (image === "shared.png") throw new Error("locked");
+    });
+    const result = await finalizePendingDeletionRecords(
+      [
+        pending("pending-a", "entry-a", ["shared.png", "a.png"]),
+        pending("pending-b", "entry-b", ["shared.png", "b.png"]),
+      ],
+      [],
+      deleteAsset,
+      Date.parse("2026-01-01T00:01:00.000Z"),
+    );
+
+    expect(result.failedImages).toEqual(new Set(["shared.png"]));
+    expect(result.retained).toEqual([
+      expect.objectContaining({ id: "pending-a", imageReferences: ["shared.png"] }),
+      expect.objectContaining({ id: "pending-b", imageReferences: ["shared.png"] }),
+    ]);
   });
 });

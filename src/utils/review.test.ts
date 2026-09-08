@@ -156,6 +156,21 @@ describe("review utilities", () => {
     expect(next.review?.relearningStep).toBe(1);
   });
 
+  it("replaces a review event in place while preserving its original timestamp", () => {
+    const first = applyReviewResult(baseEntry, "good", new Date("2026-05-01T00:00:00.000Z"));
+    const second = applyReviewResult(
+      first,
+      "hard",
+      new Date("2026-06-01T00:00:00.000Z"),
+      { eventId: first.review?.history[0]?.id, replacementEventId: first.review?.history[0]?.id },
+    );
+
+    expect(second.review?.history).toHaveLength(1);
+    expect(second.review?.history[0]?.id).toBe(first.review?.history[0]?.id);
+    expect(second.review?.history[0]?.result).toBe("hard");
+    expect(second.review?.history[0]?.reviewedAt).toBe("2026-05-01T00:00:00.000Z");
+  });
+
   it("filters due and difficult candidates", () => {
     const now = new Date("2026-05-29T12:00:00.000Z");
     const future = {
