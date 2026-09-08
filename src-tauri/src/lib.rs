@@ -417,6 +417,36 @@ fn save_pending_deletions(
     )
 }
 
+#[tauri::command]
+fn load_knowledge_graph(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
+    let path = app_dir(&app)?.join("knowledge-graph.json");
+    if !path.exists() {
+        return Ok(serde_json::json!({ "entities": [], "relations": [], "questionLinks": [] }));
+    }
+    let raw = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let value: serde_json::Value = serde_json::from_str(&raw).map_err(|error| error.to_string())?;
+    validate_knowledge_graph_value(&value)?;
+    Ok(value)
+}
+
+#[tauri::command]
+fn save_knowledge_graph(app: tauri::AppHandle, graph: serde_json::Value) -> Result<(), String> {
+    validate_knowledge_graph_value(&graph)?;
+    write_json_atomic(&app_dir(&app)?.join("knowledge-graph.json"), &graph)
+}
+
+fn validate_knowledge_graph_value(value: &serde_json::Value) -> Result<(), String> {
+    let object = value
+        .as_object()
+        .ok_or_else(|| "지식 그래프 저장 형식이 올바르지 않습니다. 객체여야 합니다.".to_string())?;
+    for key in ["entities", "relations", "questionLinks"] {
+        if !object.get(key).is_some_and(serde_json::Value::is_array) {
+            return Err(format!("지식 그래프의 {key}는 배열이어야 합니다."));
+        }
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct LibraryFolder {
@@ -1149,6 +1179,8 @@ pub fn run() {
             save_review_sessions,
             load_pending_deletions,
             save_pending_deletions,
+            load_knowledge_graph,
+            save_knowledge_graph,
             load_library_folders,
             save_library_folders,
             load_import_workspace_draft,

@@ -5,5 +5,6 @@ export * from "./models/review";
 export * from "./models/exam";
 export * from "./models/integrations";
 export * from "./models/settings";
+export * from "./models/knowledgeGraph";
 export * from "./models/library";
 export * from "./features/gpt-solution-roundtrip/model";

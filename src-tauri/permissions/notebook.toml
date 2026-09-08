@@ -21,6 +21,8 @@ commands.allow = [
   "save_review_sessions",
   "load_pending_deletions",
   "save_pending_deletions",
+  "load_knowledge_graph",
+  "save_knowledge_graph",
   "load_import_workspace_draft",
   "save_import_workspace_draft",
   "clear_import_workspace_draft",

@@ -54,6 +54,7 @@ import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 import { NotificationProvider } from "./shared/ui/NotificationProvider";
+import { useKnowledgeGraph } from "./hooks/useKnowledgeGraph";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -65,6 +66,7 @@ export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newB
 
 function AppContent() {
   const storageBackendKind = getStorageBackendKind();
+  const knowledgeGraph = useKnowledgeGraph();
   const { confirm, prompt } = useAppDialog();
   const {
     entries,
@@ -649,6 +651,7 @@ function AppContent() {
                   ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
                   : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
               }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
+              knowledgeGraph={knowledgeGraph}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -668,6 +671,13 @@ function AppContent() {
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
+              knowledgeGraph={knowledgeGraph}
+              onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
+                const itemEntry = entries.find((entry) => entry.id === item.entryId);
+                return itemEntry?.entryKind === "problem_sheet"
+                  ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
+                  : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
+              }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,

@@ -31,6 +31,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "library-folders.json",
     "import-workspace-draft.json",
     "review-sessions.json",
+    "knowledge-graph.json",
     "data-schema.json",
 ];
 
@@ -315,6 +316,10 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         | "library-folders.json"
         | "review-sessions.json" => crate::validate_persistent_store_value(name, &value)
             .map_err(|error| format!("백업의 {name} 형식이 올바르지 않습니다: {error}")),
+        "knowledge-graph.json" if !value.is_object() => {
+            Err("백업의 knowledge-graph.json 형식이 올바르지 않습니다. 객체여야 합니다.".into())
+        }
+        "knowledge-graph.json" => Ok(()),
         "import-workspace-draft.json" if !value.is_object() => {
             Err("백업의 가져오기 작업실 초안은 객체여야 합니다.".into())
         }
@@ -755,5 +760,16 @@ mod tests {
     fn review_sessions_are_in_the_persistent_backup_set() {
         assert!(PERSISTENT_DATA_FILES.contains(&"review-sessions.json"));
         assert!(!PERSISTENT_DATA_FILES.contains(&"pending-deletions.json"));
+    }
+
+    #[test]
+    fn knowledge_graph_is_an_object_store_in_the_persistent_backup_set() {
+        assert!(PERSISTENT_DATA_FILES.contains(&"knowledge-graph.json"));
+        assert!(validate_optional_store_json(
+            "knowledge-graph.json",
+            br#"{"entities":[],"relations":[],"questionLinks":[]}"#
+        )
+        .is_ok());
+        assert!(validate_optional_store_json("knowledge-graph.json", br#"[]"#).is_err());
     }
 }

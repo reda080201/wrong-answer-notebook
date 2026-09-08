@@ -1,6 +1,6 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
+import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, KnowledgeGraphStore, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
 import type { ImportWorkspace } from "../../features/import-workspace/model/importWorkspace";
 import { isGptSolutionRoundtripDraftArray, type GptSolutionRoundtripDraft } from "../../features/gpt-solution-roundtrip/model";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
@@ -23,6 +23,7 @@ import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
 import { listBrowserImages, replaceBrowserImages } from "./browserImageStore";
 import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../../features/review/storage/reviewSessionStorage";
+import { EMPTY_KNOWLEDGE_GRAPH, normalizeKnowledgeGraph } from "../../models/knowledgeGraph";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -50,6 +51,7 @@ export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
   gptSolutionDrafts: GptSolutionRoundtripDraft[];
   importWorkspaceDraft: ImportWorkspace | null;
   reviewSessions?: ReviewSession[];
+  knowledgeGraph?: KnowledgeGraphStore;
 }
 
 export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
@@ -90,6 +92,7 @@ async function readBrowserBackupSnapshot(
     ),
     importWorkspaceDraft,
     reviewSessions: readBrowserValue(REVIEW_SESSIONS_STORAGE_KEY, isReviewSessionArray, "복습 세션", []).map(normalizeReviewSession),
+    knowledgeGraph: normalizeKnowledgeGraph(readBrowserValue("wrong-answer-knowledge-graph", (value): value is KnowledgeGraphStore => Boolean(value && typeof value === "object" && !Array.isArray(value)), "지식 그래프", EMPTY_KNOWLEDGE_GRAPH)),
   };
 }
 
@@ -232,6 +235,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
     managedKeys.add(GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY);
     managedKeys.add(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY);
     managedKeys.add(REVIEW_SESSIONS_STORAGE_KEY);
+    managedKeys.add("wrong-answer-knowledge-graph");
   }
   const previous = new Map([...managedKeys].map((key) => [key, localStorage.getItem(key)]));
 
@@ -252,6 +256,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
         writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
       }
       writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, (v2Payload.reviewSessions ?? []).map(normalizeReviewSession));
+      writeStorageJson(localStorage, "wrong-answer-knowledge-graph", normalizeKnowledgeGraph(v2Payload.knowledgeGraph ?? EMPTY_KNOWLEDGE_GRAPH));
     }
     clearImageUrlCache();
   } catch (error) {

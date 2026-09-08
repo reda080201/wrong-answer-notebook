@@ -37,6 +37,7 @@ const STORE_NAMES: &[&str] = &[
     "gpt-solution-drafts",
     "review-sessions",
     "pending-deletions",
+    "knowledge-graph",
     "import-workspace-draft",
 ];
 const IMPORT_ASSET_SESSION_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
@@ -67,6 +68,7 @@ fn store_path(root: &Path, name: &str) -> BridgeResult<PathBuf> {
         "gpt-solution-drafts" => "gpt-solution-drafts.json",
         "review-sessions" => "review-sessions.json",
         "pending-deletions" => "pending-deletions.json",
+        "knowledge-graph" => "knowledge-graph.json",
         "import-workspace-draft" => "import-workspace-draft.json",
         "entries" => "entries.json",
         _ => return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into())),
@@ -109,6 +111,10 @@ fn validate_store(name: &str, value: &Value) -> Result<(), String> {
         "gpt-solution-drafts" => validate_persistent_store_value("gpt-solution-drafts.json", value),
         "review-sessions" => validate_persistent_store_value("review-sessions.json", value),
         "pending-deletions" => validate_persistent_store_value("pending-deletions.json", value),
+        "knowledge-graph" => value
+            .is_object()
+            .then_some(())
+            .ok_or_else(|| "지식 그래프 저장 형식이 올바르지 않습니다. 객체여야 합니다.".into()),
         "import-workspace-draft" => value
             .is_null()
             .then_some(())

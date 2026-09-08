@@ -19,3 +19,37 @@
 @import "./styles/text-review-foundation.css";
 @import "./styles/review-workspace.css";
 @import "./styles/workflow-polish.css";
+/* Knowledge graph workspace owns the relationship view inside Learning Hub. */
+.knowledge-view-switcher { display: flex; gap: 4px; padding: 8px 16px 0; }
+.knowledge-view-switcher button { min-height: 36px; padding: 0 12px; border: 1px solid var(--border-subtle, #d9dde5); background: var(--surface, #fff); color: var(--text-muted, #5c6470); border-radius: 6px; }
+.knowledge-view-switcher button.is-active { border-color: var(--accent, #356ae6); color: var(--accent, #356ae6); font-weight: 650; }
+.knowledge-graph-workspace { min-height: calc(100dvh - 120px); padding: 20px 24px 32px; background: var(--canvas, #f7f8fa); }
+.knowledge-graph-toolbar, .knowledge-graph-detail__heading, .knowledge-graph-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.knowledge-graph-toolbar strong { display: block; font-size: 20px; }
+.knowledge-graph-toolbar span, .knowledge-graph-detail__heading p, .knowledge-graph-muted { color: var(--text-muted, #69717e); }
+.knowledge-graph-layout { display: grid; grid-template-columns: minmax(210px, 260px) minmax(0, 1fr); gap: 16px; margin-top: 18px; }
+.knowledge-graph-outline, .knowledge-graph-detail { background: var(--surface, #fff); border: 1px solid var(--border-subtle, #e1e5eb); border-radius: 8px; }
+.knowledge-graph-outline { padding: 14px; }
+.knowledge-graph-outline label { display: block; font-size: 12px; font-weight: 650; margin-bottom: 6px; }
+.knowledge-graph-outline input { width: 100%; min-height: 38px; box-sizing: border-box; border: 1px solid var(--border-subtle, #d4d9e1); border-radius: 6px; padding: 0 10px; background: var(--canvas, #fafbfc); }
+.knowledge-graph-outline [role="listbox"] { display: grid; gap: 4px; margin-top: 12px; }
+.knowledge-graph-outline [role="option"] { display: flex; align-items: center; justify-content: space-between; min-height: 42px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; text-align: left; }
+.knowledge-graph-outline [role="option"].is-selected { background: color-mix(in srgb, var(--accent, #356ae6) 10%, transparent); color: var(--accent, #356ae6); }
+.knowledge-graph-outline small { color: var(--text-muted, #69717e); }
+.knowledge-graph-detail { padding: 22px; min-width: 0; }
+.knowledge-graph-detail section { margin-top: 28px; border-top: 1px solid var(--border-subtle, #e5e7eb); padding-top: 18px; }
+.knowledge-graph-detail h2 { margin: 4px 0; font-size: 26px; }
+.knowledge-graph-detail h3 { margin: 0 0 10px; font-size: 15px; }
+.knowledge-graph-provenance { color: var(--text-muted, #69717e); font-size: 12px; }
+.knowledge-graph-relations, .knowledge-graph-questions, .knowledge-graph-question-picker { display: grid; gap: 6px; }
+.knowledge-graph-relation { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px; }
+.knowledge-graph-relation > button:first-child, .knowledge-graph-questions button, .knowledge-graph-question-picker button { border: 1px solid var(--border-subtle, #e1e5eb); border-radius: 6px; background: var(--canvas, #fafbfc); min-height: 38px; padding: 7px 10px; text-align: left; }
+.knowledge-graph-relation span { font-size: 12px; color: var(--text-muted, #69717e); }
+.knowledge-graph-link-controls { display: flex; gap: 8px; margin-top: 10px; }
+.knowledge-graph-link-controls select { min-height: 36px; border: 1px solid var(--border-subtle, #d4d9e1); border-radius: 6px; background: var(--surface, #fff); padding: 0 8px; }
+.knowledge-graph-section-heading h3 span { font-weight: 500; color: var(--text-muted, #69717e); }
+.knowledge-graph-questions button { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; }
+.knowledge-graph-question-picker { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.knowledge-graph-question-picker button { display: flex; align-items: center; gap: 6px; }
+.knowledge-graph-empty-detail { min-height: 260px; display: grid; place-content: center; text-align: center; color: var(--text-muted, #69717e); }
+@media (max-width: 768px) { .knowledge-graph-layout { grid-template-columns: 1fr; } .knowledge-graph-outline { max-height: 280px; overflow: auto; } .knowledge-graph-workspace { padding: 16px; } }
