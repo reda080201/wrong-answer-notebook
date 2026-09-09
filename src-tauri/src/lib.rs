@@ -435,7 +435,7 @@ fn save_knowledge_graph(app: tauri::AppHandle, graph: serde_json::Value) -> Resu
     write_json_atomic(&app_dir(&app)?.join("knowledge-graph.json"), &graph)
 }
 
-fn validate_knowledge_graph_value(value: &serde_json::Value) -> Result<(), String> {
+pub(crate) fn validate_knowledge_graph_value(value: &serde_json::Value) -> Result<(), String> {
     let object = value
         .as_object()
         .ok_or_else(|| "지식 그래프 저장 형식이 올바르지 않습니다. 객체여야 합니다.".to_string())?;
@@ -445,15 +445,58 @@ fn validate_knowledge_graph_value(value: &serde_json::Value) -> Result<(), Strin
         }
     }
     let valid_entity = ["concept", "person", "theory", "strategy", "topic", "work"];
-    let valid_relation = ["related", "requires", "contrasts_with", "agrees_with", "rejects", "extends", "example_of", "tests", "associated_with"];
+    let valid_relation = [
+        "related",
+        "requires",
+        "contrasts_with",
+        "agrees_with",
+        "rejects",
+        "extends",
+        "example_of",
+        "tests",
+        "associated_with",
+    ];
     let valid_provenance = ["manual", "import", "ai_suggestion"];
-    for entity in object["entities"].as_array().unwrap_or(&vec![]) {
-        let row = entity.as_object().ok_or_else(|| "지식 그래프 entity 형식이 올바르지 않습니다.".to_string())?;
-        if !row.get("id").and_then(serde_json::Value::as_str).is_some_and(|v| !v.trim().is_empty()) || !row.get("name").and_then(serde_json::Value::as_str).is_some_and(|v| !v.trim().is_empty()) || !row.get("type").and_then(serde_json::Value::as_str).is_some_and(|v| valid_entity.contains(&v)) || !row.get("provenance").and_then(serde_json::Value::as_str).is_some_and(|v| valid_provenance.contains(&v)) { return Err("지식 그래프 entity 값이 올바르지 않습니다.".to_string()); }
+    let empty_rows = Vec::new();
+    for entity in object["entities"].as_array().unwrap_or(&empty_rows) {
+        let row = entity
+            .as_object()
+            .ok_or_else(|| "지식 그래프 entity 형식이 올바르지 않습니다.".to_string())?;
+        if !row
+            .get("id")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|v| !v.trim().is_empty())
+            || !row
+                .get("name")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|v| !v.trim().is_empty())
+            || !row
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|v| valid_entity.contains(&v))
+            || !row
+                .get("provenance")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|v| valid_provenance.contains(&v))
+        {
+            return Err("지식 그래프 entity 값이 올바르지 않습니다.".to_string());
+        }
     }
-    for relation in object["relations"].as_array().unwrap_or(&vec![]) {
-        let row = relation.as_object().ok_or_else(|| "지식 그래프 relation 형식이 올바르지 않습니다.".to_string())?;
-        if !row.get("type").and_then(serde_json::Value::as_str).is_some_and(|v| valid_relation.contains(&v)) || !row.get("provenance").and_then(serde_json::Value::as_str).is_some_and(|v| valid_provenance.contains(&v)) { return Err("지식 그래프 relation 값이 올바르지 않습니다.".to_string()); }
+    for relation in object["relations"].as_array().unwrap_or(&empty_rows) {
+        let row = relation
+            .as_object()
+            .ok_or_else(|| "지식 그래프 relation 형식이 올바르지 않습니다.".to_string())?;
+        if !row
+            .get("type")
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|v| valid_relation.contains(&v))
+            || !row
+                .get("provenance")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|v| valid_provenance.contains(&v))
+        {
+            return Err("지식 그래프 relation 값이 올바르지 않습니다.".to_string());
+        }
     }
     Ok(())
 }

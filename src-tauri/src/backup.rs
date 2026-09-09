@@ -316,10 +316,9 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
         | "library-folders.json"
         | "review-sessions.json" => crate::validate_persistent_store_value(name, &value)
             .map_err(|error| format!("백업의 {name} 형식이 올바르지 않습니다: {error}")),
-        "knowledge-graph.json" if !value.is_object() => {
-            Err("백업의 knowledge-graph.json 형식이 올바르지 않습니다. 객체여야 합니다.".into())
-        }
-        "knowledge-graph.json" => Ok(()),
+        "knowledge-graph.json" => crate::validate_knowledge_graph_value(&value).map_err(|error| {
+            format!("백업의 knowledge-graph.json 형식이 올바르지 않습니다: {error}")
+        }),
         "import-workspace-draft.json" if !value.is_object() => {
             Err("백업의 가져오기 작업실 초안은 객체여야 합니다.".into())
         }

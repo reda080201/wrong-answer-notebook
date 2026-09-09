@@ -91,6 +91,7 @@ export default function AppToolbar({
             type="button"
             className={listFilter === value ? "active" : ""}
             onClick={() => setListFilter(value)}
+            aria-pressed={listFilter === value}
           >
             {value === "due" ? `${label} ${todayReviewCount}` : label}
           </button>

@@ -39,7 +39,7 @@ interface NotebookKnowledgeWorkspaceProps {
     saveQuestionLink(input: { id: string; entityId: string; entryId: string; questionNumber: string; relation: "tests"; provenance: "manual" }): Promise<void>;
     removeRelation(id: string): Promise<void>;
     removeQuestionLink(id: string): Promise<void>;
-    updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "description" | "aliases">>): Promise<void>;
+    updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "subject" | "description" | "aliases">>): Promise<void>;
     removeEntity(id: string): Promise<void>;
   };
   subjectFilter?: string | null;
@@ -87,7 +87,7 @@ export default function NotebookKnowledgeWorkspace({
 
   return (
     <>
-      {knowledgeGraph && <div className="knowledge-view-switcher" role="group" aria-label="학습 허브 보기"><button type="button" className={learningView === "blocks" ? "is-active" : ""} onClick={() => setLearningView("blocks")}>학습 블록</button><button type="button" className={learningView === "graph" ? "is-active" : ""} onClick={() => setLearningView("graph")}>개념 관계</button></div>}
+      {knowledgeGraph && <div className="knowledge-view-switcher" role="group" aria-label="학습 허브 보기"><button type="button" aria-pressed={learningView === "blocks"} className={learningView === "blocks" ? "is-active" : ""} onClick={() => setLearningView("blocks")}>학습 블록</button><button type="button" aria-pressed={learningView === "graph"} className={learningView === "graph" ? "is-active" : ""} onClick={() => setLearningView("graph")}>개념 관계</button></div>}
       {learningView === "graph" && knowledgeGraph ? <KnowledgeGraphView
         graph={projectedGraph ?? knowledgeGraph.graph}
         onEnsureEntity={knowledgeGraph.ensureEntity}
