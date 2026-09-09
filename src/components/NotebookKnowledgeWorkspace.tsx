@@ -104,6 +104,7 @@ export default function NotebookKnowledgeWorkspace({
           if (entry) openEntry(entry, item.questionNumber);
         }}
         onStartReview={onStartReview ?? (() => undefined)}
+        subjectFilter={subjectFilter}
       /> : <LearningHubView
       entries={subjectFilter ? entries.filter((entry) => entry.subject === subjectFilter) : entries}
       highlightedBlock={learningHubTarget}

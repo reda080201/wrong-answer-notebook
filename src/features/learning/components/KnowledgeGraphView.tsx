@@ -18,6 +18,7 @@ interface KnowledgeGraphViewProps {
   onRemoveEntity(id: string): Promise<void>;
   onOpenQuestion(item: QuestionBankItem): void;
   onStartReview(items: QuestionBankItem[]): void;
+  subjectFilter?: string | null;
 }
 
 const relationLabels: Array<[KnowledgeRelationType, string]> = [
@@ -38,6 +39,7 @@ export default function KnowledgeGraphView({
   onRemoveQuestionLink, onUpdateEntity, onRemoveEntity,
   onOpenQuestion,
   onStartReview,
+  subjectFilter,
 }: KnowledgeGraphViewProps) {
   const { prompt } = useAppDialog();
   const [query, setQuery] = useState("");
@@ -45,12 +47,13 @@ export default function KnowledgeGraphView({
   const [relationType, setRelationType] = useState<KnowledgeRelationType>("related");
   const [entityType, setEntityType] = useState<KnowledgeEntityType>("concept");
   const [pickerQuery, setPickerQuery] = useState("");
-  const selected = graph.entities.find((entity) => entity.id === selectedId) ?? graph.entities[0];
+  const visibleGraphEntities = useMemo(() => graph.entities.filter((entity) => !subjectFilter || entity.subject === subjectFilter), [graph.entities, subjectFilter]);
+  const selected = visibleGraphEntities.find((entity) => entity.id === selectedId) ?? visibleGraphEntities[0];
   const entities = useMemo(() => {
     const key = normalizeKnowledgeLabel(query);
-    if (!key) return graph.entities;
-    return graph.entities.filter((entity) => normalizeKnowledgeLabel([entity.name, ...entity.aliases].join(" ")).includes(key));
-  }, [graph.entities, query]);
+    if (!key) return visibleGraphEntities;
+    return visibleGraphEntities.filter((entity) => normalizeKnowledgeLabel([entity.name, ...entity.aliases].join(" ")).includes(key));
+  }, [visibleGraphEntities, query]);
   const relatedEntities = selected
     ? graph.relations.flatMap((relation) => {
         const otherId = relation.fromEntityId === selected.id ? relation.toEntityId : relation.toEntityId === selected.id ? relation.fromEntityId : null;
@@ -65,7 +68,7 @@ export default function KnowledgeGraphView({
     const name = await prompt({ title: "개념 추가", message: "새 개념 이름을 입력하세요." });
     if (!name?.trim()) return;
     const id = `knowledge:${crypto.randomUUID()}`;
-    const created = await onCreateEntity({ id, type: entityType, name: name.trim(), aliases: [], provenance: "manual" });
+    const created = await onCreateEntity({ id, type: entityType, name: name.trim(), aliases: [], subject: subjectFilter ?? undefined, provenance: "manual" });
     setSelectedId(created.id);
   };
 
@@ -106,7 +109,7 @@ export default function KnowledgeGraphView({
         </aside>
         <main className="knowledge-graph-detail">
           {selected ? <>
-            <div className="knowledge-graph-detail__heading"><div><span className="eyebrow">{selected.type}</span><h2>{selected.name}</h2><p>{selected.description || "아직 설명이 없습니다."}</p></div><span className="knowledge-graph-provenance">{selected.provenance === "import" ? "기존 자료에서 찾음" : "수동 연결"}</span><button type="button" className="ui-button ui-button--secondary" onClick={() => void onRemoveEntity(selected.id)}>삭제</button></div>
+            <div className="knowledge-graph-detail__heading"><div><span className="eyebrow">{selected.type}</span><h2>{selected.name}</h2><p>{selected.description || "아직 설명이 없습니다."}</p></div><span className="knowledge-graph-provenance">{selected.provenance === "import" ? "기존 자료에서 찾음" : "수동 연결"}</span><button type="button" className="ui-button ui-button--secondary" onClick={() => void onRemoveEntity(selected.id)}>삭제</button></div><label>과목 <input value={selected.subject ?? ""} placeholder="전체 과목" onChange={(event) => void onUpdateEntity(selected.id, { subject: event.target.value.trim() || undefined })} /></label>
             <section><h3>별칭</h3><div className="knowledge-graph-question-picker">{selected.aliases.map((alias) => <button type="button" key={alias} onClick={() => void onUpdateEntity(selected.id, { aliases: selected.aliases.filter((item) => item !== alias) })}>{alias} <Unlink size={14} /></button>)}<button type="button" onClick={() => void prompt({ title: "별칭 추가", message: "별칭을 입력하세요." }).then((alias) => { const next = alias?.trim(); if (!next || selected.aliases.some((item) => normalizeKnowledgeLabel(item) === normalizeKnowledgeLabel(next))) return; return onUpdateEntity(selected.id, { aliases: [...selected.aliases, next] }); })}>별칭 추가</button></div></section>
             <section><h3>관련 개념</h3><div className="knowledge-graph-relations">{relatedEntities.length ? relatedEntities.map(({ relation, entity }) => <div className="knowledge-graph-relation" key={relation.id}><button type="button" onClick={() => setSelectedId(entity.id)}>{entity.name}</button><span>{relationLabels.find(([type]) => type === relation.type)?.[1] ?? relation.type}</span><button type="button" className="ui-icon-button" aria-label={`${entity.name} 연결 해제`} onClick={() => void onRemoveRelation(relation.id)}><Unlink size={15} /></button></div>) : <p className="knowledge-graph-muted">연결된 개념이 없습니다.</p>}</div>
               <div className="knowledge-graph-link-controls"><select value={relationType} onChange={(event) => setRelationType(event.target.value as KnowledgeRelationType)} aria-label="관계 유형">{relationLabels.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><select aria-label="연결할 개념" defaultValue="" onChange={(event) => { const target = graph.entities.find((entity) => entity.id === event.target.value); if (target) void saveRelationWithEntities(target); }}><option value="">개념 연결</option>{graph.entities.filter((entity) => entity.id !== selected.id).map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}</select></div>

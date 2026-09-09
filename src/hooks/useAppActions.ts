@@ -110,6 +110,7 @@ interface UseAppActionsOptions {
   refreshGeneratedExams?: () => Promise<boolean>;
   refreshLibraryFolders?: () => Promise<boolean>;
   refreshGptSolutionDrafts?: () => Promise<boolean>;
+  refreshKnowledgeGraph?: () => Promise<void>;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -144,6 +145,7 @@ export function useAppActions({
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
+  refreshKnowledgeGraph,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -688,8 +690,9 @@ export function useAppActions({
           refreshGeneratedExams?.(),
           refreshLibraryFolders?.(),
           refreshGptSolutionDrafts?.(),
+          refreshKnowledgeGraph?.().then(() => true),
         ]);
-        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안"];
+        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프"];
         const failedReloads = reloads
           .map((success, index) => success !== true ? reloadNames[index] : null)
           .filter((name): name is string => name !== null);

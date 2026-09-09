@@ -345,6 +345,7 @@ function AppContent() {
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,
+    refreshKnowledgeGraph: knowledgeGraph.refresh,
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
