@@ -23,7 +23,7 @@ import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
 import { listBrowserImages, replaceBrowserImages } from "./browserImageStore";
 import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../../features/review/storage/reviewSessionStorage";
-import { EMPTY_KNOWLEDGE_GRAPH, normalizeKnowledgeGraph } from "../../models/knowledgeGraph";
+import { EMPTY_KNOWLEDGE_GRAPH, isKnowledgeGraphStore, normalizeKnowledgeGraph } from "../../models/knowledgeGraph";
 
 const IMPORT_WORKSPACE_DRAFT_STORAGE_KEY = "wrong-answer-import-workspace-draft";
 
@@ -92,7 +92,7 @@ async function readBrowserBackupSnapshot(
     ),
     importWorkspaceDraft,
     reviewSessions: readBrowserValue(REVIEW_SESSIONS_STORAGE_KEY, isReviewSessionArray, "복습 세션", []).map(normalizeReviewSession),
-    knowledgeGraph: normalizeKnowledgeGraph(readBrowserValue("wrong-answer-knowledge-graph", (value): value is KnowledgeGraphStore => Boolean(value && typeof value === "object" && !Array.isArray(value)), "지식 그래프", EMPTY_KNOWLEDGE_GRAPH)),
+    knowledgeGraph: normalizeKnowledgeGraph(readBrowserValue("wrong-answer-knowledge-graph", isKnowledgeGraphStore, "지식 그래프", EMPTY_KNOWLEDGE_GRAPH)),
   };
 }
 
@@ -256,6 +256,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
         writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
       }
       writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, (v2Payload.reviewSessions ?? []).map(normalizeReviewSession));
+      if (v2Payload.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
       writeStorageJson(localStorage, "wrong-answer-knowledge-graph", normalizeKnowledgeGraph(v2Payload.knowledgeGraph ?? EMPTY_KNOWLEDGE_GRAPH));
     }
     clearImageUrlCache();

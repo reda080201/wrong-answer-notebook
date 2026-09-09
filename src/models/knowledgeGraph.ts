@@ -118,6 +118,15 @@ export function normalizeKnowledgeGraph(value: unknown): KnowledgeGraphStore {
   return { entities, relations: uniqueRelations, questionLinks: questionLinks.filter((link) => { const key = `${link.entityId}:${link.entryId}:${link.questionNumber}:${link.relation}`; if (linkKeys.has(key)) return false; linkKeys.add(key); return true; }) };
 }
 
+/** Strict boundary guard for persisted/backup payloads; normalization is for trusted legacy data only. */
+export function isKnowledgeGraphStore(value: unknown): value is KnowledgeGraphStore {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const candidate = value as Partial<KnowledgeGraphStore>;
+  if (!Array.isArray(candidate.entities) || !Array.isArray(candidate.relations) || !Array.isArray(candidate.questionLinks)) return false;
+  const normalized = normalizeKnowledgeGraph(value);
+  return normalized.entities.length === candidate.entities.length && normalized.relations.length === candidate.relations.length && normalized.questionLinks.length === candidate.questionLinks.length;
+}
+
 function canonicalQuestionNumber(value: string): string {
   const trimmed = value.trim();
   const numeric = Number(trimmed);
