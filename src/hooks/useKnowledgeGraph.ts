@@ -7,7 +7,7 @@ import type {
   KnowledgeRelationType,
 } from "../types";
 import { getStorageBackend } from "../services/storageBackend";
-import { knowledgeRelationKey, normalizeKnowledgeGraph } from "../models/knowledgeGraph";
+import { findCanonicalKnowledgeEntities, knowledgeRelationKey, normalizeKnowledgeGraph } from "../models/knowledgeGraph";
 
 function withTimestamp<T>(value: T, now: string): T & { createdAt: string; updatedAt: string } {
   const candidate = value as T & { createdAt?: string };
@@ -73,15 +73,28 @@ export function useKnowledgeGraph() {
     return queueRef.current;
   }, []);
 
-  const createEntity = useCallback(async (input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">) => {
+  const createEntity = useCallback(async (input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity> => {
     const now = new Date().toISOString();
-    await persist((current) => ({ ...current, entities: [...current.entities, withTimestamp(input, now)] }));
+    let resolved!: KnowledgeEntity;
+    await persist((current) => {
+      const matches = findCanonicalKnowledgeEntities(current.entities, input);
+      if (matches.length === 1) { resolved = matches[0]; return current; }
+      if (matches.length > 1) throw new Error("같은 이름 또는 별칭의 개체가 여러 개 있습니다. 기존 개체를 선택하세요.");
+      resolved = withTimestamp(input, now);
+      return { ...current, entities: [...current.entities, resolved] };
+    });
+    return resolved;
   }, [persist]);
 
-  const ensureEntity = useCallback(async (entity: KnowledgeEntity) => {
-    await persist((current) => current.entities.some((item) => item.id === entity.id)
-      ? current
-      : { ...current, entities: [...current.entities, entity] });
+  const ensureEntity = useCallback(async (entity: KnowledgeEntity): Promise<KnowledgeEntity> => {
+    let resolved!: KnowledgeEntity;
+    await persist((current) => {
+      const matches = findCanonicalKnowledgeEntities(current.entities, entity);
+      if (matches.length === 1) { resolved = matches[0]; return current; }
+      resolved = current.entities.find((item) => item.id === entity.id) ?? entity;
+      return current.entities.some((item) => item.id === resolved.id) ? current : { ...current, entities: [...current.entities, resolved] };
+    });
+    return resolved;
   }, [persist]);
 
   const saveRelation = useCallback(async (input: Omit<KnowledgeRelation, "createdAt" | "updatedAt">) => {
@@ -95,7 +108,7 @@ export function useKnowledgeGraph() {
   }, [persist]);
 
   const saveQuestionLink = useCallback(async (input: Omit<KnowledgeQuestionLink, "createdAt">) => {
-    await persist((current) => current.questionLinks.some((link) => link.entityId === input.entityId && link.entryId === input.entryId && link.questionNumber === input.questionNumber)
+    await persist((current) => current.questionLinks.some((link) => link.entityId === input.entityId && link.entryId === input.entryId && link.questionNumber === input.questionNumber && link.relation === input.relation)
       ? current
       : { ...current, questionLinks: [...current.questionLinks, { ...input, createdAt: new Date().toISOString() }] });
   }, [persist]);
@@ -110,5 +123,9 @@ export function useKnowledgeGraph() {
     relations: current.relations.filter((relation) => relation.id !== relationId),
   })), [persist]);
 
-  return { graph, ready, error, refresh, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, removeRelation };
+  const removeQuestionLink = useCallback((linkId: string) => persist((current) => ({ ...current, questionLinks: current.questionLinks.filter((link) => link.id !== linkId) })), [persist]);
+  const updateEntity = useCallback((id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "description" | "aliases">>) => persist((current) => ({ ...current, entities: current.entities.map((entity) => entity.id === id ? { ...entity, ...patch, updatedAt: new Date().toISOString() } : entity) })), [persist]);
+  const removeEntity = useCallback((id: string) => persist((current) => ({ ...current, entities: current.entities.filter((entity) => entity.id !== id), relations: current.relations.filter((relation) => relation.fromEntityId !== id && relation.toEntityId !== id), questionLinks: current.questionLinks.filter((link) => link.entityId !== id) })), [persist]);
+
+  return { graph, ready, error, refresh, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
 }

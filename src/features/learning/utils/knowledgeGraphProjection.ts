@@ -1,6 +1,6 @@
 import type { KnowledgeGraphStore, KnowledgeEntity, KnowledgeRelation, WrongAnswerEntry } from "../../../types";
 import { projectLearningBlocks } from "./learningHub";
-import { normalizeKnowledgeLabel } from "../../../models/knowledgeGraph";
+import { findCanonicalKnowledgeEntities, normalizeKnowledgeLabel } from "../../../models/knowledgeGraph";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 function legacyEntityId(label: string) {
@@ -20,7 +20,8 @@ export function projectLegacyKnowledgeGraph(graph: KnowledgeGraphStore, entries:
     const normalized = normalizeKnowledgeLabel(name);
     if (!normalized) return undefined;
     const id = legacyEntityId(normalized);
-    const existing = entities.find((entity) => entity.id === id);
+    const matches = findCanonicalKnowledgeEntities(entities, { name, aliases: [], type: "concept", subject: undefined });
+    const existing = matches.length === 1 ? matches[0] : entities.find((entity) => entity.id === id);
     if (existing) return existing;
     const entity: KnowledgeEntity = { id, type: "concept", name: name.trim(), aliases: [], provenance: "import", createdAt: now, updatedAt: now };
     entities.push(entity);
@@ -53,13 +54,14 @@ export function projectLegacyKnowledgeGraph(graph: KnowledgeGraphStore, entries:
       if (target) addRelation(source.id, target.id);
     }
     for (const reference of item.block.sourceReferences ?? []) {
-      addLink(source.id, reference.entryId, reference.questionNumber ?? item.block.sourceQuestionNumber ?? "1");
+      const questionNumber = reference.questionNumber ?? item.block.sourceQuestionNumber;
+      if (questionNumber) addLink(source.id, reference.entryId, questionNumber);
     }
   }
   for (const entry of entries.filter((item) => item.entryKind === "concept" && item.title.trim())) {
     const concept = addEntity(entry.title);
     if (!concept) continue;
-    for (const linkedEntryId of entry.linkedEntryIds ?? []) addLink(concept.id, linkedEntryId, "1");
+    // Entry associations do not imply a question identity and must not invent one.
   }
   return { entities, relations, questionLinks };
 }

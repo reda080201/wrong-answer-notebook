@@ -66,6 +66,11 @@ export const EMPTY_KNOWLEDGE_GRAPH: KnowledgeGraphStore = {
   questionLinks: [],
 };
 
+const ENTITY_TYPES = new Set<KnowledgeEntityType>(["concept", "person", "theory", "strategy", "topic", "work"]);
+const RELATION_TYPES = new Set<KnowledgeRelationType>(["related", "requires", "contrasts_with", "agrees_with", "rejects", "extends", "example_of", "tests", "associated_with"]);
+const QUESTION_RELATION_TYPES = new Set<KnowledgeQuestionLink["relation"]>(["tests", "example_of", "associated_with"]);
+const PROVENANCE_TYPES = new Set<KnowledgeProvenance>(["manual", "import", "ai_suggestion"]);
+
 const SYMMETRIC_RELATIONS = new Set<KnowledgeRelationType>([
   "related",
   "contrasts_with",
@@ -76,16 +81,21 @@ export function normalizeKnowledgeLabel(value: string): string {
   return value.normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("ko-KR");
 }
 
+export function findCanonicalKnowledgeEntities(entities: KnowledgeEntity[], candidate: Pick<KnowledgeEntity, "name" | "aliases" | "type" | "subject">): KnowledgeEntity[] {
+  const labels = new Set([candidate.name, ...candidate.aliases].map(normalizeKnowledgeLabel).filter(Boolean));
+  return entities.filter((entity) => entity.type === candidate.type && (entity.subject ?? "") === (candidate.subject ?? "") && [entity.name, ...entity.aliases].some((label) => labels.has(normalizeKnowledgeLabel(label))));
+}
+
 export function normalizeKnowledgeGraph(value: unknown): KnowledgeGraphStore {
   if (!value || typeof value !== "object") return EMPTY_KNOWLEDGE_GRAPH;
   const candidate = value as Partial<KnowledgeGraphStore>;
   const entities = Array.isArray(candidate.entities)
-    ? candidate.entities.filter((item): item is KnowledgeEntity => Boolean(item && typeof item === "object" && typeof item.id === "string" && typeof item.name === "string" && typeof item.type === "string"))
+    ? candidate.entities.filter((item): item is KnowledgeEntity => Boolean(item && typeof item === "object" && typeof item.id === "string" && typeof item.name === "string" && ENTITY_TYPES.has(item.type as KnowledgeEntityType) && PROVENANCE_TYPES.has((item.provenance ?? "manual") as KnowledgeProvenance)))
       .map((item) => ({ ...item, aliases: Array.isArray(item.aliases) ? item.aliases.filter((alias): alias is string => typeof alias === "string") : [], provenance: item.provenance ?? "manual" }))
     : [];
   const entityIds = new Set(entities.map((entity) => entity.id));
   const relations = Array.isArray(candidate.relations)
-    ? candidate.relations.filter((item): item is KnowledgeRelation => Boolean(item && typeof item === "object" && typeof item.id === "string" && entityIds.has(item.fromEntityId) && entityIds.has(item.toEntityId) && item.fromEntityId !== item.toEntityId && typeof item.type === "string"))
+    ? candidate.relations.filter((item): item is KnowledgeRelation => Boolean(item && typeof item === "object" && typeof item.id === "string" && entityIds.has(item.fromEntityId) && entityIds.has(item.toEntityId) && item.fromEntityId !== item.toEntityId && RELATION_TYPES.has(item.type as KnowledgeRelationType) && PROVENANCE_TYPES.has((item.provenance ?? "manual") as KnowledgeProvenance)))
       .map((item) => {
         if (!SYMMETRIC_RELATIONS.has(item.type)) return { ...item, provenance: item.provenance ?? "manual" };
         const [fromEntityId, toEntityId] = [item.fromEntityId, item.toEntityId].sort();
@@ -100,10 +110,18 @@ export function normalizeKnowledgeGraph(value: unknown): KnowledgeGraphStore {
     return true;
   });
   const questionLinks = Array.isArray(candidate.questionLinks)
-    ? candidate.questionLinks.filter((item): item is KnowledgeQuestionLink => Boolean(item && typeof item === "object" && typeof item.id === "string" && entityIds.has(item.entityId) && typeof item.entryId === "string" && typeof item.questionNumber === "string" && typeof item.relation === "string"))
-      .map((item) => ({ ...item, questionNumber: item.questionNumber.trim(), provenance: item.provenance ?? "manual" }))
+    ? candidate.questionLinks.filter((item): item is KnowledgeQuestionLink => Boolean(item && typeof item === "object" && typeof item.id === "string" && entityIds.has(item.entityId) && typeof item.entryId === "string" && typeof item.questionNumber === "string" && QUESTION_RELATION_TYPES.has(item.relation as KnowledgeQuestionLink["relation"]) && PROVENANCE_TYPES.has((item.provenance ?? "manual") as KnowledgeProvenance)))
+      .map((item) => ({ ...item, questionNumber: canonicalQuestionNumber(item.questionNumber), provenance: item.provenance ?? "manual" }))
+      .filter((item) => Boolean(item.questionNumber))
     : [];
-  return { entities, relations: uniqueRelations, questionLinks };
+  const linkKeys = new Set<string>();
+  return { entities, relations: uniqueRelations, questionLinks: questionLinks.filter((link) => { const key = `${link.entityId}:${link.entryId}:${link.questionNumber}:${link.relation}`; if (linkKeys.has(key)) return false; linkKeys.add(key); return true; }) };
+}
+
+function canonicalQuestionNumber(value: string): string {
+  const trimmed = value.trim();
+  const numeric = Number(trimmed);
+  return Number.isInteger(numeric) && numeric >= 0 ? String(numeric) : trimmed;
 }
 
 export function knowledgeRelationKey(fromEntityId: string, toEntityId: string, type: KnowledgeRelationType): string {

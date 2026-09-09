@@ -33,11 +33,14 @@ interface NotebookKnowledgeWorkspaceProps {
   onStartReview?(items: QuestionBankItem[]): void;
   knowledgeGraph?: {
     graph: KnowledgeGraphStore;
-    ensureEntity(entity: KnowledgeEntity): Promise<void>;
-    createEntity(input: { id: string; type: "concept"; name: string; aliases: string[]; provenance: "manual" }): Promise<void>;
+    ensureEntity(entity: KnowledgeEntity): Promise<KnowledgeEntity>;
+    createEntity(input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity>;
     saveRelation(input: { id: string; fromEntityId: string; toEntityId: string; type: KnowledgeRelationType; provenance: "manual" }): Promise<void>;
     saveQuestionLink(input: { id: string; entityId: string; entryId: string; questionNumber: string; relation: "tests"; provenance: "manual" }): Promise<void>;
     removeRelation(id: string): Promise<void>;
+    removeQuestionLink(id: string): Promise<void>;
+    updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "description" | "aliases">>): Promise<void>;
+    removeEntity(id: string): Promise<void>;
   };
 }
 
@@ -90,6 +93,9 @@ export default function NotebookKnowledgeWorkspace({
         onSaveRelation={knowledgeGraph.saveRelation}
         onSaveQuestionLink={knowledgeGraph.saveQuestionLink}
         onRemoveRelation={knowledgeGraph.removeRelation}
+        onRemoveQuestionLink={knowledgeGraph.removeQuestionLink}
+        onUpdateEntity={knowledgeGraph.updateEntity}
+        onRemoveEntity={knowledgeGraph.removeEntity}
         onOpenQuestion={(item) => {
           const entry = entries.find((candidate) => candidate.id === item.entryId);
           if (entry) openEntry(entry, item.questionNumber);
