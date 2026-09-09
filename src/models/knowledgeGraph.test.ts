@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { knowledgeRelationKey, normalizeKnowledgeGraph, normalizeKnowledgeLabel } from "./knowledgeGraph";
+import { isKnowledgeGraphStore, knowledgeRelationKey, normalizeKnowledgeGraph, normalizeKnowledgeLabel } from "./knowledgeGraph";
 
 describe("knowledge graph normalization", () => {
   it("normalizes labels without changing the stored display name", () => {
@@ -36,5 +36,10 @@ describe("knowledge graph normalization", () => {
     });
     expect(graph.questionLinks).toHaveLength(1);
     expect(graph.questionLinks[0]).toMatchObject({ entryId: "entry-1", questionNumber: "9" });
+  });
+
+  it("rejects malformed backup-shaped graph objects instead of silently emptying them", () => {
+    expect(isKnowledgeGraphStore({ hello: "world" })).toBe(false);
+    expect(isKnowledgeGraphStore({ entities: [], relations: [], questionLinks: [] })).toBe(true);
   });
 });
