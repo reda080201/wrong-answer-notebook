@@ -20,6 +20,7 @@ export function useKnowledgeGraph() {
   const [error, setError] = useState<string | null>(null);
   const graphRef = useRef(graph);
   const queueRef = useRef(Promise.resolve());
+  const maintenanceBlockedRef = useRef(false);
 
   useEffect(() => { graphRef.current = graph; }, [graph]);
 
@@ -60,6 +61,7 @@ export function useKnowledgeGraph() {
   }, []);
 
   const persist = useCallback(async (recipe: (current: KnowledgeGraphStore) => KnowledgeGraphStore) => {
+    if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
     const writer = getStorageBackend().saveKnowledgeGraph;
     if (!writer) throw new Error("현재 저장소는 지식 그래프를 지원하지 않습니다.");
     const operation = async () => {
@@ -72,6 +74,8 @@ export function useKnowledgeGraph() {
     queueRef.current = queueRef.current.then(operation, operation);
     return queueRef.current;
   }, []);
+  const flush = useCallback(async () => { await queueRef.current; }, []);
+  const setMaintenanceBlocked = useCallback((blocked: boolean) => { maintenanceBlockedRef.current = blocked; }, []);
 
   const createEntity = useCallback(async (input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity> => {
     const now = new Date().toISOString();
@@ -135,5 +139,5 @@ export function useKnowledgeGraph() {
   }), [persist]);
   const removeEntity = useCallback((id: string) => persist((current) => ({ ...current, entities: current.entities.filter((entity) => entity.id !== id), relations: current.relations.filter((relation) => relation.fromEntityId !== id && relation.toEntityId !== id), questionLinks: current.questionLinks.filter((link) => link.entityId !== id) })), [persist]);
 
-  return { graph, ready, error, refresh, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
+  return { graph, ready, error, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
 }

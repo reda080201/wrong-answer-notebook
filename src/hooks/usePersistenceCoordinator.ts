@@ -17,6 +17,7 @@ interface UsePersistenceCoordinatorOptions {
   flushGptSolutionDrafts: () => Promise<void>;
   flushReviewSessions?: () => Promise<void>;
   flushPendingDeletions?: () => Promise<void>;
+  flushKnowledgeGraph?: () => Promise<void>;
   flushTransientWrites: () => Promise<void>;
   setTransientWritesMaintenanceBlocked(blocked: boolean): void;
   setEntriesMaintenanceBlocked(blocked: boolean): void;
@@ -24,6 +25,7 @@ interface UsePersistenceCoordinatorOptions {
   setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
   setLibraryMaintenanceBlocked(blocked: boolean): void;
   setGptSolutionDraftsMaintenanceBlocked(blocked: boolean): void;
+  setKnowledgeGraphMaintenanceBlocked?(blocked: boolean): void;
   confirmCloseWithoutSaving(): Promise<boolean>;
 }
 
@@ -48,6 +50,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
     flushGptSolutionDrafts: options.flushGptSolutionDrafts,
     flushReviewSessions: options.flushReviewSessions,
     flushPendingDeletions: options.flushPendingDeletions,
+    flushKnowledgeGraph: options.flushKnowledgeGraph,
     flushActiveExam,
     flushTransientWrites: options.flushTransientWrites,
     setTransientWritesMaintenanceBlocked: options.setTransientWritesMaintenanceBlocked,
@@ -56,6 +59,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
     setGeneratedExamsMaintenanceBlocked: options.setGeneratedExamsMaintenanceBlocked,
     setLibraryMaintenanceBlocked: options.setLibraryMaintenanceBlocked,
     setGptSolutionDraftsMaintenanceBlocked: options.setGptSolutionDraftsMaintenanceBlocked,
+    setKnowledgeGraphMaintenanceBlocked: options.setKnowledgeGraphMaintenanceBlocked,
   });
   const closeGuard = useWindowCloseGuard({
     activeExam: options.activeExam,

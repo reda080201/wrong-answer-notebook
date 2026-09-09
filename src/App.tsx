@@ -209,6 +209,7 @@ function AppContent() {
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
     flushReviewSessions: reviewSessions.flush,
     flushPendingDeletions: () => pendingDeletionFlushRef.current(),
+    flushKnowledgeGraph: knowledgeGraph.flush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
@@ -216,6 +217,7 @@ function AppContent() {
     setGeneratedExamsMaintenanceBlocked,
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
+    setKnowledgeGraphMaintenanceBlocked: knowledgeGraph.setMaintenanceBlocked,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
