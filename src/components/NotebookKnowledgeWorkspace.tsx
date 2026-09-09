@@ -42,6 +42,7 @@ interface NotebookKnowledgeWorkspaceProps {
     updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "description" | "aliases">>): Promise<void>;
     removeEntity(id: string): Promise<void>;
   };
+  subjectFilter?: string | null;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -59,6 +60,7 @@ export default function NotebookKnowledgeWorkspace({
   onRegisterScrollContainer,
   onStartReview,
   knowledgeGraph,
+  subjectFilter,
 }: NotebookKnowledgeWorkspaceProps) {
   const [learningView, setLearningView] = useState<"blocks" | "graph">("blocks");
   const projectedGraph = knowledgeGraph ? projectLegacyKnowledgeGraph(knowledgeGraph.graph, entries) : undefined;
@@ -78,6 +80,7 @@ export default function NotebookKnowledgeWorkspace({
         }}
         onStartReview={onStartReview}
         onRegisterScrollContainer={onRegisterScrollContainer}
+        subjectFilter={subjectFilter}
       />
     );
   }
@@ -88,7 +91,7 @@ export default function NotebookKnowledgeWorkspace({
       {learningView === "graph" && knowledgeGraph ? <KnowledgeGraphView
         graph={projectedGraph ?? knowledgeGraph.graph}
         onEnsureEntity={knowledgeGraph.ensureEntity}
-        questionBankItems={buildQuestionBankItems(entries)}
+        questionBankItems={buildQuestionBankItems(entries).filter((item) => !subjectFilter || item.subject === subjectFilter)}
         onCreateEntity={knowledgeGraph.createEntity}
         onSaveRelation={knowledgeGraph.saveRelation}
         onSaveQuestionLink={knowledgeGraph.saveQuestionLink}
@@ -102,7 +105,7 @@ export default function NotebookKnowledgeWorkspace({
         }}
         onStartReview={onStartReview ?? (() => undefined)}
       /> : <LearningHubView
-      entries={entries}
+      entries={subjectFilter ? entries.filter((entry) => entry.subject === subjectFilter) : entries}
       highlightedBlock={learningHubTarget}
       questionBankItems={buildQuestionBankItems(entries)}
       onOpenSource={(entryId, questionNumber) => {
