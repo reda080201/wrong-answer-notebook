@@ -690,7 +690,7 @@ export function useAppActions({
           refreshGeneratedExams?.(),
           refreshLibraryFolders?.(),
           refreshGptSolutionDrafts?.(),
-          refreshKnowledgeGraph?.().then(() => true),
+          refreshKnowledgeGraph ? refreshKnowledgeGraph().then(() => true) : Promise.resolve(true),
         ]);
         const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프"];
         const failedReloads = reloads
