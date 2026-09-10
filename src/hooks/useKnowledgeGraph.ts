@@ -8,6 +8,9 @@ import type {
 } from "../types";
 import { getStorageBackend } from "../services/storageBackend";
 import { findCanonicalKnowledgeEntities, knowledgeRelationKey, normalizeKnowledgeGraph } from "../models/knowledgeGraph";
+import { normalizeQuestionNumber } from "../utils/questionNumber";
+import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
+import { reconcileKnowledgeGraphQuestionLinks } from "../features/learning/utils/reconcileKnowledgeGraph";
 
 function withTimestamp<T>(value: T, now: string): T & { createdAt: string; updatedAt: string } {
   const candidate = value as T & { createdAt?: string };
@@ -71,7 +74,11 @@ export function useKnowledgeGraph() {
       setGraph(next);
       setError(null);
     };
-    queueRef.current = queueRef.current.then(operation, operation);
+    queueRef.current = queueRef.current.then(operation, operation).catch((cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : "지식 그래프를 저장하지 못했습니다.";
+      setError(message);
+      throw cause;
+    });
     return queueRef.current;
   }, []);
   const flush = useCallback(async () => { await queueRef.current; }, []);
@@ -113,9 +120,11 @@ export function useKnowledgeGraph() {
   }, [persist]);
 
   const saveQuestionLink = useCallback(async (input: Omit<KnowledgeQuestionLink, "createdAt">) => {
-    await persist((current) => current.questionLinks.some((link) => link.entityId === input.entityId && link.entryId === input.entryId && link.questionNumber === input.questionNumber && link.relation === input.relation)
+    const questionNumber = normalizeQuestionNumber(input.questionNumber);
+    if (!questionNumber) throw new Error("문항 번호를 확인할 수 없어 연결하지 못했습니다.");
+    await persist((current) => current.questionLinks.some((link) => link.entityId === input.entityId && link.entryId === input.entryId && normalizeQuestionNumber(link.questionNumber) === questionNumber && link.relation === input.relation)
       ? current
-      : { ...current, questionLinks: [...current.questionLinks, { ...input, createdAt: new Date().toISOString() }] });
+      : { ...current, questionLinks: [...current.questionLinks, { ...input, questionNumber, createdAt: new Date().toISOString() }] });
   }, [persist]);
 
   const removeEntryLinks = useCallback((entryId: string) => persist((current) => ({
@@ -127,6 +136,14 @@ export function useKnowledgeGraph() {
     ...current,
     relations: current.relations.filter((relation) => relation.id !== relationId),
   })), [persist]);
+  const reconcileQuestionLinks = useCallback((items: QuestionBankItem[], protectedEntryIds: ReadonlySet<string>) => {
+    const staleIds = reconcileKnowledgeGraphQuestionLinks(graphRef.current, items)
+      .filter((link) => !protectedEntryIds.has(link.entryId))
+      .map((link) => link.id);
+    if (!staleIds.length) return Promise.resolve();
+    const stale = new Set(staleIds);
+    return persist((current) => ({ ...current, questionLinks: current.questionLinks.filter((link) => !stale.has(link.id)) }));
+  }, [persist]);
 
   const removeQuestionLink = useCallback((linkId: string) => persist((current) => ({ ...current, questionLinks: current.questionLinks.filter((link) => link.id !== linkId) })), [persist]);
   const updateEntity = useCallback((id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "subject" | "description" | "aliases">>) => persist((current) => {
@@ -139,5 +156,5 @@ export function useKnowledgeGraph() {
   }), [persist]);
   const removeEntity = useCallback((id: string) => persist((current) => ({ ...current, entities: current.entities.filter((entity) => entity.id !== id), relations: current.relations.filter((relation) => relation.fromEntityId !== id && relation.toEntityId !== id), questionLinks: current.questionLinks.filter((link) => link.entityId !== id) })), [persist]);
 
-  return { graph, ready, error, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
+  return { graph, ready, error, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, reconcileQuestionLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
 }

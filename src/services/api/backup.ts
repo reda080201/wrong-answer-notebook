@@ -221,6 +221,9 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
   if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
 
   const v2Payload = payload.meta.version === 2 ? payload as BrowserBackupPayloadV2 : null;
+  if (v2Payload?.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) {
+    throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
+  }
   const previousImages = await listBrowserImages();
   const managedKeys = new Set([
     ENTRIES_STORAGE_KEY,
@@ -256,7 +259,6 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
         writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, v2Payload.importWorkspaceDraft);
       }
       writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, (v2Payload.reviewSessions ?? []).map(normalizeReviewSession));
-      if (v2Payload.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
       writeStorageJson(localStorage, "wrong-answer-knowledge-graph", normalizeKnowledgeGraph(v2Payload.knowledgeGraph ?? EMPTY_KNOWLEDGE_GRAPH));
     }
     clearImageUrlCache();

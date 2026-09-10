@@ -4,6 +4,7 @@
 .learning-hub-heading h2 { margin: var(--space-1) 0; font-size: 24px; }
 .learning-hub-heading p { margin: 0; color: var(--text-muted); }
 .learning-hub-heading strong { color: var(--text-muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.learning-hub-heading__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .learning-hub-source-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-3); }
 .learning-hub-source-actions button { border: 1px solid var(--border); background: var(--accent-soft); color: var(--accent); padding: var(--space-2) var(--space-3); cursor: pointer; }
 .learning-hub-filters, .learning-hub-active-filters { max-width: 1320px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: var(--space-2); }

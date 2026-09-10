@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { isKnowledgeGraphStore, knowledgeRelationKey, normalizeKnowledgeGraph, normalizeKnowledgeLabel } from "./knowledgeGraph";
 
+const timestamp = "2026-01-01T00:00:00.000Z";
+const strictEntity = { id: "entity-1", type: "concept" as const, name: "정언 명령", aliases: ["칸트 명령"], provenance: "manual" as const, createdAt: timestamp, updatedAt: timestamp };
+
 describe("knowledge graph normalization", () => {
   it("normalizes labels without changing the stored display name", () => {
     expect(normalizeKnowledgeLabel("  정언  명령 ")).toBe("정언 명령");
@@ -41,5 +44,19 @@ describe("knowledge graph normalization", () => {
   it("rejects malformed backup-shaped graph objects instead of silently emptying them", () => {
     expect(isKnowledgeGraphStore({ hello: "world" })).toBe(false);
     expect(isKnowledgeGraphStore({ entities: [], relations: [], questionLinks: [] })).toBe(true);
+  });
+
+  it("uses the canonical question number normalizer and rejects dangling strict references", () => {
+    const graph = {
+      entities: [strictEntity],
+      relations: [],
+      questionLinks: [
+        { id: "q1", entityId: "entity-1", entryId: "entry-1", questionNumber: "[09]", relation: "tests" as const, provenance: "manual" as const, createdAt: timestamp },
+      ],
+    };
+    expect(normalizeKnowledgeGraph(graph).questionLinks[0]?.questionNumber).toBe("9");
+    expect(isKnowledgeGraphStore(graph)).toBe(true);
+    expect(isKnowledgeGraphStore({ ...graph, relations: [{ id: "bad", fromEntityId: "entity-1", toEntityId: "missing", type: "related", provenance: "manual", createdAt: timestamp, updatedAt: timestamp }] })).toBe(false);
+    expect(isKnowledgeGraphStore({ ...graph, questionLinks: [{ ...graph.questionLinks[0], entityId: "missing" }] })).toBe(false);
   });
 });

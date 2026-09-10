@@ -458,18 +458,27 @@ pub(crate) fn validate_knowledge_graph_value(value: &serde_json::Value) -> Resul
     ];
     let valid_provenance = ["manual", "import", "ai_suggestion"];
     let empty_rows = Vec::new();
+    let required_string = |row: &serde_json::Map<String, serde_json::Value>, key: &str| {
+        row.get(key)
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|value| !value.trim().is_empty())
+    };
+    let mut entity_ids = std::collections::HashSet::new();
     for entity in object["entities"].as_array().unwrap_or(&empty_rows) {
         let row = entity
             .as_object()
             .ok_or_else(|| "지식 그래프 entity 형식이 올바르지 않습니다.".to_string())?;
-        if !row
-            .get("id")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|v| !v.trim().is_empty())
-            || !row
-                .get("name")
-                .and_then(serde_json::Value::as_str)
-                .is_some_and(|v| !v.trim().is_empty())
+        if !required_string(row, "id")
+            || !required_string(row, "name")
+            || !required_string(row, "createdAt")
+            || !required_string(row, "updatedAt")
+            || !row.get("aliases").is_some_and(|aliases| {
+                aliases.as_array().is_some_and(|items| {
+                    items
+                        .iter()
+                        .all(|item| item.as_str().is_some_and(|value| !value.trim().is_empty()))
+                })
+            })
             || !row
                 .get("type")
                 .and_then(serde_json::Value::as_str)
@@ -481,21 +490,63 @@ pub(crate) fn validate_knowledge_graph_value(value: &serde_json::Value) -> Resul
         {
             return Err("지식 그래프 entity 값이 올바르지 않습니다.".to_string());
         }
+        if !entity_ids.insert(row["id"].as_str().unwrap().trim().to_string()) {
+            return Err("지식 그래프 entity ID가 중복되었습니다.".to_string());
+        }
     }
+    let mut relation_ids = std::collections::HashSet::new();
     for relation in object["relations"].as_array().unwrap_or(&empty_rows) {
         let row = relation
             .as_object()
             .ok_or_else(|| "지식 그래프 relation 형식이 올바르지 않습니다.".to_string())?;
-        if !row
-            .get("type")
-            .and_then(serde_json::Value::as_str)
-            .is_some_and(|v| valid_relation.contains(&v))
+        if !required_string(row, "id")
+            || !required_string(row, "fromEntityId")
+            || !required_string(row, "toEntityId")
+            || !required_string(row, "createdAt")
+            || !required_string(row, "updatedAt")
+            || row["fromEntityId"] == row["toEntityId"]
+            || !entity_ids.contains(row["fromEntityId"].as_str().unwrap().trim())
+            || !entity_ids.contains(row["toEntityId"].as_str().unwrap().trim())
+            || !row
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|v| valid_relation.contains(&v))
             || !row
                 .get("provenance")
                 .and_then(serde_json::Value::as_str)
                 .is_some_and(|v| valid_provenance.contains(&v))
         {
             return Err("지식 그래프 relation 값이 올바르지 않습니다.".to_string());
+        }
+        if !relation_ids.insert(row["id"].as_str().unwrap().trim().to_string()) {
+            return Err("지식 그래프 relation ID가 중복되었습니다.".to_string());
+        }
+    }
+    let valid_question_relation = ["tests", "example_of", "associated_with"];
+    let mut link_ids = std::collections::HashSet::new();
+    for link in object["questionLinks"].as_array().unwrap_or(&empty_rows) {
+        let row = link
+            .as_object()
+            .ok_or_else(|| "지식 그래프 question link 형식이 올바르지 않습니다.".to_string())?;
+        if !required_string(row, "id")
+            || !required_string(row, "entityId")
+            || !required_string(row, "entryId")
+            || !required_string(row, "questionNumber")
+            || !required_string(row, "createdAt")
+            || !entity_ids.contains(row["entityId"].as_str().unwrap().trim())
+            || !row
+                .get("relation")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|value| valid_question_relation.contains(&value))
+            || !row
+                .get("provenance")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|value| valid_provenance.contains(&value))
+        {
+            return Err("지식 그래프 question link 값이 올바르지 않습니다.".to_string());
+        }
+        if !link_ids.insert(row["id"].as_str().unwrap().trim().to_string()) {
+            return Err("지식 그래프 question link ID가 중복되었습니다.".to_string());
         }
     }
     Ok(())
@@ -885,6 +936,21 @@ mod tests {
     #[test]
     fn import_image_byte_limit_is_25mb() {
         assert_eq!(MAX_IMPORT_IMAGE_BYTES, 25 * 1024 * 1024);
+    }
+
+    #[test]
+    fn knowledge_graph_validation_rejects_malformed_children_and_dangling_references() {
+        let valid = serde_json::json!({
+            "entities": [{ "id": "e1", "name": "정언 명령", "type": "concept", "aliases": [], "provenance": "manual", "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }],
+            "relations": [],
+            "questionLinks": [{ "id": "q1", "entityId": "e1", "entryId": "entry-1", "questionNumber": "9", "relation": "tests", "provenance": "manual", "createdAt": "2026-01-01T00:00:00.000Z" }]
+        });
+        assert!(validate_knowledge_graph_value(&valid).is_ok());
+        assert!(validate_knowledge_graph_value(&serde_json::json!({ "hello": "world" })).is_err());
+        assert!(validate_knowledge_graph_value(&serde_json::json!({
+            "entities": valid["entities"].clone(), "relations": [],
+            "questionLinks": [{ "id": "q1", "entityId": "missing", "entryId": "entry-1", "questionNumber": "9", "relation": "tests", "provenance": "manual", "createdAt": "2026-01-01T00:00:00.000Z" }]
+        })).is_err());
     }
 
     #[test]

@@ -253,14 +253,24 @@ function AppContent() {
     sectionEntryCount,
   } = navigation;
 
+  const handleFinalizedKnowledgeGraphEntries = useCallback(async (entryIds: string[]) => {
+    for (const entryId of entryIds) await knowledgeGraph.removeEntryLinks(entryId);
+  }, [knowledgeGraph.removeEntryLinks]);
   const pendingDeletions = usePendingDeletionCoordinator({
     entries,
     restore: restorePendingDeletion,
     setSelectedId,
+    onFinalizedEntryIds: handleFinalizedKnowledgeGraphEntries,
   });
   useEffect(() => {
     pendingDeletionFlushRef.current = pendingDeletions.flush;
   }, [pendingDeletions.flush]);
+  const { ready: knowledgeGraphReady, reconcileQuestionLinks } = knowledgeGraph;
+  useEffect(() => {
+    if (!knowledgeGraphReady) return;
+    const protectedEntryIds = new Set(pendingDeletions.pending.map((record) => record.entry.id));
+    void reconcileQuestionLinks(buildQuestionBankItems(entries), protectedEntryIds).catch(() => undefined);
+  }, [entries, knowledgeGraphReady, pendingDeletions.pending, reconcileQuestionLinks]);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
     setOnboardingOpen(false);

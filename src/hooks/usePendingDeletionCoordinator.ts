@@ -12,6 +12,7 @@ interface Options {
   entries: WrongAnswerEntry[];
   restore(pending: PendingDeletion): Promise<void>;
   setSelectedId(id: string | null): void;
+  onFinalizedEntryIds?(entryIds: string[]): Promise<void>;
 }
 
 export function getProtectedPendingImageReferences(
@@ -55,6 +56,7 @@ function buildFinalizationPlan(records: PendingDeletion[], entries: WrongAnswerE
 export interface PendingDeletionFinalizationResult {
   retained: PendingDeletion[];
   failedImages: Set<string>;
+  finalizedEntryIds: string[];
 }
 
 export async function finalizePendingDeletionRecords(
@@ -81,11 +83,15 @@ export async function finalizePendingDeletionRecords(
       imageReferences: record.imageReferences.filter((image) => failedImages.has(image)),
     }))
     .filter((record) => record.imageReferences.length > 0);
-  return { retained: [...plan.retained, ...retryRecords], failedImages };
+  return {
+    retained: [...plan.retained, ...retryRecords],
+    failedImages,
+    finalizedEntryIds: [...new Set(plan.actionable.map((record) => record.entry.id))],
+  };
 }
 
 /** Coordinates persisted deletion records without deleting a shared image early. */
-export function usePendingDeletionCoordinator({ entries, restore, setSelectedId }: Options) {
+export function usePendingDeletionCoordinator({ entries, restore, setSelectedId, onFinalizedEntryIds }: Options) {
   const entriesRef = useRef(entries);
   const [pending, setPending] = useState<PendingDeletion[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -112,6 +118,14 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
       }
       setPending(retained);
       setError(failure);
+      const finalizedEntryIds = result.finalizedEntryIds;
+      if (finalizedEntryIds.length && onFinalizedEntryIds) {
+        try {
+          await onFinalizedEntryIds(finalizedEntryIds);
+        } catch (cause) {
+          setError(cause instanceof Error ? cause.message : "삭제된 항목의 개념 연결을 정리하지 못했습니다.");
+        }
+      }
       if (failure) {
         retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30_000);
       } else {
@@ -122,7 +136,7 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId 
       finalizePromiseRef.current = null;
     });
     return finalizePromiseRef.current;
-  }, []);
+  }, [onFinalizedEntryIds]);
 
   useEffect(() => {
     void (async () => {

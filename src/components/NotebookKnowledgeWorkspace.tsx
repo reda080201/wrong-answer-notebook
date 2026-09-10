@@ -33,6 +33,8 @@ interface NotebookKnowledgeWorkspaceProps {
   onStartReview?(items: QuestionBankItem[]): void;
   knowledgeGraph?: {
     graph: KnowledgeGraphStore;
+    error: string | null;
+    refresh(): Promise<void>;
     ensureEntity(entity: KnowledgeEntity): Promise<KnowledgeEntity>;
     createEntity(input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity>;
     saveRelation(input: { id: string; fromEntityId: string; toEntityId: string; type: KnowledgeRelationType; provenance: "manual" }): Promise<void>;
@@ -64,6 +66,7 @@ export default function NotebookKnowledgeWorkspace({
 }: NotebookKnowledgeWorkspaceProps) {
   const [learningView, setLearningView] = useState<"blocks" | "graph">("blocks");
   const projectedGraph = knowledgeGraph ? projectLegacyKnowledgeGraph(knowledgeGraph.graph, entries) : undefined;
+  const learningViewSwitcher = knowledgeGraph ? <div className="knowledge-view-switcher" role="group" aria-label="학습 허브 보기"><button type="button" aria-pressed={learningView === "blocks"} className={learningView === "blocks" ? "is-active" : ""} onClick={() => setLearningView("blocks")}>학습 블록</button><button type="button" aria-pressed={learningView === "graph"} className={learningView === "graph" ? "is-active" : ""} onClick={() => setLearningView("graph")}>개념 관계</button></div> : null;
   if (mode === "question-bank") {
     return (
       <QuestionBankView
@@ -87,9 +90,10 @@ export default function NotebookKnowledgeWorkspace({
 
   return (
     <>
-      {knowledgeGraph && <div className="knowledge-view-switcher" role="group" aria-label="학습 허브 보기"><button type="button" aria-pressed={learningView === "blocks"} className={learningView === "blocks" ? "is-active" : ""} onClick={() => setLearningView("blocks")}>학습 블록</button><button type="button" aria-pressed={learningView === "graph"} className={learningView === "graph" ? "is-active" : ""} onClick={() => setLearningView("graph")}>개념 관계</button></div>}
       {learningView === "graph" && knowledgeGraph ? <KnowledgeGraphView
         graph={projectedGraph ?? knowledgeGraph.graph}
+        persistenceError={knowledgeGraph.error}
+        onRetryPersistence={knowledgeGraph.refresh}
         onEnsureEntity={knowledgeGraph.ensureEntity}
         questionBankItems={buildQuestionBankItems(entries).filter((item) => !subjectFilter || item.subject === subjectFilter)}
         onCreateEntity={knowledgeGraph.createEntity}
@@ -105,6 +109,7 @@ export default function NotebookKnowledgeWorkspace({
         }}
         onStartReview={onStartReview ?? (() => undefined)}
         subjectFilter={subjectFilter}
+        headerAccessory={learningViewSwitcher}
       /> : <LearningHubView
       entries={subjectFilter ? entries.filter((entry) => entry.subject === subjectFilter) : entries}
       highlightedBlock={learningHubTarget}
@@ -144,6 +149,7 @@ export default function NotebookKnowledgeWorkspace({
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
       onRegisterScrollContainer={onRegisterScrollContainer}
+      headerAccessory={learningViewSwitcher}
       />}
     </>
   );
