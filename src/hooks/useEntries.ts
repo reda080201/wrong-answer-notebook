@@ -18,6 +18,7 @@ import { useSerialTaskQueue } from "./useSerialTaskQueue";
 
 type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T };
 export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
+export type InitialLoadStatus = "loading" | "ready" | "error";
 
 function getUnreferencedImages(candidates: string[], entries: WrongAnswerEntry[]): string[] {
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
@@ -28,10 +29,12 @@ export function useEntries() {
   const [entries, setEntries] = useState<WrongAnswerEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadStatus, setInitialLoadStatus] = useState<InitialLoadStatus>("loading");
   const entriesRef = useRef<WrongAnswerEntry[]>([]);
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const mutationRevisionRef = useRef(0);
   const loadedRef = useRef(false);
+  const initialLoadCompletedRef = useRef(false);
   const reloadingRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
   const { enqueue, drain } = useSerialTaskQueue();
@@ -70,6 +73,10 @@ export function useEntries() {
       const refreshRevision = mutationRevisionRef.current;
       loadedRef.current = false;
       const data = await loadEntries();
+      if (!initialLoadCompletedRef.current) {
+        initialLoadCompletedRef.current = true;
+        setInitialLoadStatus("ready");
+      }
       if (refreshRevision !== mutationRevisionRef.current) {
         loadedRef.current = true;
         return false;
@@ -80,6 +87,7 @@ export function useEntries() {
       return true;
     } catch (err) {
       loadedRef.current = false;
+      if (!initialLoadCompletedRef.current) setInitialLoadStatus("error");
       setError(errorMessage(err, "노트를 불러오지 못했습니다."));
       return false;
     } finally {
@@ -471,6 +479,7 @@ export function useEntries() {
   return {
     entries,
     loading,
+    initialLoadStatus,
     error,
     clearError,
     addEntry,

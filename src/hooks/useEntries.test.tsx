@@ -93,6 +93,20 @@ describe("useEntries", () => {
     expect(deleteImage).not.toHaveBeenCalled();
   });
 
+  it("distinguishes a successfully loaded empty workspace from an initial load failure", async () => {
+    vi.mocked(loadEntries).mockResolvedValueOnce([]);
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.entries).toEqual([]);
+    expect(result.current.initialLoadStatus).toBe("ready");
+
+    vi.mocked(loadEntries).mockRejectedValueOnce(new Error("offline"));
+    const failed = renderHook(() => useEntries());
+    await waitFor(() => expect(failed.result.current.loading).toBe(false));
+    expect(failed.result.current.initialLoadStatus).toBe("error");
+    expect(failed.result.current.entries).toEqual([]);
+  });
+
   it("saves an updated entry before deleting removed images", async () => {
     const { result } = renderHook(() => useEntries());
     await waitFor(() => expect(result.current.loading).toBe(false));

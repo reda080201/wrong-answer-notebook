@@ -55,6 +55,7 @@ import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 import { NotificationProvider } from "./shared/ui/NotificationProvider";
 import { useKnowledgeGraph } from "./hooks/useKnowledgeGraph";
+import { canReconcileKnowledgeGraph } from "./utils/knowledgeGraphReconciliationGate";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -71,6 +72,7 @@ function AppContent() {
   const {
     entries,
     loading,
+    initialLoadStatus: entriesInitialLoadStatus,
     error,
     clearError,
     refresh,
@@ -267,12 +269,22 @@ function AppContent() {
   useEffect(() => {
     pendingDeletionFlushRef.current = pendingDeletions.flush;
   }, [pendingDeletions.flush]);
-  const { ready: knowledgeGraphReady, reconcileQuestionLinks } = knowledgeGraph;
+  const {
+    ready: knowledgeGraphReady,
+    loadStatus: knowledgeGraphLoadStatus,
+    maintenanceBlocked: knowledgeGraphMaintenanceBlocked,
+    reconcileQuestionLinks,
+  } = knowledgeGraph;
   useEffect(() => {
-    if (!knowledgeGraphReady) return;
+    if (!knowledgeGraphReady || !canReconcileKnowledgeGraph({
+      graph: knowledgeGraphLoadStatus,
+      entries: entriesInitialLoadStatus,
+      pendingDeletions: pendingDeletions.initialLoadStatus,
+      maintenanceBlocked: knowledgeGraphMaintenanceBlocked,
+    })) return;
     const protectedEntryIds = new Set(pendingDeletions.pending.map((record) => record.entry.id));
     void reconcileQuestionLinks(buildQuestionBankItems(entries), protectedEntryIds).catch(() => undefined);
-  }, [entries, knowledgeGraphReady, pendingDeletions.pending, reconcileQuestionLinks]);
+  }, [entries, entriesInitialLoadStatus, knowledgeGraphLoadStatus, knowledgeGraphMaintenanceBlocked, knowledgeGraphReady, pendingDeletions.initialLoadStatus, pendingDeletions.pending, reconcileQuestionLinks]);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
     setOnboardingOpen(false);
