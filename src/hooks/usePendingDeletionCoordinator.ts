@@ -62,7 +62,10 @@ function buildFinalizationPlan(records: PendingDeletion[], entries: WrongAnswerE
 export interface PendingDeletionFinalizationResult {
   retained: PendingDeletion[];
   failedImages: Set<string>;
-  logicallyFinalizedEntryIds: string[];
+  /** Entries whose undo window expired during this pass. Cleanup may still retry. */
+  logicallyDeletedEntryIds: string[];
+  /** Only these retained records are cleanup ledgers, never Undo candidates. */
+  cleanupRetryRecordIds: Set<string>;
 }
 
 export async function finalizePendingDeletionRecords(
@@ -92,7 +95,8 @@ export async function finalizePendingDeletionRecords(
   return {
     retained: [...plan.retained, ...retryRecords],
     failedImages,
-    logicallyFinalizedEntryIds: [...new Set(plan.actionable.map((record) => record.entry.id))],
+    logicallyDeletedEntryIds: [...new Set(plan.actionable.map((record) => record.entry.id))],
+    cleanupRetryRecordIds: new Set(retryRecords.map((record) => record.id)),
   };
 }
 
@@ -122,9 +126,11 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
       const result = await finalizePendingDeletionRecords(records, entriesRef.current, deleteImage);
       const graphFailures = new Set<string>();
       if (onFinalizeEntry) {
+        const liveEntryIds = new Set(entriesRef.current.map((entry) => entry.id));
         const graphCleanupIds = [...new Set(
           records
             .filter((record) => Date.parse(record.finalizeAfter) <= Date.now())
+            .filter((record) => !liveEntryIds.has(record.entry.id))
             .filter((record) => record.graphCleanupPending !== false)
             .map((record) => record.entry.id),
         )];
@@ -137,11 +143,13 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
         }
       }
       const retained = [
-        ...result.retained.map((record) => ({
-          ...record,
-          cleanupRetry: true,
-          graphCleanupPending: graphFailures.has(record.entry.id),
-        })),
+        ...result.retained.map((record) => result.cleanupRetryRecordIds.has(record.id)
+          ? {
+              ...record,
+              cleanupRetry: true,
+              graphCleanupPending: graphFailures.has(record.entry.id),
+            }
+          : record),
         ...records
           .filter((record) => Date.parse(record.finalizeAfter) <= Date.now())
           .filter((record) => !result.retained.some((retainedRecord) => retainedRecord.id === record.id))

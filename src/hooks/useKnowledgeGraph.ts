@@ -28,12 +28,14 @@ export function useKnowledgeGraph() {
   const graphRef = useRef(graph);
   const queueRef = useRef(Promise.resolve());
   const maintenanceBlockedRef = useRef(false);
+  const loadSucceededRef = useRef(false);
 
   useEffect(() => { graphRef.current = graph; }, [graph]);
 
   const refresh = useCallback(async () => {
     const loader = getStorageBackend().loadKnowledgeGraph;
-    if (!loader) { setReady(true); setLoadStatus("ready"); return; }
+    loadSucceededRef.current = false;
+    if (!loader) { loadSucceededRef.current = true; setReady(true); setLoadStatus("ready"); return; }
     setLoadStatus("loading");
     try {
       const next = normalizeKnowledgeGraph(await loader());
@@ -42,7 +44,10 @@ export function useKnowledgeGraph() {
       setError(null);
       setReady(true);
       setLoadStatus("ready");
+      loadSucceededRef.current = true;
     } catch (cause) {
+      loadSucceededRef.current = false;
+      setReady(false);
       setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
       setLoadStatus("error");
     }
@@ -56,6 +61,7 @@ export function useKnowledgeGraph() {
         if (!mounted) return;
         setReady(true);
         setLoadStatus("ready");
+        loadSucceededRef.current = true;
       });
       return () => { mounted = false; };
     }
@@ -67,10 +73,12 @@ export function useKnowledgeGraph() {
       setError(null);
       setReady(true);
       setLoadStatus("ready");
+      loadSucceededRef.current = true;
     }).catch((cause: unknown) => {
       if (!mounted) return;
       setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
       setReady(false);
+      loadSucceededRef.current = false;
       setLoadStatus("error");
     });
     return () => { mounted = false; };
@@ -78,6 +86,7 @@ export function useKnowledgeGraph() {
 
   const persist = useCallback(async (recipe: (current: KnowledgeGraphStore) => KnowledgeGraphStore) => {
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+    if (!loadSucceededRef.current) throw new Error("지식 그래프를 불러오지 못했습니다. 다시 시도해 주세요.");
     const writer = getStorageBackend().saveKnowledgeGraph;
     if (!writer) throw new Error("현재 저장소는 지식 그래프를 지원하지 않습니다.");
     const operation = async () => {

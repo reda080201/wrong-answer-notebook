@@ -71,7 +71,8 @@ describe("pending deletion asset protection", () => {
     expect(deleteAsset).toHaveBeenCalledTimes(3);
     expect(deleteAsset).toHaveBeenCalledWith("shared.png");
     expect(result.retained).toEqual([]);
-    expect(result.logicallyFinalizedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.logicallyDeletedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.cleanupRetryRecordIds).toEqual(new Set());
   });
 
   it("protects an unexpired record and live entry from cleanup", async () => {
@@ -87,6 +88,7 @@ describe("pending deletion asset protection", () => {
     expect(deleteAsset).toHaveBeenCalledWith("a.png");
     expect(deleteAsset).not.toHaveBeenCalledWith("shared.png");
     expect(result.retained).toEqual([future]);
+    expect(result.cleanupRetryRecordIds).toEqual(new Set());
 
     deleteAsset.mockClear();
     const liveResult = await finalizePendingDeletionRecords(
@@ -118,7 +120,8 @@ describe("pending deletion asset protection", () => {
       expect.objectContaining({ id: "pending-a", imageReferences: ["shared.png"] }),
       expect.objectContaining({ id: "pending-b", imageReferences: ["shared.png"] }),
     ]);
-    expect(result.logicallyFinalizedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.logicallyDeletedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.cleanupRetryRecordIds).toEqual(new Set(["pending-a", "pending-b"]));
   });
 
   it("separates expired cleanup retries from the undoable queue", () => {

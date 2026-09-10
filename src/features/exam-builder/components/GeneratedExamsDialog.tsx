@@ -12,6 +12,7 @@ interface GeneratedExamsDialogProps {
   loadError: string | null;
   saving: boolean;
   saveError: string | null;
+  retryableError?: string | null;
   hasRetryableChange: boolean;
   exams: GeneratedExam[];
   onClose(): Promise<void>;
@@ -80,9 +81,9 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
         </div>
       )}
       {props.saving && <p className="form-hint" role="status">저장 중...</p>}
-      {props.saveError && (
+      {(props.saveError || props.retryableError) && (
         <div className="form-error" role="alert">
-          {props.saveError}
+          {props.saveError || props.retryableError}
           {props.hasRetryableChange && (
             <>
               <button type="button" className="btn-secondary" onClick={() => void runAction(props.onRetry, "실패한 변경을 다시 저장하지 못했습니다.")} disabled={actionBusy}>실패한 변경 다시 저장</button>
