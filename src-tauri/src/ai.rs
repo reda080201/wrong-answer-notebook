@@ -789,7 +789,7 @@ pub(crate) fn test_ai_provider_connection(
             format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
         });
     }
-    if provider == AiProviderType::OpenRouter {
+    if matches!(provider, AiProviderType::OpenRouter) {
         let value: serde_json::Value = response
             .json()
             .map_err(|error| format!("OpenRouter 모델 목록을 읽지 못했습니다: {error}"))?;
