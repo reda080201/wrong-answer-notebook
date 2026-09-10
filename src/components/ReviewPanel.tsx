@@ -36,6 +36,11 @@ const resultLabels: Record<ReviewResult, string> = {
 const EMPTY_REVIEW_EVENTS: ReviewEvent[] = [];
 const EMPTY_COMPLETED_KEYS: string[] = [];
 
+interface PendingSessionCommit {
+  session: ReviewSession;
+  shouldAdvance: boolean;
+}
+
 export default function ReviewPanel({
   title,
   mode,
@@ -56,6 +61,7 @@ export default function ReviewPanel({
   const [reviewEvents, setReviewEvents] = useState<ReviewEvent[]>(session?.reviewEvents ?? []);
   const [completedKeys, setCompletedKeys] = useState<string[]>(session?.completedItemKeys ?? []);
   const [editingCompleted, setEditingCompleted] = useState(false);
+  const [pendingSessionCommit, setPendingSessionCommit] = useState<PendingSessionCommit | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(true);
   const savingRef = useRef(false);
@@ -119,7 +125,7 @@ export default function ReviewPanel({
       updatedAt: new Date().toISOString(),
     }).catch(() => {
       // A review panel must remain usable when an optional session store is unavailable.
-      sessionInitializedRef.current = false;
+      setSaveError("복습 결과는 저장할 수 있지만 세션 진행 상태를 보존하지 못했습니다.");
     });
   }, [mode, onSessionSave, reviewItems, session]);
 
@@ -132,8 +138,8 @@ export default function ReviewPanel({
   }, [revealed]);
 
   const requestClose = useCallback(() => {
-    if (!savingRef.current) onClose();
-  }, [onClose]);
+    if (!savingRef.current && !pendingSessionCommit) onClose();
+  }, [onClose, pendingSessionCommit]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -182,8 +188,32 @@ export default function ReviewPanel({
     [reviewItems.length, index],
   );
 
+  const finishSessionCommit = useCallback((shouldAdvance: boolean) => {
+    setPendingSessionCommit(null);
+    setEditingCompleted(false);
+    setRevealed(false);
+    if (shouldAdvance) setIndex((value) => Math.min(value + 1, reviewItems.length));
+  }, [reviewItems.length]);
+
+  const retrySessionCommit = useCallback(async () => {
+    const commit = pendingSessionCommit;
+    if (!commit || !onSessionSave || savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSessionSave(commit.session);
+      if (mountedRef.current) finishSessionCommit(commit.shouldAdvance);
+    } catch (error) {
+      if (mountedRef.current) setSaveError(error instanceof Error && error.message ? error.message : "세션 진행 상태를 저장하지 못했습니다.");
+    } finally {
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
+    }
+  }, [finishSessionCommit, onSessionSave, pendingSessionCommit]);
+
   const handleReview = useCallback(async (result: ReviewResult) => {
-    if (!current || savingRef.current || (completedEvent && !editingCompleted)) return;
+    if (!current || savingRef.current || pendingSessionCommit || (completedEvent && !editingCompleted)) return;
     savingRef.current = true;
     setSaving(true);
     setSaveError(null);
@@ -212,10 +242,11 @@ export default function ReviewPanel({
         ? reviewEvents.map((event) => event.id === completedEvent.id ? nextEvent : event)
         : [...reviewEvents, nextEvent];
       setReviewEvents(nextReviewEvents);
+      const shouldAdvance = !editingCompleted;
       if (onSessionSave) {
         const nextIndex = editingCompleted ? index : Math.min(index + 1, reviewItems.length);
         const updatedAt = new Date().toISOString();
-        await onSessionSave({
+        const nextSession: ReviewSession = {
           id: sessionIdRef.current,
           mode: mode ?? "random",
           itemRefs: reviewItems.map((item) => item.kind === "sheet-question"
@@ -228,12 +259,21 @@ export default function ReviewPanel({
           createdAt: sessionStartedAtRef.current,
           updatedAt,
           ...(!editingCompleted && nextIndex >= reviewItems.length ? { completedAt: updatedAt } : {}),
-        });
+        };
+        const commit = { session: nextSession, shouldAdvance };
+        setPendingSessionCommit(commit);
+        try {
+          await onSessionSave(nextSession);
+        } catch (error) {
+          if (mountedRef.current) setSaveError(error instanceof Error && error.message
+            ? `복습 결과는 저장되었지만 진행 상태를 저장하지 못했습니다. ${error.message}`
+            : "복습 결과는 저장되었지만 진행 상태를 저장하지 못했습니다.");
+          return;
+        }
+        if (mountedRef.current) finishSessionCommit(commit.shouldAdvance);
+        return;
       }
-      const shouldAdvance = !editingCompleted;
-      setEditingCompleted(false);
-      setRevealed(false);
-      if (shouldAdvance) setIndex((value) => Math.min(value + 1, reviewItems.length));
+      finishSessionCommit(shouldAdvance);
     } catch (error) {
       if (mountedRef.current) {
         setSaveError(error instanceof Error && error.message ? error.message : "복습 결과를 저장하지 못했습니다.");
@@ -242,7 +282,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [completedEvent, completedKeys, current, editingCompleted, index, mode, onReview, onSessionSave, reviewEvents, reviewItems]);
+  }, [completedEvent, completedKeys, current, editingCompleted, finishSessionCommit, index, mode, onReview, onSessionSave, pendingSessionCommit, reviewEvents, reviewItems]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {
@@ -294,11 +334,20 @@ export default function ReviewPanel({
           <div><dt>어려움</dt><dd>{reviewStats.hard}</dd></div>
           <div><dt>맞음</dt><dd>{reviewStats.good}</dd></div>
         </dl>
-        <button type="button" className="btn-icon" onClick={requestClose} disabled={saving}>
+        <button type="button" className="btn-icon" onClick={requestClose} disabled={saving || Boolean(pendingSessionCommit)}>
           닫기
         </button>
       </div>
-      {saveError && <p className="form-error" role="alert">{saveError}</p>}
+      {saveError && (
+        <div className="form-error" role="alert">
+          <span>{saveError}</span>
+          {pendingSessionCommit && onSessionSave && (
+            <button type="button" className="btn-secondary btn-sm" onClick={() => void retrySessionCommit()} disabled={saving}>
+              세션 진행 상태 다시 저장
+            </button>
+          )}
+        </div>
+      )}
 
       {!current || !currentEntry ? (
         reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
@@ -398,7 +447,7 @@ export default function ReviewPanel({
                     key={result}
                     type="button"
                     className={`review-result review-result--${result}`}
-                    disabled={saving || Boolean(completedEvent && !editingCompleted)}
+                    disabled={saving || Boolean(pendingSessionCommit) || Boolean(completedEvent && !editingCompleted)}
                     onClick={() => handleReview(result)}
                   >
                     {resultLabels[result]}

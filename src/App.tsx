@@ -220,6 +220,7 @@ function AppContent() {
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
     setKnowledgeGraphMaintenanceBlocked: knowledgeGraph.setMaintenanceBlocked,
+    setReviewSessionsMaintenanceBlocked: reviewSessions.setMaintenanceBlocked,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
@@ -996,6 +997,7 @@ function AppContent() {
         loadError={generatedExamController.loadError}
         saving={generatedExamController.saving}
         saveError={generatedExamController.error}
+        retryableError={generatedExamController.retryableError}
         hasRetryableChange={generatedExamController.hasRetryableChange}
         exams={generatedExamController.exams}
         onClose={generatedExamController.closeList}
@@ -1003,7 +1005,17 @@ function AppContent() {
         onRetry={generatedExamController.retry}
         onDiscardFailure={generatedExamController.discardFailedChange}
         onOpen={generatedExamController.openExam}
-        onDelete={generatedExamController.remove}
+        onDelete={async (id) => {
+          const exam = generatedExamController.exams.find((item) => item.id === id);
+          if (!exam) return;
+          const confirmed = await confirm({
+            title: "모의고사 삭제",
+            message: `"${exam.title}"을(를) 삭제할까요? 저장된 문제 세트가 제거됩니다.`,
+            confirmLabel: "삭제",
+            variant: "destructive",
+          });
+          if (confirmed) await generatedExamController.remove(id);
+        }}
         onPrint={generatedExamController.print}
       />
       {showSettings && (

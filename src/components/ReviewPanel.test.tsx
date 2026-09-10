@@ -246,6 +246,36 @@ describe("ReviewPanel", () => {
     expect(onReview).toHaveBeenCalledTimes(1);
   });
 
+  it("retries session progress without repeating a saved review result", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    const onSessionSave = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("세션 저장 실패"))
+      .mockResolvedValueOnce(undefined);
+    render(
+      <ReviewPanel
+        title="오늘 복습"
+        entries={[entry]}
+        onClose={vi.fn()}
+        onReview={onReview}
+        onSessionSave={onSessionSave}
+        onOpenEntry={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    await waitFor(() => expect(onSessionSave).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("결과는 저장되었지만 진행 상태를 저장하지 못했습니다");
+    expect(onReview).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "세션 진행 상태 다시 저장" }));
+    await waitFor(() => expect(onSessionSave).toHaveBeenCalledTimes(3));
+    expect(onReview).toHaveBeenCalledTimes(1);
+  });
+
   it("replaces existing event and updates review stats on explicit rating edit", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
     render(
