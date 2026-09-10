@@ -464,6 +464,10 @@ export interface PendingDeletion {
   finalizeAfter: string;
   /** Restores the focused entry after an in-app Undo. Legacy records omit it. */
   wasSelected?: boolean;
+  /** An expired record retained only to retry derived-asset or graph cleanup. */
+  cleanupRetry?: boolean;
+  /** Graph link cleanup still needs to run for this expired record. */
+  graphCleanupPending?: boolean;
 }
 
 export type EntryFormData = Omit<

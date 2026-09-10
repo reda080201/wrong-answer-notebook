@@ -253,14 +253,16 @@ function AppContent() {
     sectionEntryCount,
   } = navigation;
 
-  const handleFinalizedKnowledgeGraphEntries = useCallback(async (entryIds: string[]) => {
-    for (const entryId of entryIds) await knowledgeGraph.removeEntryLinks(entryId);
-  }, [knowledgeGraph.removeEntryLinks]);
+  const { removeEntryLinks } = knowledgeGraph;
+  const handleFinalizedKnowledgeGraphEntry = useCallback(
+    async (entryId: string) => removeEntryLinks(entryId),
+    [removeEntryLinks],
+  );
   const pendingDeletions = usePendingDeletionCoordinator({
     entries,
     restore: restorePendingDeletion,
     setSelectedId,
-    onFinalizedEntryIds: handleFinalizedKnowledgeGraphEntries,
+    onFinalizeEntry: handleFinalizedKnowledgeGraphEntry,
   });
   useEffect(() => {
     pendingDeletionFlushRef.current = pendingDeletions.flush;
@@ -952,9 +954,14 @@ function AppContent() {
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
         })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
-      {pendingDeletions.latest && (
-        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latest!)}>
-          {`"${pendingDeletions.latest.entry.title || "항목"}"을(를) 삭제했습니다.`}
+      {pendingDeletions.latestUndoable && (
+        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latestUndoable!)}>
+          {`"${pendingDeletions.latestUndoable.entry.title || "항목"}"을(를) 삭제했습니다.`}
+        </Snackbar>
+      )}
+      {pendingDeletions.error && (
+        <Snackbar actionLabel="다시 시도" onAction={() => void pendingDeletions.finalizeExpired()}>
+          삭제 항목 정리를 완료하지 못했습니다.
         </Snackbar>
       )}
       {showExamBuilder && (

@@ -32,6 +32,32 @@ const relationLabels: Array<[KnowledgeRelationType, string]> = [
   ["extends", "확장"],
 ];
 
+export function SubjectDraftInput({
+  entity,
+  onCommit,
+}: {
+  entity: KnowledgeEntity;
+  onCommit(entityId: string, subject: string | undefined): Promise<void>;
+}) {
+  const [draft, setDraft] = useState(entity.subject ?? "");
+  const commit = () => {
+    const subject = draft.trim() || undefined;
+    if (subject === entity.subject) return;
+    void onCommit(entity.id, subject);
+  };
+  return (
+    <label>
+      과목
+      <input
+        value={draft}
+        placeholder="전체 과목"
+        onChange={(event) => setDraft(event.currentTarget.value)}
+        onBlur={commit}
+      />
+    </label>
+  );
+}
+
 export default function KnowledgeGraphView({
   graph,
   onEnsureEntity,
@@ -145,7 +171,11 @@ export default function KnowledgeGraphView({
           {selected ? <>
             <div className="knowledge-graph-detail__heading"><div><span className="eyebrow">{selected.type}</span><h2>{selected.name}</h2><p>{selected.description || "아직 설명이 없습니다."}</p></div><span className="knowledge-graph-provenance">{selected.provenance === "import" ? "기존 자료에서 찾음" : "수동 연결"}</span><button type="button" className="ui-button ui-button--secondary" onClick={() => void removeSelectedEntity()}>삭제</button></div>
             {mutationError && <p className="form-error" role="alert">{mutationError} {retryMutation && <button type="button" className="btn-secondary btn-sm" onClick={() => void runMutation(retryMutation)}>다시 시도</button>}</p>}
-            <label>과목 <input value={selected.subject ?? ""} placeholder="전체 과목" onBlur={(event) => { const subject = event.currentTarget.value.trim() || undefined; void runMutation(() => onUpdateEntity(selected.id, { subject })); }} /></label>
+            <SubjectDraftInput
+              key={`${selected.id}:${selected.subject ?? ""}`}
+              entity={selected}
+              onCommit={(entityId, subject) => runMutation(() => onUpdateEntity(entityId, { subject }))}
+            />
             <section><h3>별칭</h3><div className="knowledge-graph-question-picker">{selected.aliases.map((alias) => <button type="button" key={alias} onClick={() => void runMutation(() => onUpdateEntity(selected.id, { aliases: selected.aliases.filter((item) => item !== alias) }))}>{alias} <Unlink size={14} /></button>)}<button type="button" onClick={() => void (async () => { const alias = await prompt({ title: "별칭 추가", message: "별칭을 입력하세요." }); const next = alias?.trim(); if (!next || selected.aliases.some((item) => normalizeKnowledgeLabel(item) === normalizeKnowledgeLabel(next))) return; await runMutation(() => onUpdateEntity(selected.id, { aliases: [...selected.aliases, next] })); })()}>별칭 추가</button></div></section>
             <section><h3>관련 개념</h3><div className="knowledge-graph-relations">{relatedEntities.length ? relatedEntities.map(({ relation, entity }) => <div className="knowledge-graph-relation" key={relation.id}><button type="button" onClick={() => setSelectedId(entity.id)}>{entity.name}</button><span>{relationLabels.find(([type]) => type === relation.type)?.[1] ?? relation.type}</span><button type="button" className="ui-icon-button" aria-label={`${entity.name} 연결 해제`} onClick={() => void runMutation(() => onRemoveRelation(relation.id))}><Unlink size={15} /></button></div>) : <p className="knowledge-graph-muted">연결된 개념이 없습니다.</p>}</div>
               <div className="knowledge-graph-link-controls"><select value={relationType} onChange={(event) => setRelationType(event.target.value as KnowledgeRelationType)} aria-label="관계 유형">{relationLabels.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><select aria-label="연결할 개념" defaultValue="" onChange={(event) => { const target = graph.entities.find((entity) => entity.id === event.target.value); if (target) void saveRelationWithEntities(target); }}><option value="">개념 연결</option>{graph.entities.filter((entity) => entity.id !== selected.id && (!subjectFilter || entity.subject === subjectFilter)).map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}</select></div>

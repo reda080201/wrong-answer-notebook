@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { PendingDeletion, WrongAnswerEntry } from "../types";
-import { finalizePendingDeletionRecords, getProtectedPendingImageReferences } from "./usePendingDeletionCoordinator";
+import { finalizePendingDeletionRecords, getProtectedPendingImageReferences, getUndoablePendingDeletions } from "./usePendingDeletionCoordinator";
 
 const entry = (id: string): WrongAnswerEntry => ({
   id,
@@ -66,7 +66,7 @@ describe("pending deletion asset protection", () => {
     expect(deleteAsset).toHaveBeenCalledTimes(3);
     expect(deleteAsset).toHaveBeenCalledWith("shared.png");
     expect(result.retained).toEqual([]);
-    expect(result.finalizedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.logicallyFinalizedEntryIds).toEqual(["entry-a", "entry-b"]);
   });
 
   it("protects an unexpired record and live entry from cleanup", async () => {
@@ -113,6 +113,14 @@ describe("pending deletion asset protection", () => {
       expect.objectContaining({ id: "pending-a", imageReferences: ["shared.png"] }),
       expect.objectContaining({ id: "pending-b", imageReferences: ["shared.png"] }),
     ]);
-    expect(result.finalizedEntryIds).toEqual(["entry-a", "entry-b"]);
+    expect(result.logicallyFinalizedEntryIds).toEqual(["entry-a", "entry-b"]);
+  });
+
+  it("separates expired cleanup retries from the undoable queue", () => {
+    const expiredRetry = { ...pending("retry", "entry-a", ["locked.png"]), cleanupRetry: true };
+    const active = { ...pending("active", "entry-b", ["undo.png"]), finalizeAfter: "2026-01-01T00:02:00.000Z" };
+
+    expect(getUndoablePendingDeletions([expiredRetry, active], Date.parse("2026-01-01T00:01:00.000Z"))).toEqual([active]);
+    expect(getUndoablePendingDeletions([expiredRetry], Date.parse("2026-01-01T00:01:00.000Z"))).toEqual([]);
   });
 });
