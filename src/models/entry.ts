@@ -406,6 +406,7 @@ export interface WrongAnswerEntry {
   problemSource?: ProblemSourceInfo;
   /** Optional library navigation metadata; legacy entries remain valid without it. */
   resourceClassification?: LearningResourceClassification;
+  libraryFavorite?: boolean;
   similarQuestionLinks?: SimilarQuestionLink[];
   /** 오답 / 문제지 / 개념 */
   entryKind: EntryKind;

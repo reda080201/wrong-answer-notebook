@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { LibraryFolder, WrongAnswerEntry } from "../../../types";
 import LibraryExplorer from "./LibraryExplorer";
@@ -33,6 +33,20 @@ describe("LibraryExplorer", () => {
     expect(screen.getByText("단원 탐색으로 돌아가기")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "새 폴더" }));
     expect(handlers.onCreateFolder).toHaveBeenCalledWith("math");
+  });
+
+  it("renders file mode and persists favorite without opening the entry", async () => {
+    const handlers = { ...props(), onUpdateEntries: vi.fn().mockResolvedValue(undefined) };
+    render(<LibraryExplorer {...handlers} preferences={{ separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "file" }} />);
+    expect(screen.getByText("미분").closest(".library-file-open")).toHaveAttribute("title", "미분");
+    fireEvent.click(screen.getByRole("button", { name: "즐겨찾기에 추가" }));
+    expect(handlers.onOpenEntry).not.toHaveBeenCalled();
+    await waitFor(() => expect(handlers.onUpdateEntries).toHaveBeenCalledWith(["one"], { libraryFavorite: true }));
+  });
+
+  it("defaults to standard mode for legacy preferences", () => {
+    render(<LibraryExplorer {...props()} preferences={{ separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }} />);
+    expect(screen.queryByRole("button", { name: "즐겨찾기에 추가" })).not.toBeInTheDocument();
   });
 
   it("persists the selected unit and section through the navigation callback", () => {

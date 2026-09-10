@@ -467,7 +467,7 @@ fn provider_base_url(config: &AiProviderConfig) -> String {
         .map(str::trim)
         .filter(|value| !value.is_empty())
     {
-        return base.trim_end_matches('/').to_string();
+        return normalize_provider_base_url(base);
     }
     match effective_provider(config) {
         AiProviderType::OpenAi => "https://api.openai.com/v1".into(),
@@ -483,16 +483,49 @@ fn provider_base_url(config: &AiProviderConfig) -> String {
     }
 }
 
-fn extract_openai_text(value: &serde_json::Value) -> Result<String, String> {
+fn normalize_provider_base_url(base: &str) -> String {
+    let mut normalized = base.trim().trim_end_matches('/').to_string();
+    for suffix in ["/chat/completions", "/models"] {
+        if normalized.ends_with(suffix) {
+            normalized.truncate(normalized.len() - suffix.len());
+            break;
+        }
+    }
+    normalized.trim_end_matches('/').to_string()
+}
+
+fn openrouter_model_available(value: &serde_json::Value, model: &str) -> bool {
     value
+        .get("data")
+        .and_then(serde_json::Value::as_array)
+        .map_or(false, |models| {
+            models
+                .iter()
+                .any(|item| item.get("id").and_then(serde_json::Value::as_str) == Some(model))
+        })
+}
+
+fn extract_openai_text(value: &serde_json::Value) -> Result<String, String> {
+    let content = value
         .get("choices")
         .and_then(|items| items.as_array())
         .and_then(|items| items.first())
         .and_then(|item| item.get("message"))
         .and_then(|message| message.get("content"))
-        .and_then(|content| content.as_str())
+        .ok_or_else(|| "OpenAI 호환 응답에서 텍스트를 찾지 못했습니다.".to_string())?;
+    if let Some(text) = content.as_str().filter(|text| !text.trim().is_empty()) {
+        return Ok(text.to_owned());
+    }
+    content
+        .as_array()
+        .map(|parts| {
+            parts
+                .iter()
+                .filter_map(|part| part.get("text").and_then(serde_json::Value::as_str))
+                .collect::<Vec<_>>()
+                .join("\n")
+        })
         .filter(|text| !text.trim().is_empty())
-        .map(ToOwned::to_owned)
         .ok_or_else(|| "OpenAI 호환 응답에서 텍스트를 찾지 못했습니다.".into())
 }
 
@@ -743,10 +776,26 @@ pub(crate) fn test_ai_provider_connection(
         .send()
         .map_err(|error| format!("연결 테스트에 실패했습니다: {error}"))?;
     if !response.status().is_success() {
-        return Err(format!(
-            "provider 연결 테스트가 HTTP {}를 반환했습니다.",
-            response.status()
-        ));
+        let status = response.status();
+        return Err(if status.as_u16() == 401 || status.as_u16() == 403 {
+            "API key가 유효하지 않습니다.".into()
+        } else if status.as_u16() == 429 {
+            "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.".into()
+        } else if status.as_u16() == 402 {
+            "OpenRouter 크레딧이 부족합니다.".into()
+        } else if status.is_server_error() {
+            "AI 제공자 서버 오류입니다.".into()
+        } else {
+            format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
+        });
+    }
+    if provider == AiProviderType::OpenRouter {
+        let value: serde_json::Value = response
+            .json()
+            .map_err(|error| format!("OpenRouter 모델 목록을 읽지 못했습니다: {error}"))?;
+        if !openrouter_model_available(&value, config.model.trim()) {
+            return Err("OpenRouter에서 선택한 모델을 찾지 못했습니다.".into());
+        }
     }
     Ok(ai_provider_status(&app))
 }
@@ -1062,5 +1111,30 @@ mod tests {
         assert!(is_legacy_gemini_provider(AiProviderType::GeminiFlashLite));
         assert!(!is_legacy_gemini_provider(AiProviderType::OpenAi));
         assert!(!is_legacy_gemini_provider(AiProviderType::OpenRouter));
+    }
+
+    #[test]
+    fn openrouter_base_url_and_model_catalog_are_normalized_safely() {
+        assert_eq!(
+            normalize_provider_base_url(" https://openrouter.ai/api/v1/"),
+            "https://openrouter.ai/api/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("https://openrouter.ai/api/v1/chat/completions"),
+            "https://openrouter.ai/api/v1"
+        );
+        assert_eq!(
+            normalize_provider_base_url("https://openrouter.ai/api/v1/models"),
+            "https://openrouter.ai/api/v1"
+        );
+        let catalog = serde_json::json!({ "data": [{ "id": "openai/gpt-5.1-mini" }] });
+        assert!(openrouter_model_available(&catalog, "openai/gpt-5.1-mini"));
+        assert!(!openrouter_model_available(&catalog, "missing/model"));
+    }
+
+    #[test]
+    fn openai_compatible_structured_content_is_extracted() {
+        let response = serde_json::json!({ "choices": [{ "message": { "content": [{ "type": "text", "text": "결과" }] } }] });
+        assert_eq!(extract_openai_text(&response).expect("text"), "결과");
     }
 }

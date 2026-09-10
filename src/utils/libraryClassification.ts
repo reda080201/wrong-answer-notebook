@@ -35,6 +35,7 @@ export const DEFAULT_LIBRARY_PREFERENCES: LibraryPreferences = {
   defaultUnitView: "home",
   listDensity: "standard",
   showUserFolders: true,
+  displayMode: "standard",
 };
 
 function text(value: unknown): string | undefined {
@@ -87,6 +88,7 @@ export function normalizeLibraryPreferences(raw: unknown): LibraryPreferences {
       : DEFAULT_LIBRARY_PREFERENCES.defaultUnitView,
     listDensity: value.listDensity === "compact" ? "compact" : DEFAULT_LIBRARY_PREFERENCES.listDensity,
     showUserFolders: value.showUserFolders !== false,
+    displayMode: value.displayMode === "file" ? "file" : "standard",
   };
 }
 
