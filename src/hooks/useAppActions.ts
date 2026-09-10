@@ -352,7 +352,11 @@ export function useAppActions({
           return false;
         });
         const replacementAttempt = existingIndex >= 0 ? existingAttempts[existingIndex] : undefined;
-        const reviewTime = replacementAttempt ? new Date(replacementAttempt.reviewedAt) : new Date();
+        const reviewTime = replacementAttempt
+          ? new Date(replacementAttempt.reviewedAt)
+          : sub?.reviewedAt
+            ? new Date(sub.reviewedAt)
+            : new Date();
 
         const nextAttempts: ReviewAttempt[] = existingIndex >= 0
           ? existingAttempts.map((att, idx) => idx === existingIndex
@@ -410,7 +414,11 @@ export function useAppActions({
         return false;
       });
       const replacementAttempt = existingIndex >= 0 ? existingAttempts[existingIndex] : undefined;
-      const reviewTime = replacementAttempt ? new Date(replacementAttempt.reviewedAt) : new Date();
+      const reviewTime = replacementAttempt
+        ? new Date(replacementAttempt.reviewedAt)
+        : sub?.reviewedAt
+          ? new Date(sub.reviewedAt)
+          : new Date();
       const next = applyReviewResult(current, result, reviewTime, sub);
 
       const nextAttempts: ReviewAttempt[] = existingIndex >= 0

@@ -11,6 +11,7 @@ export function useGeneratedExams() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [retryableError, setRetryableError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const persistedRef = useRef<GeneratedExam[]>([]);
   const pendingRecipesRef = useRef(new Map<number, ExamRecipe>());
@@ -95,6 +96,7 @@ export function useGeneratedExams() {
       if (retrying) {
         failedRecipeRef.current = null;
         failedErrorRef.current = null;
+        setRetryableError(null);
         setHasRetryableChange(false);
       }
       if (mutation === mutationRef.current) setError(null);
@@ -104,6 +106,7 @@ export function useGeneratedExams() {
       const message = errorMessage(cause, "생성 모의고사를 저장하지 못했습니다.");
       failedRecipeRef.current = recipe;
       failedErrorRef.current = new Error(message, { cause });
+      setRetryableError(message);
       setHasRetryableChange(true);
       if (mutation === mutationRef.current) {
         setError(message);
@@ -125,6 +128,7 @@ export function useGeneratedExams() {
   const discardFailedChange = useCallback(() => {
     failedRecipeRef.current = null;
     failedErrorRef.current = null;
+    setRetryableError(null);
     setHasRetryableChange(false);
     setError(null);
     refreshVisible();
@@ -137,5 +141,5 @@ export function useGeneratedExams() {
     maintenanceBlockedRef.current = blocked;
   }, []);
 
-  return { exams, loading, loadError, saving, error, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, setGeneratedExamsMaintenanceBlocked, clearError: () => setError(null) };
+  return { exams, loading, loadError, saving, error, retryableError, hasRetryableChange, upsert, remove, retry, discardFailedChange, flush, reload, setGeneratedExamsMaintenanceBlocked, clearError: () => setError(null) };
 }

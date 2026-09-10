@@ -25,6 +25,7 @@ export async function flushPendingAppWrites(options: {
   flushGptSolutionDrafts?: () => Promise<void>;
   flushReviewSessions?: () => Promise<void>;
   flushPendingDeletions?: () => Promise<void>;
+  flushKnowledgeGraph?: () => Promise<void>;
   timeoutMs?: number;
 }): Promise<void> {
   const flush = async () => {
@@ -52,6 +53,9 @@ export async function flushPendingAppWrites(options: {
         : []),
       ...(options.flushPendingDeletions
         ? [{ name: "삭제 대기 항목", run: options.flushPendingDeletions }]
+        : []),
+      ...(options.flushKnowledgeGraph
+        ? [{ name: "지식 그래프", run: options.flushKnowledgeGraph }]
         : []),
     ];
     const results = await Promise.allSettled(
