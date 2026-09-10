@@ -4,6 +4,8 @@ import type { PendingDeletion, WrongAnswerEntry } from "../types";
 import { getAllImageFilenames } from "../utils/entry";
 import { getStorageBackend } from "../services/storageBackend";
 
+export type PendingDeletionLoadStatus = "loading" | "ready" | "error";
+
 export function getUndoablePendingDeletions(records: PendingDeletion[], now = Date.now()) {
   return records.filter((record) => !record.cleanupRetry && Date.parse(record.finalizeAfter) > now);
 }
@@ -99,6 +101,7 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
   const entriesRef = useRef(entries);
   const [pending, setPending] = useState<PendingDeletion[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [initialLoadStatus, setInitialLoadStatus] = useState<PendingDeletionLoadStatus>("loading");
   const finalizePromiseRef = useRef<Promise<void> | null>(null);
   const operationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const retryDelayRef = useRef(1_000);
@@ -173,10 +176,24 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
   useEffect(() => {
     void (async () => {
       const loader = getStorageBackend().loadPendingDeletions;
-      if (!loader) return;
-      setPending(await loader());
-      await finalizeExpired();
-    })().catch((cause) => setError(cause instanceof Error ? cause.message : "삭제 대기 항목을 불러오지 못했습니다."));
+      if (!loader) {
+        setInitialLoadStatus("ready");
+        return;
+      }
+      try {
+        setPending(await loader());
+        setInitialLoadStatus("ready");
+      } catch (cause) {
+        setInitialLoadStatus("error");
+        setError(cause instanceof Error ? cause.message : "삭제 대기 항목을 불러오지 못했습니다.");
+        return;
+      }
+      try {
+        await finalizeExpired();
+      } catch (cause) {
+        setError(cause instanceof Error ? cause.message : "삭제 대기 항목을 정리하지 못했습니다.");
+      }
+    })();
   }, [finalizeExpired]);
 
   useEffect(() => {
@@ -219,6 +236,7 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
     undoableRecords,
     cleanupRetryRecords,
     pending,
+    initialLoadStatus,
     error,
     record,
     undo,

@@ -12,6 +12,8 @@ import { normalizeQuestionNumber } from "../utils/questionNumber";
 import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
 import { reconcileKnowledgeGraphQuestionLinks } from "../features/learning/utils/reconcileKnowledgeGraph";
 
+export type KnowledgeGraphLoadStatus = "loading" | "ready" | "error";
+
 function withTimestamp<T>(value: T, now: string): T & { createdAt: string; updatedAt: string } {
   const candidate = value as T & { createdAt?: string };
   return { ...value, createdAt: candidate.createdAt ?? now, updatedAt: now };
@@ -21,6 +23,8 @@ export function useKnowledgeGraph() {
   const [graph, setGraph] = useState<KnowledgeGraphStore>({ entities: [], relations: [], questionLinks: [] });
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loadStatus, setLoadStatus] = useState<KnowledgeGraphLoadStatus>("loading");
+  const [maintenanceBlocked, setMaintenanceBlockedState] = useState(false);
   const graphRef = useRef(graph);
   const queueRef = useRef(Promise.resolve());
   const maintenanceBlockedRef = useRef(false);
@@ -29,16 +33,18 @@ export function useKnowledgeGraph() {
 
   const refresh = useCallback(async () => {
     const loader = getStorageBackend().loadKnowledgeGraph;
-    if (!loader) { setReady(true); return; }
+    if (!loader) { setReady(true); setLoadStatus("ready"); return; }
+    setLoadStatus("loading");
     try {
       const next = normalizeKnowledgeGraph(await loader());
       graphRef.current = next;
       setGraph(next);
       setError(null);
+      setReady(true);
+      setLoadStatus("ready");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
-    } finally {
-      setReady(true);
+      setLoadStatus("error");
     }
   }, []);
 
@@ -46,6 +52,11 @@ export function useKnowledgeGraph() {
     let mounted = true;
     const loader = getStorageBackend().loadKnowledgeGraph;
     if (!loader) {
+      void Promise.resolve().then(() => {
+        if (!mounted) return;
+        setReady(true);
+        setLoadStatus("ready");
+      });
       return () => { mounted = false; };
     }
     void loader().then((value) => {
@@ -55,10 +66,12 @@ export function useKnowledgeGraph() {
       setGraph(next);
       setError(null);
       setReady(true);
+      setLoadStatus("ready");
     }).catch((cause: unknown) => {
       if (!mounted) return;
       setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
-      setReady(true);
+      setReady(false);
+      setLoadStatus("error");
     });
     return () => { mounted = false; };
   }, []);
@@ -82,7 +95,10 @@ export function useKnowledgeGraph() {
     return queueRef.current;
   }, []);
   const flush = useCallback(async () => { await queueRef.current; }, []);
-  const setMaintenanceBlocked = useCallback((blocked: boolean) => { maintenanceBlockedRef.current = blocked; }, []);
+  const setMaintenanceBlocked = useCallback((blocked: boolean) => {
+    maintenanceBlockedRef.current = blocked;
+    setMaintenanceBlockedState(blocked);
+  }, []);
 
   const createEntity = useCallback(async (input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity> => {
     const now = new Date().toISOString();
@@ -156,5 +172,5 @@ export function useKnowledgeGraph() {
   }), [persist]);
   const removeEntity = useCallback((id: string) => persist((current) => ({ ...current, entities: current.entities.filter((entity) => entity.id !== id), relations: current.relations.filter((relation) => relation.fromEntityId !== id && relation.toEntityId !== id), questionLinks: current.questionLinks.filter((link) => link.entityId !== id) })), [persist]);
 
-  return { graph, ready, error, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, reconcileQuestionLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
+  return { graph, ready, loadStatus, error, maintenanceBlocked, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, reconcileQuestionLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
 }

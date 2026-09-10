@@ -1,6 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { renderHook, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { PendingDeletion, WrongAnswerEntry } from "../types";
-import { finalizePendingDeletionRecords, getProtectedPendingImageReferences, getUndoablePendingDeletions } from "./usePendingDeletionCoordinator";
+vi.mock("../services/storageBackend", () => ({ getStorageBackend: vi.fn() }));
+import { finalizePendingDeletionRecords, getProtectedPendingImageReferences, getUndoablePendingDeletions, usePendingDeletionCoordinator } from "./usePendingDeletionCoordinator";
+import { getStorageBackend } from "../services/storageBackend";
 
 const entry = (id: string): WrongAnswerEntry => ({
   id,
@@ -32,6 +35,8 @@ const pending = (id: string, entryId: string, imageReferences: string[]): Pendin
 });
 
 describe("pending deletion asset protection", () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it("protects images referenced by another undoable snapshot", () => {
     const records = [
       pending("pending-a", "entry-a", ["shared.png", "a.png"]),
@@ -122,5 +127,33 @@ describe("pending deletion asset protection", () => {
 
     expect(getUndoablePendingDeletions([expiredRetry, active], Date.parse("2026-01-01T00:01:00.000Z"))).toEqual([active]);
     expect(getUndoablePendingDeletions([expiredRetry], Date.parse("2026-01-01T00:01:00.000Z"))).toEqual([]);
+  });
+
+  it("reports durable pending load readiness independently from an empty result", async () => {
+    vi.mocked(getStorageBackend).mockReturnValue({
+      loadPendingDeletions: vi.fn().mockResolvedValue([]),
+      savePendingDeletions: vi.fn().mockResolvedValue(undefined),
+    } as never);
+    const { result } = renderHook(() => usePendingDeletionCoordinator({
+      entries: [],
+      restore: vi.fn().mockResolvedValue(undefined),
+      setSelectedId: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.initialLoadStatus).toBe("ready"));
+    expect(result.current.pending).toEqual([]);
+  });
+
+  it("keeps pending readiness unavailable when the durable load fails", async () => {
+    vi.mocked(getStorageBackend).mockReturnValue({
+      loadPendingDeletions: vi.fn().mockRejectedValue(new Error("offline")),
+      savePendingDeletions: vi.fn(),
+    } as never);
+    const { result } = renderHook(() => usePendingDeletionCoordinator({
+      entries: [],
+      restore: vi.fn().mockResolvedValue(undefined),
+      setSelectedId: vi.fn(),
+    }));
+    await waitFor(() => expect(result.current.initialLoadStatus).toBe("error"));
+    expect(result.current.pending).toEqual([]);
   });
 });
