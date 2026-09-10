@@ -84,7 +84,7 @@ interface UseAppActionsOptions {
     removedImages: string[],
   ) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
-  deleteEntryWithUndo?: (id: string, wasSelected?: boolean) => Promise<import("../types").PendingDeletion>;
+  deleteEntryWithUndo?: (id: string, wasSelected?: boolean, onPersistedPending?: (pending: import("../types").PendingDeletion) => void) => Promise<import("../types").PendingDeletion>;
   onPendingDeletion?: (pending: import("../types").PendingDeletion) => void;
   patchEntry: (
     id: string,
@@ -110,6 +110,7 @@ interface UseAppActionsOptions {
   refreshGeneratedExams?: () => Promise<boolean>;
   refreshLibraryFolders?: () => Promise<boolean>;
   refreshGptSolutionDrafts?: () => Promise<boolean>;
+  refreshKnowledgeGraph?: () => Promise<void>;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -144,6 +145,7 @@ export function useAppActions({
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
+  refreshKnowledgeGraph,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -688,8 +690,9 @@ export function useAppActions({
           refreshGeneratedExams?.(),
           refreshLibraryFolders?.(),
           refreshGptSolutionDrafts?.(),
+          refreshKnowledgeGraph ? refreshKnowledgeGraph().then(() => true) : Promise.resolve(true),
         ]);
-        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안"];
+        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프"];
         const failedReloads = reloads
           .map((success, index) => success !== true ? reloadNames[index] : null)
           .filter((name): name is string => name !== null);
@@ -782,7 +785,7 @@ export function useAppActions({
     const entry = entries.find((item) => item.id === entryId);
     if (!entry) return;
     if (!(await confirm({ title: "항목 삭제", message: `"${getEntryTitle(entry)}"을(를) 삭제할까요? 첨부 이미지도 함께 삭제됩니다.`, confirmLabel: "삭제" }))) return;
-    if (deleteEntryWithUndo) onPendingDeletion?.(await deleteEntryWithUndo(entryId, selected?.id === entryId));
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(entryId, selected?.id === entryId, onPendingDeletion);
     else await deleteEntry(entryId);
     if (selected?.id === entryId) setSelectedId(null);
   };
@@ -823,7 +826,7 @@ export function useAppActions({
   const handleDelete = async () => {
     if (!selected) return;
     if (!(await confirm({ title: "항목 삭제", message: "이 항목을 삭제할까요? 첨부 이미지도 함께 삭제됩니다.", confirmLabel: "삭제" }))) return;
-    if (deleteEntryWithUndo) onPendingDeletion?.(await deleteEntryWithUndo(selected.id, true));
+    if (deleteEntryWithUndo) await deleteEntryWithUndo(selected.id, true, onPendingDeletion);
     else await deleteEntry(selected.id);
     setSelectedId(null);
   };

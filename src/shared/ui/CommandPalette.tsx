@@ -33,6 +33,7 @@ export default function CommandPalette({ commands }: { commands: AppCommand[] })
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.isComposing || event.keyCode === 229) return;
       if (event.key.toLowerCase() === "k" && (event.metaKey || event.ctrlKey)) {
         event.preventDefault();
         setOpen(true);
@@ -88,9 +89,9 @@ export default function CommandPalette({ commands }: { commands: AppCommand[] })
   return <>
   <Dialog open={open} size="sm" ariaLabel="명령 팔레트" title="명령 팔레트" onClose={closePalette}>
     <div className="command-palette" data-dialog-editing="true">
-      <input autoFocus type="search" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="명령 검색" aria-label="명령 검색" />
-      <div role="listbox" aria-label="명령 목록">
-        {filtered.length ? filtered.map((command, index) => <button key={command.id} type="button" role="option" aria-selected={index === activeIndex} onMouseEnter={() => setActiveIndex(index)} onClick={() => { closePalette(); command.onExecute(); }}><span>{command.label}</span>{command.hint && <small>{command.hint}</small>}</button>) : <p className="empty-state">일치하는 명령이 없습니다.</p>}
+      <input autoFocus type="search" value={query} onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }} placeholder="명령 검색" aria-label="명령 검색" role="combobox" aria-controls="command-palette-list" aria-activedescendant={filtered[activeIndex] ? `command-${filtered[activeIndex].id}` : undefined} aria-expanded="true" />
+      <div id="command-palette-list" role="listbox" aria-label="명령 목록">
+        {filtered.length ? filtered.map((command, index) => <button id={`command-${command.id}`} key={command.id} type="button" role="option" aria-selected={index === activeIndex} onMouseEnter={() => setActiveIndex(index)} onClick={() => { closePalette(); command.onExecute(); }}><span>{command.label}</span>{command.hint && <small>{command.hint}</small>}</button>) : <p className="empty-state">일치하는 명령이 없습니다.</p>}
       </div>
     </div>
   </Dialog>

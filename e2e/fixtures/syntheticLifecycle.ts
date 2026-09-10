@@ -57,8 +57,12 @@ export const syntheticLifecycleEntry = {
   updatedAt: now,
 };
 
-export async function seedBrowserStorage(page: Page, entries: unknown[] = [syntheticLifecycleEntry]) {
-  await page.addInitScript((seed) => {
+export async function seedBrowserStorage(
+  page: Page,
+  entries: unknown[] = [syntheticLifecycleEntry],
+  knowledgeGraph?: unknown,
+) {
+  await page.addInitScript(({ seed, graph }) => {
     if (localStorage.getItem("wrong-answer-e2e-seeded") === "true") return;
     localStorage.clear();
     localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: seed }));
@@ -66,12 +70,13 @@ export async function seedBrowserStorage(page: Page, entries: unknown[] = [synth
     localStorage.setItem("wrong-answer-generated-exams", "[]");
     localStorage.setItem("wrong-answer-gpt-solution-roundtrip-drafts", "[]");
     localStorage.setItem("wrong-answer-library-folders", "[]");
+    localStorage.setItem("wrong-answer-knowledge-graph", JSON.stringify(graph ?? { entities: [], relations: [], questionLinks: [] }));
     localStorage.setItem("wrong-answer-theme", "light");
     localStorage.removeItem("wrong-answer-app-sidebar-collapsed");
     localStorage.removeItem("wrong-answer-entry-pane-collapsed");
     localStorage.removeItem("wrong-answer-entry-pane-width");
     localStorage.setItem("wrong-answer-e2e-seeded", "true");
-  }, entries);
+  }, { seed: entries, graph: knowledgeGraph });
 }
 
 export async function openSyntheticSheet(page: Page) {

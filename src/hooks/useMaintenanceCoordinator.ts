@@ -8,6 +8,7 @@ interface MaintenanceCoordinatorOptions {
   flushGptSolutionDrafts?(): Promise<void>;
   flushReviewSessions?(): Promise<void>;
   flushPendingDeletions?(): Promise<void>;
+  flushKnowledgeGraph?(): Promise<void>;
   flushActiveExam?(): Promise<void>;
   flushTransientWrites?(): Promise<void>;
   setTransientWritesMaintenanceBlocked?(blocked: boolean): void;
@@ -16,6 +17,7 @@ interface MaintenanceCoordinatorOptions {
   setGeneratedExamsMaintenanceBlocked(blocked: boolean): void;
   setLibraryMaintenanceBlocked?(blocked: boolean): void;
   setGptSolutionDraftsMaintenanceBlocked?(blocked: boolean): void;
+  setKnowledgeGraphMaintenanceBlocked?(blocked: boolean): void;
 }
 
 export function useMaintenanceCoordinator({
@@ -26,6 +28,7 @@ export function useMaintenanceCoordinator({
   flushGptSolutionDrafts = async () => undefined,
   flushReviewSessions = async () => undefined,
   flushPendingDeletions = async () => undefined,
+  flushKnowledgeGraph = async () => undefined,
   flushActiveExam = async () => undefined,
   flushTransientWrites = async () => undefined,
   setTransientWritesMaintenanceBlocked = () => undefined,
@@ -34,6 +37,7 @@ export function useMaintenanceCoordinator({
   setGeneratedExamsMaintenanceBlocked,
   setLibraryMaintenanceBlocked = () => undefined,
   setGptSolutionDraftsMaintenanceBlocked = () => undefined,
+  setKnowledgeGraphMaintenanceBlocked = () => undefined,
 }: MaintenanceCoordinatorOptions) {
   const activeRef = useRef(false);
 
@@ -53,6 +57,7 @@ export function useMaintenanceCoordinator({
     setGeneratedExamsMaintenanceBlocked(true);
     setLibraryMaintenanceBlocked(true);
     setGptSolutionDraftsMaintenanceBlocked(true);
+    setKnowledgeGraphMaintenanceBlocked(true);
     try {
       await Promise.all([
         flushEntries(),
@@ -62,6 +67,7 @@ export function useMaintenanceCoordinator({
         flushGptSolutionDrafts(),
         flushReviewSessions(),
         flushPendingDeletions(),
+        flushKnowledgeGraph(),
         flushActiveExam(),
       ]);
       return await task();
@@ -71,8 +77,9 @@ export function useMaintenanceCoordinator({
       setGeneratedExamsMaintenanceBlocked(false);
       setLibraryMaintenanceBlocked(false);
       setGptSolutionDraftsMaintenanceBlocked(false);
+      setKnowledgeGraphMaintenanceBlocked(false);
       setTransientWritesMaintenanceBlocked(false);
       activeRef.current = false;
     }
-  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
+  }, [flushActiveExam, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushKnowledgeGraph, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setKnowledgeGraphMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
 }

@@ -54,6 +54,7 @@ import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 import { NotificationProvider } from "./shared/ui/NotificationProvider";
+import { useKnowledgeGraph } from "./hooks/useKnowledgeGraph";
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (
@@ -65,6 +66,7 @@ export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newB
 
 function AppContent() {
   const storageBackendKind = getStorageBackendKind();
+  const knowledgeGraph = useKnowledgeGraph();
   const { confirm, prompt } = useAppDialog();
   const {
     entries,
@@ -207,6 +209,7 @@ function AppContent() {
     flushGptSolutionDrafts: gptSolutionDrafts.flush,
     flushReviewSessions: reviewSessions.flush,
     flushPendingDeletions: () => pendingDeletionFlushRef.current(),
+    flushKnowledgeGraph: knowledgeGraph.flush,
     flushTransientWrites,
     setTransientWritesMaintenanceBlocked,
     setEntriesMaintenanceBlocked,
@@ -214,6 +217,7 @@ function AppContent() {
     setGeneratedExamsMaintenanceBlocked,
     setLibraryMaintenanceBlocked: library.setMaintenanceBlocked,
     setGptSolutionDraftsMaintenanceBlocked: gptSolutionDrafts.setMaintenanceBlocked,
+    setKnowledgeGraphMaintenanceBlocked: knowledgeGraph.setMaintenanceBlocked,
     confirmCloseWithoutSaving: () => confirm({
       title: "저장하지 않고 종료",
       message: "저장되지 않은 변경 내용이 사라질 수 있습니다. 정말 저장하지 않고 종료하시겠습니까?",
@@ -249,14 +253,26 @@ function AppContent() {
     sectionEntryCount,
   } = navigation;
 
+  const { removeEntryLinks } = knowledgeGraph;
+  const handleFinalizedKnowledgeGraphEntry = useCallback(
+    async (entryId: string) => removeEntryLinks(entryId),
+    [removeEntryLinks],
+  );
   const pendingDeletions = usePendingDeletionCoordinator({
     entries,
     restore: restorePendingDeletion,
     setSelectedId,
+    onFinalizeEntry: handleFinalizedKnowledgeGraphEntry,
   });
   useEffect(() => {
     pendingDeletionFlushRef.current = pendingDeletions.flush;
   }, [pendingDeletions.flush]);
+  const { ready: knowledgeGraphReady, reconcileQuestionLinks } = knowledgeGraph;
+  useEffect(() => {
+    if (!knowledgeGraphReady) return;
+    const protectedEntryIds = new Set(pendingDeletions.pending.map((record) => record.entry.id));
+    void reconcileQuestionLinks(buildQuestionBankItems(entries), protectedEntryIds).catch(() => undefined);
+  }, [entries, knowledgeGraphReady, pendingDeletions.pending, reconcileQuestionLinks]);
   const [onboardingOpen, setOnboardingOpen] = useState(false);
   const dismissOnboarding = useCallback((dontShowAgain: boolean) => {
     setOnboardingOpen(false);
@@ -341,6 +357,7 @@ function AppContent() {
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,
+    refreshKnowledgeGraph: knowledgeGraph.refresh,
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
@@ -649,6 +666,8 @@ function AppContent() {
                   ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
                   : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
               }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
+              knowledgeGraph={knowledgeGraph}
+              subjectFilter={subjectFilter}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -668,6 +687,14 @@ function AppContent() {
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
+              knowledgeGraph={knowledgeGraph}
+              subjectFilter={subjectFilter}
+              onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
+                const itemEntry = entries.find((entry) => entry.id === item.entryId);
+                return itemEntry?.entryKind === "problem_sheet"
+                  ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
+                  : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
+              }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
                   entryId: entry.id,
@@ -927,9 +954,14 @@ function AppContent() {
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
         })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
-      {pendingDeletions.latest && (
-        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latest!)}>
-          {`"${pendingDeletions.latest.entry.title || "항목"}"을(를) 삭제했습니다.`}
+      {pendingDeletions.latestUndoable && (
+        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latestUndoable!)}>
+          {`"${pendingDeletions.latestUndoable.entry.title || "항목"}"을(를) 삭제했습니다.`}
+        </Snackbar>
+      )}
+      {pendingDeletions.error && (
+        <Snackbar actionLabel="다시 시도" onAction={() => void pendingDeletions.finalizeExpired()}>
+          삭제 항목 정리를 완료하지 못했습니다.
         </Snackbar>
       )}
       {showExamBuilder && (

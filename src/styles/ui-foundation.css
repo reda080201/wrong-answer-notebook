@@ -45,9 +45,10 @@
 .form-error { margin: 8px 12px; }
 
 @media (max-width: 1100px) {
-  .toolbar { gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
-  .toolbar .search-input { min-width: 220px; }
-  .filter-toggle--wrap { max-width: none; }
+  .toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 8px; padding: 10px 12px; align-items: center; }
+  .toolbar .search-input { min-width: 220px; width: 100%; }
+  .toolbar .filter-toggle--wrap { grid-column: 1 / -1; max-width: none; overflow-x: auto; flex-wrap: nowrap; }
+  .toolbar .filter-toggle--wrap button, .toolbar .review-launcher, .toolbar-settings-button { white-space: nowrap; }
 }
 
 @media (max-width: 768px) {

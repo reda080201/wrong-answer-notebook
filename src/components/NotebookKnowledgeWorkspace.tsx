@@ -10,6 +10,10 @@ import { buildQuestionBankItems } from "../features/question-bank/utils/buildQue
 import { patchQuestionClassification, type QuestionMetaPatch } from "../features/question-bank/utils/patchQuestionClassification";
 import type { QuestionBankItem } from "../features/question-bank/model/questionBankTypes";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
+import KnowledgeGraphView from "../features/learning/components/KnowledgeGraphView";
+import type { KnowledgeEntity, KnowledgeGraphStore, KnowledgeRelationType } from "../types";
+import { useState } from "react";
+import { projectLegacyKnowledgeGraph } from "../features/learning/utils/knowledgeGraphProjection";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 
@@ -27,6 +31,20 @@ interface NotebookKnowledgeWorkspaceProps {
   onOpenAiSettings?: () => void;
   onRegisterScrollContainer?(key: string, element: HTMLElement | null): void;
   onStartReview?(items: QuestionBankItem[]): void;
+  knowledgeGraph?: {
+    graph: KnowledgeGraphStore;
+    error: string | null;
+    refresh(): Promise<void>;
+    ensureEntity(entity: KnowledgeEntity): Promise<KnowledgeEntity>;
+    createEntity(input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity>;
+    saveRelation(input: { id: string; fromEntityId: string; toEntityId: string; type: KnowledgeRelationType; provenance: "manual" }): Promise<void>;
+    saveQuestionLink(input: { id: string; entityId: string; entryId: string; questionNumber: string; relation: "tests"; provenance: "manual" }): Promise<void>;
+    removeRelation(id: string): Promise<void>;
+    removeQuestionLink(id: string): Promise<void>;
+    updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "subject" | "description" | "aliases">>): Promise<void>;
+    removeEntity(id: string): Promise<void>;
+  };
+  subjectFilter?: string | null;
 }
 
 export default function NotebookKnowledgeWorkspace({
@@ -43,7 +61,12 @@ export default function NotebookKnowledgeWorkspace({
   onOpenAiSettings,
   onRegisterScrollContainer,
   onStartReview,
+  knowledgeGraph,
+  subjectFilter,
 }: NotebookKnowledgeWorkspaceProps) {
+  const [learningView, setLearningView] = useState<"blocks" | "graph">("blocks");
+  const projectedGraph = knowledgeGraph ? projectLegacyKnowledgeGraph(knowledgeGraph.graph, entries) : undefined;
+  const learningViewSwitcher = knowledgeGraph ? <div className="knowledge-view-switcher" role="group" aria-label="학습 허브 보기"><button type="button" aria-pressed={learningView === "blocks"} className={learningView === "blocks" ? "is-active" : ""} onClick={() => setLearningView("blocks")}>학습 블록</button><button type="button" aria-pressed={learningView === "graph"} className={learningView === "graph" ? "is-active" : ""} onClick={() => setLearningView("graph")}>개념 관계</button></div> : null;
   if (mode === "question-bank") {
     return (
       <QuestionBankView
@@ -60,13 +83,35 @@ export default function NotebookKnowledgeWorkspace({
         }}
         onStartReview={onStartReview}
         onRegisterScrollContainer={onRegisterScrollContainer}
+        subjectFilter={subjectFilter}
       />
     );
   }
 
   return (
-    <LearningHubView
-      entries={entries}
+    <>
+      {learningView === "graph" && knowledgeGraph ? <KnowledgeGraphView
+        graph={projectedGraph ?? knowledgeGraph.graph}
+        persistenceError={knowledgeGraph.error}
+        onRetryPersistence={knowledgeGraph.refresh}
+        onEnsureEntity={knowledgeGraph.ensureEntity}
+        questionBankItems={buildQuestionBankItems(entries).filter((item) => !subjectFilter || item.subject === subjectFilter)}
+        onCreateEntity={knowledgeGraph.createEntity}
+        onSaveRelation={knowledgeGraph.saveRelation}
+        onSaveQuestionLink={knowledgeGraph.saveQuestionLink}
+        onRemoveRelation={knowledgeGraph.removeRelation}
+        onRemoveQuestionLink={knowledgeGraph.removeQuestionLink}
+        onUpdateEntity={knowledgeGraph.updateEntity}
+        onRemoveEntity={knowledgeGraph.removeEntity}
+        onOpenQuestion={(item) => {
+          const entry = entries.find((candidate) => candidate.id === item.entryId);
+          if (entry) openEntry(entry, item.questionNumber);
+        }}
+        onStartReview={onStartReview ?? (() => undefined)}
+        subjectFilter={subjectFilter}
+        headerAccessory={learningViewSwitcher}
+      /> : <LearningHubView
+      entries={subjectFilter ? entries.filter((entry) => entry.subject === subjectFilter) : entries}
       highlightedBlock={learningHubTarget}
       questionBankItems={buildQuestionBankItems(entries)}
       onOpenSource={(entryId, questionNumber) => {
@@ -104,6 +149,8 @@ export default function NotebookKnowledgeWorkspace({
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
       onRegisterScrollContainer={onRegisterScrollContainer}
-    />
+      headerAccessory={learningViewSwitcher}
+      />}
+    </>
   );
 }

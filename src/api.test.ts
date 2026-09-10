@@ -367,6 +367,17 @@ describe("browser backup restore transaction", () => {
     })).rejects.toThrow("브라우저 백업 형식이 올바르지 않습니다");
   });
 
+  it("rejects malformed knowledge graph backups before changing the existing graph", async () => {
+    localStorage.setItem("wrong-answer-knowledge-graph", JSON.stringify({ entities: [], relations: [], questionLinks: [] }));
+    const before = localStorage.getItem("wrong-answer-knowledge-graph");
+    await expect(applyBrowserBackupAtomically({
+      meta: { version: 2, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },
+      entries: [], settings: defaultSettings, browserImages: {}, examSessions: [], generatedExams: [], libraryFolders: [], gptSolutionDrafts: [], importWorkspaceDraft: null, reviewSessions: [],
+      knowledgeGraph: { entities: [], relations: [], questionLinks: [{ id: "bad", entityId: "missing", entryId: "entry-1", questionNumber: "9", relation: "tests", provenance: "manual", createdAt: "2026-01-01T00:00:00.000Z" }] },
+    })).rejects.toThrow("지식 그래프");
+    expect(localStorage.getItem("wrong-answer-knowledge-graph")).toBe(before);
+  });
+
   it("rejects backups from an unsupported browser backup source or version", async () => {
     const basePayload = {
       entries: [],

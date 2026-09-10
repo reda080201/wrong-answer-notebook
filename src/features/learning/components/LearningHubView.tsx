@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import type { AiProviderStatus, LearningBlock, LearningImportance, LearningReviewStatus, LearningSubjectDomain, WrongAnswerEntry } from "../../../types";
 import MathText from "../../../components/MathText";
 import SubjectLearningDetails from "./SubjectLearningDetails";
@@ -45,6 +45,7 @@ interface LearningHubViewProps {
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
   onRegisterScrollContainer?: (key: string, element: HTMLElement | null) => void;
+  headerAccessory?: ReactNode;
 }
 
 function BlockEditor({ item, onSave, onCancel }: { item: LearningHubItem; onSave: (patch: Partial<LearningBlock>) => Promise<void>; onCancel: () => void }) {
@@ -148,7 +149,7 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings, onRegisterScrollContainer }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings, onRegisterScrollContainer, headerAccessory }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
@@ -239,7 +240,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     setBulkReviewBusy(false);
   };
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></header>
+    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><div className="learning-hub-heading__actions">{headerAccessory}<strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></div></header>
     {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="제목·과목·단원·태그 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}{!visibleCandidates.length && <div className="empty-state"><p>답안 정보가 있는 시험지를 찾지 못했습니다.</p><p className="form-hint">문항 답안이 연결된 자료만 학습 후보로 만들 수 있습니다.</p></div>}</div></Dialog>}
     <div className="learning-hub-filters">
       <SearchField ariaLabel="학습 내용 검색" value={filters.search} onChange={(search) => set("search", search)} placeholder="제목, 개념, 공식, 예시 검색" />

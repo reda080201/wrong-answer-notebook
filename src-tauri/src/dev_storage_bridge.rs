@@ -37,6 +37,7 @@ const STORE_NAMES: &[&str] = &[
     "gpt-solution-drafts",
     "review-sessions",
     "pending-deletions",
+    "knowledge-graph",
     "import-workspace-draft",
 ];
 const IMPORT_ASSET_SESSION_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
@@ -67,6 +68,7 @@ fn store_path(root: &Path, name: &str) -> BridgeResult<PathBuf> {
         "gpt-solution-drafts" => "gpt-solution-drafts.json",
         "review-sessions" => "review-sessions.json",
         "pending-deletions" => "pending-deletions.json",
+        "knowledge-graph" => "knowledge-graph.json",
         "import-workspace-draft" => "import-workspace-draft.json",
         "entries" => "entries.json",
         _ => return Err((StatusCode::NOT_FOUND, "알 수 없는 저장소입니다.".into())),
@@ -109,6 +111,7 @@ fn validate_store(name: &str, value: &Value) -> Result<(), String> {
         "gpt-solution-drafts" => validate_persistent_store_value("gpt-solution-drafts.json", value),
         "review-sessions" => validate_persistent_store_value("review-sessions.json", value),
         "pending-deletions" => validate_persistent_store_value("pending-deletions.json", value),
+        "knowledge-graph" => crate::validate_knowledge_graph_value(value),
         "import-workspace-draft" => value
             .is_null()
             .then_some(())
@@ -184,10 +187,10 @@ async fn load_store(
             let entries = state.store.load_entries().map_err(internal)?;
             return serde_json::to_value(entries).map(Json).map_err(internal);
         }
-        let default = if name == "settings" || name == "import-workspace-draft" {
-            Value::Null
-        } else {
-            Value::Array(Vec::new())
+        let default = match name.as_str() {
+            "settings" | "import-workspace-draft" => Value::Null,
+            "knowledge-graph" => json!({ "entities": [], "relations": [], "questionLinks": [] }),
+            _ => Value::Array(Vec::new()),
         };
         let value = read_json(&store_path(&state.data_dir, &name)?, default)?;
         if !value.is_null() {
@@ -775,6 +778,11 @@ mod tests {
             &json!({ "id": "w", "groups": [] })
         )
         .is_ok());
+        assert!(validate_store("knowledge-graph", &json!({ "hello": "world" })).is_err());
+        assert!(validate_store("knowledge-graph", &json!({
+            "entities": [{ "id": "e1", "name": "개념", "type": "concept", "aliases": [], "provenance": "manual", "createdAt": "2026-01-01T00:00:00.000Z", "updatedAt": "2026-01-01T00:00:00.000Z" }],
+            "relations": [], "questionLinks": []
+        })).is_ok());
     }
 
     #[test]

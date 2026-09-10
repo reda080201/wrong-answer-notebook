@@ -8,6 +8,7 @@ import type {
   WrongAnswerEntry,
   ReviewSession,
   PendingDeletion,
+  KnowledgeGraphStore,
 } from "../types";
 import type { LibraryFolder } from "../models/library";
 import type { GptSolutionRoundtripDraft } from "../features/gpt-solution-roundtrip/model";
@@ -24,6 +25,7 @@ import { GENERATED_EXAMS_STORAGE_KEY } from "../features/exam-builder/storage/ge
 import { LIBRARY_FOLDERS_STORAGE_KEY } from "./api/libraryFolders";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
 import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../features/review/storage/reviewSessionStorage";
+import { EMPTY_KNOWLEDGE_GRAPH, isKnowledgeGraphStore, normalizeKnowledgeGraph } from "../models/knowledgeGraph";
 
 export type StorageBackendKind = "tauri" | "desktop-proxy" | "isolated-browser";
 
@@ -53,6 +55,8 @@ export interface StorageBackend {
   saveReviewSessions?(sessions: ReviewSession[]): Promise<void>;
   loadPendingDeletions?(): Promise<PendingDeletion[]>;
   savePendingDeletions?(deletions: PendingDeletion[]): Promise<void>;
+  loadKnowledgeGraph?(): Promise<KnowledgeGraphStore>;
+  saveKnowledgeGraph?(graph: KnowledgeGraphStore): Promise<void>;
   loadImportWorkspaceDraft(): Promise<ImportWorkspace | null>;
   saveImportWorkspaceDraft(draft: ImportWorkspace): Promise<void>;
   clearImportWorkspaceDraft(): Promise<void>;
@@ -68,6 +72,7 @@ type StoreName =
   | "gpt-solution-drafts"
   | "review-sessions"
   | "pending-deletions"
+  | "knowledge-graph"
   | "import-workspace-draft";
 
 const proxyUrl = import.meta.env.VITE_DESKTOP_STORAGE_BRIDGE_URL?.replace(/\/$/, "");
@@ -128,6 +133,12 @@ const tauriBackend: StorageBackend = {
   saveReviewSessions: (sessions) => invoke("save_review_sessions", { sessions }),
   loadPendingDeletions: () => invoke("load_pending_deletions"),
   savePendingDeletions: (deletions) => invoke("save_pending_deletions", { deletions }),
+  loadKnowledgeGraph: async () => {
+    const value = await invoke<unknown>("load_knowledge_graph");
+    if (!isKnowledgeGraphStore(value)) throw new Error("지식 그래프 저장 형식이 올바르지 않습니다.");
+    return normalizeKnowledgeGraph(value);
+  },
+  saveKnowledgeGraph: (graph) => invoke("save_knowledge_graph", { graph }),
   async loadImportWorkspaceDraft() {
     const remote = await invoke<ImportWorkspace | null>("load_import_workspace_draft");
     if (remote) return remote;
@@ -166,6 +177,12 @@ const proxyBackend: StorageBackend = {
   saveReviewSessions: (sessions) => proxySave("review-sessions", sessions),
   loadPendingDeletions: () => proxyLoad("pending-deletions"),
   savePendingDeletions: (deletions) => proxySave("pending-deletions", deletions),
+  loadKnowledgeGraph: async () => {
+    const value = await proxyLoad<unknown>("knowledge-graph");
+    if (!isKnowledgeGraphStore(value)) throw new Error("지식 그래프 저장 형식이 올바르지 않습니다.");
+    return normalizeKnowledgeGraph(value);
+  },
+  saveKnowledgeGraph: (graph) => proxySave("knowledge-graph", graph),
   async loadImportWorkspaceDraft() {
     const remote = await proxyLoad<ImportWorkspace | null>("import-workspace-draft");
     if (remote) return remote;
@@ -214,6 +231,12 @@ const isolatedBrowserBackend: StorageBackend = {
   async saveReviewSessions(sessions) { writeStorageJson(localStorage, REVIEW_SESSIONS_STORAGE_KEY, sessions.map(normalizeReviewSession)); },
   async loadPendingDeletions() { return arrayOrThrow(readStorageJson(localStorage, "wrong-answer-pending-deletions", Array.isArray) ?? [], "삭제 대기 항목"); },
   async savePendingDeletions(deletions) { writeStorageJson(localStorage, "wrong-answer-pending-deletions", deletions); },
+  async loadKnowledgeGraph() {
+    const value = readStorageJson<unknown>(localStorage, "wrong-answer-knowledge-graph", (candidate): candidate is unknown => candidate === candidate) ?? EMPTY_KNOWLEDGE_GRAPH;
+    if (!isKnowledgeGraphStore(value)) throw new Error("지식 그래프 저장 형식이 올바르지 않습니다.");
+    return normalizeKnowledgeGraph(value);
+  },
+  async saveKnowledgeGraph(graph) { writeStorageJson(localStorage, "wrong-answer-knowledge-graph", graph); },
   async loadImportWorkspaceDraft() { return readStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, isImportWorkspace); },
   async saveImportWorkspaceDraft(draft) { writeStorageJson(localStorage, IMPORT_WORKSPACE_DRAFT_STORAGE_KEY, draft); },
   async clearImportWorkspaceDraft() { localStorage.removeItem(IMPORT_WORKSPACE_DRAFT_STORAGE_KEY); },
