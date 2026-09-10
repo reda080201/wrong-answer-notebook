@@ -258,7 +258,7 @@ export default function SettingsModal({
 
             {activeCategory === "study" && (
               <>
-              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }), ...patch } })} />
+              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "standard" }), ...patch } })} />
               <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />
               <SettingsTemplatesPanel
                 templates={settings.templates}

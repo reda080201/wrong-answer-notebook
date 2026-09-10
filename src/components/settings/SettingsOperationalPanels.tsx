@@ -2,7 +2,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import type { ExamPreferences, ImagePreferences, IntegrityReport, LibraryPreferences } from "../../types";
 import type { AppUpdateState } from "../../features/updater/model/appUpdate";
 
-const defaultLibraryPreferences: LibraryPreferences = { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true };
+const defaultLibraryPreferences: LibraryPreferences = { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "standard" };
 
 export function SettingsLibraryPanel({ preferences, onPatch }: { preferences?: LibraryPreferences; onPatch(patch: Partial<LibraryPreferences>): void }) {
   const value = preferences ?? defaultLibraryPreferences;
@@ -14,6 +14,9 @@ export function SettingsLibraryPanel({ preferences, onPatch }: { preferences?: L
     <div className="theme-options" role="group" aria-label="단원 진입 화면">{([['home', '단원 홈'], ['lectures', '특강'], ['problems', '문제']] as const).map(([valueKey, label]) => <button key={valueKey} type="button" className={`theme-btn ${value.defaultUnitView === valueKey ? "active" : ""}`} aria-pressed={value.defaultUnitView === valueKey} onClick={() => onPatch({ defaultUnitView: valueKey })}>{label}</button>)}</div>
     <p className="settings-label">자료 목록 밀도</p>
     <div className="theme-options" role="group" aria-label="자료 목록 밀도"><button type="button" className={`theme-btn ${value.listDensity !== "compact" ? "active" : ""}`} onClick={() => onPatch({ listDensity: "standard" })}>표준</button><button type="button" className={`theme-btn ${value.listDensity === "compact" ? "active" : ""}`} onClick={() => onPatch({ listDensity: "compact" })}>조밀</button></div>
+    <p className="settings-label">자료 표시 방식</p>
+    <p className="settings-help">파일형 보기는 자료를 파일 탐색기처럼 한 줄에 표시합니다.</p>
+    <div className="theme-options" role="group" aria-label="자료 표시 방식"><button type="button" className={`theme-btn ${value.displayMode !== "file" ? "active" : ""}`} aria-pressed={value.displayMode !== "file"} onClick={() => onPatch({ displayMode: "standard" })}>기존 보기</button><button type="button" className={`theme-btn ${value.displayMode === "file" ? "active" : ""}`} aria-pressed={value.displayMode === "file"} onClick={() => onPatch({ displayMode: "file" })}>파일형 보기</button></div>
     <label className="settings-checkbox"><input type="checkbox" checked={value.showUserFolders} onChange={(event) => onPatch({ showUserFolders: event.target.checked })} /> 사용자 폴더 표시</label>
   </div>;
 }

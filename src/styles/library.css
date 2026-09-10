@@ -42,6 +42,17 @@
 .library-folder-context > span { display: block; margin-bottom: 10px; color: var(--text-muted); font-size: 13px; }
 .library-folder-context > button { margin-bottom: 12px; border: 0; background: transparent; color: var(--accent-strong); }
 .library-empty { padding: 40px 0; color: var(--text-muted); text-align: center; }
+.library-resource-row--file { grid-template-columns: 28px 20px minmax(0, 1fr) 1fr auto; min-height: 48px; padding: 4px 10px; gap: 8px; }
+.library-resource-row--file .library-file-open { grid-column: 3; grid-row: 1; grid-template-columns: minmax(0, 1fr) 92px 100px 72px 90px; gap: 10px; min-height: 40px; }
+.library-file-icon { color: var(--text-muted); }
+.library-file-favorite { display: inline-grid; place-items: center; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--text-muted); }
+.library-file-favorite:hover, .library-file-favorite[aria-pressed="true"] { color: var(--accent-strong); }
+.library-resource-row--file .library-file-menu { grid-column: 5; grid-row: 1; }
+.library-resource-row--file .detail-more-menu-popover { right: 0; left: auto; }
+.menu-section-label { padding: 6px 10px 2px; color: var(--text-muted); font-size: 11px; }
+.library-file-action-error { grid-column: 3 / -1; color: var(--danger, #b42318); font-size: 11px; }
+@media (max-width: 1100px) { .library-resource-row--file .library-file-open { grid-template-columns: minmax(0, 1fr) 80px 76px 82px; } .library-resource-row--file .library-resource-count { display: none; } }
+@media (max-width: 720px) { .library-resource-row--file { grid-template-columns: 24px 18px minmax(0, 1fr) 34px 34px; gap: 5px; } .library-resource-row--file .library-file-open { grid-column: 3; grid-template-columns: minmax(0, 1fr) 76px; gap: 6px; } .library-resource-row--file .library-resource-subject, .library-resource-row--file .library-resource-type { display: none; } .library-resource-row--file .library-file-favorite { grid-column: 4; } .library-resource-row--file .library-file-menu { grid-column: 5; } }
 .library-classification-form { display: grid; gap: 14px; }
 .library-classification-form > label, .library-classification-form fieldset > label { display: grid; grid-template-columns: minmax(110px, .35fr) minmax(0, 1fr) auto; align-items: center; gap: 8px; }
 .library-classification-form fieldset { display: grid; gap: 10px; margin: 4px 0 0; padding: 12px; border: 1px solid var(--border); }

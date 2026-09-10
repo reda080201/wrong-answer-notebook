@@ -6,6 +6,7 @@ export interface LibraryPreferences {
   defaultUnitView: "home" | "lectures" | "problems";
   listDensity: "standard" | "compact";
   showUserFolders: boolean;
+  displayMode?: "standard" | "file";
 }
 
 export interface EntryTemplate {

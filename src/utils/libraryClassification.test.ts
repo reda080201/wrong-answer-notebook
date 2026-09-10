@@ -60,6 +60,7 @@ describe("library classification model", () => {
       defaultUnitView: "home",
       listDensity: "compact",
       showUserFolders: false,
+      displayMode: "standard",
     });
   });
 
