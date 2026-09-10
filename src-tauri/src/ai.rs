@@ -494,6 +494,35 @@ fn normalize_provider_base_url(base: &str) -> String {
     normalized.trim_end_matches('/').to_string()
 }
 
+fn openai_compatible_chat_url(base: &str) -> String {
+    format!("{}/chat/completions", normalize_provider_base_url(base))
+}
+
+fn build_openai_compatible_body(
+    model: &str,
+    text: &str,
+    images: &[(String, String)],
+    temperature: f64,
+    response_format: bool,
+) -> serde_json::Value {
+    let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
+    content.extend(images.iter().map(|(mime_type, data)| {
+        serde_json::json!({
+            "type": "image_url",
+            "image_url": { "url": format!("data:{mime_type};base64,{data}") }
+        })
+    }));
+    let mut body = serde_json::json!({
+        "model": model,
+        "temperature": temperature,
+        "messages": [{ "role": "user", "content": content }]
+    });
+    if response_format {
+        body["response_format"] = serde_json::json!({ "type": "json_object" });
+    }
+    body
+}
+
 fn openrouter_model_available(value: &serde_json::Value, model: &str) -> bool {
     value
         .get("data")
@@ -664,13 +693,10 @@ pub(crate) fn generate_import_with_ai(
         | AiProviderType::Groq
         | AiProviderType::OpenAiCompatible
         | AiProviderType::Manual => {
-            let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
-            for (mime_type, data) in read_ai_images(&app, &image_filenames)? {
-                content.push(serde_json::json!({ "type": "image_url", "image_url": { "url": format!("data:{mime_type};base64,{data}") } }));
-            }
+            let images = read_ai_images(&app, &image_filenames)?;
             (
-                format!("{}/chat/completions", provider_base_url(&config)),
-                serde_json::json!({ "model": config.model, "temperature": 0.2, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": content }] }),
+                openai_compatible_chat_url(&provider_base_url(&config)),
+                build_openai_compatible_body(&config.model, &text, &images, 0.2, true),
                 "openai",
             )
         }
@@ -954,7 +980,7 @@ pub(crate) fn rank_similar_questions_with_ai(
     let body = if is_gemini {
         serde_json::json!({ "contents": [{ "role": "user", "parts": [{ "text": prompt }] }], "generationConfig": { "temperature": 0.1, "responseMimeType": "application/json" } })
     } else {
-        serde_json::json!({ "model": model, "temperature": 0.1, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": prompt }] })
+        build_openai_compatible_body(&model, &prompt, &[], 0.1, true)
     };
 
     let response = reqwest::blocking::Client::builder()
@@ -969,7 +995,7 @@ pub(crate) fn rank_similar_questions_with_ai(
                 model
             )
         } else {
-            format!("{}/chat/completions", provider_base_url(&config))
+            openai_compatible_chat_url(&provider_base_url(&config))
         })
         .header(
             "x-goog-api-key",
@@ -1130,6 +1156,28 @@ mod tests {
         let catalog = serde_json::json!({ "data": [{ "id": "openai/gpt-5.1-mini" }] });
         assert!(openrouter_model_available(&catalog, "openai/gpt-5.1-mini"));
         assert!(!openrouter_model_available(&catalog, "missing/model"));
+    }
+
+    #[test]
+    fn openai_compatible_request_preserves_model_endpoint_and_multimodal_content() {
+        assert_eq!(
+            openai_compatible_chat_url("https://openrouter.ai/api/v1/chat/completions/"),
+            "https://openrouter.ai/api/v1/chat/completions"
+        );
+        let body = build_openai_compatible_body(
+            "openai/gpt-5.1-mini",
+            "분석해 주세요",
+            &[("image/png".into(), "YWJj".into())],
+            0.2,
+            true,
+        );
+        assert_eq!(body["model"], "openai/gpt-5.1-mini");
+        assert_eq!(body["response_format"]["type"], "json_object");
+        assert_eq!(body["messages"][0]["content"][1]["type"], "image_url");
+        assert_eq!(
+            body["messages"][0]["content"][1]["image_url"]["url"],
+            "data:image/png;base64,YWJj"
+        );
     }
 
     #[test]

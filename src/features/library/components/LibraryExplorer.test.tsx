@@ -44,6 +44,27 @@ describe("LibraryExplorer", () => {
     await waitFor(() => expect(handlers.onUpdateEntries).toHaveBeenCalledWith(["one"], { libraryFavorite: true }));
   });
 
+  it("persists removing a favorite and keeps the row closed when secondary controls are used", async () => {
+    const handlers = { ...props([entry("one", "미분", { libraryFavorite: true })]), onUpdateEntries: vi.fn().mockResolvedValue(undefined) };
+    render(<LibraryExplorer {...handlers} preferences={{ separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "file" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "즐겨찾기에서 제거" }));
+    await waitFor(() => expect(handlers.onUpdateEntries).toHaveBeenCalledWith(["one"], { libraryFavorite: false }));
+    fireEvent.click(screen.getByRole("button", { name: "미분 더보기" }));
+    expect(screen.getByRole("menu")).toBeVisible();
+    fireEvent.keyDown(screen.getByRole("menu"), { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(handlers.onOpenEntry).not.toHaveBeenCalled();
+  });
+
+  it("does not leave an optimistic favorite state after a failed patch", async () => {
+    const handlers = { ...props(), onUpdateEntries: vi.fn().mockRejectedValue(new Error("save failed")) };
+    render(<LibraryExplorer {...handlers} preferences={{ separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "file" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "즐겨찾기에 추가" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("저장하지 못했습니다"));
+    expect(screen.getByRole("button", { name: "즐겨찾기에 추가" })).toHaveAttribute("aria-pressed", "false");
+    expect(handlers.onOpenEntry).not.toHaveBeenCalled();
+  });
+
   it("defaults to standard mode for legacy preferences", () => {
     render(<LibraryExplorer {...props()} preferences={{ separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true }} />);
     expect(screen.queryByRole("button", { name: "즐겨찾기에 추가" })).not.toBeInTheDocument();
