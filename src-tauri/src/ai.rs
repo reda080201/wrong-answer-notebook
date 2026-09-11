@@ -505,13 +505,18 @@ fn build_openai_compatible_body(
     temperature: f64,
     response_format: bool,
 ) -> serde_json::Value {
-    let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
-    content.extend(images.iter().map(|(mime_type, data)| {
-        serde_json::json!({
-            "type": "image_url",
-            "image_url": { "url": format!("data:{mime_type};base64,{data}") }
-        })
-    }));
+    let content = if images.is_empty() {
+        serde_json::Value::String(text.to_owned())
+    } else {
+        let mut parts = vec![serde_json::json!({ "type": "text", "text": text })];
+        parts.extend(images.iter().map(|(mime_type, data)| {
+            serde_json::json!({
+                "type": "image_url",
+                "image_url": { "url": format!("data:{mime_type};base64,{data}") }
+            })
+        }));
+        serde_json::Value::Array(parts)
+    };
     let mut body = serde_json::json!({
         "model": model,
         "temperature": temperature,
@@ -571,6 +576,24 @@ fn extract_anthropic_text(value: &serde_json::Value) -> Result<String, String> {
         })
         .filter(|text| !text.trim().is_empty())
         .ok_or_else(|| "Anthropic 응답에서 텍스트를 찾지 못했습니다.".into())
+}
+
+fn provider_connection_error(provider: &AiProviderType, status: reqwest::StatusCode) -> String {
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        "API key가 유효하지 않습니다.".into()
+    } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.".into()
+    } else if status == reqwest::StatusCode::PAYMENT_REQUIRED
+        && matches!(provider, AiProviderType::OpenRouter)
+    {
+        "OpenRouter 크레딧이 부족합니다.".into()
+    } else if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+        "AI 제공자의 결제 또는 사용 한도를 확인해 주세요.".into()
+    } else if status.is_server_error() {
+        "AI 제공자 서버 오류입니다.".into()
+    } else {
+        format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
+    }
 }
 
 fn extract_gemini_text(value: serde_json::Value) -> Result<String, String> {
@@ -803,17 +826,7 @@ pub(crate) fn test_ai_provider_connection(
         .map_err(|error| format!("연결 테스트에 실패했습니다: {error}"))?;
     if !response.status().is_success() {
         let status = response.status();
-        return Err(if status.as_u16() == 401 || status.as_u16() == 403 {
-            "API key가 유효하지 않습니다.".into()
-        } else if status.as_u16() == 429 {
-            "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.".into()
-        } else if status.as_u16() == 402 {
-            "OpenRouter 크레딧이 부족합니다.".into()
-        } else if status.is_server_error() {
-            "AI 제공자 서버 오류입니다.".into()
-        } else {
-            format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
-        });
+        return Err(provider_connection_error(&provider, status));
     }
     if matches!(provider, AiProviderType::OpenRouter) {
         let value: serde_json::Value = response
@@ -1178,11 +1191,28 @@ mod tests {
             body["messages"][0]["content"][1]["image_url"]["url"],
             "data:image/png;base64,YWJj"
         );
+        let text_only = build_openai_compatible_body("model", "텍스트만", &[], 0.1, false);
+        assert_eq!(text_only["messages"][0]["content"], "텍스트만");
     }
 
     #[test]
     fn openai_compatible_structured_content_is_extracted() {
         let response = serde_json::json!({ "choices": [{ "message": { "content": [{ "type": "text", "text": "결과" }] } }] });
         assert_eq!(extract_openai_text(&response).expect("text"), "결과");
+    }
+
+    #[test]
+    fn payment_error_is_provider_specific() {
+        assert_eq!(
+            provider_connection_error(
+                &AiProviderType::OpenRouter,
+                reqwest::StatusCode::PAYMENT_REQUIRED,
+            ),
+            "OpenRouter 크레딧이 부족합니다."
+        );
+        assert_eq!(
+            provider_connection_error(&AiProviderType::Groq, reqwest::StatusCode::PAYMENT_REQUIRED),
+            "AI 제공자의 결제 또는 사용 한도를 확인해 주세요."
+        );
     }
 }

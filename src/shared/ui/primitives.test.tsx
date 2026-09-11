@@ -78,6 +78,18 @@ describe("shared UI primitives", () => {
     expect(items[0]).toHaveFocus();
   });
 
+  it("does not make presentation labels keyboard menu items", () => {
+    render(<Menu label="도구"><><button type="button">열기</button><span className="menu-section-label">폴더로 이동</span><button type="button">폴더 A</button></></Menu>);
+    const trigger = screen.getByRole("button", { name: "도구" });
+    fireEvent.click(trigger);
+    expect(screen.queryByRole("menuitem", { name: "폴더로 이동" })).not.toBeInTheDocument();
+    const first = screen.getByRole("menuitem", { name: "열기" });
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(screen.getByRole("menuitem", { name: "폴더 A" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("menuitem", { name: "폴더 A" }), { key: "ArrowUp" });
+    expect(first).toHaveFocus();
+  });
+
   it("skips disabled menu items when moving focus", () => {
     render(<Menu label="도구"><><button type="button" disabled>사용 불가</button><button type="button">실행</button><button type="button" aria-disabled="true">잠김</button><button type="button">다음</button></></Menu>);
     fireEvent.click(screen.getByRole("button", { name: "도구" }));

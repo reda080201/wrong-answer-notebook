@@ -56,6 +56,8 @@ test.describe("Library file view", () => {
         expect(star.y + star.height).toBeLessThanOrEqual(titleButton.y + titleButton.height + 2);
         expect(menuTrigger.y).toBeGreaterThanOrEqual(titleButton.y);
         expect(menuTrigger.y + menuTrigger.height).toBeLessThanOrEqual(titleButton.y + titleButton.height + 2);
+        expect(star.x - (titleButton.x + titleButton.width)).toBeLessThanOrEqual(16);
+        expect(menuTrigger.x - (star.x + star.width)).toBeLessThanOrEqual(16);
       }
       await page.screenshot({ path: testInfo.outputPath(`library-file-${size.width}x${size.height}.png`), fullPage: true });
     });

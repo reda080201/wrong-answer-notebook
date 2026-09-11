@@ -92,4 +92,30 @@ describe("useAiProviderSettings", () => {
     resolveFirst(unavailableStatus);
     await waitFor(() => expect(result.current.aiProviderStatus).toEqual(availableStatus));
   });
+
+  it("serializes config writes and preserves the latest desired patch", async () => {
+    const writes: AiProviderSettings[] = [];
+    let releaseFirst!: () => void;
+    saveAiProviderConfig.mockImplementation((value: AiProviderSettings) => {
+      writes.push(value);
+      if (writes.length === 1) return new Promise<AiProviderStatus>((resolve) => { releaseFirst = () => resolve(availableStatus); });
+      return Promise.resolve(availableStatus);
+    });
+    const refreshSettings = vi.fn().mockResolvedValue(true);
+    const { result } = renderHook(() => useAiProviderSettings({
+      aiProvider: provider,
+      refreshSettings,
+      setSettingsMessage: vi.fn(),
+    }));
+    await waitFor(() => expect(getAiProviderStatus).toHaveBeenCalled());
+    const first = result.current.updateAiProviderConfig({ model: "openai/g" });
+    const second = result.current.updateAiProviderConfig({ model: "openai/gpt" });
+    await waitFor(() => expect(writes).toHaveLength(1));
+    expect(writes[0].model).toBe("openai/g");
+    releaseFirst();
+    await first;
+    await second;
+    expect(writes).toHaveLength(2);
+    expect(writes[1].model).toBe("openai/gpt");
+  });
 });

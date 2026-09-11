@@ -61,7 +61,7 @@ export interface SettingsContextValue {
     statusError: string | null;
     keyInput: string;
     setKeyInput: (value: string) => void;
-    updateConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<void>;
+    updateConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<boolean>;
     storeKey: () => Promise<void>;
     removeKey: () => Promise<void>;
     testConnection: () => Promise<void>;

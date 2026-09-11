@@ -26,6 +26,13 @@ export function useAiProviderSettings({
   const [aiProviderStatusError, setAiProviderStatusError] = useState<string | null>(null);
   const [aiProviderKeyInput, setAiProviderKeyInput] = useState("");
   const statusRequestRef = useRef(0);
+  const configQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const desiredConfigRef = useRef<AiProviderSettings>(aiProvider);
+  const pendingConfigWritesRef = useRef(0);
+
+  useEffect(() => {
+    if (pendingConfigWritesRef.current === 0) desiredConfigRef.current = aiProvider;
+  }, [aiProvider]);
 
   const refreshAiProviderStatus = useCallback(() => {
     const requestId = ++statusRequestRef.current;
@@ -55,38 +62,42 @@ export function useAiProviderSettings({
     void refreshAiProviderStatus();
   }, [aiProvider, refreshAiProviderStatus]);
 
-  const updateAiProviderConfig = useCallback(async (patch: Partial<AiProviderSettings>) => {
-    const requestId = ++statusRequestRef.current;
-    setAiProviderStatus(null);
-    setAiProviderStatusLoading(true);
-    setAiProviderStatusError(null);
-    const next: AiProviderSettings = {
-      ...aiProvider,
-      ...patch,
-    };
+  const updateAiProviderConfig = useCallback((patch: Partial<AiProviderSettings>) => {
+    const next: AiProviderSettings = { ...desiredConfigRef.current, ...patch };
     if (next.type === "manual") next.enabled = false;
-    try {
-      const status = await saveAiProviderConfig(next);
-      if (statusRequestRef.current === requestId) {
-        setAiProviderStatus(status);
-        setAiProviderStatusError(null);
+    desiredConfigRef.current = next;
+    pendingConfigWritesRef.current += 1;
+    const requestId = ++statusRequestRef.current;
+    const write = async () => {
+      setAiProviderStatus(null);
+      setAiProviderStatusLoading(true);
+      setAiProviderStatusError(null);
+      try {
+        const status = await saveAiProviderConfig(next);
+        if (statusRequestRef.current === requestId) {
+          setAiProviderStatus(status);
+          setAiProviderStatusError(null);
+        }
+        await refreshSettings();
+        if (statusRequestRef.current === requestId) setSettingsMessage("AI Provider 설정을 저장했습니다.");
+        return true;
+      } catch (configError) {
+        if (statusRequestRef.current === requestId) {
+          const message = configError instanceof Error ? configError.message : "AI Provider 설정 저장에 실패했습니다.";
+          setAiProviderStatus(null);
+          setAiProviderStatusError(message);
+          setSettingsMessage(message);
+        }
+        return false;
+      } finally {
+        pendingConfigWritesRef.current -= 1;
+        if (statusRequestRef.current === requestId && pendingConfigWritesRef.current === 0) setAiProviderStatusLoading(false);
       }
-      await refreshSettings();
-      setSettingsMessage("AI Provider 설정을 저장했습니다.");
-    } catch (configError) {
-      if (statusRequestRef.current === requestId) {
-        setAiProviderStatus(null);
-        setAiProviderStatusError(configError instanceof Error ? configError.message : "AI Provider 설정 저장에 실패했습니다.");
-      }
-      setSettingsMessage(
-        configError instanceof Error
-          ? configError.message
-          : "AI Provider 설정 저장에 실패했습니다.",
-      );
-    } finally {
-      if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false);
-    }
-  }, [aiProvider, refreshSettings, setSettingsMessage]);
+    };
+    const queued = configQueueRef.current.then(write, write);
+    configQueueRef.current = queued.then(() => undefined, () => undefined);
+    return queued;
+  }, [refreshSettings, setSettingsMessage]);
 
   const storeAiProviderKey = useCallback(async () => {
     if (!aiProviderKeyInput.trim()) {
