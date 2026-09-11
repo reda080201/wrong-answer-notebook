@@ -58,10 +58,12 @@ export interface SettingsContextValue {
   aiProvider: {
     status: AiProviderStatus | null;
     statusLoading: boolean;
+    operationPending: boolean;
     statusError: string | null;
     keyInput: string;
     setKeyInput: (value: string) => void;
-    updateConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<void>;
+    updateConfig: (patch: Partial<AppSettings["aiProvider"]>) => Promise<boolean>;
+    flushConfig: () => Promise<void>;
     storeKey: () => Promise<void>;
     removeKey: () => Promise<void>;
     testConnection: () => Promise<void>;
@@ -251,10 +253,12 @@ export function SettingsProvider({
       aiProvider: {
         status: aiProvider.aiProviderStatus,
         statusLoading: aiProvider.aiProviderStatusLoading,
+        operationPending: aiProvider.operationPending,
         statusError: aiProvider.aiProviderStatusError,
         keyInput: aiProvider.aiProviderKeyInput,
         setKeyInput: aiProvider.setAiProviderKeyInput,
         updateConfig: aiProvider.updateAiProviderConfig,
+        flushConfig: aiProvider.flushAiProviderConfig,
         storeKey: aiProvider.storeAiProviderKey,
         removeKey: aiProvider.removeAiProviderKey,
         testConnection: aiProvider.testAiProvider,
@@ -386,10 +390,12 @@ export function SettingsProvider({
       setTheme,
       aiProvider.aiProviderStatus,
       aiProvider.aiProviderStatusLoading,
+      aiProvider.operationPending,
       aiProvider.aiProviderStatusError,
       aiProvider.aiProviderKeyInput,
       aiProvider.setAiProviderKeyInput,
       aiProvider.updateAiProviderConfig,
+      aiProvider.flushAiProviderConfig,
       aiProvider.storeAiProviderKey,
       aiProvider.removeAiProviderKey,
       aiProvider.testAiProvider,

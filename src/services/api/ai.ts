@@ -1,5 +1,5 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import type { AiProviderSettings, AiProviderStatus } from "../../types";
+import type { AiProviderSettings, AiProviderStatus, AiProviderType } from "../../types";
 import type { SimilarQuestionRankingRequest, SimilarQuestionRankingResponse } from "../../features/question-bank/utils/similarQuestionLinks";
 import { errorMessage } from "./shared";
 
@@ -37,9 +37,12 @@ export async function saveAiProviderConfig(config: AiProviderSettings): Promise<
   return invoke<AiProviderStatus>("save_ai_provider_config", { config });
 }
 
-export async function saveAiProviderKey(apiKey: string): Promise<AiProviderStatus> {
+export async function saveAiProviderKey(
+  apiKey: string,
+  expectedProvider: AiProviderType,
+): Promise<AiProviderStatus> {
   if (!isTauri()) return getAiProviderStatus();
-  return invoke<AiProviderStatus>("save_ai_provider_key", { apiKey });
+  return invoke<AiProviderStatus>("save_ai_provider_key", { apiKey, expectedProvider });
 }
 
 export async function testAiProviderConnection(): Promise<AiProviderStatus> {
@@ -47,9 +50,9 @@ export async function testAiProviderConnection(): Promise<AiProviderStatus> {
   return invoke<AiProviderStatus>("test_ai_provider_connection");
 }
 
-export async function clearAiProviderKey(): Promise<AiProviderStatus> {
+export async function clearAiProviderKey(expectedProvider: AiProviderType): Promise<AiProviderStatus> {
   if (!isTauri()) return getAiProviderStatus();
-  return invoke<AiProviderStatus>("clear_ai_provider_key");
+  return invoke<AiProviderStatus>("clear_ai_provider_key", { expectedProvider });
 }
 
 export async function generateImportWithAi(

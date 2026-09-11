@@ -205,6 +205,7 @@ function AppContent() {
     flushExamSession: flushExamSessionSave,
     flushEntries,
     flushSettings,
+    flushAiProviderConfig: aiProvider.flushConfig,
     flushGeneratedExams,
     flushImportWorkspaceDraft: flushTransientWrites,
     flushLibraryFolders: library.flush,

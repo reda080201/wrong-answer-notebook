@@ -30,7 +30,7 @@ fn ai_provider_key_entry(provider: AiProviderType) -> Result<keyring::Entry, Str
         .map_err(|error| format!("OS 보안 저장소를 열지 못했습니다: {error}"))
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum AiProviderType {
     #[serde(rename = "manual")]
     Manual,
@@ -128,6 +128,30 @@ fn effective_provider(config: &AiProviderConfig) -> AiProviderType {
         AiProviderType::Manual => AiProviderType::OpenAiCompatible,
         value => value,
     })
+}
+
+fn canonical_provider(provider: AiProviderType) -> AiProviderType {
+    match provider {
+        AiProviderType::GeminiFlashLite | AiProviderType::Gemini35Flash => {
+            AiProviderType::GoogleGemini
+        }
+        AiProviderType::Manual => AiProviderType::OpenAiCompatible,
+        value => value,
+    }
+}
+
+fn require_expected_provider(
+    config: &AiProviderConfig,
+    expected_provider: AiProviderType,
+) -> Result<AiProviderType, String> {
+    let persisted_provider = effective_provider(config);
+    if persisted_provider != canonical_provider(expected_provider) {
+        return Err(
+            "AI Provider 설정이 최신 상태가 아닙니다. 설정 저장이 완료된 뒤 다시 시도해 주세요."
+                .into(),
+        );
+    }
+    Ok(persisted_provider)
 }
 
 pub(crate) fn vision_image_mime(filename: &str) -> Result<&'static str, String> {
@@ -494,6 +518,40 @@ fn normalize_provider_base_url(base: &str) -> String {
     normalized.trim_end_matches('/').to_string()
 }
 
+fn openai_compatible_chat_url(base: &str) -> String {
+    format!("{}/chat/completions", normalize_provider_base_url(base))
+}
+
+fn build_openai_compatible_body(
+    model: &str,
+    text: &str,
+    images: &[(String, String)],
+    temperature: f64,
+    response_format: bool,
+) -> serde_json::Value {
+    let content = if images.is_empty() {
+        serde_json::Value::String(text.to_owned())
+    } else {
+        let mut parts = vec![serde_json::json!({ "type": "text", "text": text })];
+        parts.extend(images.iter().map(|(mime_type, data)| {
+            serde_json::json!({
+                "type": "image_url",
+                "image_url": { "url": format!("data:{mime_type};base64,{data}") }
+            })
+        }));
+        serde_json::Value::Array(parts)
+    };
+    let mut body = serde_json::json!({
+        "model": model,
+        "temperature": temperature,
+        "messages": [{ "role": "user", "content": content }]
+    });
+    if response_format {
+        body["response_format"] = serde_json::json!({ "type": "json_object" });
+    }
+    body
+}
+
 fn openrouter_model_available(value: &serde_json::Value, model: &str) -> bool {
     value
         .get("data")
@@ -544,6 +602,24 @@ fn extract_anthropic_text(value: &serde_json::Value) -> Result<String, String> {
         .ok_or_else(|| "Anthropic 응답에서 텍스트를 찾지 못했습니다.".into())
 }
 
+fn provider_connection_error(provider: &AiProviderType, status: reqwest::StatusCode) -> String {
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        "API key가 유효하지 않습니다.".into()
+    } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.".into()
+    } else if status == reqwest::StatusCode::PAYMENT_REQUIRED
+        && matches!(provider, AiProviderType::OpenRouter)
+    {
+        "OpenRouter 크레딧이 부족합니다.".into()
+    } else if status == reqwest::StatusCode::PAYMENT_REQUIRED {
+        "AI 제공자의 결제 또는 사용 한도를 확인해 주세요.".into()
+    } else if status.is_server_error() {
+        "AI 제공자 서버 오류입니다.".into()
+    } else {
+        format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
+    }
+}
+
 fn extract_gemini_text(value: serde_json::Value) -> Result<String, String> {
     let candidates = value
         .get("candidates")
@@ -589,13 +665,14 @@ pub(crate) fn save_ai_provider_config(
 pub(crate) fn save_ai_provider_key(
     app: tauri::AppHandle,
     api_key: String,
+    expected_provider: AiProviderType,
 ) -> Result<AiProviderStatus, String> {
     let trimmed = api_key.trim();
     if trimmed.is_empty() {
         return Err("API key가 비어 있습니다.".into());
     }
     let mut config = load_ai_provider_config(&app);
-    let provider = effective_provider(&config);
+    let provider = require_expected_provider(&config, expected_provider)?;
     save_stored_ai_provider_key(&app, provider, trimmed)?;
     config.has_stored_key = true;
     save_ai_provider_config_to_settings(&app, &config)?;
@@ -603,9 +680,12 @@ pub(crate) fn save_ai_provider_key(
 }
 
 #[tauri::command]
-pub(crate) fn clear_ai_provider_key(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
+pub(crate) fn clear_ai_provider_key(
+    app: tauri::AppHandle,
+    expected_provider: AiProviderType,
+) -> Result<AiProviderStatus, String> {
     let mut config = load_ai_provider_config(&app);
-    clear_stored_ai_provider_key(&app, effective_provider(&config))?;
+    clear_stored_ai_provider_key(&app, require_expected_provider(&config, expected_provider)?)?;
     config.has_stored_key = false;
     save_ai_provider_config_to_settings(&app, &config)?;
     Ok(ai_provider_status(&app))
@@ -664,13 +744,10 @@ pub(crate) fn generate_import_with_ai(
         | AiProviderType::Groq
         | AiProviderType::OpenAiCompatible
         | AiProviderType::Manual => {
-            let mut content = vec![serde_json::json!({ "type": "text", "text": text })];
-            for (mime_type, data) in read_ai_images(&app, &image_filenames)? {
-                content.push(serde_json::json!({ "type": "image_url", "image_url": { "url": format!("data:{mime_type};base64,{data}") } }));
-            }
+            let images = read_ai_images(&app, &image_filenames)?;
             (
-                format!("{}/chat/completions", provider_base_url(&config)),
-                serde_json::json!({ "model": config.model, "temperature": 0.2, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": content }] }),
+                openai_compatible_chat_url(&provider_base_url(&config)),
+                build_openai_compatible_body(&config.model, &text, &images, 0.2, true),
                 "openai",
             )
         }
@@ -777,17 +854,7 @@ pub(crate) fn test_ai_provider_connection(
         .map_err(|error| format!("연결 테스트에 실패했습니다: {error}"))?;
     if !response.status().is_success() {
         let status = response.status();
-        return Err(if status.as_u16() == 401 || status.as_u16() == 403 {
-            "API key가 유효하지 않습니다.".into()
-        } else if status.as_u16() == 429 {
-            "요청 한도를 초과했습니다. 잠시 후 다시 시도해 주세요.".into()
-        } else if status.as_u16() == 402 {
-            "OpenRouter 크레딧이 부족합니다.".into()
-        } else if status.is_server_error() {
-            "AI 제공자 서버 오류입니다.".into()
-        } else {
-            format!("provider 연결 테스트가 HTTP {status}를 반환했습니다.")
-        });
+        return Err(provider_connection_error(&provider, status));
     }
     if matches!(provider, AiProviderType::OpenRouter) {
         let value: serde_json::Value = response
@@ -954,7 +1021,7 @@ pub(crate) fn rank_similar_questions_with_ai(
     let body = if is_gemini {
         serde_json::json!({ "contents": [{ "role": "user", "parts": [{ "text": prompt }] }], "generationConfig": { "temperature": 0.1, "responseMimeType": "application/json" } })
     } else {
-        serde_json::json!({ "model": model, "temperature": 0.1, "response_format": { "type": "json_object" }, "messages": [{ "role": "user", "content": prompt }] })
+        build_openai_compatible_body(&model, &prompt, &[], 0.1, true)
     };
 
     let response = reqwest::blocking::Client::builder()
@@ -969,7 +1036,7 @@ pub(crate) fn rank_similar_questions_with_ai(
                 model
             )
         } else {
-            format!("{}/chat/completions", provider_base_url(&config))
+            openai_compatible_chat_url(&provider_base_url(&config))
         })
         .header(
             "x-goog-api-key",
@@ -1114,6 +1181,24 @@ mod tests {
     }
 
     #[test]
+    fn expected_provider_must_match_the_persisted_effective_provider() {
+        let config = AiProviderConfig {
+            provider_type: AiProviderType::OpenAi,
+            provider: Some(AiProviderType::OpenRouter),
+            model: "openai/gpt-5.1-mini".into(),
+            base_url: None,
+            enabled: true,
+            key_source: AiProviderKeySource::TauriSettings,
+            has_stored_key: false,
+        };
+        assert_eq!(
+            require_expected_provider(&config, AiProviderType::OpenRouter),
+            Ok(AiProviderType::OpenRouter)
+        );
+        assert!(require_expected_provider(&config, AiProviderType::OpenAi).is_err());
+    }
+
+    #[test]
     fn openrouter_base_url_and_model_catalog_are_normalized_safely() {
         assert_eq!(
             normalize_provider_base_url(" https://openrouter.ai/api/v1/"),
@@ -1133,8 +1218,47 @@ mod tests {
     }
 
     #[test]
+    fn openai_compatible_request_preserves_model_endpoint_and_multimodal_content() {
+        assert_eq!(
+            openai_compatible_chat_url("https://openrouter.ai/api/v1/chat/completions/"),
+            "https://openrouter.ai/api/v1/chat/completions"
+        );
+        let body = build_openai_compatible_body(
+            "openai/gpt-5.1-mini",
+            "분석해 주세요",
+            &[("image/png".into(), "YWJj".into())],
+            0.2,
+            true,
+        );
+        assert_eq!(body["model"], "openai/gpt-5.1-mini");
+        assert_eq!(body["response_format"]["type"], "json_object");
+        assert_eq!(body["messages"][0]["content"][1]["type"], "image_url");
+        assert_eq!(
+            body["messages"][0]["content"][1]["image_url"]["url"],
+            "data:image/png;base64,YWJj"
+        );
+        let text_only = build_openai_compatible_body("model", "텍스트만", &[], 0.1, false);
+        assert_eq!(text_only["messages"][0]["content"], "텍스트만");
+    }
+
+    #[test]
     fn openai_compatible_structured_content_is_extracted() {
         let response = serde_json::json!({ "choices": [{ "message": { "content": [{ "type": "text", "text": "결과" }] } }] });
         assert_eq!(extract_openai_text(&response).expect("text"), "결과");
+    }
+
+    #[test]
+    fn payment_error_is_provider_specific() {
+        assert_eq!(
+            provider_connection_error(
+                &AiProviderType::OpenRouter,
+                reqwest::StatusCode::PAYMENT_REQUIRED,
+            ),
+            "OpenRouter 크레딧이 부족합니다."
+        );
+        assert_eq!(
+            provider_connection_error(&AiProviderType::Groq, reqwest::StatusCode::PAYMENT_REQUIRED),
+            "AI 제공자의 결제 또는 사용 한도를 확인해 주세요."
+        );
     }
 }

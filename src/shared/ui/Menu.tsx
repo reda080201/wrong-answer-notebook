@@ -16,7 +16,9 @@ export default function Menu({ label, children, className = "", triggerAriaLabel
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   const getEnabledItems = () => Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[role=menuitem]") ?? []).filter(
-    (item) => !item.matches("[disabled]") && item.getAttribute("aria-disabled") !== "true",
+    (item) => !item.matches("[disabled]")
+      && item.getAttribute("aria-disabled") !== "true"
+      && item.tabIndex >= 0,
   );
 
   const closeMenu = (restoreFocus = false) => {
@@ -71,6 +73,11 @@ export default function Menu({ label, children, className = "", triggerAriaLabel
       return Children.map(fragment.props.children, addMenuItemRole);
     }
     const element = child as React.ReactElement<{ role?: string; onClick?: (event: React.MouseEvent) => void }>;
+    const elementType = typeof element.type === "string" ? element.type : "";
+    const isInteractive = element.props.role === "menuitem"
+      || Boolean(element.props.onClick)
+      || ["a", "button", "input", "select", "textarea"].includes(elementType);
+    if (!isInteractive) return child;
     return cloneElement(element, {
       role: "menuitem",
       onClick: (event) => {

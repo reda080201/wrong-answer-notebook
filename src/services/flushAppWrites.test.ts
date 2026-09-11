@@ -10,12 +10,13 @@ describe("flushPendingAppWrites", () => {
       flushEntries: async () => { order.push("entries"); },
       flushGeneratedExams: async () => { order.push("generated"); },
       flushSettings: async () => { order.push("settings"); },
+      flushAiProviderConfig: async () => { order.push("ai-provider"); },
       flushImportWorkspaceDraft: async () => { order.push("workspace"); },
       flushLibraryFolders: async () => { order.push("library"); },
       flushGptSolutionDrafts: async () => { order.push("gpt-drafts"); },
       flushPendingDeletions: async () => { order.push("pending-deletions"); },
     });
-    expect(order.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "pending-deletions", "settings", "workspace"]);
+    expect(order.sort()).toEqual(["ai-provider", "entries", "generated", "gpt-drafts", "library", "pending-deletions", "settings", "workspace"]);
   });
 
   it("flushes every store before reporting an active-exam failure", async () => {
@@ -53,6 +54,19 @@ describe("flushPendingAppWrites", () => {
     })).rejects.toThrow(/오답노트.*disk full/);
     expect(flushSettings).toHaveBeenCalledOnce();
     expect(flushLibraryFolders).toHaveBeenCalledOnce();
+  });
+
+  it("reports a queued AI provider config flush failure", async () => {
+    await expect(flushPendingAppWrites({
+      activeExam: null,
+      flushExamSession: vi.fn(),
+      flushEntries: vi.fn().mockResolvedValue(undefined),
+      flushGeneratedExams: vi.fn().mockResolvedValue(undefined),
+      flushSettings: vi.fn().mockResolvedValue(undefined),
+      flushAiProviderConfig: vi.fn().mockRejectedValue(new Error("latest config failed")),
+      flushImportWorkspaceDraft: vi.fn().mockResolvedValue(undefined),
+      flushLibraryFolders: vi.fn().mockResolvedValue(undefined),
+    })).rejects.toThrow(/AI Provider 설정.*latest config failed/);
   });
 
   it("reports every store and reason when multiple persistence paths fail", async () => {
