@@ -134,17 +134,21 @@ describe("useAiProviderSettings", () => {
       setSettingsMessage: vi.fn(),
     }));
     await waitFor(() => expect(getAiProviderStatus).toHaveBeenCalled());
-    await act(async () => {
+    let store!: Promise<void>;
+    act(() => {
       void result.current.updateAiProviderConfig({ provider: "openrouter", type: "openrouter" });
       result.current.setAiProviderKeyInput("router-key");
     });
     await waitFor(() => expect(result.current.aiProviderKeyInput).toBe("router-key"));
-    const store = result.current.storeAiProviderKey();
-    expect(saveAiProviderKey).not.toHaveBeenCalled();
-    await act(async () => {
-      releaseConfig();
-      await store;
+    await waitFor(() => expect(saveAiProviderConfig).toHaveBeenCalledOnce());
+    act(() => {
+      store = result.current.storeAiProviderKey();
     });
+    expect(saveAiProviderKey).not.toHaveBeenCalled();
+    act(() => {
+      releaseConfig();
+    });
+    await store;
     expect(saveAiProviderKey).toHaveBeenCalledWith("router-key", "openrouter");
   });
 
@@ -157,12 +161,13 @@ describe("useAiProviderSettings", () => {
       setSettingsMessage,
     }));
     await waitFor(() => expect(getAiProviderStatus).toHaveBeenCalled());
-    await act(async () => {
+    act(() => {
       const save = result.current.updateAiProviderConfig({ provider: "openrouter", type: "openrouter" });
       const remove = result.current.removeAiProviderKey();
       const test = result.current.testAiProvider();
-      await Promise.all([save, remove, test]);
+      void Promise.all([save, remove, test]);
     });
+    await waitFor(() => expect(setSettingsMessage).toHaveBeenCalledWith("settings disk failure"));
     expect(clearAiProviderKey).not.toHaveBeenCalled();
     expect(testAiProviderConnection).not.toHaveBeenCalled();
     expect(setSettingsMessage).toHaveBeenCalledWith("settings disk failure");
@@ -181,16 +186,16 @@ describe("useAiProviderSettings", () => {
     let flush!: Promise<void>;
     let first!: Promise<boolean>;
     let second!: Promise<boolean>;
-    await act(async () => {
+    act(() => {
       first = result.current.updateAiProviderConfig({ model: "first" });
       second = result.current.updateAiProviderConfig({ model: "second" });
       flush = result.current.flushAiProviderConfig();
     });
     await waitFor(() => expect(saveAiProviderConfig).toHaveBeenCalledTimes(1));
-    await act(async () => {
+    act(() => {
       releaseFirst();
-      await Promise.all([first, second]);
     });
+    await Promise.all([first, second]);
     await expect(flush).rejects.toThrow("latest save failed");
   });
 });
