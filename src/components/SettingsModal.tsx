@@ -102,6 +102,7 @@ export default function SettingsModal({
   const setTheme = ctx.theme.set;
   const aiProviderStatus = ctx.aiProvider.status;
   const aiProviderStatusLoading = ctx.aiProvider.statusLoading;
+  const aiProviderOperationPending = ctx.aiProvider.operationPending;
   const aiProviderStatusError = ctx.aiProvider.statusError;
   const aiProviderKeyInput = ctx.aiProvider.keyInput;
   const setAiProviderKeyInput = ctx.aiProvider.setKeyInput;
@@ -233,7 +234,7 @@ export default function SettingsModal({
 
             {activeCategory === "ai_connection" && (
               <>
-              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} />
+              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} operationPending={aiProviderOperationPending} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} />
               <SettingsMcpPanel preferences={settings.gptMcpPreferences} onPatch={patchGptMcp} bridgePanel={renderMcpBridgePanel()} />
               <SettingsChatGptPanel
                 preferences={settings.chatGptMcpPreferences}

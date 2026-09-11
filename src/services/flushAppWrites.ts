@@ -20,6 +20,7 @@ export async function flushPendingAppWrites(options: {
   flushEntries: () => Promise<void>;
   flushGeneratedExams: () => Promise<void>;
   flushSettings: () => Promise<void>;
+  flushAiProviderConfig?: () => Promise<void>;
   flushImportWorkspaceDraft: () => Promise<void>;
   flushLibraryFolders: () => Promise<void>;
   flushGptSolutionDrafts?: () => Promise<void>;
@@ -42,6 +43,9 @@ export async function flushPendingAppWrites(options: {
       { name: "오답노트", run: options.flushEntries },
       { name: "생성 모의고사", run: options.flushGeneratedExams },
       { name: "설정", run: options.flushSettings },
+      ...(options.flushAiProviderConfig
+        ? [{ name: "AI Provider 설정", run: options.flushAiProviderConfig }]
+        : []),
       { name: "가져오기 작업", run: options.flushImportWorkspaceDraft },
       { name: "보관함 폴더", run: options.flushLibraryFolders },
       ...(options.flushGptSolutionDrafts

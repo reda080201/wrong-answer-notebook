@@ -30,7 +30,7 @@ fn ai_provider_key_entry(provider: AiProviderType) -> Result<keyring::Entry, Str
         .map_err(|error| format!("OS 보안 저장소를 열지 못했습니다: {error}"))
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) enum AiProviderType {
     #[serde(rename = "manual")]
     Manual,
@@ -128,6 +128,30 @@ fn effective_provider(config: &AiProviderConfig) -> AiProviderType {
         AiProviderType::Manual => AiProviderType::OpenAiCompatible,
         value => value,
     })
+}
+
+fn canonical_provider(provider: AiProviderType) -> AiProviderType {
+    match provider {
+        AiProviderType::GeminiFlashLite | AiProviderType::Gemini35Flash => {
+            AiProviderType::GoogleGemini
+        }
+        AiProviderType::Manual => AiProviderType::OpenAiCompatible,
+        value => value,
+    }
+}
+
+fn require_expected_provider(
+    config: &AiProviderConfig,
+    expected_provider: AiProviderType,
+) -> Result<AiProviderType, String> {
+    let persisted_provider = effective_provider(config);
+    if persisted_provider != canonical_provider(expected_provider) {
+        return Err(
+            "AI Provider 설정이 최신 상태가 아닙니다. 설정 저장이 완료된 뒤 다시 시도해 주세요."
+                .into(),
+        );
+    }
+    Ok(persisted_provider)
 }
 
 pub(crate) fn vision_image_mime(filename: &str) -> Result<&'static str, String> {
@@ -641,13 +665,14 @@ pub(crate) fn save_ai_provider_config(
 pub(crate) fn save_ai_provider_key(
     app: tauri::AppHandle,
     api_key: String,
+    expected_provider: AiProviderType,
 ) -> Result<AiProviderStatus, String> {
     let trimmed = api_key.trim();
     if trimmed.is_empty() {
         return Err("API key가 비어 있습니다.".into());
     }
     let mut config = load_ai_provider_config(&app);
-    let provider = effective_provider(&config);
+    let provider = require_expected_provider(&config, expected_provider)?;
     save_stored_ai_provider_key(&app, provider, trimmed)?;
     config.has_stored_key = true;
     save_ai_provider_config_to_settings(&app, &config)?;
@@ -655,9 +680,12 @@ pub(crate) fn save_ai_provider_key(
 }
 
 #[tauri::command]
-pub(crate) fn clear_ai_provider_key(app: tauri::AppHandle) -> Result<AiProviderStatus, String> {
+pub(crate) fn clear_ai_provider_key(
+    app: tauri::AppHandle,
+    expected_provider: AiProviderType,
+) -> Result<AiProviderStatus, String> {
     let mut config = load_ai_provider_config(&app);
-    clear_stored_ai_provider_key(&app, effective_provider(&config))?;
+    clear_stored_ai_provider_key(&app, require_expected_provider(&config, expected_provider)?)?;
     config.has_stored_key = false;
     save_ai_provider_config_to_settings(&app, &config)?;
     Ok(ai_provider_status(&app))
@@ -1150,6 +1178,24 @@ mod tests {
         assert!(is_legacy_gemini_provider(AiProviderType::GeminiFlashLite));
         assert!(!is_legacy_gemini_provider(AiProviderType::OpenAi));
         assert!(!is_legacy_gemini_provider(AiProviderType::OpenRouter));
+    }
+
+    #[test]
+    fn expected_provider_must_match_the_persisted_effective_provider() {
+        let config = AiProviderConfig {
+            provider_type: AiProviderType::OpenAi,
+            provider: Some(AiProviderType::OpenRouter),
+            model: "openai/gpt-5.1-mini".into(),
+            base_url: None,
+            enabled: true,
+            key_source: AiProviderKeySource::TauriSettings,
+            has_stored_key: false,
+        };
+        assert_eq!(
+            require_expected_provider(&config, AiProviderType::OpenRouter),
+            Ok(AiProviderType::OpenRouter)
+        );
+        assert!(require_expected_provider(&config, AiProviderType::OpenAi).is_err());
     }
 
     #[test]

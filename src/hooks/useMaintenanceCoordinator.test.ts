@@ -3,6 +3,21 @@ import { describe, expect, it, vi } from "vitest";
 import { useMaintenanceCoordinator } from "./useMaintenanceCoordinator";
 
 describe("useMaintenanceCoordinator", () => {
+  it("flushes the AI provider config before maintenance work", async () => {
+    const events: string[] = [];
+    const { result } = renderHook(() => useMaintenanceCoordinator({
+      flushEntries: async () => undefined,
+      flushSettings: async () => undefined,
+      flushAiProviderConfig: async () => { events.push("ai-provider"); },
+      flushGeneratedExams: async () => undefined,
+      setEntriesMaintenanceBlocked: vi.fn(),
+      setSettingsMaintenanceBlocked: vi.fn(),
+      setGeneratedExamsMaintenanceBlocked: vi.fn(),
+    }));
+    await result.current(async () => { events.push("maintenance"); });
+    expect(events).toEqual(["ai-provider", "maintenance"]);
+  });
+
   it("blocks new mutations before draining queues and always unlocks", async () => {
     const order: string[] = [];
     const { result } = renderHook(() => useMaintenanceCoordinator({

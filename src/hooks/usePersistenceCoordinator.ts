@@ -11,6 +11,7 @@ interface UsePersistenceCoordinatorOptions {
   flushExamSession: (session: ExamSession) => Promise<boolean>;
   flushEntries: () => Promise<void>;
   flushSettings: () => Promise<void>;
+  flushAiProviderConfig?: () => Promise<void>;
   flushGeneratedExams: () => Promise<void>;
   flushImportWorkspaceDraft: () => Promise<void>;
   flushLibraryFolders: () => Promise<void>;
@@ -45,6 +46,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
   const runMaintenanceOperation = useMaintenanceCoordinator({
     flushEntries: options.flushEntries,
     flushSettings: options.flushSettings,
+    flushAiProviderConfig: options.flushAiProviderConfig,
     flushGeneratedExams: options.flushGeneratedExams,
     flushLibraryFolders: options.flushLibraryFolders,
     flushGptSolutionDrafts: options.flushGptSolutionDrafts,
@@ -68,6 +70,7 @@ export function usePersistenceCoordinator(options: UsePersistenceCoordinatorOpti
     flushEntries: options.flushEntries,
     flushGeneratedExams: options.flushGeneratedExams,
     flushSettings: options.flushSettings,
+    flushAiProviderConfig: options.flushAiProviderConfig,
     flushImportWorkspaceDraft: options.flushImportWorkspaceDraft,
     flushLibraryFolders: options.flushLibraryFolders,
     flushGptSolutionDrafts: options.flushGptSolutionDrafts,

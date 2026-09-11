@@ -34,6 +34,7 @@ describe("useWindowCloseGuard", () => {
       flushEntries: vi.fn(async () => { calls.push("entries"); }),
       flushGeneratedExams: vi.fn(async () => { calls.push("generated"); }),
       flushSettings: vi.fn(async () => { calls.push("settings"); }),
+      flushAiProviderConfig: vi.fn(async () => { calls.push("ai-provider"); }),
       flushImportWorkspaceDraft: vi.fn(async () => { calls.push("workspace"); }),
       flushLibraryFolders: vi.fn(async () => { calls.push("library"); }),
       flushGptSolutionDrafts: vi.fn(async () => { calls.push("gpt-drafts"); }),
@@ -41,7 +42,7 @@ describe("useWindowCloseGuard", () => {
     };
     renderHook(() => useWindowCloseGuard(options));
     await act(async () => { await closeRequested?.({ preventDefault: vi.fn() }); });
-    expect(calls.sort()).toEqual(["entries", "generated", "gpt-drafts", "library", "settings", "workspace"]);
+    expect(calls.sort()).toEqual(["ai-provider", "entries", "generated", "gpt-drafts", "library", "settings", "workspace"]);
     expect(close).toHaveBeenCalledTimes(1);
   });
 

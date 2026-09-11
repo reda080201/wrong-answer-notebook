@@ -44,12 +44,44 @@ describe("SettingsAiPanel", () => {
     expect(onConfigChange).toHaveBeenCalledWith({ model: "openrouter/new-model" });
   });
 
-  it("commits the base URL once with Enter", () => {
+  it("commits the base URL once when Enter blurs the field", () => {
     const { onConfigChange } = renderPanel();
     const baseUrl = screen.getByPlaceholderText("https://api.example.com");
+    baseUrl.focus();
     fireEvent.change(baseUrl, { target: { value: "https://example.test/v1" } });
     fireEvent.keyDown(baseUrl, { key: "Enter" });
     expect(onConfigChange).toHaveBeenCalledTimes(1);
     expect(onConfigChange).toHaveBeenCalledWith({ baseUrl: "https://example.test/v1" });
+  });
+
+  it("does not commit a second time when Enter is followed by blur", () => {
+    const { onConfigChange } = renderPanel();
+    const model = screen.getByPlaceholderText("예: openai/gpt-5.1-mini");
+    model.focus();
+    fireEvent.change(model, { target: { value: "openrouter/new-model" } });
+    fireEvent.keyDown(model, { key: "Enter" });
+    fireEvent.blur(model);
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables provider and key controls while a provider operation is pending", () => {
+    render(
+      <SettingsAiPanel
+        provider={provider}
+        status={null}
+        statusLoading={false}
+        operationPending
+        statusError={null}
+        keyInput="key"
+        onKeyInputChange={vi.fn()}
+        onConfigChange={vi.fn()}
+        onStoreKey={vi.fn()}
+        onRemoveKey={vi.fn()}
+        onTestConnection={vi.fn()}
+      />,
+    );
+    expect(screen.getByLabelText("AI 제공자")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "키 저장" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "연결 테스트" })).toBeDisabled();
   });
 });
