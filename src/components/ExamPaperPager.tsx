@@ -65,5 +65,10 @@ export default function ExamPaperPager({ items }: ExamPaperPagerProps) {
       <button type="button" onClick={() => setPageIndex((value) => Math.min(spreads.length - 1, value + 1))} disabled={page >= spreads.length - 1}>다음</button>
     </nav>
     <div className="exam-paper-pager__spread">{current.map((item) => <article className="exam-paper-pager__item" key={item.id}>{item.node}</article>)}</div>
+    <nav className="exam-paper-pager__navigation exam-paper-pager__navigation--bottom" aria-label="시험지 페이지 하단 이동">
+      <button type="button" onClick={() => setPageIndex((value) => Math.max(0, value - 1))} disabled={page === 0}>이전</button>
+      <span aria-live="polite">{page + 1} / {spreads.length}</span>
+      <button type="button" onClick={() => setPageIndex((value) => Math.min(spreads.length - 1, value + 1))} disabled={page >= spreads.length - 1}>다음</button>
+    </nav>
   </section>;
 }

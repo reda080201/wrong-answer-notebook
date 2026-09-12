@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import ExamPaperPager from "./ExamPaperPager";
 
@@ -13,9 +13,10 @@ describe("ExamPaperPager", () => {
     expect(screen.getByText("1번")).toBeInTheDocument();
     expect(screen.getByText("2번")).toBeInTheDocument();
     expect(screen.queryByText("3번")).not.toBeInTheDocument();
-    expect(screen.getByText("1 / 2")).toBeInTheDocument();
+    const topNavigation = screen.getByRole("navigation", { name: "시험지 페이지 이동" });
+    expect(within(topNavigation).getByText("1 / 2")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "다음" }));
+    fireEvent.click(within(topNavigation).getByRole("button", { name: "다음" }));
     expect(screen.getByText("3번")).toBeInTheDocument();
     expect(screen.queryByText("1번")).not.toBeInTheDocument();
   });

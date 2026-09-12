@@ -20,7 +20,8 @@
 
 .exam-session-overlay:not(.exam-session-overlay--real) { grid-template-rows: auto minmax(0, 1fr); }
 .exam-session-overlay:not(.exam-session-overlay--real) > .exam-session-view { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(100%, 1100px); height: 100%; min-height: 0; margin: 0 auto; overflow: hidden; }
-.exam-session-body { min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 16px 72px; overscroll-behavior-y: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.exam-session-body { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 16px 72px; overscroll-behavior-y: contain; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.exam-session-body .exam-result-summary { order: -1; }
 .exam-session-body .exam-question-paper { width: min(960px, 100%); margin: 24px auto; padding: clamp(24px, 3vw, 48px); border-radius: 4px; }
 .exam-session-body .exam-gpt-actions, .exam-session-body .exam-result-summary { width: min(960px, 100%); margin: 16px auto; }
 .exam-session-overlay:not(.exam-session-overlay--real) .exam-question-navigation { min-height: 50px; padding: 6px 16px; }
