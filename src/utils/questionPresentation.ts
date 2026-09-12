@@ -46,12 +46,18 @@ export function normalizeQuestionPresentationSegments(input: {
   const hasCanonicalStream = Boolean(input.contentSegments?.length);
   const source = hasCanonicalStream ? input.contentSegments!.map(cloneSegment) : [];
   const represented = new Set(source.map(fingerprint));
+  const canonicalText = source
+    .filter((segment): segment is Extract<QuestionContentSegment, { type: "text" }> => segment.type === "text")
+    .map((segment) => normalizeText(segment.text))
+    .filter(Boolean)
+    .join(" ");
   const fallback: QuestionContentSegment[] = [
     ...(input.questionText.trim() ? [{ id: "question-text", type: "text" as const, text: input.questionText }] : []),
     ...input.conditions.filter((value) => value.trim()).map((text, index) => ({ id: `condition-${index + 1}`, type: "condition" as const, text })),
     ...input.equations.filter((value) => value.trim()).map((latex, index) => ({ id: `equation-${index + 1}`, type: "equation" as const, latex, display: true })),
   ];
   for (const segment of fallback) {
+    if (segment.type === "text" && canonicalText && normalizeText(segment.text) === canonicalText) continue;
     const key = fingerprint(segment);
     if (!represented.has(key)) {
       source.push(segment);

@@ -158,6 +158,8 @@ describe("import workspace image separation", () => {
     expect(result.questionContentSegments).toEqual({
       "1": [
         { id: "segment-1", type: "text", text: "수정된 첫 문제" },
+        { id: "condition-1", type: "condition", text: "x > 0" },
+        { id: "equation-1", type: "equation", latex: "x + 1 = 2", display: true },
       ],
       "2": [{ id: "segment-2", type: "text", text: "둘째 문제" }],
     });
