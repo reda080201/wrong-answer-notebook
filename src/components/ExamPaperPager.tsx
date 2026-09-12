@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 export interface ExamPaperPagerItem {
   id: string;
@@ -38,7 +38,16 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export default function ExamPaperPager({ items }: ExamPaperPagerProps) {
   const spreads = useMemo(() => makeSpreads(items), [items]);
   const [pageIndex, setPageIndex] = useState(0);
+  const pagerRef = useRef<HTMLElement>(null);
+  const hasMountedRef = useRef(false);
   const page = Math.min(pageIndex, Math.max(0, spreads.length - 1));
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    requestAnimationFrame(() => pagerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  }, [page]);
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (isEditableTarget(event.target)) return;
@@ -49,7 +58,7 @@ export default function ExamPaperPager({ items }: ExamPaperPagerProps) {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [spreads.length]);
   const current = spreads[page] ?? [];
-  return <section className="exam-paper-pager" aria-label="2문항 펼침" data-page={page + 1}>
+  return <section ref={pagerRef} className="exam-paper-pager" aria-label="2문항 펼침" data-page={page + 1}>
     <nav className="exam-paper-pager__navigation" aria-label="시험지 페이지 이동">
       <button type="button" onClick={() => setPageIndex((value) => Math.max(0, value - 1))} disabled={page === 0}>이전</button>
       <span aria-live="polite">{page + 1} / {spreads.length}</span>

@@ -1,4 +1,5 @@
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../types";
+import type { ExamSessionRecipe } from "../hooks/useExamSessionController";
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { SettingsTab } from "./SettingsModal";
@@ -17,6 +18,7 @@ interface ExamSessionOverlayProps {
   onCheckLocalMcp: () => Promise<void>;
   remoteMcpConfigured: boolean;
   onChange: (session: ExamSession) => void;
+  onUpdateSession?: (recipe: ExamSessionRecipe) => void;
   onSubmittingChange: (submitting: boolean) => void;
   onSubmit: (session: ExamSession) => void | Promise<void>;
   onClose: () => void;
@@ -39,6 +41,7 @@ export default function ExamSessionOverlay({
   onCheckLocalMcp,
   remoteMcpConfigured,
   onChange,
+  onUpdateSession,
   onSubmittingChange,
   onSubmit,
   onClose,
@@ -75,6 +78,7 @@ export default function ExamSessionOverlay({
     onCheckLocalMcp={onCheckLocalMcp}
     remoteMcpConfigured={remoteMcpConfigured}
     onChange={onChange}
+    onUpdateSession={onUpdateSession}
     onSubmittingChange={onSubmittingChange}
     onSubmit={onSubmit}
     onClose={onClose}

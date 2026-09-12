@@ -3,9 +3,10 @@ import { useEffect, useState, type RefObject } from "react";
 interface ScrollToTopButtonProps {
   containerRef: RefObject<HTMLElement | null>;
   threshold?: number;
+  className?: string;
 }
 
-export default function ScrollToTopButton({ containerRef, threshold = 320 }: ScrollToTopButtonProps) {
+export default function ScrollToTopButton({ containerRef, threshold = 320, className }: ScrollToTopButtonProps) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -18,5 +19,5 @@ export default function ScrollToTopButton({ containerRef, threshold = 320 }: Scr
   }, [containerRef, threshold]);
 
   if (!visible) return null;
-  return <button type="button" className="scroll-to-top-button" aria-label="맨 위로" onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>↑</button>;
+  return <button type="button" className={className ? `scroll-to-top-button ${className}` : "scroll-to-top-button"} aria-label="맨 위로" onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>↑</button>;
 }

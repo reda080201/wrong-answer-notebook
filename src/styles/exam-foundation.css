@@ -26,6 +26,7 @@
 .exam-session-overlay:not(.exam-session-overlay--real) .exam-question-navigation { min-height: 50px; padding: 6px 16px; }
 .exam-session-overlay:not(.exam-session-overlay--real) .exam-gpt-actions { padding: 10px 16px; }
 .scroll-to-top-button { position: fixed; right: 24px; bottom: 70px; z-index: 5; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.scroll-to-top-button--detail { bottom: 24px; }
 .exam-result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .exam-result-actions button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-@media (max-width: 900px) { .exam-session-body .exam-question-paper { margin-block: 12px; padding: 20px 16px; } .scroll-to-top-button { right: 12px; bottom: 64px; } }
+@media (max-width: 900px) { .exam-session-body .exam-question-paper { margin-block: 12px; padding: 20px 16px; } .scroll-to-top-button { right: 12px; bottom: 64px; } .scroll-to-top-button--detail { bottom: 12px; } }

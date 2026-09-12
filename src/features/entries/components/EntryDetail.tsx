@@ -2103,7 +2103,7 @@ export default function EntryDetail({
         )}
         </SecondaryStudyViews>
       </div>
-      <ScrollToTopButton containerRef={detailScrollRef} />
+      <ScrollToTopButton containerRef={detailScrollRef} className="scroll-to-top-button--detail" />
       <ReviewExportDialogs>
       <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
       </ReviewExportDialogs>

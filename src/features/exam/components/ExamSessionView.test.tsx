@@ -3,6 +3,16 @@ import { describe, expect, it, vi } from "vitest";
 import type { ExamSession } from "../../../types";
 import ExamSessionView, { parseChoice } from "./ExamSessionView";
 
+const defaultExamPreferences = {
+  showScratchNote: true,
+  showOriginalPages: true,
+  showNavigator: true,
+  autoAdvanceOnAnswer: false,
+  warnUnansweredOnSubmit: true,
+  showTimer: true,
+  showMcpHelp: false,
+};
+
 function createSession(overrides: Partial<ExamSession> = {}): ExamSession {
   return {
     id: "session-1",
@@ -97,6 +107,40 @@ describe("ExamSessionView", () => {
       questionNumber: "1",
       response: "②",
     });
+  });
+
+  it("does not auto-advance while typing a short answer", () => {
+    const onChange = vi.fn();
+    const session = createSession({
+      questions: [{
+        ...createSession().questions[0],
+        questionNumber: "1",
+        questionType: "short_answer",
+        choices: [],
+      }, {
+        ...createSession().questions[0],
+        id: "q2",
+        questionNumber: "2",
+      }],
+    });
+    render(<ExamSessionView session={session} onChange={onChange} onSubmit={vi.fn()} examPreferences={{ ...defaultExamPreferences, autoAdvanceOnAnswer: true }} />);
+
+    fireEvent.change(screen.getByLabelText("1번 답안"), { target: { value: "42" } });
+
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange.mock.calls[0][0]).toMatchObject({ currentQuestionIndex: 0 });
+  });
+
+  it("keeps previous and next navigation visible when the question navigator is disabled", () => {
+    render(<ExamSessionView session={createSession({ questions: [
+      { ...createSession().questions[0], questionNumber: "1" },
+      { ...createSession().questions[0], id: "q2", questionNumber: "2" },
+    ] })} onChange={vi.fn()} onSubmit={vi.fn()} examPreferences={{ ...defaultExamPreferences, showNavigator: false }} />);
+
+    expect(screen.getByRole("navigation", { name: "문항 이동" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "이전" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "다음" })).toBeInTheDocument();
+    expect(within(screen.getByRole("navigation", { name: "문항 이동" })).getByText("1 / 2")).toBeInTheDocument();
   });
 
   it("shows submit confirmation modal and can cancel or confirm submission", async () => {
@@ -208,6 +252,25 @@ describe("ExamSessionView", () => {
     expect(screen.getByText("배점 정보 일부 미확인")).toBeInTheDocument();
     const grid = screen.getByLabelText("문항별 결과");
     expect(within(grid).getAllByRole("button")).toHaveLength(30);
-    expect(within(grid).getByRole("button", { name: "30" })).toBeInTheDocument();
+    expect(within(grid).getByRole("button", { name: "30번 정답" })).toBeInTheDocument();
+  });
+
+  it("shows result details and starts review with answered wrong questions only", () => {
+    const onStartReview = vi.fn();
+    const questions = [
+      { ...createSession().questions[0], questionNumber: "1", correctAnswer: "①", explanation: "첫 해설" },
+      { ...createSession().questions[0], id: "q2", questionNumber: "2", correctAnswer: "②", explanation: "둘째 해설" },
+    ];
+    const session = createSession({
+      status: "submitted",
+      questions,
+      responses: [{ questionNumber: "1", response: "②", scratchNote: "", markedForReview: false, updatedAt: "2026-01-02T00:00:00.000Z" }],
+    });
+    render(<ExamSessionView session={session} onChange={vi.fn()} onSubmit={vi.fn()} onStartReview={onStartReview} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /1번 오답/ }));
+    expect(screen.getByRole("article", { name: "1번 결과 상세" })).toHaveTextContent("첫 해설");
+    fireEvent.click(screen.getByRole("button", { name: "오답 복습 시작" }));
+    expect(onStartReview).toHaveBeenCalledWith(["1"]);
   });
 });

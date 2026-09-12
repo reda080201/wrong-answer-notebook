@@ -175,6 +175,7 @@ function AppContent() {
     loading: examSessionsLoading,
     loadError: examSessionsLoadError,
     reload: reloadExamSessions,
+    updateSession: updateExamSession,
     savedSessions: savedExamSessions,
     activeGeneratedExam,
     open: openExamSession,
@@ -758,6 +759,7 @@ function AppContent() {
               }}
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
               onChange={setExamSession}
+              onUpdateSession={updateExamSession}
               onSubmittingChange={setExamSubmitting}
               onSubmit={handleExamSubmit}
               onClose={closeExamSession}

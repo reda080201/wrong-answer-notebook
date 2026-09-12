@@ -52,6 +52,8 @@ export type ExamOpenResult =
   | { ok: true; session: ExamSession }
   | { ok: false; code: "sessions_not_loaded" | "no_questions" | "missing_answers"; message: string };
 
+export type ExamSessionRecipe = (current: ExamSession) => ExamSession;
+
 export function useExamSessionController({
   existingEntries = EMPTY_ENTRIES,
   commitExamSubmission,
@@ -76,6 +78,15 @@ export function useExamSessionController({
   const loadedRef = useRef(false);
   const generatedEntryKeysRef = useRef(new Set<string>());
   const submissionInFlightRef = useRef(false);
+
+  const updateSession = useCallback((recipe: ExamSessionRecipe) => {
+    setSession((current) => {
+      if (!current) return current;
+      const next = recipe(current);
+      sessionRef.current = next;
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     generatedEntryKeysRef.current = new Set(
@@ -318,6 +329,7 @@ export function useExamSessionController({
   return {
     session,
     setSession,
+    updateSession,
     sessionRef,
     saveTimerRef,
     submitting,
