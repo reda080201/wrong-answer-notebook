@@ -106,6 +106,14 @@ describe("normalizeViewPreferences", () => {
   });
 });
 
+describe("normalizeExamPreferences", () => {
+  it("defaults paper navigation to vertical pages and preserves two-up", () => {
+    expect(normalizeExamPreferences({}).paperNavigation).toBe("vertical-pages");
+    expect(normalizeExamPreferences({ paperNavigation: "two-up" }).paperNavigation).toBe("two-up");
+    expect(normalizeExamPreferences({ paperNavigation: "bad" }).paperNavigation).toBe("vertical-pages");
+  });
+});
+
 describe("migrateViewPreferences", () => {
   afterEach(() => {
     localStorage.clear();

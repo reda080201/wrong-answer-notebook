@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
-import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -26,6 +26,7 @@ import {
 import AnnotatableQuestion, { FocusedQuestionView } from "../../../components/AnnotatableQuestion";
 import CollapsibleSection from "../../../components/CollapsibleSection";
 import ContentBlock from "../../../components/ContentBlock";
+import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import { LinkifiedText } from "../../../utils/wikiLinks";
 import LearningContentPanel from "../../../components/LearningContentPanel";
 import MathText from "../../../components/MathText";
@@ -112,6 +113,7 @@ interface EntryDetailProps {
     result: "opened" | "not-found",
   ) => void;
   viewPreferences?: ViewPreferences;
+  examPreferences?: ExamPreferences;
   onViewPreferencesChange?: (patch: Partial<ViewPreferences>) => void;
   onOpenSettings?: (tab?: SettingsTab) => void;
   aiProviderStatus?: AiProviderStatus | null;
@@ -218,6 +220,7 @@ export default function EntryDetail({
   startExamLabel = "문제 풀기",
   startRealExamLabel = "실전 모드",
   examSession,
+  examPreferences,
   examPrintPreferences,
   onExamPrintPreferencesChange,
   onSyncExportContext,
@@ -247,6 +250,7 @@ export default function EntryDetail({
   onUpdateQuestionRenderVerification,
   gptSolutionDraftStore,
 }: EntryDetailProps) {
+  const detailScrollRef = useRef<HTMLDivElement>(null);
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
   const [activeStudyPanel, setActiveStudyPanel] = useState<StudyPanel>(loadFocusPanel);
@@ -1525,7 +1529,7 @@ export default function EntryDetail({
         </div>
       )}
 
-      <div className="detail-scroll">
+      <div className="detail-scroll" ref={detailScrollRef}>
         <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
@@ -1727,6 +1731,7 @@ export default function EntryDetail({
                     revealedAnswerNumbers={revealedAnswerNumbers}
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
+                    paperNavigation={isSheet ? examPreferences?.paperNavigation : "vertical-pages"}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
@@ -1896,7 +1901,7 @@ export default function EntryDetail({
 
         <SecondaryStudyViews>
 
-        {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
+        {showPaperSupplementSections && <EntryImportAuditSection entry={entry} onOpenReview={() => handleStudyModeChange("analysis")} />}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
           <section className="sheet-study-panel sheet-study-panel--answers">
@@ -2098,6 +2103,7 @@ export default function EntryDetail({
         )}
         </SecondaryStudyViews>
       </div>
+      <ScrollToTopButton containerRef={detailScrollRef} className="scroll-to-top-button--detail" />
       <ReviewExportDialogs>
       <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
       </ReviewExportDialogs>

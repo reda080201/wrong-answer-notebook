@@ -51,24 +51,29 @@ export default function QuestionBankFilterBar({ items, filters, onChange, onRese
 
   return <section className="question-bank-filters" aria-label="문제 은행 필터">
     <div className="question-bank-filter-search"><SearchField value={filters.search} onChange={(search) => onChange({ search })} placeholder="문제, 단원, 개념, 출처 검색" ariaLabel="문제 은행 검색" /><button type="button" className="btn-secondary" aria-label="필터 설정 초기화" disabled={disabled} onClick={onReset}>필터 초기화</button></div>
-    <div className="question-bank-filter-grid">
+    <div className="question-bank-filter-grid question-bank-filter-grid--basic">
       <Select label="과목" value={filters.subject} disabled={disabled} onChange={(subject) => onChange({ subject })}><option value="all">전체 과목</option>{subjects.map((subject) => <option key={subject} value={subject}>{subject}</option>)}</Select>
       <Select label="출처" value={filters.sourceType} disabled={disabled} onChange={(sourceType) => onChange({ sourceType: sourceType as QuestionBankFilters["sourceType"] })}><option value="all">전체 출처</option>{Object.entries(PROBLEM_SOURCE_LABELS).map(([type, label]) => <option key={type} value={type}>{label}</option>)}</Select>
       <Select label="단원" value={filters.unit} disabled={disabled} onChange={(unit) => onChange({ unit })}><option value="all">전체 단원</option>{units.map((unit) => <option key={unit} value={unit}>{unit}</option>)}</Select>
-      <Select label="소단원" value={filters.subunit} disabled={disabled} onChange={(subunit) => onChange({ subunit })}><option value="all">전체 소단원</option>{subunits.map((subunit) => <option key={subunit} value={subunit}>{subunit}</option>)}</Select>
-      <Select label="개념" value={filters.concept} disabled={disabled} onChange={(concept) => onChange({ concept })}><option value="all">전체 개념</option>{concepts.map((concept) => <option key={concept} value={concept}>{concept}</option>)}</Select>
-      <Select label="답 유형" value={filters.answerType} disabled={disabled} onChange={(answerType) => onChange({ answerType: answerType as QuestionBankFilters["answerType"] })}><option value="all">전체 유형</option><option value="multiple_choice">객관식</option><option value="short_answer">단답형</option><option value="essay">서술형</option><option value="unknown">미분류</option></Select>
       <NumberFilter label="최소 난이도" value={filters.minDifficulty} disabled={disabled} onChange={(minDifficulty) => onChange({ minDifficulty })} />
-      <NumberFilter label="최소 중요도" value={filters.minImportance} disabled={disabled} onChange={(minImportance) => onChange({ minImportance })} />
-      <NumberFilter label="최소 품질" value={filters.minQuality} disabled={disabled} onChange={(minQuality) => onChange({ minQuality })} />
-      <Select label="정답" value={filters.answerState} disabled={disabled} onChange={(answerState) => onChange({ answerState: answerState as QuestionBankFilters["answerState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
-      <Select label="해설" value={filters.explanationState} disabled={disabled} onChange={(explanationState) => onChange({ explanationState: explanationState as QuestionBankFilters["explanationState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
-      <Select label="이미지" value={filters.hasImages} disabled={disabled} onChange={(hasImages) => onChange({ hasImages: hasImages as QuestionBankFilters["hasImages"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
-      <Select label="출제 연도" value={filters.year} disabled={disabled} onChange={(year) => onChange({ year })}><option value="all">전체 연도</option>{years.map((year) => <option key={year} value={year}>{year}년</option>)}</Select>
-      <Select label="태그" value={filters.tag} disabled={disabled} onChange={(tag) => onChange({ tag })}><option value="all">전체 태그</option>{tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</Select>
       <label className="question-bank-filter question-bank-filter--check"><input type="checkbox" disabled={disabled} checked={filters.wrongOnly} onChange={(event) => onChange({ wrongOnly: event.target.checked })} /> 오답만</label>
       <label className="question-bank-filter question-bank-filter--check"><input type="checkbox" disabled={disabled} checked={filters.reviewDueOnly} onChange={(event) => onChange({ reviewDueOnly: event.target.checked })} /> 복습 예정</label>
     </div>
+    <details className="question-bank-advanced-filters">
+      <summary>고급 필터</summary>
+      <div className="question-bank-filter-grid">
+        <Select label="소단원" value={filters.subunit} disabled={disabled} onChange={(subunit) => onChange({ subunit })}><option value="all">전체 소단원</option>{subunits.map((subunit) => <option key={subunit} value={subunit}>{subunit}</option>)}</Select>
+        <Select label="개념" value={filters.concept} disabled={disabled} onChange={(concept) => onChange({ concept })}><option value="all">전체 개념</option>{concepts.map((concept) => <option key={concept} value={concept}>{concept}</option>)}</Select>
+        <Select label="답 유형" value={filters.answerType} disabled={disabled} onChange={(answerType) => onChange({ answerType: answerType as QuestionBankFilters["answerType"] })}><option value="all">전체 유형</option><option value="multiple_choice">객관식</option><option value="short_answer">단답형</option><option value="essay">서술형</option><option value="unknown">미분류</option></Select>
+        <NumberFilter label="최소 중요도" value={filters.minImportance} disabled={disabled} onChange={(minImportance) => onChange({ minImportance })} />
+        <NumberFilter label="최소 품질" value={filters.minQuality} disabled={disabled} onChange={(minQuality) => onChange({ minQuality })} />
+        <Select label="정답" value={filters.answerState} disabled={disabled} onChange={(answerState) => onChange({ answerState: answerState as QuestionBankFilters["answerState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
+        <Select label="해설" value={filters.explanationState} disabled={disabled} onChange={(explanationState) => onChange({ explanationState: explanationState as QuestionBankFilters["explanationState"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
+        <Select label="이미지" value={filters.hasImages} disabled={disabled} onChange={(hasImages) => onChange({ hasImages: hasImages as QuestionBankFilters["hasImages"] })}><option value="all">전체</option><option value="has">있음</option><option value="missing">없음</option></Select>
+        <Select label="출제 연도" value={filters.year} disabled={disabled} onChange={(year) => onChange({ year })}><option value="all">전체 연도</option>{years.map((year) => <option key={year} value={year}>{year}년</option>)}</Select>
+        <Select label="태그" value={filters.tag} disabled={disabled} onChange={(tag) => onChange({ tag })}><option value="all">전체 태그</option>{tags.map((tag) => <option key={tag} value={tag}>{tag}</option>)}</Select>
+      </div>
+    </details>
     {active.length > 0 && <div className="question-bank-chips" aria-label="적용된 필터">{active.map((chip) => <button key={chip.label} type="button" disabled={disabled} onClick={() => onChange(chip.patch)}>{chip.label} <span aria-hidden="true">×</span></button>)}</div>}
   </section>;
 }

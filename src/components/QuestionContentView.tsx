@@ -31,7 +31,7 @@ export default function QuestionContentView({ text, segments, figures = [] }: Qu
         const figure = byId.get(segment.figureId);
         return figure ? <FigureContent key={segment.id} figure={figure} /> : <p key={segment.id} className="question-figure-missing">그림 위치 정보를 확인할 수 없습니다.</p>;
       }
-      if (segment.type === "condition") return <section key={segment.id} className="question-condition-box"><strong>{segment.label ?? "조건"}</strong><MathText text={segment.text} /></section>;
+      if (segment.type === "condition") return <p key={segment.id} className="question-condition-line">{segment.label ? <strong>{segment.label} </strong> : null}<MathText text={segment.text} /></p>;
       if (segment.type === "equation") return <div key={segment.id} className="question-equation"><MathText text={segment.display ? `\\[${segment.latex}\\]` : `\\(${segment.latex}\\)`} /></div>;
       if (segment.type === "table") return <div key={segment.id} className="question-table-wrap"><table><tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MathText text={cell} /></td>)}</tr>)}</tbody></table></div>;
       return <p key={segment.id}><MathText text={segment.text} /></p>;

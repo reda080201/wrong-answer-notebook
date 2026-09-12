@@ -3,7 +3,7 @@ import type { StructuredQuestion } from "../types";
 import { getEntryQuestions } from "./entryQuestions";
 
 describe("getEntryQuestions semantic projection", () => {
-  it("preserves canonical fields, deep clones them, and fills missing semantic segments", () => {
+  it("treats canonical content segments as authoritative and preserves their order", () => {
     const question: StructuredQuestion = {
       questionNumber: "07",
       section: "수학 II",
@@ -41,7 +41,8 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.contentSegments).toEqual([
       { id: "condition-existing", type: "condition", text: "x > 0" },
       { id: "figure-slot", type: "figure", figureId: "figure-1" },
-      { id: "condition-1", type: "condition", text: "y > 0" },
+      { id: "question-text", type: "text", text: "함수의 값을 구하시오." },
+      { id: "condition-2", type: "condition", text: "y > 0" },
       { id: "equation-1", type: "equation", latex: "x + y = 1", display: true },
     ]);
 
@@ -51,6 +52,60 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.conditions).toEqual(["x > 0", "y > 0"]);
     expect(resolved.contentSegments?.[0]).toEqual({ id: "condition-existing", type: "condition", text: "x > 0" });
     expect(resolved.source?.title).toBe("기출");
+  });
+
+  it("builds fallback semantic segments once when canonical segments are absent", () => {
+    const [resolved] = getEntryQuestions({
+      question: "",
+      structuredQuestions: [{
+        questionNumber: "1",
+        questionText: "본문",
+        conditions: ["x > 0", "x > 0"],
+        equations: ["x+y=1"],
+        choices: [],
+        contentSegments: [],
+        figureIds: [],
+      }],
+      questionContentSegments: undefined,
+    });
+
+    expect(resolved.contentSegments).toEqual([
+      { id: "question-text", type: "text", text: "본문" },
+      { id: "condition-1", type: "condition", text: "x > 0" },
+      { id: "equation-1", type: "equation", latex: "x+y=1", display: true },
+    ]);
+  });
+
+  it("preserves missing legacy semantics without deduping the canonical stream", () => {
+    const [resolved] = getEntryQuestions({
+      question: "",
+      structuredQuestions: [{
+        questionNumber: "1",
+        questionText: "본문",
+        conditions: ["(가) x > 0"],
+        equations: ["\\frac{1}{2}"],
+        choices: [],
+        contentSegments: [
+          { id: "text", type: "text", text: "본문" },
+          { id: "first-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+          { id: "second-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+          { id: "condition", type: "condition", label: "(가)", text: "x > 0" },
+          { id: "figure", type: "figure", figureId: "figure-1" },
+          { id: "table", type: "table", rows: [["값"]] },
+        ],
+        figureIds: ["figure-1"],
+      }],
+      questionContentSegments: undefined,
+    });
+
+    expect(resolved.contentSegments).toEqual([
+      { id: "text", type: "text", text: "본문" },
+      { id: "first-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+      { id: "second-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+      { id: "condition", type: "condition", label: "(가)", text: "x > 0" },
+      { id: "figure", type: "figure", figureId: "figure-1" },
+      { id: "table", type: "table", rows: [["값"]] },
+    ]);
   });
 
   it("does not invent choices for an empty multiple-choice question", () => {

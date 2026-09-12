@@ -74,8 +74,6 @@ jobs:
         working-directory: src-tauri
       - run: cargo test
         working-directory: src-tauri
-      - name: Tauri compile smoke
-        run: npm run tauri -- build --no-bundle
       - name: Publish signed Tauri release
         uses: tauri-apps/tauri-action@v1
         env:

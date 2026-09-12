@@ -145,8 +145,14 @@ export default function SettingsModal({
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(categoryForTab(initialTab ?? "theme"));
+  const [studySubtab, setStudySubtab] = useState<"library" | "exam" | "templates">(
+    initialTab === "exam" || initialTab === "templates" ? initialTab : "library",
+  );
   useEffect(() => {
-    if (initialTab) setActiveCategory(categoryForTab(initialTab));
+    if (initialTab) {
+      setActiveCategory(categoryForTab(initialTab));
+      if (initialTab === "library" || initialTab === "exam" || initialTab === "templates") setStudySubtab(initialTab);
+    }
   }, [initialTab]);
   const patchView = async (patch: Partial<ViewPreferences>) => {
     await ctx.viewPreferences.patch(patch);
@@ -259,9 +265,16 @@ export default function SettingsModal({
 
             {activeCategory === "study" && (
               <>
-              <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "standard" }), ...patch } })} />
-              <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />
-              <SettingsTemplatesPanel
+              <nav className="settings-study-subnav" aria-label="학습 설정 하위 메뉴">
+                {(["library", "exam", "templates"] as const).map((tab) => (
+                  <button key={tab} type="button" className={studySubtab === tab ? "is-active" : ""} aria-current={studySubtab === tab ? "page" : undefined} onClick={() => setStudySubtab(tab)}>
+                    {tab === "library" ? "보관함" : tab === "exam" ? "시험" : "템플릿"}
+                  </button>
+                ))}
+              </nav>
+              {studySubtab === "library" && <SettingsLibraryPanel preferences={settings.libraryPreferences} onPatch={(patch) => void patchSettings({ libraryPreferences: { ...(settings.libraryPreferences ?? { separateMockExams: false, defaultUnitView: "home", listDensity: "standard", showUserFolders: true, displayMode: "standard" }), ...patch } })} />}
+              {studySubtab === "exam" && <SettingsExamPanel preferences={settings.examPreferences} onPatch={(patch) => void patchExam(patch)} />}
+              {studySubtab === "templates" && <SettingsTemplatesPanel
                 templates={settings.templates}
                 promptTemplates={settings.promptTemplates}
                 memoTemplates={settings.memoTemplates}
@@ -272,7 +285,7 @@ export default function SettingsModal({
                 saveMemoTemplate={saveMemoTemplate}
                 deleteMemoTemplate={deleteMemoTemplate}
                 onError={setSettingsMessage}
-              />
+              />}
               </>
             )}
 

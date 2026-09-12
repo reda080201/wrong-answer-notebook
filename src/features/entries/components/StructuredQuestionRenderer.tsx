@@ -65,7 +65,7 @@ function FigureSegment({ figure }: { figure: SheetFigureItem }) {
 
 function SegmentContent({ segment, figures }: { segment: QuestionContentSegment; figures: Map<string, SheetFigureItem> }): ReactNode {
   if (segment.type === "text") return <MathText text={segment.text} />;
-  if (segment.type === "condition") return <><strong>{segment.label ?? "조건"}</strong><MathText text={segment.text} /></>;
+  if (segment.type === "condition") return <>{segment.label ? <strong>{segment.label} </strong> : null}<MathText text={segment.text} /> </>;
   if (segment.type === "equation") return <DirectEquation {...segment} />;
   if (segment.type === "table") {
     return <table><tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MathText text={cell} /></td>)}</tr>)}</tbody></table>;

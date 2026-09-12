@@ -1,12 +1,14 @@
 .structured-problem-sheet { display: grid; gap: 1rem; }
 .structured-problem-sheet-question { min-width: 0; padding: 1rem; border: 1px solid var(--border); border-radius: 0.5rem; background: var(--surface); }
+.exam-paper-pager .structured-problem-sheet-question { border: 0; border-radius: 0; padding: 0; background: transparent; }
 .structured-problem-sheet-question > header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.875rem; }
 .structured-problem-sheet-question > header > div { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .structured-problem-sheet-question > header span { font-weight: 700; }
 .structured-problem-sheet-question > header small { color: var(--text-muted); }
 .structured-problem-sheet-actions { justify-content: flex-end; }
 .structured-question-renderer { display: grid; gap: 0.75rem; min-width: 0; }
-.structured-question-segment--condition { display: grid; gap: 0.3rem; padding: 0.75rem; border-left: 3px solid var(--accent); background: var(--surface-soft); }
+.structured-question-segment--condition { padding-inline-start: 1rem; }
+.question-condition-line { margin: 0.25rem 0; }
 .structured-question-segment--equation { overflow-x: auto; padding: 0.5rem 0; }
 .structured-question-segment--table { overflow-x: auto; }
 .structured-question-segment--table table { border-collapse: collapse; min-width: min(100%, 24rem); }

@@ -55,6 +55,7 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   defaultAnswerSheetLayout: "auto",
   warnBeforeEnd: true,
   autoSubmitOnTimeExpired: false,
+  paperNavigation: "vertical-pages",
 };
 
 export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = {
@@ -190,6 +191,7 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
       value.autoSubmitOnTimeExpired === undefined
         ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
         : Boolean(value.autoSubmitOnTimeExpired),
+    paperNavigation: value.paperNavigation === "two-up" ? "two-up" : "vertical-pages",
   };
 }
 

@@ -80,6 +80,7 @@ export interface ExamPreferences {
   defaultAnswerSheetLayout?: "auto" | "vertical" | "horizontal";
   warnBeforeEnd?: boolean;
   autoSubmitOnTimeExpired?: boolean;
+  paperNavigation?: "vertical-pages" | "two-up";
 }
 
 export interface ImagePreferences {

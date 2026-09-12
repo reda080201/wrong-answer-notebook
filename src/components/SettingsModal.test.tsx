@@ -181,7 +181,7 @@ describe("SettingsModal", () => {
     expect(patchView).toHaveBeenCalledWith({ hideAnswers: true });
 
     fireEvent.click(screen.getByRole("button", { name: "학습" }));
-    expect(screen.getByText("풀이 메모 표시")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "시험" }));
     expect(screen.getByText("기본 제한 시간(분)")).toBeInTheDocument();
     expect(screen.getByLabelText("답안지 처음 열기")).toBeInTheDocument();
     expect(screen.getByLabelText("종료 전 경고")).toBeInTheDocument();
@@ -192,6 +192,8 @@ describe("SettingsModal", () => {
     expect(mockCtx.examPreferences.patch).toHaveBeenCalledWith({ realExamAnswerSheetOpen: false });
     fireEvent.click(screen.getByLabelText("시간 만료 시 자동 제출"));
     expect(mockCtx.examPreferences.patch).toHaveBeenCalledWith({ autoSubmitOnTimeExpired: true });
+    fireEvent.click(screen.getByRole("button", { name: "보관함" }));
+    expect(screen.getByText("자료 표시 방식")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "보기" }));
     expect(screen.getByText("원본 페이지 보존")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "AI & 연결" }));
