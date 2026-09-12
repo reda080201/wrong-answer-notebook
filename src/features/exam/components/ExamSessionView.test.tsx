@@ -151,7 +151,7 @@ describe("ExamSessionView", () => {
 
     render(<ExamSessionView session={session} onChange={vi.fn()} onSubmit={vi.fn()} />);
 
-    const choiceButtons = screen.getAllByRole("button", { name: /보기/ });
+    const choiceButtons = within(screen.getByRole("group", { name: "1번 선택지" })).getAllByRole("button");
     expect(choiceButtons).toHaveLength(4);
     choiceButtons.forEach((button) => {
       expect(button).toBeDisabled();

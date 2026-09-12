@@ -77,8 +77,6 @@ describe("exam session foundation", () => {
     });
     expect(snapshot?.contentSegments).toEqual([
       { id: "text-1", type: "text", text: "정답을 고르시오." },
-      { id: "condition-1", type: "condition", text: "x > 0" },
-      { id: "equation-1", type: "equation", latex: "x = 1", display: true },
     ]);
 
     structuredEntry.structuredQuestions![0].conditions.push("changed");

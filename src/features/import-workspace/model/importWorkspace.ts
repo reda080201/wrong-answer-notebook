@@ -1,6 +1,7 @@
 import type { EntryFormData, ExplanationPart, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../../../types";
 import { normalizeStructuredQuestionType } from "../../../utils/structuredQuestionType";
 import { stripLegacyChoiceSeparator } from "../../../utils/legacyChoiceSeparator";
+import { normalizeQuestionPresentationSegments } from "../../../utils/questionPresentation";
 
 export type ImportWorkspaceStatus = "analyzing" | "review_required" | "ready" | "saving" | "completed" | "failed";
 export type ImportQuestionStatus = "ready" | "needs_review" | "missing_answer" | "duplicate_number" | "unassigned_image" | "invalid";
@@ -93,21 +94,14 @@ function applyLegacySourceText(question: ImportQuestionDraft, segments: Question
   return joined === sourceText ? segments : segments;
 }
 
-function appendMissingSemanticSegments(question: ImportQuestionDraft, segments: QuestionContentSegment[]): QuestionContentSegment[] {
-  const result = cloneContentSegments(segments);
-  let ordinal = result.length;
-  const hasValue = (type: "condition" | "equation", value: string) => result.some((segment) => segment.type === type && segmentValue(segment)?.trim() === value.trim());
-  for (const condition of question.conditions ?? []) {
-    if (condition.trim() && !hasValue("condition", condition)) result.push({ id: `legacy-${question.id}-condition-${++ordinal}`, type: "condition", text: condition });
-  }
-  for (const equation of question.equations ?? []) {
-    if (equation.trim() && !hasValue("equation", equation)) result.push({ id: `legacy-${question.id}-equation-${++ordinal}`, type: "equation", latex: equation, display: true });
-  }
-  return result;
-}
-
 export function getEditableContentSegments(question: ImportQuestionDraft): QuestionContentSegment[] {
-  return appendMissingSemanticSegments(question, applyLegacySourceText(question, cloneContentSegments(question.contentSegments)));
+  const segments = applyLegacySourceText(question, cloneContentSegments(question.contentSegments));
+  return normalizeQuestionPresentationSegments({
+    questionText: question.sourceText ?? "",
+    conditions: question.conditions ?? [],
+    equations: question.equations ?? [],
+    contentSegments: segments,
+  });
 }
 
 export function updateDraftContentSegment(question: ImportQuestionDraft, segmentId: string, value: string): ImportQuestionDraft {

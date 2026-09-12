@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
-import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
+import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
@@ -112,6 +112,7 @@ interface EntryDetailProps {
     result: "opened" | "not-found",
   ) => void;
   viewPreferences?: ViewPreferences;
+  examPreferences?: ExamPreferences;
   onViewPreferencesChange?: (patch: Partial<ViewPreferences>) => void;
   onOpenSettings?: (tab?: SettingsTab) => void;
   aiProviderStatus?: AiProviderStatus | null;
@@ -218,6 +219,7 @@ export default function EntryDetail({
   startExamLabel = "문제 풀기",
   startRealExamLabel = "실전 모드",
   examSession,
+  examPreferences,
   examPrintPreferences,
   onExamPrintPreferencesChange,
   onSyncExportContext,
@@ -1727,6 +1729,7 @@ export default function EntryDetail({
                     revealedAnswerNumbers={revealedAnswerNumbers}
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
+                    paperNavigation={isSheet ? examPreferences?.paperNavigation : "vertical-pages"}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>

@@ -736,6 +736,8 @@ function AppContent() {
             width={shell.entryPaneWidth}
             onCollapsedChange={shell.setEntryPaneCollapsed}
             onWidthChange={shell.setEntryPaneWidth}
+            libraryPreferences={settings.libraryPreferences}
+            onUpdateEntry={(entryId, patch) => patchEntry(entryId, patch)}
           />
 
           {examSession ? (
@@ -759,6 +761,7 @@ function AppContent() {
               onSubmittingChange={setExamSubmitting}
               onSubmit={handleExamSubmit}
               onClose={closeExamSession}
+              onStartReview={(questionNumbers) => selected && actions.startSelectionReview(questionNumbers.map((questionNumber) => ({ kind: "sheet-question" as const, entry: selected, questionNumber })))}
               submitting={examSubmitting}
               saving={examSaving}
               saveError={examSaveError}
@@ -805,6 +808,7 @@ function AppContent() {
               onOpenQuestionTarget={openImportantQuestion}
               examSession={savedExamSessions.find((item) => item.entryId === selected.id) ?? null}
               examPrintPreferences={settings.examPrintPreferences}
+              examPreferences={settings.examPreferences}
               onExamPrintPreferencesChange={(patch) => void patchExamPrintPreferences(patch)}
               onSyncExportContext={async (payload) => {
                 const context: McpExportContext = {

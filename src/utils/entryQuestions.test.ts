@@ -3,7 +3,7 @@ import type { StructuredQuestion } from "../types";
 import { getEntryQuestions } from "./entryQuestions";
 
 describe("getEntryQuestions semantic projection", () => {
-  it("preserves canonical fields, deep clones them, and fills missing semantic segments", () => {
+  it("treats canonical content segments as authoritative and preserves their order", () => {
     const question: StructuredQuestion = {
       questionNumber: "07",
       section: "수학 II",
@@ -41,8 +41,6 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.contentSegments).toEqual([
       { id: "condition-existing", type: "condition", text: "x > 0" },
       { id: "figure-slot", type: "figure", figureId: "figure-1" },
-      { id: "condition-1", type: "condition", text: "y > 0" },
-      { id: "equation-1", type: "equation", latex: "x + y = 1", display: true },
     ]);
 
     question.conditions.push("mutated");
@@ -51,6 +49,28 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.conditions).toEqual(["x > 0", "y > 0"]);
     expect(resolved.contentSegments?.[0]).toEqual({ id: "condition-existing", type: "condition", text: "x > 0" });
     expect(resolved.source?.title).toBe("기출");
+  });
+
+  it("builds fallback semantic segments once when canonical segments are absent", () => {
+    const [resolved] = getEntryQuestions({
+      question: "",
+      structuredQuestions: [{
+        questionNumber: "1",
+        questionText: "본문",
+        conditions: ["x > 0", "x > 0"],
+        equations: ["x+y=1"],
+        choices: [],
+        contentSegments: [],
+        figureIds: [],
+      }],
+      questionContentSegments: undefined,
+    });
+
+    expect(resolved.contentSegments).toEqual([
+      { id: "question-text", type: "text", text: "본문" },
+      { id: "condition-1", type: "condition", text: "x > 0" },
+      { id: "equation-1", type: "equation", latex: "x+y=1", display: true },
+    ]);
   });
 
   it("does not invent choices for an empty multiple-choice question", () => {

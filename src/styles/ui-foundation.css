@@ -122,6 +122,23 @@
 .entry-card-meta { gap: var(--space-2); font-size: 12px; }
 .entry-card .subject-badge, .entry-card .entry-mini-badge { max-width: 9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.entry-file-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 36px 36px; align-items: center; min-height: 48px; border-bottom: 1px solid var(--border); }
+.entry-file-row.selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.entry-file-row__main { display: grid; grid-template-columns: 22px minmax(0, 1fr) 76px 58px 82px; align-items: center; gap: 8px; min-width: 0; min-height: 48px; padding: 5px 8px 5px 12px; border: 0; background: transparent; color: inherit; text-align: left; }
+.entry-file-row__main:focus-visible, .entry-file-row__favorite:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.entry-file-row__title, .entry-file-row__meta { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.entry-file-row__title { font-weight: 650; }
+.entry-file-row__meta { color: var(--text-muted); font-size: 12px; }
+.entry-file-row__favorite { display: inline-grid; width: 32px; height: 32px; place-items: center; border: 0; background: transparent; color: var(--text-muted); }
+.entry-file-row__favorite[aria-pressed="true"] { color: var(--accent-strong); }
+.entry-file-row__menu { justify-self: center; }
+.entry-file-row__error { position: absolute; right: 76px; bottom: -18px; z-index: 2; color: var(--danger); font-size: 11px; }
+@media (max-width: 1100px) { .entry-file-row__main { grid-template-columns: 22px minmax(0, 1fr) 68px 32px; } .entry-file-row__main .entry-file-row__meta:nth-last-of-type(2) { display: none; } }
+.settings-study-subnav { display: flex; gap: 4px; margin-bottom: var(--space-4); border-bottom: 1px solid var(--border); }
+.settings-study-subnav button { min-height: 40px; padding: 0 var(--space-3); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); }
+.settings-study-subnav button.is-active { border-bottom-color: var(--accent); color: var(--text); font-weight: 650; }
+.settings-study-subnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
 .storage-mode-notice {
   flex: 0 0 auto;
   padding: var(--space-2) var(--space-4);

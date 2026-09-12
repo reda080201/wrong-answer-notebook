@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { X } from "lucide-react";
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../../../types";
 import type { SettingsTab } from "../../../components/SettingsModal";
@@ -27,13 +27,28 @@ interface ExamSessionViewProps {
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
   onClose?: () => void;
+  onStartReview?: (questionNumbers: string[]) => void;
 }
 
 function ExamHelpDialog({ onClose }: { onClose: () => void }) {
   return <Dialog open onClose={onClose} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="시험 도움말"><header><h3>시험 도움말</h3><button type="button" aria-label="시험 도움말 닫기" onClick={onClose}>닫기</button></header><ul><li>객관식은 선택지를 누르고, 주관식은 답안을 입력합니다.</li><li>풀이 메모는 답안과 별도로 남기며 제출 전까지 수정할 수 있습니다.</li><li>검토 표시는 다시 확인할 문항을 표시합니다.</li><li>이전/다음으로 이동해도 작성한 답은 저장됩니다.</li><li>시험 제출 후에는 답안을 수정할 수 없고 채점 결과가 표시됩니다.</li><li>MCP 도움은 로컬 브리지로 현재 문제를 읽게 하는 기능입니다.</li><li>문항 그림은 문제에 직접 연결된 그림이며, 원본 페이지는 별도 자료입니다.</li></ul></Dialog>;
 }
 
-export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt, examPreferences, onOpenSettings, chatGptPreferences, onChatGptPreferencesChange, onSyncChatGptContext, onOpenChatGptSettings, onCheckLocalMcp, remoteMcpConfigured, onClose }: ExamSessionViewProps) {
+function ScrollToTopButton({ containerRef }: { containerRef: RefObject<HTMLElement | null> }) {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return undefined;
+    const update = () => setVisible(container.scrollTop > 320);
+    container.addEventListener("scroll", update, { passive: true });
+    update();
+    return () => container.removeEventListener("scroll", update);
+  }, [containerRef]);
+  if (!visible) return null;
+  return <button type="button" className="scroll-to-top-button" aria-label="맨 위로" onClick={() => containerRef.current?.scrollTo({ top: 0, behavior: "smooth" })}>↑</button>;
+}
+
+export default function ExamSessionView({ session, onChange, onSubmit, onSubmittingChange, onAskGpt, examPreferences, onOpenSettings, chatGptPreferences, onChatGptPreferencesChange, onSyncChatGptContext, onOpenChatGptSettings, onCheckLocalMcp, remoteMcpConfigured, onClose, onStartReview }: ExamSessionViewProps) {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
   const [consentOpen, setConsentOpen] = useState(false);
@@ -41,14 +56,12 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [resultFilter, setResultFilter] = useState<"all" | "wrong" | "unanswered" | "marked">("all");
+  const bodyRef = useRef<HTMLElement>(null);
   const question = session.questions[session.currentQuestionIndex];
   const response = session.responses.find((item) => item.questionNumber === question?.questionNumber);
   const score = useMemo(() => session.status === "submitted" ? scoreExamSession(session) : null, [session]);
-  if (!question) return <section className="exam-session-empty">시험 문항이 없습니다.</section>;
-  const isSubmitted = session.status === "submitted";
-  const unanswered = session.questions.filter((item) => !session.responses.find((responseItem) => responseItem.questionNumber === item.questionNumber)?.response.trim()).map((item) => item.questionNumber);
-  const marked = session.responses.filter((item) => item.markedForReview).map((item) => item.questionNumber);
-  const update = (patch: { response?: string; scratchNote?: string; markedForReview?: boolean }) => onChange(updateExamResponse(session, { questionNumber: question.questionNumber, response: patch.response ?? response?.response ?? "", scratchNote: patch.scratchNote ?? response?.scratchNote ?? "", markedForReview: patch.markedForReview ?? response?.markedForReview ?? false, updatedAt: new Date().toISOString() }));
+  const moveQuestion = (delta: number) => onChange({ ...session, currentQuestionIndex: Math.max(0, Math.min(session.questions.length - 1, session.currentQuestionIndex + delta)) });
   const submit = async () => {
     if (submittingRef.current) return;
     submittingRef.current = true;
@@ -66,6 +79,21 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
       onSubmittingChange?.(false);
     }
   };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target instanceof HTMLElement ? event.target : null;
+      if (event.ctrlKey || event.metaKey || event.altKey || target?.matches("input, textarea, select, button") || target?.isContentEditable || target?.closest("[role='dialog']")) return;
+      if (event.key === "ArrowLeft" && session.currentQuestionIndex > 0) { event.preventDefault(); onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex - 1 }); }
+      if (event.key === "ArrowRight" && session.currentQuestionIndex < session.questions.length - 1) { event.preventDefault(); onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex + 1 }); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [onChange, session]);
+  if (!question) return <section className="exam-session-empty">시험 문항이 없습니다.</section>;
+  const isSubmitted = session.status === "submitted";
+  const unanswered = session.questions.filter((item) => !session.responses.find((responseItem) => responseItem.questionNumber === item.questionNumber)?.response.trim()).map((item) => item.questionNumber);
+  const marked = session.responses.filter((item) => item.markedForReview).map((item) => item.questionNumber);
+  const update = (patch: { response?: string; scratchNote?: string; markedForReview?: boolean }) => onChange(updateExamResponse(session, { questionNumber: question.questionNumber, response: patch.response ?? response?.response ?? "", scratchNote: patch.scratchNote ?? response?.scratchNote ?? "", markedForReview: patch.markedForReview ?? response?.markedForReview ?? false, updatedAt: new Date().toISOString() }));
   const questionWarning = question.warning ?? question.sourceWarning;
   const showNavigator = examPreferences?.showNavigator !== false;
   const warnUnanswered = examPreferences?.warnUnansweredOnSubmit !== false;
@@ -88,16 +116,16 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
   const totalPoints = session.questions.every((item) => typeof item.points === "number")
     ? session.questions.reduce((sum, item) => sum + (item.points ?? 0), 0)
     : undefined;
+  const visibleResultQuestions = score?.questionResults.filter((item) => resultFilter === "all" || (resultFilter === "wrong" && item.hasResponse && !item.correct) || (resultFilter === "unanswered" && !item.hasResponse) || (resultFilter === "marked" && item.markedForReview)) ?? [];
   return <section className="exam-session-view" aria-label="문제 풀기 응시">
     <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button>{onClose && <IconButton label="시험 닫기" onClick={onClose}><X size={20} /></IconButton>}</div></header>
-    <article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{questionWarning && <p className="exam-question-warning">{questionWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
+    <main ref={bodyRef} className="exam-session-body"><article className="exam-question-paper"><header className="exam-question-heading"><span>문제 {question.questionNumber}{typeof question.points === "number" ? ` · ${question.points}점` : ""}</span><span>{session.currentQuestionIndex + 1} / {session.questions.length}</span></header>{questionWarning && <p className="exam-question-warning">{questionWarning}</p>}{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}<QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
       <ExamResponseEditor question={question} response={response} disabled={isSubmitted} onChange={selectResponse} />
       {(examPreferences?.showOriginalPages !== false) && (question.sourcePageImages?.length ?? 0) > 0 && <details className="exam-source-pages"><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
       {examPreferences?.showScratchNote !== false && <label className="exam-note-field">풀이 메모<textarea value={response?.scratchNote ?? ""} onChange={(event) => update({ scratchNote: event.target.value })} disabled={isSubmitted} /></label>}
     </article>
-    {showNavigator && <nav className="exam-question-navigation" aria-label="문항 이동"><button type="button" disabled={session.currentQuestionIndex === 0} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex - 1 })}>이전</button><button type="button" onClick={() => setNavigatorOpen(true)}>{session.currentQuestionIndex + 1} / {session.questions.length}</button><label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={isSubmitted} /> 검토 표시</label><button type="button" disabled={session.currentQuestionIndex >= session.questions.length - 1} onClick={() => onChange({ ...session, currentQuestionIndex: session.currentQuestionIndex + 1 })}>다음</button></nav>}
     {(examPreferences?.showMcpHelp !== false) && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
-      <aside className="exam-gpt-actions">
+      <details className="exam-gpt-actions"><summary>보조 기능</summary>
         <ChatGptHelpLauncher
           mode={isSubmitted ? "submitted" : "pre-submit"}
           preferences={chatGptPreferences}
@@ -108,9 +136,12 @@ export default function ExamSessionView({ session, onChange, onSubmit, onSubmitt
           remoteMcpConfigured={remoteMcpConfigured}
           label="ChatGPT 도움"
         />
-      </aside>
+      </details>
     )}
-    {score && <section className="exam-result-summary" aria-live="polite"><h3>채점 결과</h3><p>응답 {score.answeredCount} · 정답 {score.correctCount} · 오답 {score.totalQuestions - score.correctCount - unanswered.length} · 미응답 {unanswered.length} · 정답률 {score.percentCorrect}%</p>{totalPoints === undefined ? <p>배점 정보 일부 미확인</p> : <p>총 {totalPoints}점</p>}<div className="exam-result-grid" aria-label="문항별 결과">{score.questionResults.map((item, index) => <button key={item.questionNumber} type="button" className={item.correct ? "is-correct" : item.hasResponse ? "is-incorrect" : "is-unanswered"} onClick={() => onChange({ ...session, currentQuestionIndex: index })}>{item.questionNumber}</button>)}</div></section>}
+    {score && <section className="exam-result-summary" aria-live="polite"><h3>채점 결과</h3><p>정답 {score.correctCount} / {score.totalQuestions} · 응답률 {score.percentCorrect}% · 미응답 {unanswered.length} · 검토 표시 {marked.length}</p>{totalPoints === undefined ? <p>배점 정보 일부 미확인</p> : <p>총 {totalPoints}점</p>}<div className="exam-result-actions"><button type="button" aria-pressed={resultFilter === "all"} onClick={() => setResultFilter("all")}>전체</button><button type="button" aria-pressed={resultFilter === "wrong"} onClick={() => setResultFilter("wrong")}>오답만 보기</button><button type="button" aria-pressed={resultFilter === "unanswered"} onClick={() => setResultFilter("unanswered")}>미응답 보기</button><button type="button" onClick={() => onStartReview?.(visibleResultQuestions.filter((item) => !item.correct).map((item) => item.questionNumber))}>오답 복습 시작</button></div><div className="exam-result-grid" aria-label="문항별 결과">{visibleResultQuestions.map((item) => { const index = session.questions.findIndex((questionItem) => questionItem.questionNumber === item.questionNumber); return <button key={item.questionNumber} type="button" className={item.correct ? "is-correct" : item.hasResponse ? "is-incorrect" : "is-unanswered"} onClick={() => onChange({ ...session, currentQuestionIndex: index })}>{item.questionNumber}</button>; })}</div></section>}
+    </main>
+    {showNavigator && <nav className="exam-question-navigation" aria-label="문항 이동"><button type="button" disabled={session.currentQuestionIndex === 0} onClick={() => moveQuestion(-1)}>이전</button><button type="button" onClick={() => setNavigatorOpen(true)}>{session.currentQuestionIndex + 1} / {session.questions.length}</button><label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={isSubmitted} /> 검토 표시</label><button type="button" disabled={session.currentQuestionIndex >= session.questions.length - 1} onClick={() => moveQuestion(1)}>다음</button></nav>}
+    <ScrollToTopButton containerRef={bodyRef} />
     <Dialog open={navigatorOpen} onClose={() => setNavigatorOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" title="문항 이동"><div className="exam-result-grid">{session.questions.map((item, index) => <button key={item.id} type="button" aria-current={index === session.currentQuestionIndex ? "page" : undefined} onClick={() => { onChange({ ...session, currentQuestionIndex: index }); setNavigatorOpen(false); }}>{item.questionNumber}</button>)}</div></Dialog>
     {helpOpen && <ExamHelpDialog onClose={() => setHelpOpen(false)} />}
     <Dialog open={consentOpen} onClose={() => setConsentOpen(false)} backdropClassName="exam-dialog-backdrop" className="exam-dialog" ariaLabel="GPT 전송 동의"><p>{onAskGpt ? "현재 문제, 내 답, 풀이 메모를 전송합니다." : "현재 문제는 로컬 MCP 브리지에만 공개됩니다."}</p>{onAskGpt && <button type="button" onClick={() => { onAskGpt({ question: question.question, response: response?.response ?? "", scratchNote: response?.scratchNote ?? "" }); setConsentOpen(false); }}>전송</button>}<button type="button" onClick={() => setConsentOpen(false)}>닫기</button></Dialog>

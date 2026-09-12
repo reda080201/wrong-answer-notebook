@@ -60,9 +60,11 @@ function packPages(items: ExamPaperItem[], heights: Map<string, number>, columnC
 /** Hidden layout measurement produces the same reusable A4 page model for screen and print. */
 export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "auto" }: ExamPaperCompositorProps) {
   const items = useMemo<ExamPaperItem[]>(() => suppliedItems ?? Children.toArray(children).map((node, index) => ({ id: `item-${index}`, node })), [children, suppliedItems]);
+  const containerRef = useRef<HTMLDivElement>(null);
   const measureRef = useRef<HTMLDivElement>(null);
   const [heights, setHeights] = useState<Map<string, number>>(() => new Map());
-  const resolvedLayout = layout === "auto" ? (typeof window !== "undefined" && window.innerWidth >= 1440 ? "columns" : "single") : layout;
+  const [containerWidth, setContainerWidth] = useState(0);
+  const resolvedLayout = layout === "auto" ? (containerWidth >= 960 ? "columns" : "single") : layout;
   const columnCount = resolvedLayout === "columns" ? 2 : 1;
   useLayoutEffect(() => {
     if (!enabled || !measureRef.current) return;
@@ -76,10 +78,18 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     }
     setHeights((current) => current.size === next.size && [...next].every(([id, height]) => current.get(id) === height) ? current : next);
   }, [enabled, items, resolvedLayout]);
+  useLayoutEffect(() => {
+    if (!enabled || !containerRef.current || typeof ResizeObserver === "undefined") return undefined;
+    const update = () => setContainerWidth(Math.ceil(containerRef.current?.getBoundingClientRect().width ?? 0));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, [enabled]);
   if (!enabled) return <>{items.map((item) => item.node)}</>;
   const pages = packPages(items, heights, columnCount);
   return <>
-    <div className={`exam-paper-compositor exam-paper-compositor--${resolvedLayout}`} data-layout={layout}>
+    <div ref={containerRef} className={`exam-paper-compositor exam-paper-compositor--${resolvedLayout}`} data-layout={layout}>
       {pages.map((page, index) => <section className={`exam-paper-page${page.oversized ? " exam-paper-page--oversized" : ""}`} key={`exam-page-${index}`} aria-label={`시험지 ${index + 1}페이지`}><div className="exam-paper-page__columns">{page.columns.map((columnItems, columnIndex) => <div className="exam-paper-page__column" key={`exam-page-${index}-column-${columnIndex}`}>{columnItems.map((item) => <div className="exam-paper-page__item" key={item.id}>{item.node}</div>)}</div>)}</div><footer className="exam-paper-page__number" aria-hidden="true">{index + 1}</footer></section>)}
     </div>
     <div className={`exam-paper-measure exam-paper-measure--${resolvedLayout}`} ref={measureRef} aria-hidden="true">{items.map((item) => <div key={item.id} data-paper-measure-id={item.id}>{withoutDomIds(item.node)}</div>)}</div>

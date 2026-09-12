@@ -20,6 +20,7 @@ interface ExamSessionOverlayProps {
   onSubmittingChange: (submitting: boolean) => void;
   onSubmit: (session: ExamSession) => void | Promise<void>;
   onClose: () => void;
+  onStartReview?: (questionNumbers: string[]) => void;
   submitting: boolean;
   saving: boolean;
   saveError: string | null;
@@ -41,6 +42,7 @@ export default function ExamSessionOverlay({
   onSubmittingChange,
   onSubmit,
   onClose,
+  onStartReview,
   submitting,
   saving,
   saveError,
@@ -76,6 +78,7 @@ export default function ExamSessionOverlay({
     onSubmittingChange={onSubmittingChange}
     onSubmit={onSubmit}
     onClose={onClose}
+    onStartReview={onStartReview}
   />;
 
   const overlay = (

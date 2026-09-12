@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { writeUiStorageJson } from "../services/uiStorage";
 import QuickConceptPanel from "./QuickConceptPanel";
-import type { EntryFormData, EntryKind, Subject, WrongAnswerEntry } from "../types";
+import type { EntryFormData, EntryKind, LibraryPreferences, Subject, WrongAnswerEntry } from "../types";
 import {
   entryKindName,
 } from "../utils/appUi";
@@ -12,7 +12,7 @@ import { difficultyScoreLabel } from "../utils/difficulty";
 import Menu from "../shared/ui/Menu";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import { getSheetResourceStatus } from "../features/supplemental-resources/utils/getSheetResourceStatus";
-import { ChevronLeft, ChevronRight, GripVertical, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, GripVertical, MoreHorizontal, Plus, Star } from "lucide-react";
 import Dialog from "../shared/ui/Dialog";
 
 interface EntryListPaneProps {
@@ -36,6 +36,8 @@ interface EntryListPaneProps {
   width?: number;
   onCollapsedChange?: (collapsed: boolean) => void;
   onWidthChange?: (width: number) => void;
+  libraryPreferences?: LibraryPreferences;
+  onUpdateEntry?: (entryId: string, patch: Partial<WrongAnswerEntry>) => Promise<void>;
 }
 
 const EXPANDED_GROUPS_KEY = "wrong-answer-expanded-sheet-groups";
@@ -70,10 +72,14 @@ export default function EntryListPane({
   width = 300,
   onCollapsedChange,
   onWidthChange,
+  libraryPreferences,
+  onUpdateEntry,
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [showAllImportant, setShowAllImportant] = useState(false);
   const [conceptCreateOpen, setConceptCreateOpen] = useState(false);
+  const [favoriteSavingId, setFavoriteSavingId] = useState<string | null>(null);
+  const [favoriteErrorId, setFavoriteErrorId] = useState<string | null>(null);
   const importantQuestions = useMemo(
     () =>
       entries
@@ -149,6 +155,38 @@ export default function EntryListPane({
 
   const renderEntryCard = (entry: WrongAnswerEntry) => {
     const resourceStatus = entry.entryKind === "problem_sheet" ? getSheetResourceStatus(entry) : null;
+    if (activeSection === "problem_sheet" && libraryPreferences?.displayMode === "file") {
+      const title = getEntryTitle(entry);
+      const toggleFavorite = async (event: React.MouseEvent<HTMLButtonElement>) => {
+        event.stopPropagation();
+        if (!onUpdateEntry || favoriteSavingId) return;
+        setFavoriteSavingId(entry.id);
+        setFavoriteErrorId(null);
+        try {
+          await onUpdateEntry(entry.id, { libraryFavorite: !entry.libraryFavorite });
+        } catch {
+          setFavoriteErrorId(entry.id);
+        } finally {
+          setFavoriteSavingId((current) => current === entry.id ? null : current);
+        }
+      };
+      return <article key={entry.id} className={`entry-file-row ${selectedId === entry.id ? "selected" : ""}`}>
+        <button type="button" className="entry-file-row__main" onClick={() => selectEntry(entry.id)} aria-current={selectedId === entry.id ? "page" : undefined} title={title}>
+          <FileText size={17} aria-hidden="true" />
+          <span className="entry-file-row__title">{title}</span>
+          <span className="entry-file-row__meta">{entry.subject}</span>
+          <span className="entry-file-row__meta">{resourceStatus?.questionCount ?? 1}문항</span>
+          <time className="entry-file-row__meta" dateTime={entry.updatedAt}>{new Date(entry.updatedAt).toLocaleDateString("ko-KR")}</time>
+        </button>
+        <button type="button" className="entry-file-row__favorite" aria-label={entry.libraryFavorite ? "즐겨찾기에서 제거" : "즐겨찾기에 추가"} aria-pressed={entry.libraryFavorite === true} disabled={!onUpdateEntry || favoriteSavingId === entry.id} onClick={(event) => void toggleFavorite(event)}><Star size={16} fill={entry.libraryFavorite ? "currentColor" : "none"} /></button>
+        <Menu label={<MoreHorizontal size={17} />} triggerAriaLabel={`${title} 더보기`} className="entry-file-row__menu" stopPropagation>
+          <button type="button" onClick={() => selectEntry(entry.id)}>열기</button>
+          {onEditEntry && <button type="button" onClick={() => onEditEntry(entry.id)}>문제지 수정</button>}
+          {onDeleteEntry && <button type="button" onClick={() => onDeleteEntry(entry.id)}>문제지 삭제</button>}
+        </Menu>
+        {favoriteErrorId === entry.id && <span className="entry-file-row__error" role="status">즐겨찾기를 저장하지 못했습니다.</span>}
+      </article>;
+    }
     return (
       <article
         key={entry.id}
