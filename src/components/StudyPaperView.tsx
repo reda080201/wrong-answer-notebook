@@ -87,7 +87,6 @@ export default function StudyPaperView({
     const revealed = revealedAnswerNumbers?.has(number);
     return {
       id: number || `question-${index}`,
-      groupId: question.section,
       node: <article id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
         <header>
           <div><span className="question-identity">{question.questionNumber}번</span><small className="question-sequence">{question.position} / {questionCount}</small>{question.points !== undefined && <small>{question.points}점</small>}{question.needsReview && <small className="answer-review-badge">검토 필요</small>}</div>

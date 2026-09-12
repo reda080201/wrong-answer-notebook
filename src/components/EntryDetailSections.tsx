@@ -7,10 +7,12 @@ import MathText from "./MathText";
 
 interface EntryImportAuditSectionProps {
   entry: WrongAnswerEntry;
+  onOpenReview?: () => void;
 }
 
-export function EntryImportAuditSection({ entry }: EntryImportAuditSectionProps) {
+export function EntryImportAuditSection({ entry, onOpenReview }: EntryImportAuditSectionProps) {
   if (!entry.importAudit && (entry.rejectedNotes?.length ?? 0) === 0) return null;
+  const rejectedNotes = entry.rejectedNotes ?? [];
 
   const hasDanger = Boolean(
     entry.importAudit?.missingQuestionNumbers.length ||
@@ -20,21 +22,26 @@ export function EntryImportAuditSection({ entry }: EntryImportAuditSectionProps)
   return (
     <section className={`import-audit-summary detail-import-audit ${hasDanger ? "import-audit-summary--danger" : ""}`}>
       <strong>AI 가져오기 검토</strong>
+      <p>{entry.importAudit?.needsReviewCount ?? entry.rejectedNotes?.length ?? 0}개 항목 확인 필요</p>
+      {onOpenReview && <button type="button" className="btn-primary btn-sm" onClick={onOpenReview}>검토 열기</button>}
       {entry.importAudit && (
         <>
-          <span>
-            예상 {entry.importAudit.expectedQuestionNumbers.length} · 감지 {entry.importAudit.detectedQuestionNumbers.length} · 검토 {entry.importAudit.needsReviewCount}
-          </span>
-          {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
-          {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
-          {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+          <details>
+            <summary>가져오기 진단 보기</summary>
+            <span>
+              예상 {entry.importAudit.expectedQuestionNumbers.length} · 감지 {entry.importAudit.detectedQuestionNumbers.length} · 검토 {entry.importAudit.needsReviewCount}
+            </span>
+            {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
+            {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
+            {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+          </details>
         </>
       )}
-      {(entry.rejectedNotes?.length ?? 0) > 0 && (
-        <div className="import-rejected-notes">
-          <b>제외된 학생 필기</b>
-          <ul>{entry.rejectedNotes?.map((note) => <li key={note}><MathText text={note} /></li>)}</ul>
-        </div>
+      {rejectedNotes.length > 0 && (
+        <details className="import-rejected-notes">
+          <summary>제외된 학생 필기 {rejectedNotes.length}개</summary>
+          <ul>{rejectedNotes.map((note) => <li key={note}><MathText text={note} /></li>)}</ul>
+        </details>
       )}
     </section>
   );

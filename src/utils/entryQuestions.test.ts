@@ -41,6 +41,9 @@ describe("getEntryQuestions semantic projection", () => {
     expect(resolved.contentSegments).toEqual([
       { id: "condition-existing", type: "condition", text: "x > 0" },
       { id: "figure-slot", type: "figure", figureId: "figure-1" },
+      { id: "question-text", type: "text", text: "함수의 값을 구하시오." },
+      { id: "condition-2", type: "condition", text: "y > 0" },
+      { id: "equation-1", type: "equation", latex: "x + y = 1", display: true },
     ]);
 
     question.conditions.push("mutated");
@@ -70,6 +73,38 @@ describe("getEntryQuestions semantic projection", () => {
       { id: "question-text", type: "text", text: "본문" },
       { id: "condition-1", type: "condition", text: "x > 0" },
       { id: "equation-1", type: "equation", latex: "x+y=1", display: true },
+    ]);
+  });
+
+  it("preserves missing legacy semantics without deduping the canonical stream", () => {
+    const [resolved] = getEntryQuestions({
+      question: "",
+      structuredQuestions: [{
+        questionNumber: "1",
+        questionText: "본문",
+        conditions: ["(가) x > 0"],
+        equations: ["\\frac{1}{2}"],
+        choices: [],
+        contentSegments: [
+          { id: "text", type: "text", text: "본문" },
+          { id: "first-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+          { id: "second-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+          { id: "condition", type: "condition", label: "(가)", text: "x > 0" },
+          { id: "figure", type: "figure", figureId: "figure-1" },
+          { id: "table", type: "table", rows: [["값"]] },
+        ],
+        figureIds: ["figure-1"],
+      }],
+      questionContentSegments: undefined,
+    });
+
+    expect(resolved.contentSegments).toEqual([
+      { id: "text", type: "text", text: "본문" },
+      { id: "first-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+      { id: "second-equation", type: "equation", latex: "\\frac{1}{2}", display: true },
+      { id: "condition", type: "condition", label: "(가)", text: "x > 0" },
+      { id: "figure", type: "figure", figureId: "figure-1" },
+      { id: "table", type: "table", rows: [["값"]] },
     ]);
   });
 

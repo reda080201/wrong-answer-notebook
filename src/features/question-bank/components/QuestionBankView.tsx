@@ -166,10 +166,10 @@ export default function QuestionBankView({ entries, onOpenQuestion, preferences,
   ].filter((chip): chip is { key: string; label: string } => Boolean(chip));
   const clearFilter = (key: string) => {
     if (key === "search") patchFilters({ search: "" });
-    else if (key === "subject") patchFilters({ subject: undefined });
-    else if (key === "unit") patchFilters({ unit: undefined });
+    else if (key === "subject") patchFilters({ subject: "all" });
+    else if (key === "unit") patchFilters({ unit: "all" });
     else if (key === "sourceType") patchFilters({ sourceType: "all" });
-    else if (key === "difficulty") patchFilters({ minDifficulty: undefined });
+    else if (key === "difficulty") patchFilters({ minDifficulty: null });
     else if (key === "wrong") patchFilters({ wrongOnly: false });
     else if (key === "review") patchFilters({ reviewDueOnly: false });
   };

@@ -26,6 +26,7 @@ import {
 import AnnotatableQuestion, { FocusedQuestionView } from "../../../components/AnnotatableQuestion";
 import CollapsibleSection from "../../../components/CollapsibleSection";
 import ContentBlock from "../../../components/ContentBlock";
+import ScrollToTopButton from "../../../components/ScrollToTopButton";
 import { LinkifiedText } from "../../../utils/wikiLinks";
 import LearningContentPanel from "../../../components/LearningContentPanel";
 import MathText from "../../../components/MathText";
@@ -249,6 +250,7 @@ export default function EntryDetail({
   onUpdateQuestionRenderVerification,
   gptSolutionDraftStore,
 }: EntryDetailProps) {
+  const detailScrollRef = useRef<HTMLDivElement>(null);
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
   const [activeStudyPanel, setActiveStudyPanel] = useState<StudyPanel>(loadFocusPanel);
@@ -1527,7 +1529,7 @@ export default function EntryDetail({
         </div>
       )}
 
-      <div className="detail-scroll">
+      <div className="detail-scroll" ref={detailScrollRef}>
         <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
@@ -1899,7 +1901,7 @@ export default function EntryDetail({
 
         <SecondaryStudyViews>
 
-        {showPaperSupplementSections && <EntryImportAuditSection entry={entry} />}
+        {showPaperSupplementSections && <EntryImportAuditSection entry={entry} onOpenReview={() => handleStudyModeChange("analysis")} />}
 
         {isFocusExpanded && isSheet && activeStudyPanel === "answer" && sheetAnswerKey.length > 0 && (
           <section className="sheet-study-panel sheet-study-panel--answers">
@@ -2101,6 +2103,7 @@ export default function EntryDetail({
         )}
         </SecondaryStudyViews>
       </div>
+      <ScrollToTopButton containerRef={detailScrollRef} />
       <ReviewExportDialogs>
       <EntryDetailReviewDialogs open={showTextReview} entry={entry} segments={suspiciousSegments} onClose={() => setShowTextReview(false)} onQuestionTextChange={onQuestionTextChange} onStructuredQuestionsChange={onStructuredQuestionsChange} onToast={(message) => pushToast(message, "success")} />
       </ReviewExportDialogs>
