@@ -37,7 +37,7 @@ export default function ExamPrintQuestion({ question, imageUrls, workspaceSize }
         if (segment.type === "condition") {
           return (
             <div key={segment.id} className="exam-print-condition">
-              <strong>{segment.label ?? "조건"}</strong>
+              {segment.label && <strong>{segment.label} </strong>}
               <MathText text={segment.text} />
             </div>
           );

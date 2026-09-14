@@ -1,4 +1,6 @@
 import { createElement } from "react";
+import { flushSync } from "react-dom";
+import paperCss from "../../../components/ExamPaperCompositor.css?raw";
 import { createRoot } from "react-dom/client";
 import { getImageUrl } from "../../../api";
 import ExamPrintDocument from "../components/ExamPrintDocument";
@@ -64,7 +66,7 @@ export async function printExamDocument(model: ExamPrintModel): Promise<PrintDoc
   const style = doc.createElement("style");
   const paperSize = model.resolvedPaperSize ?? "a4";
   const orientation = model.resolvedOrientation ?? "portrait";
-  style.textContent = `${examPrintCss}\n@page { size: ${paperSize.toUpperCase()} ${orientation}; }`;
+  style.textContent = `${examPrintCss}\n${paperSize === "a4" && orientation === "portrait" ? paperCss : ""}\n@page { size: ${paperSize.toUpperCase()} ${orientation}; ${paperSize === "a4" && orientation === "portrait" ? "margin: 0;" : ""} }`;
   doc.head.appendChild(style);
   const katexStyle = doc.createElement("style");
   katexStyle.textContent = katexCss;
@@ -72,11 +74,17 @@ export async function printExamDocument(model: ExamPrintModel): Promise<PrintDoc
   const mount = doc.getElementById("root");
   if (!mount) throw new Error("인쇄 문서를 준비하지 못했습니다.");
   const root = createRoot(mount);
-  root.render(createElement(ExamPrintDocument, { model, imageUrls }));
-  await new Promise((resolve) => window.setTimeout(resolve, 50));
+  flushSync(() => root.render(createElement(ExamPrintDocument, { model, imageUrls })));
   await waitForStyles(doc);
   await doc.fonts?.ready;
   const failedImages = await waitForImages(doc);
+  const requestFrame = (callback: FrameRequestCallback): number => {
+    if (typeof popup.requestAnimationFrame === "function") {
+      return popup.requestAnimationFrame(callback);
+    }
+    return window.setTimeout(() => callback(performance.now()), 0);
+  };
+  await new Promise<void>((resolve) => requestFrame(() => requestFrame(() => resolve())));
   popup.focus();
   popup.print();
   return { failedImages, printed: true };

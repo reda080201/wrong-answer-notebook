@@ -18,7 +18,7 @@ export default function ExamResponseEditor({ question, response, disabled = fals
       {question.choices.map((choice) => {
         const parsed = parseChoice(choice);
         const selected = response?.response === parsed.marker || response?.response === parsed.content;
-        return <button key={choice} type="button" aria-pressed={selected} disabled={disabled} onClick={() => onChange(parsed.marker || parsed.content)}><b>{parsed.marker}</b>{!compact && <MathText text={parsed.content} />}</button>;
+        return <button key={choice} type="button" aria-label={compact ? parsed.marker || parsed.content : `${parsed.marker} ${parsed.content}`.trim()} aria-pressed={selected} disabled={disabled} onClick={() => onChange(parsed.marker || parsed.content)}><b>{parsed.marker}</b>{!compact && <MathText text={parsed.content} />}</button>;
       })}
     </div>;
   }

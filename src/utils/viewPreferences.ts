@@ -191,7 +191,7 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
       value.autoSubmitOnTimeExpired === undefined
         ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
         : Boolean(value.autoSubmitOnTimeExpired),
-    paperNavigation: value.paperNavigation === "two-up" ? "two-up" : "vertical-pages",
+    paperNavigation: value.paperNavigation === "two-up" || value.paperNavigation === "horizontal-pages" ? "horizontal-pages" : "vertical-pages",
   };
 }
 

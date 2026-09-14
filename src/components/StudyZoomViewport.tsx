@@ -16,7 +16,9 @@ function clampZoom(value: number): number {
 }
 
 function loadZoom(storageKey: string): number {
-  const saved = Number(localStorage.getItem(storageKey));
+  const raw = localStorage.getItem(storageKey);
+  if (raw === null) return 100;
+  const saved = Number(raw);
   return Number.isFinite(saved) ? clampZoom(saved) : 100;
 }
 

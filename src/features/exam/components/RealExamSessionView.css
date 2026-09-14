@@ -2,15 +2,15 @@
 .exam-session-overlay, .exam-session-overlay--real { box-sizing: border-box; padding: 0; border: 0; }
 .exam-session-overlay > .exam-session-view { display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; width: min(100%, 1100px); min-width: 0; min-height: 0; margin: 0 auto; overflow: auto; padding: clamp(12px, 2vw, 28px); }
 .exam-session-overlay > .exam-session-view .exam-question-navigation { position: sticky; bottom: 0; z-index: 2; min-height: 50px; margin-inline: calc(clamp(12px, 2vw, 28px) * -1); padding-inline: clamp(12px, 2vw, 28px); background: var(--surface); }
-.real-exam-session { display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; height: 100dvh; min-height: 0; background: var(--app-bg); }
+.real-exam-session { display: flex; flex-direction: column; height: 100dvh; min-height: 0; background: var(--app-bg); }
 .real-exam-header { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); min-height: 68px; padding: var(--space-3) clamp(16px, 3vw, 42px); background: var(--surface); border-bottom: 1px solid var(--border); }
 .real-exam-header h2, .real-exam-header p { margin: 0; }
 .real-exam-header-status { display: flex; align-items: center; gap: 12px; }
 .real-exam-close { width: 44px; height: 44px; flex: 0 0 44px; }
 .real-exam-header-status strong { font-variant-numeric: tabular-nums; }
-.real-exam-layout { display: grid; grid-template-columns: minmax(0, 72fr) minmax(280px, 28fr); gap: clamp(16px, 2vw, 32px); min-height: 0; width: min(100%, 1800px); margin: 0 auto; padding: clamp(16px, 2vw, 32px); overflow: hidden; }
+.real-exam-layout { flex: 1; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 72fr) minmax(280px, 28fr); gap: clamp(16px, 2vw, 32px); min-height: 0; width: min(100%, 1800px); margin: 0 auto; padding: clamp(16px, 2vw, 32px); overflow: hidden; }
 .real-exam-layout--sheet-collapsed { grid-template-columns: minmax(0, 1fr) 72px; }
-.real-exam-paper { min-width: 0; overflow: auto; padding: clamp(8px, 2vw, 28px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); }
+.real-exam-paper { min-width: 0; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; padding: clamp(8px, 2vw, 28px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); }
 .real-exam-question { width: min(100%, 1040px); margin: 0 auto; padding: clamp(18px, 3vw, 44px); break-inside: avoid; }
 .real-exam-question > header { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); color: var(--text-muted); }
 .real-exam-question h3 { margin: 0 0 10px; }
@@ -43,7 +43,7 @@
 .real-exam-answer-grid--vertical .real-exam-answer-item.is-unanswered,
 .real-exam-answer-grid--vertical .real-exam-answer-item.is-current,
 .real-exam-answer-grid--vertical .real-exam-answer-item.is-marked { background: transparent; box-shadow: none; }
-.real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); min-height: 50px; padding: var(--space-2) var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
+.real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 4px var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
 .real-exam-answer-jump { display: grid; justify-items: start; gap: 2px; border: 0 !important; padding: 2px !important; text-align: start; }
 .real-exam-answer-jump em { font-style: normal; color: var(--review); font-size: var(--font-size-meta); }
 .real-exam-answer-sheet-choices { display: flex; flex-wrap: wrap; gap: 3px; }
