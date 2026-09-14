@@ -78,7 +78,13 @@ export async function printExamDocument(model: ExamPrintModel): Promise<PrintDoc
   await waitForStyles(doc);
   await doc.fonts?.ready;
   const failedImages = await waitForImages(doc);
-  await new Promise<void>(resolve => popup.requestAnimationFrame(() => popup.requestAnimationFrame(() => resolve())));
+  const requestFrame = (callback: FrameRequestCallback): number => {
+    if (typeof popup.requestAnimationFrame === "function") {
+      return popup.requestAnimationFrame(callback);
+    }
+    return window.setTimeout(() => callback(performance.now()), 0);
+  };
+  await new Promise<void>((resolve) => requestFrame(() => requestFrame(() => resolve())));
   popup.focus();
   popup.print();
   return { failedImages, printed: true };
