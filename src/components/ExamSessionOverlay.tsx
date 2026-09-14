@@ -67,6 +67,7 @@ export default function ExamSessionOverlay({
     saveError={saveError}
     saving={saving}
     onRetrySave={onRetrySave}
+    onStartReview={onStartReview}
   /> : <ExamSessionView
     session={session}
     examPreferences={examPreferences}

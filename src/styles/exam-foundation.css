@@ -6,13 +6,6 @@
 
 .question-identity { display: inline-flex; min-width: 3rem; font-weight: 750; }
 .question-sequence { display: inline-flex; min-width: 4.5rem; color: var(--text-muted); }
-.exam-paper-compositor { display: grid; gap: 24px; }
-.exam-paper-page { min-height: 297mm; aspect-ratio: 210 / 297; box-sizing: border-box; padding: 18mm 16mm; background: var(--surface); border: 1px solid var(--paper-border); box-shadow: 0 8px 24px color-mix(in srgb, var(--text) 12%, transparent); break-after: page; }
-.exam-paper-page__columns { column-count: 1; column-gap: 14mm; height: 100%; }
-.exam-paper-page__columns > * { break-inside: avoid; page-break-inside: avoid; }
-.exam-paper-page .structured-problem-sheet-question { border: 0; border-radius: 0; padding: 0 0 14px; margin: 0 0 14px; }
-@media (min-width: 1440px) { .exam-paper-page__columns { column-count: 2; } }
-@media print { .exam-paper-compositor { gap: 0; } .exam-paper-page { min-height: 0; box-shadow: none; border: 0; } }
 .exam-history-trigger { position: absolute; top: 70px; right: var(--space-4); z-index: 4; }
 .exam-session-history-list { display: grid; gap: 1px; padding: var(--space-4); background: var(--border); }
 .exam-session-history-list button { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-4); padding: var(--space-3); background: var(--surface); text-align: left; }
@@ -28,6 +21,8 @@
 .exam-session-overlay:not(.exam-session-overlay--real) .exam-gpt-actions { padding: 10px 16px; }
 .scroll-to-top-button { position: fixed; right: 24px; bottom: 70px; z-index: 5; width: 40px; height: 40px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 .scroll-to-top-button--detail { bottom: 24px; }
+.exam-session-body .study-zoom-hud { right: 76px; bottom: 64px; }
+.real-exam-paper .study-zoom-hud { right: 112px; bottom: 64px; }
 .exam-result-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .exam-result-actions button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
 @media (max-width: 900px) { .exam-session-body .exam-question-paper { margin-block: 12px; padding: 20px 16px; } .scroll-to-top-button { right: 12px; bottom: 64px; } .scroll-to-top-button--detail { bottom: 12px; } }

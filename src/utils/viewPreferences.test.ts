@@ -107,9 +107,9 @@ describe("normalizeViewPreferences", () => {
 });
 
 describe("normalizeExamPreferences", () => {
-  it("defaults paper navigation to vertical pages and preserves two-up", () => {
+  it("defaults paper navigation to vertical pages and migrates two-up", () => {
     expect(normalizeExamPreferences({}).paperNavigation).toBe("vertical-pages");
-    expect(normalizeExamPreferences({ paperNavigation: "two-up" }).paperNavigation).toBe("two-up");
+    expect(normalizeExamPreferences({ paperNavigation: "two-up" }).paperNavigation).toBe("horizontal-pages");
     expect(normalizeExamPreferences({ paperNavigation: "bad" }).paperNavigation).toBe("vertical-pages");
   });
 });

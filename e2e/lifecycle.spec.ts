@@ -17,19 +17,19 @@ test.describe("synthetic real-exam lifecycle", () => {
     await startDialog.getByRole("button", { name: "실전 모드 시작" }).click();
 
     await expect(page.getByRole("region", { name: "실전 모의고사" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: syntheticLifecycleEntry.title })).toBeVisible();
+    await expect(page.locator(".real-exam-header").getByRole("heading", { name: syntheticLifecycleEntry.title })).toBeVisible();
     await expect(page.getByRole("complementary", { name: "답안지" })).toBeVisible();
-    await expect(page.locator(".real-exam-paper .real-exam-question")).toHaveCount(1);
-    await expect(page.getByRole("heading", { name: "문제 2", exact: true })).toHaveCount(0);
+    await expect(page.locator(".real-exam-paper [data-paper-item]")).toHaveCount(30);
+    await expect(page.getByRole("article", { name: "문제 2", exact: true })).toBeAttached();
     await expect(page.getByRole("button", { name: "시험 닫기", exact: true })).toHaveAttribute("aria-label", "시험 닫기");
 
     await page
-      .getByRole("group", { name: "1번 선택지", exact: true })
+      .locator(".real-exam-paper").getByRole("group", { name: "1번 선택지", exact: true })
       .getByRole("button", { name: "① 1", exact: true })
       .click();
-    await page.getByLabel("2번 답안", { exact: true }).fill("short-2");
+    await page.getByRole("complementary", { name: "답안지" }).getByLabel("2번 답안", { exact: true }).fill("short-2");
     await page.getByRole("button", { name: "20번 미응답", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "문제 20", exact: true })).toBeVisible();
+    await expect(page.getByRole("article", { name: "문제 20", exact: true })).toBeVisible();
     const answerSheet = page.getByRole("complementary", { name: "답안지" });
     await answerSheet.getByRole("button", { name: "접기" }).click();
     await expect(answerSheet.getByRole("button", { name: "답안지 펼치기" })).toBeVisible();
@@ -50,7 +50,7 @@ test.describe("synthetic real-exam lifecycle", () => {
     await expect(resumeDialog).toContainText("진행 중인 실전 모의고사");
     await resumeDialog.getByRole("button", { name: "이어서 풀기" }).click();
     await page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "답안지 펼치기" }).click();
-    await expect(page.getByLabel("2번 답안", { exact: true })).toHaveValue("short-2");
+    await expect(page.getByRole("complementary", { name: "답안지" }).getByLabel("2번 답안", { exact: true })).toHaveValue("short-2");
     await expect(page.getByRole("button", { name: /^20번 미응답/ })).toBeVisible();
 
     await page.screenshot({ path: testInfo.outputPath("real-exam-resumed-1100x750.png"), fullPage: true });

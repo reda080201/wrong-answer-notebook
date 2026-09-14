@@ -494,11 +494,13 @@ export default function EntryDetail({
   }, [focusedQuestionIndex, questionAnchors.length]);
 
   const scrollToQuestion = useCallback((start: number) => {
+    const index = questionAnchors.findIndex(question => question.start === start);
+    if (index >= 0) setFocusedQuestionIndex(index);
     document.getElementById(`sheet-question-${start}`)?.scrollIntoView({
       block: "start",
       behavior: "smooth",
     });
-  }, []);
+  }, [questionAnchors]);
 
   const moveSearch = (delta: number) => {
     if (sheetMatches.length === 0) return;
@@ -1732,6 +1734,11 @@ export default function EntryDetail({
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
                     paperNavigation={isSheet ? examPreferences?.paperNavigation : "vertical-pages"}
+                    currentQuestionNumber={questionIdentifier(focusedQuestion) ?? undefined}
+                    onCurrentQuestionChange={number => {
+                      const index = questionAnchors.findIndex(question => questionIdentifier(question) === number);
+                      if (index >= 0) setFocusedQuestionIndex(index);
+                    }}
                   />
                 </StudyZoomViewport>
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>

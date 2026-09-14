@@ -1,3 +1,4 @@
+import ExamPaperCompositor from "../../../components/ExamPaperCompositor";
 import type { ExamPrintModel } from "../types";
 import BlankAnswerSheet from "./BlankAnswerSheet";
 import ExamPrintQuestion from "./ExamPrintQuestion";
@@ -11,6 +12,11 @@ export default function ExamPrintDocument({ model, imageUrls }: ExamPrintDocumen
   const layoutClass = model.resolvedLayout === "columns" ? "exam-print-layout-columns" : "";
   return (
     <div className="exam-print-root">
+      {model.resolvedPaperSize === "a4" && model.resolvedOrientation === "portrait" ? <ExamPaperCompositor enabled showHeader={model.includeHeader} showPageNumbers={model.includePageNumbers} layout={model.resolvedLayout} title={model.title} subject={model.subject} items={model.questions.map(question => ({
+        id: question.questionNumber,
+        questionNumber: question.questionNumber,
+        node: <ExamPrintQuestion question={question} imageUrls={imageUrls} workspaceSize={model.preferences.workspaceSize} />,
+      }))} /> : <>
       <section className="exam-print-page">
         {model.includePageNumbers ? <div className="exam-print-page-number" aria-hidden="true" /> : null}
         {model.includeHeader ? (
@@ -26,6 +32,7 @@ export default function ExamPrintDocument({ model, imageUrls }: ExamPrintDocumen
           ))}
         </div>
       </section>
+      </>}
       {model.includeAnswerSheet ? <section className="exam-print-page"><BlankAnswerSheet questions={model.questions} /></section> : null}
       {model.includeSourcePages && model.sourcePageImages.length > 0 ? (
         <section className="exam-print-page exam-print-source-pages">

@@ -7,8 +7,8 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
-import ExamPaperCompositor, { type ExamPaperLayout } from "./ExamPaperCompositor";
-import ExamPaperPager, { type ExamPaperPagerItem } from "./ExamPaperPager";
+import ExamPaperCompositor, { type ExamPaperItem, type ExamPaperLayout } from "./ExamPaperCompositor";
+import type { PaperNavigationMode } from "./paperPagination";
 import { Maximize2 } from "lucide-react";
 import "./StudyPaperView.css";
 
@@ -32,7 +32,9 @@ interface StudyPaperViewProps {
   revealedAnswerNumbers?: Set<string>;
   onToggleAnswerReveal?: (questionNumber: string) => void;
   onOpenQuestionSolution?: (questionNumber: string) => void;
-  paperNavigation?: "vertical-pages" | "two-up";
+  paperNavigation?: PaperNavigationMode;
+  currentQuestionNumber?: string;
+  onCurrentQuestionChange?(number: string): void;
 }
 
 export default function StudyPaperView({
@@ -56,8 +58,10 @@ export default function StudyPaperView({
   onToggleAnswerReveal,
   onOpenQuestionSolution,
   paperNavigation = "vertical-pages",
+  currentQuestionNumber,
+  onCurrentQuestionChange,
 }: StudyPaperViewProps) {
-  const structuredQuestions = entry.structuredQuestions?.length ? getEntryQuestions(entry) : [];
+  const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
@@ -79,7 +83,7 @@ export default function StudyPaperView({
         diagramSpec: block.diagramSpec,
       })),
   ];
-  const structuredQuestionNodes: ExamPaperPagerItem[] = structuredQuestions.map((question, index) => {
+  const structuredQuestionNodes: ExamPaperItem[] = structuredQuestions.map((question, index) => {
     const number = normalizeQuestionNumber(question.questionNumber);
     const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
@@ -90,10 +94,10 @@ export default function StudyPaperView({
       node: <article id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
         <header>
           <div><span className="question-identity">{question.questionNumber}번</span><small className="question-sequence">{question.position} / {questionCount}</small>{question.points !== undefined && <small>{question.points}점</small>}{question.needsReview && <small className="answer-review-badge">검토 필요</small>}</div>
-          <div className="structured-problem-sheet-actions">{selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}{onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}{onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}{answer ? <button type="button" className="btn-secondary btn-sm" aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" disabled title="연결된 정답이 없습니다.">답</button>}</div>
+          <div className="structured-problem-sheet-actions">{selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}{onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}{onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}{answer ? <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 ${revealed ? "숨기기" : "보기"}`} aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 보기`} disabled title="연결된 정답이 없습니다.">답</button>}</div>
         </header>
         <StructuredQuestionRenderer question={question} entry={entry} context={{ questionNumber: question.questionNumber, position: question.position }} />
-        {revealed && answer && <div className="structured-problem-sheet-answer"><strong>정답</strong> {answer.answer} {onOpenQuestionSolution && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionSolution(number)}>해설 보기</button>}</div>}
+        {revealed && answer && <div role="status" className="structured-problem-sheet-answer"><strong>정답</strong> {answer.answer} {onOpenQuestionSolution && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionSolution(number)}>해설 보기</button>}</div>}
         {question.warning && <p className="structured-problem-sheet-warning">{question.warning}</p>}
       </article>,
     };
@@ -102,7 +106,7 @@ export default function StudyPaperView({
   return (
     <div className={`study-paper study-paper--${displayMode}`}>
       <div className="study-paper-sheet">
-        <header className="study-paper-cover">
+        {displayMode !== "exam" && <header className="study-paper-cover">
           <div>
             <span className="study-paper-label">문제지</span>
             <h3>{entry.title.trim() || "문제"}</h3>
@@ -117,40 +121,11 @@ export default function StudyPaperView({
               <dd>{(entry.figures ?? []).length}</dd>
             </div>
           </dl>
-        </header>
+        </header>}
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
-            {displayMode === "exam" && paperNavigation === "two-up" ? <ExamPaperPager items={structuredQuestionNodes} /> : <ExamPaperCompositor enabled={displayMode === "exam"}>
-            {structuredQuestions.map((question, index) => {
-              const number = normalizeQuestionNumber(question.questionNumber);
-              const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
-              const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
-              const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
-              const revealed = revealedAnswerNumbers?.has(number);
-              return (
-                <article key={number || question.position} id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
-                  <header>
-                    <div>
-                      <span className="question-identity">{question.questionNumber}번</span>
-                      <small className="question-sequence">{question.position} / {questionCount}</small>
-                      {question.points !== undefined && <small>{question.points}점</small>}
-                      {question.needsReview && <small className="answer-review-badge">검토 필요</small>}
-                    </div>
-                    <div className="structured-problem-sheet-actions">
-                      {selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}
-                      {onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}
-                      {onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}
-                      {answer ? <button type="button" className="btn-secondary btn-sm" aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" disabled title="연결된 정답이 없습니다.">답</button>}
-                    </div>
-                  </header>
-                  <StructuredQuestionRenderer question={question} entry={entry} context={{ questionNumber: question.questionNumber, position: question.position }} />
-                  {revealed && answer && <div className="structured-problem-sheet-answer"><strong>정답</strong> {answer.answer} {onOpenQuestionSolution && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionSolution(number)}>해설 보기</button>}</div>}
-                  {question.warning && <p className="structured-problem-sheet-warning">{question.warning}</p>}
-                </article>
-              );
-            })}
-            </ExamPaperCompositor>}
+            <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />
           </div>
         ) : <AnnotatableQuestion
           question={entry.question}

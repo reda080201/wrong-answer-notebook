@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ExamPreferences, ExamSession } from "../../../types";
+import MathText from "../../../components/MathText";
 import Dialog from "../../../shared/ui/Dialog";
 import { IconButton } from "../../../shared/ui";
 import { PanelRightOpen, X } from "lucide-react";
-import QuestionContentView from "../../../components/QuestionContentView";
+import ExamSessionPaper, { type PaperResponsePatch } from "./ExamSessionPaper";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
 import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
-import { sanitizeExamQuestionDomId } from "../services/examDom";
 import ExamResponseEditor from "./ExamResponseEditor";
 import "./RealExamSessionView.css";
 
@@ -23,6 +23,7 @@ interface RealExamSessionViewProps {
   saveError?: string | null;
   saving?: boolean;
   onRetrySave?(): void;
+  onStartReview?(numbers: string[]): void;
 }
 
 function formatTime(seconds: number): string {
@@ -38,10 +39,10 @@ function resolveAnswerSheetLayout(session: ExamSession): "vertical" | "horizonta
 
 function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog']"));
+  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu']"));
 }
 
-export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave }: RealExamSessionViewProps) {
+export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave, onStartReview }: RealExamSessionViewProps) {
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
@@ -50,11 +51,10 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const [answerSheetOpen, setAnswerSheetOpen] = useState(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
   const [now, setNow] = useState(() => Date.now());
   const [filter, setFilter] = useState<"all" | "wrong" | "unanswered" | "marked">("all");
-  const [selectedResultNumber, setSelectedResultNumber] = useState<string | null>(null);
+  const selectedResultNumber = session.questions[session.currentQuestionIndex]?.questionNumber;
   const [deadlineWarning, setDeadlineWarning] = useState(false);
   const deadlineWarnedRef = useRef(false);
   const autoSubmittedRef = useRef(false);
-  const pendingScrollQuestionRef = useRef<string | null>(null);
   const expired = isExamExpired(session, new Date(now));
   const remaining = session.deadlineAt ? getRemainingExamSeconds(session.deadlineAt, new Date(now)) : 0;
   const score = session.status === "submitted" ? scoreExamSession(session) : null;
@@ -63,10 +63,6 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const marked = session.questions.filter((question) => responses.get(question.questionNumber)?.markedForReview).map((question) => question.questionNumber);
   const currentQuestionIndex = session.currentQuestionIndex ?? 0;
   const safeCurrentQuestionIndex = Math.max(0, Math.min(currentQuestionIndex, session.questions.length - 1));
-  const currentQuestion = session.questions[safeCurrentQuestionIndex];
-  const activeQuestions = useMemo(() => currentQuestion?.stimulusGroupId
-    ? session.questions.filter((question) => question.stimulusGroupId === currentQuestion.stimulusGroupId)
-    : currentQuestion ? [currentQuestion] : [], [currentQuestion, session.questions]);
   const answerSheetLayout = resolveAnswerSheetLayout(session);
 
   useEffect(() => {
@@ -81,17 +77,17 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     onChange(next);
   }, [onChange]);
 
-  const changeResponse = useCallback((questionNumber: string, patch: { response?: string; markedForReview?: boolean }) => {
-    const currentSession = sessionRef.current;
-    const current = currentSession.responses.find((item) => item.questionNumber === questionNumber);
-    updateSession((latest) => updateExamResponse(latest, {
-      questionNumber,
-      response: patch.response ?? current?.response ?? "",
-      scratchNote: current?.scratchNote ?? "",
-      markedForReview: patch.markedForReview ?? current?.markedForReview ?? false,
-      updatedAt: new Date().toISOString(),
-    }));
-  }, [updateSession]);
+  const changeResponse = useCallback((questionNumber: string, patch: PaperResponsePatch) => {
+    updateSession(latest => {
+      if (latest.status === "submitted" || isExamExpired(latest)) return latest;
+      const index = latest.questions.findIndex(question => question.questionNumber === questionNumber);
+      if (index < 0) return latest;
+      const previous = latest.responses.find(item => item.questionNumber === questionNumber);
+      const next = updateExamResponse(latest, { questionNumber, response: patch.response ?? previous?.response ?? "", scratchNote: patch.scratchNote ?? previous?.scratchNote ?? "", markedForReview: patch.markedForReview ?? previous?.markedForReview ?? false, updatedAt: new Date().toISOString() });
+      const advance = patch.response !== undefined && examPreferences?.autoAdvanceOnAnswer && isMultipleChoiceQuestion(latest.questions[index].questionType, latest.questions[index].choices);
+      return { ...next, currentQuestionIndex: advance ? Math.min(index + 1, latest.questions.length - 1) : index };
+    });
+  }, [examPreferences?.autoAdvanceOnAnswer, updateSession]);
 
   const submit = useCallback(async () => {
     if (submittingRef.current || sessionRef.current.status === "submitted") return;
@@ -133,23 +129,13 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     if (index < 0 || index >= currentSession.questions.length) return;
     const questionNumber = currentSession.questions[index]?.questionNumber;
     if (!questionNumber) return;
-    pendingScrollQuestionRef.current = sanitizeExamQuestionDomId(questionNumber);
     updateSession((latest) => ({ ...latest, currentQuestionIndex: index }));
   }, [updateSession]);
 
   useEffect(() => {
-    const targetId = pendingScrollQuestionRef.current;
-    if (!targetId) return;
-    const target = document.getElementById(targetId);
-    if (!target) return;
-    target.scrollIntoView({ behavior: "smooth", block: "start" });
-    pendingScrollQuestionRef.current = null;
-  }, [safeCurrentQuestionIndex, activeQuestions]);
-
-  useEffect(() => {
     if (sessionRef.current.status !== "in_progress") return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || shouldIgnoreExamArrowNavigation(event.target)) return;
+      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || shouldIgnoreExamArrowNavigation(event.target)) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         navigateToQuestion(safeCurrentQuestionIndex - 1);
@@ -160,7 +146,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigateToQuestion, safeCurrentQuestionIndex]);
+  }, [examPreferences?.paperNavigation, navigateToQuestion, safeCurrentQuestionIndex]);
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;
@@ -184,24 +170,8 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
       {deadlineWarning && !expired && <div className="real-exam-warning" role="status">시험 종료까지 5분 이내입니다.</div>}
       <div className={`real-exam-layout${answerSheetOpen ? "" : " real-exam-layout--sheet-collapsed"}`}>
         <main className="real-exam-paper" aria-label="실전 시험지">
-          {activeQuestions.map((question) => {
-            const index = session.questions.indexOf(question);
-            const response = responses.get(question.questionNumber);
-            return (
-              <article key={question.id} id={sanitizeExamQuestionDomId(question.questionNumber)} className="real-exam-question">
-                <header><h3>문제 {question.questionNumber}</h3><span>{index + 1} / {session.questions.length}</span></header>
-                {question.warning && <p className="real-exam-warning">{question.warning}</p>}
-                {question.passage && (!question.stimulusGroupId || session.questions.findIndex((item) => item.stimulusGroupId === question.stimulusGroupId) === index) && (
-                  <section className="real-exam-passage" aria-label={`${question.questionNumber}번 제시문`}>
-                    <QuestionContentView text={question.passage} />
-                  </section>
-                )}
-                <QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
-                <ExamResponseEditor question={question} response={response} disabled={session.status === "submitted" || expired} onChange={(value) => changeResponse(question.questionNumber, { response: value })} />
-                <label className="real-exam-review"><input type="checkbox" checked={response?.markedForReview ?? false} disabled={session.status === "submitted" || expired} onChange={(event) => changeResponse(question.questionNumber, { markedForReview: event.target.checked })} /> 검토 표시</label>
-              </article>
-            );
-          })}
+      {score && <section className="real-exam-results" aria-label="채점 결과"><div className="real-exam-result-filters">{(["all", "wrong", "unanswered", "marked"] as const).map((item) => <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)}>{item === "all" ? "전체" : item === "wrong" ? "오답" : item === "unanswered" ? "미응답" : "검토 표시"}</button>)}</div><button type="button" disabled={!onStartReview || !score.questionResults.some(item => item.hasResponse && !item.correct)} onClick={() => onStartReview?.(score.questionResults.filter(item => item.hasResponse && !item.correct).map(item => item.questionNumber))}>오답 복습 시작</button><div className="real-exam-result-cards"><span>전체 {score.totalQuestions}</span><span>응답 {score.answeredCount}</span><span>정답 {score.correctCount}</span><span>오답 {score.wrongCount}</span><span>미응답 {score.unansweredCount}</span><span>정답률 {score.percentCorrect}%</span></div>{score.pointsComplete ? <p>획득 점수 {score.earnedPoints} / {score.maxPoints}</p> : <p>배점 정보 일부 미확인</p>}<div className="real-exam-result-grid">{visibleQuestions.map((question) => { const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber); return <button key={question.id} type="button" onClick={() => { navigateToQuestion(session.questions.indexOf(question)); }}>{question.questionNumber} {result?.correct ? "✓" : result?.hasResponse ? "✕" : "-"}</button>; })}</div>{selectedResultNumber && (() => { const question = session.questions.find((item) => item.questionNumber === selectedResultNumber); const response = responses.get(selectedResultNumber); if (!question) return null; return <article className="real-exam-result-detail" aria-label={`${selectedResultNumber}번 결과 상세`}><h3>{selectedResultNumber}번 검사</h3><p>내 답: <MathText text={response?.response || "미응답"} /></p><p>정답: <MathText text={question.correctAnswer || "정답 정보 없음"} /></p>{question.explanation && <p>해설: <MathText text={question.explanation} /></p>}{typeof question.points === "number" && <p>배점: {question.points}점</p>}{question.warning && <p role="alert">주의: {question.warning}</p>}</article>; })()}</section>}
+          <ExamSessionPaper session={session} preferences={examPreferences} disabled={session.status === "submitted" || expired} onNavigate={navigateToQuestion} onResponse={changeResponse} />
         </main>
         <aside className="real-exam-answer-sheet" aria-label="답안지">
           {answerSheetOpen ? <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet} aria-label="답안지 접기">접기</button></header> : <div className="real-exam-answer-sheet-rail"><IconButton label="답안지 펼치기" onClick={toggleAnswerSheet}><PanelRightOpen size={20} /></IconButton></div>}
@@ -209,8 +179,8 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
         </aside>
       </div>
       {session.status === "in_progress" && <nav className="real-exam-navigation" aria-label="실전 문항 이동"><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex - 1)} disabled={safeCurrentQuestionIndex <= 0}>이전</button><span>{safeCurrentQuestionIndex + 1} / {session.questions.length}</span><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex + 1)} disabled={safeCurrentQuestionIndex >= session.questions.length - 1}>다음</button></nav>}
-      {score && <section className="real-exam-results" aria-label="채점 결과"><div className="real-exam-result-filters">{(["all", "wrong", "unanswered", "marked"] as const).map((item) => <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)}>{item === "all" ? "전체" : item === "wrong" ? "오답" : item === "unanswered" ? "미응답" : "검토 표시"}</button>)}</div><div className="real-exam-result-cards"><span>전체 {score.totalQuestions}</span><span>응답 {score.answeredCount}</span><span>정답 {score.correctCount}</span><span>오답 {score.wrongCount}</span><span>미응답 {score.unansweredCount}</span><span>정답률 {score.percentCorrect}%</span></div>{score.pointsComplete ? <p>획득 점수 {score.earnedPoints} / {score.maxPoints}</p> : <p>배점 정보 일부 미확인</p>}<div className="real-exam-result-grid">{visibleQuestions.map((question) => { const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber); return <button key={question.id} type="button" onClick={() => { setSelectedResultNumber(question.questionNumber); navigateToQuestion(session.questions.indexOf(question)); }}>{question.questionNumber} {result?.correct ? "✓" : result?.hasResponse ? "✕" : "-"}</button>; })}</div>{selectedResultNumber && (() => { const question = session.questions.find((item) => item.questionNumber === selectedResultNumber); const response = responses.get(selectedResultNumber); if (!question) return null; return <article className="real-exam-result-detail" aria-label={`${selectedResultNumber}번 결과 상세`}><h3>{selectedResultNumber}번 검사</h3><p>내 답: {response?.response || "미응답"}</p><p>정답: {question.correctAnswer || "정답 정보 없음"}</p>{question.explanation && <p>해설: {question.explanation}</p>}{typeof question.points === "number" && <p>배점: {question.points}점</p>}{question.warning && <p role="alert">주의: {question.warning}</p>}</article>; })()}</section>}
-      <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<div className="dialog-footer-actions"><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>그래도 제출</button></div>}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{unanswered.length > 0 && <p role="alert">미응답 {unanswered.length}문항이 있습니다: {unanswered.join(", ")}</p>}</Dialog>
+
+      <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<div className="dialog-footer-actions"><button type="button" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" onClick={() => void submit()} disabled={submitting}>제출하고 채점</button></div>}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{unanswered.length > 0 && <p role="alert">미응답 {unanswered.length}문항이 있습니다: {unanswered.join(", ")}</p>}</Dialog>
     </section>
   );
 }
