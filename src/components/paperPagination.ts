@@ -24,21 +24,27 @@ export function paginatePaper(items: PaperPageItem[], narrow: Map<string, number
   }
   for (const group of groups) {
     const height = group.reduce((sum, item) => sum + (narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
-    if (height > capacity()) {
-      push();
-      const fullHeight = group.reduce((sum, item) => sum + (wide.get(item.id) ?? narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
-      page.fullWidth = true;
-      page.oversized = fullHeight > capacity();
-      page.columns = [{ items: group, usedHeight: fullHeight }];
-      page.questionNumbers = group.map(item => item.questionNumber ?? item.id);
-      push();
-      continue;
-    }
     let column = page.columns[columnIndex]!;
     if (column.usedHeight + height > capacity()) {
-      if (columnIndex + 1 < columnCount) columnIndex += 1;
-      else push();
-      column = page.columns[columnIndex]!;
+      const nextColumnIndex = columnIndex + 1;
+      const nextColumn = page.columns[nextColumnIndex];
+      if (nextColumn && nextColumn.usedHeight + height <= capacity()) {
+        columnIndex = nextColumnIndex;
+        column = nextColumn;
+      } else {
+        if (page.questionNumbers.length) push();
+        column = page.columns[0]!;
+        const freshColumnCapacity = capacity();
+        if (height > freshColumnCapacity) {
+          const fullHeight = group.reduce((sum, item) => sum + (wide.get(item.id) ?? narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
+          page.fullWidth = true;
+          page.oversized = fullHeight > freshColumnCapacity;
+          page.columns = [{ items: group, usedHeight: fullHeight }];
+          page.questionNumbers = group.map(item => item.questionNumber ?? item.id);
+          push();
+          continue;
+        }
+      }
     }
     column.items.push(...group);
     column.usedHeight += height;

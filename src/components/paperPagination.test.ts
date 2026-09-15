@@ -29,4 +29,33 @@ describe("A4 paper pagination", () => {
     expect(oversized[1].oversized).toBe(true);
     expect(oversized[2].questionNumbers).toEqual(["3"]);
   });
+
+  it("rechecks normal-column capacity after moving past the header page", () => {
+    const narrow = new Map([["1", 200], ["2", 930]]);
+    const wide = new Map(narrow);
+    const pages = paginatePaper(items.slice(0, 2), narrow, wide);
+    expect(pages).toHaveLength(2);
+    expect(pages[1].fullWidth).toBeFalsy();
+    expect(pages[1].columns[0]?.items.map(item => item.id)).toEqual(["2"]);
+  });
+
+  it("uses a full-width page only when a fresh normal column is too short", () => {
+    const group = [{ id: "a", groupId: "shared" }, { id: "b", groupId: "shared" }];
+    const narrow = new Map([["a", 600], ["b", 600]]);
+    const wide = new Map([["a", 300], ["b", 300]]);
+    const pages = paginatePaper(group, narrow, wide);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].fullWidth).toBe(true);
+    expect(pages[0].oversized).toBe(false);
+    expect(pages[0].questionNumbers).toEqual(["a", "b"]);
+  });
+
+  it("marks a group oversized only when its wide layout also exceeds a fresh page", () => {
+    const group = [{ id: "a", groupId: "shared" }, { id: "b", groupId: "shared" }];
+    const narrow = new Map([["a", 1200], ["b", 1200]]);
+    const wide = new Map([["a", 700], ["b", 700]]);
+    const pages = paginatePaper(group, narrow, wide);
+    expect(pages[0].fullWidth).toBe(true);
+    expect(pages[0].oversized).toBe(true);
+  });
 });
