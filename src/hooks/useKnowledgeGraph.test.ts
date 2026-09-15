@@ -89,7 +89,7 @@ describe("useKnowledgeGraph load readiness", () => {
       if (loadCount === 1) return Promise.resolve({ entities: [], relations: [], questionLinks: [] });
       return new Promise((resolve) => { releaseRefresh = resolve; });
     });
-    const saveKnowledgeGraph = vi.fn(async (_value: KnowledgeGraphStore) => undefined);
+    const saveKnowledgeGraph = vi.fn<(value: KnowledgeGraphStore) => Promise<void>>().mockResolvedValue(undefined);
     vi.mocked(getStorageBackend).mockReturnValue({ loadKnowledgeGraph, saveKnowledgeGraph } as never);
     const { result } = renderHook(() => useKnowledgeGraph());
     await waitFor(() => expect(result.current.ready).toBe(true));
