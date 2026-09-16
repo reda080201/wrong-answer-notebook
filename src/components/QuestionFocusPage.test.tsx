@@ -11,16 +11,16 @@ describe("QuestionFocusPage", () => {
     render(<QuestionFocusPage items={[item("1"), item("2"), item("3"), item("4"), item("5")]} navigation="horizontal-pages" />);
     expect(screen.getByLabelText("집중 보기 1페이지")).toHaveTextContent("1");
     expect(screen.getByLabelText("집중 보기 1페이지")).toHaveTextContent("2");
-    fireEvent.click(screen.getAllByRole("button", { name: "다음", exact: true })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
     expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
-    fireEvent.click(screen.getAllByRole("button", { name: "다음", exact: true })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
     expect(screen.getByLabelText("집중 보기 3페이지")).toHaveTextContent("5");
     expect(screen.getByLabelText("집중 보기 3페이지")).not.toHaveTextContent("4");
   });
 
   it("preserves a contiguous stimulus group as one focus page", () => {
     render(<QuestionFocusPage items={[item("1"), item("2", "stimulus"), item("3", "stimulus"), item("4")]} navigation="horizontal-pages" />);
-    fireEvent.click(screen.getAllByRole("button", { name: "다음", exact: true })[0]);
+    fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
     expect(screen.getByLabelText("집중 보기 2페이지")).toHaveTextContent("2");
     expect(screen.getByLabelText("집중 보기 2페이지")).toHaveTextContent("3");
   });
@@ -31,7 +31,7 @@ describe("QuestionFocusPage", () => {
     const reader = screen.getByLabelText("집중 보기 1페이지").parentElement!;
     fireEvent.keyDown(reader, { key: "ArrowRight" });
     expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
-    fireEvent.keyDown(screen.getByRole("button", { name: "답" }), { key: "ArrowLeft" });
+    fireEvent.keyDown(document.querySelector('[data-focus-number="1"] button')!, { key: "ArrowLeft" });
     expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
     expect(onQuestionChange).toHaveBeenCalled();
   });
