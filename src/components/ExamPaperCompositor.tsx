@@ -8,6 +8,7 @@ interface Props {
   enabled: boolean; children?: ReactNode; items?: ExamPaperItem[]; layout?: ExamPaperLayout;
   navigation?: PaperNavigationMode; title?: string; subject?: string; minutes?: number;
   showHeader?: boolean; showPageNumbers?: boolean;
+  measurementKey?: string;
   currentQuestionNumber?: string; onQuestionChange?(number: string): void;
 }
 const INTERACTIVE_PAPER_TARGETS = "button, a[href], input, textarea, select, summary, [contenteditable], [role='button'], [role='radio'], [role='checkbox'], [role='option'], [role='listbox'], [role='menu'], [role='dialog']";
@@ -15,7 +16,7 @@ const INTERACTIVE_PAPER_TARGETS = "button, a[href], input, textarea, select, sum
 export function isInteractivePaperTarget(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest(INTERACTIVE_PAPER_TARGETS));
 }
-export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "columns", navigation = "vertical-pages", title = "문제지", subject, minutes, showHeader = true, showPageNumbers = true, currentQuestionNumber, onQuestionChange }: Props) {
+export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "columns", navigation = "vertical-pages", title = "문제지", subject, minutes, showHeader = true, showPageNumbers = true, currentQuestionNumber, onQuestionChange, measurementKey }: Props) {
   const items = useMemo<ExamPaperItem[]>(() => suppliedItems ?? Children.toArray(children).map((node, index) => ({ id: `item-${index}`, node })), [children, suppliedItems]);
   const root = useRef<HTMLDivElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -23,6 +24,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const lastNavigation = useRef<string | null>(null);
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const number = currentQuestionNumber ?? selected ?? items[0]?.questionNumber ?? items[0]?.id;
+  const structuralMeasurementKey = measurementKey ?? items.map(item => `${item.id}:${item.questionNumber ?? ""}:${item.groupId ?? ""}`).join("|");
   const pages = useMemo(() => paginatePaper(items, measurements.narrow, measurements.wide, layout === "single" ? 1 : 2, showHeader ? 108 : 0), [items, measurements, layout, showHeader]);
   const pageIndex = Math.max(0, pages.findIndex(page => page.questionNumbers.includes(number ?? "")));
   useLayoutEffect(() => {
@@ -61,7 +63,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     container.addEventListener("load", schedule, true);
     void container.ownerDocument.fonts?.ready.then(() => { if (!cancelled) schedule(); });
     return () => { cancelled = true; cancelAnimationFrame(frame); observer?.disconnect(); container.removeEventListener("load", schedule, true); };
-  }, [enabled, items, layout]);
+  }, [enabled, layout, structuralMeasurementKey]);
   useLayoutEffect(() => {
     const container = root.current;
     if (!container || !enabled) return;

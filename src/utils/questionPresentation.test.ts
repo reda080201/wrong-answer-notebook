@@ -2,6 +2,52 @@ import { describe, expect, it } from "vitest";
 import { normalizeQuestionPresentationSegments } from "./questionPresentation";
 
 describe("normalizeQuestionPresentationSegments", () => {
+  it("does not append a legacy whole-question duplicate when conditions and equations are represented", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "본문\n(가) A\n(나) B\n값을 구하시오.",
+      conditions: ["(가) A", "(나) B"],
+      equations: [],
+      contentSegments: [
+        { id: "stem", type: "text", text: "본문" },
+        { id: "a", type: "condition", label: "(가)", text: "A" },
+        { id: "b", type: "condition", label: "(나)", text: "B" },
+        { id: "end", type: "text", text: "값을 구하시오." },
+      ],
+    });
+    expect(segments).toHaveLength(4);
+    expect(segments.map((segment) => segment.id)).toEqual(["stem", "a", "b", "end"]);
+  });
+
+  it("keeps an unmatched legacy stem and normalizes a repeated condition label", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "다음 조건을 만족하는 함수에 대하여",
+      conditions: [],
+      equations: [],
+      contentSegments: [
+        { id: "condition", type: "condition", label: "(가)", text: "(가) x > 0" },
+        { id: "figure", type: "figure", figureId: "figure-1" },
+      ],
+    });
+    expect(segments.map((segment) => segment.type)).toEqual(["condition", "figure", "text"]);
+    expect(segments[0]).toMatchObject({ label: "(가)", text: "x > 0" });
+    expect(segments[2]).toMatchObject({ text: "다음 조건을 만족하는 함수에 대하여" });
+  });
+
+  it("preserves figure and table order and intentional equation duplicates", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "",
+      conditions: [],
+      equations: [],
+      contentSegments: [
+        { id: "eq-1", type: "equation", latex: "x", display: true },
+        { id: "figure", type: "figure", figureId: "f" },
+        { id: "table", type: "table", rows: [["t"]] },
+        { id: "eq-2", type: "equation", latex: "x", display: true },
+      ],
+    });
+    expect(segments.map((segment) => segment.id)).toEqual(["eq-1", "figure", "table", "eq-2"]);
+  });
+
   it("keeps canonical order and intentional duplicates while supplementing missing legacy semantics", () => {
     const segments = normalizeQuestionPresentationSegments({
       questionText: "본문",

@@ -10,6 +10,7 @@ import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
 import ExamResponseEditor from "./ExamResponseEditor";
+import { isInteractivePaperTarget } from "../../../components/ExamPaperCompositor";
 import "./RealExamSessionView.css";
 
 interface RealExamSessionViewProps {
@@ -37,16 +38,12 @@ function resolveAnswerSheetLayout(session: ExamSession): "vertical" | "horizonta
   return mathOrMixed ? "vertical" : "horizontal";
 }
 
-function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu']"));
-}
-
 export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave, onStartReview }: RealExamSessionViewProps) {
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const [answerSheetOpen, setAnswerSheetOpen] = useState(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
   const [now, setNow] = useState(() => Date.now());
@@ -94,9 +91,12 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     submittingRef.current = true;
     setSubmitting(true);
     onSubmittingChange?.(true);
+    setSubmitError(null);
     try {
       await onSubmit(sessionRef.current);
       setSubmitOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "시험을 저장/제출하지 못했습니다. 다시 시도해 주세요.");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -135,7 +135,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   useEffect(() => {
     if (sessionRef.current.status !== "in_progress") return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || shouldIgnoreExamArrowNavigation(event.target)) return;
+      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isInteractivePaperTarget(event.target)) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         navigateToQuestion(safeCurrentQuestionIndex - 1);
@@ -166,6 +166,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
         </div>
       </header>
       {saveError && <div className="exam-session-save-error" role="alert"><span>진행 상태 저장 실패: {saveError}</span><button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button></div>}
+      {submitError && <div className="exam-session-save-error" role="alert"><span>시험을 저장/제출하지 못했습니다: {submitError}</span><button type="button" onClick={() => void submit()} disabled={submitting}>다시 제출</button></div>}
       {expired && session.status === "in_progress" && <div className="real-exam-expired" role="alert">시간이 종료되었습니다. 답안 입력을 잠그고 제출할 수 있습니다.</div>}
       {deadlineWarning && !expired && <div className="real-exam-warning" role="status">시험 종료까지 5분 이내입니다.</div>}
       <div className={`real-exam-layout${answerSheetOpen ? "" : " real-exam-layout--sheet-collapsed"}`}>
