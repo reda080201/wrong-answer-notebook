@@ -81,6 +81,7 @@ export interface ExamPreferences {
   warnBeforeEnd?: boolean;
   autoSubmitOnTimeExpired?: boolean;
   paperNavigation?: "vertical-pages" | "horizontal-pages";
+  paperPresentation?: "a4" | "two-question";
 }
 
 export interface ImagePreferences {

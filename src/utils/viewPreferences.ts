@@ -56,6 +56,7 @@ export const DEFAULT_EXAM_PREFERENCES: ExamPreferences = {
   warnBeforeEnd: true,
   autoSubmitOnTimeExpired: false,
   paperNavigation: "vertical-pages",
+  paperPresentation: "a4",
 };
 
 export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = {
@@ -192,6 +193,7 @@ export function normalizeExamPreferences(raw: unknown): ExamPreferences {
         ? DEFAULT_EXAM_PREFERENCES.autoSubmitOnTimeExpired
         : Boolean(value.autoSubmitOnTimeExpired),
     paperNavigation: value.paperNavigation === "two-up" || value.paperNavigation === "horizontal-pages" ? "horizontal-pages" : "vertical-pages",
+    paperPresentation: value.paperPresentation === "two-question" ? "two-question" : "a4",
   };
 }
 

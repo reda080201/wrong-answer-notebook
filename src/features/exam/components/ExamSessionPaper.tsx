@@ -6,6 +6,7 @@ import QuestionContentView from "../../../components/QuestionContentView";
 import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ExamResponseEditor from "./ExamResponseEditor";
 import { sanitizeExamQuestionDomId } from "../services/examDom";
+import QuestionFocusPage from "../../../components/QuestionFocusPage";
 
 export interface PaperResponsePatch {
   response?: string;
@@ -46,12 +47,18 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       };
     });
   }, [disabled, onResponse, practice, preferences?.showOriginalPages, preferences?.showScratchNote, session.questions, session.responses]);
-  return <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}><ExamPaperCompositor enabled items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
+  return <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}>{preferences?.paperPresentation === "two-question" ? <QuestionFocusPage items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
+    navigation={preferences?.paperNavigation ?? "vertical-pages"}
+    currentQuestionNumber={session.questions[session.currentQuestionIndex]?.questionNumber}
+    onQuestionChange={number => {
+      const index = session.questions.findIndex(question => question.questionNumber === number);
+      if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
+    }} /> : <ExamPaperCompositor enabled items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
     navigation={preferences?.paperNavigation ?? "vertical-pages"}
     currentQuestionNumber={session.questions[session.currentQuestionIndex]?.questionNumber}
     measurementKey={measurementKey}
     onQuestionChange={number => {
       const index = session.questions.findIndex(question => question.questionNumber === number);
       if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
-    }} /></StudyZoomViewport>;
+    }} />}</StudyZoomViewport>;
 }
