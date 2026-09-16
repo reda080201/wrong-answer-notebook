@@ -22,6 +22,7 @@ test.describe("two-question focus view", () => {
       localStorage.setItem("wrong-answer-e2e-seeded", "true");
       localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [entry] }));
       localStorage.setItem("wrong-answer-knowledge-graph", JSON.stringify({ entities: [], relations: [], questionLinks: [] }));
+      localStorage.setItem("wrong-answer-theme", "light");
       localStorage.setItem("wrong-answer-settings", JSON.stringify({ examPreferences: { paperPresentation: "two-question", paperNavigation: "horizontal-pages" } }));
     }, { entry: focusEntry });
     await page.goto("/");
@@ -29,6 +30,9 @@ test.describe("two-question focus view", () => {
     await page.locator(".entry-card", { hasText: focusEntry.title }).click();
 
     const display = page.getByRole("group", { name: "문제지 표시 방식" });
+    await expect(page.locator(".question-focus-reader")).toHaveCount(0);
+    await display.getByRole("button", { name: "문제별", exact: true }).click();
+    await expect(page.locator(".question-focus-reader")).toHaveCount(0);
     await display.getByRole("button", { name: "시험지", exact: true }).click();
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
