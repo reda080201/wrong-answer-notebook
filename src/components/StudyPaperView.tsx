@@ -128,7 +128,7 @@ export default function StudyPaperView({
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
-            {paperPresentation === "two-question" ? <QuestionFocusPage items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} /> : <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />}
+            {displayMode === "exam" && paperPresentation === "two-question" ? <QuestionFocusPage items={structuredQuestionNodes} currentQuestionNumber={currentQuestionNumber} onNavigateQuestion={onCurrentQuestionChange} title={entry.title} subject={entry.subject} /> : <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />}
           </div>
         ) : <AnnotatableQuestion
           question={entry.question}

@@ -8,7 +8,7 @@ function item(id: string, groupId?: string) {
 
 describe("QuestionFocusPage", () => {
   it("packs ordinary questions in pairs and keeps an odd final question alone", () => {
-    render(<QuestionFocusPage items={[item("1"), item("2"), item("3"), item("4"), item("5")]} navigation="horizontal-pages" />);
+    render(<QuestionFocusPage items={[item("1"), item("2"), item("3"), item("4"), item("5")]} />);
     expect(screen.getByLabelText("집중 보기 1페이지")).toHaveTextContent("1");
     expect(screen.getByLabelText("집중 보기 1페이지")).toHaveTextContent("2");
     fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
@@ -19,7 +19,7 @@ describe("QuestionFocusPage", () => {
   });
 
   it("preserves a contiguous stimulus group as one focus page", () => {
-    render(<QuestionFocusPage items={[item("1"), item("2", "stimulus"), item("3", "stimulus"), item("4")]} navigation="horizontal-pages" />);
+    render(<QuestionFocusPage items={[item("1"), item("2", "stimulus"), item("3", "stimulus"), item("4")]} />);
     fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
     expect(screen.getByLabelText("집중 보기 2페이지")).toHaveTextContent("2");
     expect(screen.getByLabelText("집중 보기 2페이지")).toHaveTextContent("3");
@@ -27,7 +27,7 @@ describe("QuestionFocusPage", () => {
 
   it("moves with arrows but ignores interactive descendants", () => {
     const onQuestionChange = vi.fn();
-    render(<QuestionFocusPage items={[{ ...item("1"), node: <button type="button">답</button> }, item("2"), item("3")]} navigation="horizontal-pages" onQuestionChange={onQuestionChange} />);
+    render(<QuestionFocusPage items={[{ ...item("1"), node: <button type="button">답</button> }, item("2"), item("3")]} onNavigateQuestion={onQuestionChange} />);
     const reader = screen.getByLabelText("집중 보기 1페이지").parentElement!;
     fireEvent.keyDown(reader, { key: "ArrowRight" });
     expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
