@@ -65,6 +65,8 @@ jobs:
       - run: npm run check:debug
       - run: npm run check:mcp-contract
       - run: npm run check:tauri-contract
+      - run: npm run test:css-ownership
+      - run: npm run test:release-contract
       - run: npm run test
       - run: npm run build
       - run: npm run test:e2e

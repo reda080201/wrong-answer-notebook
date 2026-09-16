@@ -39,6 +39,12 @@ jobs:
       - name: Startup contract tests
         run: npm run test:startup
 
+      - name: CSS ownership contract
+        run: npm run test:css-ownership
+
+      - name: Release contract
+        run: npm run test:release-contract
+
       - name: Test
         run: npm run test
 
