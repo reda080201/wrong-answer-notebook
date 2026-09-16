@@ -31,7 +31,7 @@ test.describe("two-question focus view", () => {
 
     const display = page.getByRole("group", { name: "문제지 표시 방식" });
     await expect(page.locator(".question-focus-reader")).toHaveCount(0);
-    await display.getByRole("button", { name: "문제별", exact: true }).click();
+    await display.getByRole("button", { name: "문항별", exact: true }).click();
     await expect(page.locator(".question-focus-reader")).toHaveCount(0);
     await display.getByRole("button", { name: "시험지", exact: true }).click();
     const focus = page.locator(".question-focus-reader");
