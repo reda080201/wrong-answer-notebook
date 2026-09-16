@@ -6,6 +6,7 @@ import QuestionContentView from "../../../components/QuestionContentView";
 import ZoomableImageViewer from "../../../components/ZoomableImageViewer";
 import ExamResponseEditor from "./ExamResponseEditor";
 import { sanitizeExamQuestionDomId } from "../services/examDom";
+import QuestionFocusPage from "../../../components/QuestionFocusPage";
 
 export interface PaperResponsePatch {
   response?: string;
@@ -43,15 +44,22 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
         {practice && preferences?.showScratchNote !== false && <details><summary>풀이 메모</summary><label className="exam-note-field">{question.questionNumber}번 풀이 메모<textarea value={response?.scratchNote ?? ""} disabled={disabled} onChange={event => onResponse(question.questionNumber, { scratchNote: event.target.value })} /></label></details>}
         {practice && preferences?.showOriginalPages !== false && Boolean(question.sourcePageImages?.length) && <details><summary>원본 페이지 보기</summary><ZoomableImageViewer filenames={question.sourcePageImages ?? []} /></details>}
       </article>,
+        stimulusNode: question.passage && firstInGroup ? <section className="exam-passage"><QuestionContentView text={question.passage} /></section> : undefined,
+        stimulusIncluded: firstInGroup,
       };
     });
   }, [disabled, onResponse, practice, preferences?.showOriginalPages, preferences?.showScratchNote, session.questions, session.responses]);
-  return <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}><ExamPaperCompositor enabled items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
+  return <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}>{preferences?.paperPresentation === "two-question" ? <QuestionFocusPage items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
+    currentQuestionNumber={session.questions[session.currentQuestionIndex]?.questionNumber}
+      onNavigateQuestion={number => {
+      const index = session.questions.findIndex(question => question.questionNumber === number);
+      if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
+    }} /> : <ExamPaperCompositor enabled items={items} title={session.title} subject={session.subject} minutes={session.timeLimitMinutes}
     navigation={preferences?.paperNavigation ?? "vertical-pages"}
     currentQuestionNumber={session.questions[session.currentQuestionIndex]?.questionNumber}
     measurementKey={measurementKey}
     onQuestionChange={number => {
       const index = session.questions.findIndex(question => question.questionNumber === number);
       if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
-    }} /></StudyZoomViewport>;
+    }} />}</StudyZoomViewport>;
 }

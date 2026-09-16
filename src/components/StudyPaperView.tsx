@@ -10,6 +10,7 @@ import StructuredQuestionRenderer from "../features/entries/components/Structure
 import ExamPaperCompositor, { type ExamPaperItem, type ExamPaperLayout } from "./ExamPaperCompositor";
 import type { PaperNavigationMode } from "./paperPagination";
 import { Maximize2 } from "lucide-react";
+import QuestionFocusPage from "./QuestionFocusPage";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -33,6 +34,7 @@ interface StudyPaperViewProps {
   onToggleAnswerReveal?: (questionNumber: string) => void;
   onOpenQuestionSolution?: (questionNumber: string) => void;
   paperNavigation?: PaperNavigationMode;
+  paperPresentation?: "a4" | "two-question";
   currentQuestionNumber?: string;
   onCurrentQuestionChange?(number: string): void;
 }
@@ -58,6 +60,7 @@ export default function StudyPaperView({
   onToggleAnswerReveal,
   onOpenQuestionSolution,
   paperNavigation = "vertical-pages",
+  paperPresentation = "a4",
   currentQuestionNumber,
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
@@ -125,7 +128,7 @@ export default function StudyPaperView({
 
         {structuredQuestions.length > 0 ? (
           <div className="structured-problem-sheet" data-source="structuredQuestions">
-            <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />
+            {displayMode === "exam" && paperPresentation === "two-question" ? <QuestionFocusPage items={structuredQuestionNodes} currentQuestionNumber={currentQuestionNumber} onNavigateQuestion={onCurrentQuestionChange} title={entry.title} subject={entry.subject} /> : <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />}
           </div>
         ) : <AnnotatableQuestion
           question={entry.question}
