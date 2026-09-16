@@ -9,6 +9,7 @@
 .question-focus-columns--single { grid-template-columns: minmax(0, 1fr); }
 .question-focus-stimulus { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border, #d8d8d8); }
 .question-focus-item { min-width: 0; padding: 12px 0; font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
+.question-focus-item .exam-question-paper { margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
 .question-focus-item + .question-focus-item { border-left: 1px solid var(--border, #d8d8d8); padding-left: 40px; }
 .question-focus-item[aria-current="step"] { outline: 1px solid currentColor; outline-offset: 5px; }
 .question-focus-spread > footer { position: absolute; bottom: 18px; left: 0; width: 100%; text-align: center; font-size: 12px; }
