@@ -1734,6 +1734,7 @@ export default function EntryDetail({
                     onToggleAnswerReveal={toggleQuestionAnswerReveal}
                     onOpenQuestionSolution={openSolutionForQuestion}
                     paperNavigation={isSheet ? examPreferences?.paperNavigation : "vertical-pages"}
+                    paperPresentation={isSheet ? examPreferences?.paperPresentation : "a4"}
                     currentQuestionNumber={questionIdentifier(focusedQuestion) ?? undefined}
                     onCurrentQuestionChange={number => {
                       const index = questionAnchors.findIndex(question => questionIdentifier(question) === number);
