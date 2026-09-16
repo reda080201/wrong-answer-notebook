@@ -44,6 +44,7 @@ test.describe("two-question focus view", () => {
     await focus.getByRole("button", { name: "다음" }).first().click();
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("5 / 5");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
+    await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-columns--single")).toBeVisible();
     const overflow = await focus.evaluate(element => element.scrollWidth - element.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
 

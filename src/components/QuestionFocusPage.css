@@ -6,6 +6,7 @@
 .question-focus-header p { margin: 0; font-size: 12px; }
 .question-focus-header h2 { margin: 4px 0 0; font-size: 22px; }
 .question-focus-columns { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; }
+.question-focus-columns--single { grid-template-columns: minmax(0, 1fr); }
 .question-focus-stimulus { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border, #d8d8d8); }
 .question-focus-item { min-width: 0; padding: 12px 0; font-size: 16px; line-height: 1.65; overflow-wrap: anywhere; }
 .question-focus-item + .question-focus-item { border-left: 1px solid var(--border, #d8d8d8); padding-left: 40px; }
