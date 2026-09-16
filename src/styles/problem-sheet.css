@@ -19,7 +19,54 @@
 
 @media (max-width: 1100px) {
   .sheet-search--inline { width: min(100%, 360px); grid-column: 1 / -1; }
-  .problem-sheet-primary-toolbar { align-items: flex-start; }
+  .problem-sheet-primary-toolbar {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .problem-sheet-primary-title {
+    flex: 1 1 100%;
+  }
+
+  .problem-sheet-primary-controls {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .detail-scroll {
+    padding: 0.75rem 1rem 1.5rem;
+  }
+
+  .study-paper--exam .study-paper-sheet {
+    font-size: 0.875rem;
+  }
+
+  .study-paper--exam .structured-problem-sheet-question {
+    min-width: 0;
+  }
+}
+
+@media (min-width: 1101px) and (max-width: 1200px) {
+  .entry-list {
+    width: 250px;
+    min-width: 230px;
+    max-width: 260px;
+  }
+
+  .problem-sheet-primary-controls {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .study-paper--exam .structured-problem-sheet-question,
+  .study-paper--exam .structured-question-renderer {
+    font-size: 0.875rem;
+    line-height: 1.7;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -63,15 +63,26 @@ export function buildChatGptPrompt(
   mode: ChatGptPromptMode,
   selectedQuestion: string,
   preferences: Pick<ChatGptMcpPreferences, "displayName">,
+  questionContext?: { questionNumber?: string; questionText?: string; choices?: string[]; response?: string; scratchNote?: string },
 ): string {
   const mention = `@${preferences.displayName || "오답노트"}`;
+  const context = questionContext
+    ? [
+        questionContext.questionNumber ? `문항 번호: ${questionContext.questionNumber}` : "",
+        questionContext.questionText ? `문제:\n${questionContext.questionText}` : "",
+        questionContext.choices?.length ? `선택지:\n${questionContext.choices.join("\n")}` : "",
+        questionContext.response ? `내 답:\n${questionContext.response}` : "",
+        questionContext.scratchNote ? `풀이 메모:\n${questionContext.scratchNote}` : "",
+      ].filter(Boolean).join("\n\n")
+    : "";
+  const questionBlock = context ? `\n\n${context}` : "";
   if (mode === "pre-submit") {
-    return `${mention} 현재 응시 중인 문항을 읽어 줘.\n내 답과 풀이 메모도 확인하되 정답과 공식 해설은 말하지 마.\n${selectedQuestion}\n내가 잘못 생각한 지점과 다음에 확인할 방향만 알려 줘.`;
+    return `${mention} 현재 응시 중인 문항을 읽어 줘.\n내 답과 풀이 메모도 확인하되 정답과 공식 해설은 말하지 마.\n${selectedQuestion}\n내가 잘못 생각한 지점과 다음에 확인할 방향만 알려 줘.${questionBlock}`;
   }
   if (mode === "submitted") {
-    return `${mention} 방금 제출한 모의고사 현재 문항을 읽어 줘.\n내 답, 정답, 공식 해설을 비교해서 오답 원인과 복습 포인트를 정리해 줘.\n${selectedQuestion}`;
+    return `${mention} 방금 제출한 모의고사 현재 문항을 읽어 줘.\n내 답, 정답, 공식 해설을 비교해서 오답 원인과 복습 포인트를 정리해 줘.\n${selectedQuestion}${questionBlock}`;
   }
-  return `${mention} 현재 열어 둔 오답노트 문항을 읽어 줘.\n${selectedQuestion}\n문제의 핵심 조건과 다음 학습 행동을 정리해 줘.`;
+  return `${mention} 현재 열어 둔 오답노트 문항을 읽어 줘.\n${selectedQuestion}\n문제의 핵심 조건과 다음 학습 행동을 정리해 줘.${questionBlock}`;
 }
 
 export async function openChatGpt(): Promise<void> {

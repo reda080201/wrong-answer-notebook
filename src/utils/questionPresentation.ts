@@ -32,6 +32,17 @@ function cloneSegment(segment: QuestionContentSegment): QuestionContentSegment {
   return segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment };
 }
 
+function removeExactRepresentedFragments(value: string, fragments: string[]): string {
+  let remaining = value;
+  for (const fragment of fragments) {
+    const normalized = normalizeText(fragment);
+    if (!normalized) continue;
+    const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    remaining = remaining.replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g"), " ");
+  }
+  return normalizeText(remaining);
+}
+
 /**
  * Preserves the canonical stream, then supplements only semantic values that
  * are absent from it. Dedupe is deliberately cross-representation: repeated
@@ -51,13 +62,27 @@ export function normalizeQuestionPresentationSegments(input: {
     .map((segment) => normalizeText(segment.text))
     .filter(Boolean)
     .join(" ");
+  const representedFragments = source.flatMap((segment) => {
+    if (segment.type === "text") return [normalizeText(segment.text)];
+    if (segment.type === "condition") {
+      const parts = conditionParts(segment.label, segment.text);
+      return [parts.text, parts.label ? `${parts.label} ${parts.text}` : parts.text];
+    }
+    if (segment.type === "equation") return [normalizeLatex(segment.latex), `\\(${normalizeLatex(segment.latex)}\\)`, `\\[${normalizeLatex(segment.latex)}\\]`];
+    return [];
+  }).filter(Boolean);
   const fallback: QuestionContentSegment[] = [
     ...(input.questionText.trim() ? [{ id: "question-text", type: "text" as const, text: input.questionText }] : []),
     ...input.conditions.filter((value) => value.trim()).map((text, index) => ({ id: `condition-${index + 1}`, type: "condition" as const, text })),
     ...input.equations.filter((value) => value.trim()).map((latex, index) => ({ id: `equation-${index + 1}`, type: "equation" as const, latex, display: true })),
   ];
   for (const segment of fallback) {
-    if (segment.type === "text" && canonicalText && normalizeText(segment.text) === canonicalText) continue;
+    if (segment.type === "text") {
+      const remaining = removeExactRepresentedFragments(segment.text, representedFragments);
+      if (!remaining || (canonicalText && normalizeText(segment.text) === canonicalText)) continue;
+      source.push({ ...segment, text: remaining });
+      continue;
+    }
     const key = fingerprint(segment);
     if (!represented.has(key)) {
       source.push(segment);
