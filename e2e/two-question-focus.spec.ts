@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { openSyntheticSheet, seedBrowserStorage, syntheticLifecycleEntry } from "./fixtures/syntheticLifecycle";
+import { seedBrowserStorage, syntheticLifecycleEntry } from "./fixtures/syntheticLifecycle";
 
 const focusEntry = {
   ...syntheticLifecycleEntry,
@@ -16,7 +16,7 @@ const focusEntry = {
 
 test.describe("two-question focus view", () => {
   test("uses its own spreads and keeps question view unchanged", async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
+    await page.setViewportSize({ width: 1920, height: 1080 });
     await page.addInitScript(({ entry }) => {
       localStorage.clear();
       localStorage.setItem("wrong-answer-e2e-seeded", "true");
@@ -25,23 +25,25 @@ test.describe("two-question focus view", () => {
       localStorage.setItem("wrong-answer-settings", JSON.stringify({ examPreferences: { paperPresentation: "two-question", paperNavigation: "horizontal-pages" } }));
     }, { entry: focusEntry });
     await page.goto("/");
-    await openSyntheticSheet(page);
+    await page.getByRole("button", { name: "시험지함" }).click();
+    await page.locator(".entry-card", { hasText: focusEntry.title }).click();
 
     const display = page.getByRole("group", { name: "문제지 표시 방식" });
     await display.getByRole("button", { name: "시험지", exact: true }).click();
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
-    await expect(focus.getByText("1–2 / 5")).toBeVisible();
+    await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("1–2 / 5");
 
     await focus.getByRole("button", { name: "다음" }).first().click();
-    await expect(focus.getByText("3–4 / 5")).toBeVisible();
+    await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("3–4 / 5");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
     await focus.getByRole("button", { name: "다음" }).first().click();
-    await expect(focus.getByText("5 / 5")).toBeVisible();
+    await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("5 / 5");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
-    await expect(focus).toHaveJSProperty("scrollWidth", expect.any(Number));
+    const overflow = await focus.evaluate(element => element.scrollWidth - element.clientWidth);
+    expect(overflow).toBeLessThanOrEqual(1);
 
-    await page.screenshot({ path: "test-results/two-question-focus-1280x720.png", fullPage: true });
+    await page.screenshot({ path: "test-results/two-question-focus-1920x1080.png", fullPage: true });
   });
 
   test("falls back to one question per focus page on a narrow surface", async ({ page }) => {
@@ -51,7 +53,8 @@ test.describe("two-question focus view", () => {
       localStorage.setItem("wrong-answer-settings", JSON.stringify({ examPreferences: { paperPresentation: "two-question" } }));
     });
     await page.goto("/");
-    await openSyntheticSheet(page);
+    await page.getByRole("button", { name: "시험지함" }).click();
+    await page.locator(".entry-card", { hasText: focusEntry.title }).click();
     await page.getByRole("group", { name: "문제지 표시 방식" }).getByRole("button", { name: "시험지", exact: true }).click();
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
