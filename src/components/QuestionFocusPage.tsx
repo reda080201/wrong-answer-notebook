@@ -36,7 +36,11 @@ export function buildFocusSpreads(items: QuestionFocusItem[], narrow = false): F
       }
       index += group.length;
     } else {
-      const chunk = items.slice(index, index + (narrow ? 1 : 2));
+      const chunk: QuestionFocusItem[] = [];
+      const limit = narrow ? 1 : 2;
+      while (chunk.length < limit && items[index + chunk.length] && !items[index + chunk.length].groupId) {
+        chunk.push(items[index + chunk.length]);
+      }
       spreads.push({ id: chunk.map(entry => entry.id).join("-"), items: chunk });
       index += chunk.length;
     }
