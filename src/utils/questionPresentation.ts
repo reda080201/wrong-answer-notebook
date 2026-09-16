@@ -39,6 +39,10 @@ function semanticText(segment: QuestionContentSegment): string {
 }
 
 function cloneSegment(segment: QuestionContentSegment): QuestionContentSegment {
+  if (segment.type === "condition") {
+    const parts = conditionParts(segment.label, segment.text);
+    return { ...segment, label: parts.label || undefined, text: parts.text };
+  }
   return segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment };
 }
 
