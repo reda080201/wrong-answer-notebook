@@ -13,6 +13,7 @@ import { IconButton } from "../../../shared/ui";
 import ScrollToTopButton from "../../../components/ScrollToTopButton";
 export { parseChoice } from "../../../utils/choice";
 import { isMultipleChoiceQuestion } from "../../../utils/structuredQuestionType";
+import { isInteractivePaperTarget } from "../../../components/ExamPaperCompositor";
 
 interface ExamSessionViewProps {
   session: ExamSession;
@@ -80,8 +81,7 @@ export default function ExamSessionView({ session, onChange, onUpdateSession, on
   };
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      const target = event.target instanceof HTMLElement ? event.target : null;
-      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.ctrlKey || event.metaKey || event.altKey || target?.matches("input, textarea, select") || target?.isContentEditable || target?.closest("[role='dialog'], [role='menu']")) return;
+      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey || isInteractivePaperTarget(event.target)) return;
       if (event.key === "ArrowLeft" && session.currentQuestionIndex > 0) { event.preventDefault(); navigateToQuestion(session.currentQuestionIndex - 1); }
       if (event.key === "ArrowRight" && session.currentQuestionIndex < session.questions.length - 1) { event.preventDefault(); navigateToQuestion(session.currentQuestionIndex + 1); }
     };
