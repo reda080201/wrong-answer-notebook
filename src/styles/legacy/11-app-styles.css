@@ -33,19 +33,17 @@
 }
 
 .chatgpt-help-panel {
-  position: absolute;
-  z-index: 120;
-  right: 0;
-  top: calc(100% + 0.5rem);
-  width: min(34rem, calc(100vw - 2rem));
+  position: static;
+  width: 100%;
+  box-sizing: border-box;
   display: grid;
   gap: 0.75rem;
-  padding: 1rem;
+  padding: 0;
   color: var(--text);
-  background: var(--panel-bg);
-  border: 1px solid var(--control-border);
-  border-radius: 0.5rem;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.2);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .chatgpt-help-panel header,

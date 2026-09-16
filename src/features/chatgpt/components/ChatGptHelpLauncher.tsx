@@ -20,6 +20,15 @@ interface ChatGptHelpLauncherProps {
   remoteMcpConfigured?: boolean;
   onOpenSettings?: () => void;
   label?: string;
+  questionContext?: ChatGptQuestionContext;
+}
+
+export interface ChatGptQuestionContext {
+  questionNumber: string;
+  body: string;
+  choices: string[];
+  response?: string;
+  scratchNote?: string;
 }
 
 export default function ChatGptHelpLauncher({
@@ -31,27 +40,32 @@ export default function ChatGptHelpLauncher({
   remoteMcpConfigured = false,
   onOpenSettings,
   label = "ChatGPT에서 도움받기",
+  questionContext,
 }: ChatGptHelpLauncherProps) {
   const [open, setOpen] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(() => recommendedChatGptQuestions(mode)[0]);
   const [status, setStatus] = useState<string | null>(null);
   const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
   const questions = useMemo(() => recommendedChatGptQuestions(mode), [mode]);
-  const [prompt, setPrompt] = useState(() => buildChatGptPrompt(mode, selectedQuestion, preferences));
-
-  const syncAndCopy = async () => {
+  const contextKey = questionContext?.questionNumber ?? "";
+  const [editedPrompt, setEditedPrompt] = useState<{ contextKey: string; value: string } | null>(null);
+  const basePrompt = useMemo(() => {
+    const lines = [buildChatGptPrompt(mode, selectedQuestion, preferences)];
+    if (questionContext) {
+      lines.push(`\n현재 문항: ${questionContext.questionNumber}번`, questionContext.body);
+      if (questionContext.choices.length) lines.push(`선택지:\n${questionContext.choices.join("\n")}`);
+      if (preferences.shareUserResponse && questionContext.response?.trim()) lines.push(`내 답: ${questionContext.response}`);
+      if (preferences.shareScratchNote && questionContext.scratchNote?.trim()) lines.push(`풀이 메모: ${questionContext.scratchNote}`);
+    }
+    return lines.join("\n\n");
+  }, [mode, preferences, questionContext, selectedQuestion]);
+  const prompt = editedPrompt?.contextKey === contextKey ? editedPrompt.value : basePrompt;
+  const copyPrompt = async () => {
     setStatus(null);
     setFallbackPrompt(null);
     try {
-      await onSyncContext({
-        shareUserResponse: preferences.shareUserResponse,
-        shareScratchNote: preferences.shareScratchNote,
-        shareQuestionImages: preferences.shareQuestionImages,
-        shareSourcePageImages: preferences.shareSourcePageImages,
-      });
-      if (onCheckLocalMcp) await onCheckLocalMcp();
       await navigator.clipboard.writeText(prompt);
-      setStatus("추천 질문을 복사했습니다. ChatGPT 입력창에 붙여넣으세요.");
+      setStatus("문항 내용을 포함한 질문을 복사했습니다. ChatGPT에 붙여넣으세요.");
       return true;
     } catch (error) {
       setFallbackPrompt(prompt);
@@ -71,8 +85,8 @@ export default function ChatGptHelpLauncher({
   };
 
   const handleCopyAndOpen = async () => {
-    const copied = preferences.copyPromptBeforeOpen ? await syncAndCopy() : true;
-    if (copied && preferences.openChatGptAfterCopy) await handleOpenChatGpt();
+    const copied = await copyPrompt();
+    if (copied) await handleOpenChatGpt();
   };
 
   const handleSendToMcpTunnel = async () => {
@@ -85,9 +99,9 @@ export default function ChatGptHelpLauncher({
         shareSourcePageImages: preferences.shareSourcePageImages,
       });
       if (onCheckLocalMcp) await onCheckLocalMcp();
-      setStatus("MCP 문맥 동기화를 완료했습니다. 편집한 프롬프트는 자동 전송되지 않습니다.");
+      setStatus("MCP 문맥 동기화를 완료했습니다. 메시지는 자동 전송되지 않습니다.");
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : "MCP 문맥 동기화에 실패했습니다.");
+      setStatus(error instanceof Error ? error.message : "MCP 문맥 동기화에 실패했습니다. 연결을 확인하고 다시 시도해 주세요.");
     }
   };
 
@@ -97,32 +111,28 @@ export default function ChatGptHelpLauncher({
         {label}
       </button>
       <Dialog open={open} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={() => setOpen(false)} footer={<div className="chatgpt-help-actions">
-        <button type="button" className="btn-secondary" onClick={() => void syncAndCopy()}>질문 복사</button>
-        <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 문맥 동기화</button>
+        <button type="button" className="btn-secondary" onClick={() => void copyPrompt()}>질문 복사</button>
+        <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 동기화</button>
         <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
-        <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>질문 복사 후 ChatGPT 열기</button>
+        <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>복사 후 열기</button>
         {onOpenSettings && <button type="button" className="btn-secondary" onClick={onOpenSettings}>연결 설정</button>}
       </div>}>
         <section className="chatgpt-help-panel">
-          <header>
-            <div>
-              <p>문맥을 동기화하고 질문만 복사합니다. 메시지는 자동 전송하지 않습니다.</p>
-            </div>
-          </header>
+          <p>현재 문항과 선택한 질문을 복사합니다. MCP 동기화와 메시지 전송은 자동으로 하지 않습니다.</p>
           <p className="chatgpt-help-note">보안 터널: {remoteMcpConfigured ? "외부 HTTPS MCP URL 등록됨" : "외부 URL 미등록 - ChatGPT 연결 전 등록이 필요할 수 있습니다."}</p>
           <fieldset>
             <legend>공유할 내용</legend>
             <label><input type="checkbox" checked={preferences.shareUserResponse} onChange={(event) => void onPreferencesChange({ shareUserResponse: event.target.checked })} /> 내 답</label>
             <label><input type="checkbox" checked={preferences.shareScratchNote} onChange={(event) => void onPreferencesChange({ shareScratchNote: event.target.checked })} /> 풀이 메모</label>
-            <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지</label>
-            <label><input type="checkbox" checked={preferences.shareSourcePageImages} onChange={(event) => void onPreferencesChange({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지</label>
+            <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지 (MCP만)</label>
+            <label><input type="checkbox" checked={preferences.shareSourcePageImages} onChange={(event) => void onPreferencesChange({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지 (MCP만)</label>
           </fieldset>
           <div className="chatgpt-help-questions" aria-label="추천 질문">
             {questions.map((question) => (
-              <button key={question} type="button" className={selectedQuestion === question ? "active" : ""} onClick={() => { setSelectedQuestion(question); setPrompt(buildChatGptPrompt(mode, question, preferences)); }}>{question}</button>
+              <button key={question} type="button" className={selectedQuestion === question ? "active" : ""} onClick={() => { setSelectedQuestion(question); setEditedPrompt(null); }}>{question}</button>
             ))}
           </div>
-          <label className="chatgpt-help-prompt">보낼 프롬프트<textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} rows={10} aria-label="편집할 ChatGPT 프롬프트" /></label>
+          <label className="chatgpt-help-prompt">복사할 질문<textarea value={prompt} onChange={(event) => setEditedPrompt({ contextKey, value: event.target.value })} rows={10} aria-label="편집할 ChatGPT 프롬프트" /></label>
           {status && <p className="form-error" role="status">{status}</p>}
           {fallbackPrompt && <textarea className="chatgpt-help-fallback" readOnly value={fallbackPrompt} aria-label="복사할 추천 질문" />}
           <p className="chatgpt-help-note">ChatGPT의 MCP 기능은 계정, 워크스페이스 및 단계적 출시 상태에 따라 다를 수 있습니다.</p>

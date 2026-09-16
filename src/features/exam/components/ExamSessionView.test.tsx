@@ -273,4 +273,22 @@ describe("ExamSessionView", () => {
     fireEvent.click(screen.getByRole("button", { name: "오답 복습 시작" }));
     expect(onStartReview).toHaveBeenCalledWith(["1"]);
   });
+
+  it("moves to results and focuses the heading once after a submitted session is loaded", async () => {
+    const scrollTo = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: scrollTo });
+    const session = createSession({
+      status: "submitted",
+      submittedAt: "2026-09-16T00:00:00.000Z",
+      responses: [{ questionNumber: "1", response: "②", scratchNote: "", markedForReview: false, updatedAt: "2026-09-16T00:00:00.000Z" }],
+    });
+    render(<ExamSessionView session={session} onChange={vi.fn()} onSubmit={vi.fn()} />);
+
+    const heading = await screen.findByRole("heading", { name: "채점 결과" });
+    await waitFor(() => expect(heading).toHaveFocus());
+    expect(scrollTo).toHaveBeenCalledWith({ top: 0, behavior: "smooth" });
+    const callsAfterSubmit = scrollTo.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "오답만 보기" }));
+    expect(scrollTo).toHaveBeenCalledTimes(callsAfterSubmit);
+  });
 });

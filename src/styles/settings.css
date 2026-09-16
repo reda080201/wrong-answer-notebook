@@ -57,6 +57,7 @@
   min-height: 0;
   flex-direction: column;
   gap: var(--space-1);
+  align-content: start;
   overflow: auto;
   padding: var(--space-3);
   border-right: 1px solid var(--border);

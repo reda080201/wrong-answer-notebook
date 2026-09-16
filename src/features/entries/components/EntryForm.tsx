@@ -394,27 +394,23 @@ export default function EntryForm({
     onClose();
   };
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        handleClose();
-      }
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  });
-
   return (
-    <div className="form-overlay" onClick={handleClose}>
-      <div className="form-modal form-modal--wide" onClick={(e) => e.stopPropagation()}>
-        <div className="form-header">
-          <h2>{formTitle}</h2>
-          <button type="button" className="btn-icon" aria-label="항목 편집 닫기" onClick={handleClose} disabled={saving}>
-            ✕
-          </button>
-        </div>
-        <form onSubmit={handleSubmit}>
+    <>
+      <Dialog
+        open
+        onClose={handleClose}
+        title={formTitle}
+        ariaLabel={formTitle}
+        className="form-modal form-modal--wide entry-form-dialog"
+        closeDisabled={saving}
+        busy={saving}
+        footer={<div className="form-footer">
+          {saveError && <p className="form-save-error" role="alert">{saveError}</p>}
+          <button type="button" className="btn-secondary" onClick={handleClose} disabled={saving}>취소</button>
+          <button type="submit" form="entry-edit-form" className="btn-primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+        </div>}
+      >
+        <form id="entry-edit-form" onSubmit={handleSubmit}>
           <div className="form-body">
             <div className="form-row form-row--3">
               <div className="form-field">
@@ -1274,21 +1270,8 @@ export default function EntryForm({
               )}
             </div>
           </div>
-          <div className="form-footer">
-            {saveError && (
-              <p className="form-save-error" role="alert">
-                {saveError}
-              </p>
-            )}
-            <button type="button" className="btn-secondary" onClick={handleClose} disabled={saving}>
-              취소
-            </button>
-            <button type="submit" className="btn-primary" disabled={saving}>
-              {saving ? "저장 중…" : "저장"}
-            </button>
-          </div>
         </form>
-      </div>
+      </Dialog>
       <Dialog
         open={discardConfirmOpen}
         size="sm"
@@ -1299,6 +1282,6 @@ export default function EntryForm({
       >
         <p>아직 저장하지 않은 내용이 사라집니다.</p>
       </Dialog>
-    </div>
+    </>
   );
 }

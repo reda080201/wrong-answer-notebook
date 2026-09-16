@@ -48,9 +48,20 @@ export default function ExamSessionView({ session, onChange, onUpdateSession, on
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [resultFilter, setResultFilter] = useState<"all" | "wrong" | "unanswered" | "marked">("all");
   const bodyRef = useRef<HTMLElement>(null);
+  const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  const resultFocusHandledRef = useRef(false);
   const question = session.questions[session.currentQuestionIndex];
   const response = session.responses.find((item) => item.questionNumber === question?.questionNumber);
   const score = useMemo(() => session.status === "submitted" ? scoreExamSession(session) : null, [session]);
+  useEffect(() => {
+    if (session.status !== "submitted" || resultFocusHandledRef.current) return;
+    resultFocusHandledRef.current = true;
+    const frame = requestAnimationFrame(() => {
+      bodyRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+      resultHeadingRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [session.status]);
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const applySession = useCallback((recipe: ExamSessionRecipe) => {
@@ -110,23 +121,22 @@ export default function ExamSessionView({ session, onChange, onUpdateSession, on
     : undefined;
   const visibleResultQuestions = score?.questionResults.filter((item) => resultFilter === "all" || (resultFilter === "wrong" && item.hasResponse && !item.correct) || (resultFilter === "unanswered" && !item.hasResponse) || (resultFilter === "marked" && item.markedForReview)) ?? [];
   return <section className="exam-session-view" aria-label="문제 풀기 응시">
-    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button>{onClose && <IconButton label="시험 닫기" onClick={onClose}><X size={20} /></IconButton>}</div></header>
+    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{!isSubmitted && examPreferences?.showMcpHelp !== false && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
+      <ChatGptHelpLauncher
+        key={question.questionNumber}
+        mode="pre-submit"
+        preferences={chatGptPreferences}
+        onPreferencesChange={onChatGptPreferencesChange}
+        onSyncContext={onSyncChatGptContext}
+        onOpenSettings={onOpenChatGptSettings}
+        onCheckLocalMcp={onCheckLocalMcp}
+        remoteMcpConfigured={remoteMcpConfigured}
+        label="GPT 질문"
+        questionContext={{ questionNumber: question.questionNumber, body: question.question, choices: question.choices, response: response?.response, scratchNote: response?.scratchNote }}
+      />
+    )}{onOpenSettings && <button type="button" className="btn-secondary" onClick={() => onOpenSettings("exam")}>설정</button>}<button type="button" className="btn-secondary" onClick={() => setHelpOpen(true)}>시험 도움말</button><button type="button" title="답안을 확정하고 채점합니다. 제출 후에는 답안을 수정할 수 없습니다." onClick={() => setSubmitOpen(true)} disabled={isSubmitted || submitting}>{submitting ? "제출 중…" : "시험 제출"}</button>{onClose && <IconButton label="시험 닫기" onClick={onClose}><X size={20} /></IconButton>}</div></header>
     <main ref={bodyRef} className="exam-session-body"><ExamSessionPaper session={session} preferences={examPreferences} disabled={isSubmitted} practice onNavigate={navigateToQuestion} onResponse={updateQuestion} />
-    {(examPreferences?.showMcpHelp !== false) && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
-      <details className="exam-gpt-actions"><summary>보조 기능</summary>
-        <ChatGptHelpLauncher
-          mode={isSubmitted ? "submitted" : "pre-submit"}
-          preferences={chatGptPreferences}
-          onPreferencesChange={onChatGptPreferencesChange}
-          onSyncContext={onSyncChatGptContext}
-          onOpenSettings={onOpenChatGptSettings}
-          onCheckLocalMcp={onCheckLocalMcp}
-          remoteMcpConfigured={remoteMcpConfigured}
-          label="ChatGPT 도움"
-        />
-      </details>
-    )}
-    {score && <section className="exam-result-summary" aria-live="polite"><h3>채점 결과</h3><p>정답 {score.correctCount} / {score.totalQuestions} · 정답률 {score.percentCorrect}% · 응답 {score.answeredCount} · 미응답 {unanswered.length} · 검토 표시 {marked.length}</p>{totalPoints === undefined ? <p>배점 정보 일부 미확인</p> : <p>총 {totalPoints}점</p>}<div className="exam-result-actions"><button type="button" aria-pressed={resultFilter === "all"} onClick={() => setResultFilter("all")}>전체</button><button type="button" aria-pressed={resultFilter === "wrong"} onClick={() => setResultFilter("wrong")}>오답만 보기</button><button type="button" aria-pressed={resultFilter === "unanswered"} onClick={() => setResultFilter("unanswered")}>미응답 보기</button><button type="button" aria-pressed={resultFilter === "marked"} onClick={() => setResultFilter("marked")}>검토 표시</button><button type="button" disabled={!score.questionResults.some((item) => item.hasResponse && !item.correct)} onClick={() => onStartReview?.(score.questionResults.filter((item) => item.hasResponse && !item.correct).map((item) => item.questionNumber))}>오답 복습 시작</button></div>{selectedResultNumber && (() => { const result = score.questionResults.find((item) => item.questionNumber === selectedResultNumber); const selectedQuestion = session.questions.find((item) => item.questionNumber === selectedResultNumber); const selectedResponse = session.responses.find((item) => item.questionNumber === selectedResultNumber); if (!result || !selectedQuestion) return null; return <article className="exam-result-detail" aria-label={`${selectedResultNumber}번 결과 상세`}><h4>{selectedResultNumber}번 결과</h4><p>내 답: <MathText text={selectedResponse?.response || "미응답"} /></p><p>정답: <MathText text={selectedQuestion.correctAnswer || "정답 정보 없음"} /></p>{typeof selectedQuestion.points === "number" && <p>배점: {selectedQuestion.points}점</p>}{selectedQuestion.explanation && <p>해설: <MathText text={selectedQuestion.explanation} /></p>}{selectedQuestion.warning && <p role="alert">주의: {selectedQuestion.warning}</p>}</article>; })()}<div className="exam-result-grid" aria-label="문항별 결과">{visibleResultQuestions.map((item) => { const index = session.questions.findIndex((questionItem) => questionItem.questionNumber === item.questionNumber); return <button key={item.questionNumber} type="button" aria-label={`${item.questionNumber}번 ${item.correct ? "정답" : item.hasResponse ? "오답" : "미응답"}${item.markedForReview ? " 검토 표시" : ""}`} className={item.correct ? "is-correct" : item.hasResponse ? "is-incorrect" : "is-unanswered"} onClick={() => { navigateToQuestion(index); }}>{item.questionNumber}</button>; })}</div></section>}
+    {score && <section className="exam-result-summary" aria-live="polite"><h3 ref={resultHeadingRef} tabIndex={-1}>채점 결과</h3><p>정답 {score.correctCount} / {score.totalQuestions} · 정답률 {score.percentCorrect}% · 응답 {score.answeredCount} · 미응답 {unanswered.length} · 검토 표시 {marked.length}</p>{totalPoints === undefined ? <p>배점 정보 일부 미확인</p> : <p>총 {totalPoints}점</p>}<div className="exam-result-actions"><button type="button" aria-pressed={resultFilter === "all"} onClick={() => setResultFilter("all")}>전체</button><button type="button" aria-pressed={resultFilter === "wrong"} onClick={() => setResultFilter("wrong")}>오답만 보기</button><button type="button" aria-pressed={resultFilter === "unanswered"} onClick={() => setResultFilter("unanswered")}>미응답 보기</button><button type="button" aria-pressed={resultFilter === "marked"} onClick={() => setResultFilter("marked")}>검토 표시</button><button type="button" disabled={!score.questionResults.some((item) => item.hasResponse && !item.correct)} onClick={() => onStartReview?.(score.questionResults.filter((item) => item.hasResponse && !item.correct).map((item) => item.questionNumber))}>오답 복습 시작</button></div>{selectedResultNumber && (() => { const result = score.questionResults.find((item) => item.questionNumber === selectedResultNumber); const selectedQuestion = session.questions.find((item) => item.questionNumber === selectedResultNumber); const selectedResponse = session.responses.find((item) => item.questionNumber === selectedResultNumber); if (!result || !selectedQuestion) return null; return <article className="exam-result-detail" aria-label={`${selectedResultNumber}번 결과 상세`}><h4>{selectedResultNumber}번 결과</h4><p>내 답: <MathText text={selectedResponse?.response || "미응답"} /></p><p>정답: <MathText text={selectedQuestion.correctAnswer || "정답 정보 없음"} /></p>{typeof selectedQuestion.points === "number" && <p>배점: {selectedQuestion.points}점</p>}{selectedQuestion.explanation && <p>해설: <MathText text={selectedQuestion.explanation} /></p>}{selectedQuestion.warning && <p role="alert">주의: {selectedQuestion.warning}</p>}</article>; })()}<div className="exam-result-grid" aria-label="문항별 결과">{visibleResultQuestions.map((item) => { const index = session.questions.findIndex((questionItem) => questionItem.questionNumber === item.questionNumber); const resultLabel = item.correct ? "정답" : item.hasResponse ? "오답" : "미응답"; return <button key={item.questionNumber} type="button" aria-current={session.currentQuestionIndex === index ? "true" : undefined} aria-label={`${item.questionNumber}번 ${resultLabel}${item.markedForReview ? " 검토 표시" : ""}`} title={`${item.questionNumber}번 ${resultLabel}${item.markedForReview ? " · 검토 표시" : ""}`} className={item.correct ? "is-correct" : item.hasResponse ? "is-incorrect" : "is-unanswered"} onClick={() => { navigateToQuestion(index); }}>{item.questionNumber}<span className="exam-result-grid__status">{resultLabel}</span></button>; })}</div></section>}
     </main>
     <nav className="exam-question-navigation" aria-label="문항 이동"><button type="button" disabled={session.currentQuestionIndex === 0} onClick={() => moveQuestion(-1)}>이전</button>{showNavigator ? <button type="button" onClick={() => setNavigatorOpen(true)}>{session.currentQuestionIndex + 1} / {session.questions.length}</button> : <span aria-live="polite">{session.currentQuestionIndex + 1} / {session.questions.length}</span>}<label><input type="checkbox" checked={response?.markedForReview ?? false} onChange={(event) => update({ markedForReview: event.target.checked })} disabled={isSubmitted} /> 검토 표시</label><button type="button" disabled={session.currentQuestionIndex >= session.questions.length - 1} onClick={() => moveQuestion(1)}>다음</button></nav>
     <ScrollToTopButton containerRef={bodyRef} className="scroll-to-top-button--exam" />

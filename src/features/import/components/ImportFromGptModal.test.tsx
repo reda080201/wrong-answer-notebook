@@ -3,6 +3,7 @@ import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 import { deleteImage, pickImages, saveImageFiles } from "../../../api";
 import type { WrongAnswerEntry } from "../../../types";
+import type { ImportAssetSessionManifest } from "../../import-workspace/model/importWorkspace";
 import v2WrapperFixture from "../../../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
@@ -54,6 +55,89 @@ describe("ImportFromGptModal", () => {
     expect(entryKindAutoLabel("wrong_answer")).toBe("개별 오답으로 자동 판정됨");
     expect(entryKindAutoLabel("concept")).toBe("개념노트로 자동 판정됨");
     expect(entryKindAutoLabel("lecture")).toBe("특강자료로 자동 판정됨");
+  });
+
+  it("keeps PDF source pages staged through review and passes them to the save transaction", async () => {
+    const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    const onAnalyzeVisualFile = vi.fn().mockResolvedValue({
+      responseText: JSON.stringify({
+        schemaVersion: "wrong-answer-notebook-import-v2",
+        importType: "problem_sheet",
+        entries: [{
+          entryKind: "problem_sheet",
+          subject: "수학",
+          title: "PDF 시험지",
+          question: "1. 삼각형의 넓이를 구하시오.",
+          questionImages: ["page-1.png"],
+          sourcePageImages: ["page-1.png"],
+          questions: [{ questionNumber: "1", questionText: "삼각형의 넓이를 구하시오.", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] }],
+          answerKey: [],
+          audit: { expectedQuestionNumbers: ["1"], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: ["1"], handwritingExcluded: true, needsReviewCount: 1 },
+        }],
+      }),
+      sourcePageImages: ["staged-page-1.png"],
+      assetSession: {
+        id: "staged-session-1",
+        mode: "tauri-staged",
+        manifestVersion: 1,
+        createdAt: "2026-09-16T00:00:00.000Z",
+        sourceToStaged: { "page-1.png": "staged-page-1.png" },
+        assets: [],
+      } satisfies ImportAssetSessionManifest,
+    });
+    const onClose = vi.fn();
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={onClose}
+        onApply={vi.fn()}
+        onApplyEntries={onApplyEntries}
+        onAnalyzeVisualFile={onAnalyzeVisualFile}
+        onDiscardAssetSession={vi.fn().mockResolvedValue(undefined)}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
+    const file = new File(["pdf fixture"], "mock-paper.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [file] } });
+    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function)));
+    expect(await screen.findByText(/원본 1페이지를 보존했습니다/)).toBeInTheDocument();
+    const save = await screen.findByRole("button", { name: "수정 후 저장" });
+    await waitFor(() => expect(save).toBeEnabled());
+    fireEvent.click(save);
+
+    await waitFor(() => expect(onApplyEntries).toHaveBeenCalledOnce());
+    const [entries, assets, assetSession] = onApplyEntries.mock.calls[0] as [Array<Record<string, unknown>>, File[] | undefined, ImportAssetSessionManifest | undefined];
+    expect(assets).toEqual([]);
+    expect(entries[0].questionImages).toEqual(["staged-page-1.png"]);
+    expect(entries[0].sourcePageImages).toEqual(["staged-page-1.png"]);
+    expect(assetSession?.id).toBe("staged-session-1");
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps failed staged cleanup recoverable after the user discards a visual import", async () => {
+    const onClose = vi.fn();
+    const session = { id: "cleanup-session", mode: "tauri-staged", manifestVersion: 1, sourceToStaged: {}, assets: [] } satisfies ImportAssetSessionManifest;
+    const onDiscardAssetSession = vi.fn().mockRejectedValueOnce(new Error("저장소 일시 오류")).mockResolvedValueOnce(undefined);
+    render(
+      <ImportFromGptModal
+        fallbackSubject="수학"
+        onClose={onClose}
+        onApply={vi.fn()}
+        onAnalyzeVisualFile={vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: [{ entryKind: "problem_sheet", subject: "수학", title: "정리 테스트", question: "1. 문제", questions: [{ questionNumber: "1", questionText: "문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] }], answerKey: [], audit: { expectedQuestionNumbers: [], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 } }] }), sourcePageImages: [], assetSession: session })}
+        onDiscardAssetSession={onDiscardAssetSession}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [new File(["image"], "paper.png", { type: "image/png" })] } });
+    await screen.findByText(/원본 .*페이지를 보존했습니다/);
+    fireEvent.click(screen.getByRole("button", { name: "취소" }));
+
+    expect(await screen.findByText(/임시 파일 정리 실패/)).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "임시 파일 정리 다시 시도" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onDiscardAssetSession).toHaveBeenCalledTimes(2);
   });
 
   const sourceEntry: WrongAnswerEntry = {

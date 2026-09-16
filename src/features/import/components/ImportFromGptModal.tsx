@@ -66,16 +66,33 @@ import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import FeatureErrorBoundary from "../../../components/FeatureErrorBoundary";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import type { ImportAssetSessionManifest } from "../../import-workspace/model/importWorkspace";
+import type { VisualImportProgress } from "../../../utils/visualImportFiles";
+
+export interface VisualPaperImportResult {
+  responseText: string;
+  sourcePageImages: string[];
+  assetSession: ImportAssetSessionManifest;
+}
+
+export class VisualPaperImportError extends Error {
+  constructor(message: string, readonly assetSession?: ImportAssetSessionManifest) {
+    super(message);
+    this.name = "VisualPaperImportError";
+  }
+}
 
 interface ImportFromGptModalProps {
   onClose: () => void;
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => Promise<void> | void;
-  onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[]) => Promise<void> | void;
+  onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
   aiProvider?: AiProviderSettings;
   aiProviderStatus?: AiProviderStatus | null;
   onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
+  onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void) => Promise<VisualPaperImportResult>;
+  onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
   onSavePromptTemplate?: (template: PromptTemplate) => Promise<void>;
@@ -283,6 +300,8 @@ export default function ImportFromGptModal({
   aiProvider,
   aiProviderStatus,
   onGenerateWithAi,
+  onAnalyzeVisualFile,
+  onDiscardAssetSession,
   selectedPromptTemplateId,
   onPromptTemplateSelect,
   onSavePromptTemplate,
@@ -316,7 +335,7 @@ export default function ImportFromGptModal({
     ? availablePromptTemplates[0]?.id ?? ""
     : selectedPromptTemplateId ?? availablePromptTemplates[0]?.id ?? "";
   const [rawText, setRawText] = useState("");
-  const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct">("gpt");
+  const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct" | "visual">("gpt");
   const [filename, setFilename] = useState<string | undefined>();
   const [images, setImages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -339,6 +358,18 @@ export default function ImportFromGptModal({
   const [reviewWorkspaceOpen, setReviewWorkspaceOpen] = useState(false);
   const [activeReviewQuestionIndex, setActiveReviewQuestionIndex] = useState(0);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
+  const [visualProgress, setVisualProgress] = useState<{ phase: "rasterize" | "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean } | null>(null);
+  const [visualResult, setVisualResult] = useState<VisualPaperImportResult | null>(null);
+  const [visualCleanupSession, setVisualCleanupSession] = useState<ImportAssetSessionManifest | null>(null);
+  const [visualCleanupError, setVisualCleanupError] = useState<string | null>(null);
+  const visualControllerRef = useRef<AbortController | null>(null);
+  const visualRequestIdRef = useRef(0);
+  const visualFileInputRef = useRef<HTMLInputElement>(null);
+  const preserveVisualSessionRef = useRef(false);
+  const visualResultRef = useRef<VisualPaperImportResult | null>(null);
+  const visualCleanupSessionRef = useRef<ImportAssetSessionManifest | null>(null);
+  const closeAfterVisualAbortRef = useRef(false);
+  const closeAfterCleanupRef = useRef(false);
   const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const zipAbortRef = useRef<AbortController | null>(null);
@@ -537,6 +568,7 @@ export default function ImportFromGptModal({
 
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
+    if (!(await discardVisualSession(visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current))) return;
     setError(null);
     try {
       setRawText(await readImportFile(file));
@@ -551,6 +583,113 @@ export default function ImportFromGptModal({
           ? fileError.message
           : "파일을 읽지 못했습니다.",
       );
+    }
+  };
+
+  const discardVisualSession = async (session: ImportAssetSessionManifest | null) => {
+    if (!session || preserveVisualSessionRef.current) return true;
+    try {
+      await onDiscardAssetSession?.(session);
+      setVisualResult((current) => {
+        const next = current?.assetSession.id === session.id ? null : current;
+        visualResultRef.current = next;
+        return next;
+      });
+      setVisualCleanupSession((current) => {
+        const next = current?.id === session.id ? null : current;
+        visualCleanupSessionRef.current = next;
+        return next;
+      });
+      setVisualCleanupError(null);
+      return true;
+    } catch (cleanupError) {
+      setVisualCleanupSession(session);
+      visualCleanupSessionRef.current = session;
+      setVisualCleanupError(cleanupError instanceof Error ? cleanupError.message : "임시 파일을 정리하지 못했습니다.");
+      return false;
+    }
+  };
+
+  const retryVisualCleanup = async () => {
+    if (!visualCleanupSession) return true;
+    setVisualProgress({ phase: "stage", current: 0, indeterminate: true });
+    try {
+      await onDiscardAssetSession?.(visualCleanupSession);
+      setVisualCleanupSession(null);
+      visualCleanupSessionRef.current = null;
+      setVisualCleanupError(null);
+      setVisualResult((current) => {
+        const next = current?.assetSession.id === visualCleanupSession.id ? null : current;
+        visualResultRef.current = next;
+        return next;
+      });
+      if (closeAfterCleanupRef.current) {
+        closeAfterCleanupRef.current = false;
+        onClose();
+      }
+      return true;
+    } catch (cleanupError) {
+      setVisualCleanupError(cleanupError instanceof Error ? cleanupError.message : "임시 파일을 정리하지 못했습니다.");
+      visualCleanupSessionRef.current = visualCleanupSession;
+      return false;
+    } finally {
+      setVisualProgress(null);
+    }
+  };
+
+  const analyzeVisualPaper = async (file?: File) => {
+    if (!file) return;
+    if (!onAnalyzeVisualFile) {
+      setError("PDF/이미지 분석은 데스크톱 앱과 사용 가능한 AI provider가 필요합니다.");
+      return;
+    }
+    const requestId = ++visualRequestIdRef.current;
+    visualControllerRef.current?.abort();
+    const previousSession = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
+    if (!(await discardVisualSession(previousSession))) return;
+    if (requestId !== visualRequestIdRef.current) return;
+    const controller = new AbortController();
+    visualControllerRef.current = controller;
+    setAiGenerating(true);
+    setError(null);
+    setVisualProgress({ phase: "rasterize", current: 0, indeterminate: true });
+    try {
+      const result = await onAnalyzeVisualFile(file, controller.signal, setVisualProgress);
+      if (requestId !== visualRequestIdRef.current || controller.signal.aborted) {
+        await discardVisualSession(result.assetSession);
+        return;
+      }
+      setVisualResult(result);
+      visualResultRef.current = result;
+      setRawText(result.responseText);
+      setFilename("visual-paper-import.json");
+      setDraftOverride(null);
+      setBatchImport(null);
+      setEntryKindResolution(null);
+      setImportWarnings([]);
+      setImages([]);
+      setCopyMessage("분석 결과를 불러왔습니다. 검토 후 가져오기를 선택하세요.");
+    } catch (analysisError) {
+      if (analysisError instanceof VisualPaperImportError && analysisError.assetSession) {
+        setVisualCleanupSession(analysisError.assetSession);
+        visualCleanupSessionRef.current = analysisError.assetSession;
+      }
+      if (!(analysisError instanceof DOMException && analysisError.name === "AbortError")) {
+        setError(analysisError instanceof Error ? analysisError.message : "PDF/이미지 분석에 실패했습니다.");
+      }
+    } finally {
+      if (requestId === visualRequestIdRef.current) {
+        visualControllerRef.current = null;
+        setAiGenerating(false);
+        setVisualProgress(null);
+      }
+      if (closeAfterVisualAbortRef.current && requestId === visualRequestIdRef.current - 1) {
+        closeAfterVisualAbortRef.current = false;
+        setAiGenerating(false);
+        setVisualProgress(null);
+        const session = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
+        if (await discardVisualSession(session)) onClose();
+      }
     }
   };
 
@@ -808,14 +947,24 @@ export default function ImportFromGptModal({
     const supplementalImages = isSupplementalMode
       ? [...new Set([...(draft.sourcePageImages ?? []), ...(draft.questionImages ?? []), ...images])]
       : [];
+    const stagedImageMap = new Map<string, string>();
+    if (visualResult?.assetSession.sourceToStaged) {
+      Object.entries(visualResult.assetSession.sourceToStaged).forEach(([source, staged]) => {
+        stagedImageMap.set(normalizeImportImageKey(source), staged);
+        stagedImageMap.set(normalizeImportImageKey(staged), staged);
+      });
+    }
+    const safeDraft = visualResult
+      ? mapEntryImportImageReferences(normalizedDraft, (filename) => stagedImageMap.get(normalizeImportImageKey(filename)), { removeUnmapped: true })
+      : normalizedDraft;
     const nextData = {
-      ...normalizedDraft,
+      ...safeDraft,
       questionImages: isSolutionMode
         ? sourceEntry?.questionImages ?? []
-        : isSupplementalMode ? [] : [...new Set([...(draft.questionImages ?? []), ...images])],
+        : isSupplementalMode ? [] : visualResult ? safeDraft.questionImages ?? [] : [...new Set([...(draft.questionImages ?? []), ...images])],
       sourcePageImages: isSupplementalMode
         ? supplementalImages
-        : draft.sourcePageImages ?? [],
+        : visualResult?.sourcePageImages ?? draft.sourcePageImages ?? [],
     };
     const saved = await importSaveCoordinator.run(async () => {
       if (isSupplementalMode) {
@@ -829,7 +978,8 @@ export default function ImportFromGptModal({
       } else if (!isSolutionMode && onApplyEntries) {
         // A reviewed problem sheet is already canonical import data. Sending it
         // through EntryForm would create a second, competing edit surface.
-        await onApplyEntries([nextData], assetFiles);
+        if (visualResult?.assetSession) await onApplyEntries([nextData], assetFiles, visualResult.assetSession);
+        else await onApplyEntries([nextData], assetFiles);
       } else {
         if (assetFiles.length > 0) {
           await onApply(nextData, isSolutionMode ? applyMode : undefined, assetFiles);
@@ -840,7 +990,8 @@ export default function ImportFromGptModal({
     });
     if (saved) {
       if (isSupplementalMode) preserveSupplementalImagesRef.current = true;
-      discardAndClose();
+      if (visualResult?.assetSession) preserveVisualSessionRef.current = true;
+      await discardAndClose();
     }
   };
 
@@ -856,8 +1007,14 @@ export default function ImportFromGptModal({
       setError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
       return;
     }
-    const saved = await importSaveCoordinator.run(async () => { await onApplyEntries([normalizedDraft], assetFiles); });
-    if (saved) discardAndClose();
+    const saved = await importSaveCoordinator.run(async () => {
+      if (visualResult?.assetSession) await onApplyEntries([normalizedDraft], assetFiles, visualResult.assetSession);
+      else await onApplyEntries([normalizedDraft], assetFiles);
+    });
+    if (saved) {
+      if (visualResult?.assetSession) preserveVisualSessionRef.current = true;
+      await discardAndClose();
+    }
   };
 
   const updateLegacyQuestionText = (value: string) => {
@@ -871,8 +1028,13 @@ export default function ImportFromGptModal({
     draft && sourceDraft && JSON.stringify(draft) !== JSON.stringify(sourceDraft),
   );
 
-  const discardAndClose = () => {
+  const discardAndClose = async () => {
     if (saving || aiGenerating) return;
+    const visualSession = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
+    if (!(await discardVisualSession(visualSession))) {
+      closeAfterCleanupRef.current = true;
+      return;
+    }
     if (isSupplementalMode && !preserveSupplementalImagesRef.current) {
       void Promise.all(
         [...createdSupplementalImagesRef.current].map((filename) =>
@@ -884,20 +1046,32 @@ export default function ImportFromGptModal({
   };
 
   const handleClose = () => {
-    if (saving || aiGenerating) return;
+    if (saving) return;
+    if (aiGenerating) {
+      closeAfterVisualAbortRef.current = true;
+      visualRequestIdRef.current += 1;
+      visualControllerRef.current?.abort();
+      return;
+    }
     if (isDirty) {
       setDiscardConfirmOpen(true);
       return;
     }
-    discardAndClose();
+    void discardAndClose();
   };
 
   return (
     <>
-      <Dialog open onClose={handleClose} className="form-modal form-modal--wide import-modal" ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "GPT 결과 가져오기"} closeDisabled={saving || aiGenerating} busy={saving || aiGenerating}>
-        <div className="form-header import-modal-header">
-          <h2 id="import-modal-title">{isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? `${supplementalModeLabel(supplementalMode)} · ${sourceEntry?.title ?? "문제지"}` : "GPT 결과 가져오기"}</h2>
-          <div className="import-modal-header-actions">
+      <Dialog
+        open
+        onClose={handleClose}
+        className={`form-modal form-modal--wide import-modal${!isSolutionMode && !isSupplementalMode ? " import-modal--with-tabs" : ""}`}
+        title={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? `${supplementalModeLabel(supplementalMode)} · ${sourceEntry?.title ?? "문제지"}` : "GPT 결과 가져오기"}
+        ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "GPT 결과 가져오기"}
+        scrollMode="custom"
+        closeDisabled={saving || aiGenerating}
+        busy={saving || aiGenerating}
+        header={<div className="import-modal-header-actions">
             <button type="button" className="btn-secondary btn-sm" onClick={() => setHelpOpen(true)}>
               가져오기 도움말
             </button>
@@ -909,16 +1083,45 @@ export default function ImportFromGptModal({
             <button type="button" className="btn-icon" onClick={handleClose} aria-label="닫기">
               닫기
             </button>
-          </div>
-        </div>
+          </div>}
+        footer={<div className="import-modal-footer">
+          {!canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}
+          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
+        </div>}
+      >
 
         {!isSolutionMode && !isSupplementalMode && <nav className="import-mode-tabs" aria-label="시험지 가져오기 방식">
-          {([['gpt', 'GPT 결과'], ['file', '파일 / ZIP / JSON'], ['direct', '직접 입력']] as const).map(([value, label]) => <button key={value} type="button" className={importInputMode === value ? "active" : ""} aria-pressed={importInputMode === value} onClick={() => setImportInputMode(value)}>{label}</button>)}
+          {([['gpt', 'GPT 결과'], ['file', '파일 / ZIP / JSON'], ['visual', 'PDF / 이미지 분석'], ['direct', '직접 입력']] as const).map(([value, label]) => <button key={value} type="button" className={importInputMode === value ? "active" : ""} aria-pressed={importInputMode === value} onClick={() => {
+            if (importInputMode === "visual" && value !== "visual") {
+              visualControllerRef.current?.abort();
+              void discardVisualSession(visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current);
+            }
+            setImportInputMode(value);
+          }}>{label}</button>)}
         </nav>}
 
         <div className="form-body import-modal-body">
+          {visualCleanupError && <div className="form-error import-visual-cleanup" role="alert"><span>임시 파일 정리 실패: {visualCleanupError}</span><button type="button" className="btn-secondary btn-sm" disabled={Boolean(visualProgress)} onClick={() => void retryVisualCleanup()}>임시 파일 정리 다시 시도</button></div>}
           <div className="import-grid">
             <section className="import-pane">
+              {!isSolutionMode && !isSupplementalMode && importInputMode === "visual" && (
+                <section className="import-visual-paper" aria-label="PDF 또는 이미지 시험지 분석">
+                  <div className="import-source-launcher-heading">
+                    <FileUp size={20} aria-hidden="true" />
+                    <div><h3>PDF / 이미지 시험지 가져오기</h3><p>원본 페이지를 보존하고, 분석 결과를 검토한 뒤 시험지로 저장합니다. 최대 12페이지까지 분석합니다.</p></div>
+                  </div>
+                  <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
+                  <input ref={visualFileInputRef} id="visual-paper-file" className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => void analyzeVisualPaper(event.target.files?.[0])} />
+                  {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
+                    <span>{visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…"}</span>
+                    {visualProgress?.total ? <progress max={visualProgress.total} value={visualProgress.current} /> : <progress />}
+                    <button type="button" className="btn-secondary btn-sm" onClick={() => visualControllerRef.current?.abort()}>분석 취소</button>
+                  </div>}
+                  {visualResult && <p className="form-hint" role="status">원본 {visualResult.sourcePageImages.length}페이지를 보존했습니다. {questionCount || "문항 수를 확인해 주세요"}문항을 검토한 뒤 저장할 수 있습니다.</p>}
+                  {error && <p className="form-error" role="alert">{error}</p>}
+                  {!aiProviderStatus?.available && <div className="form-hint">AI 분석을 사용할 수 없습니다. {onOpenSettings && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenSettings("ai")}>AI 설정 열기</button>}</div>}
+                </section>
+              )}
               {!isSolutionMode && !isSupplementalMode && importInputMode === "file" && (
                 <section className="import-source-launcher" aria-labelledby="import-source-title">
                   <div className="import-source-launcher-heading">
@@ -974,7 +1177,7 @@ export default function ImportFromGptModal({
                   <details><summary>기술 형식 안내</summary><p>JSON schema와 고급 import 옵션은 파일 형식 안내를 참고하세요.</p></details>
                 </section>
               )}
-              <details className="import-advanced-settings">
+              <details className="import-advanced-settings" hidden={importInputMode === "visual"}>
                 <summary>고급 가져오기 설정</summary>
               {availablePromptTemplates.length > 0 && (
                 <div className="prompt-template-box">
@@ -1058,7 +1261,7 @@ export default function ImportFromGptModal({
                 </div>
               )}
 
-              <div className="form-field full">
+              {importInputMode !== "visual" && <div className="form-field full">
                 <label htmlFor="expected-question-numbers">예상 문제 번호</label>
                 <input
                   id="expected-question-numbers"
@@ -1075,11 +1278,11 @@ export default function ImportFromGptModal({
                       ? `사용자 기준 ${expectedQuestionNumbers.length}개 문항으로 누락을 검사합니다.`
                       : "비워두면 GPT/Gemini가 만든 audit 기준을 사용합니다."}
                 </p>
-              </div>
+              </div>}
               </details>
               {copyMessage && <p className="form-hint" role="status">{copyMessage}</p>}
 
-              <div className="form-field full">
+              {importInputMode !== "visual" && <div className="form-field full">
                 <label htmlFor="gpt-import-text">GPT 답변 붙여넣기</label>
                 <textarea
                   id="gpt-import-text"
@@ -1101,9 +1304,9 @@ export default function ImportFromGptModal({
                     개념 자료 JSON으로 감지되었습니다. 개념노트 또는 특강자료로 변환해 저장할 수 있습니다.
                   </p>
                 )}
-              </div>
+              </div>}
 
-              <div className="clipboard-actions">
+              {importInputMode !== "visual" && <div className="clipboard-actions">
                 <button type="button" className="btn-secondary btn-sm" onClick={readClipboardNow}>
                   클립보드에서 가져오기
                 </button>
@@ -1114,7 +1317,7 @@ export default function ImportFromGptModal({
                 >
                   GPT 답변 대기 {watchClipboard ? "ON" : "OFF"}
                 </button>
-              </div>
+              </div>}
 
               {isSolutionMode && sourceEntry && (
                 <div className="gpt-task-package">
@@ -1643,10 +1846,6 @@ export default function ImportFromGptModal({
           </div>
         </div>
 
-        <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
-        {!canApply && applyBlockReason && (
-          <p className="import-apply-reason" role="status">{applyBlockReason}</p>
-        )}
       </Dialog>
       <Dialog
         open={promptViewerOpen}
@@ -1771,7 +1970,7 @@ export default function ImportFromGptModal({
         footer={(
           <>
             <button type="button" className="btn-secondary" onClick={() => setDiscardConfirmOpen(false)}>계속 검수</button>
-            <button type="button" className="btn-danger" onClick={() => { setDiscardConfirmOpen(false); discardAndClose(); }}>변경사항 버리고 닫기</button>
+            <button type="button" className="btn-danger" onClick={() => { setDiscardConfirmOpen(false); void discardAndClose(); }}>변경사항 버리고 닫기</button>
           </>
         )}
       >
