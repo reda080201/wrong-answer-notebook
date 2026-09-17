@@ -36,7 +36,7 @@ test.describe("two-question focus view", () => {
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("1–2 / 5");
-    await expect(focus.locator(".structured-question-choices li")).toHaveCount(5);
+    await expect(focus.locator(".question-focus-spread:not([hidden]) .structured-question-choices li")).toHaveCount(5);
     await page.screenshot({ path: "test-results/focus-1536-choice.png", fullPage: true });
 
     await focus.getByRole("button", { name: "다음" }).first().click();
