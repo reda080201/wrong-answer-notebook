@@ -23,6 +23,11 @@ interface Props {
   onNavigateQuestion?(number: string): void;
 }
 
+const FOCUS_COLUMN_MIN_WIDTH = 320;
+const FOCUS_HORIZONTAL_PADDING = 64;
+const FOCUS_COLUMN_GAP = 32;
+export const FOCUS_TWO_COLUMN_MIN_WIDTH = FOCUS_COLUMN_MIN_WIDTH * 2 + FOCUS_HORIZONTAL_PADDING + FOCUS_COLUMN_GAP;
+
 export function buildFocusSpreads(items: QuestionFocusItem[], narrow = false): FocusSpread[] {
   const spreads: FocusSpread[] = [];
   for (let index = 0; index < items.length;) {
@@ -55,7 +60,7 @@ export default function QuestionFocusPage({ items, title = "문제지", subject,
   useEffect(() => {
     const element = root.current;
     if (!element || typeof ResizeObserver === "undefined") return;
-    const update = () => setNarrow(element.clientWidth <= 1100);
+    const update = () => setNarrow(element.clientWidth < FOCUS_TWO_COLUMN_MIN_WIDTH);
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
@@ -64,6 +69,9 @@ export default function QuestionFocusPage({ items, title = "문제지", subject,
   const spreads = useMemo(() => buildFocusSpreads(items, narrow), [items, narrow]);
   const [selected, setSelected] = useState(currentQuestionNumber ?? items[0]?.questionNumber ?? items[0]?.id);
   const number = currentQuestionNumber ?? selected;
+  const mounted = useRef(false);
+  const previousNumber = useRef(number);
+  const pendingAlignment = useRef(false);
   const pageIndex = Math.max(0, spreads.findIndex(spread => spread.items.some(item => (item.questionNumber ?? item.id) === number)));
   const selectPage = (index: number) => {
     if (index < 0 || index >= spreads.length) return;
@@ -71,14 +79,31 @@ export default function QuestionFocusPage({ items, title = "문제지", subject,
     if (!next) return;
     const nextNumber = next.questionNumber ?? next.id;
     setSelected(nextNumber);
+    pendingAlignment.current = true;
     onNavigateQuestion?.(nextNumber);
   };
   useEffect(() => {
-    const target = Array.from(root.current?.querySelectorAll<HTMLElement>("[data-focus-number]") ?? []).find(element => element.dataset.focusNumber === number);
-    if (target && pageIndex > 0) target.scrollIntoView({ block: "start", inline: "nearest" });
-  }, [pageIndex, number]);
-  const controls = <nav className="question-focus-navigation" aria-label="집중 보기 페이지 이동"><button type="button" onClick={() => selectPage(pageIndex - 1)} disabled={pageIndex === 0}>이전</button><span aria-live="polite">{spreads[pageIndex]?.items.map(item => item.questionNumber ?? item.id).join("–")} / {items.length}</span><button type="button" onClick={() => selectPage(pageIndex + 1)} disabled={pageIndex >= spreads.length - 1}>다음</button></nav>;
-  return <div ref={root} className="question-focus-reader" onKeyDown={event => {
+    if (!mounted.current) {
+      mounted.current = true;
+      previousNumber.current = number;
+      return;
+    }
+    if (previousNumber.current !== number) pendingAlignment.current = true;
+    previousNumber.current = number;
+    if (!pendingAlignment.current) return;
+    const firstItem = spreads[pageIndex]?.items[0];
+    const target = firstItem
+      ? Array.from(root.current?.querySelectorAll<HTMLElement>("[data-focus-number]") ?? []).find(element => element.dataset.focusNumber === (firstItem.questionNumber ?? firstItem.id))
+      : undefined;
+    if (target) {
+      target.scrollIntoView({ block: "start", inline: "nearest" });
+      pendingAlignment.current = false;
+    }
+  }, [pageIndex, number, spreads]);
+  const controls = (position: "top" | "bottom") => <nav className="question-focus-navigation" aria-label={`집중 보기 ${position === "top" ? "상단" : "하단"} 페이지 이동`}><button type="button" onClick={() => selectPage(pageIndex - 1)} disabled={pageIndex === 0}>이전</button><span aria-live="polite">{spreads[pageIndex]?.items.map(item => item.questionNumber ?? item.id).join("–")} / {items.length}</span><button type="button" onClick={() => selectPage(pageIndex + 1)} disabled={pageIndex >= spreads.length - 1}>다음</button></nav>;
+  return <div ref={root} tabIndex={0} aria-label="2문항 집중 보기" className="question-focus-reader" onPointerDown={event => {
+    if (event.pointerType === "mouse" && !isInteractivePaperTarget(event.target)) root.current?.focus({ preventScroll: true });
+  }} onKeyDown={event => {
     if (event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || isInteractivePaperTarget(event.target)) return;
     if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); selectPage(pageIndex + (event.key === "ArrowRight" ? 1 : -1)); }
   }} onTouchStart={event => {
@@ -93,9 +118,9 @@ export default function QuestionFocusPage({ items, title = "문제지", subject,
     const deltaY = point.clientY - start.startY;
     if (Math.abs(deltaX) >= 70 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) selectPage(pageIndex + (deltaX < 0 ? 1 : -1));
   }}>
-    {controls}
+    {controls("top")}
     <header className="question-focus-header"><p>{subject || "시험"} 영역 · {items.length}문항{minutes ? ` · ${minutes}분` : ""}</p><h2>{title}</h2></header>
-    <div className="question-focus-spread-list">{spreads.map((spread, index) => <section key={spread.id} className="question-focus-spread" hidden={index !== pageIndex} aria-label={`집중 보기 ${index + 1}페이지`}><div className={`question-focus-columns${spread.items.length === 1 ? " question-focus-columns--single" : ""}`}>{spread.items.map(item => <div key={item.id} tabIndex={-1} data-focus-number={item.questionNumber ?? item.id} className="question-focus-item" aria-current={(item.questionNumber ?? item.id) === number ? "step" : undefined} onClick={() => onActivateQuestion?.(item.questionNumber ?? item.id)}>{spread.repeatedStimulus && !item.stimulusIncluded && <div className="question-focus-stimulus">{spread.repeatedStimulus}</div>}{item.node}</div>)}</div><footer>{spread.items.map(item => item.questionNumber ?? item.id).join("–")} / {items.length}</footer></section>)}</div>
-    {controls}
+    <div className="question-focus-spread-list">{spreads.map((spread, index) => <section key={spread.id} className="question-focus-spread" hidden={index !== pageIndex} aria-label={`집중 보기 ${index + 1}페이지`}><>{spread.repeatedStimulus && <div className="question-focus-stimulus">{spread.repeatedStimulus}</div>}</><div className={`question-focus-columns${spread.items.length === 1 ? " question-focus-columns--single" : ""}`}>{spread.items.map(item => <div key={item.id} tabIndex={-1} data-focus-number={item.questionNumber ?? item.id} className="question-focus-item" aria-current={(item.questionNumber ?? item.id) === number ? "step" : undefined} onClick={() => onActivateQuestion?.(item.questionNumber ?? item.id)}>{item.node}</div>)}</div><footer>{spread.items.map(item => item.questionNumber ?? item.id).join("–")} / {items.length}</footer></section>)}</div>
+    {controls("bottom")}
   </div>;
 }

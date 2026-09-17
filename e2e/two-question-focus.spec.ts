@@ -4,10 +4,9 @@ import { seedBrowserStorage, syntheticLifecycleEntry } from "./fixtures/syntheti
 const focusEntry = {
   ...syntheticLifecycleEntry,
   title: "집중 보기 합성 시험지",
+  question: "[지문]\n함수의 성질을 이용하여 다음 물음에 답하시오.\n\n1. 첫 번째 문항입니다.\n① 1\n② 2\n③ 3\n④ 4\n⑤ 5\n\n2. 두 번째 문항입니다.\n\n3. 세 번째 문항입니다.\n\n4. 네 번째 문항입니다.\n\n[지문]\n새로운 공통 지문입니다.\n\n5. 마지막 문항입니다.",
   structuredQuestions: syntheticLifecycleEntry.structuredQuestions.slice(0, 5).map((question, index) => ({
     ...question,
-    passage: index > 1 && index < 5 ? "다음 지문을 읽고 물음에 답하시오." : undefined,
-    stimulusGroupId: index > 1 && index < 5 ? "stimulus-a" : undefined,
     question: `${question.question} 긴 본문과 조건을 읽고 답하시오.`,
     contentSegments: [...question.contentSegments, { id: `condition-${index}`, type: "condition", label: "(가)", text: "함수는 연속이다." }],
   })),
@@ -16,7 +15,7 @@ const focusEntry = {
 
 test.describe("two-question focus view", () => {
   test("uses its own spreads and keeps question view unchanged", async ({ page }) => {
-    await page.setViewportSize({ width: 1920, height: 1080 });
+    await page.setViewportSize({ width: 1536, height: 970 });
     await page.addInitScript(({ entry }) => {
       localStorage.clear();
       localStorage.setItem("wrong-answer-e2e-seeded", "true");
@@ -37,11 +36,14 @@ test.describe("two-question focus view", () => {
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("1–2 / 5");
-    await page.screenshot({ path: "test-results/two-question-focus-first-1920x1080.png", fullPage: true });
+    await expect(focus.locator(".structured-question-choices li")).toHaveCount(5);
+    await page.screenshot({ path: "test-results/focus-1536-choice.png", fullPage: true });
 
     await focus.getByRole("button", { name: "다음" }).first().click();
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("3–4 / 5");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
+    await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-stimulus")).toHaveCount(1);
+    await page.screenshot({ path: "test-results/focus-1536-stimulus.png", fullPage: true });
     await focus.getByRole("button", { name: "다음" }).first().click();
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("5 / 5");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
@@ -49,7 +51,7 @@ test.describe("two-question focus view", () => {
     const overflow = await focus.evaluate(element => element.scrollWidth - element.clientWidth);
     expect(overflow).toBeLessThanOrEqual(1);
 
-    await page.screenshot({ path: "test-results/two-question-focus-1920x1080.png", fullPage: true });
+    await page.screenshot({ path: "test-results/focus-1536-first.png", fullPage: true });
   });
 
   test("falls back to one question per focus page on a narrow surface", async ({ page }) => {
@@ -65,5 +67,6 @@ test.describe("two-question focus view", () => {
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
     await expect(focus).toHaveCSS("touch-action", "pan-y");
+    await page.screenshot({ path: "test-results/focus-800.png", fullPage: true });
   });
 });

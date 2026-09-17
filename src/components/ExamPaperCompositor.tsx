@@ -8,12 +8,19 @@ interface Props {
   enabled: boolean; children?: ReactNode; items?: ExamPaperItem[]; layout?: ExamPaperLayout;
   navigation?: PaperNavigationMode; title?: string; subject?: string; minutes?: number;
   showHeader?: boolean; showPageNumbers?: boolean;
+  measurementKey?: string;
   currentQuestionNumber?: string; onQuestionChange?(number: string): void;
 }
-function ignoreNavigation(target: EventTarget | null) {
-  return target instanceof HTMLElement && Boolean(target.closest("input, textarea, select, [contenteditable], [role=dialog], [role=menu], [role=listbox]"));
+const INTERACTIVE_PAPER_TARGETS = "button, a[href], input, textarea, select, summary, [contenteditable], [role='button'], [role='radio'], [role='checkbox'], [role='option'], [role='listbox'], [role='menu'], [role='dialog']";
+
+export function isInteractivePaperTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest(INTERACTIVE_PAPER_TARGETS));
 }
-export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "columns", navigation = "vertical-pages", title = "문제지", subject, minutes, showHeader = true, showPageNumbers = true, currentQuestionNumber, onQuestionChange }: Props) {
+
+export function ownsPresentationNavigation(paperPresentation?: "a4" | "two-question", paperNavigation?: PaperNavigationMode): boolean {
+  return paperPresentation === "two-question" || paperNavigation === "horizontal-pages";
+}
+export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "columns", navigation = "vertical-pages", title = "문제지", subject, minutes, showHeader = true, showPageNumbers = true, currentQuestionNumber, onQuestionChange, measurementKey }: Props) {
   const items = useMemo<ExamPaperItem[]>(() => suppliedItems ?? Children.toArray(children).map((node, index) => ({ id: `item-${index}`, node })), [children, suppliedItems]);
   const root = useRef<HTMLDivElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
@@ -21,6 +28,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const lastNavigation = useRef<string | null>(null);
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const number = currentQuestionNumber ?? selected ?? items[0]?.questionNumber ?? items[0]?.id;
+  const structuralMeasurementKey = measurementKey ?? items.map(item => `${item.id}:${item.questionNumber ?? ""}:${item.groupId ?? ""}`).join("|");
   const pages = useMemo(() => paginatePaper(items, measurements.narrow, measurements.wide, layout === "single" ? 1 : 2, showHeader ? 108 : 0), [items, measurements, layout, showHeader]);
   const pageIndex = Math.max(0, pages.findIndex(page => page.questionNumbers.includes(number ?? "")));
   useLayoutEffect(() => {
@@ -59,7 +67,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     container.addEventListener("load", schedule, true);
     void container.ownerDocument.fonts?.ready.then(() => { if (!cancelled) schedule(); });
     return () => { cancelled = true; cancelAnimationFrame(frame); observer?.disconnect(); container.removeEventListener("load", schedule, true); };
-  }, [enabled, items, layout]);
+  }, [enabled, layout, structuralMeasurementKey]);
   useLayoutEffect(() => {
     const container = root.current;
     if (!container || !enabled) return;
@@ -96,11 +104,11 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const byId = new Map(items.map(item => [item.id, item]));
   return <div ref={root} className={`exam-paper-reader exam-paper-reader--${navigation}`} data-layout={layout}
     onKeyDown={event => {
-      if (navigation !== "horizontal-pages" || event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || ignoreNavigation(event.target)) return;
+      if (navigation !== "horizontal-pages" || event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || isInteractivePaperTarget(event.target)) return;
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); go(pageIndex + (event.key === "ArrowLeft" ? -1 : 1)); }
     }}
-    onTouchStart={event => { if (!ignoreNavigation(event.target)) touch.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }}
-    onTouchEnd={event => { const start = touch.current; touch.current = null; if (!start || navigation !== "horizontal-pages") return; const dx = event.changedTouches[0].clientX - start.x, dy = event.changedTouches[0].clientY - start.y; if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(pageIndex + (dx < 0 ? 1 : -1)); }}>
+    onTouchStart={event => { touch.current = null; if (navigation === "horizontal-pages" && !isInteractivePaperTarget(event.target)) touch.current = { x: event.touches[0].clientX, y: event.touches[0].clientY }; }}
+    onTouchEnd={event => { const start = touch.current; touch.current = null; if (!start || navigation !== "horizontal-pages" || isInteractivePaperTarget(event.target)) return; const dx = event.changedTouches[0].clientX - start.x, dy = event.changedTouches[0].clientY - start.y; if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(pageIndex + (dx < 0 ? 1 : -1)); }}>
     {navigation === "horizontal-pages" && controls("상단")}
     <div className="exam-paper-compositor">
       {pages.map((page, index) => <section key={page.id} className={`exam-paper-page${page.oversized ? " exam-paper-page--oversized" : ""}${page.fullWidth ? " exam-paper-page--full" : ""}`} data-paper-page={index + 1} hidden={navigation === "horizontal-pages" && index !== pageIndex} aria-label={`시험지 ${index + 1}페이지`}>

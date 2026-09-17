@@ -39,4 +39,24 @@ describe("StructuredQuestionRenderer", () => {
     expect(screen.getByText("설명")).toBeInTheDocument();
     expect(screen.getByText("\\notacommand{")).toBeInTheDocument();
   });
+
+  it("renders canonical choices once after the ordered content stream", () => {
+    const { container } = render(<StructuredQuestionRenderer question={{ ...question([{ id: "text", type: "text", text: "옳은 것은?" }]), choices: ["① A", "② B", "③ C", "④ D", "⑤ E"] }} />);
+    expect(container.querySelectorAll(".structured-question-choices li")).toHaveLength(5);
+    expect(container.querySelector(".structured-question-choices")).toHaveTextContent("①");
+    expect(container.textContent).toContain("⑤E");
+  });
+
+  it("does not add a choice container for subjective questions", () => {
+    const { container } = render(<StructuredQuestionRenderer question={question([{ id: "text", type: "text", text: "설명하시오." }])} />);
+    expect(container.querySelector(".structured-question-choices")).not.toBeInTheDocument();
+  });
+
+  it("deduplicates only standalone choice lines from the content stream", () => {
+    const { container } = render(<StructuredQuestionRenderer question={{ ...question([{ id: "text", type: "text", text: "옳은 것은?\n① A\n② B" }]), choices: ["① A", "② B", "③ C"] }} />);
+    expect(container.querySelectorAll(".structured-question-choices li")).toHaveLength(1);
+    expect(container.querySelector(".structured-question-choices")).toHaveTextContent("③C");
+    expect(container.textContent?.match(/①/g)).toHaveLength(1);
+    expect(container.textContent?.match(/②/g)).toHaveLength(1);
+  });
 });
