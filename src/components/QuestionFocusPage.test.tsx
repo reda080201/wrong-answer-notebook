@@ -35,4 +35,23 @@ describe("QuestionFocusPage", () => {
     expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
     expect(onQuestionChange).toHaveBeenCalled();
   });
+
+  it("makes the reader keyboard reachable and gives focus navigation ownership", () => {
+    const onQuestionChange = vi.fn();
+    render(<QuestionFocusPage items={[item("1"), item("2"), item("3"), item("4")]} onNavigateQuestion={onQuestionChange} />);
+    const reader = screen.getByLabelText("2문항 집중 보기");
+    expect(reader).toHaveAttribute("tabindex", "0");
+    fireEvent.keyDown(reader, { key: "ArrowRight" });
+    expect(screen.getByLabelText("집중 보기 2페이지")).toBeVisible();
+    expect(onQuestionChange).toHaveBeenCalledWith("3");
+    expect(screen.getAllByLabelText(/집중 보기 .* 페이지 이동/)).toHaveLength(2);
+  });
+
+  it("renders one shared stimulus per spread, including repeated group chunks", () => {
+    const stimulus = <div data-testid="shared-stimulus">공통 지문</div>;
+    render(<QuestionFocusPage items={[{ ...item("1", "group"), stimulusNode: stimulus }, item("2", "group"), item("3", "group"), item("4", "group"), item("5")]} />);
+    expect(screen.getByLabelText("집중 보기 1페이지").querySelectorAll("[data-testid=shared-stimulus]")).toHaveLength(1);
+    fireEvent.click(screen.getAllByRole("button", { name: "다음" })[0]);
+    expect(screen.getByLabelText("집중 보기 2페이지").querySelectorAll("[data-testid=shared-stimulus]")).toHaveLength(1);
+  });
 });

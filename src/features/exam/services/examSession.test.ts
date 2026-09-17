@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
-import { createExamSession, publicExamQuestion, updateExamResponse } from "./examSession";
+import { createExamSession, publicExamQuestion, resolveEntryQuestionStimuli, updateExamResponse } from "./examSession";
 import { normalizeExamAnswer, scoreExamSession } from "./examScoring";
 
 const entry = {
@@ -8,6 +8,13 @@ const entry = {
 } as WrongAnswerEntry;
 
 describe("exam session foundation", () => {
+  it("projects an explicit passage to every following question until the next passage", () => {
+    const source = { question: "[지문]\n공통 내용\n\n1. 첫 문제\n\n2. 둘째 문제\n\n[지문]\n다음 내용\n\n3. 셋째 문제" } as Pick<WrongAnswerEntry, "question">;
+    const stimuli = resolveEntryQuestionStimuli(source);
+    expect(stimuli.get("1")?.id).toBe(stimuli.get("2")?.id);
+    expect(stimuli.get("1")?.text).toContain("공통 내용");
+    expect(stimuli.get("3")?.text).toContain("다음 내용");
+  });
   it("creates a snapshot that hides answers in public question payloads", () => {
     const session = createExamSession(entry);
     const payload = publicExamQuestion(session);
