@@ -10,7 +10,7 @@ import { scoreExamSession } from "../services/examScoring";
 import { updateExamResponse } from "../services/examSession";
 import { getRemainingExamSeconds, isExamExpired } from "../services/realExam";
 import ExamResponseEditor from "./ExamResponseEditor";
-import { isInteractivePaperTarget } from "../../../components/ExamPaperCompositor";
+import { isInteractivePaperTarget, ownsPresentationNavigation } from "../../../components/ExamPaperCompositor";
 import "./RealExamSessionView.css";
 
 interface RealExamSessionViewProps {
@@ -135,7 +135,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   useEffect(() => {
     if (sessionRef.current.status !== "in_progress") return undefined;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || event.isComposing || examPreferences?.paperNavigation === "horizontal-pages" || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isInteractivePaperTarget(event.target)) return;
+      if (event.defaultPrevented || event.isComposing || ownsPresentationNavigation(examPreferences?.paperPresentation, examPreferences?.paperNavigation) || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || isInteractivePaperTarget(event.target)) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         navigateToQuestion(safeCurrentQuestionIndex - 1);
@@ -146,7 +146,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [examPreferences?.paperNavigation, navigateToQuestion, safeCurrentQuestionIndex]);
+  }, [examPreferences?.paperNavigation, examPreferences?.paperPresentation, navigateToQuestion, safeCurrentQuestionIndex]);
 
   const toggleAnswerSheet = () => {
     const next = !answerSheetOpen;

@@ -14,17 +14,22 @@ export interface ExamSessionCreationOptions {
   answerSheetLayout?: "auto" | "vertical" | "horizontal";
 }
 
+export interface EntryQuestionStimulus {
+  id: string;
+  text: string;
+}
+
 export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
   const blocks = parseQuestionText(entry.question);
   const questions = getEntryQuestions(entry);
   const legacyQuestions = blocks.filter((item): item is QuestionBlock => item.kind === "question");
-  const stimuli = findStimuli(entry.question, legacyQuestions);
+  const stimulusByQuestion = resolveEntryQuestionStimuli(entry);
   const snapshots: ExamQuestionSnapshot[] = questions.map((block, index) => {
     const number = block.questionNumber || String(index + 1);
     const normalizedNumber = normalizeQuestionNumber(number);
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
-    const stimulus = legacyBlock ? stimuli.filter((item) => item.start < legacyBlock.start && item.end <= legacyBlock.start).at(-1) : undefined;
+    const stimulus = legacyBlock ? stimulusByQuestion.get(normalizedNumber) : undefined;
     const figures = resolveQuestionFigures(entry, block).map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
@@ -159,6 +164,17 @@ function findStimuli(text: string, questions: QuestionBlock[]): StimulusRange[] 
       text: text.slice(start, nextQuestion).trim(),
     };
   }).filter((item) => item.text);
+}
+
+/** Read-only grouping projection shared by entry readers and exam snapshots. */
+export function resolveEntryQuestionStimuli(entry: Pick<WrongAnswerEntry, "question">): Map<string, EntryQuestionStimulus> {
+  const questions = parseQuestionText(entry.question).filter((item): item is QuestionBlock => item.kind === "question");
+  const stimuli = findStimuli(entry.question, questions);
+  return new Map(questions.flatMap((question) => {
+    const number = normalizeQuestionNumber(String(question.numberLabel ?? question.displayNumber));
+    const stimulus = stimuli.filter((item) => item.start < question.start).at(-1);
+    return number && stimulus ? [[number, { id: stimulus.id, text: stimulus.text }] as const] : [];
+  }));
 }
 
 

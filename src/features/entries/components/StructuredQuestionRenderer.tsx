@@ -7,6 +7,7 @@ import SemanticFigureView from "../../figures/components/SemanticFigureView";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { resolveQuestionFigures } from "../../../utils/questionAssets";
+import { parseChoice } from "../../../utils/choice";
 
 export interface StructuredQuestionContext {
   entryId?: string;
@@ -74,6 +75,37 @@ function SegmentContent({ segment, figures }: { segment: QuestionContentSegment;
   return figure ? <FigureSegment figure={figure} /> : <p className="structured-question-missing-figure">그림 위치 정보를 확인할 수 없습니다.</p>;
 }
 
+function normalizedChoiceKey(choice: { marker: string; content: string }): string {
+  return `${choice.marker.trim()}|${choice.content.replace(/\s+/g, " ").trim()}`;
+}
+
+function ChoiceSegments({ choices, segments }: { choices: string[]; segments: QuestionContentSegment[] }) {
+  const represented = new Map<string, number>();
+  for (const segment of segments) {
+    if (segment.type !== "text") continue;
+    for (const line of segment.text.split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+      const parsed = parseChoice(line);
+      if (!parsed.marker) continue;
+      const key = normalizedChoiceKey(parsed);
+      represented.set(key, (represented.get(key) ?? 0) + 1);
+    }
+  }
+  const visibleChoices = choices.map((choice, index) => {
+    const parsed = parseChoice(choice);
+    const key = normalizedChoiceKey(parsed);
+    const count = represented.get(key) ?? 0;
+    if (count > 0) {
+      represented.set(key, count - 1);
+      return null;
+    }
+    return { choice, index, marker: parsed.marker || `${index + 1}.`, content: parsed.content };
+  }).filter((choice): choice is { choice: string; index: number; marker: string; content: string } => Boolean(choice));
+  if (!visibleChoices.length) return null;
+  return <ol className="structured-question-choices" aria-label="선택지">
+    {visibleChoices.map(({ choice, index, marker, content }) => <li key={`${index}-${choice}`}><span className="structured-question-choice-marker" aria-hidden="true">{marker}</span><MathText text={content} /></li>)}
+  </ol>;
+}
+
 export default function StructuredQuestionRenderer({ question, entry, figures, context, showQuestionLabel = false }: StructuredQuestionRendererProps) {
   const availableFigures = figures ?? (entry ? resolveQuestionFigures(entry, question) : []);
   const figureById = new Map(availableFigures.map((figure) => [figure.id, figure]));
@@ -88,5 +120,6 @@ export default function StructuredQuestionRenderer({ question, entry, figures, c
       const className = `structured-question-segment structured-question-segment--${segment.type}`;
       return <div key={segment.id} className={className} data-segment-id={segment.id}><SegmentContent segment={segment} figures={figureById} /></div>;
     })}
+    {question.choices.length > 0 && <ChoiceSegments choices={question.choices} segments={segments} />}
   </div>;
 }

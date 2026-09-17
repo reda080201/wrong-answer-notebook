@@ -7,10 +7,12 @@ import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
-import ExamPaperCompositor, { type ExamPaperItem, type ExamPaperLayout } from "./ExamPaperCompositor";
+import ExamPaperCompositor, { type ExamPaperLayout } from "./ExamPaperCompositor";
 import type { PaperNavigationMode } from "./paperPagination";
 import { Maximize2 } from "lucide-react";
-import QuestionFocusPage from "./QuestionFocusPage";
+import QuestionFocusPage, { type QuestionFocusItem } from "./QuestionFocusPage";
+import QuestionContentView from "./QuestionContentView";
+import { resolveEntryQuestionStimuli } from "../features/exam/services/examSession";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -86,14 +88,22 @@ export default function StudyPaperView({
         diagramSpec: block.diagramSpec,
       })),
   ];
-  const structuredQuestionNodes: ExamPaperItem[] = structuredQuestions.map((question, index) => {
+  const stimulusByQuestion = resolveEntryQuestionStimuli(entry);
+  const seenStimuli = new Set<string>();
+  const structuredQuestionNodes: QuestionFocusItem[] = structuredQuestions.map((question, index) => {
     const number = normalizeQuestionNumber(question.questionNumber);
+    const stimulus = stimulusByQuestion.get(number);
+    const stimulusIncluded = Boolean(stimulus && !seenStimuli.has(stimulus.id));
+    if (stimulus) seenStimuli.add(stimulus.id);
     const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
     const revealed = revealedAnswerNumbers?.has(number);
     return {
       id: number || `question-${index}`,
+      groupId: stimulus?.id,
+      stimulusNode: stimulusIncluded && stimulus ? <section className="exam-passage"><QuestionContentView text={stimulus.text} /></section> : undefined,
+      stimulusIncluded,
       node: <article id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
         <header>
           <div><span className="question-identity">{question.questionNumber}번</span><small className="question-sequence">{question.position} / {questionCount}</small>{question.points !== undefined && <small>{question.points}점</small>}{question.needsReview && <small className="answer-review-badge">검토 필요</small>}</div>

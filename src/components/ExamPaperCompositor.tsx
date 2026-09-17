@@ -16,6 +16,10 @@ const INTERACTIVE_PAPER_TARGETS = "button, a[href], input, textarea, select, sum
 export function isInteractivePaperTarget(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest(INTERACTIVE_PAPER_TARGETS));
 }
+
+export function ownsPresentationNavigation(paperPresentation?: "a4" | "two-question", paperNavigation?: PaperNavigationMode): boolean {
+  return paperPresentation === "two-question" || paperNavigation === "horizontal-pages";
+}
 export default function ExamPaperCompositor({ enabled, children, items: suppliedItems, layout = "columns", navigation = "vertical-pages", title = "문제지", subject, minutes, showHeader = true, showPageNumbers = true, currentQuestionNumber, onQuestionChange, measurementKey }: Props) {
   const items = useMemo<ExamPaperItem[]>(() => suppliedItems ?? Children.toArray(children).map((node, index) => ({ id: `item-${index}`, node })), [children, suppliedItems]);
   const root = useRef<HTMLDivElement>(null);
