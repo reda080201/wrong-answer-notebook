@@ -38,11 +38,6 @@ function resolveAnswerSheetLayout(session: ExamSession): "vertical" | "horizonta
   return mathOrMixed ? "vertical" : "horizontal";
 }
 
-function shouldIgnoreExamArrowNavigation(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  return Boolean(target.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], [role='menu']"));
-}
-
 export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave, onStartReview }: RealExamSessionViewProps) {
   const sessionRef = useRef(session);
   useEffect(() => { sessionRef.current = session; }, [session]);
