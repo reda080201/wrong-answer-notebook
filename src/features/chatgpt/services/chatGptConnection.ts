@@ -76,7 +76,7 @@ export function buildChatGptPrompt(
   const shareScratchNote = options.shareScratchNote ?? true;
   const context = questionContext
     ? [
-        questionContext.questionNumber ? `문항 번호: ${questionContext.questionNumber}` : "",
+        questionContext.questionNumber ? `문항 번호: ${questionContext.questionNumber}번` : "",
         questionContext.questionText ? `문제:\n${questionContext.questionText}` : "",
         questionContext.choices?.length ? `선택지:\n${questionContext.choices.join("\n")}` : "",
         shareUserResponse && questionContext.response ? `내 답:\n${questionContext.response}` : "",

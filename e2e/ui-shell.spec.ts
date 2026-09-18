@@ -68,6 +68,10 @@ for (const viewport of [
     const detail = page.locator(".detail-panel");
     await expect(detail).toBeVisible();
     expect(await page.evaluate(() => localStorage.getItem("wrong-answer-entry-pane-collapsed"))).not.toBe("true");
+    const expandEntryPane = page.getByRole("button", { name: "항목 목록 펼치기" });
+    if (await expandEntryPane.isVisible()) {
+      await expandEntryPane.click();
+    }
     const initialWidth = (await detail.boundingBox())?.width ?? 0;
 
     await page.getByRole("button", { name: "항목 목록 접기" }).click();
