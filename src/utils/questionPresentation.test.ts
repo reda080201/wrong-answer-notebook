@@ -16,6 +16,21 @@ describe("normalizeQuestionPresentationSegments", () => {
     });
     expect(segments).toHaveLength(4);
     expect(segments.map((segment) => segment.id)).toEqual(["stem", "a", "b", "end"]);
+    expect(segments.some((segment) => segment.type === "text" && /\([가-힣]\)/.test(segment.text))).toBe(false);
+  });
+
+  it("does not remove a condition body from an unrelated legacy stem", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "A의 값을 구하시오.",
+      conditions: [],
+      equations: [],
+      contentSegments: [
+        { id: "condition", type: "condition", label: "(가)", text: "A" },
+      ],
+    });
+
+    expect(segments).toHaveLength(2);
+    expect(segments[1]).toMatchObject({ type: "text", text: "A의 값을 구하시오." });
   });
 
   it("keeps an unmatched legacy stem and normalizes a repeated condition label", () => {
@@ -66,5 +81,20 @@ describe("normalizeQuestionPresentationSegments", () => {
     expect(segments.map((segment) => segment.id)).toEqual([
       "text-1", "equation-1", "equation-2", "figure-1", "table-1", "condition-1", "condition-2",
     ]);
+  });
+
+  it("removes only exact represented fragments from a legacy text fallback", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "본문 앞부분. 이어서 추가로 읽을 문장입니다.",
+      conditions: [],
+      equations: ["x+1"],
+      contentSegments: [
+        { id: "text-1", type: "text", text: "본문 앞부분." },
+        { id: "equation-1", type: "equation", latex: "x+1", display: true },
+      ],
+    });
+
+    expect(segments.map((segment) => segment.type)).toEqual(["text", "equation", "text"]);
+    expect(segments[2]).toMatchObject({ type: "text", text: "이어서 추가로 읽을 문장입니다." });
   });
 });

@@ -59,11 +59,15 @@ export async function generateImportWithAi(
   prompt: string,
   inputText: string,
   imageFilenames: string[] = [],
+  signal?: AbortSignal,
 ): Promise<string> {
   if (!isTauri()) {
     throw new Error("AI provider는 데스크톱 앱에서만 사용할 수 있습니다.");
   }
-  return invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
+  if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
+  const response = await invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
+  if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
+  return response;
 }
 
 export async function rankSimilarQuestionsWithAi(request: SimilarQuestionRankingRequest): Promise<SimilarQuestionRankingResponse> {

@@ -73,6 +73,13 @@ export default function Dialog({
     if (!open) return;
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const dialog = dialogRef.current;
+    const previouslyHidden = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-dialog-layer]'))
+      .filter((candidate) => candidate !== dialog && Number(candidate.dataset.dialogLayer) < dialogLayer)
+      .map((candidate) => ({ element: candidate, inert: candidate.inert, ariaHidden: candidate.getAttribute("aria-hidden") }));
+    previouslyHidden.forEach(({ element }) => {
+      element.inert = true;
+      element.setAttribute("aria-hidden", "true");
+    });
     const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
     const frame = window.requestAnimationFrame(() => {
       const autoFocusTarget = initialFocusRef?.current ?? dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
@@ -113,9 +120,14 @@ export default function Dialog({
     return () => {
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown, true);
+      previouslyHidden.forEach(({ element, inert, ariaHidden }) => {
+        element.inert = inert;
+        if (ariaHidden === null) element.removeAttribute("aria-hidden");
+        else element.setAttribute("aria-hidden", ariaHidden);
+      });
       previousFocus?.focus();
     };
-  }, [initialFocusRef, open]);
+  }, [dialogLayer, initialFocusRef, open]);
 
   if (!open) return null;
 

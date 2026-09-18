@@ -57,6 +57,22 @@ describe("Dialog", () => {
     expect(parentClose).not.toHaveBeenCalled();
   });
 
+  it("makes the parent dialog inert while a nested confirmation is open", () => {
+    render(
+      <Dialog open onClose={vi.fn()} ariaLabel="부모 편집">
+        <button type="button">부모 저장</button>
+        <Dialog open onClose={vi.fn()} ariaLabel="변경사항 확인">
+          <button type="button">변경사항 버리기</button>
+        </Dialog>
+      </Dialog>,
+    );
+    const parent = document.querySelector<HTMLElement>('[role="dialog"][aria-label="부모 편집"]');
+    expect(parent).not.toBeNull();
+    expect(parent).toHaveAttribute("aria-hidden", "true");
+    expect(parent).toHaveProperty("inert", true);
+    expect(screen.getByRole("dialog", { name: "변경사항 확인" })).toBeInTheDocument();
+  });
+
   it("supports size variants and header/body/footer slots", () => {
     render(
       <Dialog

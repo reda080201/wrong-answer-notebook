@@ -34,6 +34,19 @@ describe("chatGptConnection", () => {
     expect(prompt).toContain("정답, 공식 해설");
   });
 
+  it("includes the current question and choices in a manual copy prompt", () => {
+    const prompt = buildChatGptPrompt("pre-submit", "힌트만 줘", { displayName: "오답노트" }, {
+      questionNumber: "4",
+      questionText: "함수의 값을 구하시오.",
+      choices: ["① 1", "② 2"],
+      response: "①",
+    });
+    expect(prompt).toContain("문항 번호: 4");
+    expect(prompt).toContain("함수의 값을 구하시오.");
+    expect(prompt).toContain("① 1");
+    expect(prompt).toContain("내 답:\n①");
+  });
+
   it("marks only recent client activity as recent", () => {
     const now = Date.parse("2026-07-23T00:00:00.000Z");
     expect(isRecentClientConnection("2026-07-22T23:55:00.000Z", now)).toBe(true);

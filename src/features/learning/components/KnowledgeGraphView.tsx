@@ -32,6 +32,15 @@ const relationLabels: Array<[KnowledgeRelationType, string]> = [
   ["extends", "확장"],
 ];
 
+const entityTypeLabels: Record<KnowledgeEntityType, string> = {
+  concept: "개념",
+  person: "인물",
+  theory: "이론",
+  strategy: "전략",
+  topic: "주제",
+  work: "저작",
+};
+
 export function SubjectDraftInput({
   entity,
   onCommit,
@@ -151,7 +160,7 @@ export default function KnowledgeGraphView({
           <strong>개념 관계</strong>
           <span>개념과 실제 문항을 연결해 봅니다.</span>
         </div>{headerAccessory}
-        <label>종류 <select value={entityType} onChange={(event) => setEntityType(event.target.value as KnowledgeEntityType)}>{["concept","person","theory","strategy","topic","work"].map((type) => <option key={type} value={type}>{type === "person" ? "인물/사상가" : type}</option>)}</select></label><button type="button" className="ui-button ui-button--secondary" onClick={() => void createEntity()}><Plus size={16} />개념 추가</button>
+        <label>종류 <select value={entityType} onChange={(event) => setEntityType(event.target.value as KnowledgeEntityType)}>{(Object.keys(entityTypeLabels) as KnowledgeEntityType[]).map((type) => <option key={type} value={type}>{entityTypeLabels[type]}</option>)}</select></label><button type="button" className="ui-button ui-button--secondary" onClick={() => void createEntity()}><Plus size={16} />개념 추가</button>
       </header>
       {persistenceError && <p className="form-error knowledge-graph-persistence-error" role="alert">{persistenceError} {onRetryPersistence && <button type="button" className="btn-secondary btn-sm" onClick={() => void runMutation(onRetryPersistence)}>다시 시도</button>}</p>}
       <div className="knowledge-graph-layout">
@@ -169,7 +178,7 @@ export default function KnowledgeGraphView({
         </aside>
         <main className="knowledge-graph-detail">
           {selected ? <>
-            <div className="knowledge-graph-detail__heading"><div><span className="eyebrow">{selected.type}</span><h2>{selected.name}</h2><p>{selected.description || "아직 설명이 없습니다."}</p></div><span className="knowledge-graph-provenance">{selected.provenance === "import" ? "기존 자료에서 찾음" : "수동 연결"}</span><button type="button" className="ui-button ui-button--secondary" onClick={() => void removeSelectedEntity()}>삭제</button></div>
+            <div className="knowledge-graph-detail__heading"><div><span className="eyebrow">{entityTypeLabels[selected.type]}</span><h2>{selected.name}</h2><p>{selected.description || "아직 설명이 없습니다."}</p></div><span className="knowledge-graph-provenance">{selected.provenance === "import" ? "기존 자료에서 찾음" : "수동 연결"}</span><button type="button" className="ui-button ui-button--secondary" onClick={() => void removeSelectedEntity()}>삭제</button></div>
             {mutationError && <p className="form-error" role="alert">{mutationError} {retryMutation && <button type="button" className="btn-secondary btn-sm" onClick={() => void runMutation(retryMutation)}>다시 시도</button>}</p>}
             <SubjectDraftInput
               key={`${selected.id}:${selected.subject ?? ""}`}

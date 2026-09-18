@@ -28,22 +28,30 @@ function fingerprint(segment: QuestionContentSegment): string {
   return `table:${segment.rows.map((row) => row.map(normalizeText).join("|")).join(";")}`;
 }
 
-function semanticText(segment: QuestionContentSegment): string {
-  if (segment.type === "text") return normalizeText(segment.text);
-  if (segment.type === "condition") {
-    const parts = conditionParts(segment.label, segment.text);
-    return normalizeText([parts.label, parts.text].filter(Boolean).join(" "));
-  }
-  if (segment.type === "equation") return normalizeLatex(segment.latex);
-  return "";
-}
-
 function cloneSegment(segment: QuestionContentSegment): QuestionContentSegment {
   if (segment.type === "condition") {
     const parts = conditionParts(segment.label, segment.text);
     return { ...segment, label: parts.label || undefined, text: parts.text };
   }
   return segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment };
+}
+
+function removeExactRepresentedFragments(value: string, fragments: string[]): string {
+  let remaining = value;
+  for (const fragment of fragments) {
+    const normalized = normalizeText(fragment);
+    if (!normalized) continue;
+    const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    remaining = remaining.replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g"), " ");
+  }
+  return normalizeText(remaining);
+}
+
+function normalizedLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(normalizeText)
+    .filter(Boolean);
 }
 
 /**
@@ -60,7 +68,34 @@ export function normalizeQuestionPresentationSegments(input: {
   const hasCanonicalStream = Boolean(input.contentSegments?.length);
   const source = hasCanonicalStream ? input.contentSegments!.map(cloneSegment) : [];
   const represented = new Set(source.map(fingerprint));
-  const canonicalText = source.map(semanticText).filter(Boolean).join(" ");
+  const canonicalText = source
+    .filter((segment): segment is Extract<QuestionContentSegment, { type: "text" }> => segment.type === "text")
+    .map((segment) => normalizeText(segment.text))
+    .filter(Boolean)
+    .join(" ");
+  const representedLines = new Set(source.flatMap((segment) => {
+    if (segment.type === "text") return normalizedLines(segment.text);
+    if (segment.type === "condition") {
+      const parts = conditionParts(segment.label, segment.text);
+      return [parts.label ? `${parts.label} ${parts.text}` : parts.text];
+    }
+    if (segment.type === "equation") return [normalizeLatex(segment.latex), `\\(${normalizeLatex(segment.latex)}\\)`, `\\[${normalizeLatex(segment.latex)}\\]`];
+    return [];
+  }).map(normalizeText).filter(Boolean));
+  // A labelled condition is one semantic unit. Its body must not be removed
+  // independently from legacy prose, or a matching condition can leave only
+  // an orphan label behind.
+  const representedFragments = source.flatMap((segment) => {
+    if (segment.type === "condition") {
+      const parts = conditionParts(segment.label, segment.text);
+      return [parts.label ? `${parts.label} ${parts.text}` : parts.text];
+    }
+    if (segment.type === "equation") {
+      const latex = normalizeLatex(segment.latex);
+      return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+    }
+    return segment.type === "text" ? normalizedLines(segment.text) : [];
+  }).filter(Boolean);
   const legacyText = normalizeText(input.questionText);
   const fallback: QuestionContentSegment[] = [
     ...(input.questionText.trim() ? [{ id: "question-text", type: "text" as const, text: input.questionText }] : []),
@@ -70,12 +105,15 @@ export function normalizeQuestionPresentationSegments(input: {
   if (fallback[0]?.type === "text" && canonicalText && legacyText === canonicalText) {
     fallback.shift();
   }
-  const canonicalLineKeys = new Set(source.map((segment) => semanticText(segment)).filter(Boolean));
   for (const segment of fallback) {
     if (segment.type === "text") {
-      const lines = segment.text.split(/\r?\n/).map(normalizeText).filter(Boolean);
-      if (lines.length > 1 && lines.every((line) => canonicalLineKeys.has(line))) continue;
-      if (lines.length === 1 && canonicalLineKeys.has(lines[0])) continue;
+      const lines = normalizedLines(segment.text);
+      const remaining = lines.length > 1
+        ? lines.filter((line) => !representedLines.has(line)).join("\n")
+        : removeExactRepresentedFragments(segment.text, representedFragments);
+      if (!remaining || (canonicalText && normalizeText(segment.text) === canonicalText)) continue;
+      source.push({ ...segment, text: remaining });
+      continue;
     }
     const key = fingerprint(segment);
     if (!represented.has(key)) {

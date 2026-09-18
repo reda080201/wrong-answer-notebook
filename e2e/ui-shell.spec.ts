@@ -67,6 +67,7 @@ for (const viewport of [
     await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
     const detail = page.locator(".detail-panel");
     await expect(detail).toBeVisible();
+    expect(await page.evaluate(() => localStorage.getItem("wrong-answer-entry-pane-collapsed"))).not.toBe("true");
     const initialWidth = (await detail.boundingBox())?.width ?? 0;
 
     await page.getByRole("button", { name: "항목 목록 접기" }).click();

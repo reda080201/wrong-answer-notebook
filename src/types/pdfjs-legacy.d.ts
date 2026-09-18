@@ -10,16 +10,18 @@ declare module "pdfjs-dist/legacy/build/pdf.mjs" {
       canvas: HTMLCanvasElement;
       canvasContext: CanvasRenderingContext2D;
       viewport: PDFPageViewport;
-    }): { promise: Promise<void> };
+    }): { promise: Promise<void>; cancel(): void };
   }
 
   interface PDFDocumentProxy {
     numPages: number;
     getPage(pageNumber: number): Promise<PDFPageProxy>;
+    destroy(): Promise<void>;
   }
 
   interface PDFLoadingTask {
     promise: Promise<PDFDocumentProxy>;
+    destroy(): Promise<void>;
   }
 
   export function getDocument(options: { data: Uint8Array }): PDFLoadingTask;
