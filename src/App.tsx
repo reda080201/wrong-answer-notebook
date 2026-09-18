@@ -149,7 +149,6 @@ function AppContent() {
   const selectedRealMinutes = realExamTimePreset === "custom" ? parsedCustomMinutes : Number(realExamTimePreset);
   const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
-  const { setEntryPaneCollapsed } = shell;
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -496,11 +495,6 @@ function AppContent() {
   const selectedRealSession = selected
     ? savedExamSessions.find((item) => item.entryId === selected.id && item.status === "in_progress" && item.mode === "real")
     : undefined;
-  useEffect(() => {
-    if (activeSection === "problem_sheet" && selected?.entryKind === "problem_sheet" && window.matchMedia("(max-width: 1200px)").matches) {
-      setEntryPaneCollapsed(true);
-    }
-  }, [activeSection, selected?.entryKind, selected?.id, setEntryPaneCollapsed]);
   const openNewRealExamDialog = () => {
     const defaultMinutes = settings.examPreferences.defaultRealExamMinutes ?? 50;
     if ([30, 50, 80, 100].includes(defaultMinutes)) {

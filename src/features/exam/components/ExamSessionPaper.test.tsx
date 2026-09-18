@@ -50,4 +50,34 @@ describe("shared exam paper interactions", () => {
     expect(container.querySelector('[data-paper-number="2"]')).toHaveAttribute("aria-current", "step");
     expect(props.onResponse).not.toHaveBeenCalled();
   });
+
+  it("renders a shared passage once per focus spread while keeping it in A4 mode", () => {
+    const groupedSession: ExamSession = {
+      ...session,
+      questions: session.questions.map((question) => ({
+        ...question,
+        stimulusGroupId: "passage-a",
+        passage: "공통 지문",
+      })),
+    };
+    const props = { session: groupedSession, disabled: false, onNavigate: vi.fn(), onResponse: vi.fn() };
+    const preferences = {
+      showScratchNote: true,
+      showOriginalPages: true,
+      showNavigator: true,
+      autoAdvanceOnAnswer: false,
+      warnUnansweredOnSubmit: true,
+      showTimer: true,
+      showMcpHelp: false,
+      paperNavigation: "vertical-pages" as const,
+      paperPresentation: "two-question" as const,
+    };
+    const { container, rerender } = render(<ExamSessionPaper {...props} preferences={preferences} />);
+
+    expect(screen.getByLabelText("집중 보기 1페이지").querySelectorAll(".exam-passage")).toHaveLength(1);
+
+    rerender(<ExamSessionPaper {...props} preferences={{ ...preferences, paperPresentation: "a4" }} />);
+    expect(container.querySelectorAll(".exam-passage")).toHaveLength(1);
+    expect(screen.getByText("공통 지문")).toBeVisible();
+  });
 });

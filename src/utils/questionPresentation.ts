@@ -47,6 +47,13 @@ function removeExactRepresentedFragments(value: string, fragments: string[]): st
   return normalizeText(remaining);
 }
 
+function normalizedLines(value: string): string[] {
+  return value
+    .split(/\r?\n/)
+    .map(normalizeText)
+    .filter(Boolean);
+}
+
 /**
  * Preserves the canonical stream, then supplements only semantic values that
  * are absent from it. Dedupe is deliberately cross-representation: repeated
@@ -66,14 +73,28 @@ export function normalizeQuestionPresentationSegments(input: {
     .map((segment) => normalizeText(segment.text))
     .filter(Boolean)
     .join(" ");
-  const representedFragments = source.flatMap((segment) => {
-    if (segment.type === "text") return [normalizeText(segment.text)];
+  const representedLines = new Set(source.flatMap((segment) => {
+    if (segment.type === "text") return normalizedLines(segment.text);
     if (segment.type === "condition") {
       const parts = conditionParts(segment.label, segment.text);
-      return [parts.text, parts.label ? `${parts.label} ${parts.text}` : parts.text];
+      return [parts.label ? `${parts.label} ${parts.text}` : parts.text];
     }
     if (segment.type === "equation") return [normalizeLatex(segment.latex), `\\(${normalizeLatex(segment.latex)}\\)`, `\\[${normalizeLatex(segment.latex)}\\]`];
     return [];
+  }).map(normalizeText).filter(Boolean));
+  // A labelled condition is one semantic unit. Its body must not be removed
+  // independently from legacy prose, or a matching condition can leave only
+  // an orphan label behind.
+  const representedFragments = source.flatMap((segment) => {
+    if (segment.type === "condition") {
+      const parts = conditionParts(segment.label, segment.text);
+      return [parts.label ? `${parts.label} ${parts.text}` : parts.text];
+    }
+    if (segment.type === "equation") {
+      const latex = normalizeLatex(segment.latex);
+      return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+    }
+    return segment.type === "text" ? normalizedLines(segment.text) : [];
   }).filter(Boolean);
   const legacyText = normalizeText(input.questionText);
   const fallback: QuestionContentSegment[] = [
@@ -86,7 +107,10 @@ export function normalizeQuestionPresentationSegments(input: {
   }
   for (const segment of fallback) {
     if (segment.type === "text") {
-      const remaining = removeExactRepresentedFragments(segment.text, representedFragments);
+      const lines = normalizedLines(segment.text);
+      const remaining = lines.length > 1
+        ? lines.filter((line) => !representedLines.has(line)).join("\n")
+        : removeExactRepresentedFragments(segment.text, representedFragments);
       if (!remaining || (canonicalText && normalizeText(segment.text) === canonicalText)) continue;
       source.push({ ...segment, text: remaining });
       continue;
