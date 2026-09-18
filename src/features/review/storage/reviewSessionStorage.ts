@@ -13,6 +13,7 @@ export function normalizeReviewSession(value: ReviewSession): ReviewSession {
     completedItemKeys: Array.isArray(value.completedItemKeys) ? [...new Set(value.completedItemKeys.filter((key): key is string => typeof key === "string"))] : [],
     reviewEvents: Array.isArray(value.reviewEvents) ? value.reviewEvents.filter((event) => event && typeof event === "object").map((event) => ({ ...event, itemKey: typeof event.itemKey === "string" ? event.itemKey : undefined })) : [],
     seedFingerprint: typeof value.seedFingerprint === "string" && value.seedFingerprint.trim() ? value.seedFingerprint : undefined,
+    abandonedAt: typeof value.abandonedAt === "string" && value.abandonedAt.trim() ? value.abandonedAt : undefined,
   };
 }
 

@@ -4,6 +4,7 @@ import {
   mistakeCauseLabel,
   recommendedStrategyForAnalysis,
 } from "../utils/mistakeAnalysis";
+import { getEntryImportReviewSummary } from "../utils/importAudit";
 import MathText from "./MathText";
 
 function formatMaybeDate(value?: string | null) {
@@ -22,6 +23,7 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
   const reviewHistory = entry.review?.history ?? [];
   const questionAttempts = (entry.reviewAttempts ?? []).filter((attempt) => attempt.questionNumber);
   const confidenceLabel = (value?: string) => value === "high" ? "높음" : value === "medium" ? "보통" : value === "low" ? "낮음" : "-";
+  const importReviewSummary = getEntryImportReviewSummary(entry);
 
   return (
     <section className="study-analysis">
@@ -31,40 +33,40 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
       </header>
 
       <div className="study-analysis-grid">
-        <article className="study-analysis-card">
-          <h4>AI 가져오기 검토</h4>
-          {entry.importAudit ? (
-            <dl className="study-analysis-stats">
-              <div>
-                <dt>예상</dt>
-                <dd>{entry.importAudit.expectedQuestionNumbers.length}</dd>
-              </div>
-              <div>
-                <dt>감지</dt>
-                <dd>{entry.importAudit.detectedQuestionNumbers.length}</dd>
-              </div>
-              <div>
-                <dt>누락</dt>
-                <dd>{entry.importAudit.missingQuestionNumbers.length}</dd>
-              </div>
-              <div>
-                <dt>검토</dt>
-                <dd>{entry.importAudit.needsReviewCount}</dd>
-              </div>
-            </dl>
-          ) : (
-            <p className="study-analysis-empty">가져오기 감사 정보가 없습니다.</p>
-          )}
-          {entry.importAudit?.missingQuestionNumbers.length ? (
-            <p className="study-analysis-danger">누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>
-          ) : null}
-          {entry.importAudit?.uncertainQuestionNumbers.length ? (
-            <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>
-          ) : null}
-          {entry.importAudit && !entry.importAudit.handwritingExcluded && (
-            <p className="study-analysis-danger">손글씨 제외 여부가 확인되지 않았습니다.</p>
-          )}
-        </article>
+        {importReviewSummary.hasAuditIssue && (
+          <article className="study-analysis-card">
+            <h4>AI 가져오기 검토</h4>
+            {entry.importAudit && (
+              <dl className="study-analysis-stats">
+                <div>
+                  <dt>예상</dt>
+                  <dd>{entry.importAudit.expectedQuestionNumbers.length}</dd>
+                </div>
+                <div>
+                  <dt>감지</dt>
+                  <dd>{entry.importAudit.detectedQuestionNumbers.length}</dd>
+                </div>
+                <div>
+                  <dt>누락</dt>
+                  <dd>{entry.importAudit.missingQuestionNumbers.length}</dd>
+                </div>
+                <div>
+                  <dt>검토</dt>
+                  <dd>{entry.importAudit.needsReviewCount}</dd>
+                </div>
+              </dl>
+            )}
+            {entry.importAudit?.missingQuestionNumbers.length ? (
+              <p className="study-analysis-danger">누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>
+            ) : null}
+            {entry.importAudit?.uncertainQuestionNumbers.length ? (
+              <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>
+            ) : null}
+            {entry.importAudit?.handwritingExcluded === false && (
+              <p className="study-analysis-danger">손글씨 제외 여부가 확인되지 않았습니다.</p>
+            )}
+          </article>
+        )}
 
         <article className="study-analysis-card">
           <h4>제외된 학생 필기</h4>

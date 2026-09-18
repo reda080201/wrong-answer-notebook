@@ -14,5 +14,22 @@ export function reviewSessionFingerprint(mode: ReviewSession["mode"], items: Arr
 }
 
 export function canResumeReviewSession(session: ReviewSession, mode: ReviewSession["mode"], items: ReviewItem[]): boolean {
-  return Boolean(!session.completedAt && session.seedFingerprint && session.seedFingerprint === reviewSessionFingerprint(mode, items));
+  if (session.abandonedAt || session.completedAt || !session.seedFingerprint) return false;
+  if (session.seedFingerprint !== reviewSessionFingerprint(mode, items)) return false;
+  const itemKeys = new Set(items.map(reviewItemKey));
+  const completedKeys = new Set([
+    ...(session.completedItemKeys ?? []),
+    ...(session.reviewEvents ?? []).map((event) => event.itemKey).filter((key): key is string => Boolean(key)),
+  ]);
+  const completedCount = [...completedKeys].filter((key) => itemKeys.has(key)).length;
+  return completedCount > 0 && completedCount < items.length && session.currentIndex < items.length;
+}
+
+export function reviewSessionCompletedCount(session: ReviewSession, items: ReviewItem[]): number {
+  const itemKeys = new Set(items.map(reviewItemKey));
+  const completedKeys = new Set([
+    ...(session.completedItemKeys ?? []),
+    ...(session.reviewEvents ?? []).map((event) => event.itemKey).filter((key): key is string => Boolean(key)),
+  ]);
+  return [...completedKeys].filter((key) => itemKeys.has(key)).length;
 }

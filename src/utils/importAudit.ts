@@ -270,7 +270,7 @@ export function normalizeImportAudit(
     detectedQuestionNumbers: detected,
     missingQuestionNumbers: missing,
     uncertainQuestionNumbers: uncertain,
-    handwritingExcluded: source.handwritingExcluded === true,
+    handwritingExcluded: typeof source.handwritingExcluded === "boolean" ? source.handwritingExcluded : undefined,
     needsReviewCount: calculateNeedsReviewCount(answers, figures, missing, uncertain, structuredQuestions ?? []),
     rejectedItems: Array.isArray(source.rejectedItems)
       ? source.rejectedItems.filter((item): item is ImportRejectedItem => Boolean(
@@ -280,4 +280,19 @@ export function normalizeImportAudit(
       ))
       : undefined,
   };
+}
+
+export interface EntryImportReviewSummary {
+  auditIssueCount: number;
+  hasAuditIssue: boolean;
+  rejectedNoteCount: number;
+}
+
+export function getEntryImportReviewSummary(data: Pick<Partial<EntryFormData>, "importAudit" | "rejectedNotes">): EntryImportReviewSummary {
+  const audit = data.importAudit;
+  const auditIssueCount = audit
+    ? audit.missingQuestionNumbers.length + audit.uncertainQuestionNumbers.length + audit.needsReviewCount + (audit.handwritingExcluded === false ? 1 : 0) + (audit.rejectedItems?.length ?? 0)
+    : 0;
+  const rejectedNoteCount = data.rejectedNotes?.length ?? 0;
+  return { auditIssueCount, hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0, rejectedNoteCount };
 }

@@ -366,7 +366,7 @@ export interface ImportAudit {
   detectedQuestionNumbers: string[];
   missingQuestionNumbers: string[];
   uncertainQuestionNumbers: string[];
-  handwritingExcluded: boolean;
+  handwritingExcluded?: boolean;
   needsReviewCount: number;
   /** External material that was kept as audit evidence but excluded from canonical truth. */
   rejectedItems?: ImportRejectedItem[];

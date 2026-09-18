@@ -28,7 +28,7 @@ import {
   isConceptKnowledgeJson,
   tryParseConceptKnowledgeText,
 } from "../../../utils/conceptKnowledgeImport";
-import { classifyImportValidationIssues, validateImportedStudyData } from "../../../utils/importValidation";
+import { classifyImportValidationIssues, validateImportedStudyData, type ImportInputProvenance } from "../../../utils/importValidation";
 import {
   normalizeImportAudit,
   parseExpectedQuestionNumbers,
@@ -142,7 +142,7 @@ function withExpectedQuestionNumbers(
     {
       expectedQuestionNumbers,
       uncertainQuestionNumbers: sourceAudit?.uncertainQuestionNumbers ?? [],
-      handwritingExcluded: sourceAudit?.handwritingExcluded ?? true,
+      ...(typeof sourceAudit?.handwritingExcluded === "boolean" ? { handwritingExcluded: sourceAudit.handwritingExcluded } : {}),
     },
     {
       question: data.question,
@@ -375,6 +375,7 @@ export default function ImportFromGptModal({
   const zipAbortRef = useRef<AbortController | null>(null);
   const parseErrorRef = useRef<string | null>(null);
   const sourceDraftIdentityRef = useRef<{ initialized: boolean; value: Partial<EntryFormData> | null }>({ initialized: false, value: null });
+  const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
   const preserveSupplementalImagesRef = useRef(false);
   // Supplemental drafts can be cancelled after an image was removed from the UI.
   // Keep the complete set created by this modal so those final-store files are not orphaned.
@@ -480,7 +481,8 @@ export default function ImportFromGptModal({
         const text = await navigator.clipboard.readText();
         if (cancelled || !text.trim() || text === lastText) return;
         lastText = text;
-        setRawText(text);
+      setHasUnsavedInput(true);
+      setRawText(text);
         setFilename(undefined);
         setDraftOverride(null);
         setBatchImport(null);
@@ -512,7 +514,11 @@ export default function ImportFromGptModal({
   const questionBlocks = useMemo(() => parseQuestionText(question), [question]);
   const questionCount = draft?.structuredQuestions?.length
     ?? questionBlocks.filter((block) => block.kind === "question").length;
-  const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft) : null), [draft]);
+  const validationContext = useMemo(() => ({
+    provenance: importInputMode as ImportInputProvenance,
+    requireHandwritingAttestation: importInputMode !== "direct",
+  }), [importInputMode]);
+  const validationReport = useMemo(() => (draft ? validateImportedStudyData(draft, validationContext) : null), [draft, validationContext]);
   const validationPolicy = useMemo(
     () =>
       validationReport
@@ -571,6 +577,7 @@ export default function ImportFromGptModal({
     if (!(await discardVisualSession(visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current))) return;
     setError(null);
     try {
+      setHasUnsavedInput(true);
       setRawText(await readImportFile(file));
       setFilename(file.name);
       setDraftOverride(null);
@@ -659,6 +666,7 @@ export default function ImportFromGptModal({
         await discardVisualSession(result.assetSession);
         return;
       }
+      setHasUnsavedInput(true);
       setVisualResult(result);
       visualResultRef.current = result;
       setRawText(result.responseText);
@@ -710,7 +718,8 @@ export default function ImportFromGptModal({
         setError("클립보드에 가져올 텍스트가 없습니다.");
         return;
       }
-      setRawText(text);
+      setHasUnsavedInput(true);
+        setRawText(text);
       setFilename(undefined);
       setDraftOverride(null);
       setBatchImport(null);
@@ -743,6 +752,7 @@ export default function ImportFromGptModal({
       const aiText = await onGenerateWithAi(activePromptContent, inputText, mode === "vision" ? aiImageFilenames : []);
       const conceptValue = tryParseConceptKnowledgeText(aiText);
       if (conceptValue && (isConceptKnowledgeJson(conceptValue) || isAppCompatibleEntriesJson(conceptValue))) {
+        setHasUnsavedInput(true);
         setRawText(aiText);
         setFilename("gemini.json");
         setDraftOverride(null);
@@ -757,7 +767,8 @@ export default function ImportFromGptModal({
       if (parsedText.detectedFormat !== "json") {
         throw new Error("Gemini 응답이 순수 JSON 객체가 아닙니다.");
       }
-      validateImportedStudyData(parsedText.data);
+      validateImportedStudyData(parsedText.data, validationContext);
+      setHasUnsavedInput(true);
       setRawText(aiText);
       setFilename("gemini.json");
       setDraftOverride(null);
@@ -858,6 +869,7 @@ export default function ImportFromGptModal({
     setError(null);
     setZipProgress({ phase: "inspect", completed: 0, total: 0 });
     try {
+        setHasUnsavedInput(true);
       const { jsonText, jsonName, imageFiles, imageAssets } = await collectAllInOneFiles(files);
       const linkedDocument = await buildAllInOneDocument(jsonText, jsonName, imageFiles, imageAssets);
       setRawText(jsonText);
@@ -939,7 +951,7 @@ export default function ImportFromGptModal({
       return;
     }
     const normalizedDraft = canonicalizeImportDraftForSave(draft);
-    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft));
+    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft, validationContext));
     if (finalPolicy.blocking.length > 0) {
       setError("누락 문제가 있어 적용할 수 없습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.");
       return;
@@ -1002,7 +1014,7 @@ export default function ImportFromGptModal({
       return;
     }
     const normalizedDraft = canonicalizeImportDraftForSave(draft);
-    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft));
+    const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft, validationContext));
     if (finalPolicy.blocking.length) {
       setError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
       return;
@@ -1025,7 +1037,7 @@ export default function ImportFromGptModal({
   };
 
   const isDirty = Boolean(
-    draft && sourceDraft && JSON.stringify(draft) !== JSON.stringify(sourceDraft),
+    hasUnsavedInput || (draft && sourceDraft && JSON.stringify(draft) !== JSON.stringify(sourceDraft)),
   );
 
   const discardAndClose = async () => {
@@ -1177,7 +1189,7 @@ export default function ImportFromGptModal({
                   <details><summary>기술 형식 안내</summary><p>JSON schema와 고급 import 옵션은 파일 형식 안내를 참고하세요.</p></details>
                 </section>
               )}
-              <details className="import-advanced-settings" hidden={importInputMode === "visual"}>
+              <details className="import-advanced-settings" hidden={importInputMode === "visual" || importInputMode === "direct"}>
                 <summary>고급 가져오기 설정</summary>
               {availablePromptTemplates.length > 0 && (
                 <div className="prompt-template-box">
@@ -1283,12 +1295,13 @@ export default function ImportFromGptModal({
               {copyMessage && <p className="form-hint" role="status">{copyMessage}</p>}
 
               {importInputMode !== "visual" && <div className="form-field full">
-                <label htmlFor="gpt-import-text">GPT 답변 붙여넣기</label>
+                <label htmlFor="gpt-import-text">{importInputMode === "direct" ? "JSON 또는 텍스트 직접 입력" : "GPT 답변 붙여넣기"}</label>
                 <textarea
                   id="gpt-import-text"
                   className="import-textarea"
                   value={rawText}
                   onChange={(event) => {
+                    setHasUnsavedInput(true);
                     setRawText(event.target.value);
                     setFilename(undefined);
                     setDraftOverride(null);
@@ -1297,7 +1310,7 @@ export default function ImportFromGptModal({
                     setImportWarnings([]);
                     setError(null);
                   }}
-                  placeholder={isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
+                  placeholder={importInputMode === "direct" ? "JSON 또는 시험지 텍스트를 직접 입력하세요." : isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
                 />
                 {conceptImportValue && (
                   <p className="form-hint import-concept-detected">
@@ -1306,7 +1319,7 @@ export default function ImportFromGptModal({
                 )}
               </div>}
 
-              {importInputMode !== "visual" && <div className="clipboard-actions">
+              {importInputMode === "gpt" && <div className="clipboard-actions">
                 <button type="button" className="btn-secondary btn-sm" onClick={readClipboardNow}>
                   클립보드에서 가져오기
                 </button>
