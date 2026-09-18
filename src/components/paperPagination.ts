@@ -14,7 +14,7 @@ export function paginatePaper(items: PaperPageItem[], narrow: Map<string, number
   const empty = (): PaperPageModel => ({ id: `paper-${pages.length + 1}`, columns: columnCount === 2 ? [{ items: [], usedHeight: 0 }, { items: [], usedHeight: 0 }] : [{ items: [], usedHeight: 0 }], questionNumbers: [] });
   let page = empty();
   let columnIndex = 0;
-  const capacity = () => PAPER_HEIGHT - PAPER_PADDING * 2 - (pages.length === 0 ? headerHeight : 0);
+  const capacity = (isFirstPage: boolean) => PAPER_HEIGHT - PAPER_PADDING * 2 - (isFirstPage ? headerHeight : 0);
   const push = () => { if (page.questionNumbers.length || page.columns.some(column => column?.items.length)) pages.push(page); page = empty(); columnIndex = 0; };
   const groups: PaperPageItem[][] = [];
   for (const item of items) {
@@ -24,21 +24,30 @@ export function paginatePaper(items: PaperPageItem[], narrow: Map<string, number
   }
   for (const group of groups) {
     const height = group.reduce((sum, item) => sum + (narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
-    if (height > capacity()) {
-      push();
-      const fullHeight = group.reduce((sum, item) => sum + (wide.get(item.id) ?? narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
-      page.fullWidth = true;
-      page.oversized = fullHeight > capacity();
-      page.columns = [{ items: group, usedHeight: fullHeight }];
-      page.questionNumbers = group.map(item => item.questionNumber ?? item.id);
-      push();
-      continue;
-    }
+    const currentCapacity = capacity(pages.length === 0);
     let column = page.columns[columnIndex]!;
-    if (column.usedHeight + height > capacity()) {
-      if (columnIndex + 1 < columnCount) columnIndex += 1;
-      else push();
-      column = page.columns[columnIndex]!;
+    if (column.usedHeight + height > currentCapacity) {
+      const nextColumnIndex = columnIndex + 1;
+      const nextColumn = page.columns[nextColumnIndex];
+      if (nextColumn && nextColumn.usedHeight + height <= currentCapacity) {
+        columnIndex = nextColumnIndex;
+        column = nextColumn;
+      } else {
+        // Commit a non-empty page, then recalculate capacity without the first-page header.
+        if (page.questionNumbers.length || page.columns.some(candidate => candidate?.items.length)) push();
+        const freshCapacity = capacity(pages.length === 0);
+        column = page.columns[0]!;
+        columnIndex = 0;
+        if (height > freshCapacity) {
+          const fullHeight = group.reduce((sum, item) => sum + (wide.get(item.id) ?? narrow.get(item.id) ?? 200) + PAPER_ITEM_GAP, 0);
+          page.fullWidth = true;
+          page.oversized = fullHeight > freshCapacity;
+          page.columns = [{ items: group, usedHeight: fullHeight }];
+          page.questionNumbers = group.map(item => item.questionNumber ?? item.id);
+          push();
+          continue;
+        }
+      }
     }
     column.items.push(...group);
     column.usedHeight += height;

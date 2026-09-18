@@ -26,58 +26,53 @@ export function useKnowledgeGraph() {
   const [loadStatus, setLoadStatus] = useState<KnowledgeGraphLoadStatus>("loading");
   const [maintenanceBlocked, setMaintenanceBlockedState] = useState(false);
   const graphRef = useRef(graph);
-  const queueRef = useRef(Promise.resolve());
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
   const maintenanceBlockedRef = useRef(false);
+  const loadSucceededRef = useRef(false);
+  const mountedRef = useRef(true);
+  const refreshGenerationRef = useRef(0);
 
-  useEffect(() => { graphRef.current = graph; }, [graph]);
+  const enqueue = useCallback(<T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = queueRef.current.then(operation, operation);
+    queueRef.current = result.then(() => undefined, () => undefined);
+    return result;
+  }, []);
 
   const refresh = useCallback(async () => {
     const loader = getStorageBackend().loadKnowledgeGraph;
-    if (!loader) { setReady(true); setLoadStatus("ready"); return; }
-    setLoadStatus("loading");
+    const generation = ++refreshGenerationRef.current;
     try {
-      const next = normalizeKnowledgeGraph(await loader());
-      graphRef.current = next;
-      setGraph(next);
-      setError(null);
-      setReady(true);
-      setLoadStatus("ready");
+      await enqueue(async () => {
+        if (mountedRef.current && generation === refreshGenerationRef.current) setLoadStatus("loading");
+        const next = loader ? normalizeKnowledgeGraph(await loader()) : { entities: [], relations: [], questionLinks: [] };
+        if (!mountedRef.current) return;
+        graphRef.current = next;
+        setGraph(next);
+        loadSucceededRef.current = true;
+        if (generation === refreshGenerationRef.current) {
+          setError(null);
+          setReady(true);
+          setLoadStatus("ready");
+        }
+      });
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
-      setLoadStatus("error");
+      if (mountedRef.current && generation === refreshGenerationRef.current) {
+        setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
+        setLoadStatus("error");
+        if (!loadSucceededRef.current) setReady(false);
+      }
     }
-  }, []);
+  }, [enqueue]);
 
   useEffect(() => {
-    let mounted = true;
-    const loader = getStorageBackend().loadKnowledgeGraph;
-    if (!loader) {
-      void Promise.resolve().then(() => {
-        if (!mounted) return;
-        setReady(true);
-        setLoadStatus("ready");
-      });
-      return () => { mounted = false; };
-    }
-    void loader().then((value) => {
-      if (!mounted) return;
-      const next = normalizeKnowledgeGraph(value);
-      graphRef.current = next;
-      setGraph(next);
-      setError(null);
-      setReady(true);
-      setLoadStatus("ready");
-    }).catch((cause: unknown) => {
-      if (!mounted) return;
-      setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
-      setReady(false);
-      setLoadStatus("error");
-    });
-    return () => { mounted = false; };
-  }, []);
+    mountedRef.current = true;
+    void refresh();
+    return () => { mountedRef.current = false; };
+  }, [refresh]);
 
   const persist = useCallback(async (recipe: (current: KnowledgeGraphStore) => KnowledgeGraphStore) => {
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
+    if (!loadSucceededRef.current) throw new Error("지식 그래프를 불러오지 못했습니다. 다시 시도해 주세요.");
     const writer = getStorageBackend().saveKnowledgeGraph;
     if (!writer) throw new Error("현재 저장소는 지식 그래프를 지원하지 않습니다.");
     const operation = async () => {
@@ -87,14 +82,19 @@ export function useKnowledgeGraph() {
       setGraph(next);
       setError(null);
     };
-    queueRef.current = queueRef.current.then(operation, operation).catch((cause: unknown) => {
+    return enqueue(operation).catch((cause: unknown) => {
       const message = cause instanceof Error ? cause.message : "지식 그래프를 저장하지 못했습니다.";
       setError(message);
       throw cause;
     });
-    return queueRef.current;
+  }, [enqueue]);
+  const flush = useCallback(async () => {
+    let observed: Promise<void>;
+    do {
+      observed = queueRef.current;
+      await observed;
+    } while (observed !== queueRef.current);
   }, []);
-  const flush = useCallback(async () => { await queueRef.current; }, []);
   const setMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
     setMaintenanceBlockedState(blocked);

@@ -43,6 +43,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   useEffect(() => { sessionRef.current = session; }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const submittingRef = useRef(false);
   const [answerSheetOpen, setAnswerSheetOpen] = useState(session.answerSheetOpen ?? examPreferences?.realExamAnswerSheetOpen ?? true);
   const [now, setNow] = useState(() => Date.now());
@@ -90,9 +91,12 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
     submittingRef.current = true;
     setSubmitting(true);
     onSubmittingChange?.(true);
+    setSubmitError(null);
     try {
       await onSubmit(sessionRef.current);
       setSubmitOpen(false);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : "시험을 저장/제출하지 못했습니다. 다시 시도해 주세요.");
     } finally {
       submittingRef.current = false;
       setSubmitting(false);
@@ -162,6 +166,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
         </div>
       </header>
       {saveError && <div className="exam-session-save-error" role="alert"><span>진행 상태 저장 실패: {saveError}</span><button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button></div>}
+      {submitError && <div className="exam-session-save-error" role="alert"><span>시험을 저장/제출하지 못했습니다: {submitError}</span><button type="button" onClick={() => void submit()} disabled={submitting}>다시 제출</button></div>}
       {expired && session.status === "in_progress" && <div className="real-exam-expired" role="alert">시간이 종료되었습니다. 답안 입력을 잠그고 제출할 수 있습니다.</div>}
       {deadlineWarning && !expired && <div className="real-exam-warning" role="status">시험 종료까지 5분 이내입니다.</div>}
       <div className={`real-exam-layout${answerSheetOpen ? "" : " real-exam-layout--sheet-collapsed"}`}>

@@ -31,6 +31,48 @@ describe("ExamPaperCompositor", () => {
     expect(container.querySelector('[data-paper-number="9"]')).toHaveAttribute("aria-current", "step");
   });
 
+  it("allows horizontal arrows on the paper surface but not from controls or their descendants", () => {
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(() => ({ width: 339, height: 400, top: 0, left: 0, right: 339, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }));
+    const items = [
+      { id: "1", node: <article><button type="button"><span>선택지</span></button><input aria-label="답 입력" /></article> },
+      ...Array.from({ length: 9 }, (_, index) => item(String(index + 2))),
+    ];
+    const { container } = render(<ExamPaperCompositor enabled items={items} navigation="horizontal-pages" />);
+    const reader = container.querySelector<HTMLElement>(".exam-paper-reader")!;
+
+    fireEvent.keyDown(reader, { key: "ArrowRight" });
+    expect(screen.getByLabelText("시험지 2페이지")).toBeVisible();
+
+    fireEvent.keyDown(container.querySelector("button span")!, { key: "ArrowLeft" });
+    expect(screen.getByLabelText("시험지 2페이지")).toBeVisible();
+
+    fireEvent.keyDown(container.querySelector("input")!, { key: "ArrowLeft" });
+    expect(screen.getByLabelText("시험지 2페이지")).toBeVisible();
+  });
+
+  it("ignores swipes that start or end on an interactive target and keeps empty-surface swipes", () => {
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(() => ({ width: 339, height: 400, top: 0, left: 0, right: 339, bottom: 400, x: 0, y: 0, toJSON: () => ({}) }));
+    const items = [
+      { id: "1", node: <button type="button">선택</button> },
+      ...Array.from({ length: 9 }, (_, index) => item(String(index + 2))),
+    ];
+    const { container } = render(<ExamPaperCompositor enabled items={items} navigation="horizontal-pages" />);
+    const reader = container.querySelector<HTMLElement>(".exam-paper-reader")!;
+    const button = container.querySelector("button")!;
+
+    fireEvent.touchStart(button, { touches: [{ identifier: 1, clientX: 200, clientY: 100 }] });
+    fireEvent.touchEnd(button, { changedTouches: [{ identifier: 1, clientX: 20, clientY: 100 }] });
+    expect(screen.getByLabelText("시험지 1페이지")).toBeVisible();
+
+    fireEvent.touchStart(reader, { touches: [{ identifier: 2, clientX: 200, clientY: 100 }] });
+    fireEvent.touchEnd(button, { changedTouches: [{ identifier: 2, clientX: 20, clientY: 100 }] });
+    expect(screen.getByLabelText("시험지 1페이지")).toBeVisible();
+
+    fireEvent.touchStart(reader, { touches: [{ identifier: 3, clientX: 200, clientY: 100 }] });
+    fireEvent.touchEnd(reader, { changedTouches: [{ identifier: 3, clientX: 20, clientY: 100 }] });
+    expect(screen.getByLabelText("시험지 2페이지")).toBeVisible();
+  });
+
   it("packs measured items into visible A4 page surfaces instead of fixed item slices", () => {
     HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
       const height = this.textContent === "one" || this.textContent === "two" ? 620 : 180;

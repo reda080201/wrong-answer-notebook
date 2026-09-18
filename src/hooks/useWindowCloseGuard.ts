@@ -17,6 +17,7 @@ interface UseWindowCloseGuardOptions {
   flushGptSolutionDrafts?: () => Promise<void>;
   flushReviewSessions?: () => Promise<void>;
   flushPendingDeletions?: () => Promise<void>;
+  flushKnowledgeGraph?: () => Promise<void>;
   confirmCloseWithoutSaving: () => Promise<boolean>;
 }
 
@@ -39,6 +40,7 @@ export function useWindowCloseGuard({
   flushGptSolutionDrafts = async () => undefined,
   flushReviewSessions = async () => undefined,
   flushPendingDeletions = async () => undefined,
+  flushKnowledgeGraph = async () => undefined,
   confirmCloseWithoutSaving,
 }: UseWindowCloseGuardOptions) {
   const [closeError, setCloseError] = useState<string | null>(null);
@@ -73,6 +75,7 @@ export function useWindowCloseGuard({
         flushGptSolutionDrafts,
         flushReviewSessions,
         flushPendingDeletions,
+        flushKnowledgeGraph,
       });
       setCloseError(null);
       allowCloseRef.current = true;
@@ -84,7 +87,7 @@ export function useWindowCloseGuard({
       inFlightRef.current = false;
       setSaving(false);
     }
-  }, [examSaveTimerRef, flushAiProviderConfig, flushEntries, flushExamSession, flushGeneratedExams, flushGptSolutionDrafts, flushImportWorkspaceDraft, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings]);
+  }, [examSaveTimerRef, flushAiProviderConfig, flushEntries, flushExamSession, flushGeneratedExams, flushGptSolutionDrafts, flushImportWorkspaceDraft, flushKnowledgeGraph, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings]);
 
   const closeWithoutSaving = useCallback(async () => {
     if (inFlightRef.current || !closeError || !isTauri()) return;

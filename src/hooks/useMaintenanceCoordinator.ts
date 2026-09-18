@@ -19,6 +19,7 @@ interface MaintenanceCoordinatorOptions {
   setLibraryMaintenanceBlocked?(blocked: boolean): void;
   setGptSolutionDraftsMaintenanceBlocked?(blocked: boolean): void;
   setKnowledgeGraphMaintenanceBlocked?(blocked: boolean): void;
+  setReviewSessionsMaintenanceBlocked?(blocked: boolean): void;
 }
 
 export function useMaintenanceCoordinator({
@@ -40,6 +41,7 @@ export function useMaintenanceCoordinator({
   setLibraryMaintenanceBlocked = () => undefined,
   setGptSolutionDraftsMaintenanceBlocked = () => undefined,
   setKnowledgeGraphMaintenanceBlocked = () => undefined,
+  setReviewSessionsMaintenanceBlocked = () => undefined,
 }: MaintenanceCoordinatorOptions) {
   const activeRef = useRef(false);
 
@@ -60,6 +62,7 @@ export function useMaintenanceCoordinator({
     setLibraryMaintenanceBlocked(true);
     setGptSolutionDraftsMaintenanceBlocked(true);
     setKnowledgeGraphMaintenanceBlocked(true);
+    setReviewSessionsMaintenanceBlocked(true);
     try {
       await Promise.all([
         flushEntries(),
@@ -81,8 +84,9 @@ export function useMaintenanceCoordinator({
       setLibraryMaintenanceBlocked(false);
       setGptSolutionDraftsMaintenanceBlocked(false);
       setKnowledgeGraphMaintenanceBlocked(false);
+      setReviewSessionsMaintenanceBlocked(false);
       setTransientWritesMaintenanceBlocked(false);
       activeRef.current = false;
     }
-  }, [flushActiveExam, flushAiProviderConfig, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushKnowledgeGraph, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setKnowledgeGraphMaintenanceBlocked, setLibraryMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
+  }, [flushActiveExam, flushAiProviderConfig, flushEntries, flushGeneratedExams, flushGptSolutionDrafts, flushKnowledgeGraph, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings, flushTransientWrites, setEntriesMaintenanceBlocked, setGeneratedExamsMaintenanceBlocked, setGptSolutionDraftsMaintenanceBlocked, setKnowledgeGraphMaintenanceBlocked, setLibraryMaintenanceBlocked, setReviewSessionsMaintenanceBlocked, setSettingsMaintenanceBlocked, setTransientWritesMaintenanceBlocked]);
 }
