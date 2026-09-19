@@ -34,6 +34,7 @@ describe("AppToolbar", () => {
     fireEvent.change(screen.getByPlaceholderText("문제, 답, 태그로 검색…"), {
       target: { value: "함수" },
     });
+    fireEvent.click(screen.getByRole("button", { name: "필터" }));
     fireEvent.change(screen.getByLabelText("정렬"), {
       target: { value: "title-asc" },
     });

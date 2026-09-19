@@ -42,6 +42,7 @@ export type ChatGptPromptMode = "pre-submit" | "submitted" | "detail";
 export interface ChatGptPromptOptions {
   shareUserResponse?: boolean;
   shareScratchNote?: boolean;
+  shareExistingAnswersAndExplanations?: boolean;
 }
 
 const PRE_SUBMIT_QUESTIONS = [
@@ -74,6 +75,7 @@ export function buildChatGptPrompt(
   const mention = `@${preferences.displayName || "오답노트"}`;
   const shareUserResponse = options.shareUserResponse ?? true;
   const shareScratchNote = options.shareScratchNote ?? true;
+  const shareExistingAnswersAndExplanations = options.shareExistingAnswersAndExplanations ?? true;
   const context = questionContext
     ? [
         questionContext.questionNumber ? `문항 번호: ${questionContext.questionNumber}번` : "",
@@ -97,7 +99,9 @@ export function buildChatGptPrompt(
   if (mode === "submitted") {
     const responseInstruction = shareUserResponse ? "내 답, " : "";
     const noteInstruction = shareScratchNote ? "풀이 메모, " : "";
-    return `${mention} 방금 제출한 모의고사 현재 문항을 읽어 줘.\n${responseInstruction}${noteInstruction}정답, 공식 해설을 비교해서 오답 원인과 복습 포인트를 정리해 줘.\n${selectedQuestion}${questionBlock}`;
+    const answerInstruction = shareExistingAnswersAndExplanations ? "정답, 공식 해설을 비교해서 " : "";
+    const subject = shareExistingAnswersAndExplanations ? "오답 원인과 복습 포인트" : "내 풀이에서 보완할 점과 복습 포인트";
+    return `${mention} 현재 제출 결과의 문항을 읽어 줘.\n${responseInstruction}${noteInstruction}${answerInstruction}${subject}를 정리해 줘.\n${selectedQuestion}${questionBlock}`;
   }
   return `${mention} 현재 열어 둔 오답노트 문항을 읽어 줘.\n${selectedQuestion}\n문제의 핵심 조건과 다음 학습 행동을 정리해 줘.${questionBlock}`;
 }

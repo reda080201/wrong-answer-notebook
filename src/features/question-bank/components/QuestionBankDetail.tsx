@@ -43,6 +43,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasFailedPatch, setHasFailedPatch] = useState(false);
+  const [classificationOpen, setClassificationOpen] = useState(false);
   const failedPatchRef = useRef<QuestionMetaPatch | null>(null);
 
   useEffect(() => {
@@ -58,6 +59,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     failedPatchRef.current = null;
     setHasFailedPatch(false);
     setSaveError(null);
+    setClassificationOpen(false);
   }, [item]);
 
   const makePatch = (): QuestionMetaPatch => ({
@@ -105,7 +107,8 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
       {metricRows.length ? <dl>{metricRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="question-bank-detail__empty-metrics">평가 정보 없음</p>}
       <section><h4>정답</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.answer ?? "연결되지 않음")} /></p></section>
       <section><h4>해설</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.explanation ?? "연결되지 않음")} /></p></section>
-      {onPatchClassification && <section className="question-bank-detail__classification"><h4>분류 편집</h4>
+      {onPatchClassification && <section className="question-bank-detail__classification"><button type="button" className="question-bank-classification-toggle" aria-expanded={classificationOpen} onClick={() => setClassificationOpen((open) => !open)}>분류 편집 <span aria-hidden="true">{classificationOpen ? "▴" : "▾"}</span></button>
+        {classificationOpen && <div className="question-bank-classification-form">
         <label>난이도 (0-100)<input type="number" min="0" max="100" value={difficulty} onChange={(event) => setDifficulty(event.target.value)} /></label>
         <label>중요도 (0-100)<input type="number" min="0" max="100" value={importance} onChange={(event) => setImportance(event.target.value)} /></label>
         <label>품질 (0-100)<input type="number" min="0" max="100" value={quality} onChange={(event) => setQuality(event.target.value)} /></label>
@@ -114,6 +117,7 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
         <label>단원<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label>소단원<input value={subunit} onChange={(event) => setSubunit(event.target.value)} /></label><label>개념 (쉼표)<input value={concepts} onChange={(event) => setConcepts(event.target.value)} /></label><label>태그 (쉼표)<input value={tags} onChange={(event) => setTags(event.target.value)} /></label>
         {saveError && <p className="form-error" role="alert">{saveError}<button type="button" className="btn-secondary" onClick={() => { const failed = failedPatchRef.current; if (failed) void saveClassification(failed); }} disabled={saving || !hasFailedPatch}>다시 저장</button></p>}
         <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button>
+        </div>}
       </section>}
       <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>
     </div>;

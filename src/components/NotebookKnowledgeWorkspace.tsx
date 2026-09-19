@@ -29,6 +29,7 @@ interface NotebookKnowledgeWorkspaceProps {
   openCandidateReview(entryId: string): void;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  onOpenImport?: () => void;
   onRegisterScrollContainer?(key: string, element: HTMLElement | null): void;
   onStartReview?(items: QuestionBankItem[]): void;
   knowledgeGraph?: {
@@ -59,6 +60,7 @@ export default function NotebookKnowledgeWorkspace({
   openCandidateReview,
   aiProviderStatus,
   onOpenAiSettings,
+  onOpenImport,
   onRegisterScrollContainer,
   onStartReview,
   knowledgeGraph,
@@ -148,6 +150,7 @@ export default function NotebookKnowledgeWorkspace({
       onOpenCandidateReview={openCandidateReview}
       aiProviderStatus={aiProviderStatus}
       onOpenAiSettings={onOpenAiSettings}
+      onOpenImport={onOpenImport}
       onRegisterScrollContainer={onRegisterScrollContainer}
       headerAccessory={learningViewSwitcher}
       />}
