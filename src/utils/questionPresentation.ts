@@ -47,6 +47,40 @@ function removeExactRepresentedFragments(value: string, fragments: string[]): st
   return normalizeText(remaining);
 }
 
+function representedFragmentsForSegment(segment: QuestionContentSegment): string[] {
+  if (segment.type === "condition") {
+    const parts = conditionParts(segment.label, segment.text);
+    return [parts.label ? `${parts.label} ${parts.text}` : parts.text].filter(Boolean);
+  }
+  if (segment.type === "equation") {
+    const latex = normalizeLatex(segment.latex);
+    return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+  }
+  return segment.type === "text" ? normalizedLines(segment.text) : [];
+}
+
+function insertLegacyLineNearExactAnchor(source: QuestionContentSegment[], line: string): boolean {
+  const normalized = normalizeText(line);
+  if (!normalized) return false;
+  for (const fragment of source.flatMap(representedFragmentsForSegment)) {
+    const anchorMatches = source.filter((segment) => representedFragmentsForSegment(segment).includes(fragment));
+    if (anchorMatches.length !== 1) continue;
+    const fragmentText = normalizeText(fragment);
+    const prefix = `${fragmentText} `;
+    const suffix = ` ${fragmentText}`;
+    const anchorIndex = source.indexOf(anchorMatches[0]);
+    if (normalized.startsWith(prefix)) {
+      source.splice(anchorIndex + 1, 0, { id: `legacy-${anchorIndex}-after`, type: "text", text: normalized.slice(prefix.length) });
+      return true;
+    }
+    if (normalized.endsWith(suffix)) {
+      source.splice(anchorIndex, 0, { id: `legacy-${anchorIndex}-before`, type: "text", text: normalized.slice(0, -suffix.length) });
+      return true;
+    }
+  }
+  return false;
+}
+
 function normalizedLines(value: string): string[] {
   return value
     .split(/\r?\n/)
@@ -108,9 +142,14 @@ export function normalizeQuestionPresentationSegments(input: {
   for (const segment of fallback) {
     if (segment.type === "text") {
       const lines = normalizedLines(segment.text);
-      const remaining = lines.length > 1
-        ? lines.filter((line) => !representedLines.has(line)).join("\n")
-        : removeExactRepresentedFragments(segment.text, representedFragments);
+      if (lines.length > 1) {
+        for (const line of lines) {
+          if (representedLines.has(line)) continue;
+          if (!insertLegacyLineNearExactAnchor(source, line)) source.push({ ...segment, text: line });
+        }
+        continue;
+      }
+      const remaining = removeExactRepresentedFragments(segment.text, representedFragments);
       if (!remaining || (canonicalText && normalizeText(segment.text) === canonicalText)) continue;
       source.push({ ...segment, text: remaining });
       continue;

@@ -97,4 +97,21 @@ describe("normalizeQuestionPresentationSegments", () => {
     expect(segments.map((segment) => segment.type)).toEqual(["text", "equation", "text"]);
     expect(segments[2]).toMatchObject({ type: "text", text: "이어서 추가로 읽을 문장입니다." });
   });
+
+  it("keeps unmatched text in its exact line position when a legacy line partially overlaps", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "첫 문장. 추가 문장.\n(가) A\n값을 구하시오.",
+      conditions: ["(가) A"],
+      equations: [],
+      contentSegments: [
+        { id: "stem", type: "text", text: "첫 문장." },
+        { id: "condition", type: "condition", label: "(가)", text: "A" },
+        { id: "end", type: "text", text: "값을 구하시오." },
+      ],
+    });
+
+    expect(segments.map((segment) => segment.type === "equation" ? segment.latex : segment.type === "table" || segment.type === "figure" ? segment.type : segment.text)).toEqual([
+      "첫 문장.", "추가 문장.", "A", "값을 구하시오.",
+    ]);
+  });
 });
