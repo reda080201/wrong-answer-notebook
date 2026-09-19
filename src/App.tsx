@@ -149,6 +149,7 @@ function AppContent() {
   const selectedRealMinutes = realExamTimePreset === "custom" ? parsedCustomMinutes : Number(realExamTimePreset);
   const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
+  const [autoCompactEntryPane, setAutoCompactEntryPane] = useState(false);
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -257,6 +258,20 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+
+  useEffect(() => {
+    const updateCompactMode = () => {
+      setAutoCompactEntryPane(window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet");
+    };
+    updateCompactMode();
+    window.addEventListener("resize", updateCompactMode);
+    return () => window.removeEventListener("resize", updateCompactMode);
+  }, [selected?.entryKind, selectedId]);
+
+  const handleEntryPaneCollapsedChange = useCallback((collapsed: boolean) => {
+    if (!collapsed) setAutoCompactEntryPane(false);
+    shell.setEntryPaneCollapsed(collapsed);
+  }, [shell.setEntryPaneCollapsed]);
 
   const { removeEntryLinks } = knowledgeGraph;
   const handleFinalizedKnowledgeGraphEntry = useCallback(
@@ -585,7 +600,7 @@ function AppContent() {
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <CommandPalette commands={appCommands} />
-    <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
+    <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed || autoCompactEntryPane ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -734,9 +749,9 @@ function AppContent() {
             onEditEntry={actions.openEditEntry}
             onDeleteEntry={(entryId) => void actions.deleteEntryById(entryId)}
             onLinkLearningEntry={actions.openLearningEntryLink}
-            collapsed={shell.entryPaneCollapsed}
+            collapsed={shell.entryPaneCollapsed || autoCompactEntryPane}
             width={shell.entryPaneWidth}
-            onCollapsedChange={shell.setEntryPaneCollapsed}
+            onCollapsedChange={handleEntryPaneCollapsedChange}
             onWidthChange={shell.setEntryPaneWidth}
             libraryPreferences={settings.libraryPreferences}
             onUpdateEntry={(entryId, patch) => patchEntry(entryId, patch)}

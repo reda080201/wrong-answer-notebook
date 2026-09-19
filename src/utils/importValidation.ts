@@ -20,6 +20,13 @@ export interface ImportValidationReport {
   audit?: ImportAudit;
 }
 
+export type ImportInputProvenance = "gpt" | "file" | "visual" | "direct";
+
+export interface ImportValidationContext {
+  provenance?: ImportInputProvenance;
+  requireHandwritingAttestation?: boolean;
+}
+
 export interface ImportValidationClassification {
   blocking: ImportValidationIssue[];
   confirmable: ImportValidationIssue[];
@@ -167,7 +174,7 @@ export function getQuestionNumbers(question: string): string[] {
     .filter(Boolean);
 }
 
-export function validateImportedStudyData(data: Partial<EntryFormData>): ImportValidationReport {
+export function validateImportedStudyData(data: Partial<EntryFormData>, context: ImportValidationContext = {}): ImportValidationReport {
   const questionBlocks = parseQuestionText(data.question ?? "").filter((block) => block.kind === "question");
   const hasStructuredQuestions = Array.isArray(data.structuredQuestions) && data.structuredQuestions.length > 0;
   const structuredQuestionIssues = malformedStructuredQuestionIssues(data.structuredQuestions);
@@ -230,7 +237,8 @@ export function validateImportedStudyData(data: Partial<EntryFormData>): ImportV
       message: `번호 또는 내용 확인이 필요한 문항: ${audit.uncertainQuestionNumbers.join(", ")}`,
     });
   }
-  if (audit && !audit.handwritingExcluded) {
+  const requiresHandwritingAttestation = context.requireHandwritingAttestation ?? context.provenance !== "direct";
+  if (audit && requiresHandwritingAttestation && audit.handwritingExcluded === false) {
     issues.push({
       id: "audit-handwriting-not-excluded",
       severity: "error",

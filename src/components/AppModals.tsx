@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
+import { reviewSessionCompletedCount } from "../features/review/storage/reviewSessionIdentity";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
 import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
 import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
@@ -99,7 +100,13 @@ export default function AppModals({
     : reviewMode && reviewSession
       ? "pending"
       : "restart";
-  const chooseReviewResume = (choice: "resume" | "restart") => setReviewResumeDecision({ identity: reviewResumeIdentity, choice });
+  const chooseReviewResume = (choice: "resume" | "restart") => {
+    if (choice === "restart" && reviewSession && saveReviewSession) {
+      const now = new Date().toISOString();
+      void saveReviewSession({ ...reviewSession, abandonedAt: now, updatedAt: now });
+    }
+    setReviewResumeDecision({ identity: reviewResumeIdentity, choice });
+  };
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult, existingSession?: ImportAssetSessionManifest): ImportWorkspace => {
     const now = new Date().toISOString();
     const groups = items.map((item, groupIndex) => {
@@ -423,7 +430,7 @@ export default function AppModals({
           onClose={() => setReviewMode(null)}
           footer={<><button type="button" className="btn-secondary" onClick={() => chooseReviewResume("restart")}>처음부터</button><button type="button" className="btn-primary" onClick={() => chooseReviewResume("resume")}>이어서 하기</button></>}
         >
-          <p>{`${Math.min(reviewSession.currentIndex + 1, reviewSession.itemRefs.length)} / ${reviewSession.itemRefs.length}까지 진행한 ${reviewMode === "today" ? "오늘 복습" : "복습"} 세션이 있습니다.`}</p>
+          <p>{`${reviewSessionCompletedCount(reviewSession, reviewSeed)} / ${reviewSession.itemRefs.length}개 문항을 평가한 ${reviewMode === "today" ? "오늘 복습" : "복습"} 세션이 있습니다.`}</p>
           <p className="form-hint">현재 복습 대상과 순서가 정확히 일치하는 세션만 이어갈 수 있습니다.</p>
         </Dialog>
       )}

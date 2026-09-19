@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ChatGptMcpPreferences } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import {
   buildChatGptPrompt,
   openChatGpt,
   recommendedChatGptQuestions,
+  type ChatGptPromptOptions,
   type ChatGptPromptMode,
 } from "../services/chatGptConnection";
 
@@ -43,6 +44,7 @@ export default function ChatGptHelpLauncher({
   questionContext,
 }: ChatGptHelpLauncherProps) {
   const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [selectedQuestion, setSelectedQuestion] = useState(() => recommendedChatGptQuestions(mode)[0]);
   const [status, setStatus] = useState<string | null>(null);
   const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
@@ -50,14 +52,17 @@ export default function ChatGptHelpLauncher({
   const contextKey = questionContext?.questionNumber ?? "";
   const [editedPrompt, setEditedPrompt] = useState<{ contextKey: string; value: string } | null>(null);
   const basePrompt = useMemo(() => {
-    const lines = [buildChatGptPrompt(mode, selectedQuestion, preferences)];
-    if (questionContext) {
-      lines.push(`\n현재 문항: ${questionContext.questionNumber}번`, questionContext.body);
-      if (questionContext.choices.length) lines.push(`선택지:\n${questionContext.choices.join("\n")}`);
-      if (preferences.shareUserResponse && questionContext.response?.trim()) lines.push(`내 답: ${questionContext.response}`);
-      if (preferences.shareScratchNote && questionContext.scratchNote?.trim()) lines.push(`풀이 메모: ${questionContext.scratchNote}`);
-    }
-    return lines.join("\n\n");
+    const promptOptions: ChatGptPromptOptions = {
+      shareUserResponse: preferences.shareUserResponse,
+      shareScratchNote: preferences.shareScratchNote,
+    };
+    return buildChatGptPrompt(mode, selectedQuestion, preferences, questionContext && {
+      questionNumber: questionContext.questionNumber,
+      questionText: questionContext.body,
+      choices: questionContext.choices,
+      response: questionContext.response,
+      scratchNote: questionContext.scratchNote,
+    }, promptOptions);
   }, [mode, preferences, questionContext, selectedQuestion]);
   const prompt = editedPrompt?.contextKey === contextKey ? editedPrompt.value : basePrompt;
   const copyPrompt = async () => {
@@ -107,10 +112,10 @@ export default function ChatGptHelpLauncher({
 
   return (
     <div className="chatgpt-help-launcher">
-      <button type="button" className="btn-secondary" onClick={() => setOpen((value) => !value)}>
+      <button ref={triggerRef} type="button" className="btn-secondary" onClick={() => setOpen((value) => !value)}>
         {label}
       </button>
-      <Dialog open={open} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={() => setOpen(false)} footer={<div className="chatgpt-help-actions">
+      <Dialog open={open} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={() => { setOpen(false); requestAnimationFrame(() => triggerRef.current?.focus()); }} header={<button type="button" className="btn-icon" aria-label="ChatGPT 도움 닫기" onClick={() => { setOpen(false); requestAnimationFrame(() => triggerRef.current?.focus()); }}>닫기</button>} footer={<div className="chatgpt-help-actions">
         <button type="button" className="btn-secondary" onClick={() => void copyPrompt()}>질문 복사</button>
         <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 동기화</button>
         <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
@@ -124,8 +129,11 @@ export default function ChatGptHelpLauncher({
             <legend>공유할 내용</legend>
             <label><input type="checkbox" checked={preferences.shareUserResponse} onChange={(event) => void onPreferencesChange({ shareUserResponse: event.target.checked })} /> 내 답</label>
             <label><input type="checkbox" checked={preferences.shareScratchNote} onChange={(event) => void onPreferencesChange({ shareScratchNote: event.target.checked })} /> 풀이 메모</label>
-            <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지 (MCP만)</label>
-            <label><input type="checkbox" checked={preferences.shareSourcePageImages} onChange={(event) => void onPreferencesChange({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지 (MCP만)</label>
+            <div className="chatgpt-help-mcp-options" aria-label="MCP 동기화 전용 공유 옵션">
+              <span>MCP 동기화 전용</span>
+              <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지</label>
+              <label><input type="checkbox" checked={preferences.shareSourcePageImages} onChange={(event) => void onPreferencesChange({ shareSourcePageImages: event.target.checked })} /> 원본 전체 페이지</label>
+            </div>
           </fieldset>
           <div className="chatgpt-help-questions" aria-label="추천 질문">
             {questions.map((question) => (

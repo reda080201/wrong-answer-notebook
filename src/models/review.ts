@@ -125,4 +125,5 @@ export interface ReviewSession {
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
+  abandonedAt?: string;
 }

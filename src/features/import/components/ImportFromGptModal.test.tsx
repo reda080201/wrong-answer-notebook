@@ -132,6 +132,7 @@ describe("ImportFromGptModal", () => {
     fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [new File(["image"], "paper.png", { type: "image/png" })] } });
     await screen.findByText(/원본 .*페이지를 보존했습니다/);
     fireEvent.click(screen.getByRole("button", { name: "취소" }));
+    fireEvent.click(screen.getByRole("button", { name: "변경사항 버리고 닫기" }));
 
     expect(await screen.findByText(/임시 파일 정리 실패/)).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();

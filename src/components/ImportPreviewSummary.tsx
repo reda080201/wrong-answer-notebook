@@ -56,7 +56,7 @@ export default function ImportPreviewSummary({
           {validationReport.audit.uncertainQuestionNumbers.length > 0 && (
             <p>불확실 문제: {validationReport.audit.uncertainQuestionNumbers.join(", ")}</p>
           )}
-          {!validationReport.audit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+          {validationReport.audit.handwritingExcluded === false && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
           {rejectedNotes.length > 0 && (
             <div className="import-rejected-notes">
               <b>학습 데이터에서 제외된 학생 필기</b>

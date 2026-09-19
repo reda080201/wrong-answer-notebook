@@ -4,6 +4,7 @@ import { PRACTICE_MODE_LABELS, mistakeCauseLabel, summarizeMistakeAnalysis } fro
 import CollapsibleSection from "./CollapsibleSection";
 import ConceptGraph from "./ConceptGraph";
 import MathText from "./MathText";
+import { getEntryImportReviewSummary } from "../utils/importAudit";
 
 interface EntryImportAuditSectionProps {
   entry: WrongAnswerEntry;
@@ -11,7 +12,8 @@ interface EntryImportAuditSectionProps {
 }
 
 export function EntryImportAuditSection({ entry, onOpenReview }: EntryImportAuditSectionProps) {
-  if (!entry.importAudit && (entry.rejectedNotes?.length ?? 0) === 0) return null;
+  const summary = getEntryImportReviewSummary(entry);
+  if (!summary.hasAuditIssue) return null;
   const rejectedNotes = entry.rejectedNotes ?? [];
 
   const hasDanger = Boolean(
@@ -22,7 +24,7 @@ export function EntryImportAuditSection({ entry, onOpenReview }: EntryImportAudi
   return (
     <section className={`import-audit-summary detail-import-audit ${hasDanger ? "import-audit-summary--danger" : ""}`}>
       <strong>AI 가져오기 검토</strong>
-      <p>{entry.importAudit?.needsReviewCount ?? entry.rejectedNotes?.length ?? 0}개 항목 확인 필요</p>
+      <p>{summary.auditIssueCount}개 항목 확인 필요</p>
       {onOpenReview && <button type="button" className="btn-primary btn-sm" onClick={onOpenReview}>검토 열기</button>}
       {entry.importAudit && (
         <>
@@ -33,7 +35,7 @@ export function EntryImportAuditSection({ entry, onOpenReview }: EntryImportAudi
             </span>
             {entry.importAudit.missingQuestionNumbers.length > 0 && <p>누락 문제: {entry.importAudit.missingQuestionNumbers.join(", ")}</p>}
             {entry.importAudit.uncertainQuestionNumbers.length > 0 && <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>}
-            {!entry.importAudit.handwritingExcluded && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
+            {entry.importAudit.handwritingExcluded === false && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
           </details>
         </>
       )}
