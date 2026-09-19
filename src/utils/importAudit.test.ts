@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredQuestion } from "../types";
-import { normalizeImportAudit, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
+import { getEntryImportReviewSummary, normalizeImportAudit, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
 
 function question(overrides: Partial<StructuredQuestion> = {}): StructuredQuestion {
   return {
@@ -19,6 +19,33 @@ function question(overrides: Partial<StructuredQuestion> = {}): StructuredQuesti
 }
 
 describe("import audit structured questions", () => {
+  it("deduplicates question review counts from missing, uncertain, and aggregate audit values", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: {
+        expectedQuestionNumbers: ["1", "2"],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: ["1"],
+        uncertainQuestionNumbers: ["2"],
+        needsReviewCount: 2,
+      },
+    });
+
+    expect(summary.questionReviewCount).toBe(2);
+    expect(summary.additionalAuditCount).toBe(0);
+    expect(summary.auditIssueCount).toBe(2);
+  });
+
+  it("keeps non-question checks separate and preserves rejected-note guidance", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: { expectedQuestionNumbers: [], detectedQuestionNumbers: [], missingQuestionNumbers: [], uncertainQuestionNumbers: [], needsReviewCount: 0, handwritingExcluded: false },
+      rejectedNotes: ["필기"],
+    });
+    expect(summary.questionReviewCount).toBe(0);
+    expect(summary.additionalAuditCount).toBe(1);
+    expect(summary.rejectedNoteCount).toBe(1);
+    expect(summary.hasAuditIssue).toBe(true);
+  });
+
   it("compares expected audit numbers with canonical structured numbers", () => {
     const audit = normalizeImportAudit({ expectedQuestionNumbers: ["1", "2"], detectedQuestionNumbers: ["2"] }, {
       question: "1. 호환 본문\n\n2. 호환 본문",

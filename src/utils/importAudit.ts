@@ -283,6 +283,8 @@ export function normalizeImportAudit(
 }
 
 export interface EntryImportReviewSummary {
+  questionReviewCount: number;
+  additionalAuditCount: number;
   auditIssueCount: number;
   hasAuditIssue: boolean;
   rejectedNoteCount: number;
@@ -290,9 +292,16 @@ export interface EntryImportReviewSummary {
 
 export function getEntryImportReviewSummary(data: Pick<Partial<EntryFormData>, "importAudit" | "rejectedNotes">): EntryImportReviewSummary {
   const audit = data.importAudit;
-  const auditIssueCount = audit
-    ? audit.missingQuestionNumbers.length + audit.uncertainQuestionNumbers.length + audit.needsReviewCount + (audit.handwritingExcluded === false ? 1 : 0) + (audit.rejectedItems?.length ?? 0)
-    : 0;
+  const questionNumbers = new Set([
+    ...(audit?.missingQuestionNumbers ?? []),
+    ...(audit?.uncertainQuestionNumbers ?? []),
+  ]);
+  // needsReviewCount may already include missing/uncertain questions. Use the
+  // larger of the explicit question set and the aggregate count so a question
+  // is never counted twice while unnumbered answer/figure issues remain visible.
+  const questionReviewCount = Math.max(questionNumbers.size, audit?.needsReviewCount ?? 0);
+  const additionalAuditCount = (audit?.handwritingExcluded === false ? 1 : 0) + (audit?.rejectedItems?.length ?? 0);
   const rejectedNoteCount = data.rejectedNotes?.length ?? 0;
-  return { auditIssueCount, hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0, rejectedNoteCount };
+  const auditIssueCount = questionReviewCount + additionalAuditCount;
+  return { questionReviewCount, additionalAuditCount, auditIssueCount, hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0, rejectedNoteCount };
 }
