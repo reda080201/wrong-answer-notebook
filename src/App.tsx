@@ -150,6 +150,9 @@ function AppContent() {
   const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
   const [autoCompactEntryPane, setAutoCompactEntryPane] = useState(false);
+  const [entryPaneResponsiveIntent, setEntryPaneResponsiveIntent] = useState<{ selectedId: string | null; value: boolean | null }>({ selectedId: null, value: null });
+  const entryPaneResponsiveOverride = entryPaneResponsiveIntent.selectedId === selectedId ? entryPaneResponsiveIntent.value : null;
+  const { setEntryPaneCollapsed } = shell;
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -261,17 +264,19 @@ function AppContent() {
 
   useEffect(() => {
     const updateCompactMode = () => {
+      if (entryPaneResponsiveOverride !== null) return;
       setAutoCompactEntryPane(window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet");
     };
     updateCompactMode();
     window.addEventListener("resize", updateCompactMode);
     return () => window.removeEventListener("resize", updateCompactMode);
-  }, [selected?.entryKind, selectedId]);
+  }, [entryPaneResponsiveOverride, selected?.entryKind, selectedId]);
 
   const handleEntryPaneCollapsedChange = useCallback((collapsed: boolean) => {
-    if (!collapsed) setAutoCompactEntryPane(false);
-    shell.setEntryPaneCollapsed(collapsed);
-  }, [shell.setEntryPaneCollapsed]);
+    setEntryPaneResponsiveIntent({ selectedId, value: collapsed });
+    setAutoCompactEntryPane(collapsed);
+    setEntryPaneCollapsed(collapsed);
+  }, [selectedId, setEntryPaneCollapsed]);
 
   const { removeEntryLinks } = knowledgeGraph;
   const handleFinalizedKnowledgeGraphEntry = useCallback(
