@@ -51,8 +51,8 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
                   <dd>{entry.importAudit.missingQuestionNumbers.length}</dd>
                 </div>
                 <div>
-                  <dt>검토</dt>
-                  <dd>{entry.importAudit.needsReviewCount}</dd>
+                  <dt>검토 필요 문항</dt>
+                  <dd>{importReviewSummary.questionReviewCount}</dd>
                 </div>
               </dl>
             )}
