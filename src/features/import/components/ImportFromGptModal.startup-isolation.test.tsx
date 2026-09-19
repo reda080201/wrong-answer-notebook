@@ -64,7 +64,7 @@ describe("ImportFromGptModal startup isolation", () => {
   it("does not enable, pair, sync MCP, invoke Tauri commands, or open a native window when rendered", () => {
     renderModal();
 
-    expect(screen.getByRole("dialog", { name: "GPT 결과 가져오기" })).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "시험지 가져오기" })).toBeInTheDocument();
     expect(setMcpBridgeEnabled).not.toHaveBeenCalled();
     expect(createMcpBridgePairing).not.toHaveBeenCalled();
     expect(syncMcpBridgeActiveContext).not.toHaveBeenCalled();
