@@ -150,8 +150,6 @@ function AppContent() {
   const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
   const [autoCompactEntryPane, setAutoCompactEntryPane] = useState(false);
-  const [entryPaneResponsiveIntent, setEntryPaneResponsiveIntent] = useState<{ selectedId: string | null; value: boolean | null }>({ selectedId: null, value: null });
-  const entryPaneResponsiveOverride = entryPaneResponsiveIntent.selectedId === selectedId ? entryPaneResponsiveIntent.value : null;
   const { setEntryPaneCollapsed } = shell;
   const {
     registerWorkspaceDraftFlush,
@@ -261,6 +259,8 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+  const [entryPaneResponsiveIntent, setEntryPaneResponsiveIntent] = useState<{ selectedId: string | null; value: boolean | null }>({ selectedId: null, value: null });
+  const entryPaneResponsiveOverride = entryPaneResponsiveIntent.selectedId === selectedId ? entryPaneResponsiveIntent.value : null;
 
   useEffect(() => {
     const updateCompactMode = () => {
