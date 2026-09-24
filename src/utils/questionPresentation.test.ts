@@ -114,4 +114,23 @@ describe("normalizeQuestionPresentationSegments", () => {
       "첫 문장.", "추가 문장.", "A", "값을 구하시오.",
     ]);
   });
+  it("places legacy sentences around their exact neighboring anchors with unique deterministic IDs", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "본문. 추가 문장.", conditions: [], equations: [],
+      contentSegments: [{ id: "legacy-supplement-1", type: "text", text: "본문." }],
+    });
+    expect(segments.map((segment) => segment.id)).toEqual(["legacy-supplement-1", "legacy-supplement-2"]);
+    expect(segments[1]).toMatchObject({ type: "text", text: "추가 문장." });
+    expect(new Set(segments.map((segment) => segment.id)).size).toBe(segments.length);
+  });
+
+  it("keeps multiple missing sentences after one exact anchor in source order", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "기준 문장. 보충 첫째. 보충 둘째.", conditions: [], equations: [],
+      contentSegments: [{ id: "anchor", type: "text", text: "기준 문장." }],
+    });
+    expect(segments.map((segment) => segment.type === "text" ? segment.text : "")).toEqual(["기준 문장.", "보충 첫째.", "보충 둘째."]);
+    expect(new Set(segments.map((segment) => segment.id)).size).toBe(segments.length);
+  });
+
 });

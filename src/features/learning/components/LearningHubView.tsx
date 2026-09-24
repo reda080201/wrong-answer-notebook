@@ -44,6 +44,7 @@ interface LearningHubViewProps {
   highlightedBlock?: { entryId: string; blockId: string } | null;
   aiProviderStatus?: AiProviderStatus | null;
   onOpenAiSettings?: () => void;
+  onOpenImport?: () => void;
   onRegisterScrollContainer?: (key: string, element: HTMLElement | null) => void;
   headerAccessory?: ReactNode;
 }
@@ -149,7 +150,7 @@ function LearningBlockCard({ item, onOpenSource, onUpdateBlock, onDuplicateBlock
   </article>;
 }
 
-export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings, onRegisterScrollContainer, headerAccessory }: LearningHubViewProps) {
+export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, onDuplicateBlock, onDeleteBlock, onOpenCandidateReview, questionBankItems = [], highlightedBlock = null, aiProviderStatus, onOpenAiSettings, onOpenImport, onRegisterScrollContainer, headerAccessory }: LearningHubViewProps) {
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
@@ -240,8 +241,8 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     setBulkReviewBusy(false);
   };
   return <section className="learning-hub" aria-label="학습 허브">
-    <header className="learning-hub-heading"><div><span>Learning hub</span><h2>과목별 학습 지식 허브</h2><p>저장된 개념, 공식, 풀이법과 복습 포인트를 한곳에서 찾습니다.</p><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><div className="learning-hub-heading__actions">{headerAccessory}<strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></div></header>
-    {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)}><header className="modal-head"><h2>시험지 선택</h2></header><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="제목·과목·단원·태그 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}{!visibleCandidates.length && <div className="empty-state"><p>답안 정보가 있는 시험지를 찾지 못했습니다.</p><p className="form-hint">문항 답안이 연결된 자료만 학습 후보로 만들 수 있습니다.</p></div>}</div></Dialog>}
+    <header className="learning-hub-heading"><div><span>학습 허브</span><h2>학습 허브</h2><button className="btn-primary" type="button" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button></div><div className="learning-hub-heading__actions">{headerAccessory}<strong aria-label={`학습 항목 ${filtered.length}개`}>학습 항목 {filtered.length}개</strong></div></header>
+    {candidatePickerOpen && <Dialog open size="md" ariaLabel="학습 후보 소스 선택" onClose={() => setCandidatePickerOpen(false)} header={<><h2>시험지 선택</h2><button type="button" className="btn-icon" aria-label="시험지 선택 닫기" onClick={() => setCandidatePickerOpen(false)}>닫기</button></>}><div className="candidate-source-picker"><input autoFocus type="search" value={candidateSearch} onChange={(event) => setCandidateSearch(event.target.value)} placeholder="제목·과목·단원·태그 검색" />{visibleCandidates.map((entry) => <button key={entry.id} type="button" onClick={() => { setCandidatePickerOpen(false); onOpenCandidateReview(entry.id); }}>{entry.title}<small>{entry.subject}</small></button>)}{!visibleCandidates.length && <div className="empty-state"><p>{candidateEntries.length ? "검색 조건에 맞는 시험지를 찾지 못했습니다." : "답안 정보가 있는 시험지를 찾지 못했습니다."}</p><p className="form-hint">{candidateEntries.length ? "검색어를 지우고 다시 확인해 보세요." : "문항 답안이 연결된 자료만 학습 후보로 만들 수 있습니다."}</p><div className="learning-candidate-recovery"><button type="button" className="btn-secondary" onClick={() => { setCandidatePickerOpen(false); const entry = entries.find((item) => item.entryKind === "problem_sheet"); if (entry) onOpenSource(entry.id); }}>시험지 열기</button>{onOpenImport && <button type="button" className="btn-secondary" onClick={onOpenImport}>시험지 가져오기</button>}</div></div>}</div></Dialog>}
     <div className="learning-hub-filters">
       <SearchField ariaLabel="학습 내용 검색" value={filters.search} onChange={(search) => set("search", search)} placeholder="제목, 개념, 공식, 예시 검색" />
       <select aria-label="과목 필터" value={filters.domain} onChange={(event) => set("domain", event.target.value as LearningHubFilters["domain"])}>{Object.entries(DOMAIN_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
@@ -264,6 +265,6 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     {filtered.length ? <div className="learning-hub-workspace">
       <aside className="learning-hub-outline" aria-label="학습 항목 목록" ref={(element) => onRegisterScrollContainer?.("learning-hub-outline", element)}>{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setSelectedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || item.block.type}</small></button>; })}</aside>
       <main className="learning-hub-selected">{(() => { const item = filtered.find((candidate) => `${candidate.sourceEntryId}:${candidate.block.id}` === selectedBlockKey) ?? filtered[0]; return <LearningBlockCard item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />; })()}</main>
-    </div> : <div className="detail-panel empty-state"><p>조건에 맞는 학습 카드가 없습니다.</p>{filters.search && <button type="button" className="btn-secondary" onClick={() => set("search", "")}>검색어 지우기</button>}<button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button></div>}
+    </div> : <div className="detail-panel empty-state"><p>{items.length === 0 ? "아직 학습 카드가 없습니다." : "조건에 맞는 학습 카드가 없습니다."}</p>{items.length === 0 ? <div className="learning-hub-empty-actions"><button type="button" className="btn-primary" onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button>{onOpenImport && <button type="button" className="btn-secondary" onClick={onOpenImport}>시험지 가져오기</button>}</div> : <>{filters.search && <button type="button" className="btn-secondary" onClick={() => set("search", "")}>검색어 지우기</button>}<button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button></>}</div>}
   </section>;
 }
