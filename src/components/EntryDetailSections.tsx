@@ -25,7 +25,9 @@ export function EntryImportAuditSection({ entry, onOpenReview }: EntryImportAudi
     <section className={`import-audit-summary detail-import-audit ${hasDanger ? "import-audit-summary--danger" : ""}`}>
       <strong>{entry.importAudit ? "AI 가져오기 검토" : "가져오기 확인"}</strong>
       {summary.questionReviewCount > 0 && <p>검토 필요 문항 {summary.questionReviewCount}개</p>}
-      {summary.additionalAuditCount > 0 && <p>추가 확인 항목 {summary.additionalAuditCount}개</p>}
+      {summary.legacyReviewCount > 0 && <p>검토 필요 항목 {summary.legacyReviewCount}개</p>}
+      {summary.handwritingNeedsReview && <p>손글씨 확인 필요</p>}
+      {summary.rejectedItemCount > 0 && <p>제외된 가져오기 항목 {summary.rejectedItemCount}개</p>}
       {summary.rejectedNoteCount > 0 && <p>제외된 필기 {summary.rejectedNoteCount}개</p>}
       {onOpenReview && <button type="button" className="btn-primary btn-sm" onClick={onOpenReview}>검토 열기</button>}
       {entry.importAudit && (

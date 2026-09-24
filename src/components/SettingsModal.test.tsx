@@ -182,7 +182,7 @@ describe("SettingsModal", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "학습" }));
     fireEvent.click(screen.getByRole("button", { name: "시험" }));
-    expect(screen.getByText("기본 제한 시간(분)")).toBeInTheDocument();
+    expect(screen.getByLabelText("기본 제한 시간(분)")).toBeInTheDocument();
     expect(screen.getByLabelText("답안지 처음 열기")).toBeInTheDocument();
     expect(screen.getByLabelText("종료 전 경고")).toBeInTheDocument();
     expect(screen.getByLabelText("시간 만료 시 자동 제출")).toBeInTheDocument();

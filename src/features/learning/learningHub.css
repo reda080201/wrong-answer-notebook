@@ -2,7 +2,7 @@
 .learning-hub-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-5); margin: 0 auto var(--space-4); max-width: 1320px; }
 .learning-hub-heading span { color: var(--accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
 .learning-hub-heading h2 { margin: var(--space-1) 0; font-size: 24px; }
-.learning-hub-heading p { margin: 0; color: var(--text-muted); }
+.learning-hub-heading p { display: none; }
 .learning-hub-heading strong { color: var(--text-muted); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .learning-hub-heading__actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .learning-hub-source-actions { display: flex; flex-wrap: wrap; gap: var(--space-1); margin-top: var(--space-3); }

@@ -284,6 +284,9 @@ export function normalizeImportAudit(
 
 export interface EntryImportReviewSummary {
   questionReviewCount: number;
+  legacyReviewCount: number;
+  rejectedItemCount: number;
+  handwritingNeedsReview: boolean;
   additionalAuditCount: number;
   auditIssueCount: number;
   hasAuditIssue: boolean;
@@ -295,13 +298,24 @@ export function getEntryImportReviewSummary(data: Pick<Partial<EntryFormData>, "
   const questionNumbers = new Set([
     ...(audit?.missingQuestionNumbers ?? []),
     ...(audit?.uncertainQuestionNumbers ?? []),
-  ]);
-  // needsReviewCount may already include missing/uncertain questions. Use the
-  // larger of the explicit question set and the aggregate count so a question
-  // is never counted twice while unnumbered answer/figure issues remain visible.
-  const questionReviewCount = Math.max(questionNumbers.size, audit?.needsReviewCount ?? 0);
-  const additionalAuditCount = (audit?.handwritingExcluded === false ? 1 : 0) + (audit?.rejectedItems?.length ?? 0);
+  ].map(normalizeImportQuestionNumber).filter(Boolean));
+  const questionReviewCount = questionNumbers.size;
+  // Legacy aggregates do not say whether the count represents questions or
+  // other review flags. Show only the residual as an unclassified item count.
+  const legacyReviewCount = Math.max(0, (audit?.needsReviewCount ?? 0) - questionReviewCount);
+  const rejectedItemCount = audit?.rejectedItems?.length ?? 0;
+  const handwritingNeedsReview = audit?.handwritingExcluded === false;
+  const additionalAuditCount = legacyReviewCount + rejectedItemCount + Number(handwritingNeedsReview);
   const rejectedNoteCount = data.rejectedNotes?.length ?? 0;
   const auditIssueCount = questionReviewCount + additionalAuditCount;
-  return { questionReviewCount, additionalAuditCount, auditIssueCount, hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0, rejectedNoteCount };
+  return {
+    questionReviewCount,
+    legacyReviewCount,
+    rejectedItemCount,
+    handwritingNeedsReview,
+    additionalAuditCount,
+    auditIssueCount,
+    hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0,
+    rejectedNoteCount,
+  };
 }
