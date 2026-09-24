@@ -150,7 +150,7 @@ function AppContent() {
   const questionRenderPersistingRef = useRef(false);
   const shell = useUiShellPreferences();
   const [autoCompactEntryPane, setAutoCompactEntryPane] = useState(false);
-  const { setEntryPaneCollapsed } = shell;
+  const { setEntryPaneCollapsed, setEntryPaneOverride } = shell;
   const {
     registerWorkspaceDraftFlush,
     registerQuestionBankPreferenceFlush,
@@ -259,24 +259,23 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
-  const [entryPaneResponsiveIntent, setEntryPaneResponsiveIntent] = useState<{ selectedId: string | null; value: boolean | null }>({ selectedId: null, value: null });
-  const entryPaneResponsiveOverride = entryPaneResponsiveIntent.selectedId === selectedId ? entryPaneResponsiveIntent.value : null;
+  const selectedEntryPaneOverride = selectedId ? shell.entryPaneOverrides[selectedId] : undefined;
 
   useEffect(() => {
-    const updateCompactMode = () => {
-      if (entryPaneResponsiveOverride !== null) return;
-      setAutoCompactEntryPane(window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet");
-    };
+    const updateCompactMode = () => setAutoCompactEntryPane(window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet");
     updateCompactMode();
     window.addEventListener("resize", updateCompactMode);
     return () => window.removeEventListener("resize", updateCompactMode);
-  }, [entryPaneResponsiveOverride, selected?.entryKind, selectedId]);
+  }, [selected?.entryKind, selectedId]);
+
+  const entryPaneCollapsed = selected?.entryKind === "problem_sheet"
+    ? selectedEntryPaneOverride ?? autoCompactEntryPane
+    : shell.entryPaneCollapsed;
 
   const handleEntryPaneCollapsedChange = useCallback((collapsed: boolean) => {
-    setEntryPaneResponsiveIntent({ selectedId, value: collapsed });
-    setAutoCompactEntryPane(collapsed);
-    setEntryPaneCollapsed(collapsed);
-  }, [selectedId, setEntryPaneCollapsed]);
+    if (selected?.entryKind === "problem_sheet" && selectedId) setEntryPaneOverride(selectedId, collapsed);
+    else setEntryPaneCollapsed(collapsed);
+  }, [selected?.entryKind, selectedId, setEntryPaneCollapsed, setEntryPaneOverride]);
 
   const { removeEntryLinks } = knowledgeGraph;
   const handleFinalizedKnowledgeGraphEntry = useCallback(
@@ -605,7 +604,7 @@ function AppContent() {
   return (
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <CommandPalette commands={appCommands} />
-    <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${shell.entryPaneCollapsed || autoCompactEntryPane ? " app-shell--entry-collapsed" : ""}`}>
+    <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
         navigationController={appNavigationController}
         activeSection={activeSection}
@@ -694,6 +693,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
                 const itemEntry = entries.find((entry) => entry.id === item.entryId);
@@ -721,6 +721,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               knowledgeGraph={knowledgeGraph}
               subjectFilter={subjectFilter}
@@ -754,7 +755,7 @@ function AppContent() {
             onEditEntry={actions.openEditEntry}
             onDeleteEntry={(entryId) => void actions.deleteEntryById(entryId)}
             onLinkLearningEntry={actions.openLearningEntryLink}
-            collapsed={shell.entryPaneCollapsed || autoCompactEntryPane}
+            collapsed={entryPaneCollapsed}
             width={shell.entryPaneWidth}
             onCollapsedChange={handleEntryPaneCollapsedChange}
             onWidthChange={shell.setEntryPaneWidth}

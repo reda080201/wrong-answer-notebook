@@ -1078,8 +1078,8 @@ export default function ImportFromGptModal({
         open
         onClose={handleClose}
         className={`form-modal form-modal--wide import-modal${!isSolutionMode && !isSupplementalMode ? " import-modal--with-tabs" : ""}`}
-        title={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? `${supplementalModeLabel(supplementalMode)} · ${sourceEntry?.title ?? "문제지"}` : "GPT 결과 가져오기"}
-        ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "GPT 결과 가져오기"}
+        title={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? `${supplementalModeLabel(supplementalMode)} · ${sourceEntry?.title ?? "문제지"}` : "시험지 가져오기"}
+        ariaLabel={isSolutionMode ? "GPT 해설 빠른 가져오기" : isSupplementalMode ? "기존 문제지에 추가 자료 연결" : "시험지 가져오기"}
         scrollMode="custom"
         closeDisabled={saving || aiGenerating}
         busy={saving || aiGenerating}
@@ -1097,7 +1097,7 @@ export default function ImportFromGptModal({
             </button>
           </div>}
         footer={<div className="import-modal-footer">
-          {!canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}
+          {draft && !canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}
           <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         </div>}
       >
@@ -1478,7 +1478,7 @@ export default function ImportFromGptModal({
 }`}</pre>
               </details>
 
-              {!isSolutionMode && (
+              {!isSolutionMode && importInputMode !== "direct" && (
                 <>
                   <ImagePreprocessor
                     onAddImage={(filenameToAdd) => {
@@ -1497,6 +1497,20 @@ export default function ImportFromGptModal({
                     }
                   />
                 </>
+              )}
+              {!isSolutionMode && importInputMode === "direct" && (
+                <details className="import-direct-image-options">
+                  <summary>이미지 추가(선택)</summary>
+                  <ImageField
+                    label="원본 사진"
+                    images={images}
+                    onChange={setImages}
+                    onImagesAdded={rememberSupplementalImages}
+                    onRemove={(filenameToRemove) =>
+                      setImages((current) => current.filter((item) => item !== filenameToRemove))
+                    }
+                  />
+                </details>
               )}
             </section>
 

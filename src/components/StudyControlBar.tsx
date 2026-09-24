@@ -113,7 +113,7 @@ export default function StudyControlBar({
         )}
 
         {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}</button>}
-        {onOpenGptExport && !isConcept && <button type="button" className="study-control-nav-button" onClick={onOpenGptExport}>AI</button>}
+        {onOpenGptExport && !isConcept && <button type="button" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문</button>}
 
         <button
           type="button"

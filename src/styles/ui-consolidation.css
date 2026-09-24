@@ -37,11 +37,34 @@
 .app-sidebar .section-tab-btn.active { background: var(--accent-soft); color: var(--text); box-shadow: inset 3px 0 0 var(--accent); }
 .detail-toolbar--problem-sheet { gap: var(--space-2); border-bottom: 1px solid var(--border); background: var(--surface); box-shadow: none; }
 .problem-sheet-primary-controls { flex-wrap: nowrap; }
+.study-control-gpt-button { min-width: 76px; }
+.settings-input-with-suffix { display: inline-flex; align-items: center; gap: var(--space-2); }
+.settings-input-with-suffix input { width: 96px; min-height: var(--control-height); }
+.settings-input-with-suffix > span { color: var(--text-muted); }
+.learning-hub-empty-actions { display: flex; justify-content: center; gap: var(--space-2); flex-wrap: wrap; }
+.learning-hub-heading span { text-transform: none; }
+.import-preview:has(.import-preview-empty) { min-height: 0; }
+.import-preview:has(.import-preview-empty) .import-preview-empty { min-height: 96px; padding: var(--space-4); border: 1px dashed var(--border); background: transparent; }
+.import-direct-image-options { margin-top: var(--space-3); }
+.import-direct-image-options > summary { cursor: pointer; color: var(--text-muted); }
+.export-chatgpt-share-panel section { display: grid; gap: var(--space-2); }
+.export-chatgpt-share-panel section > h4 { margin: var(--space-2) 0 0; }
+.export-chatgpt-share-panel section label { display: inline-flex; min-height: var(--control-height-compact); align-items: center; gap: var(--space-2); }
+.export-chatgpt-share-panel fieldset { display: grid; gap: var(--space-2); margin: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.export-chatgpt-share-panel fieldset legend { padding: 0 var(--space-1); color: var(--text-muted); font-size: 12px; }
+.export-chatgpt-share-panel .export-prompt-preview { max-width: 100%; margin: 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.export-chatgpt-share-panel .export-panel-footer { position: sticky; bottom: 0; z-index: 1; padding-top: var(--space-3); background: var(--surface); }
+
+/* Keep the paper hierarchy quiet: reading content carries the emphasis. */
+.study-paper--exam .structured-problem-sheet-question { border-color: var(--border); box-shadow: none; }
+.study-paper--exam .question-number { background: transparent; border-bottom: 1px solid var(--border); color: var(--text); }
+.study-paper--exam .question-body { font-size: 16px; }
 
 @media (max-width: 1100px) {
   .toolbar { flex-wrap: nowrap; overflow: hidden; }
   .toolbar .search-input { min-width: 180px; }
   .problem-sheet-primary-controls .detail-search-inline { max-width: 240px; }
+  .export-chatgpt-share-panel .export-panel-footer { position: sticky; }
 }
 
 /* Short viewports reserve the available height for the question itself. */
@@ -56,3 +79,33 @@
 .study-control-bar { padding: 2px var(--space-3); box-shadow: none; }
 .study-control-row--primary { min-height: 48px; }
 .study-control-bar:not(:has(.study-control-row--secondary)) { max-height: 52px; overflow: visible; }
+
+/* Keep the primary workspace quiet: secondary choices live behind one filter action. */
+.toolbar { position: relative; flex-wrap: wrap; min-width: 0; background: var(--surface); }
+.toolbar-filter-button { min-height: var(--control-height); padding: 0 var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); white-space: nowrap; }
+.toolbar-filter-button[aria-expanded="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.toolbar-settings-button.btn-icon { width: var(--control-height); min-width: var(--control-height); padding: 0; }
+.toolbar-active-chips { display: flex; flex: 1 0 100%; flex-wrap: wrap; gap: var(--space-1); }
+.toolbar-active-chips button { min-height: 28px; padding: 0 var(--space-2); border: 1px solid var(--border); border-radius: 999px; background: var(--surface-soft); color: var(--text); font-size: 12px; }
+.toolbar-filter-panel { display: grid; gap: var(--space-4); }
+.toolbar-filter-panel label, .toolbar-filter-panel fieldset { display: grid; gap: var(--space-2); margin: 0; }
+.toolbar-filter-panel select { min-height: var(--control-height); padding: 0 var(--space-2); }
+.toolbar-filter-panel fieldset { border: 0; padding: 0; }
+.toolbar-filter-panel .filter-toggle { flex-wrap: wrap; }
+.subject-list-heading { display: flex; align-items: center; justify-content: space-between; min-height: 32px; color: var(--text-muted); font-size: 12px; }
+.subject-drag-handle { visibility: hidden; width: 18px; color: var(--text-muted); }
+.subject-row .subject-item:hover .subject-drag-handle, .subject-row.dragging .subject-drag-handle, .subject-list:has(.subject-list-heading button[aria-pressed="true"]) .subject-drag-handle { visibility: visible; }
+
+@media screen {
+  .study-paper { background: var(--app-bg); }
+  .study-paper-sheet { border: 0; border-radius: 0; background: var(--surface); box-shadow: none; }
+  .study-paper .structured-problem-sheet-question { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+  .study-paper .question-number { border: 0; border-bottom: 1px solid var(--border); border-radius: 0; background: transparent; }
+  .study-paper .question-body { padding-inline: 0; }
+  .study-paper .question-body-segment--condition, .study-paper .question-body-segment--view { border: 0; border-left: 2px solid var(--border); border-radius: 0; background: transparent; }
+}
+
+@media (max-width: 1100px) {
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .toolbar-active-chips { grid-column: 1 / -1; }
+}
