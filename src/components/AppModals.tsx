@@ -4,7 +4,7 @@ import LearningImportModal, { type LearningImportAnalysis } from "./LearningImpo
 import ReviewPanel from "./ReviewPanel";
 import Dialog from "../shared/ui/Dialog";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
 import type {
@@ -98,7 +98,7 @@ export default function AppModals({
   const [reviewResumeBusy, setReviewResumeBusy] = useState(false);
   const [reviewResumeError, setReviewResumeError] = useState<string | null>(null);
   const reviewResumeIdentityRef = useRef(reviewResumeIdentity);
-  useEffect(() => { reviewResumeIdentityRef.current = reviewResumeIdentity; }, [reviewResumeIdentity]);
+  useLayoutEffect(() => { reviewResumeIdentityRef.current = reviewResumeIdentity; }, [reviewResumeIdentity]);
   const reviewResumeBusyRef = useRef(false);
   const reviewResumeOperationRef = useRef(0);
   useEffect(() => () => { reviewResumeOperationRef.current += 1; }, []);
