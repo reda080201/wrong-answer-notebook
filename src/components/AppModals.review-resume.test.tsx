@@ -51,7 +51,7 @@ function renderApp(saveSession: (value: ReviewSession) => Promise<void>, setMode
 describe("AppModals review restart integration", () => {
   it("waits for the old session save, blocks duplicate actions and close, then renders ReviewPanel", async () => {
     const pending = deferred<void>();
-    const saveSession = vi.fn((_value: ReviewSession) => pending.promise);
+    const saveSession = vi.fn((value: ReviewSession) => { void value; return pending.promise; });
     const setMode = vi.fn();
     renderApp(saveSession, setMode);
 
@@ -77,11 +77,11 @@ describe("AppModals review restart integration", () => {
   it("keeps the resume dialog and original records after rejection, then permits retry", async () => {
     const first = deferred<void>();
     const second = deferred<void>();
-    const saveSession = vi.fn((_value: ReviewSession): Promise<void> => Promise.resolve()).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const saveSession = vi.fn((value: ReviewSession): Promise<void> => { void value; return Promise.resolve(); }).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
     renderApp(saveSession);
 
     fireEvent.click(screen.getByRole("button", { name: "처음부터" }));
-    await act(async () => { first.reject(new Error("disk full")); try { await first.promise; } catch {} });
+    await act(async () => { first.reject(new Error("disk full")); try { await first.promise; } catch (error) { expect(error).toBeInstanceOf(Error); } });
     expect(await screen.findByRole("alert")).toHaveTextContent("disk full");
     expect(screen.getByRole("dialog", { name: "복습 이어서 하기" })).toBeInTheDocument();
     expect(screen.queryByRole("dialog", { name: "랜덤 복습" })).not.toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("AppModals review restart integration", () => {
   });
 
   it("resumes the existing session without marking it abandoned", async () => {
-    const saveSession = vi.fn(async (_value: ReviewSession) => undefined);
+    const saveSession = vi.fn(async (value: ReviewSession) => { void value; });
     renderApp(saveSession);
     fireEvent.click(screen.getByRole("button", { name: "이어서 하기" }));
     expect(await screen.findByRole("dialog", { name: "랜덤 복습" })).toBeInTheDocument();

@@ -98,7 +98,7 @@ export default function AppModals({
   const [reviewResumeBusy, setReviewResumeBusy] = useState(false);
   const [reviewResumeError, setReviewResumeError] = useState<string | null>(null);
   const reviewResumeIdentityRef = useRef(reviewResumeIdentity);
-  reviewResumeIdentityRef.current = reviewResumeIdentity;
+  useEffect(() => { reviewResumeIdentityRef.current = reviewResumeIdentity; }, [reviewResumeIdentity]);
   const reviewResumeBusyRef = useRef(false);
   const reviewResumeOperationRef = useRef(0);
   useEffect(() => () => { reviewResumeOperationRef.current += 1; }, []);
