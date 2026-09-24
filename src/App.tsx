@@ -689,6 +689,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
                 const itemEntry = entries.find((entry) => entry.id === item.entryId);
@@ -716,6 +717,7 @@ function AppContent() {
               openCandidateReview={setLearningCandidateEntryId}
               aiProviderStatus={aiProviderStatus}
               onOpenAiSettings={() => openSettings("gpt-mcp")}
+              onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
               knowledgeGraph={knowledgeGraph}
               subjectFilter={subjectFilter}

@@ -40,6 +40,7 @@ import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
 import type { ChatGptSharePayload } from "../../../features/export/types";
 import type { GptSolutionPurpose } from "../../../features/export/components/ChatGptSharePanel";
+import ChatGptHelpLauncher from "../../../features/chatgpt/components/ChatGptHelpLauncher";
 import GptSolutionRoundtripModal from "../../../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
 import type { GptSolutionRoundtripDraft } from "../../../features/gpt-solution-roundtrip/model";
 import { validateGptSolutionResponse } from "../../../features/gpt-solution-roundtrip/services/gptSolutionRoundtrip";
@@ -254,6 +255,8 @@ export default function EntryDetail({
   const [focusMode, setFocusMode] = useState<FocusMode>("closed");
   const [focusTextSize, setFocusTextSize] = useState<FocusTextSize>(viewPreferences?.fontSize ?? loadFocusTextSize);
   const [activeStudyPanel, setActiveStudyPanel] = useState<StudyPanel>(loadFocusPanel);
+  const [gptQuestionOpen, setGptQuestionOpen] = useState(false);
+  const gptQuestionReturnFocusRef = useRef<HTMLElement | null>(null);
   const [memoMode, setMemoMode] = useState(false);
   const [sheetLayout, setSheetLayout] = useState<SheetLayout>(viewPreferences?.sheetLayout ?? loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
@@ -2150,8 +2153,8 @@ export default function EntryDetail({
             void handleQuestionDifficultyScoreChange(questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber), score)
           }
           onOpenGptExport={() => {
-            setSelectedQuestionNumbers([questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber)]);
-            openExportHub("chatgpt-share", "selected", true);
+            gptQuestionReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setGptQuestionOpen(true);
           }}
           onReview={(result) => void handleReviewResult(result, theaterQuestion)}
           reviewSaving={reviewSaving !== null}
@@ -2212,13 +2215,49 @@ export default function EntryDetail({
           onQuickMemoTextChange={setQuickMemoText}
           onQuickMemoSubmit={() => void handleQuickMemoSubmit()}
           onOpenGptExport={isSheet && focusedQuestion ? () => {
-            setSelectionMode(true);
-            setSelectedQuestionNumbers([questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber)]);
-            openExportHub("chatgpt-share", "selected", true);
+            gptQuestionReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            setGptQuestionOpen(true);
           } : undefined}
         />
       )}
       <EntryDetailViewHelpDialog open={viewHelpOpen} onClose={() => setViewHelpOpen(false)} />
+
+      {chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (theaterQuestion || focusedQuestion) && (() => {
+        const currentQuestion = theaterQuestion ?? focusedQuestion;
+        if (!currentQuestion) return null;
+        const number = questionIdentifier(currentQuestion) ?? String(currentQuestion.displayNumber);
+        return <ChatGptHelpLauncher
+          open={gptQuestionOpen}
+          onOpenChange={setGptQuestionOpen}
+          returnFocusRef={gptQuestionReturnFocusRef}
+          mode="detail"
+          preferences={chatGptPreferences}
+          onPreferencesChange={onChatGptPreferencesChange}
+          onSyncContext={(sharing) => onSyncExportContext({
+            scope: "current",
+            questionNumbers: [number],
+            submitted: false,
+            shareOptions: {
+              shareQuestionText: true,
+              shareChoices: true,
+              shareQuestionImages: sharing.shareQuestionImages,
+              shareSourcePageImages: sharing.shareSourcePageImages,
+              shareUserResponse: sharing.shareUserResponse,
+              shareScratchNote: sharing.shareScratchNote,
+              shareExistingAnswersAndExplanations: false,
+            },
+          })}
+          onCheckLocalMcp={onCheckLocalMcp}
+          remoteMcpConfigured={remoteMcpConfigured}
+          onOpenSettings={onOpenChatGptSettings}
+          questionContext={{
+            questionNumber: number,
+            body: currentQuestion.body,
+            choices: currentQuestion.choices.map((choice) => `${choice.marker} ${choice.text}`),
+            scratchNote: entry.memo,
+          }}
+        />;
+      })()}
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal

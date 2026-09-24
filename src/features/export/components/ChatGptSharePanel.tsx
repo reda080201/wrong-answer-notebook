@@ -5,6 +5,8 @@ import { buildChatGptPrompt, openChatGpt, recommendedChatGptQuestions } from "..
 import { buildChatGptSharePayload } from "../services/buildChatGptSharePayload";
 import { resolveExportQuestionNumbers } from "../services/resolveExportQuestionNumbers";
 import type { ChatGptSharePayload } from "../types";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 
 export type GptSolutionPurpose =
   | "hint"
@@ -119,10 +121,31 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
   const scopeResult = useMemo(() => resolveExportQuestionNumbers({ entry, scope, selectedNumbers: selectedQuestionNumbers, currentQuestionNumber, manualInput: manualRange, examSession }), [entry, scope, selectedQuestionNumbers, currentQuestionNumber, manualRange, examSession]);
   const submitted = examSession?.status === "submitted";
   const payload = useMemo(() => buildChatGptSharePayload({ entry, questionNumbers: scopeResult.questionNumbers, scope, examSession, preferences: shareOptions }), [entry, scopeResult.questionNumbers, scope, examSession, shareOptions]);
+  const promptQuestion = useMemo(() => {
+    const number = normalizeQuestionNumber(currentQuestionNumber ?? scopeResult.questionNumbers[0] ?? "");
+    return getEntryQuestions(entry).find((item) => normalizeQuestionNumber(item.questionNumber) === number) ?? null;
+  }, [currentQuestionNumber, entry, scopeResult.questionNumbers]);
+  const promptResponse = examSession?.responses.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(currentQuestionNumber ?? ""));
   const canSend = scopeResult.questionNumbers.length > 0
     && !scopeResult.disabledReason
     && (!shareOptions.shareExistingAnswersAndExplanations || answerDisclosureConfirmed);
-  const prompt = buildChatGptPrompt(examSession?.status === "submitted" ? "submitted" : examSession ? "pre-submit" : "detail", selectedQuestion, preferences);
+  const prompt = buildChatGptPrompt(
+    examSession?.status === "submitted" ? "submitted" : examSession ? "pre-submit" : "detail",
+    selectedQuestion,
+    preferences,
+    promptQuestion ? {
+      questionNumber: promptQuestion.questionNumber,
+      questionText: promptQuestion.questionText,
+      choices: promptQuestion.choices,
+      response: promptResponse?.response,
+      scratchNote: promptResponse?.scratchNote,
+    } : undefined,
+    {
+      shareUserResponse: shareOptions.shareUserResponse,
+      shareScratchNote: shareOptions.shareScratchNote,
+      shareExistingAnswersAndExplanations: shareOptions.shareExistingAnswersAndExplanations,
+    },
+  );
   const handleShare = async () => {
     if (!canSend) return;
     setBusy(true);
@@ -135,13 +158,28 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
         shareOptions,
       });
       if (onCheckLocalMcp) await onCheckLocalMcp();
-      if (preferences.copyPromptBeforeOpen) await navigator.clipboard.writeText(prompt);
-      if (preferences.openChatGptAfterCopy) await openChatGpt();
-      setStatus(remoteMcpConfigured ? "공유 범위를 저장했고 추천 질문을 복사했습니다." : "로컬 MCP 컨텍스트를 저장했습니다. Secure MCP Tunnel이 없으면 직접 연결 완료로 표시하지 않습니다.");
+      setStatus(remoteMcpConfigured ? "MCP 공유 범위를 저장했습니다." : "MCP 문맥을 저장했습니다. 외부 전송은 실행하지 않았습니다.");
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "ChatGPT 전달을 준비하지 못했습니다.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setStatus("질문을 복사했습니다. ChatGPT에 붙여넣으세요.");
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "질문을 복사하지 못했습니다.");
+    }
+  };
+
+  const handleOpenChatGpt = async () => {
+    try {
+      await openChatGpt();
+    } catch (error) {
+      setStatus(error instanceof Error ? error.message : "ChatGPT를 열지 못했습니다.");
     }
   };
 
@@ -171,7 +209,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
     <div className="export-chatgpt-share-panel">
       <header className="export-panel-header">
         <div>
-          <h3>{selectionOnly ? "MCP로 선택 문제 보내기" : "ChatGPT로 문제 보내기"}</h3>
+          <h3>{selectionOnly ? "MCP로 선택 문제 공유" : "MCP 공유"}</h3>
           <p>ChatGPT가 문제 데이터를 구조적으로 읽을 수 있도록 공유합니다. PDF 파일을 만들지 않으며, 선택한 문항과 공유 범위만 전달합니다.</p>
         </div>
         <button type="button" className="btn-secondary" onClick={onBack}>뒤로</button>
@@ -190,7 +228,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
           ))}
         </div>}
         {!selectionOnly && scope === "manual" ? <input className="input" value={manualRange} onChange={(event) => setManualRange(event.target.value)} placeholder="예: 1-5, 8, 10-14" /> : null}
-        {scopeResult.disabledReason ? <p className="form-error">{scopeResult.disabledReason}</p> : <p className="muted">공유 문항 {payload.questionNumbers.length}개 · 정답 보호 {payload.answerProtection}</p>}
+        {scopeResult.disabledReason ? <p className="form-error">{scopeResult.disabledReason}</p> : <p className="muted">공유 문항 {payload.questionNumbers.length}개 · {payload.answerProtection === "active" ? "정답·해설 공유 안 함" : "정답·해설 공유"}</p>}
       </section>
       <section className="mcp-share-receipt" aria-live="polite">
         <span>{sharedQuestionCount > 0 ? `${sharedQuestionCount}문제 공유됨${sharedAt ? ` · ${new Date(sharedAt).toLocaleTimeString("ko-KR")}` : ""}` : "문제 공유 안 됨"}</span>
@@ -213,11 +251,14 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
         <h4>공유 내용</h4>
         <label><input type="checkbox" checked={shareOptions.shareQuestionText} onChange={(event) => setShareOptions((current) => ({ ...current, shareQuestionText: event.target.checked }))} /> 문제 본문</label>
         <label><input type="checkbox" checked={shareOptions.shareChoices} onChange={(event) => setShareOptions((current) => ({ ...current, shareChoices: event.target.checked }))} /> 선택지</label>
-        <label><input type="checkbox" checked={shareOptions.shareQuestionImages} onChange={(event) => { void onPreferencesChange({ shareQuestionImages: event.target.checked }); setShareOptions((current) => ({ ...current, shareQuestionImages: event.target.checked })); }} /> 직접 연결 문제 그림</label>
         <label><input type="checkbox" checked={shareOptions.shareUserResponse} onChange={(event) => { void onPreferencesChange({ shareUserResponse: event.target.checked }); setShareOptions((current) => ({ ...current, shareUserResponse: event.target.checked })); }} /> 내 답</label>
         <label><input type="checkbox" checked={shareOptions.shareScratchNote} onChange={(event) => { void onPreferencesChange({ shareScratchNote: event.target.checked }); setShareOptions((current) => ({ ...current, shareScratchNote: event.target.checked })); }} /> 풀이 메모</label>
-        <label><input type="checkbox" checked={shareOptions.shareSourcePageImages} onChange={(event) => { void onPreferencesChange({ shareSourcePageImages: event.target.checked }); setShareOptions((current) => ({ ...current, shareSourcePageImages: event.target.checked })); }} /> 원본 페이지</label>
-        <label><input type="checkbox" checked={shareOptions.shareExistingAnswersAndExplanations} onChange={(event) => { setShareOptions((current) => ({ ...current, shareExistingAnswersAndExplanations: event.target.checked })); setAnswerDisclosureConfirmed(false); }} /> 기존 정답·해설</label>
+        <fieldset className="export-mcp-only-options">
+          <legend>MCP 동기화 전용</legend>
+          <label><input type="checkbox" checked={shareOptions.shareQuestionImages} onChange={(event) => { void onPreferencesChange({ shareQuestionImages: event.target.checked }); setShareOptions((current) => ({ ...current, shareQuestionImages: event.target.checked })); }} /> 직접 연결 문제 그림</label>
+          <label><input type="checkbox" checked={shareOptions.shareSourcePageImages} onChange={(event) => { void onPreferencesChange({ shareSourcePageImages: event.target.checked }); setShareOptions((current) => ({ ...current, shareSourcePageImages: event.target.checked })); }} /> 원본 페이지</label>
+        </fieldset>
+        <label><input type="checkbox" checked={shareOptions.shareExistingAnswersAndExplanations} onChange={(event) => { setShareOptions((current) => ({ ...current, shareExistingAnswersAndExplanations: event.target.checked })); setAnswerDisclosureConfirmed(false); }} /> 기존 정답·해설 공유</label>
         {shareOptions.shareExistingAnswersAndExplanations && <label className="form-warning"><input type="checkbox" checked={answerDisclosureConfirmed} onChange={(event) => setAnswerDisclosureConfirmed(event.target.checked)} /> 선택 문항의 정답과 해설이 MCP에 공개됨을 확인했습니다.</label>}
       </section>
       <section>
@@ -230,9 +271,9 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
       {status ? <p className="muted">{status}</p> : null}
       <footer className="export-panel-footer">
         {onOpenSettings ? <button type="button" className="btn-secondary" onClick={onOpenSettings}>설정</button> : null}
-        <button type="button" className="btn-primary" disabled={busy || !canSend} onClick={() => void handleShare()}>
-          {busy ? "전달 준비 중..." : selectionOnly ? `${scopeResult.questionNumbers.length}문제 보내기` : "ChatGPT/MCP 전달"}
-        </button>
+        <button type="button" className="btn-secondary" disabled={busy || !scopeResult.questionNumbers.length} onClick={() => void handleCopyPrompt()}>질문 복사</button>
+        <button type="button" className="btn-secondary" disabled={busy} onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
+        <button type="button" className="btn-primary" disabled={busy || !canSend} onClick={() => void handleShare()}>{busy ? "동기화 중..." : "MCP 동기화"}</button>
       </footer>
     </div>
   );
