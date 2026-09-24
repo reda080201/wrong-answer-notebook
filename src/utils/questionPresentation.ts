@@ -124,7 +124,7 @@ export function normalizeQuestionPresentationSegments(input: {
   const usedIds = new Set(source.map((segment) => segment.id));
   let supplementSequence = 0;
   const createSupplementId = () => {
-    let id = "";
+    let id: string;
     do { id = `legacy-supplement-${++supplementSequence}`; } while (usedIds.has(id));
     usedIds.add(id);
     return id;
