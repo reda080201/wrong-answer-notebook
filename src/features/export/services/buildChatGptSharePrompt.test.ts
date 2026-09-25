@@ -89,6 +89,42 @@ describe("buildChatGptSharePrompt", () => {
     expect(prompt).toContain("legacy-only stem");
   });
 
+  it("keeps legacy-only text supplemented into a non-empty normalized stream", () => {
+    const entry = {
+      id: "legacy-entry",
+      title: "시험",
+      subject: "수학",
+      question: "",
+      structuredQuestions: [{
+        questionNumber: "1",
+        questionText: "legacy-only stem",
+        conditions: [],
+        equations: ["x+y=1"],
+        choices: [],
+        contentSegments: [{ id: "equation", type: "equation", latex: "x+y=1", display: true }],
+        figureIds: [],
+      }],
+    } as unknown as WrongAnswerEntry;
+    const payload = buildChatGptSharePayload({
+      entry,
+      questionNumbers: ["1"],
+      scope: "current",
+      preferences: {
+        shareQuestionText: true,
+        shareChoices: true,
+        shareQuestionImages: false,
+        shareSourcePageImages: false,
+        shareUserResponse: false,
+        shareScratchNote: false,
+        shareExistingAnswersAndExplanations: false,
+      },
+    });
+    const prompt = buildChatGptSharePrompt(payload, "힌트만 줘");
+
+    expect(prompt).toContain("legacy-only stem");
+    expect(prompt.match(/x\+y=1/g)).toHaveLength(1);
+  });
+
   it("preserves intentional duplicate equations in presentation stream order", () => {
     const payload: ChatGptSharePayload = {
       ...base,
