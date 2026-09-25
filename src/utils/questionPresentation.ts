@@ -37,19 +37,72 @@ function cloneSegment(segment: QuestionContentSegment): QuestionContentSegment {
 }
 
 function removeExactRepresentedFragments(value: string, fragments: string[]): string {
-  let remaining = value;
+  let remaining = normalizeText(value);
   for (const fragment of fragments) {
     const normalized = normalizeText(fragment);
     if (!normalized) continue;
-    const escaped = normalized.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    remaining = remaining.replace(new RegExp(`(^|\\s)${escaped}(?=\\s|$)`, "g"), " ");
+    const index = remaining.indexOf(normalized);
+    if (index < 0) continue;
+    const before = index === 0 ? "" : remaining[index - 1];
+    const afterIndex = index + normalized.length;
+    const after = afterIndex >= remaining.length ? "" : remaining[afterIndex];
+    if ((before && !/\s/.test(before)) || (after && !/\s/.test(after))) continue;
+    remaining = normalizeText(remaining.slice(0, index) + " " + remaining.slice(afterIndex));
   }
-  return normalizeText(remaining);
+  return remaining;
+}
+
+function representedFragmentsForSegment(segment: QuestionContentSegment): string[] {
+  if (segment.type === "condition") {
+    const parts = conditionParts(segment.label, segment.text);
+    return [parts.label ? `${parts.label} ${parts.text}` : parts.text].filter(Boolean);
+  }
+  if (segment.type === "equation") {
+    const latex = normalizeLatex(segment.latex);
+    return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+  }
+  return segment.type === "text" ? normalizedLines(segment.text) : [];
+}
+
+function insertLegacyLineNearExactAnchor(source: QuestionContentSegment[], line: string, createId: () => string): boolean {
+  const normalized = normalizeText(line);
+  if (!normalized) return false;
+  for (const fragment of source.flatMap(representedFragmentsForSegment)) {
+    const anchorMatches = source.filter((segment) => representedFragmentsForSegment(segment).includes(fragment));
+    if (anchorMatches.length !== 1) continue;
+    const fragmentText = normalizeText(fragment);
+    const prefix = `${fragmentText} `;
+    const suffix = ` ${fragmentText}`;
+    const anchorIndex = source.indexOf(anchorMatches[0]);
+    if (normalized.startsWith(prefix)) {
+      let insertionIndex = anchorIndex + 1;
+      while (source[insertionIndex]?.type === "text" && source[insertionIndex].id.startsWith("legacy-supplement-")) insertionIndex += 1;
+      source.splice(insertionIndex, 0, { id: createId(), type: "text", text: normalized.slice(prefix.length) });
+      return true;
+    }
+    if (normalized.endsWith(suffix)) {
+      source.splice(anchorIndex, 0, { id: createId(), type: "text", text: normalized.slice(0, -suffix.length) });
+      return true;
+    }
+  }
+  return false;
+}
+
+function insertLegacyLineByNeighbors(source: QuestionContentSegment[], lines: string[], lineIndex: number, createId: () => string): void {
+  const matchingIndices = (line: string) => source.flatMap((segment, index) => representedFragmentsForSegment(segment).includes(normalizeText(line)) ? [index] : []);
+  let previousIndex: number | undefined;
+  for (let index = lineIndex - 1; index >= 0 && previousIndex === undefined; index -= 1) previousIndex = matchingIndices(lines[index])[0];
+  let nextIndex: number | undefined;
+  for (let index = lineIndex + 1; index < lines.length && nextIndex === undefined; index += 1) nextIndex = matchingIndices(lines[index])[0];
+  const insertionIndex = nextIndex !== undefined && previousIndex !== undefined && previousIndex < nextIndex
+    ? previousIndex + 1
+    : nextIndex ?? source.length;
+  source.splice(insertionIndex, 0, { id: createId(), type: "text", text: normalizeText(lines[lineIndex]) });
 }
 
 function normalizedLines(value: string): string[] {
   return value
-    .split(/\r?\n/)
+    .split(/\r?\n|(?<=[.!?])\s+(?=[가-힣(“"”])/u)
     .map(normalizeText)
     .filter(Boolean);
 }
@@ -68,6 +121,14 @@ export function normalizeQuestionPresentationSegments(input: {
   const hasCanonicalStream = Boolean(input.contentSegments?.length);
   const source = hasCanonicalStream ? input.contentSegments!.map(cloneSegment) : [];
   const represented = new Set(source.map(fingerprint));
+  const usedIds = new Set(source.map((segment) => segment.id));
+  let supplementSequence = 0;
+  const createSupplementId = () => {
+    let id: string;
+    do { id = `legacy-supplement-${++supplementSequence}`; } while (usedIds.has(id));
+    usedIds.add(id);
+    return id;
+  };
   const canonicalText = source
     .filter((segment): segment is Extract<QuestionContentSegment, { type: "text" }> => segment.type === "text")
     .map((segment) => normalizeText(segment.text))
@@ -108,9 +169,15 @@ export function normalizeQuestionPresentationSegments(input: {
   for (const segment of fallback) {
     if (segment.type === "text") {
       const lines = normalizedLines(segment.text);
-      const remaining = lines.length > 1
-        ? lines.filter((line) => !representedLines.has(line)).join("\n")
-        : removeExactRepresentedFragments(segment.text, representedFragments);
+      if (lines.length > 1) {
+        for (const [lineIndex, originalLine] of lines.entries()) {
+          const line = removeExactRepresentedFragments(originalLine, representedFragments);
+          if (!line || representedLines.has(line)) continue;
+          if (!insertLegacyLineNearExactAnchor(source, line, createSupplementId)) insertLegacyLineByNeighbors(source, lines, lineIndex, createSupplementId);
+        }
+        continue;
+      }
+      const remaining = removeExactRepresentedFragments(segment.text, representedFragments);
       if (!remaining || (canonicalText && normalizeText(segment.text) === canonicalText)) continue;
       source.push({ ...segment, text: remaining });
       continue;
