@@ -45,6 +45,7 @@ interface LineInfo {
 
 const QUESTION_RE = /^\s*(?:\[\s*)?(?:(문제\s*(0?[1-9]\d{0,2}))|(#(0?[1-9]\d{0,2}))|(0?[1-9]\d{0,2})([.)]|번))\s*(?:\])?\s*/;
 const CHOICE_RE = /^\s*((?:[①②③④⑤⑥⑦⑧⑨⑩])|(?:\(\d{1,2}\))|(?:\d{1,2}\))|(?:[ㄱ-ㅎA-Ea-e][.)]))\s*/;
+const INLINE_CIRCLED_CHOICE_RE = /(^|\s)([①②③④⑤⑥⑦⑧⑨⑩])\s*/g;
 const VIEW_MARKER_RE = /^\s*(?:<\s*보기\s*>|보기)\s*$/;
 const VIEW_ITEM_RE = /^\s*(?:[ㄱ-ㅎ][.)]|[ㄱ-ㅎ]\s*[:：])\s*/;
 const CONDITION_RE = /^\s*(?:(?:조건|자료|제시문|그림|도표|그래프|표)\s*[:：]|(?:\([가-힣]\)|[가-힣][.)])\s*)/;
@@ -83,6 +84,32 @@ function matchQuestion(line: string) {
 
 function matchChoice(line: string) {
   return line.match(CHOICE_RE);
+}
+
+function splitInlineCircledChoices(text: string, line: LineInfo): ChoiceBlock[] | null {
+  const matches = Array.from(line.text.matchAll(INLINE_CIRCLED_CHOICE_RE));
+  if (matches.length < 2 || matches[0].index !== 0) return null;
+
+  const markerValues = matches.map((match) => "①②③④⑤⑥⑦⑧⑨⑩".indexOf(match[2] ?? ""));
+  if (markerValues.some((value, index) => index > 0 && value <= markerValues[index - 1])) return null;
+
+  const choices = matches.map((match, index): ChoiceBlock | null => {
+    const contentStart = (match.index ?? 0) + match[0].length;
+    const next = matches[index + 1];
+    const contentEnd = next ? (next.index ?? 0) + (next[1]?.length ?? 0) : line.text.length;
+    const range = trimRange(text, line.start + contentStart, line.start + contentEnd);
+    if (range.start >= range.end) return null;
+    return {
+      marker: match[2] ?? "",
+      text: text.slice(range.start, range.end),
+      start: range.start,
+      end: range.end,
+    };
+  });
+
+  return choices.some((choice) => choice === null)
+    ? null
+    : choices as ChoiceBlock[];
 }
 
 function isViewMarker(line: string): boolean {
@@ -199,6 +226,11 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
     const choiceMatch = matchChoice(line.text);
     if (choiceMatch) {
       insideView = false;
+      const inlineChoices = splitInlineCircledChoices(text, line);
+      if (inlineChoices) {
+        choices.push(...inlineChoices);
+        continue;
+      }
       const choiceTextStart = line.start + choiceMatch[0].length;
       const choiceRange = trimRange(text, choiceTextStart, line.end);
       choices.push({

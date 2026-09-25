@@ -24,7 +24,7 @@ import type {
 } from "../types";
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
-import { reviewSessionCompletedCount } from "../features/review/storage/reviewSessionIdentity";
+import { reviewSessionCompletedCount, reviewSessionFingerprint } from "../features/review/storage/reviewSessionIdentity";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
 import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
 import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
@@ -93,7 +93,21 @@ export default function AppModals({
   const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
   const [supplementalCleanupError, setSupplementalCleanupError] = useState<string | null>(null);
   const [supplementalCleanupBusy, setSupplementalCleanupBusy] = useState(false);
-  const reviewResumeIdentity = `${reviewMode ?? "none"}:${reviewSession?.id ?? "none"}`;
+  const reviewRunKey = reviewMode
+    ? reviewSessionFingerprint(reviewMode, reviewSeed)
+    : "none";
+  const [activeReviewRun, setActiveReviewRun] = useState<{ runKey: string; session: ReviewSession; panelSession?: ReviewSession } | null>(null);
+  const reviewRunKeyRef = useRef(reviewRunKey);
+  useLayoutEffect(() => {
+    if (reviewRunKeyRef.current === reviewRunKey) return;
+    reviewRunKeyRef.current = reviewRunKey;
+    setActiveReviewRun(null);
+  }, [reviewRunKey]);
+  const activeReviewSession = activeReviewRun?.runKey === reviewRunKey
+    ? activeReviewRun.session
+    : undefined;
+  const reviewSessionForChoice = activeReviewSession ?? reviewSession;
+  const reviewResumeIdentity = `${reviewMode ?? "none"}:${reviewSessionForChoice?.id ?? "none"}`;
   const [reviewResumeDecision, setReviewResumeDecision] = useState<{ identity: string; choice: "pending" | "resume" | "restart" }>({ identity: "", choice: "restart" });
   const [reviewResumeBusy, setReviewResumeBusy] = useState(false);
   const [reviewResumeError, setReviewResumeError] = useState<string | null>(null);
@@ -102,19 +116,24 @@ export default function AppModals({
   const reviewResumeBusyRef = useRef(false);
   const reviewResumeOperationRef = useRef(0);
   useEffect(() => () => { reviewResumeOperationRef.current += 1; }, []);
-  const reviewResumeChoice = reviewResumeDecision.identity === reviewResumeIdentity
-    ? reviewResumeDecision.choice
-    : reviewMode && reviewSession
-      ? "pending"
-      : "restart";
+  const reviewResumeChoice = activeReviewSession
+    ? "resume"
+    : reviewResumeDecision.identity === reviewResumeIdentity
+      ? reviewResumeDecision.choice
+      : reviewMode && reviewSessionForChoice
+        ? "pending"
+        : "restart";
   const chooseReviewResume = async (choice: "resume" | "restart") => {
     if (reviewResumeBusyRef.current) return;
     setReviewResumeError(null);
     if (choice === "resume") {
+      if (reviewMode && reviewSessionForChoice) {
+        setActiveReviewRun({ runKey: reviewRunKey, session: reviewSessionForChoice, panelSession: reviewSessionForChoice });
+      }
       setReviewResumeDecision({ identity: reviewResumeIdentity, choice });
       return;
     }
-    if (!reviewSession || !saveReviewSession) {
+    if (!reviewSessionForChoice || !saveReviewSession) {
       setReviewResumeDecision({ identity: reviewResumeIdentity, choice });
       return;
     }
@@ -124,7 +143,7 @@ export default function AppModals({
     setReviewResumeBusy(true);
     try {
       const now = new Date().toISOString();
-      await saveReviewSession({ ...reviewSession, abandonedAt: now, updatedAt: now });
+      await saveReviewSession({ ...reviewSessionForChoice, abandonedAt: now, updatedAt: now });
       if (reviewResumeOperationRef.current === operationId && reviewResumeIdentityRef.current === operationIdentity) {
         setReviewResumeDecision({ identity: operationIdentity, choice });
       }
@@ -138,6 +157,14 @@ export default function AppModals({
         setReviewResumeBusy(false);
       }
     }
+  };
+  const saveActiveReviewSession = async (session: ReviewSession) => {
+    setActiveReviewRun((current) => ({
+      runKey: reviewRunKey,
+      session,
+      panelSession: current?.runKey === reviewRunKey ? current.panelSession : undefined,
+    }));
+    await saveReviewSession?.(session);
   };
   const buildWorkspace = (items: Partial<EntryFormData>[], assetFiles: File[] = [], staged?: ImportAssetStageResult, existingSession?: ImportAssetSessionManifest): ImportWorkspace => {
     const now = new Date().toISOString();
@@ -454,19 +481,22 @@ export default function AppModals({
           onVisualFile={analyzeLearningVisualFile}
         />
       )}
-      {reviewMode && reviewSession && reviewResumeChoice === "pending" && (
+      {reviewMode && reviewSessionForChoice && reviewResumeChoice === "pending" && (
         <Dialog
           open
           title="복습 이어서 하기"
           ariaLabel="복습 이어서 하기"
+          bodyClassName="review-resume-dialog-body"
           onClose={() => { if (!reviewResumeBusyRef.current) setReviewMode(null); }}
           closeDisabled={reviewResumeBusy}
           busy={reviewResumeBusy}
           footer={<><button type="button" className="btn-secondary" disabled={reviewResumeBusy} onClick={() => void chooseReviewResume("restart")}>{reviewResumeBusy ? "저장 중…" : "처음부터"}</button><button type="button" className="btn-primary" disabled={reviewResumeBusy} onClick={() => void chooseReviewResume("resume")}>이어서 하기</button></>}
         >
-          <p>{`${reviewSessionCompletedCount(reviewSession, reviewSeed)} / ${reviewSession.itemRefs.length}개 문항을 평가한 ${reviewMode === "today" ? "오늘 복습" : "복습"} 세션이 있습니다.`}</p>
-          <p className="form-hint">현재 복습 대상과 순서가 정확히 일치하는 세션만 이어갈 수 있습니다.</p>
-          {reviewResumeError && <p className="form-error" role="alert">{reviewResumeError}</p>}
+          <div className="review-resume-dialog-content">
+            <p>{`${reviewSessionCompletedCount(reviewSessionForChoice, reviewSeed)} / ${reviewSessionForChoice.itemRefs.length}개 문항을 평가한 ${reviewMode === "today" ? "오늘 복습" : "복습"} 세션이 있습니다.`}</p>
+            <p className="form-hint">현재 복습 대상과 순서가 정확히 일치하는 세션만 이어갈 수 있습니다.</p>
+            {reviewResumeError && <p className="form-error" role="alert">{reviewResumeError}</p>}
+          </div>
         </Dialog>
       )}
       {reviewMode && (!reviewSession || reviewResumeChoice !== "pending") && (
@@ -493,8 +523,10 @@ export default function AppModals({
           }}
           onWikiLinkClick={handleWikiLinkClick}
           existingTargets={existingTargets}
-          session={reviewResumeChoice === "resume" ? reviewSession : undefined}
-          onSessionSave={saveReviewSession}
+          session={activeReviewRun?.runKey === reviewRunKey
+            ? activeReviewRun.panelSession
+            : reviewResumeChoice === "resume" ? reviewSessionForChoice : undefined}
+          onSessionSave={saveActiveReviewSession}
         />
       )}
     </>

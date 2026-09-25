@@ -108,6 +108,8 @@
 /* Sidebar owns the vertical scroll region; the shell and list remain fixed. */
 .app-sidebar .section-tabs, .app-sidebar .logo, .app-sidebar .sidebar-summary, .app-sidebar .sidebar-footer { flex: 0 0 auto; }
 .app-sidebar-scroll-region { min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; }
+.app-sidebar > .app-sidebar-scroll-region { display: flex; flex-direction: column; }
+.app-sidebar-scroll-region > .filter-section { flex: 0 0 auto; overflow: visible; }
 .sidebar-summary { margin: var(--space-2) 0; padding: var(--space-2) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .sidebar-summary summary { cursor: pointer; color: var(--text-muted); font-size: 13px; font-weight: 600; }
 .sidebar-summary dl { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; }

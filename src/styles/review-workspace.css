@@ -17,16 +17,33 @@
   padding: 10px 20px;
   border-bottom: 1px solid var(--border-subtle, #d8dee8);
   background: var(--surface, #fff);
+  flex-wrap: wrap;
 }
+
+.review-panel-header > div:first-child { min-width: 0; }
+
+.review-stats {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12px;
+  margin: 0 auto 0 0;
+}
+
+.review-stats > div { display: flex; align-items: baseline; gap: 4px; }
+.review-stats dt { color: var(--text-muted); font-size: 12px; }
+.review-stats dd { margin: 0; font-size: 14px; font-weight: 700; }
 
 .review-card,
 .review-complete,
 .review-empty {
+  align-self: start;
   width: min(960px, calc(100% - 32px));
   min-height: 0;
+  max-height: calc(100% - 32px);
   overflow: auto;
   margin: 0 auto;
-  padding: 24px 0 76px;
+  padding: 16px 0 56px;
 }
 
 .review-actions {

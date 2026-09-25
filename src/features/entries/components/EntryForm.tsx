@@ -412,7 +412,7 @@ export default function EntryForm({
       >
         <form id="entry-edit-form" onSubmit={handleSubmit}>
           <div className="form-body">
-            <div className="form-row form-row--3">
+            <div className="form-row form-row--3 form-row--entry-meta">
               <div className="form-field">
                 <label htmlFor="entryKind">유형</label>
                 <select

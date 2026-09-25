@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../types";
 import {
   entryKindName,
+  entryKindWithParticle,
   getEntryCardPreview,
   imageCount,
   isDifficultyFilter,
@@ -30,6 +31,14 @@ const baseEntry: WrongAnswerEntry = {
 };
 
 describe("appUi utilities", () => {
+  it("attaches the correct Korean subject and object particles to entry kinds", () => {
+    expect(entryKindWithParticle("wrong_answer", "subject")).toBe("오답이");
+    expect(entryKindWithParticle("wrong_answer", "object")).toBe("오답을");
+    expect(entryKindWithParticle("concept", "subject")).toBe("개념이");
+    expect(entryKindWithParticle("problem_sheet", "object")).toBe("시험지를");
+    expect(entryKindWithParticle("lecture", "object")).toBe("특강자료를");
+  });
+
   it("sorts entries by title and updated date", () => {
     const older = { ...baseEntry, id: "older", title: "나", updatedAt: "2026-01-01T00:00:00.000Z" };
     const newer = { ...baseEntry, id: "newer", title: "가", updatedAt: "2026-02-01T00:00:00.000Z" };

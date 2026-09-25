@@ -71,6 +71,32 @@ describe("parseQuestionText", () => {
     });
   });
 
+  it("splits ordered circled choices written on one line and keeps their source ranges", () => {
+    const source = "1. 값을 고르시오.\n① x/y = 1/2  ② 2/3  ③ 1\n\n2. 다음 문제";
+    const question = parseQuestionText(source).find((block) => block.kind === "question");
+
+    expect(question).toMatchObject({
+      kind: "question",
+      body: "값을 고르시오.",
+      choices: [
+        { marker: "①", text: "x/y = 1/2" },
+        { marker: "②", text: "2/3" },
+        { marker: "③", text: "1" },
+      ],
+    });
+    if (question?.kind !== "question") throw new Error("expected question block");
+    expect(question.choices.map(({ start, end }) => source.slice(start, end))).toEqual(["x/y = 1/2", "2/3", "1"]);
+  });
+
+  it("keeps inline circled symbols in a single option when the marker sequence is not ordered", () => {
+    const [question] = parseQuestionText("1. 수식에서 표시한 것은?\n① ②와 ①의 관계");
+
+    expect(question).toMatchObject({
+      kind: "question",
+      choices: [{ marker: "①", text: "②와 ①의 관계" }],
+    });
+  });
+
   it("falls back to a paragraph for free text", () => {
     const text = "번호 없는 자유 형식 문제입니다.\n줄바꿈은 보존됩니다.";
     const blocks = parseQuestionText(text);
