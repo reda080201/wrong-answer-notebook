@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredQuestion } from "../types";
-import { normalizeImportAudit, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
+import { getEntryImportReviewSummary, normalizeImportAudit, scrubRejectedNotesFromStructuredQuestions } from "./importAudit";
 
 function question(overrides: Partial<StructuredQuestion> = {}): StructuredQuestion {
   return {
@@ -19,6 +19,80 @@ function question(overrides: Partial<StructuredQuestion> = {}): StructuredQuesti
 }
 
 describe("import audit structured questions", () => {
+  it("deduplicates question review counts from missing, uncertain, and aggregate audit values", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: {
+        expectedQuestionNumbers: ["1", "2"],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: ["1"],
+        uncertainQuestionNumbers: ["2"],
+        needsReviewCount: 2,
+      },
+    });
+
+    expect(summary.questionReviewCount).toBe(2);
+    expect(summary.additionalAuditCount).toBe(0);
+    expect(summary.auditIssueCount).toBe(2);
+  });
+
+  it("keeps non-question checks separate and preserves rejected-note guidance", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: { expectedQuestionNumbers: [], detectedQuestionNumbers: [], missingQuestionNumbers: [], uncertainQuestionNumbers: [], needsReviewCount: 0, handwritingExcluded: false },
+      rejectedNotes: ["필기"],
+    });
+    expect(summary.questionReviewCount).toBe(0);
+    expect(summary.additionalAuditCount).toBe(1);
+    expect(summary.rejectedNoteCount).toBe(1);
+    expect(summary.hasAuditIssue).toBe(true);
+  });
+
+  it("labels legacy aggregate counts separately from known question numbers", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: {
+        expectedQuestionNumbers: ["1", "2", "3"],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: ["01", "2"],
+        uncertainQuestionNumbers: ["2"],
+        needsReviewCount: 4,
+      },
+    });
+    expect(summary.questionReviewCount).toBe(2);
+    expect(summary.legacyReviewCount).toBe(2);
+    expect(summary.auditIssueCount).toBe(4);
+  });
+
+  it("keeps rejected items, handwriting, and rejected notes distinct", () => {
+    const summary = getEntryImportReviewSummary({
+      importAudit: {
+        expectedQuestionNumbers: [],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        needsReviewCount: 0,
+        handwritingExcluded: false,
+        rejectedItems: [{ kind: "figure", questionNumber: "8", reason: "불명확", raw: {} }],
+      },
+      rejectedNotes: ["필기 제외"],
+    });
+    expect(summary.questionReviewCount).toBe(0);
+    expect(summary.handwritingNeedsReview).toBe(true);
+    expect(summary.rejectedItemCount).toBe(1);
+    expect(summary.rejectedNoteCount).toBe(1);
+  });
+
+  it("hides summaries with no saved review flags", () => {
+    expect(getEntryImportReviewSummary({
+      importAudit: {
+        expectedQuestionNumbers: [],
+        detectedQuestionNumbers: [],
+        missingQuestionNumbers: [],
+        uncertainQuestionNumbers: [],
+        needsReviewCount: 0,
+        handwritingExcluded: true,
+      },
+    }).hasAuditIssue).toBe(false);
+  });
+
   it("compares expected audit numbers with canonical structured numbers", () => {
     const audit = normalizeImportAudit({ expectedQuestionNumbers: ["1", "2"], detectedQuestionNumbers: ["2"] }, {
       question: "1. 호환 본문\n\n2. 호환 본문",
