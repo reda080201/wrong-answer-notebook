@@ -1,4 +1,5 @@
 import type { ImportDetectedFormat } from "../utils/importStudyText";
+import { getEntryImportReviewSummary } from "../utils/importAudit";
 import type {
   ImportValidationClassification,
   ImportValidationReport,
@@ -33,12 +34,13 @@ export default function ImportPreviewSummary({
   validationPolicy,
   reviewExpanded,
 }: ImportPreviewSummaryProps) {
+  const importReviewSummary = getEntryImportReviewSummary({ importAudit: validationReport?.audit, rejectedNotes });
   const hasBlockingIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableIssues = validationPolicy.confirmable.length > 0;
 
   return (
     <>
-      {validationReport?.audit && (
+      {validationReport?.audit && importReviewSummary.hasAuditIssue && (
         <div
           className={`import-audit-summary ${validationReport.issues.some((issue) => issue.severity === "error") ? "import-audit-summary--danger" : ""}`}
           role="alert"
@@ -48,8 +50,11 @@ export default function ImportPreviewSummary({
             {expectedQuestionNumbers.length > 0 && <span className="import-user-expected-badge">사용자 기준</span>}
           </strong>
           <span>
-            예상 {validationReport.audit.expectedQuestionNumbers.length} · 감지 {validationReport.audit.detectedQuestionNumbers.length} · 검토 {validationReport.audit.needsReviewCount}
+            예상 {validationReport.audit.expectedQuestionNumbers.length} · 감지 {validationReport.audit.detectedQuestionNumbers.length}
           </span>
+          {importReviewSummary.questionReviewCount > 0 && <p>검토 필요 문항 {importReviewSummary.questionReviewCount}개</p>}
+          {importReviewSummary.legacyReviewCount > 0 && <p>검토 필요 항목 {importReviewSummary.legacyReviewCount}개 (세부 구분 정보 없음)</p>}
+          {importReviewSummary.rejectedItemCount > 0 && <p>제외된 가져오기 항목 {importReviewSummary.rejectedItemCount}개</p>}
           {validationReport.audit.missingQuestionNumbers.length > 0 && (
             <p>누락 문제: {validationReport.audit.missingQuestionNumbers.join(", ")}</p>
           )}

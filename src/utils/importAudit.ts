@@ -283,6 +283,11 @@ export function normalizeImportAudit(
 }
 
 export interface EntryImportReviewSummary {
+  questionReviewCount: number;
+  legacyReviewCount: number;
+  rejectedItemCount: number;
+  handwritingNeedsReview: boolean;
+  additionalAuditCount: number;
   auditIssueCount: number;
   hasAuditIssue: boolean;
   rejectedNoteCount: number;
@@ -290,9 +295,27 @@ export interface EntryImportReviewSummary {
 
 export function getEntryImportReviewSummary(data: Pick<Partial<EntryFormData>, "importAudit" | "rejectedNotes">): EntryImportReviewSummary {
   const audit = data.importAudit;
-  const auditIssueCount = audit
-    ? audit.missingQuestionNumbers.length + audit.uncertainQuestionNumbers.length + audit.needsReviewCount + (audit.handwritingExcluded === false ? 1 : 0) + (audit.rejectedItems?.length ?? 0)
-    : 0;
+  const questionNumbers = new Set([
+    ...(audit?.missingQuestionNumbers ?? []),
+    ...(audit?.uncertainQuestionNumbers ?? []),
+  ].map(normalizeImportQuestionNumber).filter(Boolean));
+  const questionReviewCount = questionNumbers.size;
+  // Legacy aggregates do not say whether the count represents questions or
+  // other review flags. Show only the residual as an unclassified item count.
+  const legacyReviewCount = Math.max(0, (audit?.needsReviewCount ?? 0) - questionReviewCount);
+  const rejectedItemCount = audit?.rejectedItems?.length ?? 0;
+  const handwritingNeedsReview = audit?.handwritingExcluded === false;
+  const additionalAuditCount = legacyReviewCount + rejectedItemCount + Number(handwritingNeedsReview);
   const rejectedNoteCount = data.rejectedNotes?.length ?? 0;
-  return { auditIssueCount, hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0, rejectedNoteCount };
+  const auditIssueCount = questionReviewCount + additionalAuditCount;
+  return {
+    questionReviewCount,
+    legacyReviewCount,
+    rejectedItemCount,
+    handwritingNeedsReview,
+    additionalAuditCount,
+    auditIssueCount,
+    hasAuditIssue: auditIssueCount > 0 || rejectedNoteCount > 0,
+    rejectedNoteCount,
+  };
 }

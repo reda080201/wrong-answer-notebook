@@ -170,9 +170,9 @@ describe("ImportFromGptModal", () => {
         expectedQuestionNumbers: ["1"],
         detectedQuestionNumbers: ["1"],
         missingQuestionNumbers: [],
-        uncertainQuestionNumbers: [],
+        uncertainQuestionNumbers: ["1"],
         handwritingExcluded: true,
-        needsReviewCount: 0,
+        needsReviewCount: 1,
       },
     }));
     render(

@@ -51,8 +51,8 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
                   <dd>{entry.importAudit.missingQuestionNumbers.length}</dd>
                 </div>
                 <div>
-                  <dt>검토</dt>
-                  <dd>{entry.importAudit.needsReviewCount}</dd>
+                  <dt>검토 필요 문항</dt>
+                  <dd>{importReviewSummary.questionReviewCount}</dd>
                 </div>
               </dl>
             )}
@@ -62,6 +62,8 @@ export default function StudyAnalysisView({ entry }: { entry: WrongAnswerEntry }
             {entry.importAudit?.uncertainQuestionNumbers.length ? (
               <p>불확실 문제: {entry.importAudit.uncertainQuestionNumbers.join(", ")}</p>
             ) : null}
+            {importReviewSummary.legacyReviewCount > 0 && <p>검토 필요 항목 {importReviewSummary.legacyReviewCount}개 (세부 구분 정보 없음)</p>}
+            {importReviewSummary.rejectedItemCount > 0 && <p>제외된 가져오기 항목 {importReviewSummary.rejectedItemCount}개</p>}
             {entry.importAudit?.handwritingExcluded === false && (
               <p className="study-analysis-danger">손글씨 제외 여부가 확인되지 않았습니다.</p>
             )}
