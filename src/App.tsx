@@ -16,7 +16,7 @@ import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
-import { entryKindIcon, entryKindName } from "./utils/appUi";
+import { entryKindIcon, entryKindName, entryKindWithParticle } from "./utils/appUi";
 import { collectAllImageReferences } from "./utils/entry";
 import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
@@ -40,7 +40,7 @@ import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDr
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
-import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
+import { getEntryQuestions, renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
@@ -259,6 +259,8 @@ function AppContent() {
     linkableTargets,
     sectionEntryCount,
   } = navigation;
+  const selectedIsVisible = selected ? filtered.some((entry) => entry.id === selected.id) : false;
+  const hasActiveSectionEntries = entries.some((entry) => entry.entryKind === activeSection);
   const selectedEntryPaneOverride = selectedId ? shell.entryPaneOverrides[selectedId] : undefined;
 
   useEffect(() => {
@@ -347,7 +349,7 @@ function AppContent() {
     const overlayIsStale =
       !selected ||
       selected.id !== examSession.entryId ||
-      (entry ? activeSection !== entry.entryKind : false);
+      !entry;
     if (overlayIsStale) void closeExamSession();
   }, [examSession, selected, activeSection, entries, closeExamSession]);
 
@@ -794,7 +796,7 @@ function AppContent() {
                 if (current) void flushExamSessionSave(current);
               }}
             />
-          ) : selected ? (
+          ) : selected && selectedIsVisible ? (
             <>
               {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
               {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && <button type="button" className="exam-history-trigger btn-secondary" onClick={() => setExamHistoryOpen(true)}>이력 <span>{selectedExamHistory.length}</span></button>}
@@ -943,18 +945,20 @@ function AppContent() {
             <div className="detail-panel empty-state">
               <span className="icon">{entryKindIcon(activeSection)}</span>
               <p>
-                왼쪽 목록에서 {entryKindName(activeSection)}를 선택하거나
-                <br />새 {entryKindName(activeSection)}를 추가하세요.
+                {selected
+                  ? "선택한 항목이 현재 검색 또는 필터에 포함되지 않습니다. 검색어나 필터를 조정하면 다시 표시됩니다."
+                  : `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하거나`}
+                {!selected && <><br />새 {entryKindName(activeSection)}를 추가하세요.</>}
               </p>
-              {activeSection === "problem_sheet" ? (
+              {!selected && (activeSection === "problem_sheet" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
               ) : activeSection === "lecture" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>첫 특강 가져오기</button>
               ) : activeSection === "concept" ? (
-                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 개념 만들기</button>
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>{hasActiveSectionEntries ? "새 개념 만들기" : "첫 개념 만들기"}</button>
               ) : (
-                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>첫 오답 추가</button>
-              )}
+                <button type="button" className="btn-primary" onClick={() => actions.openNew()}>{hasActiveSectionEntries ? "새 오답 추가" : "첫 오답 추가"}</button>
+              ))}
             </div>
           )}
           </>}
@@ -1080,7 +1084,7 @@ function AppContent() {
         {realExamStartEntry && (
           <div className="real-exam-start-dialog">
             <p className="form-hint">{realExamStartEntry.title}</p>
-            <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            <p>문항 {selectedRealSession?.questions.length ?? getEntryQuestions(realExamStartEntry).length}개</p>
             {examStartError?.entryId === realExamStartEntry.id && <p className="form-error" role="alert">{examStartError.message}</p>}
             {selectedRealSession?.deadlineAt && (
               <p className="form-hint" role="status">

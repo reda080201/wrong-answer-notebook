@@ -12,6 +12,9 @@
 .modal-card > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--line-subtle); }
 .modal-card > .dialog-header h2 { margin: 0; font-size: 19px; }
 .modal-card > .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--line-subtle); }
+.review-resume-dialog-body > .review-resume-dialog-content { display: grid; gap: 12px; }
+.review-resume-dialog-content > p { margin: 0; line-height: 1.5; }
+.review-resume-dialog-content > .form-hint { margin-top: 0; }
 @media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: 14px; } }
 
 .import-modal {
@@ -140,6 +143,11 @@
 
 .entry-form-dialog .form-body > * { order: 8; }
 .entry-form-dialog .form-body > .form-row--3 { order: 0; }
+.entry-form-dialog .form-body > .form-row--entry-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
 .entry-form-dialog .form-body > .form-field:has(#title) { order: 1; }
 .entry-form-dialog .form-body > .sheet-group-editor { order: 2; }
 .entry-form-dialog .form-body > .form-field:has(#question) { order: 3; }
@@ -151,7 +159,18 @@
 .entry-form-dialog .form-footer {
   width: 100%;
   box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
 }
+
+.entry-form-dialog .form-footer .form-save-error {
+  flex: 0 0 100%;
+  width: 100%;
+  margin: 0 0 8px;
+}
+
+.entry-form-dialog .form-footer > button { flex: 0 0 auto; }
 
 @media (max-width: 760px) {
   .import-modal { width: 100vw; height: 100dvh; }

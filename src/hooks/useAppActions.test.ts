@@ -322,7 +322,8 @@ describe("useAppActions", () => {
 
     it("saves entry with sheet group metadata", async () => {
       const addEntry = vi.fn(async () => "entry-id");
-      const { result } = createHook({ addEntry });
+      const setActiveSection = vi.fn();
+      const { result } = createHook({ addEntry, setActiveSection });
       const formData = createMockFormData({
         entryKind: "problem_sheet",
         sheetGroup: {
@@ -344,6 +345,7 @@ describe("useAppActions", () => {
           partTitle: "1단원",
         }),
       }));
+      expect(setActiveSection).toHaveBeenCalledWith("problem_sheet");
     });
   });
 
