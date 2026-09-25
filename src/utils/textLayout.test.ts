@@ -88,6 +88,68 @@ describe("parseQuestionText", () => {
     expect(question.choices.map(({ start, end }) => source.slice(start, end))).toEqual(["x/y = 1/2", "2/3", "1"]);
   });
 
+  it.each([
+    "① 두 값 중 ②와 ③의 관계가 옳다.",
+    "① ㄱ이 참이면 ②와 ③을 비교한다.",
+    "① 조건에 따라 ② 또는 ④를 선택한다.",
+    "① ②보다 크고 ③보다 작다.",
+  ])("keeps inline circled references in one choice: %s", (choiceText) => {
+    const [question] = parseQuestionText(`1. 옳은 것을 고르시오.\n${choiceText}`);
+    const expectedText = choiceText.replace(/^①\s*/, "");
+
+    expect(question).toMatchObject({
+      kind: "question",
+      choices: [{ marker: "①", text: expectedText }],
+    });
+  });
+
+  it.each([
+    ["① A   ② B   ③ C", ["A", "B", "C"]],
+    ["① x/y = 1/2  ② 2/3  ③ 1", ["x/y = 1/2", "2/3", "1"]],
+    ["① 긴 첫 선택지   ② 두 번째 선택지   ③ 세 번째 선택지", ["긴 첫 선택지", "두 번째 선택지", "세 번째 선택지"]],
+  ])("splits explicitly separated inline choices and preserves source ranges: %s", (line, expected) => {
+    const source = `1. 고르시오.\n${line}`;
+    const [question] = parseQuestionText(source);
+
+    expect(question).toMatchObject({ kind: "question", choices: expected.map((text, index) => ({ marker: "①②③"[index], text })) });
+    if (question?.kind !== "question") throw new Error("expected question block");
+    expect(question.choices.map(({ start, end }) => source.slice(start, end))).toEqual(expected);
+  });
+
+  it("splits tab-separated inline choices while retaining circled references inside choice text", () => {
+    const source = "1. 고르시오.\n① A\t② B와 ③의 관계\t③ C";
+    const [question] = parseQuestionText(source);
+
+    expect(question).toMatchObject({
+      kind: "question",
+      choices: [
+        { marker: "①", text: "A" },
+        { marker: "②", text: "B와 ③의 관계" },
+        { marker: "③", text: "C" },
+      ],
+    });
+    if (question?.kind !== "question") throw new Error("expected question block");
+    expect(question.choices.map(({ start, end }) => source.slice(start, end))).toEqual(["A", "B와 ③의 관계", "C"]);
+  });
+
+  it("splits a contiguous five-choice inline sequence", () => {
+    const source = "1. 고르시오.\n① x/y = 1/2  ② 2/3  ③ 1  ④ 3/2  ⑤ 2";
+    const [question] = parseQuestionText(source);
+
+    expect(question).toMatchObject({
+      kind: "question",
+      choices: [
+        { marker: "①", text: "x/y = 1/2" },
+        { marker: "②", text: "2/3" },
+        { marker: "③", text: "1" },
+        { marker: "④", text: "3/2" },
+        { marker: "⑤", text: "2" },
+      ],
+    });
+    if (question?.kind !== "question") throw new Error("expected question block");
+    expect(question.choices.map(({ start, end }) => source.slice(start, end))).toEqual(["x/y = 1/2", "2/3", "1", "3/2", "2"]);
+  });
+
   it("keeps inline circled symbols in a single option when the marker sequence is not ordered", () => {
     const [question] = parseQuestionText("1. 수식에서 표시한 것은?\n① ②와 ①의 관계");
 
