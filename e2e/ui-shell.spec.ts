@@ -21,6 +21,25 @@ const entries = [
     mastered: false,
   },
   {
+    id: "shell-sheet-other",
+    subject: "수학",
+    title: "두 번째 시험지",
+    question: "1. 다른 문항",
+    questionImages: [],
+    entryKind: "problem_sheet",
+    difficult: false,
+    difficulty: "none",
+    myAnswer: "",
+    correctAnswer: "",
+    explanationParts: [],
+    memo: "",
+    annotations: [],
+    tags: ["shell-e2e"],
+    createdAt: "2026-08-13T00:00:00.000Z",
+    updatedAt: "2026-08-13T00:00:00.000Z",
+    mastered: false,
+  },
+  {
     id: "shell-lecture",
     subject: "수학",
     title: "합성 함수 특강",
@@ -44,10 +63,13 @@ const entries = [
 
 async function seedEntries(page: Page) {
   await page.addInitScript((seed) => {
-    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: seed }));
-    localStorage.removeItem("wrong-answer-app-sidebar-collapsed");
-    localStorage.removeItem("wrong-answer-entry-pane-collapsed");
-    localStorage.removeItem("wrong-answer-entry-pane-width");
+    if (!localStorage.getItem("wrong-answer-entries")) {
+      localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: seed }));
+      localStorage.removeItem("wrong-answer-app-sidebar-collapsed");
+      localStorage.removeItem("wrong-answer-entry-pane-collapsed");
+      localStorage.removeItem("wrong-answer-entry-pane-width");
+      localStorage.removeItem("wrong-answer-entry-pane-overrides");
+    }
   }, entries);
 }
 
@@ -94,6 +116,59 @@ for (const viewport of [
     await page.screenshot({ path: testInfo.outputPath(`ui-shell-${viewport.width}x${viewport.height}.png`), fullPage: true });
   });
 }
+
+test("problem sheet pane auto-collapses transiently and restores only explicit per-sheet choices", async ({ page }) => {
+  await page.setViewportSize({ width: 1100, height: 750 });
+  await seedEntries(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "시험지함" }).click();
+  await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
+  const overrides = () => page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entry-pane-overrides") || "{}"));
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  expect(await overrides()).toEqual({});
+
+  await page.setViewportSize({ width: 1120, height: 750 });
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  await page.setViewportSize({ width: 1090, height: 750 });
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  expect(await overrides()).toEqual({});
+
+  await page.getByRole("button", { name: "항목 목록 펼치기" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 접기" })).toBeVisible();
+  expect(await overrides()).toEqual({ "shell-sheet": false });
+  await page.setViewportSize({ width: 1120, height: 750 });
+  await page.setViewportSize({ width: 1090, height: 750 });
+  await expect(page.getByRole("button", { name: "항목 목록 접기" })).toBeVisible();
+
+  await page.locator(".entry-card", { hasText: "두 번째 시험지" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  await page.getByRole("button", { name: "항목 목록 펼치기" }).click();
+  await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 접기" })).toBeVisible();
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "시험지함" }).click();
+  await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 접기" })).toBeVisible();
+  expect(await overrides()).toEqual({ "shell-sheet": false, "shell-sheet-other": false });
+});
+
+test("wide viewport uses the default pane state and restores a manual collapse", async ({ page }) => {
+  await page.setViewportSize({ width: 1536, height: 970 });
+  await seedEntries(page);
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "시험지함" }).click();
+  await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 접기" })).toBeVisible();
+  await page.getByRole("button", { name: "항목 목록 접기" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entry-pane-overrides") || "{}"))).toEqual({ "shell-sheet": true });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.getByRole("button", { name: "시험지함" }).click();
+  await page.locator(".entry-card", { hasText: "합성 UI 시험지" }).click();
+  await expect(page.getByRole("button", { name: "항목 목록 펼치기" })).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entry-pane-overrides") || "{}"))).toEqual({ "shell-sheet": true });
+});
 
 test("lecture fullscreen occupies the viewport and closes with Escape", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1100, height: 750 });
