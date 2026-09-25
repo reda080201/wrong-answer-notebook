@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 export const APP_SIDEBAR_COLLAPSED_KEY = "wrong-answer-app-sidebar-collapsed";
 export const ENTRY_PANE_COLLAPSED_KEY = "wrong-answer-entry-pane-collapsed";
 export const ENTRY_PANE_WIDTH_KEY = "wrong-answer-entry-pane-width";
+export const ENTRY_PANE_OVERRIDES_KEY = "wrong-answer-entry-pane-overrides";
 export const ENTRY_PANE_MIN_WIDTH = 240;
 export const ENTRY_PANE_MAX_WIDTH = 460;
 export const ENTRY_PANE_DEFAULT_WIDTH = 300;
@@ -11,6 +12,7 @@ export interface UiShellPreferences {
   appSidebarCollapsed: boolean;
   entryPaneCollapsed: boolean;
   entryPaneWidth: number;
+  entryPaneOverrides: Record<string, boolean>;
 }
 
 function readBoolean(key: string): boolean {
@@ -20,6 +22,15 @@ function readBoolean(key: string): boolean {
 export function clampEntryPaneWidth(value: number): number {
   if (!Number.isFinite(value)) return ENTRY_PANE_DEFAULT_WIDTH;
   return Math.min(ENTRY_PANE_MAX_WIDTH, Math.max(ENTRY_PANE_MIN_WIDTH, Math.round(value)));
+}
+
+function readEntryPaneOverrides(): Record<string, boolean> {
+  if (typeof localStorage === "undefined") return {};
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(ENTRY_PANE_OVERRIDES_KEY) ?? "{}");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"));
+  } catch { return {}; }
 }
 
 function readWidth(): number {
@@ -32,6 +43,7 @@ export function useUiShellPreferences() {
     appSidebarCollapsed: readBoolean(APP_SIDEBAR_COLLAPSED_KEY),
     entryPaneCollapsed: readBoolean(ENTRY_PANE_COLLAPSED_KEY),
     entryPaneWidth: readWidth(),
+    entryPaneOverrides: readEntryPaneOverrides(),
   }));
 
   const setAppSidebarCollapsed = useCallback((collapsed: boolean) => {
@@ -42,11 +54,18 @@ export function useUiShellPreferences() {
     localStorage.setItem(ENTRY_PANE_COLLAPSED_KEY, String(collapsed));
     setPreferences((current) => ({ ...current, entryPaneCollapsed: collapsed }));
   }, []);
+  const setEntryPaneOverride = useCallback((entryId: string, collapsed: boolean) => {
+    setPreferences((current) => {
+      const entryPaneOverrides = { ...current.entryPaneOverrides, [entryId]: collapsed };
+      localStorage.setItem(ENTRY_PANE_OVERRIDES_KEY, JSON.stringify(entryPaneOverrides));
+      return { ...current, entryPaneOverrides };
+    });
+  }, []);
   const setEntryPaneWidth = useCallback((width: number) => {
     const next = clampEntryPaneWidth(width);
     localStorage.setItem(ENTRY_PANE_WIDTH_KEY, String(next));
     setPreferences((current) => ({ ...current, entryPaneWidth: next }));
   }, []);
 
-  return { ...preferences, setAppSidebarCollapsed, setEntryPaneCollapsed, setEntryPaneWidth };
+  return { ...preferences, setAppSidebarCollapsed, setEntryPaneCollapsed, setEntryPaneOverride, setEntryPaneWidth };
 }
