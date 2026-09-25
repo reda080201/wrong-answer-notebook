@@ -12,10 +12,12 @@ function segmentText(question: ChatGptSharePayloadQuestion): string[] {
 
 export function buildChatGptSharePrompt(payload: ChatGptSharePayload, instruction: string): string {
   const questions = payload.questions.map((question) => {
+    const presentation = segmentText(question);
     const sections = [
-      question.questionText ? "문제:\n" + question.questionText : "",
+      presentation.length
+        ? "문제:\n" + presentation.join("\n")
+        : question.questionText ? "문제:\n" + question.questionText : "",
       question.passage ? "지문:\n" + question.passage : "",
-      ...segmentText(question).map((value) => "문항 내용:\n" + value),
       question.choices.length ? "선택지:\n" + question.choices.join("\n") : "",
       question.userResponse ? "내 답:\n" + question.userResponse : "",
       question.scratchNote ? "풀이 메모:\n" + question.scratchNote : "",
