@@ -40,7 +40,7 @@ import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDr
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
-import { renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
+import { getEntryQuestions, renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
@@ -1080,7 +1080,7 @@ function AppContent() {
         {realExamStartEntry && (
           <div className="real-exam-start-dialog">
             <p className="form-hint">{realExamStartEntry.title}</p>
-            <p>문항 {realExamStartEntry.structuredQuestions?.length ?? realExamStartEntry.question.trim().split(/\n+/).filter(Boolean).length}개</p>
+            <p>문항 {selectedRealSession?.questions.length ?? getEntryQuestions(realExamStartEntry).length}개</p>
             {examStartError?.entryId === realExamStartEntry.id && <p className="form-error" role="alert">{examStartError.message}</p>}
             {selectedRealSession?.deadlineAt && (
               <p className="form-hint" role="status">

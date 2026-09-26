@@ -390,7 +390,12 @@ describe("useAppActions", () => {
       const setActiveSection = vi.fn();
       const setSelectedId = vi.fn();
       const { result } = createHook({ addEntries, setActiveSection, setSelectedId });
-      const importedEntries = [createMockFormData({ title: "Imported Entry" })];
+      const questionContentSegments = { "1": [
+        { id: "before-figure", type: "text" as const, text: "앞 문장" },
+        { id: "figure", type: "figure" as const, figureId: "figure-1" },
+        { id: "after-figure", type: "text" as const, text: "뒤 문장" },
+      ] };
+      const importedEntries = [createMockFormData({ title: "Imported Entry", questionContentSegments })];
 
       await act(async () => {
         await result.current.handleImportedEntriesApply(importedEntries, []);
@@ -398,7 +403,7 @@ describe("useAppActions", () => {
 
       expect(addEntries).toHaveBeenCalledWith(
         expect.arrayContaining([
-          expect.objectContaining({ title: "Imported Entry" }),
+          expect.objectContaining({ title: "Imported Entry", questionContentSegments }),
         ]),
       );
       expect(setSelectedId).toHaveBeenCalledWith("imported-id");

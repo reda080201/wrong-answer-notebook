@@ -80,12 +80,13 @@ export function useExamSessionController({
   const submissionInFlightRef = useRef(false);
 
   const updateSession = useCallback((recipe: ExamSessionRecipe) => {
-    setSession((current) => {
-      if (!current) return current;
-      const next = recipe(current);
-      sessionRef.current = next;
-      return next;
-    });
+    const current = sessionRef.current;
+    if (!current) return;
+    const next = recipe(current);
+    // Keep imperative reads (especially submit) in step with updates that React
+    // has queued but has not committed yet.
+    sessionRef.current = next;
+    setSession(next);
   }, []);
 
   useEffect(() => {
@@ -208,6 +209,7 @@ export function useExamSessionController({
     setActiveGeneratedExam(null);
     if (normalizedOptions.resumable) {
       const resumed = normalizeExamSession(normalizedOptions.resumable);
+      sessionRef.current = resumed;
       setSession(resumed);
       return { ok: true, session: resumed };
     }
@@ -225,6 +227,7 @@ export function useExamSessionController({
       setStartError({ entryId: entry.id, message });
       return { ok: false, code: "missing_answers", message };
     }
+    sessionRef.current = next;
     setSession(next);
     return { ok: true, session: next };
   }, [loadError]);
@@ -242,21 +245,29 @@ export function useExamSessionController({
     setActiveGeneratedExam(exam);
     setStartError(null);
     if (resumable) {
-      setSession(normalizeExamSession(resumable));
+      const resumed = normalizeExamSession(resumable);
+      sessionRef.current = resumed;
+      setSession(resumed);
       return;
     }
-    setSession(createSessionFromGeneratedExam(exam, new Date(), { ...options, mode }));
+    const next = createSessionFromGeneratedExam(exam, new Date(), { ...options, mode });
+    sessionRef.current = next;
+    setSession(next);
   }, [loadError]);
 
   const submit = useCallback(async (current: ExamSession) => {
     if (submissionInFlightRef.current) return;
     if (!loadedRef.current) throw new Error(loadError ?? "시험 기록을 불러오는 중이어서 제출할 수 없습니다.");
-    if (current.status === "submitted") return;
+    const latest = sessionRef.current;
+    const sessionToSubmit = current.status === "in_progress" && latest?.id === current.id && latest.status === "in_progress"
+      ? latest
+      : current;
+    if (sessionToSubmit.status === "submitted") return;
     submissionInFlightRef.current = true;
     try {
-    const score = scoreExamSession(current);
+    const score = scoreExamSession(sessionToSubmit);
     const submitted = {
-      ...current,
+      ...sessionToSubmit,
       status: "submitted" as const,
       submittedAt: new Date().toISOString(),
       score,
@@ -302,6 +313,7 @@ export function useExamSessionController({
         .filter((entry) => entry.generatedFromExamSessionId && entry.generatedFromQuestionNumber)
         .map((entry) => `${entry.generatedFromExamSessionId}:${normalizeExamQuestionNumber(entry.generatedFromQuestionNumber)}`),
     );
+    sessionRef.current = submitted;
     setSession(submitted);
     } finally {
       submissionInFlightRef.current = false;
@@ -309,7 +321,15 @@ export function useExamSessionController({
   }, [commitExamSubmission, loadError]);
 
   useEffect(() => {
-    sessionRef.current = session;
+    if (!session) {
+      sessionRef.current = null;
+    } else if (sessionRef.current?.id !== session.id || (session.status === "submitted" && sessionRef.current.status !== "submitted")) {
+      // A render scheduled by an earlier answer can commit after another quick
+      // answer has already advanced the imperative session reference. Only
+      // replace that reference when the session identity or terminal state
+      // changes; updates in the active session go through updateSession().
+      sessionRef.current = session;
+    }
     if (saveTimerRef.current !== null) window.clearTimeout(saveTimerRef.current);
     if (session) {
       saveTimerRef.current = window.setTimeout(() => {
