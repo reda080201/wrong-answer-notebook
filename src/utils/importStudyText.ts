@@ -1257,21 +1257,47 @@ function contentSegmentsFromQuestionTokens(question: string): Record<string, Que
   const entries = parseQuestionText(question)
     .filter((block) => block.kind === "question")
     .flatMap((block) => {
-      const segments = block.bodySegments.flatMap((body, index): QuestionContentSegment[] => {
-        const id = `import-${normalizeQuestionNumber(block.numberLabel) || block.displayNumber}-${index + 1}`;
-        const figure = body.text.trim().match(/^\[FIGURE:([^\]]+)\]$/i);
-        if (figure?.[1]) return [{ id, type: "figure", figureId: figure[1].trim() }];
-        return [body.kind === "condition"
-          ? { id, type: "condition", label: body.label, text: body.text }
-          : { id, type: "text", text: body.text }];
+      const questionNumber = normalizeQuestionNumber(block.numberLabel) || String(block.displayNumber);
+      let segmentIndex = 0;
+      const segments = block.bodySegments.flatMap((body): QuestionContentSegment[] => {
+        const result: QuestionContentSegment[] = [];
+        const figurePattern = /\[FIGURE:([^\]]+)\]/gi;
+        let cursor = 0;
+        for (const match of body.text.matchAll(figurePattern)) {
+          const matchIndex = match.index ?? 0;
+          const precedingText = body.text.slice(cursor, matchIndex);
+          if (precedingText.trim()) {
+            const id = `import-${questionNumber}-${++segmentIndex}`;
+            result.push(body.kind === "condition"
+              ? { id, type: "condition", label: body.label, text: precedingText.trim() }
+              : { id, type: "text", text: precedingText.trim() });
+          }
+          const figureId = match[1]?.trim();
+          if (figureId) {
+            result.push({ id: `import-${questionNumber}-${++segmentIndex}`, type: "figure", figureId });
+          }
+          cursor = matchIndex + match[0].length;
+        }
+        const remainingText = body.text.slice(cursor);
+        if (remainingText.trim()) {
+          const id = `import-${questionNumber}-${++segmentIndex}`;
+          result.push(body.kind === "condition"
+            ? { id, type: "condition", label: body.label, text: remainingText.trim() }
+            : { id, type: "text", text: remainingText.trim() });
+        }
+        return result;
       });
-      return segments.length ? [[normalizeQuestionNumber(block.numberLabel) || String(block.displayNumber), segments] as const] : [];
+      return segments.length ? [[questionNumber, segments] as const] : [];
     });
   return entries.length ? Object.fromEntries(entries) : undefined;
 }
 
 function removeFigureTokens(question: string): string {
-  return question.replace(/^\s*\[FIGURE:[^\]]+\]\s*(?:\r?\n)?/gim, "").trim();
+  return question
+    .replace(/\[FIGURE:[^\]]+\]/gi, "")
+    .replace(/[ \t]+\r?\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 interface QuestionMetadata {

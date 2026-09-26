@@ -59,6 +59,7 @@ export default function ExamSessionOverlay({
   const content = session.mode === "real" ? <RealExamSessionView
     session={session}
     onChange={onChange}
+    onUpdateSession={onUpdateSession}
     onSubmittingChange={onSubmittingChange}
     onSubmit={onSubmit}
     examPreferences={examPreferences}

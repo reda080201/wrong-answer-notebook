@@ -63,6 +63,10 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     };
   });
   const mode = options.mode === "real" ? "real" : "practice";
+  const sourcePageQuestionMap = Object.fromEntries(
+    [...new Set(snapshots.flatMap(question => question.sourcePageImages ?? []))]
+      .map(filename => [filename, snapshots.filter(question => question.sourcePageImages?.includes(filename)).map(question => question.questionNumber)]),
+  );
   const startedAt = now.toISOString();
   const timeLimitMinutes = mode === "real" && Number.isFinite(options.timeLimitMinutes) && (options.timeLimitMinutes ?? 0) > 0
     ? options.timeLimitMinutes
@@ -80,6 +84,8 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     answerSheetOpen: mode === "real" ? options.answerSheetOpen !== false : undefined,
     answerSheetLayout: mode === "real" ? options.answerSheetLayout ?? "auto" : undefined,
     questions: snapshots,
+    sourcePageImages: structuredClone(entry.sourcePageImages ?? []),
+    sourcePageQuestionMap,
     responses: [],
     currentQuestionIndex: 0,
     startedAt,

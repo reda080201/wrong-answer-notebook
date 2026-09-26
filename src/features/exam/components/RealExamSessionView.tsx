@@ -16,6 +16,7 @@ import "./RealExamSessionView.css";
 interface RealExamSessionViewProps {
   session: ExamSession;
   onChange(session: ExamSession): void;
+  onUpdateSession?(recipe: (current: ExamSession) => ExamSession): void;
   onSubmit(session: ExamSession): void | Promise<void>;
   onSubmittingChange?(value: boolean): void;
   examPreferences?: ExamPreferences;
@@ -38,9 +39,16 @@ function resolveAnswerSheetLayout(session: ExamSession): "vertical" | "horizonta
   return mathOrMixed ? "vertical" : "horizontal";
 }
 
-export default function RealExamSessionView({ session, onChange, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave, onStartReview }: RealExamSessionViewProps) {
+export default function RealExamSessionView({ session, onChange, onUpdateSession, onSubmit, onSubmittingChange, examPreferences, onClose, closeDisabled = false, saveError = null, saving = false, onRetrySave, onStartReview }: RealExamSessionViewProps) {
   const sessionRef = useRef(session);
-  useEffect(() => { sessionRef.current = session; }, [session]);
+  useEffect(() => {
+    // Parent updates can commit in a later render than several rapid answer
+    // clicks. Do not let an older in-progress prop overwrite the imperative
+    // session that already contains those queued answers.
+    if (sessionRef.current.id !== session.id || session.status === "submitted") {
+      sessionRef.current = session;
+    }
+  }, [session.id, session.status]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -71,8 +79,9 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
   const updateSession = useCallback((recipe: (current: ExamSession) => ExamSession) => {
     const next = recipe(sessionRef.current);
     sessionRef.current = next;
-    onChange(next);
-  }, [onChange]);
+    if (onUpdateSession) onUpdateSession(recipe);
+    else onChange(next);
+  }, [onChange, onUpdateSession]);
 
   const changeResponse = useCallback((questionNumber: string, patch: PaperResponsePatch) => {
     updateSession(latest => {
@@ -172,7 +181,7 @@ export default function RealExamSessionView({ session, onChange, onSubmit, onSub
       <div className={`real-exam-layout${answerSheetOpen ? "" : " real-exam-layout--sheet-collapsed"}`}>
         <main className="real-exam-paper" aria-label="실전 시험지">
       {score && <section className="real-exam-results" aria-label="채점 결과"><div className="real-exam-result-filters">{(["all", "wrong", "unanswered", "marked"] as const).map((item) => <button key={item} type="button" aria-pressed={filter === item} onClick={() => setFilter(item)}>{item === "all" ? "전체" : item === "wrong" ? "오답" : item === "unanswered" ? "미응답" : "검토 표시"}</button>)}</div><button type="button" disabled={!onStartReview || !score.questionResults.some(item => item.hasResponse && !item.correct)} onClick={() => onStartReview?.(score.questionResults.filter(item => item.hasResponse && !item.correct).map(item => item.questionNumber))}>오답 복습 시작</button><div className="real-exam-result-cards"><span>전체 {score.totalQuestions}</span><span>응답 {score.answeredCount}</span><span>정답 {score.correctCount}</span><span>오답 {score.wrongCount}</span><span>미응답 {score.unansweredCount}</span><span>정답률 {score.percentCorrect}%</span></div>{score.pointsComplete ? <p>획득 점수 {score.earnedPoints} / {score.maxPoints}</p> : <p>배점 정보 일부 미확인</p>}<div className="real-exam-result-grid">{visibleQuestions.map((question) => { const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber); return <button key={question.id} type="button" onClick={() => { navigateToQuestion(session.questions.indexOf(question)); }}>{question.questionNumber} {result?.correct ? "✓" : result?.hasResponse ? "✕" : "-"}</button>; })}</div>{selectedResultNumber && (() => { const question = session.questions.find((item) => item.questionNumber === selectedResultNumber); const response = responses.get(selectedResultNumber); if (!question) return null; return <article className="real-exam-result-detail" aria-label={`${selectedResultNumber}번 결과 상세`}><h3>{selectedResultNumber}번 검사</h3><p>내 답: <MathText text={response?.response || "미응답"} /></p><p>정답: <MathText text={question.correctAnswer || "정답 정보 없음"} /></p>{question.explanation && <p>해설: <MathText text={question.explanation} /></p>}{typeof question.points === "number" && <p>배점: {question.points}점</p>}{question.warning && <p role="alert">주의: {question.warning}</p>}</article>; })()}</section>}
-          <ExamSessionPaper session={session} preferences={examPreferences} disabled={session.status === "submitted" || expired} onNavigate={navigateToQuestion} onResponse={changeResponse} />
+          <ExamSessionPaper session={session} preferences={examPreferences} disabled={session.status === "submitted" || expired} onNavigate={navigateToQuestion} onResponse={changeResponse} onSessionChange={updateSession} />
         </main>
         <aside className="real-exam-answer-sheet" aria-label="답안지">
           {answerSheetOpen ? <header><h3>답안지</h3><button type="button" onClick={toggleAnswerSheet} aria-label="답안지 접기">접기</button></header> : <div className="real-exam-answer-sheet-rail"><IconButton label="답안지 펼치기" onClick={toggleAnswerSheet}><PanelRightOpen size={20} /></IconButton></div>}
