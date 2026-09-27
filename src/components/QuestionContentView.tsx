@@ -3,6 +3,7 @@ import MathText from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import SemanticFigureView from "../features/figures/components/SemanticFigureView";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
+import InlineQuestionText from "./InlineQuestionText";
 
 interface QuestionContentViewProps {
   text: string;
@@ -23,11 +24,14 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
 export default function QuestionContentView({ text, segments, figures = [] }: QuestionContentViewProps) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
   const rendered = segments?.length ? segments : [{ id: "fallback", type: "text" as const, text }];
-  const referenced = new Set<string>();
+  const referenced = new Set<string>(rendered.flatMap((segment) => {
+    if (segment.type === "figure") return [segment.figureId];
+    if (segment.type !== "text" && segment.type !== "condition") return [];
+    return [...segment.text.matchAll(/\[FIGURE(?::([^\]]*))?(?:\]|$)/gi)].map((match) => match[1]?.trim()).filter((id): id is string => Boolean(id));
+  }));
   return <div className="question-content-view">
     {rendered.map((segment) => {
       if (segment.type === "figure") {
-        referenced.add(segment.figureId);
         const figure = byId.get(segment.figureId);
         return figure ? <FigureContent key={segment.id} figure={figure} /> : <p key={segment.id} className="question-figure-missing">그림 위치 정보를 확인할 수 없습니다.</p>;
       }
@@ -35,11 +39,11 @@ export default function QuestionContentView({ text, segments, figures = [] }: Qu
         const conditionText = segment.label
           ? segment.text.replace(new RegExp(`^${segment.label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*`), "")
           : segment.text;
-        return <p key={segment.id} className="question-condition-line">{segment.label ? <strong>{segment.label} </strong> : null}<MathText text={conditionText} /></p>;
+        return <p key={segment.id} className="question-condition-line">{segment.label ? <strong>{segment.label} </strong> : null}<InlineQuestionText text={conditionText} figures={figures} /></p>;
       }
       if (segment.type === "equation") return <div key={segment.id} className="question-equation"><MathText text={segment.display ? `\\[${segment.latex}\\]` : `\\(${segment.latex}\\)`} /></div>;
       if (segment.type === "table") return <div key={segment.id} className="question-table-wrap"><table><tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MathText text={cell} /></td>)}</tr>)}</tbody></table></div>;
-      return <p key={segment.id}><MathText text={segment.text} /></p>;
+      return <p key={segment.id}><InlineQuestionText text={segment.text} figures={figures} /></p>;
     })}
     {figures.filter((figure) => !referenced.has(figure.id)).map((figure) => <FigureContent key={figure.id} figure={figure} />)}
   </div>;

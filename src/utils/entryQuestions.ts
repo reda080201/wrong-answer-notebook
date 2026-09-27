@@ -1,10 +1,11 @@
-import type { ProcessingStatus, QuestionContentSegment, StructuredQuestion, WrongAnswerEntry } from "../types";
+import type { ProcessingStatus, QuestionContentSegment, SheetFigureItem, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
 import { isMultipleChoiceQuestion } from "./structuredQuestionType";
 import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
 import { reconcileEntryQuestions } from "./questionCanonical";
 import { normalizeQuestionPresentationSegments } from "./questionPresentation";
+import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "./figureTokens";
 
 export interface ResolvedEntryQuestion {
   /** Stable source identity. Never use position as a persistence key. */
@@ -28,12 +29,22 @@ export interface ResolvedEntryQuestion {
 
 const EMPTY_MULTIPLE_CHOICE_WARNING = "객관식 문항에 선택지가 없어 검토가 필요합니다.";
 
-function projectStructuredQuestion(question: StructuredQuestion, index: number): ResolvedEntryQuestion {
+function projectStructuredQuestion(question: StructuredQuestion, index: number, figures: SheetFigureItem[] = []): ResolvedEntryQuestion {
   const isEmptyMultipleChoice = isMultipleChoiceQuestion(question.questionType, question.choices)
     && question.choices.length === 0;
-  const warning = isEmptyMultipleChoice
-    ? [question.warning, EMPTY_MULTIPLE_CHOICE_WARNING].filter((value, index, values) => value && values.indexOf(value) === index).join(" ")
-    : question.warning;
+  const segments = normalizeQuestionPresentationSegments(question);
+  const references = readFigureTokenReferences([
+    question.questionText,
+    ...question.choices,
+    ...segments.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []),
+  ]);
+  const tokenWarning = figureTokenWarning(unresolvedFigureTokens(references.map(({ raw }) => raw), figures));
+  const warning = [
+    isEmptyMultipleChoice ? EMPTY_MULTIPLE_CHOICE_WARNING : undefined,
+    question.warning,
+    tokenWarning,
+  ].filter((value, warningIndex, values) => value && values.indexOf(value) === warningIndex).join(" ") || undefined;
+  const referencedIds = references.map(({ id }) => id).filter(Boolean);
   return {
     questionNumber: normalizeQuestionNumber(question.questionNumber) || question.questionNumber,
     position: index + 1,
@@ -43,12 +54,12 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number):
     conditions: [...question.conditions],
     equations: [...question.equations],
     choices: [...question.choices],
-    contentSegments: normalizeQuestionPresentationSegments(question),
-    needsReview: Boolean(question.needsReview || isEmptyMultipleChoice),
+    contentSegments: segments,
+    needsReview: Boolean(question.needsReview || isEmptyMultipleChoice || tokenWarning),
     processingStatus: question.processingStatus,
     points: question.points,
     warning,
-    figureIds: [...question.figureIds],
+    figureIds: [...new Set([...question.figureIds, ...referencedIds])],
     source: question.source ? structuredClone(question.source) : undefined,
   };
 }
@@ -56,13 +67,22 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number):
 export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures">>): ResolvedEntryQuestion[] {
   const canonical = reconcileEntryQuestions(entry).entry;
   if (canonical.structuredQuestions?.length) {
-    return canonical.structuredQuestions.map((question, index) => projectStructuredQuestion({ ...question, choices: question.choices.map(stripLegacyChoiceSeparator) }, index));
+    return canonical.structuredQuestions.map((question, index) => projectStructuredQuestion({ ...question, choices: question.choices.map(stripLegacyChoiceSeparator) }, index, canonical.figures));
   }
 
   return parseQuestionText(canonical.question)
     .filter((block): block is QuestionBlock => block.kind === "question")
     .map((block, index) => {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
+      const segments = number && canonical.questionContentSegments?.[number]
+        ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments[number] })
+        : undefined;
+      const references = readFigureTokenReferences([
+        block.body,
+        ...block.choices.map((choice) => choice.text),
+        ...segments?.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []) ?? [],
+      ]);
+      const tokenWarning = figureTokenWarning(unresolvedFigureTokens(references.map(({ raw }) => raw), canonical.figures ?? []));
       return {
         questionNumber: number || String(index + 1),
         position: index + 1,
@@ -70,10 +90,10 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
         equations: [],
         questionText: block.body,
         choices: block.choices.map((choice) => stripLegacyChoiceSeparator(`${choice.marker} ${choice.text}`.trim())),
-         contentSegments: number && canonical.questionContentSegments?.[number]
-           ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments[number] })
-           : undefined,
-        figureIds: [],
+        contentSegments: segments,
+        needsReview: Boolean(tokenWarning),
+        warning: tokenWarning,
+        figureIds: [...new Set(references.map(({ id }) => id).filter(Boolean))],
       };
     });
 }

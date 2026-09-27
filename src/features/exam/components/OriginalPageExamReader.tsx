@@ -18,7 +18,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [imageSize, setImageSize] = useState({ filename: "", width: 0, height: 0 });
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const selectedSet = useMemo(() => new Set(selectedFilenames ?? filenames), [filenames, selectedFilenames]);
   const visiblePages = useMemo(() => filenames.filter((filename) => selectedSet.has(filename)), [filenames, selectedSet]);
@@ -27,8 +27,9 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   const zoom = zoomState.value;
   const fitWidth = Math.max(0, viewportSize.width);
   const fitHeight = Math.max(0, viewportSize.height);
-  const pageWidth = imageSize.width && imageSize.height
-    ? Math.min(fitWidth, fitHeight * imageSize.width / imageSize.height)
+  const activeImageSize = imageSize.filename === activeFilename ? imageSize : { width: 0, height: 0 };
+  const pageWidth = activeImageSize.width && activeImageSize.height
+    ? Math.min(fitWidth, fitHeight * activeImageSize.width / activeImageSize.height)
     : fitWidth;
   const displayWidth = zoomState.mode === "page" ? pageWidth : zoomState.mode === "width" ? fitWidth : fitWidth * zoom;
   const displayedPercent = fitWidth > 0 ? Math.round(displayWidth / fitWidth * 100) : 100;
@@ -67,7 +68,6 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
 
   useEffect(() => {
     viewportRef.current?.scrollTo({ left: 0, top: 0 });
-    setImageSize({ width: 0, height: 0 });
   }, [activeFilename]);
 
   const go = (nextIndex: number) => {
@@ -92,10 +92,12 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
     touchStart.current = null;
     const point = event.changedTouches[0];
     if (!start || !point) return;
+    const viewport = viewportRef.current;
+    if (viewport && viewport.scrollWidth > viewport.clientWidth + 1) return;
     const dx = point.clientX - start.x;
     const dy = point.clientY - start.y;
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(activeIndex + (dx < 0 ? 1 : -1));
-  }}>
+  }} onTouchCancel={() => { touchStart.current = null; }}>
     <header className="original-page-toolbar">
       <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>이전 페이지</button>
       <strong aria-live="polite">{visiblePages.length ? `${activeIndex + 1} / ${visiblePages.length} 페이지` : "페이지를 선택해 주세요"}</strong>
@@ -124,7 +126,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
       </div>
     </details>
     <div ref={viewportRef} className="original-page-viewport" tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
-      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요.</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} /> : <p role="status">원본 페이지를 불러오는 중…</p>}
+      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요.</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} /> : <p role="status">원본 페이지를 불러오는 중…</p>}
     </div>
   </section>;
 }

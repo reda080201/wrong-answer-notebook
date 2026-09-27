@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { WrongAnswerEntry } from "../../../types";
+import type { GeneratedExam, WrongAnswerEntry } from "../../../types";
 import { createExamSession, publicExamQuestion, resolveEntryQuestionStimuli, updateExamResponse } from "./examSession";
 import { normalizeExamAnswer, scoreExamSession } from "./examScoring";
+import { createSessionFromGeneratedExam } from "../../exam-builder/services/createSessionFromGeneratedExam";
 
 const entry = {
   id: "sheet-1", subject: "수학", title: "모의고사", question: "1. 함수의 값은?\n① 1\n② 2", questionImages: [], entryKind: "problem_sheet", difficult: false, myAnswer: "", correctAnswer: "", explanationParts: [], memo: "", annotations: [], tags: [], answerKey: [{ id: "a1", questionNumber: "1", answer: "②", explanation: "해설", importantPoints: [] }], figures: [], mastered: false, createdAt: "", updatedAt: "",
@@ -42,6 +43,30 @@ describe("exam session foundation", () => {
     expect(session.questions[0]?.figures).toHaveLength(1);
     expect(session.questions[0]?.questionImages).toEqual(["figure.png"]);
     expect(session.questions[0]?.sourcePageImages).toEqual([]);
+  });
+
+  it("selects only question-linked source pages by default in real exams", () => {
+    const withPages = {
+      ...entry,
+      question: "1. 첫 문항\n답을 쓰시오.\n\n2. 둘째 문항\n답을 쓰시오.",
+      sourcePageImages: ["problem-1.png", "problem-2.png", "answer-key.png"],
+      questionSourceCrops: [
+        { id: "crop-1", questionNumber: "1", image: "q1.png", sourcePageImage: "problem-1.png", page: 1, order: 0 },
+        { id: "crop-2", questionNumber: "2", image: "q2.png", sourcePageImage: "problem-2.png", page: 2, order: 0 },
+      ],
+    } as WrongAnswerEntry;
+
+    const real = createExamSession(withPages, new Date(), { mode: "real" });
+    const practice = createExamSession(withPages, new Date(), { mode: "practice" });
+    expect(real.selectedSourcePageImages).toEqual(["problem-1.png", "problem-2.png"]);
+    expect(practice.selectedSourcePageImages).toBeUndefined();
+  });
+
+  it("keeps legacy real-exam source pages unselected when no question mapping exists", () => {
+    const legacy = { ...entry, sourcePageImages: ["unknown-1.png", "unknown-2.png"] } as WrongAnswerEntry;
+    const session = createExamSession(legacy, new Date(), { mode: "real" });
+    expect(session.sourcePageQuestionMap).toEqual({});
+    expect(session.selectedSourcePageImages).toEqual([]);
   });
 
   it("projects structured question semantics into a detached exam snapshot", () => {
@@ -207,5 +232,29 @@ describe("exam snapshot stimulus handling", () => {
     const session = createExamSession(subjectiveEntry);
     expect(session.questions[0]?.passage).toBeUndefined();
     expect(session.questions[1]?.passage).toBe("[자료 B]\nB 자료");
+  });
+});
+
+describe("generated exam original page defaults", () => {
+  it("maps explicit generated question source pages and leaves unlinked pages unselected", () => {
+    const generated = {
+      id: "generated-pages",
+      title: "생성 시험",
+      subject: "수학",
+      preset: "random",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      seed: "seed",
+      status: "ready",
+      generationReport: { candidateCount: 2, selectedCount: 2, excludedCounts: {}, difficultyDistribution: {}, unitDistribution: {}, sourceDistribution: {}, relaxedConstraints: [], warnings: [], usedGeminiEvaluation: false, generatedAt: "2026-01-01T00:00:00.000Z" },
+      questions: [
+        { position: 1, snapshot: { id: "q1", questionNumber: "1", question: "첫 문항", choices: [], questionImages: [], sourcePageImages: ["q1.png", "answer.png"], figures: [], source: { page: 1 } }, source: { sourceEntryId: "entry", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
+        { position: 2, snapshot: { id: "q2", questionNumber: "2", question: "둘째 문항", choices: [], questionImages: [], sourcePageImages: ["q2.png", "answer.png"], figures: [], source: { page: 1 } }, source: { sourceEntryId: "entry", sourceQuestionNumber: "2" }, locked: true, selectionScore: 1, selectionReasons: [] },
+      ],
+    } as unknown as GeneratedExam;
+
+    const session = createSessionFromGeneratedExam(generated, new Date(), { mode: "real" });
+    expect(session.sourcePageQuestionMap).toEqual({ "q1.png": ["1"], "q2.png": ["2"] });
+    expect(session.selectedSourcePageImages).toEqual(["q1.png", "q2.png"]);
   });
 });

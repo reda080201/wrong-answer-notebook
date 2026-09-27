@@ -25,15 +25,22 @@ interface Props {
   onSessionChange?(recipe: (session: ExamSession) => ExamSession): void;
 }
 
+const EMPTY_SOURCE_PAGE_SELECTION: string[] = [];
+
 export default function ExamSessionPaper({ session, preferences, disabled, practice = false, onNavigate, onResponse, onSessionChange }: Props) {
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
-  const [textView, setTextView] = useState(false);
+  const [textView, setTextView] = useState(() => session.mode === "real"
+    && (session.selectedSourcePageImages === undefined
+      || !Object.values(session.sourcePageQuestionMap ?? {}).some((numbers) => numbers.length > 0)));
   const [practiceAnswerOpen, setPracticeAnswerOpen] = useState(true);
   const sourcePageImages = useMemo(() => session.sourcePageImages?.length
     ? session.sourcePageImages
     : [...new Set(session.questions.flatMap(question => question.sourcePageImages ?? []))], [session.questions, session.sourcePageImages]);
-  const selectedPages = session.selectedSourcePageImages ?? sourcePageImages;
+  const selectedPages = useMemo(
+    () => session.selectedSourcePageImages ?? (session.mode === "real" ? EMPTY_SOURCE_PAGE_SELECTION : sourcePageImages),
+    [session.mode, session.selectedSourcePageImages, sourcePageImages],
+  );
   const currentQuestion = session.questions[session.currentQuestionIndex];
   const mappedCurrentPage = currentQuestion
     ? Object.entries(session.sourcePageQuestionMap ?? {}).find(([, numbers]) => numbers.includes(currentQuestion.questionNumber))?.[0]
@@ -61,13 +68,13 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       node: <article id={sanitizeExamQuestionDomId(question.questionNumber)} className="exam-question-paper" aria-label={`문제 ${question.questionNumber}`}>
         <header className="exam-question-heading"><strong>{question.questionNumber}.</strong>{typeof question.points === "number" && <span>[{question.points}점]</span>}</header>
         {(question.warning || question.sourceWarning) && <p className="exam-question-warning">{question.warning || question.sourceWarning}</p>}
-        {!focusPresentation && question.passage && firstInGroup && <section className="exam-passage"><QuestionContentView text={question.passage} /></section>}
+        {!focusPresentation && question.passage && firstInGroup && <section className="exam-passage"><QuestionContentView text={question.passage} figures={question.figures} /></section>}
         <QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
         <ExamResponseEditor question={question} response={response} disabled={disabled} onChange={value => onResponse(question.questionNumber, { response: value })} />
         <label className="real-exam-review"><input type="checkbox" aria-label={`${question.questionNumber}번 검토 표시`} checked={response?.markedForReview ?? false} disabled={disabled} onChange={event => onResponse(question.questionNumber, { markedForReview: event.target.checked })} />검토 표시</label>
         {practice && preferences?.showScratchNote !== false && <details><summary>풀이 메모</summary><label className="exam-note-field">{question.questionNumber}번 풀이 메모<textarea value={response?.scratchNote ?? ""} disabled={disabled} onChange={event => onResponse(question.questionNumber, { scratchNote: event.target.value })} /></label></details>}
       </article>,
-        stimulusNode: question.passage && firstInGroup ? <section className="exam-passage"><QuestionContentView text={question.passage} /></section> : undefined,
+        stimulusNode: question.passage && firstInGroup ? <section className="exam-passage"><QuestionContentView text={question.passage} figures={question.figures} /></section> : undefined,
         stimulusIncluded: firstInGroup,
       };
     });
@@ -76,7 +83,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   const originalPageMode = Boolean(sourcePageImages.length && preferences?.showOriginalPages !== false && !textView);
   const originalReader = <OriginalPageExamReader
     filenames={sourcePageImages}
-    selectedFilenames={session.selectedSourcePageImages}
+    selectedFilenames={selectedPages}
     currentFilename={session.currentSourcePageImage ?? mappedCurrentPage}
     onSelectPages={filenames => onSessionChange?.(latest => ({ ...latest, selectedSourcePageImages: filenames, currentSourcePageImage: filenames.includes(latest.currentSourcePageImage ?? "") ? latest.currentSourcePageImage : filenames[0] }))}
     onChangePage={filename => {

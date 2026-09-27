@@ -4,6 +4,7 @@ import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { resolveQuestionAssets, resolveQuestionFigures } from "../../../utils/questionAssets";
+import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "../../../utils/figureTokens";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
 
 export interface ExamSessionCreationOptions {
@@ -30,11 +31,21 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === normalizedNumber);
     const legacyBlock = legacyQuestions.find((item) => normalizeQuestionNumber(item.displayNumber) === normalizedNumber);
     const stimulus = legacyBlock ? stimulusByQuestion.get(normalizedNumber) : undefined;
-    const figures = resolveQuestionFigures(entry, block).map((figure) => {
+    const tokenReferences = readFigureTokenReferences([
+      stimulus?.text,
+      block.questionText,
+      ...block.choices,
+      ...(block.contentSegments ?? []).flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []),
+    ]);
+    const figureIds = [...new Set([...block.figureIds, ...tokenReferences.map(({ id }) => id).filter(Boolean)])];
+    const referencedBlock = { ...block, figureIds };
+    const figures = resolveQuestionFigures(entry, referencedBlock).map((figure) => {
       const representation = resolveFigureRepresentation(figure);
       return { ...figure, image: representation.image, source: representation.kind === "cleaned" ? "gpt_cleaned" as const : representation.kind === "original" ? "original" as const : "described_only" as const, needsReview: representation.needsReview };
     });
-    const assets = resolveQuestionAssets(entry, block);
+    const tokenWarning = figureTokenWarning(unresolvedFigureTokens(tokenReferences.map(({ raw }) => raw), entry.figures ?? []));
+    const warning = [block.warning, tokenWarning].filter((value, warningIndex, values) => value && values.indexOf(value) === warningIndex).join(" ") || undefined;
+    const assets = resolveQuestionAssets(entry, referencedBlock);
     return {
       id: `${entry.id}-${number}`,
       questionNumber: number,
@@ -52,21 +63,18 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       contentSegments: block.contentSegments
         ? structuredClone(block.contentSegments)
         : (legacyBlock ? resolveContentSegments(entry, normalizedNumber, legacyBlock, figures) : undefined),
-      needsReview: block.needsReview,
+      needsReview: Boolean(block.needsReview || tokenWarning),
       correctAnswer: answer?.answer,
       explanation: answer?.explanation,
       points: block.points,
-      warning: block.warning,
-      sourceWarning: block.warning,
-      figureIds: structuredClone(block.figureIds),
+      warning,
+      sourceWarning: warning,
+      figureIds: structuredClone(figureIds),
       source: block.source ? structuredClone(block.source) : undefined,
     };
   });
   const mode = options.mode === "real" ? "real" : "practice";
-  const sourcePageQuestionMap = Object.fromEntries(
-    [...new Set(snapshots.flatMap(question => question.sourcePageImages ?? []))]
-      .map(filename => [filename, snapshots.filter(question => question.sourcePageImages?.includes(filename)).map(question => question.questionNumber)]),
-  );
+  const sourcePageQuestionMap = buildExplicitSourcePageQuestionMap(entry, questions);
   const startedAt = now.toISOString();
   const timeLimitMinutes = mode === "real" && Number.isFinite(options.timeLimitMinutes) && (options.timeLimitMinutes ?? 0) > 0
     ? options.timeLimitMinutes
@@ -86,11 +94,40 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
     questions: snapshots,
     sourcePageImages: structuredClone(entry.sourcePageImages ?? []),
     sourcePageQuestionMap,
+    ...(mode === "real"
+      ? { selectedSourcePageImages: Object.entries(sourcePageQuestionMap).filter(([, numbers]) => numbers.length > 0).map(([filename]) => filename) }
+      : {}),
     responses: [],
     currentQuestionIndex: 0,
     startedAt,
     updatedAt: startedAt,
   };
+}
+
+function buildExplicitSourcePageQuestionMap(
+  entry: WrongAnswerEntry,
+  questions: ReturnType<typeof getEntryQuestions>,
+): Record<string, string[]> {
+  const pageNames = new Set(entry.sourcePageImages ?? []);
+  const byPage = new Map<string, string[]>();
+  const add = (filename: string | undefined, questionNumber: string) => {
+    if (!filename || !pageNames.has(filename)) return;
+    const numbers = byPage.get(filename) ?? [];
+    if (!numbers.includes(questionNumber)) numbers.push(questionNumber);
+    byPage.set(filename, numbers);
+  };
+  for (const question of questions) {
+    const number = normalizeQuestionNumber(question.questionNumber);
+    if (question.source?.page) add(entry.sourcePageImages?.[question.source.page - 1], number);
+    for (const crop of entry.questionSourceCrops ?? []) {
+      if (normalizeQuestionNumber(crop.questionNumber) !== number) continue;
+      add(crop.sourcePageImage ?? (crop.page ? entry.sourcePageImages?.[crop.page - 1] : undefined), number);
+    }
+    for (const figure of resolveQuestionFigures(entry, question)) {
+      add(figure.original?.sourcePageImage, number);
+    }
+  }
+  return Object.fromEntries(byPage);
 }
 
 export function updateExamResponse(session: ExamSession, response: ExamResponse, now = new Date()): ExamSession {
