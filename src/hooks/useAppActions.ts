@@ -573,6 +573,7 @@ export function useAppActions({
         tags: imported.tags ?? [],
         answerKey: imported.answerKey ?? [],
         figures: imported.figures ?? [],
+        questionContentSegments: imported.questionContentSegments,
         questionMeta: imported.questionMeta ?? [],
         structuredQuestions: imported.structuredQuestions,
         sheetGroup: imported.sheetGroup,

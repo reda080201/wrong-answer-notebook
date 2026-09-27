@@ -72,6 +72,14 @@ export interface ExamSession {
   subject: string;
   status: ExamSessionStatus;
   questions: ExamQuestionSnapshot[];
+  /** Ordered source pages for the original-paper exam reader. */
+  sourcePageImages?: string[];
+  /** Source page to question links used to keep answer navigation aligned with the scan. */
+  sourcePageQuestionMap?: Record<string, string[]>;
+  /** Optional user-selected subset when a source contains both questions and solutions. */
+  selectedSourcePageImages?: string[];
+  /** Last source page shown in the original-paper reader. */
+  currentSourcePageImage?: string;
   responses: ExamResponse[];
   currentQuestionIndex: number;
   startedAt: string;
