@@ -34,7 +34,6 @@ export function useReviewSessions() {
       const next = (await loader()).map(normalizeReviewSession);
       sessionsRef.current = next;
       setSessions(next);
-      writeErrorRef.current = null;
       setError(null);
       loadedRef.current = true;
       setLoadStatus("ready");
@@ -63,12 +62,12 @@ export function useReviewSessions() {
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "복습 세션을 저장하지 못했습니다.";
         writeErrorRef.current = message;
-        writeErrorRef.current = message;
         setError(message);
         throw new Error(message, { cause });
       }
       sessionsRef.current = next;
       setSessions(next);
+      writeErrorRef.current = null;
       setError(null);
     };
     const task = queueRef.current.then(operation, operation);
@@ -87,6 +86,7 @@ export function useReviewSessions() {
         await writer(next);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "복습 세션을 저장하지 못했습니다.";
+        writeErrorRef.current = message;
         setError(message);
         throw new Error(message, { cause });
       }
