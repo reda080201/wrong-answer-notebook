@@ -34,7 +34,7 @@ export function useReviewSessions() {
       const next = (await loader()).map(normalizeReviewSession);
       sessionsRef.current = next;
       setSessions(next);
-      setError(null);
+      if (!writeErrorRef.current) setError(null);
       loadedRef.current = true;
       setLoadStatus("ready");
       setReady(true);
