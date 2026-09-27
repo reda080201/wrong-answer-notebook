@@ -212,7 +212,6 @@ describe("useExamSessionController safety guards", () => {
     }));
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.open(entry));
-    const current = result.current.session!;
     act(() => result.current.updateSession((latest) => updateExamResponse(latest, {
       questionNumber: "1",
       response: "①",
