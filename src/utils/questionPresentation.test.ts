@@ -48,6 +48,24 @@ describe("normalizeQuestionPresentationSegments", () => {
     expect(segments[2]).toMatchObject({ text: "다음 조건을 만족하는 함수에 대하여" });
   });
 
+  it("shows an old split condition label once across a figure", () => {
+    const segments = normalizeQuestionPresentationSegments({
+      questionText: "",
+      conditions: [],
+      equations: [],
+      contentSegments: [
+        { id: "condition-before", type: "condition", label: "(가)", text: "첫 부분" },
+        { id: "figure", type: "figure", figureId: "figure-1" },
+        { id: "condition-after", type: "condition", label: "(가)", text: "(가) 이어지는 부분" },
+      ],
+    });
+
+    expect(segments.map((segment) => segment.id)).toEqual(["condition-before", "figure", "condition-after"]);
+    expect(segments.filter((segment) => segment.type === "condition").map((segment) => segment.type === "condition" ? segment.label : undefined))
+      .toEqual(["(가)", undefined]);
+    expect(segments[2]).toMatchObject({ type: "condition", text: "이어지는 부분" });
+  });
+
   it("preserves figure and table order and intentional equation duplicates", () => {
     const segments = normalizeQuestionPresentationSegments({
       questionText: "",

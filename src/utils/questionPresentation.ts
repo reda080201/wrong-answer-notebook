@@ -120,6 +120,21 @@ export function normalizeQuestionPresentationSegments(input: {
 }): QuestionContentSegment[] {
   const hasCanonicalStream = Boolean(input.contentSegments?.length);
   const source = hasCanonicalStream ? input.contentSegments!.map(cloneSegment) : [];
+  let previousConditionLabel: string | undefined;
+  for (const segment of source) {
+    if (segment.type === "condition") {
+      const parts = conditionParts(segment.label, segment.text);
+      if (parts.label && parts.label === previousConditionLabel) {
+        segment.label = undefined;
+      } else if (parts.label) {
+        previousConditionLabel = parts.label;
+      }
+      continue;
+    }
+    // Figure segments can split one labelled condition into multiple text
+    // fragments. Keep the label context across those figures only.
+    previousConditionLabel = segment.type === "figure" ? previousConditionLabel : undefined;
+  }
   const represented = new Set(source.map(fingerprint));
   const usedIds = new Set(source.map((segment) => segment.id));
   let supplementSequence = 0;
