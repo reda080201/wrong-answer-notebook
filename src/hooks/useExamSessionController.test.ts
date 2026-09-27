@@ -213,11 +213,14 @@ describe("useExamSessionController safety guards", () => {
     await waitFor(() => expect(result.current.loading).toBe(false));
     act(() => result.current.open(entry));
     const current = result.current.session!;
-    const input: ExamSession = {
-      ...current,
-      responses: [{ questionNumber: "1", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" }],
-    };
-    act(() => result.current.setSession(input));
+    act(() => result.current.updateSession((latest) => updateExamResponse(latest, {
+      questionNumber: "1",
+      response: "①",
+      scratchNote: "",
+      markedForReview: false,
+      updatedAt: "",
+    })));
+    const input = result.current.session!;
 
     await act(async () => { await result.current.submit(input); });
     expect(commitExamSubmission).toHaveBeenCalledTimes(1);
