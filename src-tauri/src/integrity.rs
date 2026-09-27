@@ -36,7 +36,8 @@ pub(crate) fn run_integrity_check(
 ) -> Result<IntegrityReport, String> {
     let entries = store.load_entries()?;
     let image_dir = images_dir(&app)?;
-    let referenced = store.referenced_image_filenames()?;
+    let mut referenced = store.referenced_image_filenames()?;
+    referenced.extend(store.pending_deletion_image_filenames()?);
 
     let mut issues = Vec::new();
     if image_dir.exists() {
@@ -82,7 +83,8 @@ pub(crate) fn cleanup_orphan_images(
 ) -> Result<usize, String> {
     let image_dir = images_dir(&app)?;
     store.with_write_lock(|| {
-        let referenced = store.referenced_image_filenames()?;
+        let mut referenced = store.referenced_image_filenames()?;
+        referenced.extend(store.pending_deletion_image_filenames()?);
         let mut removed = 0;
         for item in fs::read_dir(&image_dir).map_err(|error| error.to_string())? {
             let path = item.map_err(|error| error.to_string())?.path();
@@ -103,7 +105,8 @@ pub(crate) fn preview_orphan_images(
     app: tauri::AppHandle,
     store: tauri::State<'_, Arc<NotebookStore>>,
 ) -> Result<OrphanImagePreview, String> {
-    let referenced = store.referenced_image_filenames()?;
+    let mut referenced = store.referenced_image_filenames()?;
+    referenced.extend(store.pending_deletion_image_filenames()?);
     let image_dir = images_dir(&app)?;
     let mut filenames = Vec::new();
     let mut total_bytes = 0u64;
