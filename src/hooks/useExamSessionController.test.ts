@@ -222,6 +222,12 @@ describe("useExamSessionController safety guards", () => {
     expect(commitExamSubmission).toHaveBeenCalledTimes(1);
     expect(saveExamSessions).not.toHaveBeenCalled();
     expect(result.current.session?.status).toBe("submitted");
+    const derivedWrongForm = commitExamSubmission.mock.calls[0][1][0] as Partial<WrongAnswerEntry>;
+    expect(derivedWrongForm?.myAnswer).toBe("①");
+    expect(derivedWrongForm?.question).toContain("첫 문제");
+    expect(derivedWrongForm?.questionContentSegments?.["1"]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: "text", text: "첫 문제" }),
+    ]));
     const submitted = result.current.session!;
 
     await act(async () => { await result.current.submit({ ...submitted, status: "in_progress" }); });
