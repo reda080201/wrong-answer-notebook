@@ -43,7 +43,7 @@ describe("buildChatGptSharePayload", () => {
 
   it("includes a common passage from the entry when no exam session is supplied", () => {
     const passageEntry = {
-      ...entry,
+      ...(entry as object),
       question: "[지문]\n공통으로 읽을 자료\n\n[문제 3] 세 번째 문제\n① 하나\n② 둘",
     } as never;
     const payload = buildChatGptSharePayload({
@@ -58,7 +58,7 @@ describe("buildChatGptSharePayload", () => {
 
   it("does not include a common passage when question text sharing is disabled", () => {
     const passageEntry = {
-      ...entry,
+      ...(entry as object),
       question: "[지문]\n공통으로 읽을 자료\n\n[문제 3] 세 번째 문제\n① 하나\n② 둘",
     } as never;
     const payload = buildChatGptSharePayload({
