@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { SheetFigureItem } from "../types";
 import { getImageUrl } from "../api";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
@@ -26,21 +26,25 @@ function InlineFigure({ figure, id }: { figure?: SheetFigureItem; id: string }) 
 }
 
 /** Renders imported figure markers in place without exposing the internal token. */
-export default function InlineQuestionText({ text, figures = [] }: { text: string; figures?: SheetFigureItem[] }) {
+export default function InlineQuestionText({ text, figures = [], renderText }: {
+  text: string;
+  figures?: SheetFigureItem[];
+  renderText?: (text: string, offset: number) => ReactNode;
+}) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
-  const parts: Array<{ text: string } | { id: string }> = [];
+  const parts: Array<{ text: string; start: number } | { id: string | undefined; start: number }> = [];
   let cursor = 0;
   for (const match of text.matchAll(FIGURE_TOKEN)) {
     const index = match.index ?? 0;
-    if (index > cursor) parts.push({ text: text.slice(cursor, index) });
+    if (index > cursor) parts.push({ text: text.slice(cursor, index), start: cursor });
     const id = match[1]?.trim();
-    parts.push({ id });
+    parts.push({ id, start: index });
     cursor = index + match[0].length;
   }
-  if (cursor < text.length) parts.push({ text: text.slice(cursor) });
+  if (cursor < text.length) parts.push({ text: text.slice(cursor), start: cursor });
   return <>{parts.map((part, index) => "id" in part
     ? part.id
       ? <span key={`${part.id}-${index}`} className="question-inline-figure-slot"><InlineFigure id={part.id} figure={byId.get(part.id)} /></span>
       : <span key={`missing-${index}`} className="question-inline-figure-warning" role="note">[그림 ID 확인 필요]</span>
-    : <MathText key={`text-${index}`} text={part.text} />)}</>;
+    : <Fragment key={`text-${index}`}>{renderText ? renderText(part.text, part.start) : <MathText text={part.text} />}</Fragment>)}</>;
 }

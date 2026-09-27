@@ -32,6 +32,8 @@ import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
 import MathText, { renderMathInNodes } from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
+import InlineQuestionText from "./InlineQuestionText";
+import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "../utils/figureTokens";
 
 interface AnnotatableQuestionProps {
   question: string;
@@ -157,13 +159,25 @@ function splitQuestionBodySegments(text: string, absoluteStart: number): Questio
 }
 
 function parsedBodySegments(block: QuestionBlock): QuestionBodySegment[] {
-  return (block.bodySegments ?? []).map((segment: ParsedQuestionBodySegment) => ({
-    kind: segment.kind,
-    text: segment.text,
-    start: segment.start,
-    end: segment.end,
-    label: segment.label,
-  }));
+  let previousConditionLabel: string | undefined;
+  return (block.bodySegments ?? []).map((segment: ParsedQuestionBodySegment) => {
+    const rawText = segment.text;
+    const label = segment.kind === "condition" ? segment.label : undefined;
+    const leadingWhitespace = rawText.length - rawText.trimStart().length;
+    const text = label && rawText.trimStart().startsWith(label)
+      ? rawText.slice(leadingWhitespace + label.length).trimStart()
+      : rawText;
+    const repeatedLabel = Boolean(label && label === previousConditionLabel);
+    if (label && !repeatedLabel) previousConditionLabel = label;
+    else if (segment.kind !== "condition" && segment.kind !== "body") previousConditionLabel = undefined;
+    return {
+      kind: segment.kind,
+      text,
+      start: segment.start,
+      end: segment.end,
+      label: repeatedLabel ? undefined : label,
+    };
+  });
 }
 
 function questionBodySegmentsForBlock(block: QuestionBlock): QuestionBodySegment[] {
@@ -190,6 +204,7 @@ function StructuredTextSegment({
   text,
   start,
   annotations,
+  figures = [],
   className,
   onWikiLinkClick,
   existingTargets,
@@ -200,6 +215,7 @@ function StructuredTextSegment({
   text: string;
   start: number;
   annotations: TextRangeAnnotation[];
+  figures?: SheetFigureItem[];
   className?: string;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
@@ -210,9 +226,36 @@ function StructuredTextSegment({
   const conceptRuntime = useConceptLinkRuntime();
   const suspicious = suspiciousSegments.find((segment) => segment.end > start && segment.start < start + text.length);
   const mergedClassName = [className, suspicious ? "suspicious-text-segment" : ""].filter(Boolean).join(" ");
-  const nodes = annotations.length > 0
-    ? renderAnnotatedText(text, annotations)
-    : [text];
+  const renderChunk = (chunk: string, offset: number) => {
+    const chunkAnnotations = clipTextAnnotations(annotations, offset, offset + chunk.length);
+    const nodes = chunkAnnotations.length > 0 ? renderAnnotatedText(chunk, chunkAnnotations) : [chunk];
+    if (chunkAnnotations.length === 0) {
+      const segments = splitMarkdownTableSegments(chunk);
+      if (segments.some((segment) => typeof segment !== "string")) {
+        return (
+          <span>
+            {segments.map((segment, index) => typeof segment === "string"
+              ? <span key={`text-${index}`}>{renderMathInNodes(highlightSearchNodes(renderWikiLinksInNodes([segment], onWikiLinkClick, existingTargets, conceptRuntime, conceptContext), searchQuery))}</span>
+              : <MarkdownTable key={`table-${index}`} table={segment} />)}
+          </span>
+        );
+      }
+    }
+    return renderMathInNodes(highlightSearchNodes(
+      renderWikiLinksInNodes(nodes, onWikiLinkClick, existingTargets, conceptRuntime, conceptContext),
+      searchQuery,
+    ));
+  };
+
+  if (/\[FIGURE(?::|\]|$)/i.test(text)) {
+    return (
+      <span className={mergedClassName} data-text-start={start} title={suspicious?.reason}>
+        <InlineQuestionText text={text} figures={figures} renderText={renderChunk} />
+      </span>
+    );
+  }
+
+  const nodes = annotations.length > 0 ? renderAnnotatedText(text, annotations) : [text];
 
   if (annotations.length === 0) {
     const segments = splitMarkdownTableSegments(text);
@@ -343,6 +386,7 @@ function StructuredQuestionBlock({
           text={block.text}
           start={block.start}
           annotations={clipTextAnnotations(textAnnotations, block.start, block.end)}
+          figures={figures}
           onWikiLinkClick={onWikiLinkClick}
           existingTargets={existingTargets}
           searchQuery={searchQuery}
@@ -352,7 +396,10 @@ function StructuredQuestionBlock({
     );
   }
 
-  const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, block));
+  const tokenReferences = readFigureTokenReferences([block.body, ...block.choices.map((choice) => choice.text)]);
+  const placedFigureIds = new Set(tokenReferences.map(({ id }) => id).filter(Boolean));
+  const tokenWarning = figureTokenWarning(unresolvedFigureTokens(tokenReferences.map(({ raw }) => raw), figures));
+  const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, block) && !placedFigureIds.has(figure.id));
   const bodySegments = questionBodySegmentsForBlock(block);
   const meta = questionMeta.find((item) => {
     const normalized = normalizeNumberLabel(item.questionNumber);
@@ -411,6 +458,7 @@ function StructuredQuestionBlock({
       <QuestionBodySegments
         segments={bodySegments}
         textAnnotations={textAnnotations}
+        figures={figures}
         onWikiLinkClick={onWikiLinkClick}
         existingTargets={existingTargets}
         searchQuery={searchQuery}
@@ -428,6 +476,7 @@ function StructuredQuestionBlock({
                 text={choice.text}
                 start={choice.start}
                 annotations={clipTextAnnotations(textAnnotations, choice.start, choice.end)}
+                figures={figures}
                 onWikiLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
                 searchQuery={searchQuery}
@@ -439,6 +488,7 @@ function StructuredQuestionBlock({
         </ol>
       )}
       {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
+      {tokenWarning && <p className="structured-problem-sheet-warning" role="note">{tokenWarning}</p>}
       {presentation === "exam" && onToggleAnswerReveal && (
         <div className="exam-question-answer">
           <button
@@ -493,6 +543,7 @@ function StructuredQuestionBlock({
 function QuestionBodySegments({
   segments,
   textAnnotations,
+  figures = [],
   onWikiLinkClick,
   existingTargets,
   searchQuery,
@@ -501,6 +552,7 @@ function QuestionBodySegments({
 }: {
   segments: QuestionBodySegment[];
   textAnnotations: TextRangeAnnotation[];
+  figures?: SheetFigureItem[];
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   searchQuery?: string;
@@ -526,6 +578,7 @@ function QuestionBodySegments({
             text={segment.text}
             start={segment.start}
             annotations={clipTextAnnotations(textAnnotations, segment.start, segment.end)}
+            figures={figures}
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
             searchQuery={searchQuery}
@@ -671,7 +724,10 @@ export function FocusedQuestionView({
   const textAnns = questionAnns.filter(
     (a): a is Extract<Annotation, { kind: "text" }> => a.kind === "text",
   );
-  const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, questionBlock));
+  const tokenReferences = readFigureTokenReferences([questionBlock.body, ...questionBlock.choices.map((choice) => choice.text)]);
+  const placedFigureIds = new Set(tokenReferences.map(({ id }) => id).filter(Boolean));
+  const tokenWarning = figureTokenWarning(unresolvedFigureTokens(tokenReferences.map(({ raw }) => raw), figures));
+  const matchedFigures = figures.filter((figure) => figureMatchesQuestion(figure, questionBlock) && !placedFigureIds.has(figure.id));
   const bodySegments = questionBodySegmentsForBlock(questionBlock);
   const focusImageFilenames = [
     ...matchedFigures.flatMap((figure) => figure.image ? [figure.image] : []),
@@ -711,6 +767,7 @@ export function FocusedQuestionView({
           <QuestionBodySegments
             segments={bodySegments}
             textAnnotations={textAnns}
+            figures={figures}
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
             suspiciousSegments={suspiciousSegments}
@@ -725,9 +782,10 @@ export function FocusedQuestionView({
                   {choice.marker}
                 </span>
                 <StructuredTextSegment
-                  text={choice.text}
-                  start={choice.start}
-                  annotations={clipTextAnnotations(textAnns, choice.start, choice.end)}
+                text={choice.text}
+                start={choice.start}
+                annotations={clipTextAnnotations(textAnns, choice.start, choice.end)}
+                figures={figures}
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
                   suspiciousSegments={suspiciousSegments}
@@ -737,6 +795,7 @@ export function FocusedQuestionView({
           </ol>
         )}
         {matchedFigures.length > 0 && <FigureList figures={matchedFigures} />}
+        {tokenWarning && <p className="structured-problem-sheet-warning" role="note">{tokenWarning}</p>}
       </section>
 
       {showImages && focusImageFilenames.length > 0 && (

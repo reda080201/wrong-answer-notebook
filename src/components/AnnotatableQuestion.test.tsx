@@ -121,6 +121,28 @@ describe("AnnotatableQuestion", () => {
     expect(screen.getByRole("cell", { name: "10" })).toBeInTheDocument();
   });
 
+  it("renders legacy figure tokens in place and warns when their IDs cannot be resolved", () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question={"1. 앞 문장 [FIGURE:missing-figure] 뒤 문장\n(가) 조건 [FIGURE:missing-figure] 이어짐\n① 보기 [FIGURE:missing-figure]"}
+        questionImages={[]}
+        figures={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    expect(container.textContent).not.toContain("[FIGURE:");
+    expect(screen.getAllByText("[그림 연결 확인 필요: missing-figure]")).toHaveLength(3);
+    expect(screen.getByText("문항의 그림 표식 위치 또는 연결을 확인해 주세요.")).toBeInTheDocument();
+    expect(container.textContent?.match(/\(가\)/g)).toHaveLength(1);
+  });
+
   it("wraps condition and view lines without losing structured text", () => {
     const { container } = render(
       <AnnotatableQuestion
