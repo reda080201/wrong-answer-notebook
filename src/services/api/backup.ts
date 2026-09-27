@@ -399,6 +399,46 @@ export async function runNativeIntegrityCheck(): Promise<IntegrityReport | null>
   return invoke<IntegrityReport>("run_integrity_check");
 }
 
+const BROWSER_IMAGE_REFERENCE_KEYS = [
+  EXAM_SESSIONS_STORAGE_KEY,
+  GENERATED_EXAMS_STORAGE_KEY,
+  GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY,
+  IMPORT_WORKSPACE_DRAFT_STORAGE_KEY,
+  "wrong-answer-pending-deletions",
+] as const;
+
+function collectBrowserImageReferences(value: unknown, referenced: Set<string>): void {
+  if (typeof value === "string") {
+    if (/^[^/\\:]{1,255}\.(?:png|jpe?g|gif|webp)$/i.test(value) && !value.includes("..")) {
+      referenced.add(value);
+    }
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectBrowserImageReferences(item, referenced));
+    return;
+  }
+  if (value && typeof value === "object") {
+    Object.values(value as Record<string, unknown>).forEach((item) => collectBrowserImageReferences(item, referenced));
+  }
+}
+
+function getBrowserProtectedImageReferences(entries: WrongAnswerEntry[]): Set<string> {
+  const referenced = new Set(entries.flatMap(getAllImageFilenames));
+  for (const key of BROWSER_IMAGE_REFERENCE_KEYS) {
+    const stored = localStorage.getItem(key);
+    if (!stored) continue;
+    let value: unknown;
+    try {
+      value = JSON.parse(stored);
+    } catch (cause) {
+      throw new Error(`저장된 이미지 참조(${key})를 읽지 못했습니다.`, { cause });
+    }
+    collectBrowserImageReferences(value, referenced);
+  }
+  return referenced;
+}
+
 export async function previewOrphanImages(): Promise<OrphanImagePreview> {
   if (isTauri()) {
     return invoke<OrphanImagePreview>("preview_orphan_images");
@@ -406,7 +446,7 @@ export async function previewOrphanImages(): Promise<OrphanImagePreview> {
 
   const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   const entries = stored === null ? [] : parseStoredEntries(stored);
-  const referenced = new Set(entries.flatMap(getAllImageFilenames));
+  const referenced = getBrowserProtectedImageReferences(entries);
   const browserImages = await listBrowserImages();
   const filenames = Object.keys(browserImages).filter((key) => !referenced.has(key));
   const totalBytes = filenames.reduce((sum, filename) => sum + (browserImages[filename]?.length ?? 0), 0);
@@ -420,7 +460,7 @@ export async function cleanupOrphanImages(): Promise<number> {
 
   const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   const entries = stored === null ? [] : parseStoredEntries(stored);
-  const referenced = new Set(entries.flatMap(getAllImageFilenames));
+  const referenced = getBrowserProtectedImageReferences(entries);
   let removed = 0;
   const browserImages = await listBrowserImages();
   for (const key of Object.keys(browserImages)) {
