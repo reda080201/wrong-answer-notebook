@@ -57,7 +57,12 @@ fn looks_like_image_filename(value: &str) -> bool {
         return false;
     }
     matches!(
-        Path::new(value).extension().and_then(|extension| extension.to_str()).unwrap_or("").to_ascii_lowercase().as_str(),
+        Path::new(value)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
         "png" | "jpg" | "jpeg" | "gif" | "webp"
     )
 }
@@ -81,7 +86,10 @@ fn collect_persisted_image_references(value: &Value, referenced: &mut HashSet<St
     }
 }
 
-fn collect_json_file_references(path: &Path, referenced: &mut HashSet<String>) -> Result<(), String> {
+fn collect_json_file_references(
+    path: &Path,
+    referenced: &mut HashSet<String>,
+) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
@@ -91,7 +99,10 @@ fn collect_json_file_references(path: &Path, referenced: &mut HashSet<String>) -
     Ok(())
 }
 
-fn collect_json_tree_references(path: &Path, referenced: &mut HashSet<String>) -> Result<(), String> {
+fn collect_json_tree_references(
+    path: &Path,
+    referenced: &mut HashSet<String>,
+) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
@@ -100,7 +111,12 @@ fn collect_json_tree_references(path: &Path, referenced: &mut HashSet<String>) -
         let file_type = item.file_type().map_err(|error| error.to_string())?;
         if file_type.is_dir() {
             collect_json_tree_references(&item.path(), referenced)?;
-        } else if item.path().extension().and_then(|extension| extension.to_str()) == Some("json") {
+        } else if item
+            .path()
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("json")
+        {
             collect_json_file_references(&item.path(), referenced)?;
         }
     }
@@ -1067,7 +1083,8 @@ mod tests {
         std::fs::write(
             root.join("pending-deletions.json"),
             r#"[{"imageReferences":["undo-window.jpg"]}]"#,
-        ).unwrap();
+        )
+        .unwrap();
 
         let referenced = store.referenced_image_filenames().unwrap();
         let pending = store.pending_deletion_image_filenames().unwrap();
