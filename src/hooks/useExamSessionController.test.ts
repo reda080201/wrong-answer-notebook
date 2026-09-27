@@ -217,6 +217,7 @@ describe("useExamSessionController safety guards", () => {
       ...current,
       responses: [{ questionNumber: "1", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" }],
     };
+    act(() => result.current.setSession(input));
 
     await act(async () => { await result.current.submit(input); });
     expect(commitExamSubmission).toHaveBeenCalledTimes(1);
