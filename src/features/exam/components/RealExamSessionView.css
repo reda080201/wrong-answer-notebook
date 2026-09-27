@@ -9,8 +9,12 @@
 .real-exam-close { width: 44px; height: 44px; flex: 0 0 44px; }
 .real-exam-header-status strong { font-variant-numeric: tabular-nums; }
 .real-exam-layout { flex: 1; box-sizing: border-box; display: grid; grid-template-columns: minmax(0, 72fr) minmax(280px, 28fr); gap: clamp(16px, 2vw, 32px); min-height: 0; width: min(100%, 1800px); margin: 0 auto; padding: clamp(16px, 2vw, 32px); overflow: hidden; }
-.real-exam-layout--sheet-collapsed { grid-template-columns: minmax(0, 1fr) 72px; }
+.real-exam-layout--sheet-collapsed { grid-template-columns: minmax(0, 1fr) 56px; }
 .real-exam-paper { min-width: 0; overflow: auto; touch-action: pan-y; overscroll-behavior: contain; padding: clamp(8px, 2vw, 28px); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); }
+.real-exam-paper:has(.exam-session-paper--original) { display: flex; overflow: hidden; padding: 4px; }
+.real-exam-paper:has(.exam-session-paper--original) > .study-zoom-viewport { display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.real-exam-paper:has(.exam-session-paper--original) .study-zoom-content { width: 100%; height: 100%; min-width: 0; min-height: 0; }
+.real-exam-paper:has(.exam-session-paper--original) .exam-session-paper--original { width: 100%; height: 100%; }
 .real-exam-question { width: min(100%, 1040px); margin: 0 auto; padding: clamp(18px, 3vw, 44px); break-inside: avoid; }
 .real-exam-question > header { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-4); color: var(--text-muted); }
 .real-exam-question h3 { margin: 0 0 10px; }

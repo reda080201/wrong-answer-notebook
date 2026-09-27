@@ -15,6 +15,7 @@ vi.mock("../api", () => ({
 }));
 
 import { useExamSessionController } from "./useExamSessionController";
+import { updateExamResponse } from "../features/exam/services/examSession";
 
 const preferences = {
   shareUserResponse: false,
@@ -93,6 +94,36 @@ describe("useExamSessionController safety guards", () => {
     }));
 
     expect(syncMcpBridgeActiveExamContext).not.toHaveBeenCalled();
+  });
+
+  it("submits the latest answer when submit follows an update in the same event", async () => {
+    const commitExamSubmission = vi.fn(successfulCommit);
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      commitExamSubmission,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => { result.current.open(entry); });
+    const previouslyRenderedSession = result.current.session!;
+
+    let submission!: Promise<void>;
+    act(() => {
+      result.current.updateSession((current) => updateExamResponse(current, {
+        questionNumber: "1",
+        response: "②",
+        scratchNote: "",
+        markedForReview: false,
+        updatedAt: "",
+      }));
+      submission = result.current.submit(previouslyRenderedSession);
+    });
+    await act(async () => { await submission; });
+
+    expect(commitExamSubmission).toHaveBeenCalledTimes(1);
+    expect(commitExamSubmission.mock.calls[0][0].responses).toMatchObject([
+      { questionNumber: "1", response: "②" },
+    ]);
+    expect(result.current.session?.status).toBe("submitted");
   });
 
   it("keeps exam persistence blocked after load failure and recovers with one retry", async () => {
