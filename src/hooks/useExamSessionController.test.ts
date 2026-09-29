@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { ExamSession, ExamSubmissionTransactionResult, WrongAnswerEntry } from "../types";
+import type { ExamSession, ExamSubmissionTransactionResult, GeneratedExam, WrongAnswerEntry } from "../types";
 
 const { loadExamSessions, saveExamSessions, syncMcpBridgeActiveExamContext } = vi.hoisted(() => ({
   loadExamSessions: vi.fn(),
@@ -16,6 +16,7 @@ vi.mock("../api", () => ({
 
 import { useExamSessionController } from "./useExamSessionController";
 import { updateExamResponse } from "../features/exam/services/examSession";
+import { createSessionFromGeneratedExam } from "../features/exam-builder/services/createSessionFromGeneratedExam";
 
 const preferences = {
   shareUserResponse: false,
@@ -234,6 +235,74 @@ describe("useExamSessionController safety guards", () => {
     const submitted = result.current.session!;
 
     await act(async () => { await result.current.submit({ ...submitted, status: "in_progress" }); });
+    expect(commitExamSubmission).toHaveBeenCalledTimes(2);
+    expect(commitExamSubmission.mock.calls[1][1]).toEqual([]);
+  });
+
+  it("keeps generated exam identity separate from original sheet provenance", async () => {
+    const commitExamSubmission = vi.fn((submitted: ExamSession, forms: unknown[]) =>
+      Promise.resolve(transactionResult(submitted, forms.map((form, index) => ({
+        id: `wrong-${index}`,
+        ...(form as object),
+        createdAt: "a",
+        updatedAt: "a",
+      } as WrongAnswerEntry)))),
+    );
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      commitExamSubmission,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const snapshot = {
+      id: "source-question-1",
+      questionNumber: "1",
+      question: "원본 1번 문항",
+      choices: ["①", "②"],
+      correctAnswer: "②",
+      questionImages: [],
+      figures: [],
+    };
+    const generatedExam = {
+      id: "generated-exam-q1-q1",
+      title: "두 문제지 생성 시험",
+      subject: "수학",
+      timeLimitMinutes: 50,
+      questions: [
+        { position: 1, snapshot: { ...snapshot, id: "sheet-a-q1" }, source: { sourceEntryId: "sheet-a", sourceEntryTitle: "문제지 A", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
+        { position: 2, snapshot: { ...snapshot, id: "sheet-b-q1", question: "문제지 B의 원문 1번" }, source: { sourceEntryId: "sheet-b", sourceEntryTitle: "문제지 B", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
+      ],
+    } as unknown as GeneratedExam;
+    const convertedSession = createSessionFromGeneratedExam(generatedExam, new Date("2026-01-01T00:00:00.000Z"), { mode: "real" });
+    expect(convertedSession.questions.map((question) => question.questionNumber)).toEqual(["1", "2"]);
+    expect(convertedSession.questions.map((question) => question.sourceQuestionNumber)).toEqual(["1", "1"]);
+    const generatedSession: ExamSession = {
+      ...convertedSession,
+      id: "generated-session-q1-q1",
+      responses: [
+        { questionNumber: "1", response: "②", scratchNote: "", markedForReview: false, updatedAt: "" },
+        { questionNumber: "2", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" },
+      ],
+    };
+    act(() => result.current.setSession(generatedSession));
+
+    await act(async () => { await result.current.submit(generatedSession); });
+
+    const wrongForms = commitExamSubmission.mock.calls[0][1] as Array<Partial<WrongAnswerEntry>>;
+    expect(wrongForms).toHaveLength(1);
+    expect(wrongForms[0].generatedFromExamSessionId).toBe("generated-session-q1-q1");
+    expect(wrongForms[0].generatedFromQuestionNumber).toBe("2");
+    expect(wrongForms[0].supplementalResources).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        sourceEntryId: "sheet-b",
+        questionNumbers: ["1"],
+        generatedFromExamSessionId: "generated-session-q1-q1",
+        generatedFromQuestionNumber: "2",
+      }),
+    ]));
+
+    await act(async () => {
+      await result.current.submit({ ...result.current.session!, status: "in_progress" });
+    });
     expect(commitExamSubmission).toHaveBeenCalledTimes(2);
     expect(commitExamSubmission.mock.calls[1][1]).toEqual([]);
   });

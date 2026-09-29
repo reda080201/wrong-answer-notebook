@@ -282,6 +282,19 @@ export function useExamSessionController({
     }).map((question) => {
       const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
       const draft = createEmptyEntryDraft("wrong_answer");
+      const sourceProvenance = question.sourceEntryId && question.sourceQuestionNumber
+        ? [{
+            id: `exam-source-${submitted.id}-${question.questionNumber}`,
+            kind: "other" as const,
+            title: `원본 문제지 ${question.sourceEntryId} · 원문 ${question.sourceQuestionNumber}번`,
+            createdAt: submitted.updatedAt,
+            updatedAt: submitted.updatedAt,
+            sourceEntryId: question.sourceEntryId,
+            questionNumbers: [question.sourceQuestionNumber],
+            generatedFromExamSessionId: submitted.id,
+            generatedFromQuestionNumber: question.questionNumber,
+          }]
+        : [];
       return normalizeEntryDraftForSave({
         ...draft,
         generatedFromExamSessionId: submitted.id,
@@ -298,6 +311,7 @@ export function useExamSessionController({
         questionImages: question.questionImages,
         sourcePageImages: question.sourcePageImages ?? [],
         figures: question.figures,
+        ...(sourceProvenance.length ? { supplementalResources: sourceProvenance } : {}),
         myAnswer: response?.response ?? "",
         questionContentSegments: {
           [question.questionNumber]: question.contentSegments?.length
