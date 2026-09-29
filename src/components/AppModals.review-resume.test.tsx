@@ -28,14 +28,14 @@ const session: ReviewSession = {
   completedItemKeys: ["entry:review-a"], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:01:00.000Z",
 };
 
-function appProps(saveSession: (value: ReviewSession) => Promise<void>, setMode = vi.fn(), mode: "random" | null = "random") {
+function appProps(saveSession: (value: ReviewSession) => Promise<void>, setMode = vi.fn(), mode: "random" | null = "random", candidate: ReviewSession | null = session) {
   return {
     workspaceActions: { registerDraftFlush: vi.fn() },
     form: { show: false, handleSave: vi.fn(), close: vi.fn(), activeSection: "wrong_answer", prefilledTitle: "" },
     settings: { value: {}, saveTemplate: vi.fn(), aiProviderStatus: null, setLastImportTemplate: vi.fn(), savePromptTemplate: vi.fn() },
     importFlow: { show: false, mode: "import", fallbackSubject: "기타", close: vi.fn(), apply: vi.fn(), applyEntries: vi.fn(async () => undefined) },
     learningImport: { show: false, setShow: vi.fn(), apply: vi.fn(async () => undefined) },
-    review: { mode, seed: items, setMode, handle: vi.fn(async () => undefined), session, saveSession },
+    review: { mode, seed: items, setMode, handle: vi.fn(async () => undefined), session: candidate ?? undefined, saveSession },
     navigation: { setActiveSection: vi.fn(), setSelectedId: vi.fn(), handleWikiLinkClick: vi.fn(), existingTargets: new Set<string>() },
     supplemental: {
       closeImport: vi.fn(), applyMerge: vi.fn(async () => undefined), closeManager: vi.fn(), rename: vi.fn(async () => undefined),
@@ -44,8 +44,8 @@ function appProps(saveSession: (value: ReviewSession) => Promise<void>, setMode 
   } as unknown as ComponentProps<typeof AppModals>;
 }
 
-function renderApp(saveSession: (value: ReviewSession) => Promise<void>, setMode = vi.fn(), mode: "random" | null = "random") {
-  return render(<AppModals {...appProps(saveSession, setMode, mode)} />);
+function renderApp(saveSession: (value: ReviewSession) => Promise<void>, setMode = vi.fn(), mode: "random" | null = "random", candidate: ReviewSession | null = session) {
+  return render(<AppModals {...appProps(saveSession, setMode, mode, candidate)} />);
 }
 
 describe("AppModals review restart integration", () => {
@@ -102,6 +102,24 @@ describe("AppModals review restart integration", () => {
     await waitFor(() => expect(saveSession).toHaveBeenCalled());
     expect(saveSession.mock.calls[0][0]).toMatchObject({ id: "old-session", completedItemKeys: ["entry:review-a"] });
     expect(saveSession.mock.calls[0][0]).not.toHaveProperty("abandonedAt");
+  });
+
+  it("keeps a newly started review open when its first completed item becomes resumable", async () => {
+    const saveSession = vi.fn(async (value: ReviewSession) => { void value; });
+    const view = renderApp(saveSession, vi.fn(), "random", null);
+    await waitFor(() => expect(saveSession).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("dialog", { name: "복습 이어서 하기" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "맞음" }));
+    await waitFor(() => expect(saveSession).toHaveBeenCalledTimes(2));
+    const activeSession = saveSession.mock.calls[1][0];
+    expect(activeSession.currentIndex).toBe(1);
+
+    view.rerender(<AppModals {...appProps(saveSession, vi.fn(), "random", activeSession)} />);
+    expect(screen.queryByRole("dialog", { name: "복습 이어서 하기" })).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "랜덤 복습" })).toBeInTheDocument();
+    expect(screen.getByText("review-b")).toBeInTheDocument();
   });
 
   it("does not open a stale review panel after the review identity changes during a pending save", async () => {

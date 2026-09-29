@@ -234,9 +234,11 @@ export function useAppActions({
     try {
       if (editingEntry) {
         await updateEntry(editingEntry.id, finalData, removedImages);
+        setActiveSection(finalData.entryKind);
         setSelectedId(editingEntry.id);
       } else {
         const id = await addEntry(finalData);
+        setActiveSection(finalData.entryKind);
         setSelectedId(id);
       }
     } catch (error) {
