@@ -1,13 +1,49 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { getImageUrl } from "../api";
 import type { Annotation } from "../types";
-import AnnotatableQuestion from "./AnnotatableQuestion";
+import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn(),
 }));
 
 describe("AnnotatableQuestion", () => {
+  it("renders figures referenced by a shared passage in focused question view", async () => {
+    vi.mocked(getImageUrl).mockResolvedValue("mock://passage.png");
+    const { container } = render(
+      <FocusedQuestionView
+        passage={{ kind: "passage", start: 0, end: 39, text: "공통 자료 [FIGURE:passage-figure] 뒤 문장" }}
+        questionBlock={{
+          kind: "question",
+          start: 40,
+          end: 52,
+          numberLabel: "1",
+          displayNumber: 1,
+          body: "자료를 설명하시오.",
+          bodyStart: 43,
+          bodyEnd: 52,
+          bodySegments: [{ kind: "body", start: 43, end: 52, text: "자료를 설명하시오." }],
+          choices: [],
+        }}
+        questionImages={[]}
+        figures={[{ id: "passage-figure", questionNumber: "1", title: "공통 그림", caption: "자료", image: "passage.png", source: "original" }]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        showImages
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector(".focused-passage img")).toHaveAttribute("src", "mock://passage.png"));
+    expect(container.querySelector(".focused-passage img")).toHaveAttribute("alt", "공통 그림");
+    expect(container.textContent).not.toContain("[FIGURE:");
+    expect(container.textContent).not.toContain("그림 연결 확인 필요");
+  });
+
   it("renders structured question numbers and choices", () => {
     render(
       <AnnotatableQuestion

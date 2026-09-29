@@ -743,6 +743,7 @@ export function FocusedQuestionView({
             text={passage.text}
             start={passage.start}
             annotations={clipTextAnnotations(textAnns, passage.start, passage.end)}
+            figures={figures}
             onWikiLinkClick={onWikiLinkClick}
             existingTargets={existingTargets}
             suspiciousSegments={suspiciousSegments}
