@@ -50,6 +50,23 @@ describe("shared exam paper interactions", () => {
     expect(container.querySelector('[data-paper-number="2"]')).toHaveAttribute("aria-current", "step");
     expect(props.onResponse).not.toHaveBeenCalled();
   });
+  it("starts a real session in text mode when legacy source pages have no question mapping", () => {
+    const legacyRealSession: ExamSession = {
+      ...session,
+      mode: "real",
+      sourcePageImages: ["unmapped-page-1.png", "unmapped-page-2.png"],
+      sourcePageQuestionMap: {},
+    };
+    const { container } = render(<ExamSessionPaper
+      session={legacyRealSession}
+      disabled={false}
+      onNavigate={vi.fn()}
+      onResponse={vi.fn()}
+      preferences={{ showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" }}
+    />);
+
+    expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
+  });
 
   it("renders a shared passage once per focus spread while keeping it in A4 mode", () => {
     const groupedSession: ExamSession = {

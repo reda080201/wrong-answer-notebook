@@ -1,13 +1,49 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { getImageUrl } from "../api";
 import type { Annotation } from "../types";
-import AnnotatableQuestion from "./AnnotatableQuestion";
+import AnnotatableQuestion, { FocusedQuestionView } from "./AnnotatableQuestion";
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn(),
 }));
 
 describe("AnnotatableQuestion", () => {
+  it("renders figures referenced by a shared passage in focused question view", async () => {
+    vi.mocked(getImageUrl).mockResolvedValue("mock://passage.png");
+    const { container } = render(
+      <FocusedQuestionView
+        passage={{ kind: "passage", start: 0, end: 39, text: "공통 자료 [FIGURE:passage-figure] 뒤 문장" }}
+        questionBlock={{
+          kind: "question",
+          start: 40,
+          end: 52,
+          numberLabel: "1",
+          displayNumber: 1,
+          body: "자료를 설명하시오.",
+          bodyStart: 43,
+          bodyEnd: 52,
+          bodySegments: [{ kind: "body", start: 43, end: 52, text: "자료를 설명하시오." }],
+          choices: [],
+        }}
+        questionImages={[]}
+        figures={[{ id: "passage-figure", questionNumber: "1", title: "공통 그림", caption: "자료", image: "passage.png", source: "original" }]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        showImages
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector(".focused-passage img")).toHaveAttribute("src", "mock://passage.png"));
+    expect(container.querySelector(".focused-passage img")).toHaveAttribute("alt", "공통 그림");
+    expect(container.textContent).not.toContain("[FIGURE:");
+    expect(container.textContent).not.toContain("그림 연결 확인 필요");
+  });
+
   it("renders structured question numbers and choices", () => {
     render(
       <AnnotatableQuestion
@@ -119,6 +155,28 @@ describe("AnnotatableQuestion", () => {
     expect(screen.getByRole("table")).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "구분" })).toBeInTheDocument();
     expect(screen.getByRole("cell", { name: "10" })).toBeInTheDocument();
+  });
+
+  it("renders legacy figure tokens in place and warns when their IDs cannot be resolved", () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question={"1. 앞 문장 [FIGURE:missing-figure] 뒤 문장\n(가) 조건 [FIGURE:missing-figure] 이어짐\n① 보기 [FIGURE:missing-figure]"}
+        questionImages={[]}
+        figures={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    expect(container.textContent).not.toContain("[FIGURE:");
+    expect(screen.getAllByText("[그림 연결 확인 필요: missing-figure]")).toHaveLength(3);
+    expect(screen.getByText("문항의 그림 표식 위치 또는 연결을 확인해 주세요.")).toBeInTheDocument();
+    expect(container.textContent?.match(/\(가\)/g)).toHaveLength(1);
   });
 
   it("wraps condition and view lines without losing structured text", () => {

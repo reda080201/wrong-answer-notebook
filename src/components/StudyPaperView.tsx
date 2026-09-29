@@ -13,6 +13,7 @@ import { Maximize2 } from "lucide-react";
 import QuestionFocusPage, { type QuestionFocusItem } from "./QuestionFocusPage";
 import QuestionContentView from "./QuestionContentView";
 import { resolveEntryQuestionStimuli } from "../features/exam/services/examSession";
+import { readFigureTokenReferences } from "../utils/figureTokens";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -95,6 +96,8 @@ export default function StudyPaperView({
     const stimulus = stimulusByQuestion.get(number);
     const stimulusIncluded = Boolean(stimulus && !seenStimuli.has(stimulus.id));
     if (stimulus) seenStimuli.add(stimulus.id);
+    const stimulusFigureIds = new Set(readFigureTokenReferences([stimulus?.text]).map(({ id }) => id));
+    const stimulusFigures = (entry.figures ?? []).filter((figure) => stimulusFigureIds.has(figure.id));
     const answer = (entry.answerKey ?? []).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
@@ -102,7 +105,7 @@ export default function StudyPaperView({
     return {
       id: number || `question-${index}`,
       groupId: stimulus?.id,
-      stimulusNode: stimulusIncluded && stimulus ? <section className="exam-passage"><QuestionContentView text={stimulus.text} /></section> : undefined,
+      stimulusNode: stimulusIncluded && stimulus ? <section className="exam-passage"><QuestionContentView text={stimulus.text} figures={stimulusFigures} /></section> : undefined,
       stimulusIncluded,
       node: <article id={`sheet-question-canonical-${number}`} className={`structured-problem-sheet-question structured-problem-sheet-question--${displayMode}`}>
         <header>

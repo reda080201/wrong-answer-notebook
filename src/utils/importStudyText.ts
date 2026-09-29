@@ -543,7 +543,7 @@ function parseImportedStudyTextInternal(
     }
     if (rawQuestion.trim()) {
       const rejectedNotes = normalizeRejectedNotes(parsed.rejectedNotes);
-      const question = removeFigureTokens(removeRejectedNotes(rawQuestion, rejectedNotes));
+      const question = cleanQuestionText(removeRejectedNotes(rawQuestion, rejectedNotes));
       const questionContentSegments = normalizeQuestionContentSegments(parsed.questionContentSegments ?? parsed.contentSegments)
         ?? (structuredQuestions?.length
           ? Object.fromEntries(structuredQuestions.map((item) => [item.questionNumber, item.contentSegments]))
@@ -1263,15 +1263,21 @@ function contentSegmentsFromQuestionTokens(question: string): Record<string, Que
         const result: QuestionContentSegment[] = [];
         const figurePattern = /\[FIGURE:([^\]]+)\]/gi;
         let cursor = 0;
+        let conditionLabelUsed = false;
+        const appendText = (raw: string) => {
+          const text = raw.trim();
+          const label = body.kind === "condition" && !conditionLabelUsed ? body.label : undefined;
+          const normalized = label && text.startsWith(label) ? text.slice(label.length).trimStart() : text;
+          if (!normalized && !label) return;
+          result.push(body.kind === "condition"
+            ? { id: `import-${questionNumber}-${++segmentIndex}`, type: "condition", label, text: normalized }
+            : { id: `import-${questionNumber}-${++segmentIndex}`, type: "text", text: normalized });
+          if (body.kind === "condition") conditionLabelUsed = true;
+        };
         for (const match of body.text.matchAll(figurePattern)) {
           const matchIndex = match.index ?? 0;
           const precedingText = body.text.slice(cursor, matchIndex);
-          if (precedingText.trim()) {
-            const id = `import-${questionNumber}-${++segmentIndex}`;
-            result.push(body.kind === "condition"
-              ? { id, type: "condition", label: body.label, text: precedingText.trim() }
-              : { id, type: "text", text: precedingText.trim() });
-          }
+          appendText(precedingText);
           const figureId = match[1]?.trim();
           if (figureId) {
             result.push({ id: `import-${questionNumber}-${++segmentIndex}`, type: "figure", figureId });
@@ -1279,25 +1285,12 @@ function contentSegmentsFromQuestionTokens(question: string): Record<string, Que
           cursor = matchIndex + match[0].length;
         }
         const remainingText = body.text.slice(cursor);
-        if (remainingText.trim()) {
-          const id = `import-${questionNumber}-${++segmentIndex}`;
-          result.push(body.kind === "condition"
-            ? { id, type: "condition", label: body.label, text: remainingText.trim() }
-            : { id, type: "text", text: remainingText.trim() });
-        }
+        appendText(remainingText);
         return result;
       });
       return segments.length ? [[questionNumber, segments] as const] : [];
     });
   return entries.length ? Object.fromEntries(entries) : undefined;
-}
-
-function removeFigureTokens(question: string): string {
-  return question
-    .replace(/\[FIGURE:[^\]]+\]/gi, "")
-    .replace(/[ \t]+\r?\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 interface QuestionMetadata {

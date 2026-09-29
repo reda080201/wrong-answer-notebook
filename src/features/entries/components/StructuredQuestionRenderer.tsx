@@ -8,6 +8,7 @@ import { resolveFigureRepresentation } from "../../figures/services/figureRepres
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { resolveQuestionFigures } from "../../../utils/questionAssets";
 import { parseChoice } from "../../../utils/choice";
+import InlineQuestionText from "../../../components/InlineQuestionText";
 
 export interface StructuredQuestionContext {
   entryId?: string;
@@ -65,8 +66,8 @@ function FigureSegment({ figure }: { figure: SheetFigureItem }) {
 }
 
 function SegmentContent({ segment, figures }: { segment: QuestionContentSegment; figures: Map<string, SheetFigureItem> }): ReactNode {
-  if (segment.type === "text") return <MathText text={segment.text} />;
-  if (segment.type === "condition") return <>{segment.label ? <strong>{segment.label} </strong> : null}<MathText text={segment.text} /> </>;
+  if (segment.type === "text") return <InlineQuestionText text={segment.text} figures={[...figures.values()]} />;
+  if (segment.type === "condition") return <>{segment.label ? <strong>{segment.label} </strong> : null}<InlineQuestionText text={segment.text} figures={[...figures.values()]} /> </>;
   if (segment.type === "equation") return <DirectEquation {...segment} />;
   if (segment.type === "table") {
     return <table><tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MathText text={cell} /></td>)}</tr>)}</tbody></table>;
@@ -79,7 +80,7 @@ function normalizedChoiceKey(choice: { marker: string; content: string }): strin
   return `${choice.marker.trim()}|${choice.content.replace(/\s+/g, " ").trim()}`;
 }
 
-function ChoiceSegments({ choices, segments }: { choices: string[]; segments: QuestionContentSegment[] }) {
+function ChoiceSegments({ choices, segments, figures }: { choices: string[]; segments: QuestionContentSegment[]; figures: SheetFigureItem[] }) {
   const represented = new Map<string, number>();
   for (const segment of segments) {
     if (segment.type !== "text") continue;
@@ -102,7 +103,7 @@ function ChoiceSegments({ choices, segments }: { choices: string[]; segments: Qu
   }).filter((choice): choice is { choice: string; index: number; marker: string; content: string } => Boolean(choice));
   if (!visibleChoices.length) return null;
   return <ol className="structured-question-choices" aria-label="선택지">
-    {visibleChoices.map(({ choice, index, marker, content }) => <li key={`${index}-${choice}`}><span className="structured-question-choice-marker" aria-hidden="true">{marker}</span><MathText text={content} /></li>)}
+    {visibleChoices.map(({ choice, index, marker, content }) => <li key={`${index}-${choice}`}><span className="structured-question-choice-marker" aria-hidden="true">{marker}</span><InlineQuestionText text={content} figures={figures} /></li>)}
   </ol>;
 }
 
@@ -120,6 +121,6 @@ export default function StructuredQuestionRenderer({ question, entry, figures, c
       const className = `structured-question-segment structured-question-segment--${segment.type}`;
       return <div key={segment.id} className={className} data-segment-id={segment.id}><SegmentContent segment={segment} figures={figureById} /></div>;
     })}
-    {question.choices.length > 0 && <ChoiceSegments choices={question.choices} segments={segments} />}
+    {question.choices.length > 0 && <ChoiceSegments choices={question.choices} segments={segments} figures={availableFigures} />}
   </div>;
 }

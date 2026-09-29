@@ -827,6 +827,34 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByLabelText("오답 집중 보기")).toBeInTheDocument();
   });
 
+  it("renders linked figures in wrong-answer focus mode", async () => {
+    const { container } = render(
+      <EntryDetail
+        entry={{
+          ...sheetEntry,
+          id: "wrong-with-figure",
+          entryKind: "wrong_answer",
+          title: "그림 오답",
+          question: "1. 그래프 [FIGURE:f1]을 참고하여 구하여라.",
+          figures: [{ id: "f1", questionNumber: "1", title: "그래프", caption: "그래프 자료", image: "graph.png", source: "original" }],
+        }}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    openSecondaryAction("집중 보기");
+    await waitFor(() => expect(container.querySelector(".wrong-focus-question img")).toHaveAttribute("src", "mock://graph.png"));
+    expect(container.querySelector(".wrong-focus-question img")).toHaveAttribute("alt", "그래프");
+    expect(container.querySelector(".wrong-focus-question")).not.toHaveTextContent("[FIGURE:");
+    expect(container.querySelector(".wrong-focus-question")).not.toHaveTextContent("그림 연결 확인 필요");
+  });
+
   it("shows the sticky study control bar and keeps normal mode switching in the top tabs", () => {
     render(
       <EntryDetail

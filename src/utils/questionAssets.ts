@@ -12,7 +12,7 @@ const unique = (values: Array<string | undefined>) => [
   ...new Set(values.filter((value): value is string => Boolean(value?.trim())).map((value) => value.trim())),
 ];
 
-/** Canonical figure IDs win; question-number matching is legacy-only. */
+/** Canonical figures use exact IDs; legacy questions also retain their question-number attachments. */
 export function resolveQuestionFigures(
   entry: Pick<WrongAnswerEntry, "figures" | "structuredQuestions">,
   question: Pick<ResolvedEntryQuestion, "questionNumber" | "figureIds">,
@@ -21,8 +21,8 @@ export function resolveQuestionFigures(
   const hasCanonicalQuestion = Boolean(entry.structuredQuestions?.some((item) => normalizeQuestionNumber(item.questionNumber) === number));
   const ids = new Set(question.figureIds);
   return (entry.figures ?? []).filter((figure) => {
-    if (hasCanonicalQuestion || question.figureIds.length > 0) return ids.has(figure.id);
-    return normalizeQuestionNumber(figure.questionNumber) === number;
+    if (hasCanonicalQuestion) return ids.has(figure.id);
+    return ids.has(figure.id) || normalizeQuestionNumber(figure.questionNumber) === number;
   });
 }
 
