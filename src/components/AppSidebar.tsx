@@ -205,40 +205,41 @@ export default function AppSidebar({
         </>
       </div>
 
-      {!collapsed && !isLibraryDestination && <details className="sidebar-summary">
-        <summary>요약</summary>
-        <dl>{sidebarStats.slice(0, 5).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-      </details>}
+      {!collapsed && !isLibraryDestination && <div className="app-sidebar-scroll-region">
+        <details className="sidebar-summary">
+          <summary>요약</summary>
+          <dl>{sidebarStats.slice(0, 5).map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+          {destinationSection === "wrong_answer" && <div className="learning-insights">
+            <div className="learning-insight">
+              <span>7일 복습</span>
+              <strong>{learningStats.recentReviewCount}</strong>
+            </div>
+            <div className="learning-insight">
+              <span>주요 원인</span>
+              <strong>
+                {learningStats.topCauses[0]
+                  ? mistakeCauseLabel(learningStats.topCauses[0].type)
+                  : "미분류"}
+              </strong>
+            </div>
+            <div className="learning-insight">
+              <span>약점 개념</span>
+              <strong>{learningStats.weakConcepts[0]?.concept ?? "-"}</strong>
+            </div>
+          </div>}
+        </details>
 
-      {!collapsed && destinationSection === "wrong_answer" && <div className="learning-insights">
-        <div className="learning-insight">
-          <span>7일 복습</span>
-          <strong>{learningStats.recentReviewCount}</strong>
-        </div>
-        <div className="learning-insight">
-          <span>주요 원인</span>
-          <strong>
-            {learningStats.topCauses[0]
-              ? mistakeCauseLabel(learningStats.topCauses[0].type)
-              : "미분류"}
-          </strong>
-        </div>
-        <div className="learning-insight">
-          <span>약점 개념</span>
-          <strong>{learningStats.weakConcepts[0]?.concept ?? "-"}</strong>
-        </div>
-      </div>}
-
-      {!collapsed && !isLibraryDestination && <div className="filter-section app-sidebar-scroll-region">
-        <h3>과목</h3>
-        <SubjectList
-          subjectOrder={subjectOrder}
-          subjectFilter={subjectFilter}
-          subjectCounts={visibleSubjectCounts}
-          totalCount={visibleSubjectTotal}
+        <div className="filter-section">
+          <h3>과목</h3>
+          <SubjectList
+            subjectOrder={subjectOrder}
+            subjectFilter={subjectFilter}
+            subjectCounts={visibleSubjectCounts}
+            totalCount={visibleSubjectTotal}
             onSelect={subjects.select}
             onReorder={subjects.move}
-        />
+          />
+        </div>
       </div>}
 
       <div className="sidebar-footer">
