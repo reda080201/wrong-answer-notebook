@@ -1829,6 +1829,7 @@ export default function EntryDetail({
                   <AnnotatableQuestion
                     question={entry.question}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
+                    figures={entry.figures ?? []}
                     annotations={entry.annotations ?? []}
                     memoMode={memoMode}
                     activeTool={activeTool}
