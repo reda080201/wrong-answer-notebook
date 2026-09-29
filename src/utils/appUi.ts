@@ -183,6 +183,13 @@ export function entryKindName(kind: EntryKind): string {
   return "오답";
 }
 
+export function entryKindWithParticle(kind: EntryKind, particle: "subject" | "object"): string {
+  const name = entryKindName(kind);
+  const hasFinalConsonant = kind === "wrong_answer" || kind === "concept";
+  if (particle === "subject") return `${name}${hasFinalConsonant ? "이" : "가"}`;
+  return `${name}${hasFinalConsonant ? "을" : "를"}`;
+}
+
 export function entryKindIcon(kind: EntryKind): string {
   if (kind === "concept") return "💡";
   if (kind === "problem_sheet") return "📄";
