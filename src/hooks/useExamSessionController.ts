@@ -282,15 +282,50 @@ export function useExamSessionController({
     }).map((question) => {
       const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
       const draft = createEmptyEntryDraft("wrong_answer");
+      const sourceProvenance = question.sourceEntryId && question.sourceQuestionNumber
+        ? [{
+            id: `exam-source-${submitted.id}-${question.questionNumber}`,
+            kind: "other" as const,
+            title: `원본 문제지 ${question.sourceEntryId} · 원문 ${question.sourceQuestionNumber}번`,
+            createdAt: submitted.updatedAt,
+            updatedAt: submitted.updatedAt,
+            sourceEntryId: question.sourceEntryId,
+            questionNumbers: [question.sourceQuestionNumber],
+            generatedFromExamSessionId: submitted.id,
+            generatedFromQuestionNumber: question.questionNumber,
+          }]
+        : [];
       return normalizeEntryDraftForSave({
         ...draft,
         generatedFromExamSessionId: submitted.id,
         generatedFromQuestionNumber: question.questionNumber,
         subject: submitted.subject,
         title: `${submitted.title} · ${question.questionNumber}번 오답`,
-        question: [question.question, ...question.choices].filter(Boolean).join("\n"),
+        question: [
+          question.passage,
+          ...(question.conditions ?? []),
+          ...(question.equations ?? []),
+          question.question,
+          ...question.choices,
+        ].filter(Boolean).join("\n"),
         questionImages: question.questionImages,
+        sourcePageImages: question.sourcePageImages ?? [],
         figures: question.figures,
+        ...(sourceProvenance.length ? { supplementalResources: sourceProvenance } : {}),
+        myAnswer: response?.response ?? "",
+        questionContentSegments: {
+          [question.questionNumber]: question.contentSegments?.length
+            ? [
+                ...(question.passage ? [{ id: `exam-${submitted.id}-${question.questionNumber}-passage`, type: "text" as const, text: question.passage }] : []),
+                ...structuredClone(question.contentSegments),
+              ]
+            : [
+                ...(question.passage ? [{ id: `exam-${submitted.id}-${question.questionNumber}-passage`, type: "text" as const, text: question.passage }] : []),
+                ...(question.conditions ?? []).map((text, index) => ({ id: `exam-${submitted.id}-${question.questionNumber}-condition-${index + 1}`, type: "condition" as const, text })),
+                ...(question.equations ?? []).map((latex, index) => ({ id: `exam-${submitted.id}-${question.questionNumber}-equation-${index + 1}`, type: "equation" as const, latex, display: true })),
+                ...(question.question ? [{ id: `exam-${submitted.id}-${question.questionNumber}-text`, type: "text" as const, text: question.question }] : []),
+              ],
+        },
         correctAnswer: question.correctAnswer ?? "",
         memo: [`모의고사: ${submitted.title}`, response?.scratchNote?.trim()].filter(Boolean).join("\n"),
         explanationParts: question.explanation

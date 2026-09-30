@@ -46,6 +46,83 @@ pub(crate) fn with_shared_storage_lock<T>(
     result
 }
 
+fn looks_like_image_filename(value: &str) -> bool {
+    if value.is_empty()
+        || value.len() > 255
+        || value.contains('/')
+        || value.contains('\\')
+        || value.contains(':')
+        || value.contains("..")
+    {
+        return false;
+    }
+    matches!(
+        Path::new(value)
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .as_str(),
+        "png" | "jpg" | "jpeg" | "gif" | "webp"
+    )
+}
+
+fn collect_persisted_image_references(value: &Value, referenced: &mut HashSet<String>) {
+    match value {
+        Value::String(filename) if looks_like_image_filename(filename) => {
+            referenced.insert(filename.clone());
+        }
+        Value::Array(values) => {
+            for value in values {
+                collect_persisted_image_references(value, referenced);
+            }
+        }
+        Value::Object(values) => {
+            for value in values.values() {
+                collect_persisted_image_references(value, referenced);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn collect_json_file_references(
+    path: &Path,
+    referenced: &mut HashSet<String>,
+) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let contents = fs::read_to_string(path).map_err(|error| error.to_string())?;
+    let value: Value = serde_json::from_str(&contents).map_err(|error| error.to_string())?;
+    collect_persisted_image_references(&value, referenced);
+    Ok(())
+}
+
+fn collect_json_tree_references(
+    path: &Path,
+    referenced: &mut HashSet<String>,
+) -> Result<(), String> {
+    if !path.exists() {
+        return Ok(());
+    }
+    for item in fs::read_dir(path).map_err(|error| error.to_string())? {
+        let item = item.map_err(|error| error.to_string())?;
+        let file_type = item.file_type().map_err(|error| error.to_string())?;
+        if file_type.is_dir() {
+            collect_json_tree_references(&item.path(), referenced)?;
+        } else if item
+            .path()
+            .extension()
+            .and_then(|extension| extension.to_str())
+            == Some("json")
+        {
+            collect_json_file_references(&item.path(), referenced)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String> {
     let mut referenced = HashSet::new();
     referenced.extend(entry.question_images.iter().cloned());
@@ -458,6 +535,27 @@ impl NotebookStore {
         let mut referenced = HashSet::new();
         for entry in self.load_entries()? {
             referenced.extend(collect_entry_image_filenames(&entry));
+        }
+        if let Some(root) = self.entries_path.parent() {
+            for filename in [
+                "exam-sessions.json",
+                "generated-exams.json",
+                "gpt-solution-drafts.json",
+                "import-workspace-draft.json",
+            ] {
+                collect_json_file_references(&root.join(filename), &mut referenced)?;
+            }
+            collect_json_tree_references(&root.join("import-workspaces"), &mut referenced)?;
+        }
+        Ok(referenced)
+    }
+
+    /// Undoable deletions protect assets during orphan cleanup, but are deliberately
+    /// excluded from is_referenced_image so finalizing their own expired record works.
+    pub fn pending_deletion_image_filenames(&self) -> Result<HashSet<String>, String> {
+        let mut referenced = HashSet::new();
+        if let Some(root) = self.entries_path.parent() {
+            collect_json_file_references(&root.join("pending-deletions.json"), &mut referenced)?;
         }
         Ok(referenced)
     }
@@ -970,6 +1068,33 @@ mod tests {
         assert!(images.join("new-image.png").exists());
         assert!(!assets.join("new-image.png").exists());
         assert_eq!(store.load_entries().unwrap()[0].memo, "병합됨");
+    }
+
+    #[test]
+    fn image_references_include_saved_exam_snapshots_but_not_pending_deletion_records() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let store = NotebookStore::new(root.join("entries.json"), root.join("images"));
+        store.save_entries(&[]).unwrap();
+        std::fs::write(
+            root.join("exam-sessions.json"),
+            r#"[{"questions":[{"questionImages":["exam-question.png"],"figures":[{"image":"exam-figure.webp"}]}]}]"#,
+        ).unwrap();
+        std::fs::write(
+            root.join("pending-deletions.json"),
+            r#"[{"imageReferences":["undo-window.jpg"]}]"#,
+        )
+        .unwrap();
+
+        let referenced = store.referenced_image_filenames().unwrap();
+        let pending = store.pending_deletion_image_filenames().unwrap();
+
+        assert!(referenced.contains("exam-question.png"));
+        assert!(referenced.contains("exam-figure.webp"));
+        assert!(!referenced.contains("undo-window.jpg"));
+        assert!(pending.contains("undo-window.jpg"));
+        assert!(store.is_referenced_image("exam-question.png").unwrap());
+        assert!(!store.is_referenced_image("undo-window.jpg").unwrap());
     }
 
     #[test]

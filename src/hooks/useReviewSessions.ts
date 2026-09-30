@@ -14,6 +14,7 @@ export function useReviewSessions() {
   const queueRef = useRef(Promise.resolve());
   const loadedRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
+  const writeErrorRef = useRef<string | null>(null);
 
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
 
@@ -33,7 +34,7 @@ export function useReviewSessions() {
       const next = (await loader()).map(normalizeReviewSession);
       sessionsRef.current = next;
       setSessions(next);
-      setError(null);
+      if (!writeErrorRef.current) setError(null);
       loadedRef.current = true;
       setLoadStatus("ready");
       setReady(true);
@@ -60,11 +61,13 @@ export function useReviewSessions() {
         await writer(next);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "복습 세션을 저장하지 못했습니다.";
+        writeErrorRef.current = message;
         setError(message);
         throw new Error(message, { cause });
       }
       sessionsRef.current = next;
       setSessions(next);
+      writeErrorRef.current = null;
       setError(null);
     };
     const task = queueRef.current.then(operation, operation);
@@ -83,18 +86,24 @@ export function useReviewSessions() {
         await writer(next);
       } catch (cause) {
         const message = cause instanceof Error ? cause.message : "복습 세션을 저장하지 못했습니다.";
+        writeErrorRef.current = message;
         setError(message);
         throw new Error(message, { cause });
       }
       sessionsRef.current = next;
       setSessions(next);
+      writeErrorRef.current = null;
+      setError(null);
     };
     const task = queueRef.current.then(operation, operation);
     queueRef.current = task.then(() => undefined, () => undefined);
     return task;
   }, [error]);
 
-  const flush = useCallback(async () => queueRef.current, []);
+  const flush = useCallback(async () => {
+    await queueRef.current;
+    if (writeErrorRef.current) throw new Error(writeErrorRef.current);
+  }, []);
   const setMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
   }, []);

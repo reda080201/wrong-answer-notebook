@@ -1,6 +1,7 @@
 import type { ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { resolveEntryQuestionStimuli } from "../../exam/services/examSession";
 import { resolveQuestionAssets, resolveQuestionFigures } from "../../../utils/questionAssets";
 import type { ChatGptSharePayload } from "../types";
 
@@ -14,6 +15,7 @@ export function buildChatGptSharePayload(options: {
   const submitted = options.examSession?.status === "submitted";
   const allowAnswers = options.preferences.shareExistingAnswersAndExplanations;
   const blocks = getEntryQuestions(options.entry);
+  const stimuli = resolveEntryQuestionStimuli(options.entry);
   const questions = options.questionNumbers.map((questionNumber) => {
     const block = blocks.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
     const sessionQuestion = options.examSession?.questions.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
@@ -33,7 +35,9 @@ export function buildChatGptSharePayload(options: {
     return {
       questionNumber,
       questionText: options.preferences.shareQuestionText ? block?.questionText : undefined,
-      passage: options.preferences.shareQuestionText ? sessionQuestion?.passage : undefined,
+      passage: options.preferences.shareQuestionText
+        ? sessionQuestion?.passage ?? stimuli.get(questionNumber)?.text
+        : undefined,
       contentSegments: options.preferences.shareQuestionText ? block?.contentSegments : undefined,
       choices: options.preferences.shareChoices
         ? sessionQuestion?.choices ?? (block?.choices ?? []).map((choice) => choice.replace(/^\s*(?:①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[A-Ea-e][.)])\s*/, ""))

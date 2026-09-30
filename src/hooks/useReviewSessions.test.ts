@@ -26,6 +26,24 @@ describe("useReviewSessions load safety", () => {
     expect(saveReviewSessions).toHaveBeenCalledTimes(1);
   });
 
+  it("rejects flush after a failed save and clears the failure after a later save succeeds", async () => {
+    const saveReviewSessions = vi.fn()
+      .mockRejectedValueOnce(new Error("disk full"))
+      .mockResolvedValueOnce(undefined);
+    vi.mocked(getStorageBackend).mockReturnValue({
+      loadReviewSessions: vi.fn().mockResolvedValue([]),
+      saveReviewSessions,
+    } as never);
+    const { result } = renderHook(() => useReviewSessions());
+    const session = { id: "session-1", mode: "random" as const, itemRefs: [], currentIndex: 0, completedItemKeys: [], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    await waitFor(() => expect(result.current.loadStatus).toBe("ready"));
+
+    await expect(result.current.save(session)).rejects.toThrow("disk full");
+    await expect(result.current.flush()).rejects.toThrow("disk full");
+    await act(async () => { await result.current.save(session); });
+    await expect(result.current.flush()).resolves.toBeUndefined();
+  });
+
   it("keeps persistence unavailable after an initial load failure", async () => {
     const saveReviewSessions = vi.fn();
     vi.mocked(getStorageBackend).mockReturnValue({
