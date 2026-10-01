@@ -5,6 +5,17 @@ import ExamSessionView from "./ExamSessionView";
 import RealExamSessionView from "./RealExamSessionView";
 import ExamSessionPaper from "./ExamSessionPaper";
 
+vi.mock("../../../api", () => ({ getImageUrl: vi.fn(async (filename: string) => `blob:${filename}`) }));
+
+class TestResizeObserver {
+  constructor(private readonly callback: ResizeObserverCallback) {}
+  observe(target: Element) { this.callback([{ target, contentRect: { width: 300, height: 400 } } as ResizeObserverEntry], this as unknown as ResizeObserver); }
+  disconnect() {}
+  unobserve() {}
+}
+vi.stubGlobal("ResizeObserver", TestResizeObserver);
+Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
+
 const session: ExamSession = {
   id: "paper-session", entryId: "sheet", title: "수학 모의고사", subject: "수학",
   status: "in_progress", currentQuestionIndex: 0, responses: [],
@@ -66,6 +77,78 @@ describe("shared exam paper interactions", () => {
     />);
 
     expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
+  });
+
+  it("keeps the current question on another linked page when its current page is deselected", async () => {
+    const linkedSession: ExamSession = {
+      ...session,
+      mode: "real",
+      sourcePageImages: ["q1-page-a.png", "q1-page-b.png", "q2-page.png"],
+      sourcePageQuestionMap: { "q1-page-a.png": ["1"], "q1-page-b.png": ["1"], "q2-page.png": ["2"] },
+      selectedSourcePageImages: ["q1-page-a.png", "q1-page-b.png", "q2-page.png"],
+      currentSourcePageImage: "q1-page-a.png",
+    };
+    const onSessionChange = vi.fn();
+    const props = { session: linkedSession, disabled: false, onNavigate: vi.fn(), onResponse: vi.fn(), onSessionChange };
+    const { rerender } = render(<ExamSessionPaper {...props} preferences={{ showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" }} />);
+    fireEvent.click(screen.getByText("문제 페이지 선택"));
+    const checkboxes = screen.getAllByRole("checkbox");
+    fireEvent.click(checkboxes[0]);
+
+    const recipe = onSessionChange.mock.lastCall?.[0] as (value: ExamSession) => ExamSession;
+    const updated = recipe(linkedSession);
+    expect(updated.currentSourcePageImage).toBe("q1-page-b.png");
+    rerender(<ExamSessionPaper {...props} session={updated} />);
+    expect(await screen.findByAltText("원본 문제지 페이지 2")).toBeVisible();
+  });
+
+  it("switches to text and does not fall back to another question page when all current links are deselected", () => {
+    const linkedSession: ExamSession = {
+      ...session,
+      mode: "real",
+      sourcePageImages: ["q1-page.png", "q2-page.png"],
+      sourcePageQuestionMap: { "q1-page.png": ["1"], "q2-page.png": ["2"] },
+      selectedSourcePageImages: ["q1-page.png", "q2-page.png"],
+      currentSourcePageImage: "q1-page.png",
+    };
+    const onSessionChange = vi.fn();
+    const props = { session: linkedSession, disabled: false, onNavigate: vi.fn(), onResponse: vi.fn(), onSessionChange };
+    const preferences = { showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" as const };
+    const { unmount } = render(<ExamSessionPaper {...props} preferences={preferences} />);
+    fireEvent.click(screen.getByText("문제 페이지 선택"));
+    fireEvent.click(screen.getAllByRole("checkbox")[0]);
+
+    const recipe = onSessionChange.mock.lastCall?.[0] as (value: ExamSession) => ExamSession;
+    const updated = recipe(linkedSession);
+    expect(updated.currentSourcePageImage).toBeUndefined();
+    unmount();
+    render(<ExamSessionPaper {...props} session={updated} preferences={preferences} />);
+    expect(screen.getByText("문항 텍스트").closest("button")).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByAltText("원본 문제지 페이지 2")).not.toBeInTheDocument();
+  });
+
+  it("lets the user turn to a different question's page from the no-linked-page state", () => {
+    const linkedSession: ExamSession = {
+      ...session,
+      entryId: "generated:manual-check",
+      mode: "real",
+      currentQuestionIndex: 1,
+      sourcePageImages: ["q1-page.png", "q2-page.png"],
+      sourcePageQuestionMap: { "q1-page.png": ["1"] },
+      selectedSourcePageImages: ["q1-page.png"],
+      questions: session.questions.slice(0, 2).map((question, index) => ({
+        ...question,
+        sourcePageImages: [index === 0 ? "q1-page.png" : "q2-page.png"],
+        source: { page: 1 },
+      })),
+    };
+    const onNavigate = vi.fn();
+    render(<ExamSessionPaper session={linkedSession} disabled={false} onNavigate={onNavigate} onResponse={vi.fn()} preferences={{ showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" }} />);
+    fireEvent.click(screen.getByText("원본 문제지").closest("button")!);
+
+    expect(screen.getByText("현재 문항의 연결 페이지 없음")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "다음 페이지" }));
+    expect(onNavigate).toHaveBeenCalledWith(0);
   });
 
   it("renders a shared passage once per focus spread while keeping it in A4 mode", () => {
