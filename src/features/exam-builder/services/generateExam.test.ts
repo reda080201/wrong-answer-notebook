@@ -30,4 +30,23 @@ describe("generateExam", () => {
     expect(easyHighQuality).toBeGreaterThan(70);
     expect(easyHighQuality).toBeGreaterThan(hardWithoutSolution);
   });
+  it("preserves the unique structured source page and explicit crop page links in snapshots", () => {
+    const source = {
+      ...sheet("source-page", "페이지 연결 문제", 60),
+      sourcePageImages: ["page-1.png", "page-2.png", "answer.png"],
+      structuredQuestions: [{
+        questionNumber: "1", questionText: "페이지 연결 문제", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: [],
+        source: { title: "원본", page: 2 },
+      }],
+      questionSourceCrops: [
+        { id: "crop-page-2", questionNumber: "01번", image: "crop-2.png", page: 2, order: 0 },
+        { id: "crop-page-1", questionNumber: "1", image: "crop-1.png", sourcePageImage: "page-1.png", order: 1 },
+        { id: "bad-crop", questionNumber: "1", image: "crop-x.png", page: 9, order: 2 },
+      ],
+    } as WrongAnswerEntry;
+    const generated = generateExam({ entries: [source], title: "페이지 연결", preset: "real_exam", blueprint: defaultBlueprintForPreset("real_exam", 1), seed: "page" });
+
+    expect(generated.questions[0]?.snapshot.source).toEqual({ title: "원본", page: 2 });
+    expect(generated.questions[0]?.snapshot.linkedSourcePageImages).toEqual(["page-2.png", "page-1.png"]);
+  });
 });

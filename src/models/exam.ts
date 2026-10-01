@@ -19,6 +19,8 @@ export interface ExamQuestionSnapshot {
   questionImages: string[];
   /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
   sourcePageImages?: string[];
+  /** Explicit source-page links for crops attached to this question. */
+  linkedSourcePageImages?: string[];
   figures: SheetFigureItem[];
   contentSegments?: QuestionContentSegment[];
   needsReview?: boolean;
