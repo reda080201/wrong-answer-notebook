@@ -27,12 +27,37 @@ interface Props {
 
 const EMPTY_SOURCE_PAGE_SELECTION: string[] = [];
 
+function getQuestionSourcePages(session: ExamSession, question: ExamSession["questions"][number] | undefined, sourcePageImages: string[]): string[] {
+  if (!question) return [];
+  const mappedPages = Object.entries(session.sourcePageQuestionMap ?? {})
+    .filter(([, numbers]) => numbers.includes(question.questionNumber))
+    .map(([filename]) => filename);
+  if (mappedPages.length) return mappedPages;
+  if (!question.source?.page) return [];
+  const questionPage = question.sourcePageImages?.[question.source.page - 1];
+  if (questionPage) return [questionPage];
+  if (session.sourcePageQuestionMap !== undefined || session.entryId.startsWith("generated:")) return [];
+  const legacyPage = sourcePageImages[question.source.page - 1];
+  return legacyPage ? [legacyPage] : [];
+}
+
 export default function ExamSessionPaper({ session, preferences, disabled, practice = false, onNavigate, onResponse, onSessionChange }: Props) {
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
-  const [textView, setTextView] = useState(() => session.mode === "real"
-    && (session.selectedSourcePageImages === undefined
-      || !Object.values(session.sourcePageQuestionMap ?? {}).some((numbers) => numbers.length > 0)));
+  const [textViewState, setTextViewState] = useState(() => {
+    if (session.mode !== "real") return { sessionId: session.id, textView: false };
+    const question = session.questions[session.currentQuestionIndex];
+    const linkedPages = getQuestionSourcePages(session, question, session.sourcePageImages ?? []);
+    const textView = session.selectedSourcePageImages === undefined || !linkedPages.some(filename => session.selectedSourcePageImages?.includes(filename));
+    return { sessionId: session.id, textView };
+  });
+  const textView = textViewState.sessionId === session.id ? textViewState.textView : (() => {
+    if (session.mode !== "real") return false;
+    const question = session.questions[session.currentQuestionIndex];
+    const linkedPages = getQuestionSourcePages(session, question, session.sourcePageImages ?? []);
+    return session.selectedSourcePageImages === undefined || !linkedPages.some(filename => session.selectedSourcePageImages?.includes(filename));
+  })();
+  const setTextView = (value: boolean) => setTextViewState({ sessionId: session.id, textView: value });
   const [practiceAnswerOpen, setPracticeAnswerOpen] = useState(true);
   const sourcePageImages = useMemo(() => session.sourcePageImages?.length
     ? session.sourcePageImages
@@ -42,10 +67,12 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
     [session.mode, session.selectedSourcePageImages, sourcePageImages],
   );
   const currentQuestion = session.questions[session.currentQuestionIndex];
-  const mappedCurrentPage = currentQuestion
-    ? Object.entries(session.sourcePageQuestionMap ?? {}).find(([, numbers]) => numbers.includes(currentQuestion.questionNumber))?.[0]
-      ?? (currentQuestion.source?.page ? sourcePageImages[currentQuestion.source.page - 1] : undefined)
-    : undefined;
+  const currentQuestionPages = getQuestionSourcePages(session, currentQuestion, sourcePageImages);
+  const selectedCurrentQuestionPages = currentQuestionPages.filter(filename => selectedPages.includes(filename));
+  const mappedCurrentPage = selectedCurrentQuestionPages[0] ?? currentQuestionPages[0];
+  const currentQuestionPage = selectedCurrentQuestionPages.includes(session.currentSourcePageImage ?? "")
+    ? session.currentSourcePageImage
+    : selectedCurrentQuestionPages[0];
   const previousQuestionNumber = useRef(currentQuestion?.questionNumber);
 
   useEffect(() => {
@@ -84,15 +111,27 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   const originalReader = <OriginalPageExamReader
     filenames={sourcePageImages}
     selectedFilenames={selectedPages}
-    currentFilename={session.currentSourcePageImage ?? mappedCurrentPage}
-    onSelectPages={filenames => onSessionChange?.(latest => ({ ...latest, selectedSourcePageImages: filenames, currentSourcePageImage: filenames.includes(latest.currentSourcePageImage ?? "") ? latest.currentSourcePageImage : filenames[0] }))}
+    currentFilename={currentQuestionPages.length > 0 ? currentQuestionPage ?? "" : session.currentSourcePageImage ?? mappedCurrentPage}
+    emptyMessage={currentQuestionPages.length > 0 ? "선택한 페이지 중 이 문항에 연결된 페이지가 없습니다. 문항 텍스트 보기로 계속 풀거나 페이지를 다시 선택하세요." : undefined}
+    onSelectPages={filenames => {
+      const replacement = currentQuestionPages.find(filename => filenames.includes(filename));
+      if (!replacement) setTextView(true);
+      onSessionChange?.(latest => ({
+        ...latest,
+        selectedSourcePageImages: filenames,
+        currentSourcePageImage: currentQuestionPages.includes(latest.currentSourcePageImage ?? "")
+          && filenames.includes(latest.currentSourcePageImage ?? "") ? latest.currentSourcePageImage : replacement,
+      }));
+    }}
     onChangePage={filename => {
       onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: filename }));
       const linkedNumbers = session.sourcePageQuestionMap?.[filename] ?? [];
       const pageNumber = sourcePageImages.indexOf(filename) + 1;
       const questionIndex = session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber)) >= 0
         ? session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber))
-        : session.questions.findIndex(question => question.source?.page === pageNumber);
+        : session.sourcePageQuestionMap === undefined && !session.entryId.startsWith("generated:")
+          ? session.questions.findIndex(question => question.source?.page === pageNumber)
+          : -1;
       if (questionIndex >= 0 && questionIndex !== session.currentQuestionIndex) onNavigate(questionIndex);
     }}
   />;

@@ -6,13 +6,14 @@ interface Props {
   filenames: string[];
   selectedFilenames?: string[];
   currentFilename?: string;
+  emptyMessage?: string;
   onSelectPages(filenames: string[]): void;
   onChangePage(filename: string): void;
 }
 
 const clampZoom = (zoom: number) => Math.min(2.5, Math.max(0.2, zoom));
 
-export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, onSelectPages, onChangePage }: Props) {
+export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage }: Props) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [zoomState, setZoomState] = useState({ mode: "width" as "width" | "page" | "manual", value: 1 });
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
@@ -22,8 +23,8 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const selectedSet = useMemo(() => new Set(selectedFilenames ?? filenames), [filenames, selectedFilenames]);
   const visiblePages = useMemo(() => filenames.filter((filename) => selectedSet.has(filename)), [filenames, selectedSet]);
-  const activeFilename = visiblePages.includes(currentFilename ?? "") ? currentFilename! : visiblePages[0];
-  const activeIndex = Math.max(0, visiblePages.indexOf(activeFilename));
+  const activeFilename = currentFilename === "" ? undefined : visiblePages.includes(currentFilename ?? "") ? currentFilename! : visiblePages[0];
+  const activeIndex = activeFilename === undefined ? -1 : visiblePages.indexOf(activeFilename);
   const zoom = zoomState.value;
   const fitWidth = Math.max(0, viewportSize.width);
   const fitHeight = Math.max(0, viewportSize.height);
@@ -100,7 +101,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   }} onTouchCancel={() => { touchStart.current = null; }}>
     <header className="original-page-toolbar">
       <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>이전 페이지</button>
-      <strong aria-live="polite">{visiblePages.length ? `${activeIndex + 1} / ${visiblePages.length} 페이지` : "페이지를 선택해 주세요"}</strong>
+      <strong aria-live="polite">{!visiblePages.length ? "페이지를 선택해 주세요" : activeIndex < 0 ? "현재 문항의 연결 페이지 없음" : `${activeIndex + 1} / ${visiblePages.length} 페이지`}</strong>
       <button type="button" onClick={() => go(activeIndex + 1)} disabled={activeIndex >= visiblePages.length - 1}>다음 페이지</button>
       <span className="original-page-toolbar__separator" aria-hidden="true" />
       <button type="button" onClick={() => changeZoom(value => value - 0.2)} disabled={zoom <= 0.2}>축소</button>
@@ -126,7 +127,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
       </div>
     </details>
     <div ref={viewportRef} className="original-page-viewport" tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
-      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요.</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} /> : <p role="status">원본 페이지를 불러오는 중…</p>}
+      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>{emptyMessage ? "현재 문항의 페이지가 선택되지 않았습니다" : "표시할 문제 페이지를 선택하세요"}</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} /> : <p role="status">원본 페이지를 불러오는 중…</p>}
     </div>
   </section>;
 }

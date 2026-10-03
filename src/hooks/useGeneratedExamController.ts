@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
-import type { ExamPrintPreferences, GeneratedExam } from "../types";
+import { useCallback, useMemo, useState } from "react";
+import type { ExamPrintPreferences, GeneratedExam, WrongAnswerEntry } from "../types";
+import { normalizeGeneratedExamSources } from "../features/exam-builder/services/questionSource";
 import { buildGeneratedExamPrintModel } from "../features/exam-builder/services/buildGeneratedExamPrintModel";
 import { printExamDocument } from "../features/export/services/printExamDocument";
 import { useGeneratedExams } from "./useGeneratedExams";
@@ -7,11 +8,13 @@ import type { ExamOpenOptions } from "./useExamSessionController";
 
 interface UseGeneratedExamControllerOptions {
   examPrintPreferences: ExamPrintPreferences;
+  entries: WrongAnswerEntry[];
   onOpenExam(exam: GeneratedExam, options?: ExamOpenOptions): void;
 }
 
 export function useGeneratedExamController({
   examPrintPreferences,
+  entries,
   onOpenExam,
 }: UseGeneratedExamControllerOptions) {
   const store = useGeneratedExams();
@@ -20,6 +23,7 @@ export function useGeneratedExamController({
   const [listOpen, setListOpen] = useState(false);
   const [closeError, setCloseError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
+  const exams = useMemo(() => store.exams.map((exam) => normalizeGeneratedExamSources(exam, entries)), [entries, store.exams]);
 
   const persist = useCallback(async (exam: GeneratedExam) => {
     await upsert(exam);
@@ -62,6 +66,7 @@ export function useGeneratedExamController({
 
   return {
     ...store,
+    exams,
     builderOpen,
     setBuilderOpen,
     listOpen,

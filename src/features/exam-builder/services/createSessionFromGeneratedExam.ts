@@ -7,14 +7,21 @@ export function createSessionFromGeneratedExam(exam: GeneratedExam, now = new Da
   const timeLimitMinutes = mode === "real" ? options.timeLimitMinutes ?? exam.timeLimitMinutes : undefined;
   const startedAt = now.toISOString();
   const questions = exam.questions.map((question) => { const source = question.source ?? migrateQuestionSource(question, []).source; return { ...structuredClone(question.snapshot), questionNumber: String(question.position), generatedExamId: exam.id, sourceEntryId: source.sourceEntryId, sourceQuestionNumber: source.sourceQuestionNumber, generatedQuestionPosition: question.position }; });
-  const sourcePageImages = [...new Set(questions.flatMap((question) => question.sourcePageImages ?? []))];
+  const sourcePageImages = [...new Set(questions.flatMap((question) => [
+    ...(question.sourcePageImages ?? []),
+    ...(question.linkedSourcePageImages ?? []),
+    ...(question.figures ?? []).map((figure) => figure.original?.sourcePageImage),
+  ]).filter((filename): filename is string => Boolean(filename)))];
   const explicitPages = new Map<string, string[]>();
   for (const question of questions) {
-    const sourcePage = question.source?.page
-      ? question.sourcePageImages?.[question.source.page - 1] ?? (question.sourcePageImages?.length === 1 ? question.sourcePageImages[0] : undefined)
+    const sourcePage = Number.isInteger(question.source?.page)
+      && (question.source?.page ?? 0) > 0
+      && (question.source?.page ?? 0) <= (question.sourcePageImages?.length ?? 0)
+      ? question.sourcePageImages?.[(question.source?.page ?? 1) - 1]
       : undefined;
     const linkedPages = [
       sourcePage,
+      ...(question.linkedSourcePageImages ?? []),
       ...(question.figures ?? []).map((figure) => figure.original?.sourcePageImage),
     ];
     for (const filename of linkedPages) {
