@@ -249,7 +249,7 @@ describe("AnnotatableQuestion", () => {
         existingTargets={new Set()}
       />,
     );
-    const text = container.querySelector("[data-canonical-segment-id]")!.firstChild!;
+    const text = container.querySelector("[data-canonical-raw-start]")!.firstChild!;
     const range = document.createRange();
     range.setStart(text, 0);
     range.setEnd(text, "중요".length);
@@ -260,6 +260,79 @@ describe("AnnotatableQuestion", () => {
     expect(onAnnotationsChange).toHaveBeenCalledWith([
       expect.objectContaining({ kind: "text", canonicalAnchors: [{ segmentId: "canonical-body", start: 0, end: 2 }] }),
     ]);
+  });
+
+  it("renders extracted choices once and keeps inline math available in canonical content", async () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question={"식은 \\(x^2\\)이다.\n① 첫 번째 선택지\n② 두 번째 선택지"}
+        canonicalSegments={[{ id: "body", type: "text", text: "식은 \\(x^2\\)이다." }]}
+        questionImages={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    expect(container.querySelector(".structured-question-choices")?.textContent).toContain("첫 번째 선택지");
+    expect(container.querySelector(".structured-question-choices")?.textContent).toContain("두 번째 선택지");
+    expect(container.querySelectorAll(".structured-question-choices li")).toHaveLength(2);
+    expect(container.querySelector(".math-fragment")).toBeInTheDocument();
+  });
+
+  it("maps annotation ranges across an inline figure and math token to the canonical raw offsets", async () => {
+    const source = "앞 [FIGURE:graph] 수식 \\(x^2\\) 뒤";
+    const onAnnotationsChange = vi.fn();
+    const { container } = render(
+      <AnnotatableQuestion
+        question={source}
+        canonicalSegments={[{ id: "body-with-assets", type: "text", text: source }]}
+        questionImages={[]}
+        figures={[{ id: "graph", questionNumber: "1", title: "그래프", caption: "", image: "graph.png", source: "original" }]}
+        annotations={[]}
+        memoMode
+        activeTool="highlight"
+        onAnnotationsChange={onAnnotationsChange}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    const tokens = [...container.querySelectorAll<HTMLElement>("[data-canonical-raw-start]")];
+    const firstText = tokens.find((token) => token.dataset.canonicalRawAtomic !== "true")!;
+    const lastText = [...tokens].reverse().find((token) => token.dataset.canonicalRawAtomic !== "true")!;
+    const range = document.createRange();
+    range.setStart(firstText.firstChild!, 0);
+    range.setEnd(lastText.firstChild!, " 뒤".length);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(container.querySelector(".annotatable-text")!);
+
+    expect(onAnnotationsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: "text", canonicalAnchors: [{ segmentId: "body-with-assets", start: 0, end: source.length }] }),
+    ]);
+    expect(container.querySelector(".question-inline-figure-slot")).toBeInTheDocument();
+    expect(container.querySelector(".math-fragment")).toBeInTheDocument();
+  });
+
+  it("warns when an attached figure has no canonical position instead of moving it to the end", () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question="본문"
+        canonicalSegments={[{ id: "body-only", type: "text", text: "본문" }]}
+        questionImages={[]}
+        figures={[{ id: "unplaced", questionNumber: "1", title: "그림", caption: "", image: "graph.png", source: "original" }]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    expect(container.querySelector(".question-figure-missing")).toHaveTextContent("그림 위치 연결 확인 필요: unplaced");
+    expect(container.querySelector(".question-source-figure")).toBeNull();
   });
 
   it("maps an existing legacy annotation only when its text matches one canonical segment", () => {

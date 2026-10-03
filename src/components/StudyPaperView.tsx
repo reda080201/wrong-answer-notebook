@@ -150,6 +150,7 @@ export default function StudyPaperView({
             {displayMode === "exam" && paperPresentation === "two-question" ? <QuestionFocusPage items={structuredQuestionNodes} currentQuestionNumber={currentQuestionNumber} onNavigateQuestion={onCurrentQuestionChange} title={entry.title} subject={entry.subject} /> : <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />}
           </div>
         ) : <AnnotatableQuestion
+          key={entry.id}
           question={entry.question}
           canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
           canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}

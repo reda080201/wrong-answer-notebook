@@ -33,8 +33,8 @@ import ImageGallery from "./ImageGallery";
 import MathText, { renderMathInNodes } from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import InlineQuestionText from "./InlineQuestionText";
+import { resolveCanonicalQuestionPresentation } from "../utils/canonicalQuestionPresentation";
 import QuestionContentView, { resolveCanonicalAnnotationRanges } from "./QuestionContentView";
-import { normalizeQuestionPresentationSegments } from "../utils/questionPresentation";
 import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "../utils/figureTokens";
 
 interface AnnotatableQuestionProps {
@@ -1133,15 +1133,26 @@ export default function AnnotatableQuestion({
       const spans = [...textRef.current.querySelectorAll<HTMLElement>("[data-canonical-segment-id]")];
       const canonicalAnchors = spans.flatMap((span) => {
         try { if (!range.intersectsNode(span)) return []; } catch { return []; }
-        const textLength = span.textContent?.length ?? 0;
-        const offsetAt = (node: Node, offset: number) => {
+        const tokens = [...span.querySelectorAll<HTMLElement>("[data-canonical-raw-start][data-canonical-raw-end]")];
+        const textLength = Math.max(0, ...tokens.map((token) => Number(token.dataset.canonicalRawEnd) || 0));
+        const offsetAt = (node: Node, offset: number, endPoint: boolean) => {
+          const token = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-canonical-raw-start][data-canonical-raw-end]");
+          if (token && span.contains(token)) {
+            const start = Number(token.dataset.canonicalRawStart) || 0;
+            const end = Number(token.dataset.canonicalRawEnd) || start;
+            if (token.dataset.canonicalRawAtomic === "true") return endPoint ? end : start;
+            const local = document.createRange();
+            local.selectNodeContents(token);
+            try { local.setEnd(node, offset); } catch { return endPoint ? end : start; }
+            return Math.min(end, start + local.toString().length);
+          }
           const local = document.createRange();
           local.selectNodeContents(span);
-          local.setEnd(node, offset);
-          return local.toString().length;
+          try { local.setEnd(node, offset); } catch { return endPoint ? textLength : 0; }
+          return Math.min(textLength, local.toString().length);
         };
-        const start = span.contains(range.startContainer) ? offsetAt(range.startContainer, range.startOffset) : 0;
-        const end = span.contains(range.endContainer) ? offsetAt(range.endContainer, range.endOffset) : textLength;
+        const start = span.contains(range.startContainer) ? offsetAt(range.startContainer, range.startOffset, false) : 0;
+        const end = span.contains(range.endContainer) ? offsetAt(range.endContainer, range.endOffset, true) : textLength;
         const clippedStart = Math.max(0, Math.min(start, textLength));
         const clippedEnd = Math.max(0, Math.min(end, textLength));
         return clippedEnd > clippedStart ? [{ segmentId: span.dataset.canonicalSegmentId!, start: clippedStart, end: clippedEnd }] : [];
@@ -1186,11 +1197,12 @@ export default function AnnotatableQuestion({
         >
           {canonicalReviewRequired && <p className="question-content-review-notice" role="status">문항 원문과 순서 연결을 확인해 주세요.</p>}
           {canonicalSegments?.length && !showOriginalAnnotations ? (() => {
-            const normalized = normalizeQuestionPresentationSegments({ questionText: question, conditions: [], equations: [], contentSegments: canonicalSegments });
+            const presentation = resolveCanonicalQuestionPresentation(question, canonicalSegments);
+            const normalized = presentation.segments;
             const unresolved = resolveCanonicalAnnotationRanges(normalized, textAnns, question).unresolved;
             return <>
               {unresolved.length > 0 && <button type="button" className="text-button" onClick={() => setShowOriginalAnnotations(true)}>기존 필기 {unresolved.length}개를 원문 보기에서 확인</button>}
-              <QuestionContentView text={question} segments={normalized} figures={figures} appendUnreferencedFigures={false} annotations={textAnns} legacyQuestion={question} />
+              <QuestionContentView text={question} segments={normalized} figures={figures} appendUnreferencedFigures={false} choices={presentation.choices} annotations={textAnns} legacyQuestion={question} />
             </>;
           })() : <StructuredQuestionText
             question={question}

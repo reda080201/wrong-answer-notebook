@@ -1834,6 +1834,7 @@ export default function EntryDetail({
               <div className="wrong-focus-question">
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
                   <AnnotatableQuestion
+                    key={entry.id}
                     question={entry.question}
                     canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
                     canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
@@ -1902,6 +1903,7 @@ export default function EntryDetail({
             </>
           ) : (
             <AnnotatableQuestion
+              key={entry.id}
               question={entry.question}
               canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
               canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
