@@ -7,6 +7,8 @@ export interface TextRangeAnnotation {
   start: number;
   end: number;
   tool: AnnotationTool;
+  /** Optional anchors into canonical question text segments. Legacy offsets remain valid. */
+  canonicalAnchors?: Array<{ segmentId: string; start: number; end: number }>;
 }
 
 export interface ImageRectAnnotation {

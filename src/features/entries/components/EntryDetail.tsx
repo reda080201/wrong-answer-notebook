@@ -15,6 +15,7 @@ import { getNextStudyAction, type NextStudyActionId } from "../../../utils/nextS
 import { normalizeDifficultyScore } from "../../../utils/difficulty";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions, resolvedQuestionToBlock } from "../../../utils/entryQuestions";
+import { resolveGeneratedWrongAnswerContent } from "../../../utils/generatedWrongAnswerContent";
 import { detectSuspiciousTextSegments } from "../../../utils/suspiciousText";
 import {
   getQuestionMetaForBlock,
@@ -340,6 +341,12 @@ export default function EntryDetail({
   const isConcept = entry.entryKind === "concept";
   const isLecture = entry.entryKind === "lecture";
   const isWrongAnswer = entry.entryKind === "wrong_answer";
+  const generatedWrongAnswerContent = useMemo(
+    () => isWrongAnswer && entry.generatedFromExamSessionId
+      ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
+      : { status: "unavailable" as const },
+    [isWrongAnswer, entry.generatedFromExamSessionId, entry.generatedFromQuestionNumber, entry.questionContentSegments],
+  );
   const isFocusable = !isConcept && !isLecture;
   const isFocusExpanded = isFocusable && focusMode === "expanded";
   const isFocusMini = isFocusable && focusMode === "mini";
@@ -1827,7 +1834,10 @@ export default function EntryDetail({
               <div className="wrong-focus-question">
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
                   <AnnotatableQuestion
+                    key={entry.id}
                     question={entry.question}
+                    canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
+                    canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
                     figures={entry.figures ?? []}
                     annotations={entry.annotations ?? []}
@@ -1893,7 +1903,10 @@ export default function EntryDetail({
             </>
           ) : (
             <AnnotatableQuestion
+              key={entry.id}
               question={entry.question}
+              canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
+              canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
               questionImages={entry.questionImages}
               figures={entry.figures ?? []}
               annotations={entry.annotations ?? []}
