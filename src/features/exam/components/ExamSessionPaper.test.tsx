@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { ExamSession } from "../../../types";
 import ExamSessionView from "./ExamSessionView";
@@ -77,6 +77,18 @@ describe("shared exam paper interactions", () => {
     />);
 
     expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
+  });
+
+  it("reinitializes the page/text view when the mounted paper receives another session", async () => {
+    const linkedReal = { ...session, id: "real-a", mode: "real" as const, sourcePageImages: ["page.png"], sourcePageQuestionMap: { "page.png": ["1"] }, selectedSourcePageImages: ["page.png"] };
+    const props = { disabled: false, onNavigate: vi.fn(), onResponse: vi.fn() };
+    const { container, rerender } = render(<ExamSessionPaper {...props} session={linkedReal} />);
+    expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("원본 문제지");
+    const unlinkedReal = { ...linkedReal, id: "real-b", selectedSourcePageImages: undefined };
+    await act(async () => rerender(<ExamSessionPaper {...props} session={unlinkedReal} />));
+    expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
+    await act(async () => rerender(<ExamSessionPaper {...props} session={{ ...session, id: "practice-c", mode: "practice", sourcePageImages: ["page.png"] }} />));
+    expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("원본 문제지");
   });
 
   it("keeps the current question on another linked page when its current page is deselected", async () => {

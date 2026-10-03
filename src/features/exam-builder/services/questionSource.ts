@@ -1,5 +1,34 @@
 import type { GeneratedExamQuestion, QuestionSourceReference, QuestionSourceStatus, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
+
+function hydrateExplicitSourcePages(question: GeneratedExamQuestion, entry: WrongAnswerEntry): GeneratedExamQuestion {
+  const number = normalizeQuestionNumber(question.source?.sourceQuestionNumber ?? question.sourceQuestionNumber ?? question.snapshot.sourceQuestionNumber ?? question.snapshot.questionNumber);
+  if (!number) return question;
+  const matches = getEntryQuestions(entry).filter((item) => normalizeQuestionNumber(item.questionNumber) === number);
+  if (matches.length !== 1) return question;
+  const sourceQuestion = matches[0];
+  const pages = entry.sourcePageImages ?? [];
+  const page = sourceQuestion.source?.page;
+  const validPage = Number.isInteger(page) && (page ?? 0) > 0 && (page ?? 0) <= pages.length ? page : undefined;
+  const linkedCropPages = (entry.questionSourceCrops ?? [])
+    .filter((crop) => normalizeQuestionNumber(crop.questionNumber) === number)
+    .flatMap((crop) => {
+      const explicitName = crop.sourcePageImage && pages.includes(crop.sourcePageImage) ? [crop.sourcePageImage] : [];
+      const explicitPage = Number.isInteger(crop.page) && (crop.page ?? 0) > 0 && (crop.page ?? 0) <= pages.length ? [pages[(crop.page ?? 1) - 1]] : [];
+      return [...explicitName, ...explicitPage];
+    });
+  const linkedSourcePageImages = [...new Set([...(question.snapshot.linkedSourcePageImages ?? []), ...linkedCropPages])];
+  if (validPage === question.snapshot.source?.page && linkedSourcePageImages.length === (question.snapshot.linkedSourcePageImages ?? []).length) return question;
+  return {
+    ...question,
+    snapshot: {
+      ...question.snapshot,
+      source: validPage ? { ...question.snapshot.source, page: validPage } : question.snapshot.source,
+      linkedSourcePageImages: linkedSourcePageImages.length ? linkedSourcePageImages : question.snapshot.linkedSourcePageImages,
+    },
+  };
+}
 
 export function questionSnapshotHash(question: { question: string; choices: string[] }): string {
   let hash = 2166136261;
@@ -23,14 +52,17 @@ export function createQuestionSource(entry: WrongAnswerEntry, questionNumber: st
 }
 
 export function migrateQuestionSource(question: GeneratedExamQuestion, entries: WrongAnswerEntry[]): GeneratedExamQuestion {
-  if (question.source?.sourceEntryId) return question;
   const entryId = question.sourceEntryId ?? question.snapshot.sourceEntryId ?? "";
+  const storedEntryId = question.source?.sourceEntryId || entryId;
+  const existingEntry = entries.find((item) => item.id === storedEntryId);
+  if (question.source?.sourceEntryId) return existingEntry ? hydrateExplicitSourcePages(question, existingEntry) : question;
   const number = question.sourceQuestionNumber ?? question.snapshot.sourceQuestionNumber ?? question.snapshot.questionNumber;
   const entry = entries.find((item) => item.id === entryId);
   const source: QuestionSourceReference = entry
     ? createQuestionSource(entry, number, question.snapshot)
     : { sourceEntryId: entryId, sourceEntryTitle: "출처 미확인", sourceQuestionNumber: number, sourceStatus: entryId ? "snapshot_only" : "unknown" };
-  return { ...question, source, sourceEntryId: undefined, sourceQuestionNumber: undefined };
+  const migrated = { ...question, source, sourceEntryId: undefined, sourceQuestionNumber: undefined };
+  return entry ? hydrateExplicitSourcePages(migrated, entry) : migrated;
 }
 
 export function normalizeGeneratedExamSources(exam: import("../../../types").GeneratedExam, entries: WrongAnswerEntry[]): import("../../../types").GeneratedExam {

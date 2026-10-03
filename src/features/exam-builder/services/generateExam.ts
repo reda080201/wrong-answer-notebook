@@ -3,7 +3,7 @@ import type { ExamBlueprint, ExamGenerationReport, ExamQuestionSnapshot, Generat
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { resolveQuestionDifficultyScore } from "../../../utils/difficulty";
-import { createQuestionSource } from "./questionSource";
+import { createQuestionSource, migrateQuestionSource } from "./questionSource";
 
 export interface ExamBuilderFilters {
   entryIds?: string[];
@@ -152,7 +152,7 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
   const rng = seeded(input.seed);
   const maxPerSource = filters.maxPerSource ?? Math.max(1, Math.ceil(input.blueprint.totalQuestions * .3));
   const selected: GeneratedExamQuestion[] = [...(input.lockedQuestions ?? [])].slice(0, input.blueprint.totalQuestions).map((question, index) => {
-    if (question.source?.sourceEntryId) return { ...question, position: index + 1, locked: true };
+    if (question.source?.sourceEntryId) return { ...migrateQuestionSource(question, input.entries), position: index + 1, locked: true };
     const legacyEntry = input.entries.find((entry) => entry.id === question.sourceEntryId);
     const number = question.sourceQuestionNumber ?? question.snapshot.questionNumber;
     return { ...question, position: index + 1, locked: true, source: legacyEntry ? createQuestionSource(legacyEntry, number, question.snapshot) : { sourceEntryId: question.sourceEntryId ?? "", sourceEntryTitle: "출처 미확인", sourceQuestionNumber: number, sourceStatus: question.sourceEntryId ? "snapshot_only" : "unknown" } };

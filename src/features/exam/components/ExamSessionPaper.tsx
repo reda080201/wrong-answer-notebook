@@ -44,13 +44,20 @@ function getQuestionSourcePages(session: ExamSession, question: ExamSession["que
 export default function ExamSessionPaper({ session, preferences, disabled, practice = false, onNavigate, onResponse, onSessionChange }: Props) {
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
-  const [textView, setTextView] = useState(() => {
+  const [textViewState, setTextViewState] = useState(() => {
+    if (session.mode !== "real") return { sessionId: session.id, textView: false };
+    const question = session.questions[session.currentQuestionIndex];
+    const linkedPages = getQuestionSourcePages(session, question, session.sourcePageImages ?? []);
+    const textView = session.selectedSourcePageImages === undefined || !linkedPages.some(filename => session.selectedSourcePageImages?.includes(filename));
+    return { sessionId: session.id, textView };
+  });
+  const textView = textViewState.sessionId === session.id ? textViewState.textView : (() => {
     if (session.mode !== "real") return false;
     const question = session.questions[session.currentQuestionIndex];
     const linkedPages = getQuestionSourcePages(session, question, session.sourcePageImages ?? []);
-    if (session.selectedSourcePageImages === undefined) return true;
-    return !linkedPages.some(filename => session.selectedSourcePageImages?.includes(filename));
-  });
+    return session.selectedSourcePageImages === undefined || !linkedPages.some(filename => session.selectedSourcePageImages?.includes(filename));
+  })();
+  const setTextView = (value: boolean) => setTextViewState({ sessionId: session.id, textView: value });
   const [practiceAnswerOpen, setPracticeAnswerOpen] = useState(true);
   const sourcePageImages = useMemo(() => session.sourcePageImages?.length
     ? session.sourcePageImages

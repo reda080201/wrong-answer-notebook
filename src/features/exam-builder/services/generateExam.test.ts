@@ -49,4 +49,23 @@ describe("generateExam", () => {
     expect(generated.questions[0]?.snapshot.source).toEqual({ title: "원본", page: 2 });
     expect(generated.questions[0]?.snapshot.linkedSourcePageImages).toEqual(["page-2.png", "page-1.png"]);
   });
+
+  it("hydrates explicit source pages for locked legacy snapshots without changing their content", () => {
+    const source = {
+      ...sheet("locked-source", "원문 본문", 60),
+      sourcePageImages: ["p1.png", "p2.png"],
+      structuredQuestions: [{ questionNumber: "1", questionText: "canonical 본문", conditions: [], equations: [], choices: [], contentSegments: [], figureIds: [], source: { page: 2 } }],
+      questionSourceCrops: [{ questionNumber: "1", image: "crop.png", page: 1 }],
+    } as WrongAnswerEntry;
+    const locked = {
+      position: 1,
+      source: { sourceEntryId: source.id, sourceEntryTitle: source.title, sourceQuestionNumber: "1" },
+      snapshot: { id: "locked", questionNumber: "1", question: "kept snapshot", choices: ["① kept choice"], questionImages: [], figures: [] },
+      locked: true,
+      selectionScore: 1,
+      selectionReasons: [],
+    };
+    const generated = generateExam({ entries: [source], title: "locked", preset: "hard", blueprint: defaultBlueprintForPreset("hard", 1), seed: "locked", lockedQuestions: [locked] });
+    expect(generated.questions[0].snapshot).toMatchObject({ question: "kept snapshot", choices: ["① kept choice"], source: { page: 2 }, linkedSourcePageImages: ["p1.png"] });
+  });
 });
