@@ -97,11 +97,13 @@ export default function QuestionContentView({ text, segments, figures = [], appe
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
   const rendered = segments?.length ? segments : [{ id: "fallback", type: "text" as const, text }];
   const { ranges } = resolveCanonicalAnnotationRanges(rendered, annotations, legacyQuestion);
-  const referenced = new Set<string>(rendered.flatMap((segment) => {
+  const figureIdsInText = (value: string) => [...value.matchAll(/\[FIGURE(?::([^\]]*))?(?:\]|$)/gi)]
+    .map((match) => match[1]?.trim()).filter((id): id is string => Boolean(id));
+  const referenced = new Set<string>([...rendered.flatMap((segment) => {
     if (segment.type === "figure") return [segment.figureId];
     if (segment.type !== "text" && segment.type !== "condition") return [];
-    return [...segment.text.matchAll(/\[FIGURE(?::([^\]]*))?(?:\]|$)/gi)].map((match) => match[1]?.trim()).filter((id): id is string => Boolean(id));
-  }));
+    return figureIdsInText(segment.text);
+  }), ...choices.flatMap(figureIdsInText)]);
   const unreferencedFigures = figures.filter((figure) => !referenced.has(figure.id));
   return <div className="question-content-view">
     {rendered.map((segment) => {
