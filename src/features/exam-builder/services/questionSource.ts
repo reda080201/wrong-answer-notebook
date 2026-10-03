@@ -11,6 +11,19 @@ function hydrateExplicitSourcePages(question: GeneratedExamQuestion, entry: Wron
   const pages = entry.sourcePageImages ?? [];
   const page = sourceQuestion.source?.page;
   const validPage = Number.isInteger(page) && (page ?? 0) > 0 && (page ?? 0) <= pages.length ? page : undefined;
+  const snapshotPages = question.snapshot.sourcePageImages ?? [];
+  const snapshotPage = question.snapshot.source?.page;
+  const hasSnapshotPage = Number.isInteger(snapshotPage)
+    && (snapshotPage ?? 0) > 0 && (snapshotPage ?? 0) <= snapshotPages.length;
+  // A saved index belongs to its saved page list. Preserve that association;
+  // recover missing associations by filename before assigning a new index.
+  const sourceFilename = hasSnapshotPage
+    ? snapshotPages[(snapshotPage ?? 1) - 1]
+    : validPage ? pages[validPage - 1] : undefined;
+  const sourcePageImages = sourceFilename && !hasSnapshotPage
+    ? [...new Set([...snapshotPages, ...pages])]
+    : snapshotPages;
+  const resolvedPage = sourceFilename ? sourcePageImages.indexOf(sourceFilename) + 1 : snapshotPage;
   const linkedCropPages = (entry.questionSourceCrops ?? [])
     .filter((crop) => normalizeQuestionNumber(crop.questionNumber) === number)
     .flatMap((crop) => {
@@ -19,12 +32,14 @@ function hydrateExplicitSourcePages(question: GeneratedExamQuestion, entry: Wron
       return [...explicitName, ...explicitPage];
     });
   const linkedSourcePageImages = [...new Set([...(question.snapshot.linkedSourcePageImages ?? []), ...linkedCropPages])];
-  if (validPage === question.snapshot.source?.page && linkedSourcePageImages.length === (question.snapshot.linkedSourcePageImages ?? []).length) return question;
+  if (resolvedPage === snapshotPage && sourcePageImages.length === snapshotPages.length
+    && linkedSourcePageImages.length === (question.snapshot.linkedSourcePageImages ?? []).length) return question;
   return {
     ...question,
     snapshot: {
       ...question.snapshot,
-      source: validPage ? { ...question.snapshot.source, page: validPage } : question.snapshot.source,
+      source: resolvedPage ? { ...question.snapshot.source, page: resolvedPage } : question.snapshot.source,
+      sourcePageImages: sourcePageImages.length ? sourcePageImages : question.snapshot.sourcePageImages,
       linkedSourcePageImages: linkedSourcePageImages.length ? linkedSourcePageImages : question.snapshot.linkedSourcePageImages,
     },
   };
