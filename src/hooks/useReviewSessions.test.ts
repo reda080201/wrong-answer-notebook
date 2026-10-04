@@ -55,4 +55,24 @@ describe("useReviewSessions load safety", () => {
     await expect(result.current.save({ id: "session-1", mode: "random", itemRefs: [], currentIndex: 0, completedItemKeys: [], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" })).rejects.toThrow("offline");
     expect(saveReviewSessions).not.toHaveBeenCalled();
   });
+
+  it("blocks review writes until every restored store has reloaded", async () => {
+    const saveReviewSessions = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getStorageBackend).mockReturnValue({
+      loadReviewSessions: vi.fn().mockResolvedValue([]),
+      saveReviewSessions,
+    } as never);
+    const { result } = renderHook(() => useReviewSessions());
+    const session = { id: "session-1", mode: "random" as const, itemRefs: [], currentIndex: 0, completedItemKeys: [], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z" };
+    await waitFor(() => expect(result.current.loadStatus).toBe("ready"));
+
+    act(() => result.current.setRestoreReloadBlocked(true));
+    await expect(result.current.save(session)).rejects.toThrow("복원한 데이터를 다시 불러온 뒤");
+    await expect(result.current.remove(session.id)).rejects.toThrow("복원한 데이터를 다시 불러온 뒤");
+    expect(saveReviewSessions).not.toHaveBeenCalled();
+
+    act(() => result.current.setRestoreReloadBlocked(false));
+    await act(async () => { await result.current.save(session); });
+    expect(saveReviewSessions).toHaveBeenCalledTimes(1);
+  });
 });

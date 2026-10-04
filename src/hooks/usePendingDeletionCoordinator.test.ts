@@ -69,7 +69,7 @@ describe("pending deletion asset protection", () => {
     );
 
     expect(deleteAsset).toHaveBeenCalledTimes(3);
-    expect(deleteAsset).toHaveBeenCalledWith("shared.png");
+    expect(deleteAsset).toHaveBeenCalledWith("shared.png", ["pending-a", "pending-b"]);
     expect(result.retained).toEqual([]);
     expect(result.logicallyDeletedEntryIds).toEqual(["entry-a", "entry-b"]);
     expect(result.cleanupRetryRecordIds).toEqual(new Set());
@@ -85,8 +85,8 @@ describe("pending deletion asset protection", () => {
       Date.parse("2026-01-01T00:01:00.000Z"),
     );
 
-    expect(deleteAsset).toHaveBeenCalledWith("a.png");
-    expect(deleteAsset).not.toHaveBeenCalledWith("shared.png");
+    expect(deleteAsset).toHaveBeenCalledWith("a.png", ["pending-a"]);
+    expect(deleteAsset).not.toHaveBeenCalledWith("shared.png", expect.anything());
     expect(result.retained).toEqual([future]);
     expect(result.cleanupRetryRecordIds).toEqual(new Set());
 

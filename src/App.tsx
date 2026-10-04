@@ -200,6 +200,17 @@ function AppContent() {
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
   const reviewSessions = useReviewSessions();
+  const reviewSessionGenerationRef = useRef(0);
+  const reviewCallbackGeneration = reviewSessionGenerationRef.current;
+  const saveReviewSession = (session: import("./types").ReviewSession) => {
+    if (reviewCallbackGeneration !== reviewSessionGenerationRef.current) {
+      return Promise.reject(new Error("복원 후 이전 복습 화면의 저장 요청은 취소되었습니다."));
+    }
+    return reviewSessions.save(session);
+  };
+  const discardActiveReviewAfterRestore = useCallback(() => {
+    reviewSessionGenerationRef.current += 1;
+  }, []);
   const pendingDeletionFlushRef = useRef<() => Promise<void>>(async () => undefined);
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
@@ -389,7 +400,10 @@ function AppContent() {
     removeMemoTemplate,
     refreshSettings,
     refreshExamSessions: reloadExamSessions,
+    refreshReviewSessions: reviewSessions.refresh,
+    setReviewSessionsRestoreReloadBlocked: reviewSessions.setRestoreReloadBlocked,
     discardActiveSessionAfterRestore,
+    discardActiveReviewAfterRestore,
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,
@@ -990,7 +1004,7 @@ function AppContent() {
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
           session: resumableReviewSession,
-          saveSession: reviewSessions.save,
+          saveSession: saveReviewSession,
         }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
         supplemental={{ target: (() => {
@@ -1057,6 +1071,8 @@ function AppContent() {
             integrityReport: actions.integrityReport,
             backup: actions.handleBackup,
             restore: actions.handleRestore,
+            restoreReloadPending: actions.restoreReloadPending,
+            retryRestoreReload: actions.retryRestoreReload,
             runIntegrity: actions.runIntegrity,
             cleanupOrphans: actions.handleCleanupOrphans,
           }}

@@ -1,8 +1,21 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { ImportWorkspace } from "../model/importWorkspace";
 import { getStorageBackend } from "../../../services/storageBackend";
 
+let draftWriteQueue: Promise<void> = Promise.resolve();
+
+function enqueueDraftWrite(write: () => Promise<void>): Promise<void> {
+  const result = draftWriteQueue.then(write, write);
+  draftWriteQueue = result.catch(() => undefined);
+  return result;
+}
+
+export async function flushImportWorkspaceDraftWrites(): Promise<void> {
+  await draftWriteQueue;
+}
+
 export async function loadImportWorkspaceDraft(): Promise<ImportWorkspace | null> {
+    await flushImportWorkspaceDraftWrites();
     const draft = await getStorageBackend().loadImportWorkspaceDraft();
     if (!draft) return null;
     return {
@@ -19,11 +32,11 @@ export async function loadImportWorkspaceDraft(): Promise<ImportWorkspace | null
 }
 
 export async function clearImportWorkspaceDraft(): Promise<void> {
-  await getStorageBackend().clearImportWorkspaceDraft();
+  await enqueueDraftWrite(() => getStorageBackend().clearImportWorkspaceDraft());
 }
 
 export async function saveImportWorkspaceDraft(workspace: ImportWorkspace): Promise<void> {
-  await getStorageBackend().saveImportWorkspaceDraft(workspace);
+  await enqueueDraftWrite(() => getStorageBackend().saveImportWorkspaceDraft(workspace));
 }
 
 export interface ImportWorkspaceAutosaveCallbacks {
@@ -36,8 +49,9 @@ export function useImportWorkspaceAutosave(
   workspace: ImportWorkspace,
   enabled = true,
   callbacks?: ImportWorkspaceAutosaveCallbacks,
-): void {
+): () => Promise<void> {
   const callbacksRef = useRef(callbacks);
+  const timerRef = useRef<number | null>(null);
   useEffect(() => {
     callbacksRef.current = callbacks;
   }, [callbacks]);
@@ -45,6 +59,7 @@ export function useImportWorkspaceAutosave(
   useEffect(() => {
     if (!enabled) return;
     const timer = window.setTimeout(async () => {
+      timerRef.current = null;
       callbacksRef.current?.onSaving?.();
       try {
         await saveImportWorkspaceDraft(workspace);
@@ -53,7 +68,19 @@ export function useImportWorkspaceAutosave(
         callbacksRef.current?.onError?.(error);
       }
     }, 750);
-    return () => window.clearTimeout(timer);
+    timerRef.current = timer;
+    return () => {
+      window.clearTimeout(timer);
+      if (timerRef.current === timer) timerRef.current = null;
+    };
   }, [workspace, enabled]);
+
+  return useCallback(async () => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    await flushImportWorkspaceDraftWrites();
+  }, []);
 }
 
