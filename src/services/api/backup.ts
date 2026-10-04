@@ -8,7 +8,7 @@ import { GENERATED_EXAMS_STORAGE_KEY } from "../../features/exam-builder/storage
 import { isLibraryFolderArray, type LibraryFolder } from "../../models/library";
 import { LIBRARY_FOLDERS_STORAGE_KEY } from "./libraryFolders";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
-import { getAllImageFilenames } from "../../utils/entry";
+import { getBrowserProtectedImageReferences as collectBrowserImageReferences } from "./browserImageReferences";
 import { readStorageJson, writeStorageJson } from "../storageJson";
 import { clearImageUrlCache } from "./images";
 import {
@@ -165,7 +165,7 @@ function isGeneratedExamArray(value: unknown): value is GeneratedExam[] {
 function isReviewSessionArray(value: unknown): value is ReviewSession[] {
   return Array.isArray(value) && value.every((item) => isRecord(item)
     && typeof item.id === "string"
-    && ["today", "random", "difficult", "important"].includes(String(item.mode))
+    && ["today", "random", "difficult", "important", "selection"].includes(String(item.mode))
     && Array.isArray(item.itemRefs)
     && item.itemRefs.every((ref) => isRecord(ref)
       && (ref.kind === "entry" || ref.kind === "sheet-question")
@@ -399,44 +399,8 @@ export async function runNativeIntegrityCheck(): Promise<IntegrityReport | null>
   return invoke<IntegrityReport>("run_integrity_check");
 }
 
-const BROWSER_IMAGE_REFERENCE_KEYS = [
-  EXAM_SESSIONS_STORAGE_KEY,
-  GENERATED_EXAMS_STORAGE_KEY,
-  GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY,
-  IMPORT_WORKSPACE_DRAFT_STORAGE_KEY,
-  "wrong-answer-pending-deletions",
-] as const;
-
-function collectBrowserImageReferences(value: unknown, referenced: Set<string>): void {
-  if (typeof value === "string") {
-    if (/^[^/\\:]{1,255}\.(?:png|jpe?g|gif|webp)$/i.test(value) && !value.includes("..")) {
-      referenced.add(value);
-    }
-    return;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((item) => collectBrowserImageReferences(item, referenced));
-    return;
-  }
-  if (value && typeof value === "object") {
-    Object.values(value as Record<string, unknown>).forEach((item) => collectBrowserImageReferences(item, referenced));
-  }
-}
-
 function getBrowserProtectedImageReferences(entries: WrongAnswerEntry[]): Set<string> {
-  const referenced = new Set(entries.flatMap(getAllImageFilenames));
-  for (const key of BROWSER_IMAGE_REFERENCE_KEYS) {
-    const stored = localStorage.getItem(key);
-    if (!stored) continue;
-    let value: unknown;
-    try {
-      value = JSON.parse(stored);
-    } catch (cause) {
-      throw new Error(`저장된 이미지 참조(${key})를 읽지 못했습니다.`, { cause });
-    }
-    collectBrowserImageReferences(value, referenced);
-  }
-  return referenced;
+  return collectBrowserImageReferences(entries);
 }
 
 export async function previewOrphanImages(): Promise<OrphanImagePreview> {
@@ -483,3 +447,4 @@ export async function createPreUpdateBackup(fromVersion: string, toVersion: stri
   if (!isTauri()) return null;
   return invoke<string>("create_pre_update_backup", { fromVersion, toVersion });
 }
+

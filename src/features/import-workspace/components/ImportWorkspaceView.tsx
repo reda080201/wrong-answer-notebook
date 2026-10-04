@@ -53,6 +53,8 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   const [saveError, setSaveError] = useState<string | null>(null);
   const [draftSaveState, setDraftSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [draftSaveError, setDraftSaveError] = useState<string | null>(null);
+  const [committedAwaitingDraftCleanup, setCommittedAwaitingDraftCleanup] = useState(false);
+  const committedAwaitingDraftCleanupRef = useRef(false);
   const [maintenanceBlocked, setMaintenanceBlocked] = useState(false);
   const workspaceRef = useRef(workspace);
   const maintenanceBlockedRef = useRef(false);
@@ -88,7 +90,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setSaveError("백업 또는 복원 중에는 가져오기 작업실을 변경할 수 없습니다.");
     return true;
   };
-  useImportWorkspaceAutosave(workspace, !busy && !recoveryAvailable && !closePromptOpen && !maintenanceBlocked, {
+  const cancelAutosaveAndDrain = useImportWorkspaceAutosave(workspace, !busy && !recoveryAvailable && !closePromptOpen && !maintenanceBlocked, {
     onSaving: () => setDraftSaveState("saving"),
     onSaved: () => {
       setDraftSaveState("saved");
@@ -101,11 +103,11 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
   });
   useEffect(() => {
     registerDraftFlush({
-      flush: async () => { await persistDraft(workspaceRef.current); },
+      flush: async () => { await cancelAutosaveAndDrain(); await persistDraft(workspaceRef.current); },
       setMaintenanceBlocked: updateMaintenanceBlocked,
     });
     return () => registerDraftFlush(null);
-  }, [persistDraft, registerDraftFlush, updateMaintenanceBlocked]);
+  }, [cancelAutosaveAndDrain, persistDraft, registerDraftFlush, updateMaintenanceBlocked]);
   useEffect(() => {
     let active = true;
     void loadImportWorkspaceDraft().then((draft) => {
@@ -127,6 +129,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setCloseBusy(true);
     setCloseError(null);
     try {
+      await cancelAutosaveAndDrain();
       await persistDraft(workspaceRef.current);
       setClosePromptOpen(false);
       onClose();
@@ -142,6 +145,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     setCloseBusy(true);
     setCloseError(null);
     try {
+      await cancelAutosaveAndDrain();
       await discardWorkspaceAssets?.(workspace);
       await clearImportWorkspaceDraft();
       setClosePromptOpen(false);
@@ -190,6 +194,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     const recovered = await loadImportWorkspaceDraft();
     setRecoveryBusy(true);
     try {
+      await cancelAutosaveAndDrain();
       if (recovered) await discardWorkspaceAssets?.(recovered);
       await clearImportWorkspaceDraft();
       setRecoveryAvailable(false);
@@ -247,15 +252,36 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
 
   const save = async () => {
     if (rejectMaintenanceMutation()) return;
+    if (committedAwaitingDraftCleanupRef.current) {
+      setBusy(true);
+      setSaveError(null);
+      try {
+        await cancelAutosaveAndDrain();
+        await clearImportWorkspaceDraft();
+        committedAwaitingDraftCleanupRef.current = false;
+        setCommittedAwaitingDraftCleanup(false);
+        onClose();
+      } catch (error) {
+        setSaveError(`항목은 저장됐지만 초안을 정리하지 못했습니다. ${error instanceof Error ? error.message : "다시 시도해 주세요."}`);
+      } finally { setBusy(false); }
+      return;
+    }
     setBusy(true);
     setSaveError(null);
     try {
+      await cancelAutosaveAndDrain();
       const result = commitImportWorkspace(workspace);
       await onSave(result.entries, workspace.assetSession);
-      clearImportWorkspaceDraft();
+      committedAwaitingDraftCleanupRef.current = true;
+      setCommittedAwaitingDraftCleanup(true);
+      await clearImportWorkspaceDraft();
+      committedAwaitingDraftCleanupRef.current = false;
       onClose();
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "작업실을 저장하지 못했습니다. 다시 시도해 주세요.");
+      const message = error instanceof Error ? error.message : "작업실을 저장하지 못했습니다. 다시 시도해 주세요.";
+      setSaveError(committedAwaitingDraftCleanupRef.current
+        ? `항목은 저장됐지만 초안을 정리하지 못했습니다. ${message}`
+        : message);
     } finally { setBusy(false); }
   };
 
@@ -266,7 +292,7 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     <div className="import-workspace-grid"><aside className="import-workspace-sidebar"><h3>자료 및 회차</h3>{workspace.groups.map((group) => <button type="button" key={group.id} className={group.id === selectedGroupId ? "is-selected" : ""} onClick={() => { setSelectedGroupId(group.id); setSelectedQuestionId(group.questions[0]?.id ?? ""); }}>{group.title}<small>{group.questions.length}문항 · 신뢰도 {Math.round((group.confidence ?? 0) * 100)}%</small></button>)}{workspace.unassignedBlocks.length > 0 && <p className="form-error">미분류 블록 {workspace.unassignedBlocks.length}개</p>}</aside>
       <main className="import-workspace-list"><header><strong>{selectedGroup?.title ?? "문항"}</strong><div><button type="button" className={filter === "all" ? "is-selected" : ""} onClick={() => setFilter("all")}>전체</button><button type="button" className={filter === "review" ? "is-selected" : ""} onClick={() => setFilter("review")}>검토 필요</button></div></header>{visibleQuestions.map((question) => <article key={question.id} className={question.id === selectedQuestionId ? "is-selected" : ""} onClick={() => setSelectedQuestionId(question.id)}><div><strong>{question.displayQuestionNumber}번</strong><p>{questionText(question).slice(0, 150)}</p><small>{question.status === "ready" ? "준비됨" : question.warnings[0] ?? "검토 필요"}</small></div></article>)}</main>
       <aside className="import-workspace-editor"><h3>문항 편집</h3>{selectedQuestion ? <><label>현재 문항 번호<input disabled={maintenanceBlocked} value={selectedQuestion.displayQuestionNumber} onChange={(event) => updateQuestion({ displayQuestionNumber: event.target.value })} /></label><label>원본 문항 번호<input disabled={maintenanceBlocked} value={selectedQuestion.sourceQuestionNumber ?? ""} onChange={(event) => updateQuestion({ sourceQuestionNumber: event.target.value })} /></label>{hasAmbiguousLegacySourceText(selectedQuestion) && <p className="form-error" role="alert">기존 본문이 여러 text segment로 나뉘어 있어 자동 병합할 수 없습니다. 각 본문 segment를 확인한 뒤 저장하세요.</p>}<h4>문항 내용</h4>{selectedContentSegments.map((segment) => segment.type === "figure" || segment.type === "table" ? <div className="import-workspace-segment-anchor" key={segment.id} role="note"><strong>{segmentLabel(segment)}</strong><span>문항 내 배치를 유지합니다.</span>{segment.type === "table" && <pre>{segment.rows.map((row) => row.join(" | ")).join("\n")}</pre>}</div> : <label key={segment.id}>{segmentLabel(segment)}<textarea disabled={maintenanceBlocked} value={segmentValue(segment)} onChange={(event) => updateQuestionSegment(segment.id, event.target.value)} /></label>)}<h4>선택지</h4>{selectedQuestion.choices.map((choice, index) => <label key={choice.id}>{choice.marker || `선지 ${index + 1}`}<input disabled={maintenanceBlocked} value={choice.content} onChange={(event) => updateQuestion({ choices: selectedQuestion.choices.map((item) => item.id === choice.id ? { ...item, content: event.target.value } : item) })} /></label>)}<p className="import-workspace-note">그림 {selectedQuestion.figures.length}개 · 원본 페이지 {selectedQuestion.sourcePageAssets.length}개</p><div className="import-workspace-move"><label>회차 이동<select disabled={maintenanceBlocked} value={selectedGroupId} onChange={(event) => moveSelectedQuestion(event.target.value, 0)}>{workspace.groups.map((group) => <option key={group.id} value={group.id}>{group.title}</option>)}</select></label><button type="button" onClick={() => moveSelectedQuestion(selectedGroupId, selectedQuestionIndex - 1)} disabled={maintenanceBlocked || selectedQuestionIndex <= 0}>위로</button><button type="button" onClick={() => moveSelectedQuestion(selectedGroupId, selectedQuestionIndex + 1)} disabled={maintenanceBlocked || selectedQuestionIndex < 0 || selectedQuestionIndex >= questions.length - 1}>아래로</button></div></> : <p>문항을 선택하세요.</p>}</aside>
-    </div><footer className="import-workspace-footer"><span>{workspace.groups.reduce((sum, group) => sum + group.questions.length, 0)}문항 · 검토 권장 {warnings.filter((warning) => warning.severity === "warning").length}개</span><span role="status">{draftSaveState === "saving" ? "초안 저장 중…" : draftSaveState === "saved" ? "초안 저장됨" : draftSaveState === "error" ? "초안 저장 실패" : ""}</span><button type="button" className="btn-secondary" onClick={requestClose} disabled={busy || recoveryBusy || maintenanceBlocked}>닫기</button><button type="button" disabled={busy || recoveryBusy || maintenanceBlocked} onClick={() => void save()}>{busy ? "저장 중…" : "가져오기"}</button></footer>
+    </div><footer className="import-workspace-footer"><span>{workspace.groups.reduce((sum, group) => sum + group.questions.length, 0)}문항 · 검토 권장 {warnings.filter((warning) => warning.severity === "warning").length}개</span><span role="status">{draftSaveState === "saving" ? "초안 저장 중…" : draftSaveState === "saved" ? "초안 저장됨" : draftSaveState === "error" ? "초안 저장 실패" : ""}</span><button type="button" className="btn-secondary" onClick={requestClose} disabled={busy || recoveryBusy || maintenanceBlocked}>닫기</button><button type="button" disabled={busy || recoveryBusy || maintenanceBlocked} onClick={() => void save()}>{busy ? "저장 중…" : committedAwaitingDraftCleanup ? "초안 정리 재시도" : "가져오기"}</button></footer>
     {saveError && <p className="form-error" role="alert">{saveError}<button type="button" className="btn-secondary" onClick={() => void save()} disabled={busy}>다시 저장</button></p>}
     {draftSaveError && <p className="form-error" role="alert">{draftSaveError}<button type="button" className="btn-secondary" onClick={() => { try { persistDraft(workspaceRef.current); } catch { /* state is already updated */ } }} disabled={draftSaveState === "saving"}>초안 다시 저장</button></p>}
     <Dialog open={closePromptOpen} onClose={() => setClosePromptOpen(false)} title="가져오기 작업실을 닫을까요?" closeDisabled={closeBusy} busy={closeBusy}>
@@ -277,3 +303,4 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     </Dialog>
   </Dialog>;
 }
+

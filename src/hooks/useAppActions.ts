@@ -106,7 +106,10 @@ interface UseAppActionsOptions {
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<boolean>;
   refreshExamSessions?: () => Promise<boolean>;
+  refreshReviewSessions?: () => Promise<boolean>;
+  setReviewSessionsRestoreReloadBlocked?: (blocked: boolean) => void;
   discardActiveSessionAfterRestore?: () => void;
+  discardActiveReviewAfterRestore?: () => void;
   refreshGeneratedExams?: () => Promise<boolean>;
   refreshLibraryFolders?: () => Promise<boolean>;
   refreshGptSolutionDrafts?: () => Promise<boolean>;
@@ -141,7 +144,10 @@ export function useAppActions({
   patchSettings,
   refreshSettings,
   refreshExamSessions,
+  refreshReviewSessions,
+  setReviewSessionsRestoreReloadBlocked,
   discardActiveSessionAfterRestore,
+  discardActiveReviewAfterRestore,
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
@@ -172,6 +178,48 @@ export function useAppActions({
   const [integrityReport, setIntegrityReport] =
     useState<IntegrityReport | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [restoreReloadPending, setRestoreReloadPending] = useState(false);
+
+  const reloadRestoredData = async () => {
+    const safeReload = async (reload?: () => Promise<boolean>): Promise<boolean> => {
+      if (!reload) return true;
+      try {
+        return (await reload()) === true;
+      } catch {
+        return false;
+      }
+    };
+    const reloads = await Promise.all([
+      safeReload(refresh),
+      safeReload(refreshSettings),
+      safeReload(refreshExamSessions),
+      safeReload(refreshGeneratedExams),
+      safeReload(refreshLibraryFolders),
+      safeReload(refreshGptSolutionDrafts),
+      safeReload(refreshKnowledgeGraph ? async () => { await refreshKnowledgeGraph(); return true; } : undefined),
+      safeReload(refreshReviewSessions),
+    ]);
+    const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프", "복습 세션"];
+    const failed = reloads.map((success, index) => success !== true ? reloadNames[index] : null).filter((name): name is string => name !== null);
+    if (failed.length === 0) setReviewSessionsRestoreReloadBlocked?.(false);
+    return failed;
+  };
+
+  const retryRestoreReload = async () => {
+    if (maintenanceRef.current) return;
+    setSettingsMessage("복원한 데이터를 다시 불러오는 중입니다.");
+    try {
+      const failed = await reloadRestoredData();
+      if (failed.length) {
+        setSettingsMessage(`백업은 복원됐지만 ${failed.join(", ")}을(를) 다시 불러오지 못했습니다.`);
+        return;
+      }
+      setRestoreReloadPending(false);
+      setSettingsMessage("복원한 데이터를 다시 불러왔습니다.");
+    } catch (cause) {
+      setSettingsMessage(`복원한 데이터를 다시 불러오지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
+    }
+  };
 
   const importFallbackSubject: Subject =
     subjectFilter && SUBJECTS.includes(subjectFilter as Subject)
@@ -657,71 +705,66 @@ export function useAppActions({
   };
 
   const handleBackup = async () => {
-    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
-    const destination = await selectBackupDestination();
-    if (isTauri() && !destination) {
-      setSettingsMessage("백업이 취소되었습니다.");
-      return;
-    }
-    const operation = (async () => {
-      const writeBackup = () => createBackupAtDestination(destination, entries, settings);
-      const message = runMaintenanceOperation
-        ? await runMaintenanceOperation(writeBackup)
-        : await writeBackup();
-      setSettingsMessage(message);
-    })();
-    maintenanceRef.current = operation;
+    if (maintenanceRef.current) { setSettingsMessage("백업 또는 복원이 진행 중입니다."); return; }
+    maintenanceRef.current = Promise.resolve();
+    setSettingsMessage(null);
     try {
+      const destination = await selectBackupDestination();
+      if (isTauri() && !destination) { setSettingsMessage("백업이 취소되었습니다."); return; }
+      const operation = (async () => {
+        setSettingsMessage("백업을 만드는 중입니다.");
+        const writeBackup = () => createBackupAtDestination(destination, entries, settings);
+        const message = runMaintenanceOperation ? await runMaintenanceOperation(writeBackup) : await writeBackup();
+        if (isTauri()) await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
+        setSettingsMessage(message);
+      })();
+      maintenanceRef.current = operation;
       await operation;
+    } catch (cause) {
+      setSettingsMessage(`백업을 만들지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
     } finally {
       maintenanceRef.current = null;
-    }
-    if (isTauri()) {
-      await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
     }
   };
 
   const handleRestore = async () => {
-    if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
-    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
-    const source = await selectBackupSource();
-    if (!source) return;
-    const operation = (async () => {
-      const restore = async () => {
-        const payload = await restoreBackupFromSource(source);
-        let restoreResult = payload;
-        if (payload && "entries" in payload) {
-          restoreResult = await applyBrowserBackupAtomically(payload);
-        }
-        discardActiveSessionAfterRestore?.();
-        const reloads = await Promise.all([
-          refresh(),
-          refreshSettings(),
-          refreshExamSessions?.(),
-          refreshGeneratedExams?.(),
-          refreshLibraryFolders?.(),
-          refreshGptSolutionDrafts?.(),
-          refreshKnowledgeGraph ? refreshKnowledgeGraph().then(() => true) : Promise.resolve(true),
-        ]);
-        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프"];
-        const failedReloads = reloads
-          .map((success, index) => success !== true ? reloadNames[index] : null)
-          .filter((name): name is string => name !== null);
-        if (failedReloads.length) {
-          throw new Error(`백업은 복원됐지만 ${failedReloads.join(", ")}을(를) 다시 불러오지 못했습니다. 해당 데이터를 다시 불러온 뒤 계속해 주세요.`);
-        }
-        return restoreResult;
-      };
-      const payload = runMaintenanceOperation
-        ? await runMaintenanceOperation(restore)
-        : await restore();
-      setSettingsMessage(payload && "restored" in payload && payload.warnings.length
-        ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
-        : "백업 복원을 완료했습니다.");
-    })();
-    maintenanceRef.current = operation;
+    if (maintenanceRef.current) { setSettingsMessage("백업 또는 복원이 진행 중입니다."); return; }
+    maintenanceRef.current = Promise.resolve();
+    setSettingsMessage(null);
     try {
+      if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
+      const source = await selectBackupSource();
+      if (!source) { setSettingsMessage("백업 복원을 취소했습니다."); return; }
+      const operation = (async () => {
+        setSettingsMessage("백업을 복원하는 중입니다.");
+        const restore = async () => {
+          const payload = await restoreBackupFromSource(source);
+          const restoreResult = payload && "entries" in payload ? await applyBrowserBackupAtomically(payload) : payload;
+          setReviewSessionsRestoreReloadBlocked?.(true);
+          discardActiveSessionAfterRestore?.();
+          discardActiveReviewAfterRestore?.();
+          setReviewMode(null);
+          setReviewSeed([]);
+          setRestoreReloadPending(true);
+          const failedReloads = await reloadRestoredData();
+          if (failedReloads.length) {
+            setSettingsMessage(`백업은 복원됐지만 ${failedReloads.join(", ")}을(를) 다시 불러오지 못했습니다.`);
+            return { restoreResult, failedReloads };
+          }
+          setRestoreReloadPending(false);
+          return { restoreResult, failedReloads };
+        };
+        const result = runMaintenanceOperation ? await runMaintenanceOperation(restore) : await restore();
+        if ("failedReloads" in result && result.failedReloads.length) return;
+        const payload = "restoreResult" in result ? result.restoreResult : result;
+        setSettingsMessage(payload && "restored" in payload && payload.warnings.length
+          ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
+          : "백업 복원을 완료했습니다.");
+      })();
+      maintenanceRef.current = operation;
       await operation;
+    } catch (cause) {
+      setSettingsMessage(`백업을 복원하지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
     } finally {
       maintenanceRef.current = null;
     }
@@ -986,6 +1029,8 @@ export function useAppActions({
     integrityReport,
     settingsMessage,
     setSettingsMessage,
+    restoreReloadPending,
+    retryRestoreReload,
     importFallbackSubject,
     quickConceptSubject,
     handleSave,
@@ -1034,3 +1079,4 @@ export function useAppActions({
     closeImportModal,
   };
 }
+

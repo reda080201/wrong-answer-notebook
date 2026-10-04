@@ -6,6 +6,7 @@ import { mapEntryImportImageReferences, normalizeImportImageKey } from "../../ut
 import { errorMessage } from "./shared";
 import { getStorageBackendKind, proxyRequest } from "../storageBackend";
 import { deleteBrowserImage, getBrowserImage, putBrowserImage } from "./browserImageStore";
+import { getBrowserProtectedImageReferences, loadBrowserEntriesForImageReferences } from "./browserImageReferences";
 
 export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
@@ -216,24 +217,29 @@ export function clearImageUrlCache(filename?: string): void {
   }
 }
 
-export async function deleteImage(filename: string): Promise<void> {
+export async function deleteImage(filename: string, options: { excludePendingDeletionIds?: readonly string[] } = {}): Promise<void> {
   try {
-    clearImageUrlCache(filename);
     if (getStorageBackendKind() === "isolated-browser") {
+      const references = getBrowserProtectedImageReferences(loadBrowserEntriesForImageReferences(), options);
+      if (references.has(filename)) return;
       await deleteBrowserImage(filename);
+      clearImageUrlCache(filename);
       return;
     }
     if (getStorageBackendKind() === "desktop-proxy") {
       await proxyRequest(`/v1/images/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      clearImageUrlCache(filename);
       return;
     }
     if (!isTauri()) {
       return;
     }
     await invoke("delete_image", { filename });
+    clearImageUrlCache(filename);
   } catch (error) {
     throw new Error(errorMessage(error, "이미지를 삭제하지 못했습니다."), {
       cause: error,
     });
   }
 }
+

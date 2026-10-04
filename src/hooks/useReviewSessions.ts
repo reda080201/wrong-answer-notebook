@@ -14,6 +14,7 @@ export function useReviewSessions() {
   const queueRef = useRef(Promise.resolve());
   const loadedRef = useRef(false);
   const maintenanceBlockedRef = useRef(false);
+  const restoreReloadBlockedRef = useRef(false);
   const writeErrorRef = useRef<string | null>(null);
 
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
@@ -51,6 +52,7 @@ export function useReviewSessions() {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const save = useCallback(async (session: ReviewSession) => {
+    if (restoreReloadBlockedRef.current) throw new Error("복원한 데이터를 다시 불러온 뒤 복습을 저장할 수 있습니다.");
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
     if (!loadedRef.current) throw new Error(error ?? "복습 세션을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
     const writer = getStorageBackend().saveReviewSessions;
@@ -76,6 +78,7 @@ export function useReviewSessions() {
   }, [error]);
 
   const remove = useCallback(async (id: string) => {
+    if (restoreReloadBlockedRef.current) throw new Error("복원한 데이터를 다시 불러온 뒤 복습 세션을 삭제할 수 있습니다.");
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
     if (!loadedRef.current) throw new Error(error ?? "복습 세션을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
     const writer = getStorageBackend().saveReviewSessions;
@@ -107,5 +110,9 @@ export function useReviewSessions() {
   const setMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
   }, []);
-  return { sessions, ready, loadStatus, error, refresh, save, remove, flush, setMaintenanceBlocked };
+  const setRestoreReloadBlocked = useCallback((blocked: boolean) => {
+    restoreReloadBlockedRef.current = blocked;
+  }, []);
+  return { sessions, ready, loadStatus, error, refresh, save, remove, flush, setMaintenanceBlocked, setRestoreReloadBlocked };
 }
+
