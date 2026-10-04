@@ -494,4 +494,3 @@ function McpBridgeSettingsPanel({
     </div>
   );
 }
-

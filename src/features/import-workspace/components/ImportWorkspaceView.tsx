@@ -303,4 +303,3 @@ export default function ImportWorkspaceView({ initialWorkspace, onSave, onClose,
     </Dialog>
   </Dialog>;
 }
-

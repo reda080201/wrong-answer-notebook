@@ -447,4 +447,3 @@ export async function createPreUpdateBackup(fromVersion: string, toVersion: stri
   if (!isTauri()) return null;
   return invoke<string>("create_pre_update_backup", { fromVersion, toVersion });
 }
-

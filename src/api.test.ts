@@ -494,4 +494,3 @@ describe("exam session persistence", () => {
     expect(mockedInvoke).toHaveBeenCalledTimes(2);
   });
 });
-

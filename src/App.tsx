@@ -1187,4 +1187,3 @@ export default function App() {
     </NotificationProvider>
   );
 }
-

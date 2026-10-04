@@ -242,4 +242,3 @@ export async function deleteImage(filename: string, options: { excludePendingDel
     });
   }
 }
-

@@ -160,4 +160,3 @@ describe("pending deletion asset protection", () => {
     expect(result.current.pending).toEqual([]);
   });
 });
-

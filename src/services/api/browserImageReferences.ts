@@ -51,4 +51,3 @@ export function loadBrowserEntriesForImageReferences(): WrongAnswerEntry[] {
   const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
   return stored === null ? [] : parseStoredEntries(stored);
 }
-
