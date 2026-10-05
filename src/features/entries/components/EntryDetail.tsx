@@ -1,3 +1,4 @@
+import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
@@ -69,6 +70,7 @@ import EntryDetailViewHelpDialog from "./EntryDetailViewHelpDialog";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
+  onSaveSolutionHotspots?: (hotspots: NonNullable<WrongAnswerEntry["questionSolutionHotspots"]>) => Promise<void>;
   onEdit: () => void;
   onDelete: () => void;
   onToggleMastered: () => Promise<void>;
@@ -202,6 +204,7 @@ function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
 
 export default function EntryDetail({
   entry,
+  onSaveSolutionHotspots,
   onEdit,
   onDelete,
   onToggleMastered,
@@ -268,6 +271,8 @@ export default function EntryDetail({
   const [problemSheetDisplayMode, setProblemSheetDisplayMode] = useState<ProblemSheetDisplayMode>(
     viewPreferences?.problemSheetDisplayMode ?? "questions",
   );
+  const [originalStudyChoice, setOriginalStudyChoice] = useState<{ entryId: string; original: boolean } | null>(null);
+  const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
@@ -1713,7 +1718,8 @@ export default function EntryDetail({
               />
             ) : (
               <>
-                <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
+                {Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
+                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
                     memoMode={memoMode}
@@ -1744,7 +1750,7 @@ export default function EntryDetail({
                       if (index >= 0) setFocusedQuestionIndex(index);
                     }}
                   />
-                </StudyZoomViewport>
+                </StudyZoomViewport>}
                 <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
                     entry={entry}

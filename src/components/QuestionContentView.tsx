@@ -9,6 +9,7 @@ interface QuestionContentViewProps {
   text: string;
   segments?: QuestionContentSegment[];
   figures?: SheetFigureItem[];
+  appendUnreferencedFigures?: boolean;
 }
 
 function FigureContent({ figure }: { figure: SheetFigureItem }) {
@@ -21,7 +22,7 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
   return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption><ZoomableImageViewer filenames={[representation.image]} /></figure>;
 }
 
-export default function QuestionContentView({ text, segments, figures = [] }: QuestionContentViewProps) {
+export default function QuestionContentView({ text, segments, figures = [], appendUnreferencedFigures = true }: QuestionContentViewProps) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
   const rendered = segments?.length ? segments : [{ id: "fallback", type: "text" as const, text }];
   const referenced = new Set<string>(rendered.flatMap((segment) => {
@@ -45,6 +46,6 @@ export default function QuestionContentView({ text, segments, figures = [] }: Qu
       if (segment.type === "table") return <div key={segment.id} className="question-table-wrap"><table><tbody>{segment.rows.map((row, rowIndex) => <tr key={rowIndex}>{row.map((cell, cellIndex) => <td key={cellIndex}><MathText text={cell} /></td>)}</tr>)}</tbody></table></div>;
       return <p key={segment.id}><InlineQuestionText text={segment.text} figures={figures} /></p>;
     })}
-    {figures.filter((figure) => !referenced.has(figure.id)).map((figure) => <FigureContent key={figure.id} figure={figure} />)}
+    {appendUnreferencedFigures && figures.filter((figure) => !referenced.has(figure.id)).map((figure) => <FigureContent key={figure.id} figure={figure} />)}
   </div>;
 }

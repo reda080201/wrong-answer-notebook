@@ -76,8 +76,8 @@ interface UseAppActionsOptions {
   activeSection: EntryKind;
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
-  addEntries: (forms: EntryFormData[]) => Promise<string[]>;
-  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[]) => Promise<string[]>;
+  addEntries: (forms: EntryFormData[], plannedIds?: string[]) => Promise<string[]>;
+  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[], plannedIds?: string[]) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -113,7 +113,8 @@ interface UseAppActionsOptions {
   refreshGeneratedExams?: () => Promise<boolean>;
   refreshLibraryFolders?: () => Promise<boolean>;
   refreshGptSolutionDrafts?: () => Promise<boolean>;
-  refreshKnowledgeGraph?: () => Promise<void>;
+  refreshKnowledgeGraph?: () => Promise<boolean | void>;
+  setKnowledgeGraphRestoreReloadBlocked?: (blocked: boolean) => void;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -152,6 +153,7 @@ export function useAppActions({
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
   refreshKnowledgeGraph,
+  setKnowledgeGraphRestoreReloadBlocked,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -196,28 +198,39 @@ export function useAppActions({
       safeReload(refreshGeneratedExams),
       safeReload(refreshLibraryFolders),
       safeReload(refreshGptSolutionDrafts),
-      safeReload(refreshKnowledgeGraph ? async () => { await refreshKnowledgeGraph(); return true; } : undefined),
+      safeReload(refreshKnowledgeGraph ? async () => (await refreshKnowledgeGraph()) === true : undefined),
       safeReload(refreshReviewSessions),
     ]);
     const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프", "복습 세션"];
     const failed = reloads.map((success, index) => success !== true ? reloadNames[index] : null).filter((name): name is string => name !== null);
-    if (failed.length === 0) setReviewSessionsRestoreReloadBlocked?.(false);
+    if (failed.length === 0) {
+      setReviewSessionsRestoreReloadBlocked?.(false);
+      setKnowledgeGraphRestoreReloadBlocked?.(false);
+    }
     return failed;
   };
 
   const retryRestoreReload = async () => {
     if (maintenanceRef.current) return;
+    maintenanceRef.current = Promise.resolve();
     setSettingsMessage("복원한 데이터를 다시 불러오는 중입니다.");
     try {
-      const failed = await reloadRestoredData();
-      if (failed.length) {
-        setSettingsMessage(`백업은 복원됐지만 ${failed.join(", ")}을(를) 다시 불러오지 못했습니다.`);
-        return;
-      }
-      setRestoreReloadPending(false);
-      setSettingsMessage("복원한 데이터를 다시 불러왔습니다.");
+      const reload = async () => {
+        const failed = await reloadRestoredData();
+        if (failed.length) {
+          setSettingsMessage(`백업은 복원됐지만 ${failed.join(", ")}을(를) 다시 불러오지 못했습니다.`);
+          return;
+        }
+        setRestoreReloadPending(false);
+        setSettingsMessage("복원한 데이터를 다시 불러왔습니다.");
+      };
+      const operation = runMaintenanceOperation ? runMaintenanceOperation(reload) : reload();
+      maintenanceRef.current = operation;
+      await operation;
     } catch (cause) {
       setSettingsMessage(`복원한 데이터를 다시 불러오지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
+    } finally {
+      maintenanceRef.current = null;
     }
   };
 
@@ -566,8 +579,9 @@ export function useAppActions({
     importedEntries: Partial<EntryFormData>[],
     assetFiles: File[] = [],
     assetSession?: ImportAssetSessionManifest,
+    plannedIds?: string[],
   ) => {
-    if (!importedEntries.length) return;
+    if (!importedEntries.length) return [];
     let sourceToSaved: Record<string, string> = {};
     let savedFilenames: string[] = [];
     if (assetSession?.mode === "tauri-staged") {
@@ -611,6 +625,7 @@ export function useAppActions({
         questionImages: imported.questionImages ?? [],
         sourcePageImages: imported.sourcePageImages ?? [],
         questionSourceCrops: imported.questionSourceCrops,
+        questionSolutionHotspots: imported.questionSolutionHotspots,
         entryKind,
         difficult: imported.difficult ?? false,
         difficulty: imported.difficulty ?? "none",
@@ -640,14 +655,15 @@ export function useAppActions({
       };
       });
       const ids = assetSession?.mode === "tauri-staged"
-        ? await addEntriesWithImportAssetSession(assetSession.id, forms)
-        : await addEntries(forms);
+        ? await addEntriesWithImportAssetSession(assetSession.id, forms, plannedIds)
+        : await addEntries(forms, plannedIds);
       setShowImportModal(false);
       setSolutionSourceEntry(undefined);
       setImportMode("import");
       setPendingImportFiles([]);
       setActiveSection(forms[0].entryKind);
       setSelectedId(ids[0] ?? null);
+      return ids;
     } catch (error) {
       if (assetSession?.mode !== "tauri-staged") {
         await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
@@ -738,6 +754,7 @@ export function useAppActions({
       const operation = (async () => {
         setSettingsMessage("백업을 복원하는 중입니다.");
         const restore = async () => {
+          setKnowledgeGraphRestoreReloadBlocked?.(true);
           const payload = await restoreBackupFromSource(source);
           const restoreResult = payload && "entries" in payload ? await applyBrowserBackupAtomically(payload) : payload;
           setReviewSessionsRestoreReloadBlocked?.(true);
@@ -764,6 +781,7 @@ export function useAppActions({
       maintenanceRef.current = operation;
       await operation;
     } catch (cause) {
+      setRestoreReloadPending(true);
       setSettingsMessage(`백업을 복원하지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
     } finally {
       maintenanceRef.current = null;

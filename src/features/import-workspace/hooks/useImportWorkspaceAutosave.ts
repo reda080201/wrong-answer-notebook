@@ -18,6 +18,13 @@ export async function loadImportWorkspaceDraft(): Promise<ImportWorkspace | null
     await flushImportWorkspaceDraftWrites();
     const draft = await getStorageBackend().loadImportWorkspaceDraft();
     if (!draft) return null;
+    if (draft.commitAttempt) {
+      const receipt = draft.commitAttempt;
+      if (!Array.isArray(receipt.entryIds) || !Array.isArray(receipt.groupIds) || !receipt.entryIds.length
+        || receipt.entryIds.length !== receipt.groupIds.length || !receipt.entryIds.every(id => typeof id === "string" && id.length > 0)
+        || new Set(receipt.entryIds).size !== receipt.entryIds.length || !receipt.groupIds.every(id => typeof id === "string" && id.length > 0)
+        || (receipt.state !== "pending" && receipt.state !== "completed")) throw new Error("가져오기 확정 기록이 손상되어 초안 복구를 중단했습니다. 항목 목록과 백업을 확인해 주세요.");
+    }
     return {
       ...draft,
       groups: (draft.groups ?? []).map((group) => ({

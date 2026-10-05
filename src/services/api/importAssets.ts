@@ -154,3 +154,15 @@ function bytesToBase64(bytes: Uint8Array): string {
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
+
+/** Internal review preview; never promotes staged files. */
+export async function getImportAssetPreviewUrl(session: ImportAssetSessionManifest, filename: string): Promise<string> {
+  const normalized = normalizeImportImageKey(filename);
+  const stagedFilename = session.assets.find(asset => normalizeImportImageKey(asset.sourceName) === normalized || asset.stagedFilename === filename)?.stagedFilename;
+  if (!stagedFilename || session.mode !== "tauri-staged") throw new Error("이 페이지의 임시 이미지 연결을 확인할 수 없습니다.");
+  const base64 = getStorageBackendKind() === "desktop-proxy"
+    ? (await proxyRequest<{ bytesBase64: string }>(`/v1/import-sessions/${encodeURIComponent(session.id)}/assets/${encodeURIComponent(stagedFilename)}`)).bytesBase64
+    : await invoke<string>("read_import_asset_preview", { sessionId: session.id, filename: stagedFilename });
+  const mime = /\.png$/i.test(stagedFilename) ? "image/png" : /\.webp$/i.test(stagedFilename) ? "image/webp" : "image/jpeg";
+  return `data:${mime};base64,${base64}`;
+}

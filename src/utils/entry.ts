@@ -1,3 +1,4 @@
+import { validSolutionHotspot } from "../features/solutions/hotspotValidation";
 import { v4 as uuidv4 } from "uuid";
 import type {
   ChecklistItem,
@@ -415,6 +416,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       answer: `${item.answer ?? ""}`.trim(),
       explanation: `${item.explanation ?? ""}`.trim(),
       strategy: `${item.strategy ?? ""}`.trim(),
+      intent: `${item.intent ?? ""}`.trim(),
       steps: normalizeImportantPoints(item.steps),
       choiceJudgements: normalizeChoiceJudgements(item.choiceJudgements),
       wrongPoint: `${item.wrongPoint ?? ""}`.trim(),
@@ -438,6 +440,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
         item.questionNumber ||
         item.answer ||
         item.explanation ||
+        item.intent ||
         item.strategy ||
         item.steps.length ||
         item.choiceJudgements.length ||
@@ -1014,6 +1017,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
       ? rest.sourcePageImages.filter((image): image is string => typeof image === "string" && image.trim().length > 0).map((image) => image.trim())
       : [],
     questionSourceCrops: normalizeQuestionSourceCrops(rest.questionSourceCrops),
+    questionSolutionHotspots: Array.isArray(rest.questionSolutionHotspots) ? rest.questionSolutionHotspots.filter(validSolutionHotspot) : undefined,
     questionRenderVerification: normalizeQuestionRenderVerification(rest.questionRenderVerification),
     problemSource: normalizeProblemSource(rest.problemSource),
     resourceClassification: normalizeLearningResourceClassification(rest.resourceClassification),
@@ -1065,6 +1069,7 @@ export function getAllImageFilenames(entry: WrongAnswerEntry): string[] {
   const fromSupplementalResources = (entry.supplementalResources ?? []).flatMap((resource) => resource.images ?? []);
   const fromFigures = (entry.figures ?? []).flatMap((figure) => [figure.image, figure.original?.image, figure.original?.sourcePageImage, figure.cleaned?.image].filter((image): image is string => Boolean(image)));
   const fromQuestionVisuals = [
+    ...(entry.questionSolutionHotspots ?? []).map(hotspot => hotspot.sourcePageImage),
     ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]).filter((image): image is string => Boolean(image)),
     ...(entry.questionRenderVerification ?? []).map((record) => record.renderedImage).filter((image): image is string => Boolean(image)),
   ];

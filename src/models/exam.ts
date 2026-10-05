@@ -1,4 +1,4 @@
-import type { QuestionContentSegment, SheetFigureItem, StructuredQuestion } from "./entry";
+import type { QuestionContentSegment, QuestionSolutionHotspot, SheetAnswerItem, SheetFigureItem, StructuredQuestion } from "./entry";
 import type { WrongAnswerEntry } from "./entry";
 
 export type ExamSessionStatus = "in_progress" | "submitted";
@@ -6,6 +6,9 @@ export type ExamSessionStatus = "in_progress" | "submitted";
 export type ExamMode = "practice" | "real";
 
 export interface ExamQuestionSnapshot {
+  questionSolutionHotspots?: QuestionSolutionHotspot[];
+  solutionAnswer?: SheetAnswerItem;
+  solutionFigures?: SheetFigureItem[];
   id: string;
   questionNumber: string;
   passage?: string;

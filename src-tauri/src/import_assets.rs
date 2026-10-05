@@ -3,6 +3,7 @@ use crate::{
     app_dir, images_dir, save_import_image_bytes_to_dir, validate_image_filename, WrongAnswerEntry,
 };
 use serde::{Deserialize, Serialize};
+use base64::{engine::general_purpose::STANDARD, Engine};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
@@ -296,4 +297,14 @@ pub(crate) fn discard_import_asset_session(
         fs::remove_dir_all(root).map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn read_import_asset_preview(app: tauri::AppHandle, session_id: String, filename: String) -> Result<String, String> {
+    validate_image_filename(&filename)?;
+    let path = import_asset_session_root(&app, &session_id)?.join("assets").join(&filename);
+    let size = fs::metadata(&path).map_err(|error| error.to_string())?.len();
+    if size > 32 * 1024 * 1024 { return Err("미리보기 이미지가 너무 큽니다.".into()); }
+    let bytes = fs::read(path).map_err(|error| error.to_string())?;
+    Ok(STANDARD.encode(bytes))
 }

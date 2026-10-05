@@ -7,6 +7,9 @@ export function renameQuestionNumber(group: ImportDraftGroup, questionId: string
   const normalized = normalizeQuestionNumber(newNumber);
   if (!normalized) return group;
   const oldNumbers = new Set([question.displayQuestionNumber, question.sourceQuestionNumber ?? ""].map(normalizeQuestionNumber));
+  const oldKey = JSON.stringify([normalizeQuestionNumber(question.displayQuestionNumber), question.section ?? ""]);
+  const newKey = JSON.stringify([normalized, question.section ?? ""]);
+  const unique = group.questions.filter(item => JSON.stringify([normalizeQuestionNumber(item.displayQuestionNumber), item.section ?? ""]) === oldKey).length === 1;
   const renamedQuestion = {
     ...question,
     displayQuestionNumber: newNumber,
@@ -19,6 +22,8 @@ export function renameQuestionNumber(group: ImportDraftGroup, questionId: string
   };
   return {
     ...group,
+    entryMetadata: group.entryMetadata && { ...group.entryMetadata, questionSolutionHotspots: group.entryMetadata.questionSolutionHotspots?.filter(hotspot => unique || hotspot.questionKey !== oldKey).map(hotspot => hotspot.questionKey === oldKey ? { ...hotspot, questionKey: newKey } : hotspot) },
+    solutionHotspotCandidates: group.solutionHotspotCandidates?.map(candidate => candidate.questionKey === oldKey ? { ...candidate, questionKey: unique ? newKey : "", confirmed: false } : candidate),
     questions: group.questions.map((item) => item.id === questionId ? renamedQuestion : item),
     answerItems: group.answerItems.map((answer) => oldNumbers.has(normalizeQuestionNumber(answer.questionNumber ?? "")) ? { ...answer, questionNumber: newNumber } : answer),
   };

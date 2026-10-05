@@ -6,7 +6,7 @@ export function createSessionFromGeneratedExam(exam: GeneratedExam, now = new Da
   const mode = options.mode === "real" ? "real" : "practice";
   const timeLimitMinutes = mode === "real" ? options.timeLimitMinutes ?? exam.timeLimitMinutes : undefined;
   const startedAt = now.toISOString();
-  const questions = exam.questions.map((question) => { const source = question.source ?? migrateQuestionSource(question, []).source; return { ...structuredClone(question.snapshot), questionNumber: String(question.position), generatedExamId: exam.id, sourceEntryId: source.sourceEntryId, sourceQuestionNumber: source.sourceQuestionNumber, generatedQuestionPosition: question.position }; });
+  const questions = exam.questions.map((question) => { const source = question.source ?? migrateQuestionSource(question, []).source; const id = `${exam.id}-${question.position}`; return { ...structuredClone(question.snapshot), id, questionSolutionHotspots: question.snapshot.questionSolutionHotspots?.map(hotspot => ({ ...hotspot, id: `${id}-${hotspot.id}`, questionKey: id })), questionNumber: String(question.position), generatedExamId: exam.id, sourceEntryId: source.sourceEntryId, sourceQuestionNumber: source.sourceQuestionNumber, generatedQuestionPosition: question.position }; });
   const sourcePageImages = [...new Set(questions.flatMap((question) => question.sourcePageImages ?? []))];
   const explicitPages = new Map<string, string[]>();
   for (const question of questions) {
@@ -15,6 +15,7 @@ export function createSessionFromGeneratedExam(exam: GeneratedExam, now = new Da
       : undefined;
     const linkedPages = [
       sourcePage,
+      ...(question.questionSolutionHotspots ?? []).map(hotspot => hotspot.sourcePageImage),
       ...(question.figures ?? []).map((figure) => figure.original?.sourcePageImage),
     ];
     for (const filename of linkedPages) {

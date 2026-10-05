@@ -1,3 +1,5 @@
+import QuestionSolutionSheet from "../../solutions/QuestionSolutionSheet";
+import { snapshotSolutionQuestions } from "../../solutions/solutionModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExamPreferences, ExamSession } from "../../../types";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
@@ -20,6 +22,7 @@ interface Props {
   preferences?: ExamPreferences;
   disabled: boolean;
   practice?: boolean;
+  hideAnswers?: boolean;
   onNavigate(index: number): void;
   onResponse(number: string, patch: PaperResponsePatch): void;
   onSessionChange?(recipe: (session: ExamSession) => ExamSession): void;
@@ -27,9 +30,15 @@ interface Props {
 
 const EMPTY_SOURCE_PAGE_SELECTION: string[] = [];
 
-export default function ExamSessionPaper({ session, preferences, disabled, practice = false, onNavigate, onResponse, onSessionChange }: Props) {
+export default function ExamSessionPaper({ session, preferences, disabled, practice = false, hideAnswers = false, onNavigate, onResponse, onSessionChange }: Props) {
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
+  const [solutionKey, setSolutionKey] = useState<string | null>(null);
+  const [revealedSolutions, setRevealedSolutions] = useState<Set<string>>(() => new Set());
+  const solutionPageNavigationRef = useRef<string | null>(null);
+  const [solutionNotice, setSolutionNotice] = useState("");
+  const solutionAllowed = session.mode !== "real" || session.status === "submitted";
+  const solutionQuestions = useMemo(() => solutionAllowed ? snapshotSolutionQuestions(session.questions) : [], [solutionAllowed, session.questions]);
   const [textView, setTextView] = useState(() => session.mode === "real"
     && (session.selectedSourcePageImages === undefined
       || !Object.values(session.sourcePageQuestionMap ?? {}).some((numbers) => numbers.length > 0)));
@@ -51,6 +60,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   useEffect(() => {
     if (previousQuestionNumber.current === currentQuestion?.questionNumber) return;
     previousQuestionNumber.current = currentQuestion?.questionNumber;
+    if (solutionPageNavigationRef.current === currentQuestion?.questionNumber) { solutionPageNavigationRef.current = null; return; }
     if (!sourcePageImages.length || !mappedCurrentPage || !selectedPages.includes(mappedCurrentPage) || session.currentSourcePageImage === mappedCurrentPage) return;
     const frame = requestAnimationFrame(() => onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: mappedCurrentPage })));
     return () => cancelAnimationFrame(frame);
@@ -81,7 +91,23 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   }, [disabled, focusPresentation, onResponse, practice, preferences?.showScratchNote, session.questions, session.responses]);
 
   const originalPageMode = Boolean(sourcePageImages.length && preferences?.showOriginalPages !== false && !textView);
+  const navigateSolution = (key: string) => {
+    if (!solutionAllowed) return;
+    const index = session.questions.findIndex(question => question.id === key);
+    if (index < 0) return;
+    setSolutionKey(key);
+    solutionPageNavigationRef.current = session.questions[index].questionNumber;
+    onNavigate(index);
+    const page = session.questions[index].questionSolutionHotspots?.find(hotspot => selectedPages.includes(hotspot.sourcePageImage))?.sourcePageImage;
+    if (page) {
+      onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: page }));
+      setSolutionNotice("");
+    } else setSolutionNotice(sourcePageImages.length ? "이 문항의 선택된 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다." : "");
+  };
   const originalReader = <OriginalPageExamReader
+    hotspots={solutionAllowed ? session.questions.flatMap(question => question.questionSolutionHotspots ?? []) : []}
+    questionLabels={Object.fromEntries(solutionQuestions.map(question => [question.key, question.number]))}
+    onOpenSolution={solutionAllowed ? navigateSolution : undefined}
     filenames={sourcePageImages}
     selectedFilenames={selectedPages}
     currentFilename={session.currentSourcePageImage ?? mappedCurrentPage}
@@ -93,7 +119,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       const questionIndex = session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber)) >= 0
         ? session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber))
         : session.questions.findIndex(question => question.source?.page === pageNumber);
-      if (questionIndex >= 0 && questionIndex !== session.currentQuestionIndex) onNavigate(questionIndex);
+      if (!linkedNumbers.includes(currentQuestion?.questionNumber ?? "") && questionIndex >= 0 && questionIndex !== session.currentQuestionIndex) onNavigate(questionIndex);
     }}
   />;
 
@@ -123,6 +149,8 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       const index = session.questions.findIndex(question => question.questionNumber === number);
       if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
     }} />}
+    {solutionAllowed && currentQuestion && <button type="button" className="btn-secondary" onClick={() => navigateSolution(currentQuestion.id)}>현재 문항 정답·해설</button>}
     </div>
+    {solutionAllowed && solutionKey && <QuestionSolutionSheet hidden={hideAnswers && !revealedSolutions.has(solutionKey)} onReveal={() => setRevealedSolutions(current => new Set(current).add(solutionKey))} questions={solutionQuestions} questionKey={solutionKey} onNavigate={navigateSolution} onClose={() => setSolutionKey(null)} pageNotice={solutionNotice} />}
   </StudyZoomViewport>;
 }

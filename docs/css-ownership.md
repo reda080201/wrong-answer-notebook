@@ -12,6 +12,7 @@ the compatibility source for selectors that have not yet been migrated.
 | Lecture | `src/styles/legacy/07-app-styles.css`, `src/styles/lecture.css` | Lecture reader structure and document/card presentation foundations. |
 | Sidebar | `src/styles/ui-foundation.css` | App shell, sidebar sizing, sidebar scroll region, entry list, and list density. |
 | Problem Sheet/Search | `src/components/StudyPaperView.css`, `src/styles/problem-sheet.css` | Structured question rendering and toolbar search behavior. Legacy problem-sheet selectors remain compatibility-only until their JSX consumers move. |
+| Original-page solutions | `src/features/solutions/solutions.css` | Confirmed hotspot overlays, solution sheet, and connection editor. |
 | Dialog | `src/shared/ui/Dialog.tsx`, `src/styles/dialog-shell.css`, `src/styles/dialog-foundation.css` | Dialog shell geometry, shared dialog scroll ownership, import dialog layout, and dialog typography. |
 
 ## Foundation Rules

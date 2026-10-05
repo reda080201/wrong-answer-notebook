@@ -1,3 +1,5 @@
+import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { v4 as uuidv4 } from "uuid";
 import type { ExamBlueprint, ExamGenerationReport, ExamQuestionSnapshot, GeneratedExam, GeneratedExamPreset, GeneratedExamQuestion, QuestionMeta, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -78,7 +80,12 @@ export function questionQualityScore(entry: WrongAnswerEntry, number: string, me
 
 function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string): ExamQuestionSnapshot {
   const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
+  const matched = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+  const hotspots = matched.length === 1 ? confirmedQuestionHotspots(entry, matched[0]) : [];
   return {
+    questionSolutionHotspots: hotspots.map(hotspot => ({ ...hotspot, questionKey: `${entry.id}-${number}` })),
+    solutionAnswer: answer ? structuredClone(answer) : undefined,
+    solutionFigures: solutionFigures(answer, entry.figures ?? []),
     id: `${entry.id}-${number}`,
     questionNumber: String(block.numberLabel ?? block.displayNumber),
     question: block.body,

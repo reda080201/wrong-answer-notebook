@@ -1056,6 +1056,9 @@ fn active_exam_question_payload(
         object.remove("correctAnswer");
         object.remove("explanation");
         object.remove("answerKey");
+        object.remove("solutionAnswer");
+        object.remove("solutionFigures");
+        object.remove("questionSolutionHotspots");
     }
     let response = session
         .get("responses")

@@ -24,6 +24,8 @@ export function useKnowledgeGraph() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadStatus, setLoadStatus] = useState<KnowledgeGraphLoadStatus>("loading");
+  const restoreReloadBlockedRef = useRef(false);
+  const [restoreReloadBlocked, setRestoreReloadBlockedState] = useState(false);
   const [maintenanceBlocked, setMaintenanceBlockedState] = useState(false);
   const graphRef = useRef(graph);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
@@ -38,14 +40,14 @@ export function useKnowledgeGraph() {
     return result;
   }, []);
 
-  const refresh = useCallback(async () => {
+  const reload = useCallback(async (): Promise<boolean> => {
     const loader = getStorageBackend().loadKnowledgeGraph;
     const generation = ++refreshGenerationRef.current;
     try {
       await enqueue(async () => {
         if (mountedRef.current && generation === refreshGenerationRef.current) setLoadStatus("loading");
         const next = loader ? normalizeKnowledgeGraph(await loader()) : { entities: [], relations: [], questionLinks: [] };
-        if (!mountedRef.current) return;
+        if (!mountedRef.current || generation !== refreshGenerationRef.current) return;
         graphRef.current = next;
         setGraph(next);
         loadSucceededRef.current = true;
@@ -55,27 +57,43 @@ export function useKnowledgeGraph() {
           setLoadStatus("ready");
         }
       });
+      return mountedRef.current && generation === refreshGenerationRef.current && loadSucceededRef.current;
     } catch (cause) {
       if (mountedRef.current && generation === refreshGenerationRef.current) {
         setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
         setLoadStatus("error");
-        if (!loadSucceededRef.current) setReady(false);
+        loadSucceededRef.current = false;
+        setReady(false);
       }
+      return false;
     }
   }, [enqueue]);
 
+  const refresh = useCallback(async (): Promise<void> => { await reload(); }, [reload]);
+
+  const setRestoreReloadBlocked = useCallback((blocked: boolean) => {
+    restoreReloadBlockedRef.current = blocked;
+    setRestoreReloadBlockedState(blocked);
+    if (blocked) {
+      ++refreshGenerationRef.current;
+      loadSucceededRef.current = false;
+      setReady(false);
+    }
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
-    void refresh();
+    void reload();
     return () => { mountedRef.current = false; };
-  }, [refresh]);
+  }, [reload]);
 
   const persist = useCallback(async (recipe: (current: KnowledgeGraphStore) => KnowledgeGraphStore) => {
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
-    if (!loadSucceededRef.current) throw new Error("지식 그래프를 불러오지 못했습니다. 다시 시도해 주세요.");
+    if (restoreReloadBlockedRef.current || !loadSucceededRef.current) throw new Error("지식 그래프를 불러오지 못했습니다. 다시 시도해 주세요.");
     const writer = getStorageBackend().saveKnowledgeGraph;
     if (!writer) throw new Error("현재 저장소는 지식 그래프를 지원하지 않습니다.");
     const operation = async () => {
+      if (restoreReloadBlockedRef.current || !loadSucceededRef.current) throw new Error("복원한 지식 그래프를 다시 불러온 뒤 저장할 수 있습니다.");
       const next = normalizeKnowledgeGraph(recipe(graphRef.current));
       await writer(next);
       graphRef.current = next;
@@ -172,5 +190,5 @@ export function useKnowledgeGraph() {
   }), [persist]);
   const removeEntity = useCallback((id: string) => persist((current) => ({ ...current, entities: current.entities.filter((entity) => entity.id !== id), relations: current.relations.filter((relation) => relation.fromEntityId !== id && relation.toEntityId !== id), questionLinks: current.questionLinks.filter((link) => link.entityId !== id) })), [persist]);
 
-  return { graph, ready, loadStatus, error, maintenanceBlocked, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, reconcileQuestionLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
+  return { graph, ready, loadStatus, error, maintenanceBlocked: maintenanceBlocked || restoreReloadBlocked, setRestoreReloadBlocked, reload, refresh, flush, setMaintenanceBlocked, createEntity, ensureEntity, saveRelation, saveQuestionLink, removeEntryLinks, reconcileQuestionLinks, removeRelation, removeQuestionLink, updateEntity, removeEntity };
 }

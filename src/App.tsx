@@ -407,7 +407,8 @@ function AppContent() {
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,
-    refreshKnowledgeGraph: knowledgeGraph.refresh,
+    refreshKnowledgeGraph: knowledgeGraph.reload,
+    setKnowledgeGraphRestoreReloadBlocked: knowledgeGraph.setRestoreReloadBlocked,
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
@@ -717,7 +718,7 @@ function AppContent() {
                   ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
                   : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
               }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
-              knowledgeGraph={knowledgeGraph}
+              knowledgeGraph={{ ...knowledgeGraph, refresh: actions.retryRestoreReload }}
               subjectFilter={subjectFilter}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
@@ -739,7 +740,7 @@ function AppContent() {
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
-              knowledgeGraph={knowledgeGraph}
+              knowledgeGraph={{ ...knowledgeGraph, refresh: actions.retryRestoreReload }}
               subjectFilter={subjectFilter}
               onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
                 const itemEntry = entries.find((entry) => entry.id === item.entryId);
@@ -783,6 +784,7 @@ function AppContent() {
             <ExamSessionOverlay
               session={examSession}
               generated={Boolean(activeGeneratedExam)}
+              hideAnswers={settings.viewPreferences.hideAnswers}
               examPreferences={settings.examPreferences}
               onOpenSettings={(tab) => openSettings(tab ?? "exam")}
               chatGptPreferences={settings.chatGptMcpPreferences}
@@ -868,6 +870,7 @@ function AppContent() {
               onQuickMemo={actions.handleQuickMemo}
               onLearningBlocksChange={actions.handleLearningBlocksChange}
               onImportLecture={() => actions.setShowLearningImportModal(true)}
+              onSaveSolutionHotspots={hotspots => patchEntry(selected.id, { questionSolutionHotspots: hotspots })}
               onQuestionTextChange={(entry, text) =>
                 patchEntry(entry.id, { question: text })
               }
@@ -962,7 +965,7 @@ function AppContent() {
                 {selected
                   ? "선택한 항목이 현재 검색 또는 필터에 포함되지 않습니다. 검색어나 필터를 조정하면 다시 표시됩니다."
                   : `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하거나`}
-                {!selected && <><br />새 {entryKindName(activeSection)}를 추가하세요.</>}
+                {!selected && <><br />새 {entryKindName(activeSection)}{activeSection === "wrong_answer" || activeSection === "concept" ? "을" : "를"} 추가하세요.</>}
               </p>
               {!selected && (activeSection === "problem_sheet" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
