@@ -181,8 +181,8 @@ export function useEntries() {
         setError(null);
         const now = fixedCreatedAt ?? new Date().toISOString();
         const added = forms.map((form, index) => ({
-          id: plannedIds?.[index] ?? uuidv4(),
           ...form,
+          id: plannedIds?.[index] ?? uuidv4(),
           createdAt: now,
           updatedAt: now,
         } satisfies WrongAnswerEntry));
@@ -252,8 +252,8 @@ export function useEntries() {
         setError(null);
         const now = fixedCreatedAt ?? new Date().toISOString();
         const added = forms.map((form, index) => ({
-          id: plannedIds?.[index] ?? uuidv4(),
           ...form,
+          id: plannedIds?.[index] ?? uuidv4(),
           createdAt: now,
           updatedAt: now,
         } satisfies WrongAnswerEntry));
