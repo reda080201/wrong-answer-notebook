@@ -395,6 +395,15 @@ async fn create_import_session(State(state): State<BridgeState>) -> BridgeResult
     Ok(Json(json!({ "sessionId": session_id })))
 }
 
+async fn read_import_asset_preview(
+    State(state): State<BridgeState>,
+    AxumPath((session_id, filename)): AxumPath<(String, String)>,
+) -> BridgeResult<Json<Value>> {
+    let bytes = crate::import_assets::read_staged_preview(&state.data_dir, &session_id, &filename)
+        .map_err(invalid)?;
+    Ok(Json(json!({ "bytesBase64": STANDARD.encode(bytes) })))
+}
+
 async fn stage_import_asset(
     State(state): State<BridgeState>,
     AxumPath(session_id): AxumPath<String>,
@@ -701,6 +710,10 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
             get(load_image).delete(delete_image),
         )
         .route("/v1/import-sessions", post(create_import_session))
+        .route(
+            "/v1/import-sessions/{session_id}/assets/{filename}",
+            get(read_import_asset_preview),
+        )
         .route(
             "/v1/import-sessions/validate",
             post(validate_import_session),

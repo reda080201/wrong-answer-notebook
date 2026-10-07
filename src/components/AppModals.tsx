@@ -1,10 +1,12 @@
+import { getImportAssetPreviewUrl } from "../services/api/importAssets";
+import { getImageUrl } from "../api";
 import EntryForm from "../features/entries/components/EntryForm";
 import ImportFromGptModal, { VisualPaperImportError, type VisualPaperImportResult } from "../features/import/components/ImportFromGptModal";
 import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
 import Dialog from "../shared/ui/Dialog";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { SUBJECTS } from "../types";
 import type {
@@ -26,6 +28,8 @@ import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
 import { reviewSessionCompletedCount, reviewSessionFingerprint } from "../features/review/storage/reviewSessionIdentity";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
+import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { commitImportWorkspace } from "../features/import-workspace/services/commitImportWorkspace";
 import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
 import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
 import SupplementalLinkModal from "../features/supplemental-resources/components/SupplementalLinkModal";
@@ -57,7 +61,7 @@ interface AppModalsProps {
   workspaceActions: { registerDraftFlush(registration: TransientWriteRegistration): void };
   form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
-  importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"]): Promise<void> };
+  importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"], plannedIds?: string[]): Promise<string[] | void> };
   learningImport: {
     show: boolean;
     setShow(show: boolean): void;
@@ -174,7 +178,7 @@ export default function AppModals({
       const blocks = structuredQuestions.length ? [] : parseQuestionText(item.question ?? "").filter((block) => block.kind === "question");
       const questionImageAssets = item.questionImages ?? [];
       const sourcePageAssets = item.sourcePageImages ?? [];
-      const knownEntryKeys = new Set(["entryKind", "subject", "title", "question", "questionImages", "sourcePageImages", "questionSourceCrops", "problemSource", "importAudit", "questionMeta", "sheetGroup", "tags", "difficulty", "difficultyScore", "concepts", "checklist", "learningBlocks", "answerKey", "figures", "structuredQuestions", "questionContentSegments", "explanationParts", "memo", "annotations", "myAnswer", "correctAnswer", "difficult", "mastered"]);
+      const knownEntryKeys = new Set(["entryKind", "subject", "title", "question", "questionImages", "sourcePageImages", "questionSourceCrops", "questionSolutionHotspots", "problemSource", "importAudit", "questionMeta", "sheetGroup", "tags", "difficulty", "difficultyScore", "concepts", "checklist", "learningBlocks", "answerKey", "figures", "structuredQuestions", "questionContentSegments", "explanationParts", "memo", "annotations", "myAnswer", "correctAnswer", "difficult", "mastered"]);
       const findQuestionNumber = (value: string | number | undefined) => normalizeQuestionNumber(String(value ?? ""));
       const questions: ImportQuestionDraft[] = blocks.length
         ? blocks.map((block, index) => {
@@ -207,19 +211,71 @@ export default function AppModals({
             return { id: uuidv4(), groupId, order: index, displayQuestionNumber: number, sourceQuestionNumber: structured.questionNumber, section: structured.section, questionType: structured.questionType, conditions: [...structured.conditions], equations: [...structured.equations], points: structured.points, contentSegments: structured.contentSegments.map((segment) => segment.type === "table" ? { ...segment, rows: segment.rows.map((row) => [...row]) } : { ...segment }), choices: structured.choices.map((choice, choiceIndex) => normalizeChoice(choice, choiceIndex)), figures, questionImageAssets, sourcePageAssets, answer: answer ? { ...answer, id: uuidv4(), confirmed: false } : undefined, explanationParts: [], sourceReferences: [], status: importStatus, warnings: structured.warning ? [structured.warning] : [], needsReview: structured.needsReview, warning: structured.warning, source: structured.source ? { ...structured.source } : undefined, figureIds: [...structured.figureIds] };
           })
           : [{ id: uuidv4(), groupId, order: 0, displayQuestionNumber: "1", sourceQuestionNumber: "1", conditions: [], equations: [], contentSegments: [{ id: "segment-1", type: "text", text: item.question ?? "" }], choices: [], figures: item.figures ?? [], questionImageAssets, sourcePageAssets, figureIds: (item.figures ?? []).map((figure) => figure.id), answer: item.answerKey?.[0] ? { ...item.answerKey[0], id: uuidv4() } : undefined, explanationParts: [], sourceReferences: [], status: item.question?.trim() ? "needs_review" : "invalid", warnings: item.question?.trim() ? [] : ["문항 본문이 비어 있습니다."] }];
-      return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, questionSourceCrops: item.questionSourceCrops, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
+      return { id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, questionSourceCrops: item.questionSourceCrops, questionSolutionHotspots: item.questionSolutionHotspots, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions, answerItems: [], sourceFileIds: [], userConfirmed: false };
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: existingSession ?? (assetFiles.length ? { id: staged?.sessionId ?? `memory-${uuidv4()}`, mode: staged ? "tauri-staged" : "memory-only", manifestVersion: staged ? 1 : undefined, createdAt: staged ? now : undefined, sourceToStaged: staged?.sourceToStaged, assets: staged?.assets ?? assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined), groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
+  const resolveWorkspacePageUrl = useCallback(async (filename: string, session?: ImportAssetSessionManifest) => {
+    const file = workspaceAssetFiles.find(item => item.name === filename || item.name === filename.split(/[\\/]/).pop());
+    if (file) return URL.createObjectURL(file);
+    if (session?.mode === "tauri-staged") return getImportAssetPreviewUrl(session, filename);
+    return getImageUrl(filename);
+  }, [workspaceAssetFiles]);
   const handleWorkspaceEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => {
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
-    if (problemSheets.length > 1) {
+    if (problemSheets.length > 0 && problemSheets.length === items.length) {
       const staged = assetSession ? undefined : await stageImportAssetFiles(assetFiles ?? []);
       setWorkspace(buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession));
       setWorkspaceAssetFiles(assetFiles ?? []);
       return;
     }
     await handleImportedEntriesApply(items, assetFiles, assetSession);
+  };
+  const directCommitRef = useRef<ImportWorkspace | null>(null);
+  const [directCommitLocked, setDirectCommitLocked] = useState(false);
+  const directTaskRef = useRef<Promise<void> | null>(null);
+  const directMaintenanceRef = useRef(false);
+  useEffect(() => {
+    if (!showImportModal || importMode !== "import") return;
+    let active = true;
+    void loadImportWorkspaceDraft().then(draft => {
+      if (!active || directTaskRef.current) return;
+      if (draft?.commitAttempt) { directCommitRef.current = draft; setDirectCommitLocked(true); }
+      else setDirectCommitLocked(false);
+    }).catch(() => { if (active) setDirectCommitLocked(true); });
+    return () => { active = false; };
+  }, [showImportModal, importMode]);
+  useEffect(() => {
+    if (workspace) return;
+    registerWorkspaceDraftFlush({ flush: async () => { await directTaskRef.current; }, setMaintenanceBlocked: blocked => { directMaintenanceRef.current = blocked; } });
+    return () => registerWorkspaceDraftFlush(null);
+  }, [workspace, registerWorkspaceDraftFlush]);
+  const handleDirectEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => {
+    if (directMaintenanceRef.current) throw new Error("백업·복원이 끝난 뒤 저장해 주세요.");
+    if (directTaskRef.current) throw new Error("가져오기를 저장하는 중입니다.");
+    const operation = (async () => {
+      const existing = await loadImportWorkspaceDraft();
+      if (existing && existing.id !== directCommitRef.current?.id) throw new Error("보존된 가져오기 초안을 작업실에서 먼저 확인해 주세요.");
+      let snapshot = existing ?? directCommitRef.current;
+      if (!snapshot) {
+        snapshot = buildWorkspace(items, assetFiles ?? [], undefined, assetSession);
+        snapshot = { ...snapshot, commitAttempt: { attemptId: crypto.randomUUID(), createdAt: new Date().toISOString(), entryIds: items.map(() => crypto.randomUUID()), groupIds: snapshot.groups.map(group => group.id), state: "pending" } };
+        await saveImportWorkspaceDraft(snapshot);
+        directCommitRef.current = snapshot;
+        setDirectCommitLocked(true);
+      }
+      const attempt = snapshot.commitAttempt!;
+      if (!attempt.preparedEntries && snapshot.assetSession?.mode === "memory-only" && snapshot.assetSession.assets.length && !assetFiles?.length) throw new Error("임시 원본 파일을 복구할 수 없습니다. 원본 파일과 항목 목록을 확인해 주세요.");
+      const ids = await handleImportedEntriesApply(attempt.preparedEntries ?? items, assetFiles, assetSession ?? snapshot.assetSession, attempt.entryIds);
+      if (JSON.stringify(ids) !== JSON.stringify(attempt.entryIds)) throw new Error("실제 저장된 항목 ID를 모두 확인하지 못했습니다.");
+      snapshot = await loadImportWorkspaceDraft() ?? snapshot;
+      await saveImportWorkspaceDraft({ ...snapshot, commitAttempt: { ...snapshot.commitAttempt!, state: "completed" } });
+      await clearImportWorkspaceDraft();
+      directCommitRef.current = null;
+      setDirectCommitLocked(false);
+    })();
+    directTaskRef.current = operation;
+    try { await operation; } finally { directTaskRef.current = null; }
   };
   const validateWorkspaceAssets = async (candidate: ImportWorkspace) => {
     const assetSession = candidate.assetSession;
@@ -369,7 +425,7 @@ export default function AppModals({
 
   return (
     <>
-      {workspace && <ImportWorkspaceView initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
+      {workspace && <ImportWorkspaceView resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
       {showForm && (
         <EntryForm
           entry={editingEntry}
@@ -409,7 +465,10 @@ export default function AppModals({
           mode={importMode}
           onClose={closeImportModal}
           onApply={handleImportApply}
-          onApplyEntries={handleWorkspaceEntries}
+          onApplyEntries={handleDirectEntries}
+          commitLocked={directCommitLocked}
+          onRecoverCommit={async () => { const draft = await loadImportWorkspaceDraft(); if (!draft?.commitAttempt) throw new Error("확정 기록을 읽지 못했습니다. 항목 목록과 초안을 확인해 주세요."); directCommitRef.current = draft; await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
+          onOpenWorkspace={handleWorkspaceEntries}
           onOpenSettings={openSettings}
           gptMcpPreferences={settings.gptMcpPreferences}
         />
@@ -476,7 +535,7 @@ export default function AppModals({
         <LearningImportModal
           onClose={() => setShowLearningImportModal(false)}
           onApply={handleLearningImportApply}
-          onApplyEntries={handleImportedEntriesApply}
+          onApplyEntries={async entries => { await handleImportedEntriesApply(entries); }}
           onDiscardAssetSession={(session) => session.mode === "tauri-staged" ? discardImportAssetSession(session.id) : undefined}
           mode={activeSection === "lecture" ? "lecture" : "append"}
           onVisualFile={analyzeLearningVisualFile}

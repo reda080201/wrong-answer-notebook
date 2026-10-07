@@ -98,6 +98,7 @@ export interface SheetAnswerItem {
   answer: string;
   explanation: string;
   strategy?: string;
+  intent?: string;
   steps?: string[];
   choiceJudgements?: Array<{ marker: string; text: string }>;
   wrongPoint?: string;
@@ -389,7 +390,16 @@ export interface QuestionRating {
   evaluationSource?: "manual" | "heuristic" | "gemini";
 }
 
+export interface QuestionSolutionHotspot {
+  id: string;
+  sourcePageImage: string;
+  questionKey: string;
+  x: number;
+  y: number;
+}
+
 export interface WrongAnswerEntry {
+  questionSolutionHotspots?: QuestionSolutionHotspot[];
   id: string;
   /** 사용자가 정리한 보관 위치. sheetGroup과 독립적입니다. */
   folderId?: string;

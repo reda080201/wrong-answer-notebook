@@ -1318,6 +1318,7 @@ pub fn run() {
             images::save_import_image_bytes,
             import_assets::create_import_asset_session,
             import_assets::stage_import_asset_bytes,
+            import_assets::read_import_asset_preview,
             import_assets::commit_import_asset_session,
             import_assets::commit_import_asset_session_entry,
             import_assets::commit_import_asset_session_entries,

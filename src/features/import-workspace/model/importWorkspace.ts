@@ -40,11 +40,12 @@ export interface ImportQuestionDraft {
 export type ImportEntryMetadata = Partial<Pick<EntryFormData,
   "problemSource" | "importAudit" | "questionMeta" | "sheetGroup" | "tags" |
   "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks" |
-  "questionSourceCrops"
+  "questionSourceCrops" | "questionSolutionHotspots"
 >> & { unknownFields?: Record<string, unknown> };
-export interface ImportDraftGroup { id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
+export interface ImportDraftGroup { solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }
-export interface ImportWorkspace { id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
+export interface ImportCommitAttempt { entryIds: string[]; groupIds: string[]; state: "pending" | "completed"; attemptId?: string; createdAt?: string; entryDigests?: string[]; preparedEntries?: EntryFormData[]; sourceToSaved?: Record<string, string>; }
+export interface ImportWorkspace { commitAttempt?: ImportCommitAttempt; id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
 
 export function normalizeChoice(value: string, index: number): { id: string; marker: string; content: string } {
   const match = value.trim().match(/^(①|②|③|④|⑤|⑥|⑦|⑧|⑨|⑩|\(\d{1,2}\)|\d{1,2}\)|[ㄱ-ㅎA-Ea-e][.)])\s*(.*)$/);

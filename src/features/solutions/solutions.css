@@ -1,0 +1,38 @@
+.solution-sheet-backdrop { position: fixed; inset: 0; z-index: 1800; display: flex; align-items: flex-end; justify-content: center; padding: 0; background: rgb(0 0 0 / 36%); }
+.solution-sheet-backdrop > .solution-sheet { width: min(100%, 1100px); max-width: 1100px; height: 80dvh; max-height: 100dvh; margin: 0; padding: 0; border-radius: 22px 22px 0 0; background: #fff; color: #171717; --text: #171717; --text-muted: #626975; --surface: #fff; --surface-soft: #f5f6f8; --border: #dce1e9; border: 0; box-shadow: 0 -8px 28px rgb(0 0 0 / 12%); }
+.solution-sheet-backdrop > .solution-sheet--full { height: 100dvh; border-radius: 0; }
+.solution-sheet .solution-sheet-shell { height: 100%; min-height: 0; overflow: hidden; padding: 0; display: flex; }
+.solution-sheet-frame { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
+.solution-sheet-handle { display: flex; align-items: center; justify-content: center; align-self: center; width: 96px; min-height: 30px; border: 0; background: transparent; touch-action: none; cursor: ns-resize; }
+.solution-sheet-handle span { width: 42px; height: 5px; border-radius: 6px; background: #d9dce3; }
+.solution-sheet-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 26px 18px; flex-wrap: wrap; }
+.solution-sheet-header strong { font-size: 18px; }
+.solution-sheet-header nav { display: flex; gap: 8px; }
+.solution-sheet button { color: #282e3b; background: #f0f2f5; border: 1px solid #e5e7eb; border-radius: 9px; min-height: 36px; padding: 6px 10px; }
+.solution-sheet button:disabled { opacity: .4; }
+.solution-sheet .solution-sheet-handle { background: transparent; border: 0; padding: 0; }
+.solution-sheet-content { overflow: auto; overscroll-behavior: contain; min-height: 0; padding: 14px 42px 48px; flex: 1; font-size: 17px; line-height: 1.8; }
+.solution-sheet-number { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 1px solid #60646c; padding-bottom: 10px; margin-bottom: 22px; }
+.solution-sheet-number > strong { font-size: 40px; line-height: 1.2; }
+.solution-sheet-number > span { display: flex; align-items: baseline; gap: 8px; }
+.solution-content section { margin: 22px 0; }
+.solution-content h3 { font-size: 17px; margin: 0 0 12px; }
+.solution-content .question-content-view { color: inherit; }
+.solution-sheet-notice { padding: 10px; border: 1px solid #dce1e9; border-radius: 8px; font-size: 14px; }
+.solution-hotspot-stage { position: relative; display: block; flex: none; }
+.solution-hotspot-stage > img { display: block; width: 100%; height: auto; }
+.solution-hotspot { position: absolute; transform: translate(-50%, -50%); width: 32px; height: 32px; min-width: 32px; min-height: 32px; border-radius: 50%; border: 1px solid transparent; background: transparent; padding: 0; cursor: pointer; z-index: 1; touch-action: manipulation; }
+.solution-hotspot:hover, .solution-hotspot:focus-visible { outline: 2px solid #6146ff; background: rgb(97 70 255 / 12%); }
+.solution-hotspot--manual::after { content: ""; position: absolute; width: 6px; height: 6px; top: 13px; left: 13px; background: #6146ff; border-radius: 50%; }
+.solution-link-editor { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.solution-link-editor-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.solution-link-editor-body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(230px, 1fr); gap: 16px; min-height: 0; }
+.solution-link-editor-page { overflow: auto; max-height: 60dvh; }
+.solution-link-editor-page .solution-hotspot-stage { width: 100%; cursor: crosshair; }
+.solution-link-editor-marker { position: absolute; transform: translate(-50%, -50%); width: 32px; height: 32px; border-radius: 50%; color: #fff; background: #6751cb; border: 2px solid white; touch-action: none; cursor: move; }
+.solution-link-editor-marker[aria-pressed="true"] { outline: 3px solid #d49111; }
+.solution-link-editor-list { overflow: auto; max-height: 60dvh; }
+.solution-link-editor-item { border: 1px solid var(--border-color, #dce1e9); border-radius: 8px; padding: 8px; margin-bottom: 8px; }
+.solution-link-editor-item label { display: flex; gap: 8px; align-items: center; margin: 8px 0; }
+.solution-link-editor-item select { min-width: 0; max-width: 100%; }
+@media (max-width: 700px) { .solution-sheet-header { padding: 4px 16px 12px; } .solution-sheet-header strong { font-size: 16px; } .solution-sheet-content { padding: 12px 24px 32px; } .solution-link-editor-body { grid-template-columns: 1fr; } .solution-link-editor-page { max-height: 42dvh; } .solution-link-editor-list { max-height: 25dvh; } }

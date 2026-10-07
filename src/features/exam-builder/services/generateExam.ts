@@ -1,9 +1,11 @@
+import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
+import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { v4 as uuidv4 } from "uuid";
 import type { ExamBlueprint, ExamGenerationReport, ExamQuestionSnapshot, GeneratedExam, GeneratedExamPreset, GeneratedExamQuestion, QuestionMeta, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { resolveQuestionDifficultyScore } from "../../../utils/difficulty";
-import { createQuestionSource } from "./questionSource";
+import { createQuestionSource, migrateQuestionSource } from "./questionSource";
 
 export interface ExamBuilderFilters {
   entryIds?: string[];
@@ -78,15 +80,34 @@ export function questionQualityScore(entry: WrongAnswerEntry, number: string, me
 
 function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string): ExamQuestionSnapshot {
   const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
+  const matched = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+  const hotspots = matched.length === 1 ? confirmedQuestionHotspots(entry, matched[0]) : [];
+  const structuredMatches = (entry.structuredQuestions ?? []).filter((item) => normalizeQuestionNumber(item.questionNumber) === number);
+  const structuredSource = structuredMatches.length === 1 ? structuredMatches[0]?.source : undefined;
+  const sourcePages = entry.sourcePageImages ?? [];
+  const linkedSourcePageImages = [...new Set((entry.questionSourceCrops ?? [])
+    .filter((crop) => normalizeQuestionNumber(crop.questionNumber) === number)
+    .flatMap((crop) => {
+      const explicitName = crop.sourcePageImage && sourcePages.includes(crop.sourcePageImage) ? [crop.sourcePageImage] : [];
+      const explicitPage = Number.isInteger(crop.page) && (crop.page ?? 0) > 0 && (crop.page ?? 0) <= sourcePages.length
+        ? [sourcePages[(crop.page ?? 1) - 1]]
+        : [];
+      return [...explicitName, ...explicitPage].filter((filename): filename is string => Boolean(filename));
+    }))];
   return {
+    questionSolutionHotspots: hotspots.map(hotspot => ({ ...hotspot, questionKey: `${entry.id}-${number}` })),
+    solutionAnswer: answer ? structuredClone(answer) : undefined,
+    solutionFigures: solutionFigures(answer, entry.figures ?? []),
     id: `${entry.id}-${number}`,
     questionNumber: String(block.numberLabel ?? block.displayNumber),
     question: block.body,
     choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`),
     questionImages: [],
-    sourcePageImages: entry.sourcePageImages ?? [],
+    sourcePageImages: sourcePages,
+    linkedSourcePageImages,
     figures: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number),
     contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => normalizeQuestionNumber(key) === number)?.[1],
+    source: structuredSource ? structuredClone(structuredSource) : undefined,
     correctAnswer: answer?.answer,
     explanation: answer?.explanation,
   };
@@ -138,7 +159,7 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
   const rng = seeded(input.seed);
   const maxPerSource = filters.maxPerSource ?? Math.max(1, Math.ceil(input.blueprint.totalQuestions * .3));
   const selected: GeneratedExamQuestion[] = [...(input.lockedQuestions ?? [])].slice(0, input.blueprint.totalQuestions).map((question, index) => {
-    if (question.source?.sourceEntryId) return { ...question, position: index + 1, locked: true };
+    if (question.source?.sourceEntryId) return { ...migrateQuestionSource(question, input.entries), position: index + 1, locked: true };
     const legacyEntry = input.entries.find((entry) => entry.id === question.sourceEntryId);
     const number = question.sourceQuestionNumber ?? question.snapshot.questionNumber;
     return { ...question, position: index + 1, locked: true, source: legacyEntry ? createQuestionSource(legacyEntry, number, question.snapshot) : { sourceEntryId: question.sourceEntryId ?? "", sourceEntryTitle: "출처 미확인", sourceQuestionNumber: number, sourceStatus: question.sourceEntryId ? "snapshot_only" : "unknown" } };

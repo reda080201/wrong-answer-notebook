@@ -18,6 +18,7 @@ import {
   loadGeneratedExams,
   MAX_IMPORT_IMAGE_BYTES,
   cleanupOrphanImages,
+  deleteImage,
   clearImageUrlCache,
   getImageUrl,
   IMAGE_URL_CACHE_LIMIT,
@@ -193,6 +194,25 @@ describe("image file security limits", () => {
     expect(localStorage.getItem("img_block.png")).toBeTruthy();
     expect(localStorage.getItem("img_orphan.png")).toBeNull();
   });
+
+  it("preserves an image removed from an entry while a saved exam still references it", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "saved", questions: [{ questionImages: ["img_exam.png"] }] }]));
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+
+    await deleteImage("img_exam.png");
+
+    expect(localStorage.getItem("img_exam.png")).toBe("data:image/png;base64,exam");
+  });
+
+  it("stops image deletion when a saved image-reference store is malformed", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, "not-json");
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+
+    await expect(deleteImage("img_exam.png")).rejects.toThrow("이미지 참조");
+    expect(localStorage.getItem("img_exam.png")).toBe("data:image/png;base64,exam");
+  });
 });
 
 describe("browser ai provider fallback", () => {
@@ -287,6 +307,26 @@ describe("browser backup restore transaction", () => {
       importWorkspaceDraft: null,
       reviewSessions: [],
     }));
+  });
+
+  it("backs up and restores a valid selection review session", async () => {
+    const session = {
+      id: "selection-session", mode: "selection", itemRefs: [{ kind: "entry", entryId: "entry-1" }],
+      currentIndex: 0, completedItemKeys: [], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    localStorage.setItem("wrong-answer-review-sessions", JSON.stringify([session]));
+    let backupBlob: Blob | null = null;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn((blob: Blob) => { backupBlob = blob; return "blob:selection-backup"; }),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await expect(createBackupAtDestination(null, [], defaultSettings)).resolves.toContain("내려받았습니다");
+    const payload = JSON.parse(await backupBlob!.text());
+    expect(payload.reviewSessions).toEqual([session]);
+    await expect(applyBrowserBackupAtomically(payload)).resolves.toEqual({ restored: true, warnings: [] });
+    expect(JSON.parse(localStorage.getItem("wrong-answer-review-sessions")!)[0].mode).toBe("selection");
   });
 
   it("restores every browser persistent store atomically with a v2 payload", async () => {

@@ -855,6 +855,45 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".wrong-focus-question")).not.toHaveTextContent("그림 연결 확인 필요");
   });
 
+  it("renders a generated wrong answer's canonical stream in normal and focused views", async () => {
+    const entry: WrongAnswerEntry = {
+      ...sheetEntry,
+      id: "generated-wrong",
+      entryKind: "wrong_answer",
+      title: "자동 생성 오답",
+      generatedFromExamSessionId: "session-1",
+      generatedFromQuestionNumber: "2",
+      question: "앞 문장 뒤 문장",
+      questionContentSegments: { "2": [
+        { id: "before", type: "text", text: "앞 문장" },
+        { id: "figure-slot", type: "figure", figureId: "g1" },
+        { id: "after", type: "text", text: "뒤 문장" },
+      ] },
+      figures: [{ id: "g1", questionNumber: "2", title: "원본 그래프", caption: "", image: "source-graph.png", source: "original" }],
+    };
+    const { container } = render(
+      <EntryDetail
+        entry={entry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    await waitFor(() => expect(container.querySelector(".question-content-view img")).toHaveAttribute("src", "mock://source-graph.png"));
+    expect(container.querySelector(".question-content-view")?.children[0]).toHaveTextContent("앞 문장");
+    expect(container.querySelector(".question-content-view")?.children[2]).toHaveTextContent("뒤 문장");
+    expect(container.querySelector(".study-paper-figures")).toBeNull();
+
+    openSecondaryAction("집중 보기");
+    await waitFor(() => expect(container.querySelector(".wrong-focus-question .question-content-view img")).toHaveAttribute("src", "mock://source-graph.png"));
+    expect(container.querySelector(".wrong-focus-question .question-content-view")?.children[0]).toHaveTextContent("앞 문장");
+    expect(container.querySelector(".wrong-focus-question .question-content-view")?.children[2]).toHaveTextContent("뒤 문장");
+  });
+
   it("shows the sticky study control bar and keeps normal mode switching in the top tabs", () => {
     render(
       <EntryDetail

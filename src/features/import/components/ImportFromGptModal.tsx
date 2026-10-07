@@ -62,6 +62,8 @@ import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
 import ImportSaveFooter from "./ImportSaveFooter";
 import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
 import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
+import { validateImportImage } from "../services/validateImportImage";
+import { validateImportAssetReferences } from "../services/zipImport";
 import { FileUp, Maximize2 } from "lucide-react";
 import ImageGallery from "../../../components/ImageGallery";
 import FeatureErrorBoundary from "../../../components/FeatureErrorBoundary";
@@ -86,6 +88,9 @@ interface ImportFromGptModalProps {
   onClose: () => void;
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
+  onOpenWorkspace?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
+  commitLocked?: boolean;
+  onRecoverCommit?: () => Promise<void>;
   fallbackSubject: Subject;
   promptTemplates?: PromptTemplate[];
   aiProvider?: AiProviderSettings;
@@ -295,6 +300,9 @@ export default function ImportFromGptModal({
   onClose,
   onApply,
   onApplyEntries,
+  onOpenWorkspace,
+  commitLocked = false,
+  onRecoverCommit,
   fallbackSubject,
   promptTemplates = [],
   aiProvider,
@@ -805,6 +813,7 @@ export default function ImportFromGptModal({
     assertImportJsonSize(jsonFiles[0].name, jsonFiles[0].size);
     const imageFiles = files.filter((file) => isSupportedImageFile(file.name));
     assertImportImages(imageFiles);
+    await Promise.all(imageFiles.map(validateImportImage));
     return {
       jsonText: await jsonFiles[0].text(),
       jsonName: jsonFiles[0].name,
@@ -820,6 +829,7 @@ export default function ImportFromGptModal({
     imageAssets: ZipImportAsset[] = imageFiles.map((file) => ({ sourcePath: file.name, file })),
   ): Promise<ImportedStudyDocument> => {
     const imported = parseAllInOneImport(jsonText, jsonName, fallbackSubject);
+    validateImportAssetReferences(jsonText, imageAssets.map(asset => asset.sourcePath));
     const imageKeys = imageFiles.map((file) => imageFileKey(file.name));
     const duplicateKey = imageKeys.find((key, index) => imageKeys.indexOf(key) !== index);
     if (duplicateKey) throw new Error(`중복된 이미지 파일명이 있습니다: ${duplicateKey}`);
@@ -828,7 +838,7 @@ export default function ImportFromGptModal({
     const fileIndexByKey = new Map<string, number>();
     const warnings: string[] = [];
 
-    for (const [entryIndex, entry] of imported.entries.entries()) {
+    for (const entry of imported.entries) {
       const allReferenced = collectEntryImportImageReferences(entry);
       const unsafeReference = allReferenced.find((image) => !isSafeImportAssetReference(image));
       if (unsafeReference) throw new Error(`JSON의 이미지 참조 \`${unsafeReference}\`가 안전한 파일명이 아닙니다.`);
@@ -837,10 +847,6 @@ export default function ImportFromGptModal({
         const key = imageFileKey(image);
         const file = imageByName.get(key);
         if (!file) {
-          if (entry.entryKind === "lecture") {
-            warnings.push(`entries[${entryIndex}]에서 참조한 이미지 \`${image}\`를 찾지 못해 연결을 해제했습니다.`);
-            continue;
-          }
           throw new Error(`JSON에서 참조한 이미지 \`${image}\`를 찾을 수 없습니다.`);
         }
         if (fileIndexByKey.has(key)) continue;
@@ -1029,6 +1035,12 @@ export default function ImportFromGptModal({
     }
   };
 
+  const openWorkspace = async () => {
+    if (!draft || !onOpenWorkspace || isSolutionMode || isSupplementalMode) return;
+    const opened = await importSaveCoordinator.run(async () => { await onOpenWorkspace([canonicalizeImportDraftForSave(draft)], assetFiles, visualResult?.assetSession); });
+    if (opened) { if (visualResult?.assetSession) preserveVisualSessionRef.current = true; onClose(); }
+  };
+
   const updateLegacyQuestionText = (value: string) => {
     setDraft((current) => {
       setStructuredReviewError(null);
@@ -1058,6 +1070,7 @@ export default function ImportFromGptModal({
   };
 
   const handleClose = () => {
+    if (commitLocked) { onClose(); return; }
     if (saving) return;
     if (aiGenerating) {
       closeAfterVisualAbortRef.current = true;
@@ -1098,11 +1111,12 @@ export default function ImportFromGptModal({
           </div>}
         footer={<div className="import-modal-footer">
           {draft && !canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}
-          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
+          <ImportSaveFooter commitLocked={commitLocked} solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onOpenWorkspace={onOpenWorkspace && draft ? () => void openWorkspace() : undefined} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         </div>}
       >
-
-        {!isSolutionMode && !isSupplementalMode && <nav className="import-mode-tabs" aria-label="시험지 가져오기 방식">
+        {commitLocked && error && <p className="form-save-error" role="alert">{error}</p>}
+        {commitLocked && <section className="import-commit-recovery" role="status"><p>확정 저장 기록이 남아 있습니다. 저장 결과 확인·정리만 실행할 수 있습니다.</p><button type="button" disabled={saving} onClick={() => void importSaveCoordinator.run(async () => { if (!onRecoverCommit) throw new Error("저장 결과 확인 경로가 없습니다."); await onRecoverCommit(); onClose(); })}>확정 기록 확인·정리</button></section>}
+        {!isSolutionMode && !isSupplementalMode && <nav inert={commitLocked} className="import-mode-tabs" aria-label="시험지 가져오기 방식">
           {([['gpt', 'GPT 결과'], ['file', '파일 / ZIP / JSON'], ['visual', 'PDF / 이미지 분석'], ['direct', '직접 입력']] as const).map(([value, label]) => <button key={value} type="button" className={importInputMode === value ? "active" : ""} aria-pressed={importInputMode === value} onClick={() => {
             if (importInputMode === "visual" && value !== "visual") {
               visualControllerRef.current?.abort();
@@ -1112,7 +1126,7 @@ export default function ImportFromGptModal({
           }}>{label}</button>)}
         </nav>}
 
-        <div className="form-body import-modal-body">
+        <div className="form-body import-modal-body" inert={commitLocked}>
           {visualCleanupError && <div className="form-error import-visual-cleanup" role="alert"><span>임시 파일 정리 실패: {visualCleanupError}</span><button type="button" className="btn-secondary btn-sm" disabled={Boolean(visualProgress)} onClick={() => void retryVisualCleanup()}>임시 파일 정리 다시 시도</button></div>}
           <div className="import-grid">
             <section className="import-pane">
@@ -1521,7 +1535,7 @@ export default function ImportFromGptModal({
                       <Maximize2 size={16} aria-hidden="true" /> 전체 화면 검수
                     </button>
                   </div>
-              {error && (
+              {error && !commitLocked && (
                 <p className="form-save-error" role="alert">
                   {error}
                 </p>
@@ -1885,6 +1899,7 @@ export default function ImportFromGptModal({
       </Dialog>
       <FeatureErrorBoundary featureName="가져오기 검수">
       <ImportReviewWorkspace
+        editingBlocked={commitLocked || saving}
         open={reviewWorkspaceOpen && Boolean(draft)}
         title={`${draft?.title?.trim() || "가져온 자료"} 검수`}
         onClose={() => setReviewWorkspaceOpen(false)}
@@ -1931,7 +1946,7 @@ export default function ImportFromGptModal({
             <StructuredQuestionReviewEditor
               id={`fullscreen-import-question-${index}`}
               questions={[activeQuestion]}
-              disabled={saving}
+              disabled={saving || commitLocked}
               onChange={([updatedQuestion]) => {
                 if (!updatedQuestion) return;
                 setStructuredReviewError(null);
@@ -1969,10 +1984,10 @@ export default function ImportFromGptModal({
           </div>
         ) : undefined}
         footer={(
-          <ImportSaveFooter solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving} onClose={() => setReviewWorkspaceOpen(false)} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
+          <ImportSaveFooter commitLocked={commitLocked} solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving} onClose={() => setReviewWorkspaceOpen(false)} onOpenWorkspace={onOpenWorkspace && draft ? () => void openWorkspace() : undefined} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         )}
       >
-        {error && <p className="form-save-error" role="alert">{error}</p>}
+        {error && !commitLocked && <p className="form-save-error" role="alert">{error}</p>}
         {draft ? (
           <TextReviewSplitView id="fullscreen-import-question" label="본문" value={draft.question ?? ""} onChange={updateLegacyQuestionText} />
         ) : null}

@@ -1,3 +1,4 @@
+import { validSolutionHotspot } from "../features/solutions/hotspotValidation";
 import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
@@ -198,6 +199,9 @@ export function validateImportedStudyData(data: Partial<EntryFormData>, context:
   const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
   issues.push(...structuredQuestionIssues);
 
+  if (data.questionSolutionHotspots !== undefined && (!Array.isArray(data.questionSolutionHotspots) || !data.questionSolutionHotspots.every(validSolutionHotspot))) {
+    issues.push({ id: "invalid-solution-hotspots", severity: "error", message: "파란 점의 페이지·문항 연결 또는 위치가 올바르지 않습니다." });
+  }
   for (const [index, crop] of ((data as EntryFormData & { questionSourceCrops?: unknown }).questionSourceCrops ?? [] as unknown[]).entries()) {
     if (!crop || typeof crop !== "object") continue;
     const value = crop as Record<string, unknown>;

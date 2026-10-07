@@ -2,16 +2,89 @@ use crate::notebook_store::{with_shared_storage_lock, NotebookStore, StagedCommi
 use crate::{
     app_dir, images_dir, save_import_image_bytes_to_dir, validate_image_filename, WrongAnswerEntry,
 };
+use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
+use std::io::{Cursor, Read};
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use uuid::Uuid;
 
 pub(crate) const IMPORT_ASSET_SESSION_MAX_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+pub(crate) const MAX_IMPORT_PREVIEW_BYTES: u64 = 32 * 1024 * 1024;
+
+fn reject_link(path: &Path) -> Result<(), String> {
+    let metadata = fs::symlink_metadata(path).map_err(|error| error.to_string())?;
+    if metadata.file_type().is_symlink() {
+        return Err("미리보기 경로에 링크를 사용할 수 없습니다.".into());
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & 0x400 != 0 {
+            return Err("미리보기 경로에 reparse point를 사용할 수 없습니다.".into());
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn read_staged_preview(
+    data_dir: &Path,
+    session_id: &str,
+    filename: &str,
+) -> Result<Vec<u8>, String> {
+    Uuid::parse_str(session_id)
+        .map_err(|_| "가져오기 자산 session ID가 올바르지 않습니다.".to_string())?;
+    validate_image_filename(filename)?;
+    if filename.contains(':') {
+        return Err("허용되지 않은 이미지 파일명입니다.".into());
+    }
+    let sessions = data_dir.join("import-workspaces");
+    let root = sessions.join(session_id);
+    let assets = root.join("assets");
+    let path = assets.join(filename);
+    for item in [&sessions, &root, &assets, &path] {
+        reject_link(item)?;
+    }
+    let canonical_assets = assets.canonicalize().map_err(|error| error.to_string())?;
+    let canonical_path = path.canonicalize().map_err(|error| error.to_string())?;
+    if !canonical_path.starts_with(&canonical_assets) {
+        return Err("미리보기 경로가 session을 벗어납니다.".into());
+    }
+    let file = fs::File::open(&canonical_path).map_err(|error| error.to_string())?;
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.is_file() {
+        return Err("미리보기 대상이 일반 파일이 아닙니다.".into());
+    }
+    if metadata.len() > MAX_IMPORT_PREVIEW_BYTES {
+        return Err("미리보기 이미지가 너무 큽니다.".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_IMPORT_PREVIEW_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| error.to_string())?;
+    if bytes.len() as u64 > MAX_IMPORT_PREVIEW_BYTES {
+        return Err("미리보기 이미지가 너무 큽니다.".into());
+    }
+    let ext = Path::new(filename)
+        .extension()
+        .and_then(|value| value.to_str())
+        .unwrap_or("");
+    crate::images::validate_image_header_bytes(&bytes, ext)?;
+    let image = image::ImageReader::new(Cursor::new(&bytes))
+        .with_guessed_format()
+        .map_err(|error| error.to_string())?
+        .decode()
+        .map_err(|error| format!("미리보기 이미지를 디코딩할 수 없습니다: {error}"))?;
+    if image.width() == 0 || image.height() == 0 {
+        return Err("빈 이미지를 표시할 수 없습니다.".into());
+    }
+    Ok(bytes)
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -296,4 +369,87 @@ pub(crate) fn discard_import_asset_session(
         fs::remove_dir_all(root).map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+#[tauri::command]
+pub(crate) fn read_import_asset_preview(
+    app: tauri::AppHandle,
+    session_id: String,
+    filename: String,
+) -> Result<String, String> {
+    let bytes = read_staged_preview(&app_dir(&app)?, &session_id, &filename)?;
+    Ok(STANDARD.encode(bytes))
+}
+
+#[cfg(test)]
+mod preview_tests {
+    use super::*;
+    fn fixture() -> (tempfile::TempDir, String, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let id = Uuid::new_v4().to_string();
+        let assets = dir
+            .path()
+            .join("import-workspaces")
+            .join(&id)
+            .join("assets");
+        fs::create_dir_all(&assets).unwrap();
+        (dir, id, assets)
+    }
+    #[test]
+    fn rejects_unsafe_missing_and_non_images() {
+        let (dir, id, assets) = fixture();
+        for name in ["../a.png", "folder/a.png", "a.json", "C:a.png"] {
+            assert!(read_staged_preview(dir.path(), &id, name).is_err());
+        }
+        assert!(read_staged_preview(dir.path(), "../invalid", "a.png").is_err());
+        assert!(read_staged_preview(dir.path(), &id, "missing.png").is_err());
+        fs::write(assets.join("fake.png"), b"not an image").unwrap();
+        assert!(read_staged_preview(dir.path(), &id, "fake.png").is_err());
+        fs::write(assets.join("header.png"), [137, 80, 78, 71, 13, 10, 26, 10]).unwrap();
+        assert!(read_staged_preview(dir.path(), &id, "header.png").is_err());
+    }
+    #[test]
+    fn reads_real_png_and_rejects_oversized_file() {
+        let (dir, id, assets) = fixture();
+        image::RgbaImage::new(1, 1)
+            .save(assets.join("ok.png"))
+            .unwrap();
+        assert!(!read_staged_preview(dir.path(), &id, "ok.png")
+            .unwrap()
+            .is_empty());
+        fs::File::create(assets.join("big.png"))
+            .unwrap()
+            .set_len(MAX_IMPORT_PREVIEW_BYTES + 1)
+            .unwrap();
+        assert!(read_staged_preview(dir.path(), &id, "big.png")
+            .unwrap_err()
+            .contains("너무 큽니다"));
+    }
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_escape() {
+        let (dir, id, assets) = fixture();
+        std::os::unix::fs::symlink(dir.path().join("outside.png"), assets.join("escape.png"))
+            .unwrap();
+        assert!(read_staged_preview(dir.path(), &id, "escape.png").is_err());
+    }
+    #[cfg(windows)]
+    #[test]
+    fn rejects_directory_junction_escape() {
+        let (dir, id, assets) = fixture();
+        let outside = dir.path().join("outside");
+        fs::create_dir(&outside).unwrap();
+        image::RgbaImage::new(1, 1)
+            .save(outside.join("escape.png"))
+            .unwrap();
+        fs::remove_dir(&assets).unwrap();
+        let output = std::process::Command::new("cmd")
+            .args(["/c", "mklink", "/J"])
+            .arg(&assets)
+            .arg(&outside)
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "junction fixture creation failed");
+        assert!(read_staged_preview(dir.path(), &id, "escape.png").is_err());
+    }
 }

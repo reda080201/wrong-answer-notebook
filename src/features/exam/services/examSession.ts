@@ -1,3 +1,4 @@
+import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
 import { v4 as uuidv4 } from "uuid";
 import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
@@ -58,7 +59,10 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       equations: structuredClone(block.equations),
       choices: structuredClone(block.choices),
       questionImages: structuredClone([...assets.sourceCrops.map((crop) => crop.image), ...assets.figureAssets]),
-      sourcePageImages: structuredClone(assets.sourcePages),
+      sourcePageImages: structuredClone([...new Set([...assets.sourcePages, ...confirmedQuestionHotspots(entry, block).map(hotspot => hotspot.sourcePageImage)])]),
+      questionSolutionHotspots: confirmedQuestionHotspots(entry, block).map(hotspot => ({ ...hotspot, questionKey: `${entry.id}-${number}` })),
+      solutionAnswer: answer ? structuredClone(answer) : undefined,
+      solutionFigures: solutionFigures(answer, entry.figures ?? []),
       figures: structuredClone(figures),
       contentSegments: block.contentSegments
         ? structuredClone(block.contentSegments)
@@ -118,6 +122,7 @@ function buildExplicitSourcePageQuestionMap(
   };
   for (const question of questions) {
     const number = normalizeQuestionNumber(question.questionNumber);
+    for (const hotspot of confirmedQuestionHotspots(entry, question)) add(hotspot.sourcePageImage, number);
     if (question.source?.page) add(entry.sourcePageImages?.[question.source.page - 1], number);
     for (const crop of entry.questionSourceCrops ?? []) {
       if (normalizeQuestionNumber(crop.questionNumber) !== number) continue;
@@ -146,7 +151,7 @@ export function publicExamQuestion(session: ExamSession, index = session.current
     status: session.status,
     questionIndex: index,
     totalQuestions: session.questions.length,
-    question: { ...question, correctAnswer: undefined, explanation: undefined },
+    question: { ...question, correctAnswer: undefined, explanation: undefined, solutionAnswer: undefined, solutionFigures: undefined, questionSolutionHotspots: undefined },
     response: response?.response ?? "",
     scratchNote: response?.scratchNote ?? "",
     markedForReview: response?.markedForReview ?? false,

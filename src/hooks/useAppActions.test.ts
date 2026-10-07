@@ -292,6 +292,8 @@ describe("useAppActions", () => {
         patchSettings: vi.fn(async () => {}),
         refreshSettings: vi.fn(async () => true),
         refreshExamSessions: vi.fn(async () => true),
+        refreshReviewSessions: vi.fn(async () => true),
+        setReviewSessionsRestoreReloadBlocked: vi.fn(),
         refreshGeneratedExams: vi.fn(async () => true),
         refreshLibraryFolders: vi.fn(async () => true),
         refreshGptSolutionDrafts: vi.fn(async () => true),
@@ -601,29 +603,45 @@ describe("useAppActions", () => {
 
     it("reloads exam sessions after a browser backup restore", async () => {
       const refreshExamSessions = vi.fn(async () => true);
+      const refreshReviewSessions = vi.fn(async () => true);
       const discardActiveSessionAfterRestore = vi.fn();
+      const discardActiveReviewAfterRestore = vi.fn();
       vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
       vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
       vi.mocked(api.applyBrowserBackupAtomically).mockResolvedValue({ restored: true, warnings: [] });
-      const { result } = createHook({ refreshExamSessions, discardActiveSessionAfterRestore });
+      const { result } = createHook({ refreshExamSessions, refreshReviewSessions, discardActiveSessionAfterRestore, discardActiveReviewAfterRestore });
 
       await act(async () => {
         await result.current.handleRestore();
       });
 
       expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+      expect(refreshReviewSessions).toHaveBeenCalledTimes(1);
       expect(discardActiveSessionAfterRestore).toHaveBeenCalledTimes(1);
+      expect(discardActiveReviewAfterRestore).toHaveBeenCalledTimes(1);
+      expect(result.current.reviewMode).toBeNull();
     });
 
-    it("does not report a restore as complete when exam sessions cannot reload", async () => {
+    it("keeps a failed restore reload retryable without applying the backup twice", async () => {
       const refreshExamSessions = vi.fn(async () => false);
+      const setReviewSessionsRestoreReloadBlocked = vi.fn();
       vi.mocked(api.selectBackupSource).mockResolvedValue("backup.json");
       vi.mocked(api.restoreBackupFromSource).mockResolvedValue({ entries: [], settings: {} } as never);
       vi.mocked(api.applyBrowserBackupAtomically).mockResolvedValue({ restored: true, warnings: [] });
-      const { result } = createHook({ refreshExamSessions });
+      const { result } = createHook({ refreshExamSessions, setReviewSessionsRestoreReloadBlocked });
 
-      await expect(result.current.handleRestore()).rejects.toThrow("시험 세션");
+      await act(async () => { await result.current.handleRestore(); });
       expect(refreshExamSessions).toHaveBeenCalledTimes(1);
+      expect(result.current.restoreReloadPending).toBe(true);
+      expect(result.current.settingsMessage).toContain("시험 세션");
+      expect(setReviewSessionsRestoreReloadBlocked).toHaveBeenLastCalledWith(true);
+      refreshExamSessions.mockResolvedValue(true);
+      await act(async () => { await result.current.retryRestoreReload(); });
+      expect(refreshExamSessions).toHaveBeenCalledTimes(2);
+      expect(api.applyBrowserBackupAtomically).toHaveBeenCalledTimes(1);
+      expect(result.current.restoreReloadPending).toBe(false);
+      expect(result.current.settingsMessage).toContain("다시 불러왔습니다");
+      expect(setReviewSessionsRestoreReloadBlocked).toHaveBeenLastCalledWith(false);
     });
 
     it("keeps the active session when storage restoration fails", async () => {
@@ -632,8 +650,19 @@ describe("useAppActions", () => {
       vi.mocked(api.restoreBackupFromSource).mockRejectedValue(new Error("restore failed"));
       const { result } = createHook({ discardActiveSessionAfterRestore });
 
-      await expect(result.current.handleRestore()).rejects.toThrow("restore failed");
+      await act(async () => { await result.current.handleRestore(); });
       expect(discardActiveSessionAfterRestore).not.toHaveBeenCalled();
+      expect(result.current.settingsMessage).toContain("restore failed");
+    });
+
+    it("reports browser backup failures in the settings message", async () => {
+      vi.mocked(api.createBackupAtDestination).mockRejectedValue(new Error("invalid stored data"));
+      const { result } = createHook();
+
+      await act(async () => { await result.current.handleBackup(); });
+
+      expect(result.current.settingsMessage).toContain("백업을 만들지 못했습니다");
+      expect(result.current.settingsMessage).toContain("invalid stored data");
     });
   });
 

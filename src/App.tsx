@@ -200,6 +200,17 @@ function AppContent() {
   const library = useLibraryFolders();
   const gptSolutionDrafts = useGptSolutionRoundtripDrafts();
   const reviewSessions = useReviewSessions();
+  const reviewSessionGenerationRef = useRef(0);
+  const reviewCallbackGeneration = reviewSessionGenerationRef.current;
+  const saveReviewSession = (session: import("./types").ReviewSession) => {
+    if (reviewCallbackGeneration !== reviewSessionGenerationRef.current) {
+      return Promise.reject(new Error("복원 후 이전 복습 화면의 저장 요청은 취소되었습니다."));
+    }
+    return reviewSessions.save(session);
+  };
+  const discardActiveReviewAfterRestore = useCallback(() => {
+    reviewSessionGenerationRef.current += 1;
+  }, []);
   const pendingDeletionFlushRef = useRef<() => Promise<void>>(async () => undefined);
   const persistence = usePersistenceCoordinator({
     activeExam: examSession,
@@ -389,11 +400,15 @@ function AppContent() {
     removeMemoTemplate,
     refreshSettings,
     refreshExamSessions: reloadExamSessions,
+    refreshReviewSessions: reviewSessions.refresh,
+    setReviewSessionsRestoreReloadBlocked: reviewSessions.setRestoreReloadBlocked,
     discardActiveSessionAfterRestore,
+    discardActiveReviewAfterRestore,
     refreshGeneratedExams: reloadGeneratedExams,
     refreshLibraryFolders: library.refresh,
     refreshGptSolutionDrafts: gptSolutionDrafts.reload,
-    refreshKnowledgeGraph: knowledgeGraph.refresh,
+    refreshKnowledgeGraph: knowledgeGraph.reload,
+    setKnowledgeGraphRestoreReloadBlocked: knowledgeGraph.setRestoreReloadBlocked,
     runMaintenanceOperation,
     setActiveSection,
     setSelectedId,
@@ -703,7 +718,7 @@ function AppContent() {
                   ? { kind: "sheet-question" as const, entry: itemEntry, questionNumber: item.questionNumber }
                   : itemEntry ? { kind: "entry" as const, entry: itemEntry } : null;
               }).filter((item): item is { kind: "entry"; entry: typeof entries[number] } | { kind: "sheet-question"; entry: typeof entries[number]; questionNumber: string } => Boolean(item)))}
-              knowledgeGraph={knowledgeGraph}
+              knowledgeGraph={{ ...knowledgeGraph, refresh: actions.retryRestoreReload }}
               subjectFilter={subjectFilter}
               openEntry={(entry, questionNumber) => void requestNavigation({
                   section: entry.entryKind,
@@ -725,7 +740,7 @@ function AppContent() {
               onOpenAiSettings={() => openSettings("gpt-mcp")}
               onOpenImport={actions.openImport}
               onRegisterScrollContainer={navigationHistory.registerScrollRestoration}
-              knowledgeGraph={knowledgeGraph}
+              knowledgeGraph={{ ...knowledgeGraph, refresh: actions.retryRestoreReload }}
               subjectFilter={subjectFilter}
               onStartReview={(items) => actions.startSelectionReview(items.map((item) => {
                 const itemEntry = entries.find((entry) => entry.id === item.entryId);
@@ -769,6 +784,7 @@ function AppContent() {
             <ExamSessionOverlay
               session={examSession}
               generated={Boolean(activeGeneratedExam)}
+              hideAnswers={settings.viewPreferences.hideAnswers}
               examPreferences={settings.examPreferences}
               onOpenSettings={(tab) => openSettings(tab ?? "exam")}
               chatGptPreferences={settings.chatGptMcpPreferences}
@@ -854,6 +870,7 @@ function AppContent() {
               onQuickMemo={actions.handleQuickMemo}
               onLearningBlocksChange={actions.handleLearningBlocksChange}
               onImportLecture={() => actions.setShowLearningImportModal(true)}
+              onSaveSolutionHotspots={hotspots => patchEntry(selected.id, { questionSolutionHotspots: hotspots })}
               onQuestionTextChange={(entry, text) =>
                 patchEntry(entry.id, { question: text })
               }
@@ -948,7 +965,7 @@ function AppContent() {
                 {selected
                   ? "선택한 항목이 현재 검색 또는 필터에 포함되지 않습니다. 검색어나 필터를 조정하면 다시 표시됩니다."
                   : `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하거나`}
-                {!selected && <><br />새 {entryKindName(activeSection)}를 추가하세요.</>}
+                {!selected && <><br />새 {entryKindName(activeSection)}{activeSection === "wrong_answer" || activeSection === "concept" ? "을" : "를"} 추가하세요.</>}
               </p>
               {!selected && (activeSection === "problem_sheet" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
@@ -990,7 +1007,7 @@ function AppContent() {
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
           session: resumableReviewSession,
-          saveSession: reviewSessions.save,
+          saveSession: saveReviewSession,
         }}
         navigation={{ setActiveSection, setSelectedId, handleWikiLinkClick, existingTargets: linkableTargets }}
         supplemental={{ target: (() => {
@@ -1057,6 +1074,8 @@ function AppContent() {
             integrityReport: actions.integrityReport,
             backup: actions.handleBackup,
             restore: actions.handleRestore,
+            restoreReloadPending: actions.restoreReloadPending,
+            retryRestoreReload: actions.retryRestoreReload,
             runIntegrity: actions.runIntegrity,
             cleanupOrphans: actions.handleCleanupOrphans,
           }}

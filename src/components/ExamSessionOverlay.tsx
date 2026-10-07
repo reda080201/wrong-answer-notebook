@@ -9,6 +9,7 @@ import RealExamSessionView from "../features/exam/components/RealExamSessionView
 interface ExamSessionOverlayProps {
   session: ExamSession;
   generated: boolean;
+  hideAnswers?: boolean;
   examPreferences: ExamPreferences;
   onOpenSettings: (tab?: SettingsTab) => void;
   chatGptPreferences: ChatGptMcpPreferences;
@@ -32,6 +33,7 @@ interface ExamSessionOverlayProps {
 export default function ExamSessionOverlay({
   session,
   generated,
+  hideAnswers = false,
   examPreferences,
   onOpenSettings,
   chatGptPreferences,
@@ -63,6 +65,7 @@ export default function ExamSessionOverlay({
     onSubmittingChange={onSubmittingChange}
     onSubmit={onSubmit}
     examPreferences={examPreferences}
+    hideAnswers={hideAnswers}
     onClose={onClose}
     closeDisabled={submitting || saving}
     saveError={saveError}
@@ -72,6 +75,7 @@ export default function ExamSessionOverlay({
   /> : <ExamSessionView
     session={session}
     examPreferences={examPreferences}
+    hideAnswers={hideAnswers}
     onOpenSettings={onOpenSettings}
     chatGptPreferences={chatGptPreferences}
     onChatGptPreferencesChange={onChatGptPreferencesChange}
