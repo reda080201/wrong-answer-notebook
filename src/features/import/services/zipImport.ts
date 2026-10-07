@@ -73,7 +73,7 @@ export function validateImportAssetReferences(jsonText: string, filenames: strin
   const names = new Set(filenames);
   // Inspect declared paths before normalization can drop malformed representations.
   const checkDeclared = (value: unknown, key = ""): void => {
-    if (typeof value === "string" && ["image", "sourcePageImage", "questionImages", "sourcePageImages", "images", "linkedSourcePageImages"].includes(key)) {
+    if (typeof value === "string" && value !== "" && ["image", "sourcePageImage", "questionImages", "sourcePageImages", "images", "linkedSourcePageImages"].includes(key)) {
       if (!safeImportAssetPath(value) || !names.has(value)) throw new Error(`이미지 참조와 실제 파일명이 일치하지 않습니다: ${value}`);
     } else if (Array.isArray(value)) value.forEach(item => checkDeclared(item, key));
     else if (value && typeof value === "object") Object.entries(value).forEach(([field, item]) => checkDeclared(item, field));
