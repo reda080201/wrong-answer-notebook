@@ -116,7 +116,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   }} onTouchCancel={() => { touchStart.current = null; }}>
     <header className="original-page-toolbar">
       <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>이전 페이지</button>
-      <strong aria-live="polite">{visiblePages.length ? `${activeIndex + 1} / ${visiblePages.length} 페이지` : "페이지를 선택해 주세요"}</strong>
+      <strong aria-live="polite">{!visiblePages.length ? "페이지를 선택해 주세요" : activeIndex < 0 ? "현재 문항의 연결 페이지 없음" : `${activeIndex + 1} / ${visiblePages.length} 페이지`}</strong>
       <button type="button" onClick={() => go(activeIndex + 1)} disabled={activeIndex >= visiblePages.length - 1}>다음 페이지</button>
       <span className="original-page-toolbar__separator" aria-hidden="true" />
       <button type="button" onClick={() => changeZoom(value => value - 0.2)} disabled={zoom <= 0.2}>축소</button>
