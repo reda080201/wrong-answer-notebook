@@ -62,8 +62,10 @@ export function useKnowledgeGraph() {
       if (mountedRef.current && generation === refreshGenerationRef.current) {
         setError(cause instanceof Error ? cause.message : "지식 그래프를 불러오지 못했습니다.");
         setLoadStatus("error");
+        // An ordinary refresh may keep the last committed graph visible. Writes
+        // still require a fresh successful read; restoration also hides readiness.
+        setReady(!restoreReloadBlockedRef.current && loadSucceededRef.current);
         loadSucceededRef.current = false;
-        setReady(false);
       }
       return false;
     }

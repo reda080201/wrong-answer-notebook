@@ -7,6 +7,22 @@ import { useKnowledgeGraph } from "./useKnowledgeGraph";
 vi.mock("../services/storageBackend", () => ({ getStorageBackend: vi.fn() }));
 
 describe("useKnowledgeGraph load readiness", () => {
+  it("blocks stale writes after restore reload failure and retries against restored data", async () => {
+    const entity = (id: string) => ({ id, type: "concept", name: id, aliases: [], provenance: "manual" });
+    const loadKnowledgeGraph = vi.fn().mockResolvedValueOnce({ entities: [entity("A")], relations: [], questionLinks: [] }).mockRejectedValueOnce(new Error("restored graph offline")).mockResolvedValueOnce({ entities: [entity("B")], relations: [], questionLinks: [] });
+    const saveKnowledgeGraph = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getStorageBackend).mockReturnValue({ loadKnowledgeGraph, saveKnowledgeGraph } as never);
+    const { result } = renderHook(() => useKnowledgeGraph());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    act(() => result.current.setRestoreReloadBlocked(true));
+    await act(async () => { expect(await result.current.reload()).toBe(false); });
+    expect(result.current.ready).toBe(false);
+    await expect(result.current.createEntity(entity("stale") as never)).rejects.toThrow("불러오지 못했습니다");
+    expect(saveKnowledgeGraph).not.toHaveBeenCalled();
+    await act(async () => { expect(await result.current.reload()).toBe(true); result.current.setRestoreReloadBlocked(false); });
+    await act(async () => { await result.current.createEntity(entity("C") as never); });
+    expect(saveKnowledgeGraph.mock.calls[0][0].entities.map((item: { id: string }) => item.id)).toEqual(["B", "C"]);
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it("marks an empty graph ready only after a successful load", async () => {
