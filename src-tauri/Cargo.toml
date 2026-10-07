@@ -32,3 +32,4 @@ tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync",
 axum = { version = "0.8", features = ["http1", "json", "tokio"] }
 rfd = "0.14"
 fs2 = "0.4"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp", "gif"] }

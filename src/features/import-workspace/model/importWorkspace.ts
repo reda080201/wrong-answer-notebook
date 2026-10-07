@@ -44,7 +44,7 @@ export type ImportEntryMetadata = Partial<Pick<EntryFormData,
 >> & { unknownFields?: Record<string, unknown> };
 export interface ImportDraftGroup { solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }
-export interface ImportCommitAttempt { entryIds: string[]; groupIds: string[]; state: "pending" | "completed"; }
+export interface ImportCommitAttempt { entryIds: string[]; groupIds: string[]; state: "pending" | "completed"; attemptId?: string; createdAt?: string; entryDigests?: string[]; preparedEntries?: EntryFormData[]; sourceToSaved?: Record<string, string>; }
 export interface ImportWorkspace { commitAttempt?: ImportCommitAttempt; id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
 
 export function normalizeChoice(value: string, index: number): { id: string; marker: string; content: string } {

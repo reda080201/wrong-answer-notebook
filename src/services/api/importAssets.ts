@@ -163,6 +163,6 @@ export async function getImportAssetPreviewUrl(session: ImportAssetSessionManife
   const base64 = getStorageBackendKind() === "desktop-proxy"
     ? (await proxyRequest<{ bytesBase64: string }>(`/v1/import-sessions/${encodeURIComponent(session.id)}/assets/${encodeURIComponent(stagedFilename)}`)).bytesBase64
     : await invoke<string>("read_import_asset_preview", { sessionId: session.id, filename: stagedFilename });
-  const mime = /\.png$/i.test(stagedFilename) ? "image/png" : /\.webp$/i.test(stagedFilename) ? "image/webp" : "image/jpeg";
+  const mime = /\.png$/i.test(stagedFilename) ? "image/png" : /\.webp$/i.test(stagedFilename) ? "image/webp" : /\.gif$/i.test(stagedFilename) ? "image/gif" : "image/jpeg";
   return `data:${mime};base64,${base64}`;
 }

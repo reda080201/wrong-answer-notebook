@@ -395,11 +395,13 @@ async fn create_import_session(State(state): State<BridgeState>) -> BridgeResult
     Ok(Json(json!({ "sessionId": session_id })))
 }
 
-async fn read_import_asset_preview(State(state): State<BridgeState>, AxumPath((session_id, filename)): AxumPath<(String, String)>) -> BridgeResult<Json<Value>> {
-    if !safe_image_name(&filename) { return Err(invalid("허용되지 않은 이미지 파일명입니다.")); }
-    let path = import_session_root(&state, &session_id)?.join("assets").join(filename);
-    if fs::metadata(&path).map_err(internal)?.len() > 32 * 1024 * 1024 { return Err(invalid("미리보기 이미지가 너무 큽니다.")); }
-    Ok(Json(json!({ "bytesBase64": STANDARD.encode(fs::read(path).map_err(internal)?) })))
+async fn read_import_asset_preview(
+    State(state): State<BridgeState>,
+    AxumPath((session_id, filename)): AxumPath<(String, String)>,
+) -> BridgeResult<Json<Value>> {
+    let bytes = crate::import_assets::read_staged_preview(&state.data_dir, &session_id, &filename)
+        .map_err(invalid)?;
+    Ok(Json(json!({ "bytesBase64": STANDARD.encode(bytes) })))
 }
 
 async fn stage_import_asset(
@@ -708,7 +710,10 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
             get(load_image).delete(delete_image),
         )
         .route("/v1/import-sessions", post(create_import_session))
-        .route("/v1/import-sessions/{session_id}/assets/{filename}", get(read_import_asset_preview))
+        .route(
+            "/v1/import-sessions/{session_id}/assets/{filename}",
+            get(read_import_asset_preview),
+        )
         .route(
             "/v1/import-sessions/validate",
             post(validate_import_session),

@@ -28,6 +28,8 @@ import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
 import { reviewSessionCompletedCount, reviewSessionFingerprint } from "../features/review/storage/reviewSessionIdentity";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
+import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { commitImportWorkspace } from "../features/import-workspace/services/commitImportWorkspace";
 import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
 import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
 import SupplementalLinkModal from "../features/supplemental-resources/components/SupplementalLinkModal";
@@ -229,6 +231,52 @@ export default function AppModals({
     }
     await handleImportedEntriesApply(items, assetFiles, assetSession);
   };
+  const directCommitRef = useRef<ImportWorkspace | null>(null);
+  const [directCommitLocked, setDirectCommitLocked] = useState(false);
+  const directTaskRef = useRef<Promise<void> | null>(null);
+  const directMaintenanceRef = useRef(false);
+  useEffect(() => {
+    if (!showImportModal || importMode !== "import") return;
+    let active = true;
+    void loadImportWorkspaceDraft().then(draft => {
+      if (!active || directTaskRef.current) return;
+      if (draft?.commitAttempt) { directCommitRef.current = draft; setDirectCommitLocked(true); }
+      else setDirectCommitLocked(false);
+    }).catch(() => { if (active) setDirectCommitLocked(true); });
+    return () => { active = false; };
+  }, [showImportModal, importMode]);
+  useEffect(() => {
+    if (workspace) return;
+    registerWorkspaceDraftFlush({ flush: async () => { await directTaskRef.current; }, setMaintenanceBlocked: blocked => { directMaintenanceRef.current = blocked; } });
+    return () => registerWorkspaceDraftFlush(null);
+  }, [workspace, registerWorkspaceDraftFlush]);
+  const handleDirectEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => {
+    if (directMaintenanceRef.current) throw new Error("백업·복원이 끝난 뒤 저장해 주세요.");
+    if (directTaskRef.current) throw new Error("가져오기를 저장하는 중입니다.");
+    const operation = (async () => {
+      const existing = await loadImportWorkspaceDraft();
+      if (existing && existing.id !== directCommitRef.current?.id) throw new Error("보존된 가져오기 초안을 작업실에서 먼저 확인해 주세요.");
+      let snapshot = existing ?? directCommitRef.current;
+      if (!snapshot) {
+        snapshot = buildWorkspace(items, assetFiles ?? [], undefined, assetSession);
+        snapshot = { ...snapshot, commitAttempt: { attemptId: crypto.randomUUID(), createdAt: new Date().toISOString(), entryIds: items.map(() => crypto.randomUUID()), groupIds: snapshot.groups.map(group => group.id), state: "pending" } };
+        await saveImportWorkspaceDraft(snapshot);
+        directCommitRef.current = snapshot;
+        setDirectCommitLocked(true);
+      }
+      const attempt = snapshot.commitAttempt!;
+      if (!attempt.preparedEntries && snapshot.assetSession?.mode === "memory-only" && snapshot.assetSession.assets.length && !assetFiles?.length) throw new Error("임시 원본 파일을 복구할 수 없습니다. 원본 파일과 항목 목록을 확인해 주세요.");
+      const ids = await handleImportedEntriesApply(attempt.preparedEntries ?? items, assetFiles, assetSession ?? snapshot.assetSession, attempt.entryIds);
+      if (JSON.stringify(ids) !== JSON.stringify(attempt.entryIds)) throw new Error("실제 저장된 항목 ID를 모두 확인하지 못했습니다.");
+      snapshot = await loadImportWorkspaceDraft() ?? snapshot;
+      await saveImportWorkspaceDraft({ ...snapshot, commitAttempt: { ...snapshot.commitAttempt!, state: "completed" } });
+      await clearImportWorkspaceDraft();
+      directCommitRef.current = null;
+      setDirectCommitLocked(false);
+    })();
+    directTaskRef.current = operation;
+    try { await operation; } finally { directTaskRef.current = null; }
+  };
   const validateWorkspaceAssets = async (candidate: ImportWorkspace) => {
     const assetSession = candidate.assetSession;
     if (!assetSession) return { valid: true, message: undefined };
@@ -417,7 +465,10 @@ export default function AppModals({
           mode={importMode}
           onClose={closeImportModal}
           onApply={handleImportApply}
-          onApplyEntries={handleWorkspaceEntries}
+          onApplyEntries={handleDirectEntries}
+          commitLocked={directCommitLocked}
+          onRecoverCommit={async () => { const draft = directCommitRef.current; if (!draft) throw new Error("확정 기록을 읽지 못했습니다. 다시 불러와 주세요."); await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
+          onOpenWorkspace={handleWorkspaceEntries}
           onOpenSettings={openSettings}
           gptMcpPreferences={settings.gptMcpPreferences}
         />

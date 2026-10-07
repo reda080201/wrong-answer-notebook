@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import HotspotLinkEditor from "../../solutions/HotspotLinkEditor";
 import { entrySolutionQuestions } from "../../solutions/solutionModel";
 import { questionDraftToEntryData } from "../model/importWorkspace";
-import { loadEntries } from "../../../api";
 import type { EntryFormData, QuestionContentSegment } from "../../../types";
 import { getEditableContentSegments, hasAmbiguousLegacySourceText, updateDraftContentSegment } from "../model/importWorkspace";
 import type { ImportQuestionDraft, ImportWorkspace } from "../model/importWorkspace";
@@ -296,11 +295,13 @@ export default function ImportWorkspaceView({ initialWorkspace, resolvePageUrl, 
   };
 
   const resolveCommit = async (snapshot: ImportWorkspace): Promise<boolean> => {
+    const latestDraft = await loadImportWorkspaceDraft();
+    if (latestDraft?.id === snapshot.id) snapshot = latestDraft;
     const attempt = snapshot.commitAttempt;
     if (!attempt || !attempt.entryIds.length) throw new Error("확정 저장 기록이 올바르지 않습니다.");
-    const stored = await loadEntries();
-    const found = attempt.entryIds.filter(id => stored.some(entry => entry.id === id));
-    if (found.length === attempt.entryIds.length) {
+    if (!attempt.attemptId) throw new Error("이전 확정 기록의 저장 내용을 입증할 수 없습니다. 항목 목록과 백업을 확인해 주세요.");
+    const ids = await onSave(attempt.preparedEntries ?? commitImportWorkspace(snapshot).entries, snapshot.assetSession, attempt.entryIds);
+    if (JSON.stringify(ids) === JSON.stringify(attempt.entryIds)) {
       committedAwaitingDraftCleanupRef.current = true;
       setCommittedAwaitingDraftCleanup(true);
       setCommitUncertain(false);
@@ -319,26 +320,28 @@ export default function ImportWorkspaceView({ initialWorkspace, resolvePageUrl, 
       await cancelAutosaveAndDrain();
       let snapshot = workspaceRef.current;
       if (snapshot.commitAttempt) {
-        if (!committedAwaitingDraftCleanupRef.current) await resolveCommit(snapshot);
+        await resolveCommit(snapshot);
       } else {
         const result = commitImportWorkspace(snapshot);
         const groupIds = snapshot.groups.filter(group => group.questions.length).map(group => group.id);
-        const attempt = { entryIds: result.entries.map(() => crypto.randomUUID()), groupIds, state: "pending" as const };
+        const attempt = { entryIds: result.entries.map(() => crypto.randomUUID()), groupIds, state: "pending" as const, attemptId: crypto.randomUUID(), createdAt: new Date().toISOString() };
         snapshot = { ...snapshot, commitAttempt: attempt };
         // The durable receipt must exist before any entry or asset is committed.
         await persistDraft(snapshot);
         workspaceRef.current = snapshot;
         replaceWorkspace(snapshot);
         setCommitUncertain(true);
-        await onSave(result.entries, snapshot.assetSession, attempt.entryIds);
-        committedAwaitingDraftCleanupRef.current = true;
-        setCommittedAwaitingDraftCleanup(true);
-        setCommitUncertain(false);
-        snapshot = { ...snapshot, commitAttempt: { ...attempt, state: "completed" } };
-        workspaceRef.current = snapshot;
-        replaceWorkspace(snapshot);
-        await persistDraft(snapshot);
+        const ids = await onSave(result.entries, snapshot.assetSession, attempt.entryIds);
+        if (JSON.stringify(ids) !== JSON.stringify(attempt.entryIds)) throw new Error("실제 저장된 항목 ID를 모두 확인하지 못했습니다.");
       }
+      snapshot = await loadImportWorkspaceDraft() ?? snapshot;
+      committedAwaitingDraftCleanupRef.current = true;
+      setCommittedAwaitingDraftCleanup(true);
+      setCommitUncertain(false);
+      snapshot = { ...snapshot, commitAttempt: { ...snapshot.commitAttempt!, state: "completed" } };
+      workspaceRef.current = snapshot;
+      replaceWorkspace(snapshot);
+      await persistDraft(snapshot);
       await clearImportWorkspaceDraft();
       onClose();
     } catch (error) {

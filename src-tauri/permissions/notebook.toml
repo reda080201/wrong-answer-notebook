@@ -35,6 +35,7 @@ commands.allow = [
   "rank_similar_questions_with_ai",
   "create_import_asset_session",
   "stage_import_asset_bytes",
+  "read_import_asset_preview",
   "commit_import_asset_session",
   "commit_import_asset_session_entry",
   "commit_import_asset_session_entries",

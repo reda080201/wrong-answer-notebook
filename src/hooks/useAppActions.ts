@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
+import { loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { importEntryDigest, validatePlannedIds } from "../features/import-workspace/services/importCommitProof";
 import {
   cleanupOrphanImages,
   applyBrowserBackupAtomically,
@@ -34,7 +36,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { findDuplicateEntries } from "../utils/duplicates";
-import { getEntryTitle } from "../utils/entry";
+import { getEntryTitle, normalizeEntry } from "../utils/entry";
 import {
   entryToFormData,
   mergeGptSolutionIntoEntry,
@@ -76,8 +78,8 @@ interface UseAppActionsOptions {
   activeSection: EntryKind;
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
-  addEntries: (forms: EntryFormData[], plannedIds?: string[]) => Promise<string[]>;
-  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[], plannedIds?: string[]) => Promise<string[]>;
+  addEntries: (forms: EntryFormData[], plannedIds?: string[], allowCreate?: boolean, fixedCreatedAt?: string) => Promise<string[]>;
+  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[], plannedIds?: string[], allowCreate?: boolean, fixedCreatedAt?: string) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -581,13 +583,19 @@ export function useAppActions({
     assetSession?: ImportAssetSessionManifest,
     plannedIds?: string[],
   ) => {
+    if (maintenanceRef.current || restoreReloadPending) throw new Error("백업·복원 또는 재로딩이 끝난 뒤 가져오기를 저장해 주세요.");
     if (!importedEntries.length) return [];
+    const commitDraft = plannedIds ? await loadImportWorkspaceDraft() : null;
+    if (plannedIds && (!commitDraft?.commitAttempt || JSON.stringify(commitDraft.commitAttempt.entryIds) !== JSON.stringify(plannedIds))) throw new Error("고정 ID에 대응하는 확정 기록을 찾을 수 없습니다.");
+    const receipt = commitDraft?.commitAttempt;
+    if (receipt && !receipt.attemptId) throw new Error("이전 확정 기록의 저장 내용을 입증할 수 없습니다. 항목 목록과 백업을 확인해 주세요.");
     let sourceToSaved: Record<string, string> = {};
     let savedFilenames: string[] = [];
     if (assetSession?.mode === "tauri-staged") {
       sourceToSaved = assetSession.sourceToStaged ?? {};
     }
-    if (assetSession?.mode !== "tauri-staged" && assetFiles.length) {
+    if (receipt?.preparedEntries) sourceToSaved = receipt.sourceToSaved ?? {};
+    if (!receipt?.preparedEntries && assetSession?.mode !== "tauri-staged" && assetFiles.length) {
       const referencedImages = new Set(
         importedEntries.flatMap(collectEntryImportImageReferences).map(normalizeImportImageKey),
       );
@@ -599,7 +607,7 @@ export function useAppActions({
       sourceToSaved = importedAssets.sourceToSaved;
     }
     try {
-      const forms = importedEntries.map((rawImported): EntryFormData => {
+      let forms = receipt?.preparedEntries ?? importedEntries.map((rawImported): EntryFormData => {
       const imported = rewriteImportAssetReferences(rawImported, sourceToSaved);
       const entryKind: EntryKind =
         imported.entryKind === "wrong_answer" ||
@@ -654,10 +662,24 @@ export function useAppActions({
         checklist: imported.checklist ?? [],
       };
       });
+      validatePlannedIds(forms, plannedIds);
+      if (receipt && !receipt.preparedEntries) {
+        forms = forms.map((form, index) => {
+          const normalized = normalizeEntry({ ...form, id: plannedIds![index], createdAt: receipt.createdAt!, updatedAt: receipt.createdAt! } as WrongAnswerEntry);
+          const { id, createdAt, updatedAt, ...prepared } = normalized;
+          void id; void createdAt; void updatedAt;
+          return prepared;
+        });
+      }
+      if (receipt && commitDraft) {
+        const entryDigests = await Promise.all(forms.map(importEntryDigest));
+        if (receipt.entryDigests && JSON.stringify(receipt.entryDigests) !== JSON.stringify(entryDigests)) throw new Error("확정 기록의 저장 내용이 손상되어 저장을 중단했습니다.");
+        await saveImportWorkspaceDraft({ ...commitDraft, commitAttempt: { ...receipt, preparedEntries: forms, entryDigests, sourceToSaved } });
+      }
       const ids = assetSession?.mode === "tauri-staged"
-        ? await addEntriesWithImportAssetSession(assetSession.id, forms, plannedIds)
-        : await addEntries(forms, plannedIds);
-      setShowImportModal(false);
+        ? receipt ? await addEntriesWithImportAssetSession(assetSession.id, forms, plannedIds, receipt.state !== "completed", receipt.createdAt) : await addEntriesWithImportAssetSession(assetSession.id, forms)
+        : receipt ? await addEntries(forms, plannedIds, receipt.state !== "completed", receipt.createdAt) : await addEntries(forms);
+      if (!plannedIds) setShowImportModal(false);
       setSolutionSourceEntry(undefined);
       setImportMode("import");
       setPendingImportFiles([]);

@@ -62,6 +62,51 @@ const form: EntryFormData = {
 };
 
 describe("useEntries", () => {
+  it("retains the durable creation timestamp for fixed-ID imports", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    let stored: WrongAnswerEntry[] = [entry];
+    vi.mocked(loadEntries).mockImplementation(async () => stored);
+    vi.mocked(saveEntries).mockImplementation(async (next) => { stored = next; });
+    const createdAt = "2026-01-02T03:04:05.000Z";
+    await act(async () => { await result.current.addEntries([form], ["fixed-date"], true, createdAt); });
+    expect(stored.find(item => item.id === "fixed-date")).toMatchObject({ createdAt, updatedAt: createdAt });
+  });
+  it("acknowledges matching planned IDs in normal and staged paths", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await act(async () => { expect(await result.current.addEntries([entry], [entry.id])).toEqual([entry.id]); });
+    await act(async () => { expect(await result.current.addEntriesWithImportAssetSession("session", [entry], [entry.id])).toEqual([entry.id]); });
+    expect(commitImportAssetSessionEntries).not.toHaveBeenCalled();
+    expect(saveEntries).not.toHaveBeenCalled();
+  });
+  it("does not recreate a missing completed import", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect(act(() => result.current.addEntries([form], ["deleted-import"], false))).rejects.toThrow("재생성");
+    await expect(act(() => result.current.addEntriesWithImportAssetSession("session", [form], ["deleted-import"], false))).rejects.toThrow("재생성");
+    expect(saveEntries).not.toHaveBeenCalled(); expect(commitImportAssetSessionEntries).not.toHaveBeenCalled();
+  });
+  it("rejects mismatched planned IDs before writing", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect(act(() => result.current.addEntries([form], []))).rejects.toThrow();
+    expect(saveEntries).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial planned-ID collisions without adding the missing entries", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect(act(() => result.current.addEntries([form, form], [entry.id, "new-id"]))).rejects.toThrow();
+    expect(saveEntries).not.toHaveBeenCalled();
+  });
+
+  it("does not acknowledge an existing ID with different imported content", async () => {
+    const { result } = renderHook(() => useEntries());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    await expect(act(() => result.current.addEntries([form], [entry.id]))).rejects.toThrow();
+    expect(saveEntries).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.mocked(deleteImage).mockReset();
     vi.mocked(commitExamSubmission).mockReset();

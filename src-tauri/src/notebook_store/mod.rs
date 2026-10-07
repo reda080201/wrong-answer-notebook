@@ -136,7 +136,11 @@ pub fn collect_entry_image_filenames(entry: &WrongAnswerEntry) -> HashSet<String
             .into_iter()
             .flat_map(|items| items.iter().filter_map(Value::as_str).map(str::to_owned)),
     );
-    for field in ["questionSourceCrops", "questionRenderVerification", "questionSolutionHotspots"] {
+    for field in [
+        "questionSourceCrops",
+        "questionRenderVerification",
+        "questionSolutionHotspots",
+    ] {
         referenced.extend(
             entry
                 .extra

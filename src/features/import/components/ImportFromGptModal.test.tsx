@@ -1,3 +1,4 @@
+import { validPngBytes } from "../../../test/fixtures/validPng";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
@@ -7,6 +8,8 @@ import type { ImportAssetSessionManifest } from "../../import-workspace/model/im
 import v2WrapperFixture from "../../../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
+
+vi.mock("../services/validateImportImage", () => ({ validateImportImage: vi.fn().mockResolvedValue(undefined) }));
 
 vi.mock("../../../api", () => ({
   getImageUrl: vi.fn().mockResolvedValue("blob:fixture"),
@@ -1005,7 +1008,7 @@ describe("ImportFromGptModal", () => {
         },
       }],
     }));
-    zip.file("q1.png", new Uint8Array([137, 80, 78, 71]));
+    zip.file("q1.png", validPngBytes);
     const blob = await zip.generateAsync({ type: "blob" });
     const file = new File([blob], "bundle.zip", { type: "application/zip" });
 
@@ -1046,7 +1049,7 @@ describe("ImportFromGptModal", () => {
       }],
     }));
     for (const name of ["images/q9-a.png", "images/q9-b.png", "images/q10-a.png", "images/page-3.png", "images/page-4.png", "images/page-5.png"]) {
-      zip.file(name, new Uint8Array([137, 80, 78, 71]));
+      zip.file(name, validPngBytes);
     }
     const file = new File([await zip.generateAsync({ type: "blob" })], "crops.zip", { type: "application/zip" });
 

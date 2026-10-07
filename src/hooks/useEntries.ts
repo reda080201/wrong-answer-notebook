@@ -16,8 +16,9 @@ import { getStorageBackend } from "../services/storageBackend";
 import { getAllImageFilenames } from "../utils/entry";
 import { reconcileSolutionHotspots } from "../features/solutions/solutionModel";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
+import { classifyImportRetry, validatePlannedIds } from "../features/import-workspace/services/importCommitProof";
 
-type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T };
+type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T; unchanged?: boolean } | Promise<{ next: WrongAnswerEntry[]; value: T; unchanged?: boolean }>;
 export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
 export type InitialLoadStatus = "loading" | "ready" | "error";
 
@@ -42,7 +43,7 @@ export function useEntries() {
 
   const clearError = useCallback(() => setError(null), []);
 
-  const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>): Promise<T> => {
+  const enqueueMutation = useCallback(<T,>(mutation: Mutation<T>, verify?: (next: WrongAnswerEntry[]) => Promise<void>): Promise<T> => {
     if (maintenanceBlockedRef.current) {
       return Promise.reject(new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요."));
     }
@@ -54,8 +55,9 @@ export function useEntries() {
     }
     mutationRevisionRef.current += 1;
     const task = enqueue(async () => {
-      const { next, value } = mutation(entriesRef.current);
-      await saveEntries(next);
+      const { next, value, unchanged } = await mutation(entriesRef.current);
+      if (!unchanged) await saveEntries(next);
+      await verify?.(next);
       entriesRef.current = next;
       setEntries(next);
       return value;
@@ -172,21 +174,26 @@ export function useEntries() {
   );
 
   const addEntries = useCallback(
-    async (forms: EntryFormData[], plannedIds?: string[]) => {
+    async (forms: EntryFormData[], plannedIds?: string[], allowCreate = true, fixedCreatedAt?: string) => {
+      validatePlannedIds(forms, plannedIds);
       if (!forms.length) return [];
       try {
         setError(null);
-        const now = new Date().toISOString();
+        const now = fixedCreatedAt ?? new Date().toISOString();
         const added = forms.map((form, index) => ({
           id: plannedIds?.[index] ?? uuidv4(),
           ...form,
           createdAt: now,
           updatedAt: now,
         } satisfies WrongAnswerEntry));
-        return await enqueueMutation((current) => ({
-          next: [...added.filter(entry => !current.some(existing => existing.id === entry.id)), ...current],
-          value: added.map((entry) => entry.id),
-        }));
+        return await enqueueMutation(async (current) => {
+          const stored = plannedIds ? await loadEntries() : current;
+          const state = classifyImportRetry(stored, added);
+          if (state === "new" && !allowCreate) throw new Error("완료된 가져오기 항목이 없어 자동 재생성을 중단했습니다.");
+          return { next: state === "existing" ? stored : [...added, ...stored], value: added.map(entry => entry.id), unchanged: state === "existing" };
+        }, plannedIds ? async () => {
+          if (classifyImportRetry(await loadEntries(), added) !== "existing") throw new Error("항목의 영속 저장을 확인하지 못했습니다.");
+        } : undefined);
       } catch (err) {
         const message = errorMessage(err, "여러 항목을 추가하지 못했습니다.");
         setError(message);
@@ -232,17 +239,18 @@ export function useEntries() {
   );
 
   const addEntriesWithImportAssetSession = useCallback(
-    async (sessionId: string, forms: EntryFormData[], plannedIds?: string[]) => {
+    async (sessionId: string, forms: EntryFormData[], plannedIds?: string[], allowCreate = true, fixedCreatedAt?: string) => {
+      validatePlannedIds(forms, plannedIds);
       if (!forms.length) return [];
       if (maintenanceBlockedRef.current) {
         throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
       }
-      if (!loadedRef.current) {
+      if (reloadingRef.current || !loadedRef.current) {
         throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
       }
       try {
         setError(null);
-        const now = new Date().toISOString();
+        const now = fixedCreatedAt ?? new Date().toISOString();
         const added = forms.map((form, index) => ({
           id: plannedIds?.[index] ?? uuidv4(),
           ...form,
@@ -252,10 +260,11 @@ export function useEntries() {
         const task = enqueue(async () => {
           if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");
           if (!loadedRef.current) throw new Error("노트를 불러오는 중입니다. 잠시 후 다시 시도해 주세요.");
-          const existingIds = new Set(entriesRef.current.map(entry => entry.id));
-          if (added.every(entry => existingIds.has(entry.id))) return added.map(entry => entry.id);
-          if (added.some(entry => existingIds.has(entry.id))) throw new Error("가져오기 저장 결과가 일부만 확인되어 재저장을 중단했습니다.");
+          const stored = plannedIds ? await loadEntries() : entriesRef.current;
+          if (classifyImportRetry(stored, added) === "existing") { entriesRef.current = stored; setEntries(stored); return added.map(entry => entry.id); }
+          if (!allowCreate) throw new Error("완료된 가져오기 항목이 없어 자동 재생성을 중단했습니다.");
           const committed = await commitImportAssetSessionEntries(sessionId, added);
+          if (plannedIds && classifyImportRetry(await loadEntries(), added) !== "existing") throw new Error("항목의 영속 저장을 확인하지 못했습니다.");
           updateLoadedEntriesRevision(committed.revision);
           const next = committed.entries ?? [...added, ...entriesRef.current];
           entriesRef.current = next;
