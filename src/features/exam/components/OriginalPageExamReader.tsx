@@ -13,13 +13,14 @@ interface Props {
   filenames: string[];
   selectedFilenames?: string[];
   currentFilename?: string;
+  emptyMessage?: string;
   onSelectPages(filenames: string[]): void;
   onChangePage(filename: string): void;
 }
 
 const clampZoom = (zoom: number) => Math.min(2.5, Math.max(0.2, zoom));
 
-export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {
+export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {
   const [overlapChoices, setOverlapChoices] = useState<QuestionSolutionHotspot[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [zoomState, setZoomState] = useState({ mode: "width" as "width" | "page" | "manual", value: 1 });
@@ -30,8 +31,8 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const selectedSet = useMemo(() => new Set(selectedFilenames ?? filenames), [filenames, selectedFilenames]);
   const visiblePages = useMemo(() => filenames.filter((filename) => selectedSet.has(filename)), [filenames, selectedSet]);
-  const activeFilename = visiblePages.includes(currentFilename ?? "") ? currentFilename! : visiblePages[0];
-  const activeIndex = Math.max(0, visiblePages.indexOf(activeFilename));
+  const activeFilename = currentFilename === "" ? undefined : visiblePages.includes(currentFilename ?? "") ? currentFilename! : visiblePages[0];
+  const activeIndex = activeFilename === undefined ? -1 : visiblePages.indexOf(activeFilename);
   const zoom = zoomState.value;
   const fitWidth = Math.max(0, viewportSize.width);
   const fitHeight = Math.max(0, viewportSize.height);
@@ -141,7 +142,7 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
       </div>
     </details>
     <div ref={viewportRef} className="original-page-viewport" tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
-      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요.</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <div className="solution-hotspot-stage" style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
+      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <div className="solution-hotspot-stage" style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
     </div>
     <Dialog open={overlapChoices.length > 0} onClose={() => setOverlapChoices([])} title="열 문항의 해설을 선택하세요">{overlapChoices.map(hotspot => <button type="button" key={hotspot.id} onClick={() => { setOverlapChoices([]); onOpenSolution?.(hotspot.questionKey); }}>{questionLabels[hotspot.questionKey]}번 정답·해설</button>)}</Dialog>
   </section>;
