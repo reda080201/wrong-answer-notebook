@@ -69,7 +69,7 @@ describe("useEntries", () => {
     vi.mocked(loadEntries).mockImplementation(async () => stored);
     vi.mocked(saveEntries).mockImplementation(async (next) => { stored = next; });
     const createdAt = "2026-01-02T03:04:05.000Z";
-    await act(async () => { await result.current.addEntries([form], ["fixed-date"], true, createdAt); });
+    await act(async () => { await result.current.addEntries([{ ...form, id: "untrusted-input-id" } as EntryFormData], ["fixed-date"], true, createdAt); });
     expect(stored.find(item => item.id === "fixed-date")).toMatchObject({ createdAt, updatedAt: createdAt });
   });
   it("acknowledges matching planned IDs in normal and staged paths", async () => {

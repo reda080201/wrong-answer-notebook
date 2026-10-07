@@ -467,7 +467,7 @@ export default function AppModals({
           onApply={handleImportApply}
           onApplyEntries={handleDirectEntries}
           commitLocked={directCommitLocked}
-          onRecoverCommit={async () => { const draft = directCommitRef.current; if (!draft) throw new Error("확정 기록을 읽지 못했습니다. 다시 불러와 주세요."); await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
+          onRecoverCommit={async () => { const draft = await loadImportWorkspaceDraft(); if (!draft?.commitAttempt) throw new Error("확정 기록을 읽지 못했습니다. 항목 목록과 초안을 확인해 주세요."); directCommitRef.current = draft; await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
           onOpenWorkspace={handleWorkspaceEntries}
           onOpenSettings={openSettings}
           gptMcpPreferences={settings.gptMcpPreferences}
