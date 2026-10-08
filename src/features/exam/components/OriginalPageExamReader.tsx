@@ -23,7 +23,7 @@ const clampZoom = (zoom: number) => Math.min(2.5, Math.max(0.2, zoom));
 export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {
   const [overlapChoices, setOverlapChoices] = useState<QuestionSolutionHotspot[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [zoomState, setZoomState] = useState({ mode: "width" as "width" | "page" | "manual", value: 1 });
+  const [zoomState, setZoomState] = useState({ mode: "page" as "width" | "page" | "manual", value: 1 });
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -33,14 +33,14 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   const visiblePages = useMemo(() => filenames.filter((filename) => selectedSet.has(filename)), [filenames, selectedSet]);
   const activeFilename = currentFilename === "" ? undefined : visiblePages.includes(currentFilename ?? "") ? currentFilename! : visiblePages[0];
   const activeIndex = activeFilename === undefined ? -1 : visiblePages.indexOf(activeFilename);
-  const zoom = zoomState.value;
   const fitWidth = Math.max(0, viewportSize.width);
   const fitHeight = Math.max(0, viewportSize.height);
   const activeImageSize = imageSize.filename === activeFilename ? imageSize : { width: 0, height: 0 };
   const pageWidth = activeImageSize.width && activeImageSize.height
     ? Math.min(fitWidth, fitHeight * activeImageSize.width / activeImageSize.height)
     : fitWidth;
-  const displayWidth = zoomState.mode === "page" ? pageWidth : zoomState.mode === "width" ? fitWidth : fitWidth * zoom;
+  const displayWidth = zoomState.mode === "page" ? pageWidth : zoomState.mode === "width" ? fitWidth : fitWidth * zoomState.value;
+  const zoom = fitWidth > 0 ? displayWidth / fitWidth : 1;
   const activeHotspots = onOpenSolution ? hotspots.filter(hotspot => validSolutionHotspot(hotspot) && hotspot.sourcePageImage === activeFilename && questionLabels[hotspot.questionKey]) : [];
   const openHotspot = (hotspot: QuestionSolutionHotspot) => {
     const displayHeight = activeImageSize.width ? displayWidth * activeImageSize.height / activeImageSize.width : 0;
@@ -49,7 +49,8 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
     if (unique.length > 1) setOverlapChoices(unique); else onOpenSolution?.(hotspot.questionKey);
   };
   const displayedPercent = fitWidth > 0 ? Math.round(displayWidth / fitWidth * 100) : 100;
-  const changeZoom = (update: (value: number) => number) => setZoomState(current => ({ mode: "manual", value: clampZoom(update(current.value)) }));
+  const changeZoom = (update: (value: number) => number) => setZoomState({ mode: "manual", value: clampZoom(update(zoom)) });
+  const [pageDirection, setPageDirection] = useState("forward");
 
   useEffect(() => {
     let cancelled = false;
@@ -87,8 +88,12 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
   }, [activeFilename]);
 
   const go = (nextIndex: number) => {
+    if (activeIndex < 0) return;
     const next = visiblePages[nextIndex];
-    if (next) onChangePage(next);
+    if (next) {
+      setPageDirection(nextIndex < activeIndex ? "backward" : "forward");
+      onChangePage(next);
+    }
   };
   const fitPage = () => setZoomState(current => ({ ...current, mode: "page" }));
   const fitToWidth = () => setZoomState(current => ({ ...current, mode: "width" }));
@@ -97,8 +102,11 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
 
   return <section className="original-page-reader" aria-label="원본 문제지 페이지 보기" onKeyDown={(event) => {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing || (event.target instanceof Element && event.target.closest("button, input, textarea, select, summary, [contenteditable='true']"))) return;
-    if (event.key === "ArrowLeft") { event.preventDefault(); go(activeIndex - 1); }
-    if (event.key === "ArrowRight") { event.preventDefault(); go(activeIndex + 1); }
+    // At an enlarged scale the arrows pan the original image instead.
+    const viewport = viewportRef.current;
+    if (viewport && viewport.scrollWidth > viewport.clientWidth + 1) { event.stopPropagation(); return; }
+    if (event.key === "ArrowLeft") { event.preventDefault(); event.stopPropagation(); go(activeIndex - 1); }
+    if (event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); go(activeIndex + 1); }
   }} onTouchStart={(event) => {
     if (event.target instanceof Element && event.target.closest("button, input, textarea, select, summary, [role='checkbox'], [contenteditable='true']")) return;
     const point = event.touches[0];
@@ -115,9 +123,9 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(activeIndex + (dx < 0 ? 1 : -1));
   }} onTouchCancel={() => { touchStart.current = null; }}>
     <header className="original-page-toolbar">
-      <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>이전 페이지</button>
+      <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>← 이전 페이지</button>
       <strong aria-live="polite">{!visiblePages.length ? "페이지를 선택해 주세요" : activeIndex < 0 ? "현재 문항의 연결 페이지 없음" : `${activeIndex + 1} / ${visiblePages.length} 페이지`}</strong>
-      <button type="button" onClick={() => go(activeIndex + 1)} disabled={activeIndex >= visiblePages.length - 1}>다음 페이지</button>
+      <button type="button" onClick={() => go(activeIndex + 1)} disabled={activeIndex < 0 || activeIndex >= visiblePages.length - 1}>다음 페이지 →</button>
       <span className="original-page-toolbar__separator" aria-hidden="true" />
       <button type="button" onClick={() => changeZoom(value => value - 0.2)} disabled={zoom <= 0.2}>축소</button>
       <span>{displayedPercent}%</span>
@@ -141,8 +149,8 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
         </label>)}
       </div>
     </details>
-    <div ref={viewportRef} className="original-page-viewport" tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
-      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <div className="solution-hotspot-stage" style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} data-solution-question-key={hotspot.questionKey} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
+    <div ref={viewportRef} className={`original-page-viewport${zoomState.mode === "page" ? " original-page-viewport--fit-page" : ""}`} tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
+      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <div key={activeFilename} className={`solution-hotspot-stage original-page-frame original-page-frame--${pageDirection}`} style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} data-solution-question-key={hotspot.questionKey} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
     </div>
     <Dialog open={overlapChoices.length > 0} onClose={() => setOverlapChoices([])} title="열 문항의 해설을 선택하세요">{overlapChoices.map(hotspot => <button type="button" key={hotspot.id} onClick={() => { setOverlapChoices([]); onOpenSolution?.(hotspot.questionKey); }}>{questionLabels[hotspot.questionKey]}번 정답·해설</button>)}</Dialog>
   </section>;

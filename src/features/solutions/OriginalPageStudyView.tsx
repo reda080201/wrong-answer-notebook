@@ -4,6 +4,7 @@ import OriginalPageExamReader from "../exam/components/OriginalPageExamReader";
 import QuestionSolutionSheet from "./QuestionSolutionSheet";
 import HotspotLinkEditor from "./HotspotLinkEditor";
 import { entrySolutionQuestions, validSolutionHotspot } from "./solutionModel";
+import "./OriginalPageStudyView.css";
 
 interface Props {
   entry: WrongAnswerEntry;
@@ -28,10 +29,14 @@ export default function OriginalPageStudyView({ entry, hidden, onSaveHotspots }:
     if (page) { setCurrentPage(page); setNotice(""); }
     else setNotice("이 문항의 선택된 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다.");
   };
-  return <div ref={returnFocusRegionRef}>
+  return <div ref={returnFocusRegionRef} className="original-page-study">
+    <div className="original-page-study__tools">
     {onSaveHotspots && <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>파란 점·해설 연결 편집</button>}
     {!hotspots.length && <p role="status">파란 점과 문항의 연결을 확인하면 원본 문제지에서 정답·해설을 열 수 있습니다.</p>}
+    </div>
+    <div className="original-page-study__reader">
     <OriginalPageExamReader filenames={pages} selectedFilenames={selectedPages} currentFilename={currentPage} onSelectPages={setSelectedPages} onChangePage={setCurrentPage} hotspots={hotspots} questionLabels={Object.fromEntries(questions.map(question => [question.key, question.number]))} onOpenSolution={navigate} />
+    </div>
     {solutionKey && <QuestionSolutionSheet returnFocusRegionRef={returnFocusRegionRef} questions={questions} questionKey={solutionKey} hidden={hidden && !revealed.has(solutionKey)} onReveal={() => setRevealed(current => new Set(current).add(solutionKey))} onNavigate={navigate} onClose={() => setSolutionKey(null)} pageNotice={notice} />}
     {editing && onSaveHotspots && <HotspotLinkEditor pages={pages} questions={questions} hotspots={hotspots} onSave={onSaveHotspots} onClose={() => setEditing(false)} />}
   </div>;

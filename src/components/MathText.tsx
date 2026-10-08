@@ -1,12 +1,14 @@
 import { cloneElement, isValidElement, useLayoutEffect, useRef, type ReactNode } from "react";
 import katex from "katex";
+import { typesetMathExpression } from "../utils/mathTypesetting";
+import "./MathText.css";
 
 export type MathDisplaySegment =
   | { type: "text"; value: string }
   | { type: "math"; raw: string; expression: string; displayMode: boolean }
   | { type: "invalid-math"; raw: string; reason: string };
 
-const COMMANDS = new Set(["times", "cdot", "div", "pm", "mp", "ge", "geq", "le", "leq", "neq", "approx", "to", "rightarrow", "leftarrow", "leftrightarrow", "in", "notin", "subset", "supset", "cup", "cap", "parallel", "perp", "angle", "triangle", "circ", "infty", "sum", "prod", "frac", "sqrt", "int", "lim", "sin", "cos", "tan", "log", "ln", "left", "right"]);
+const COMMANDS = new Set(["times", "cdot", "div", "pm", "mp", "ge", "geq", "le", "leq", "neq", "approx", "to", "rightarrow", "leftarrow", "leftrightarrow", "in", "notin", "subset", "supset", "cup", "cap", "parallel", "perp", "angle", "triangle", "circ", "infty", "sum", "prod", "frac", "dfrac", "tfrac", "sqrt", "int", "lim", "sin", "cos", "tan", "log", "ln", "left", "right", "prime", "alpha", "beta", "gamma", "delta", "theta", "pi", "sigma", "omega"]);
 const ENVIRONMENTS = new Set(["cases", "aligned", "array"]);
 const OPENERS = ["$$", "\\[", "\\(", "$"] as const;
 
@@ -48,6 +50,53 @@ function readBalanced(value: string, start: number): number {
   return -1;
 }
 
+const MATH_WORDS = new Set(["sin", "cos", "tan", "log", "ln", "lim", "dx", "dy", "dt"]);
+
+/** Read an unmarked formula without treating English prose, URLs or paths as TeX. */
+function readMathRun(value: string, start: number): number {
+  let cursor = start;
+  const brackets: string[] = [];
+  while (cursor < value.length) {
+    const char = value[cursor];
+    if (/\r|\n/.test(char)) break;
+    if (char === "\\") {
+      const command = value.slice(cursor + 1).match(/^(?:[A-Za-z]+|[,;! ])/);
+      if (!command) break;
+      cursor += command[0].length + 1;
+      continue;
+    }
+    if (/[A-Za-z]/.test(char)) {
+      const word = value.slice(cursor).match(/^[A-Za-z]+/)![0];
+      if (word.length > 1 && !brackets.includes("{") && !MATH_WORDS.has(word)) break;
+      cursor += word.length;
+      continue;
+    }
+    if (/[ \t]/.test(char)) { cursor += 1; continue; }
+    if ("({[".includes(char)) { brackets.push(char); cursor += 1; continue; }
+    if (")}]".includes(char)) {
+      if (!brackets.length || "({[".indexOf(brackets[brackets.length - 1]) !== ")}]".indexOf(char)) break;
+      brackets.pop(); cursor += 1; continue;
+    }
+    if (char === "," && brackets.length) { cursor += 1; continue; }
+    if (char === "." && /\d/.test(value[cursor - 1] ?? "") && /\d/.test(value[cursor + 1] ?? "")) { cursor += 1; continue; }
+    if (/[0-9_^=+\-*/'′’″‴<>|!∑∏∫Σ∞≤≥≠±×÷·→α-ωΑ-Ω⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ₙᵢₖ₊₋]/u.test(char)) { cursor += 1; continue; }
+    break;
+  }
+  return start + value.slice(start, cursor).trimEnd().length;
+}
+
+function readUnmarkedMath(value: string, start: number): { end: number; raw: string } | null {
+  if (!/[A-Za-z0-9∑∏∫Σα-ωΑ-Ω(]/u.test(value[start])) return null;
+  const previous = value[start - 1];
+  if (previous && /[A-Za-z0-9_\\/:.'′]/.test(previous)) return null;
+  const end = readMathRun(value, start);
+  const raw = value.slice(start, end);
+  // Plain ratios and ordinary words remain plain text. Scripts, primes,
+  // operators or function notation provide an explicit mathematical signal.
+  if (!/[_^′’″‴'∑∏∫⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ₀₁₂₃₄₅₆₇₈₉ₙᵢₖ]|\\[A-Za-z]+|[A-Za-z]\s*\([^)]*\)|[A-Za-z0-9]\s*[=≤≥≠]/.test(raw)) return null;
+  return { end, raw };
+}
+
 function readRawCommand(value: string, start: number): { end: number; raw: string } | null {
   const previous = value[start - 1];
   const isBackslashCommand = value[start] === "\\" && previous !== "\\" && previous !== "/" && !(previous === ":" && /[A-Za-z]:$/.test(value.slice(Math.max(0, start - 2), start)));
@@ -80,22 +129,8 @@ function readRawCommand(value: string, start: number): { end: number; raw: strin
   // further commands (for example `\\int_1^3\\left(x\\right)\\,dx=2`).
   // Keeping that expression together lets KaTeX validate it as a single unit
   // while stopping before ordinary prose.
-  let cursor = end;
-  let depth = 0;
-  while (cursor < value.length) {
-    const character = value[cursor];
-    if (character.charCodeAt(0) > 127 || /[\r\n]/.test(character)) break;
-    if (/\s/.test(character)) break;
-    if (character === "{") depth += 1;
-    if (character === "}") {
-      if (depth === 0) break;
-      depth -= 1;
-    }
-    // Raw prose punctuation ends an expression, except the TeX punctuation
-    // that appears after a command or within a number.
-    if (depth === 0 && /[!?;]/.test(character)) break;
-    cursor += 1;
-  }
+  const commandSource = value[start] === "/" ? `${value.slice(0, start)}\\${value.slice(start + 1)}` : value;
+  const cursor = Math.max(end, readMathRun(commandSource, start));
   return { end: cursor, raw: value.slice(start, cursor) };
 }
 
@@ -111,7 +146,7 @@ export function tokenizeMathForDisplay(text: string): MathDisplaySegment[] {
   const pushText = (end: number) => { if (end > textStart) result.push({ type: "text", value: text.slice(textStart, end) }); };
   while (cursor < text.length) {
     const opener = OPENERS.find((candidate) => text.startsWith(candidate, cursor));
-    if (opener && isBoundary(text, cursor)) {
+    if (opener && countBackslashes(text, cursor) % 2 === 0) {
       const close = findClosingDelimiter(text, cursor, opener);
       if (close < 0) {
         const end = invalidEnd(text, cursor, opener);
@@ -132,6 +167,12 @@ export function tokenizeMathForDisplay(text: string): MathDisplaySegment[] {
       result.push({ type: "math", raw: command.raw, expression: parsed.expression, displayMode: parsed.displayMode });
       cursor = command.end; textStart = cursor; continue;
     }
+    const unmarked = readUnmarkedMath(text, cursor);
+    if (unmarked) {
+      pushText(cursor);
+      result.push({ type: "math", raw: unmarked.raw, expression: unmarked.raw, displayMode: false });
+      cursor = unmarked.end; textStart = cursor; continue;
+    }
     cursor += 1;
   }
   pushText(text.length);
@@ -147,7 +188,7 @@ function MathFragment({ segment }: { segment: Extract<MathDisplaySegment, { type
     if (!container) return;
     container.textContent = "";
     container.className = segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment";
-    try { katex.render(segment.expression, container, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
+    try { katex.render(typesetMathExpression(segment.expression, segment.displayMode), container, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
     catch { container.className = "math-fragment--invalid"; container.textContent = "수식 형식 확인 필요"; }
   }, [segment.displayMode, segment.expression]);
   return <span ref={containerRef} className={segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment"} aria-label="수식" />;
@@ -155,7 +196,7 @@ function MathFragment({ segment }: { segment: Extract<MathDisplaySegment, { type
 
 export default function MathText({ text }: { text: string }) {
   return <>{tokenizeMathForDisplay(text).map((segment, index) => {
-    if (segment.type === "text") return <span key={`text-${index}`}>{segment.value}</span>;
+    if (segment.type === "text") return <span className="math-prose" key={`text-${index}`}>{segment.value}</span>;
     if (segment.type === "invalid-math") return <span key={`invalid-${index}`} className="math-fragment--invalid" role="status">수식 형식 확인 필요</span>;
     return <MathFragment key={`${segment.raw}-${index}`} segment={segment} />;
   })}</>;

@@ -1,4 +1,5 @@
 import katex from "katex";
+import { typesetMathExpression } from "../../../utils/mathTypesetting";
 import katexCss from "katex/dist/katex.min.css?inline";
 import type { QuestionContentSegment, SheetFigureItem } from "../../../types";
 import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
@@ -92,7 +93,7 @@ function appendMathText(target: HTMLElement, value: string) {
     if (segment.type === "text") { target.append(document.createTextNode(segment.value)); continue; }
     if (segment.type === "invalid-math") { const invalid = createElement("span", "question-export-surface__invalid-math"); invalid.textContent = "수식 형식 확인 필요"; target.append(invalid); continue; }
     const math = createElement("span", segment.displayMode ? "question-export-surface__math question-export-surface__math--display" : "question-export-surface__math");
-    try { math.innerHTML = katex.renderToString(segment.expression, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "html" }); }
+    try { math.innerHTML = katex.renderToString(typesetMathExpression(segment.expression, segment.displayMode), { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "html" }); }
     catch { math.textContent = "수식 형식 확인 필요"; math.className = "question-export-surface__invalid-math"; }
     target.append(math);
   }

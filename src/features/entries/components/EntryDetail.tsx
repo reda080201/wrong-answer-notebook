@@ -324,6 +324,11 @@ export default function EntryDetail({
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
 
+  const changeProblemSheetDisplayMode = (mode: ProblemSheetDisplayMode) => {
+    updateViewPreference("problemSheetDisplayMode", mode);
+    setOriginalStudyChoice({ entryId: entry.id, original: mode === "exam" && Boolean(entry.sourcePageImages?.length) });
+  };
+
   useEffect(() => {
     if (!viewPreferences) return;
     setSheetLayout(viewPreferences.sheetLayout);
@@ -1291,8 +1296,8 @@ export default function EntryDetail({
               {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
               {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
-                <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
-                <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
+                <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""} aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"} onClick={() => changeProblemSheetDisplayMode("questions")}>문항별</button>
+                <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
               </div>
               <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
                 const next = !value;
@@ -1373,19 +1378,19 @@ export default function EntryDetail({
             <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
               <button
                 type="button"
-                className={problemSheetDisplayMode === "questions" ? "active" : ""}
-                aria-pressed={problemSheetDisplayMode === "questions"}
-                onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}
+                className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""}
+                aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"}
+                onClick={() => changeProblemSheetDisplayMode("questions")}
               >
                 문항별
               </button>
               <button
                 type="button"
-                className={problemSheetDisplayMode === "exam" ? "active" : ""}
-                aria-pressed={problemSheetDisplayMode === "exam"}
-                onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}
+                className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""}
+                aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"}
+                onClick={() => changeProblemSheetDisplayMode("exam")}
               >
-                시험지
+                {entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}
               </button>
             </div>
           )}
@@ -1726,7 +1731,8 @@ export default function EntryDetail({
               />
             ) : (
               <>
-                {Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
+                {!isSheet && Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
+                {isSheet && problemSheetDisplayMode === "exam" && !entry.sourcePageImages?.length && <p role="status">원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다. 원본 배치로 넘겨 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
                 {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
