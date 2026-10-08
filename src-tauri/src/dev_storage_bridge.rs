@@ -644,14 +644,33 @@ async fn load_image(
         .map_err(internal)
 }
 
+#[derive(Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct DeleteImageOptions {
+    #[serde(default)]
+    exclude_pending_deletion_ids: Vec<String>,
+}
+
 async fn delete_image(
     State(state): State<BridgeState>,
     AxumPath(filename): AxumPath<String>,
+    options: Option<Json<DeleteImageOptions>>,
 ) -> BridgeResult<Json<Value>> {
     if !safe_image_name(&filename) {
         return Err(invalid("허용되지 않은 이미지 파일명입니다."));
     }
     with_file_lock(&state.data_dir, || {
+        let excluded = options
+            .map(|Json(options)| options.exclude_pending_deletion_ids)
+            .unwrap_or_default();
+        if state
+            .store
+            .protected_image_filenames(&excluded)
+            .map_err(internal)?
+            .contains(&filename)
+        {
+            return Ok(Json(json!({ "ok": true })));
+        }
         let path = state.data_dir.join("images").join(filename);
         if path.exists() {
             fs::remove_file(path).map_err(internal)?;
@@ -763,6 +782,58 @@ mod tests {
         bridge_request_authorized, safe_image_name, store_path, validate_store, EXACT_ORIGIN,
     };
     use serde_json::json;
+
+    #[test]
+    fn proxy_delete_protects_saved_and_pending_images_and_rejects_corruption() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        std::fs::create_dir_all(root.join("images")).unwrap();
+        std::fs::write(root.join("images/kept.png"), b"existing image").unwrap();
+        let store = std::sync::Arc::new(crate::notebook_store::NotebookStore::new(
+            root.join("entries.json"),
+            root.join("images"),
+        ));
+        store.save_entries(&[]).unwrap();
+        let state = super::BridgeState {
+            data_dir: root.into(),
+            token: "isolated".into(),
+            store,
+        };
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        let remove = |options| {
+            runtime.block_on(super::delete_image(
+                axum::extract::State(state.clone()),
+                axum::extract::Path("kept.png".into()),
+                options,
+            ))
+        };
+        std::fs::write(
+            root.join("exam-sessions.json"),
+            r#"[{"questions":[{"questionImages":["kept.png"]}]}]"#,
+        )
+        .unwrap();
+        assert!(remove(None).is_ok());
+        assert!(root.join("images/kept.png").exists());
+        std::fs::write(
+            root.join("exam-sessions.json"),
+            r#"{"broken":"lost array"}"#,
+        )
+        .unwrap();
+        assert!(remove(None).is_err());
+        assert!(root.join("images/kept.png").exists());
+        std::fs::write(root.join("exam-sessions.json"), "[]").unwrap();
+        std::fs::write(root.join("pending-deletions.json"), r#"[{"id":"self","imageReferences":["kept.png"]},{"id":"other","imageReferences":["kept.png"]}]"#).unwrap();
+        assert!(remove(Some(axum::Json(super::DeleteImageOptions {
+            exclude_pending_deletion_ids: vec!["self".into()]
+        })))
+        .is_ok());
+        assert!(root.join("images/kept.png").exists());
+        assert!(remove(Some(axum::Json(super::DeleteImageOptions {
+            exclude_pending_deletion_ids: vec!["self".into(), "other".into()]
+        })))
+        .is_ok());
+        assert!(!root.join("images/kept.png").exists());
+    }
 
     #[test]
     fn store_names_are_allowlisted_and_cannot_traverse() {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import Dialog from "../../shared/ui/Dialog";
 import MathText from "../../components/MathText";
 import SolutionContent from "./SolutionContent";
@@ -13,27 +13,38 @@ interface Props {
   onNavigate(key: string): void;
   onClose(): void;
   pageNotice?: string;
+  returnFocusRegionRef?: RefObject<HTMLElement | null>;
 }
 
-export default function QuestionSolutionSheet({ questions, questionKey, hidden = false, onReveal, onNavigate, onClose, pageNotice }: Props) {
+export default function QuestionSolutionSheet({ questions, questionKey, hidden = false, onReveal, onNavigate, onClose, pageNotice, returnFocusRegionRef }: Props) {
   const [full, setFull] = useState(false);
   const frameRef = useRef<HTMLDivElement>(null);
+  const [openerRegion] = useState(() => document.activeElement?.closest(".original-page-reader") ?? null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const suppressClickRef = useRef(false);
   const dragRef = useRef<{ y: number; full: boolean } | null>(null);
   const index = questions.findIndex(question => question.key === questionKey);
   const question = questions[index];
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [questionKey]);
-  const go = (next: number) => { if (questions[next]) onNavigate(questions[next].key); };
+  const go = (next: number) => {
+    if (!questions[next]) return;
+    if (next === 0 || next === questions.length - 1) frameRef.current?.querySelector<HTMLButtonElement>(".solution-sheet-handle")?.focus();
+    onNavigate(questions[next].key);
+  };
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
       const dialog = frameRef.current?.closest('[role="dialog"]');
-      if (!dialog || !(event.target instanceof Node) || !dialog.contains(event.target) || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
+      const layers = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-dialog-layer]'));
+      const topmost = layers.reduce<HTMLElement | null>((top, candidate) => !top || Number(candidate.dataset.dialogLayer) > Number(top.dataset.dialogLayer) ? candidate : top, null);
+      if (!dialog || topmost !== dialog || !(event.target instanceof Node) || (!dialog.contains(event.target) && event.target !== document.body) || event.ctrlKey || event.metaKey || event.altKey || event.isComposing) return;
       if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable='true']")) return;
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       event.preventDefault(); event.stopImmediatePropagation();
       const next = questions[index + (event.key === "ArrowRight" ? 1 : -1)];
-      if (next) onNavigate(next.key);
+      if (next) {
+        frameRef.current?.querySelector<HTMLButtonElement>(".solution-sheet-handle")?.focus();
+        onNavigate(next.key);
+      }
     };
     document.addEventListener("keydown", handleKey, true);
     return () => document.removeEventListener("keydown", handleKey, true);
@@ -46,7 +57,12 @@ export default function QuestionSolutionSheet({ questions, questionKey, hidden =
     else if (dy > 64) { if (drag.full) setFull(false); else onClose(); }
   };
   if (!question) return null;
-  return <Dialog open onClose={onClose} ariaLabel={`정답·해설 ${question.number}번`} className={`solution-sheet${full ? " solution-sheet--full" : ""}`} backdropClassName="solution-sheet-backdrop" scrollMode="custom" bodyClassName="solution-sheet-shell">
+  return <Dialog open onClose={onClose} returnFocusFallback={() => {
+    const region = returnFocusRegionRef?.current ?? openerRegion;
+    if (!region?.isConnected) return null;
+    return Array.from(region.querySelectorAll<HTMLElement>("[data-solution-question-key]")).find(dot => dot.dataset.solutionQuestionKey === questionKey)
+      ?? region.querySelector<HTMLElement>(".original-page-viewport");
+  }} ariaLabel={`정답·해설 ${question.number}번`} className={`solution-sheet${full ? " solution-sheet--full" : ""}`} backdropClassName="solution-sheet-backdrop" scrollMode="custom" bodyClassName="solution-sheet-shell">
     <div ref={frameRef} className="solution-sheet-frame">
       <button type="button" className="solution-sheet-handle" aria-label={full ? "해설창 축소" : "해설창 전체 높이로 확대"} aria-expanded={full} onClick={() => { if (suppressClickRef.current) { suppressClickRef.current = false; return; } setFull(value => !value); }} onPointerDown={event => { event.stopPropagation(); event.currentTarget.setPointerCapture(event.pointerId); dragRef.current = { y: event.clientY, full }; }} onPointerUp={event => { event.stopPropagation(); const dragged = dragRef.current && Math.abs(event.clientY - dragRef.current.y) > 12; finishDrag(event); if (dragged) { suppressClickRef.current = true; event.preventDefault(); } }} onPointerCancel={() => { dragRef.current = null; }}><span /></button>
       <header className="solution-sheet-header"><strong>정답·해설 <span>| {question.number}번</span></strong><nav aria-label="해설 문항 이동">

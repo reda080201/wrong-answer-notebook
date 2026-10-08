@@ -41,6 +41,7 @@ import QuestionTheaterView from "../../../components/QuestionTheaterView";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
 import type { ChatGptSharePayload } from "../../../features/export/types";
+import { buildChatGptSharePayload } from "../../export/services/buildChatGptSharePayload";
 import type { GptSolutionPurpose } from "../../../features/export/components/ChatGptSharePanel";
 import ChatGptHelpLauncher from "../../../features/chatgpt/components/ChatGptHelpLauncher";
 import GptSolutionRoundtripModal from "../../../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
@@ -2245,7 +2246,14 @@ export default function EntryDetail({
       {chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (theaterQuestion || focusedQuestion) && (() => {
         const currentQuestion = theaterQuestion ?? focusedQuestion;
         if (!currentQuestion) return null;
-        const number = questionIdentifier(currentQuestion) ?? String(currentQuestion.displayNumber);
+        const number = normalizeQuestionNumber(String(currentQuestion.numberLabel ?? currentQuestion.displayNumber));
+        const matchingQuestions = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+        const sharePayload = buildChatGptSharePayload({
+          entry, questionNumbers: [number], scope: "current",
+          preferences: { shareQuestionText: true, shareChoices: true, shareQuestionImages: false, shareSourcePageImages: false, shareUserResponse: true, shareScratchNote: true, shareExistingAnswersAndExplanations: true },
+        });
+        sharePayload.questions[0].questionText ??= currentQuestion.body;
+        sharePayload.questions[0].scratchNote = entry.memo;
         return <ChatGptHelpLauncher
           open={gptQuestionOpen}
           onOpenChange={setGptQuestionOpen}
@@ -2253,7 +2261,9 @@ export default function EntryDetail({
           mode="detail"
           preferences={chatGptPreferences}
           onPreferencesChange={onChatGptPreferencesChange}
-          onSyncContext={(sharing) => onSyncExportContext({
+          onSyncContext={async (sharing) => {
+            if (matchingQuestions.length !== 1) throw new Error("같은 번호의 문항 연결이 모호합니다. 문항 연결을 확인한 뒤 동기화하세요.");
+            await onSyncExportContext({
             scope: "current",
             questionNumbers: [number],
             submitted: false,
@@ -2264,13 +2274,16 @@ export default function EntryDetail({
               shareSourcePageImages: sharing.shareSourcePageImages,
               shareUserResponse: sharing.shareUserResponse,
               shareScratchNote: sharing.shareScratchNote,
-              shareExistingAnswersAndExplanations: false,
+              shareExistingAnswersAndExplanations: sharing.shareExistingAnswersAndExplanations,
             },
-          })}
+            });
+          }}
           onCheckLocalMcp={onCheckLocalMcp}
           remoteMcpConfigured={remoteMcpConfigured}
           onOpenSettings={onOpenChatGptSettings}
           questionContext={{
+            contextId: entry.id + ":" + currentQuestion.displayNumber,
+            sharePayload,
             questionNumber: number,
             body: currentQuestion.body,
             choices: currentQuestion.choices.map((choice) => `${choice.marker} ${choice.text}`),

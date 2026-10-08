@@ -67,6 +67,32 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("copies and syncs the focused source question's official answer only after consent", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const sync = vi.fn().mockResolvedValue(undefined);
+    render(<EntryDetail
+      entry={{ ...sheetEntry, question: "31. 원문 서른한 번째 문항\n① 하나\n② 둘\n99. 다른 문항\n① 다른 보기",
+        answerKey: [{ id: "answer-31", questionNumber: "31", answer: "정답_31", explanation: "해설_31", importantPoints: [] }, { id: "answer-99", questionNumber: "99", answer: "정답_99", explanation: "해설_99", importantPoints: [] }] }}
+      onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()}
+      chatGptPreferences={DEFAULT_CHATGPT_MCP_PREFERENCES} onChatGptPreferencesChange={vi.fn()} onSyncExportContext={sync}
+    />);
+    openSecondaryAction("집중 보기");
+    fireEvent.click(screen.getByRole("button", { name: "하단 도구 열기" }));
+    fireEvent.click(screen.getByRole("button", { name: "GPT 질문" }));
+    const dialog = screen.getByRole("dialog", { name: "ChatGPT에서 도움받기" });
+    expect((within(dialog).getByRole("textbox", { name: "편집할 ChatGPT 프롬프트" }) as HTMLTextAreaElement).value).not.toContain("정답_31");
+    fireEvent.click(within(dialog).getByLabelText("정답·해설 공유"));
+    fireEvent.click(screen.getByRole("button", { name: "공유 허용" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "질문 복사" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain("해설_31");
+    expect(writeText.mock.calls[0][0]).not.toContain("해설_99");
+    expect(sync).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "MCP 동기화" }));
+    await waitFor(() => expect(sync).toHaveBeenCalledWith(expect.objectContaining({ questionNumbers: ["31"], shareOptions: expect.objectContaining({ shareExistingAnswersAndExplanations: true }) })));
+  });
+
   it("uses the compact problem-sheet action to call the existing exam callback", () => {
     const onStartExam = vi.fn();
     render(
