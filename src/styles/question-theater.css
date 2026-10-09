@@ -80,6 +80,9 @@
   margin: 0 auto;
 }
 
+.question-theater .focused-question-body { line-height: 1.65; }
+.question-theater .focused-question-body .math-fragment--display { margin-block: 0.35em; }
+
 .question-theater-solution-pane {
   padding-inline: var(--space-4);
   border: 0;

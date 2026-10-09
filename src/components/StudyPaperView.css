@@ -20,5 +20,7 @@
 .detail-panel--zoom .structured-question-renderer { gap: 0.35rem; }
 .detail-panel--zoom .structured-question-segment--equation { padding-block: 0.15rem; }
 .detail-panel--zoom .structured-question-equation--display .katex-display { margin-block: 0.35em; }
+.detail-panel--zoom .focused-question-body { line-height: 1.65; }
+.detail-panel--zoom .focused-question-body .math-fragment--display { margin-block: 0.35em; }
 .structured-problem-sheet-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; padding: 0.75rem; background: var(--surface-soft); }
 @media (max-width: 760px) { .structured-problem-sheet-question { padding: 0.75rem; } .structured-problem-sheet-question > header { align-items: flex-start; flex-direction: column; } .structured-problem-sheet-actions { justify-content: flex-start; } }
