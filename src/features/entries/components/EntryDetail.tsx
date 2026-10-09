@@ -328,17 +328,6 @@ export default function EntryDetail({
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
 
-  const changeProblemSheetDisplayMode = (mode: ProblemSheetDisplayMode) => {
-    const current = questionAnchors[focusedQuestionIndex];
-    updateViewPreference("problemSheetDisplayMode", mode);
-    setOriginalStudyChoice({ entryId: entry.id, original: mode === "exam" && Boolean(entry.sourcePageImages?.length) });
-    if (mode === "questions" && current) {
-      pendingSheetQuestionScrollRef.current = entry.structuredQuestions?.length
-        ? `canonical-${normalizeQuestionNumber(String(current.numberLabel ?? current.displayNumber))}`
-        : String(current.start);
-    }
-  };
-
   useEffect(() => {
     if (!originalImmersive) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -409,7 +398,7 @@ export default function EntryDetail({
     if (!target) return;
     pendingSheetQuestionScrollRef.current = null;
     requestAnimationFrame(() => target.scrollIntoView({ block: "start", behavior: "smooth" }));
-  }, [detailViewMode, problemSheetDisplayMode, questionAnchors, showOriginalStudy]);
+  }, [detailViewMode, focusedQuestionIndex, problemSheetDisplayMode, showOriginalStudy]);
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
   const questionIdentifier = useCallback((question?: QuestionBlock) => {
     if (!question) return null;
@@ -418,6 +407,16 @@ export default function EntryDetail({
     }
     return question.displayNumber ? String(question.displayNumber) : null;
   }, [entry.structuredQuestions?.length]);
+  const changeProblemSheetDisplayMode = (mode: ProblemSheetDisplayMode) => {
+    const current = questionAnchors[focusedQuestionIndex];
+    updateViewPreference("problemSheetDisplayMode", mode);
+    setOriginalStudyChoice({ entryId: entry.id, original: mode === "exam" && Boolean(entry.sourcePageImages?.length) });
+    if (mode === "questions" && current) {
+      pendingSheetQuestionScrollRef.current = entry.structuredQuestions?.length
+        ? `canonical-${normalizeQuestionNumber(String(current.numberLabel ?? current.displayNumber))}`
+        : String(current.start);
+    }
+  };
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
