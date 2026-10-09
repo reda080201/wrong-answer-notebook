@@ -7,6 +7,7 @@ import { getImageUrl } from "../../../api";
 import "./OriginalPageExamReader.css";
 
 interface Props {
+  preferenceKey?: string;
   hotspots?: QuestionSolutionHotspot[];
   onOpenSolution?(key: string): void;
   questionLabels?: Record<string, string>;
@@ -20,10 +21,24 @@ interface Props {
 
 const clampZoom = (zoom: number) => Math.min(2.5, Math.max(0.2, zoom));
 
-export default function OriginalPageExamReader({ filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {
+type ZoomState = { mode: "width" | "page" | "manual"; value: number };
+function initialZoomState(preferenceKey?: string): ZoomState {
+  if (preferenceKey) {
+    try {
+      const stored = localStorage.getItem(preferenceKey);
+      if (stored) {
+        const value = JSON.parse(stored) as Partial<ZoomState>;
+        if ((value.mode === "width" || value.mode === "page" || value.mode === "manual") && typeof value.value === "number" && Number.isFinite(value.value)) return { mode: value.mode, value: clampZoom(value.value) };
+      }
+    } catch { /* Use the readable width-fit default when stored view settings are unavailable. */ }
+  }
+  return { mode: preferenceKey ? "width" : "page", value: 1 };
+}
+
+export default function OriginalPageExamReader({ preferenceKey, filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {
   const [overlapChoices, setOverlapChoices] = useState<QuestionSolutionHotspot[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
-  const [zoomState, setZoomState] = useState({ mode: "page" as "width" | "page" | "manual", value: 1 });
+  const [zoomState, setZoomState] = useState<ZoomState>(() => initialZoomState(preferenceKey));
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -49,7 +64,12 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
     if (unique.length > 1) setOverlapChoices(unique); else onOpenSolution?.(hotspot.questionKey);
   };
   const displayedPercent = fitWidth > 0 ? Math.round(displayWidth / fitWidth * 100) : 100;
-  const changeZoom = (update: (value: number) => number) => setZoomState({ mode: "manual", value: clampZoom(update(zoom)) });
+  const updateZoomState = (next: ZoomState) => {
+    setZoomState(next);
+    if (!preferenceKey) return;
+    try { localStorage.setItem(preferenceKey, JSON.stringify(next)); } catch { /* Zoom still works when browser storage is unavailable. */ }
+  };
+  const changeZoom = (update: (value: number) => number) => updateZoomState({ mode: "manual", value: clampZoom(update(zoom)) });
   const [pageDirection, setPageDirection] = useState("forward");
 
   useEffect(() => {
@@ -99,8 +119,8 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
       onChangePage(next);
     }
   };
-  const fitPage = () => setZoomState(current => ({ ...current, mode: "page" }));
-  const fitToWidth = () => setZoomState(current => ({ ...current, mode: "width" }));
+  const fitPage = () => updateZoomState({ ...zoomState, mode: "page" });
+  const fitToWidth = () => updateZoomState({ ...zoomState, mode: "width" });
 
   if (!filenames.length) return <section className="original-page-empty" role="status"><h3>원본 문제지가 없습니다</h3><p>이 문제지에 페이지 전체 이미지가 연결되지 않았습니다. 문항 텍스트 보기로 계속 풀 수 있습니다.</p></section>;
 

@@ -275,6 +275,8 @@ export default function EntryDetail({
     viewPreferences?.problemSheetDisplayMode ?? "questions",
   );
   const [originalStudyChoice, setOriginalStudyChoice] = useState<{ entryId: string; original: boolean } | null>(null);
+  const [originalImmersiveEntryId, setOriginalImmersiveEntryId] = useState<string | null>(null);
+  const originalImmersive = originalImmersiveEntryId === entry.id;
   const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
@@ -313,6 +315,7 @@ export default function EntryDetail({
     "highlight",
   );
   const consumedInitialTargetRef = useRef<number | null>(null);
+  const pendingSheetQuestionScrollRef = useRef<string | null>(null);
   const sheetSearchTriggerRef = useRef<HTMLButtonElement>(null);
   const sheetSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -326,9 +329,24 @@ export default function EntryDetail({
   }, [onViewPreferencesChange]);
 
   const changeProblemSheetDisplayMode = (mode: ProblemSheetDisplayMode) => {
+    const current = questionAnchors[focusedQuestionIndex];
     updateViewPreference("problemSheetDisplayMode", mode);
     setOriginalStudyChoice({ entryId: entry.id, original: mode === "exam" && Boolean(entry.sourcePageImages?.length) });
+    if (mode === "questions" && current) {
+      pendingSheetQuestionScrollRef.current = entry.structuredQuestions?.length
+        ? `canonical-${normalizeQuestionNumber(String(current.numberLabel ?? current.displayNumber))}`
+        : String(current.start);
+    }
   };
+
+  useEffect(() => {
+    if (!originalImmersive) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) setOriginalImmersiveEntryId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [originalImmersive]);
 
   useEffect(() => {
     if (!viewPreferences) return;
@@ -384,6 +402,14 @@ export default function EntryDetail({
     () => questionBlocks.filter((block) => block.kind === "question"),
     [questionBlocks],
   );
+  useEffect(() => {
+    const questionStart = pendingSheetQuestionScrollRef.current;
+    if (!questionStart || detailViewMode !== "paper" || problemSheetDisplayMode !== "questions" || showOriginalStudy) return;
+    const target = document.getElementById(`sheet-question-${questionStart}`);
+    if (!target) return;
+    pendingSheetQuestionScrollRef.current = null;
+    requestAnimationFrame(() => target.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }, [detailViewMode, problemSheetDisplayMode, questionAnchors, showOriginalStudy]);
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
   const questionIdentifier = useCallback((question?: QuestionBlock) => {
     if (!question) return null;
@@ -1287,7 +1313,7 @@ export default function EntryDetail({
       workspace: { detailViewMode, focusMode, selectionMode },
     }}>
     <div
-      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""} ${originalReading ? "detail-panel--original-reading" : ""}`}
+      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""} ${originalReading ? "detail-panel--original-reading" : ""} ${originalImmersive && originalReading ? "detail-panel--original-immersive" : ""}`}
     >
       {!isFocusExpanded && (
       <ProblemSheetHeader>
@@ -1736,7 +1762,7 @@ export default function EntryDetail({
               <>
                 {!isSheet && Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
                 {isSheet && problemSheetDisplayMode === "exam" && !entry.sourcePageImages?.length && <p role="status">원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다. 원본 배치로 넘겨 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
-                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots}
+                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} onToggleImmersive={() => setOriginalImmersiveEntryId(value => value === entry.id ? null : entry.id)} immersive={originalImmersive}
                   currentQuestionKey={originalStudyQuestions[focusedQuestionIndex] ? solutionQuestionKey(originalStudyQuestions[focusedQuestionIndex]) : undefined}
                   onCurrentQuestionChange={key => {
                     const matches = originalStudyQuestions.flatMap((question, index) => solutionQuestionKey(question) === key ? [index] : []);
@@ -2216,7 +2242,7 @@ export default function EntryDetail({
       )}
       {isFocusable && (
         <EntryDetailStudyControls
-          questionLabel={originalReading ? questionIdentifier(focusedQuestion) ?? undefined : undefined}
+          questionLabel={isSheet && detailViewMode === "paper" ? questionIdentifier(focusedQuestion) ?? undefined : undefined}
           isSheet={isSheet}
           isConcept={isConcept}
           questionIndex={focusedQuestionIndex}

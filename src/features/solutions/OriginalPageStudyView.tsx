@@ -12,10 +12,12 @@ interface Props {
   hidden: boolean;
   currentQuestionKey?: string;
   onCurrentQuestionChange?(key: string): void;
+  immersive?: boolean;
+  onToggleImmersive?(): void;
   onSaveHotspots?(hotspots: QuestionSolutionHotspot[]): Promise<void>;
 }
 
-export default function OriginalPageStudyView({ entry, hidden, currentQuestionKey, onCurrentQuestionChange, onSaveHotspots }: Props) {
+export default function OriginalPageStudyView({ entry, hidden, currentQuestionKey, onCurrentQuestionChange, onSaveHotspots, immersive = false, onToggleImmersive }: Props) {
   const returnFocusRegionRef = useRef<HTMLDivElement>(null);
   const pages = entry.sourcePageImages ?? [];
   const questions = useMemo(() => entrySolutionQuestions(entry), [entry]);
@@ -70,10 +72,11 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
       </select></label>
       <button type="button" className="btn-secondary" onClick={() => setInfoOpen(true)}>자료 정보</button>
       {onSaveHotspots && <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>파란 점·해설 연결 편집</button>}
+      <button type="button" className="btn-secondary" aria-pressed={immersive} onClick={onToggleImmersive}>{immersive ? "집중 보기 닫기" : "원본 집중 보기"}</button>
     </div>
     {(notice || !hotspots.length) && <p className="original-page-study__notice" role="status">{notice || "파란 점과 문항의 연결을 확인하면 원본 문제지에서 정답·해설을 열 수 있습니다."}</p>}
     <div className="original-page-study__reader">
-      <OriginalPageExamReader filenames={pages} selectedFilenames={selectedPages} currentFilename={currentPage} onSelectPages={next => {
+      <OriginalPageExamReader preferenceKey={`original-page-study:${entry.id}`} filenames={pages} selectedFilenames={selectedPages} currentFilename={currentPage} onSelectPages={next => {
         setSelectedPages(next);
         if (!next.includes(currentPage)) {
           const replacement = currentQuestionKey ? linkedPages(currentQuestionKey).find(page => next.includes(page)) : undefined;
