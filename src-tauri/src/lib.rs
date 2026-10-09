@@ -2,6 +2,7 @@ mod ai;
 mod backup;
 mod dev_storage_bridge;
 mod exam_submission;
+mod image_references;
 mod images;
 mod import_assets;
 mod integrity;
@@ -1099,7 +1100,7 @@ mod tests {
     #[test]
     fn saves_import_image_bytes_atomically() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let png = [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a, 0x00];
+        let png = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII=").unwrap();
 
         let filename =
             save_import_image_bytes_to_dir(dir.path(), &png, Some("import.png"), Some("image/png"))

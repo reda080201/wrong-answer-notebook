@@ -21,6 +21,26 @@ function openDatabase(): Promise<IDBDatabase> {
   });
 }
 
+async function writeImages(operation: (store: IDBObjectStore) => void, message: string): Promise<void> {
+  const db = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readwrite");
+      transaction.oncomplete = () => resolve();
+      transaction.onerror = () => reject(transaction.error ?? new Error(message));
+      transaction.onabort = () => reject(transaction.error ?? new Error(message));
+      try {
+        operation(transaction.objectStore(STORE_NAME));
+      } catch (error) {
+        transaction.abort();
+        reject(error);
+      }
+    });
+  } finally {
+    db.close();
+  }
+}
+
 async function migrateLegacyBrowserImages(): Promise<void> {
   if (!supportsIndexedDb()) return;
   const legacy = Object.fromEntries(
@@ -30,19 +50,10 @@ async function migrateLegacyBrowserImages(): Promise<void> {
       .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
   );
   if (!Object.keys(legacy).length) return;
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
+  await writeImages(store => {
     for (const [key, value] of Object.entries(legacy)) store.put(value, key);
-    transaction.oncomplete = () => {
-      for (const key of Object.keys(legacy)) localStorage.removeItem(key);
-      resolve();
-    };
-    transaction.onerror = () => reject(transaction.error ?? new Error("기존 브라우저 이미지 이전에 실패했습니다."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("기존 브라우저 이미지 이전이 중단되었습니다."));
-  });
-  db.close();
+  }, "기존 브라우저 이미지 이전에 실패했습니다.");
+  for (const key of Object.keys(legacy)) localStorage.removeItem(key);
 }
 
 export async function putBrowserImage(key: string, value: string): Promise<void> {
@@ -50,24 +61,22 @@ export async function putBrowserImage(key: string, value: string): Promise<void>
     localStorage.setItem(key, value);
     return;
   }
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).put(value, key);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 저장에 실패했습니다."));
-  });
-  db.close();
+  await writeImages(store => { store.put(value, key); }, "브라우저 이미지 저장에 실패했습니다.");
 }
 
 export async function getBrowserImage(key: string): Promise<string | null> {
   if (!supportsIndexedDb()) return legacyValue(key);
   const db = await openDatabase();
-  const value = await new Promise<string | null>((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(key);
-    request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
-    request.onerror = () => reject(request.error ?? new Error("브라우저 이미지를 불러오지 못했습니다."));
-  });
-  db.close();
+  let value: string | null;
+  try {
+    value = await new Promise<string | null>((resolve, reject) => {
+      const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(key);
+      request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
+      request.onerror = () => reject(request.error ?? new Error("브라우저 이미지를 불러오지 못했습니다."));
+    });
+  } finally {
+    db.close();
+  }
   if (value !== null) return value;
   const legacy = legacyValue(key);
   if (legacy !== null) {
@@ -82,13 +91,7 @@ export async function deleteBrowserImage(key: string): Promise<void> {
     localStorage.removeItem(key);
     return;
   }
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const request = db.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(key);
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 삭제에 실패했습니다."));
-  });
-  db.close();
+  await writeImages(store => { store.delete(key); }, "브라우저 이미지 삭제에 실패했습니다.");
   localStorage.removeItem(key);
 }
 
@@ -99,17 +102,10 @@ export async function replaceBrowserImages(images: Record<string, string>): Prom
     return;
   }
   await migrateLegacyBrowserImages();
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction(STORE_NAME, "readwrite");
-    const store = transaction.objectStore(STORE_NAME);
+  await writeImages(store => {
     store.clear();
     for (const [key, value] of Object.entries(images)) store.put(value, key);
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지 복원에 실패했습니다."));
-    transaction.onabort = () => reject(transaction.error ?? new Error("브라우저 이미지 복원이 중단되었습니다."));
-  });
-  db.close();
+  }, "브라우저 이미지 복원에 실패했습니다.");
   for (const key of Object.keys(localStorage).filter((key) => key.startsWith("img_"))) localStorage.removeItem(key);
 }
 
@@ -123,7 +119,8 @@ export async function listBrowserImages(): Promise<Record<string, string>> {
   }
   await migrateLegacyBrowserImages();
   const db = await openDatabase();
-  const images = await new Promise<Record<string, string>>((resolve, reject) => {
+  try {
+    return await new Promise<Record<string, string>>((resolve, reject) => {
     const transaction = db.transaction(STORE_NAME, "readonly");
     const store = transaction.objectStore(STORE_NAME);
     const request = store.getAll();
@@ -139,7 +136,8 @@ export async function listBrowserImages(): Promise<Record<string, string>> {
     request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
     keysRequest.onerror = () => reject(keysRequest.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
     transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
-  });
-  db.close();
-  return images;
+    });
+  } finally {
+    db.close();
+  }
 }

@@ -1,6 +1,9 @@
 import { useMemo, useState, type RefObject } from "react";
 import type { ChatGptMcpPreferences } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
+import type { ChatGptSharePayload } from "../../export/types";
+import { filterChatGptSharePayload } from "../../export/services/buildChatGptSharePayload";
+import { buildChatGptSharePrompt } from "../../export/services/buildChatGptSharePrompt";
 import {
   buildChatGptPrompt,
   openChatGpt,
@@ -19,7 +22,7 @@ interface ChatGptHelpLauncherProps {
   onSyncContext: (sharing: Pick<
     ChatGptMcpPreferences,
     "shareUserResponse" | "shareScratchNote" | "shareQuestionImages" | "shareSourcePageImages"
-  >) => Promise<void>;
+  > & { shareExistingAnswersAndExplanations: boolean }) => Promise<void>;
   onCheckLocalMcp?: () => Promise<void>;
   remoteMcpConfigured?: boolean;
   onOpenSettings?: () => void;
@@ -28,6 +31,8 @@ interface ChatGptHelpLauncherProps {
 }
 
 export interface ChatGptQuestionContext {
+  contextId?: string;
+  sharePayload?: ChatGptSharePayload;
   questionNumber: string;
   body: string;
   choices: string[];
@@ -57,19 +62,34 @@ export default function ChatGptHelpLauncher({
   };
   const [selectedQuestion, setSelectedQuestion] = useState(() => recommendedChatGptQuestions(mode)[0]);
   const [status, setStatus] = useState<string | null>(null);
-  const [fallbackPrompt, setFallbackPrompt] = useState<string | null>(null);
-  const [shareExistingAnswersAndExplanations, setShareExistingAnswersAndExplanations] = useState(false);
+  const identity = JSON.stringify([mode, questionContext?.contextId, questionContext?.questionNumber]);
+  const [disclosure, setDisclosure] = useState({ identity, allowed: false });
+  const shareExistingAnswersAndExplanations = mode !== "pre-submit" && disclosure.identity === identity && disclosure.allowed;
+  const setShareExistingAnswersAndExplanations = (allowed: boolean) => setDisclosure({ identity, allowed });
+  const [fallbackState, setFallbackState] = useState<{ contextKey: string; value: string } | null>(null);
   const [shareConfirmOpen, setShareConfirmOpen] = useState(false);
+  if (disclosure.identity !== identity) {
+    setDisclosure({ identity, allowed: false });
+    setShareConfirmOpen(false);
+    setSelectedQuestion(recommendedChatGptQuestions(mode)[0]);
+  }
   const questions = useMemo(() => {
     const allQuestions = recommendedChatGptQuestions(mode);
     if (shareExistingAnswersAndExplanations && preferences.shareUserResponse) return allQuestions;
     return allQuestions.filter((question) => !question.includes("공식 해설과 내 풀이"));
   }, [mode, preferences.shareUserResponse, shareExistingAnswersAndExplanations]);
-  const contextKey = questionContext?.questionNumber ?? "";
+  const contextKey = JSON.stringify([identity, preferences.shareUserResponse, preferences.shareScratchNote, preferences.shareQuestionImages, preferences.shareSourcePageImages, shareExistingAnswersAndExplanations]);
+  const fallbackPrompt = fallbackState?.contextKey === contextKey ? fallbackState.value : null;
+  const setFallbackPrompt = (value: string | null) => setFallbackState(value === null ? null : { contextKey, value });
   const [editedPrompt, setEditedPrompt] = useState<{ contextKey: string; value: string } | null>(null);
+  if (editedPrompt && editedPrompt.contextKey !== contextKey) setEditedPrompt(null);
+  if (fallbackState && fallbackState.contextKey !== contextKey) setFallbackState(null);
   const activeQuestion = questions.includes(selectedQuestion) ? selectedQuestion : questions[0];
   const closeDialog = () => {
     setShareExistingAnswersAndExplanations(false);
+    setShareConfirmOpen(false);
+    setEditedPrompt(null);
+    setFallbackPrompt(null);
     setDialogOpen(false);
     requestAnimationFrame(() => returnFocusRef?.current?.focus());
   };
@@ -79,13 +99,19 @@ export default function ChatGptHelpLauncher({
       shareScratchNote: preferences.shareScratchNote,
       shareExistingAnswersAndExplanations,
     };
-    return buildChatGptPrompt(mode, activeQuestion, preferences, questionContext && {
-      questionNumber: questionContext.questionNumber,
-      questionText: questionContext.body,
-      choices: questionContext.choices,
-      response: questionContext.response,
-      scratchNote: questionContext.scratchNote,
-    }, promptOptions);
+    const instruction = buildChatGptPrompt(mode, activeQuestion, preferences, undefined, promptOptions);
+    if (!questionContext) return instruction;
+    const raw: ChatGptSharePayload = questionContext.sharePayload ?? {
+      title: "", subject: "", scope: "current", questionNumbers: [questionContext.questionNumber], submitted: mode === "submitted", answerProtection: "active",
+      questions: [{ questionNumber: questionContext.questionNumber, questionText: questionContext.body, choices: questionContext.choices, images: [], userResponse: questionContext.response, scratchNote: questionContext.scratchNote }],
+    };
+    const payload = filterChatGptSharePayload(raw, {
+      shareQuestionText: true, shareChoices: true,
+      shareQuestionImages: false, shareSourcePageImages: false,
+      shareUserResponse: preferences.shareUserResponse, shareScratchNote: preferences.shareScratchNote,
+      shareExistingAnswersAndExplanations,
+    });
+    return buildChatGptSharePrompt(payload, instruction + `\n문항 번호: ${questionContext.questionNumber}번`);
   }, [activeQuestion, mode, preferences, questionContext, shareExistingAnswersAndExplanations]);
   const prompt = editedPrompt?.contextKey === contextKey ? editedPrompt.value : basePrompt;
   const copyPrompt = async () => {
@@ -125,6 +151,7 @@ export default function ChatGptHelpLauncher({
         shareScratchNote: preferences.shareScratchNote,
         shareQuestionImages: preferences.shareQuestionImages,
         shareSourcePageImages: preferences.shareSourcePageImages,
+        shareExistingAnswersAndExplanations,
       });
       if (onCheckLocalMcp) await onCheckLocalMcp();
       setStatus("MCP 문맥 동기화를 완료했습니다. 메시지는 자동 전송되지 않습니다.");
@@ -150,7 +177,7 @@ export default function ChatGptHelpLauncher({
             <legend>공유할 내용</legend>
             <label><input type="checkbox" checked={preferences.shareUserResponse} onChange={(event) => void onPreferencesChange({ shareUserResponse: event.target.checked })} /> 내 답</label>
             <label><input type="checkbox" checked={preferences.shareScratchNote} onChange={(event) => void onPreferencesChange({ shareScratchNote: event.target.checked })} /> 풀이 메모</label>
-            <label><input type="checkbox" checked={shareExistingAnswersAndExplanations} onChange={(event) => { if (event.target.checked) setShareConfirmOpen(true); else setShareExistingAnswersAndExplanations(false); }} /> 정답·해설 공유</label>
+            <label><input type="checkbox" checked={shareExistingAnswersAndExplanations} disabled={mode === "pre-submit"} onChange={(event) => { if (event.target.checked) setShareConfirmOpen(true); else setShareExistingAnswersAndExplanations(false); }} /> 정답·해설 공유</label>
             <div className="chatgpt-help-mcp-options" aria-label="MCP 동기화 전용 공유 옵션">
               <span>MCP 동기화 전용</span>
               <label><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPreferencesChange({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지</label>

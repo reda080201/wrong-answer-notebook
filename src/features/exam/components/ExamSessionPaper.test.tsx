@@ -27,6 +27,19 @@ const session: ExamSession = {
   ],
 };
 describe("shared exam paper interactions", () => {
+  it.each(["practice", "real"] as const)("restores text fallback for %s when saved selection excludes this question", mode => {
+    const saved = { ...session, mode, sourcePageImages: ["first.png", "second.png"], sourcePageQuestionMap: { "first.png": ["1"], "second.png": ["2"] }, selectedSourcePageImages: ["second.png"], responses: [{ questionNumber: "1", response: "②", scratchNote: "", markedForReview: false, updatedAt: session.updatedAt }] };
+    render(<ExamSessionPaper session={saved} disabled={false} onNavigate={vi.fn()} onResponse={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "문항 텍스트" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByAltText("원본 문제지 페이지 2")).not.toBeInTheDocument();
+    expect(within(screen.getByRole("group", { name: "1번 선택지" })).getByRole("button", { name: "② 2" })).toHaveAttribute("aria-pressed", "true");
+  });
+  it("uses a selected same-question alternative on practice resume, including question-level pages", async () => {
+    const saved = { ...session, mode: "practice" as const, sourcePageQuestionMap: { "a.png": ["1"], "b.png": ["1"] }, selectedSourcePageImages: ["b.png"], questions: session.questions.map(question => ({ ...question, sourcePageImages: ["a.png", "b.png"] })) };
+    render(<ExamSessionPaper session={saved} disabled={false} onNavigate={vi.fn()} onResponse={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "원본 문제지" })).toHaveAttribute("aria-pressed", "true");
+    expect(await screen.findByAltText("원본 문제지 페이지 2")).toBeVisible();
+  });
   it.each(["practice", "real"])("%s keeps answer, mark and navigation from rapid interactions", mode => {
     const onChange = vi.fn();
     render(mode === "practice"

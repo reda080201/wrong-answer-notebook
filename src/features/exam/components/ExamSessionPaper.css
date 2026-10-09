@@ -1,5 +1,5 @@
 .exam-session-paper { min-width: 0; }
-.exam-session-paper--original { display: grid; grid-template-rows: auto minmax(0, 1fr); min-height: 0; height: min(76dvh, 900px); }
+.exam-session-paper--original { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; flex: 0 0 auto; min-height: 360px; height: min(76dvh, 900px); }
 .exam-source-view-switch { position: relative; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--border); background: var(--surface); }
 .exam-source-view-switch__modes { display: flex; justify-content: center; gap: 6px; }
 .exam-source-answer-toggle { position: absolute; right: 12px; }
@@ -26,8 +26,10 @@
 .exam-source-notes > label { display: grid; gap: 6px; margin-top: 8px; }
 .exam-source-notes textarea { width: 100%; min-height: 130px; box-sizing: border-box; resize: vertical; }
 @media (max-width: 820px) {
-  .exam-session-paper--original { grid-template-rows: auto minmax(0, 1fr); height: min(76dvh, 900px); }
-  .exam-source-layout { grid-template-columns: minmax(0, 1fr); overflow: visible; }
+  .exam-session-paper--original { height: auto; min-height: 0; }
+  .exam-source-layout { grid-template-columns: minmax(0, 1fr); overflow: hidden; }
+  .exam-source-layout--practice { grid-template-rows: minmax(360px, 64dvh) auto; }
+  .exam-source-answer-panel { max-height: 40dvh; }
   .exam-source-layout > .original-page-reader { min-height: 0; height: 100%; }
   .exam-source-answer-panel { border-inline-start: 0; border-top: 1px solid var(--border); }
   .exam-source-answer-toggle { position: static; }

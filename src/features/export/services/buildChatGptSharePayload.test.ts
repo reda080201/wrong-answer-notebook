@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildChatGptSharePayload } from "./buildChatGptSharePayload";
+import type { ExamSession } from "../../../types";
 
 const entry = {
   id: "sheet-1",
@@ -25,6 +26,28 @@ const baseOptions = {
 };
 
 describe("buildChatGptSharePayload", () => {
+  it("shares a single legacy wrong answer only within the selected consent scope", () => {
+    const source = { ...(entry as object), entryKind: "wrong_answer", question: "[문제 31] 단일 오답\n① 하나\n② 둘", questionContentSegments: undefined, answerKey: [], myAnswer: "내 응답", correctAnswer: "기존 정답", explanationParts: [{ text: "기존 해설" }] } as never;
+    const options = { entry: source, questionNumbers: ["31"], scope: "current" as const };
+    const allowed = buildChatGptSharePayload({ ...options, preferences: { ...baseOptions, shareUserResponse: true, shareExistingAnswersAndExplanations: true } });
+    expect(allowed.questions[0]).toMatchObject({ answer: "기존 정답", explanation: "기존 해설", userResponse: "내 응답" });
+    const blocked = buildChatGptSharePayload({ ...options, preferences: baseOptions });
+    expect(blocked.questions[0].answer).toBeUndefined();
+    expect(blocked.questions[0].explanation).toBeUndefined();
+    expect(blocked.questions[0].userResponse).toBeUndefined();
+    const multiple = { ...(source as object), question: "[문제 31] 첫 오답\n① 하나\n② 둘\n[문제 32] 둘째 오답\n① 셋\n② 넷" } as never;
+    expect(buildChatGptSharePayload({ ...options, entry: multiple, preferences: { ...baseOptions, shareExistingAnswersAndExplanations: true } }).questions[0].answer).toBeUndefined();
+  });
+  it("uses submitted snapshot answers rather than subsequently edited source answers", () => {
+    const examSession = { status: "submitted", questions: [{ id: "q3", questionNumber: "3", question: "제출 당시 본문", choices: [], correctAnswer: "저장된 정답", explanation: "저장된 해설" }], responses: [] } as unknown as ExamSession;
+    const payload = buildChatGptSharePayload({ entry, questionNumbers: ["3"], scope: "current", examSession, preferences: { ...baseOptions, shareExistingAnswersAndExplanations: true } });
+    expect(payload.questions[0]).toMatchObject({ questionText: "제출 당시 본문", answer: "저장된 정답", explanation: "저장된 해설" });
+  });
+  it("does not guess between duplicate official answer numbers", () => {
+    const source = { ...(entry as object), answerKey: [{ questionNumber: "3", answer: "A" }, { questionNumber: "03번", answer: "B" }] } as never;
+    const payload = buildChatGptSharePayload({ entry: source, questionNumbers: ["3"], scope: "current", preferences: { ...baseOptions, shareExistingAnswersAndExplanations: true } });
+    expect(payload.questions[0].answer).toBeUndefined();
+  });
   it("keeps only the selected questions in their sheet order and protects answers by default", () => {
     const payload = buildChatGptSharePayload({
       entry,

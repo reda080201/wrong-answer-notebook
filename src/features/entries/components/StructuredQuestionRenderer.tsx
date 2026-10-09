@@ -9,6 +9,7 @@ import type { ResolvedEntryQuestion } from "../../../utils/entryQuestions";
 import { resolveQuestionFigures } from "../../../utils/questionAssets";
 import InlineQuestionText from "../../../components/InlineQuestionText";
 import QuestionChoiceList from "../../../components/QuestionChoiceList";
+import { typesetMathExpression } from "../../../utils/mathTypesetting";
 
 export interface StructuredQuestionContext {
   entryId?: string;
@@ -28,7 +29,7 @@ export interface StructuredQuestionRendererProps {
 function DirectEquation({ latex, display }: Extract<QuestionContentSegment, { type: "equation" }>) {
   let html: string | undefined;
   try {
-    html = katex.renderToString(latex, {
+    html = katex.renderToString(typesetMathExpression(latex, display), {
       displayMode: display,
       throwOnError: true,
       trust: false,
