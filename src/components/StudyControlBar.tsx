@@ -13,6 +13,7 @@ export interface StudyNextAction {
 interface StudyControlBarProps {
   isSheet: boolean;
   isConcept: boolean;
+  questionLabel?: string;
   questionIndex: number;
   questionCount: number;
   hideAnswers: boolean;
@@ -40,6 +41,7 @@ interface StudyControlBarProps {
 export default function StudyControlBar({
   isSheet,
   isConcept,
+  questionLabel,
   questionIndex,
   questionCount,
   hideAnswers,
@@ -112,8 +114,8 @@ export default function StudyControlBar({
           </button>
         )}
 
-        {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}</button>}
-        {onOpenGptExport && !isConcept && <button type="button" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문</button>}
+        {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}{questionLabel && ` · ${questionLabel}번`}</button>}
+        {onOpenGptExport && !isConcept && <button type="button" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문{questionLabel && ` · ${questionLabel}번`}</button>}
 
         <button
           type="button"

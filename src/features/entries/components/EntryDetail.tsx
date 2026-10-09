@@ -1,3 +1,4 @@
+import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -372,6 +373,7 @@ export default function EntryDetail({
     () => (entry.structuredQuestions?.length ? getEntryQuestions(entry) : []),
     [entry],
   );
+  const originalStudyQuestions = useMemo(() => getEntryQuestions(entry), [entry]);
   const questionBlocks = useMemo(
     () => entry.structuredQuestions?.length
       ? resolvedSheetQuestions.map(resolvedQuestionToBlock)
@@ -425,6 +427,7 @@ export default function EntryDetail({
   const hasMistakeAnalysis =
     (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
     Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
+  const originalReading = showOriginalStudy && Boolean(entry.sourcePageImages?.length) && !isFocusExpanded && !isConcept && !isLecture && detailViewMode === "paper";
   const showPaperSupplementSections = !isFocusExpanded && detailViewMode === "paper";
   const hasNextQuestion = isSheet && focusedQuestionIndex < questionAnchors.length - 1;
   const suspiciousSegments = useMemo(
@@ -1284,7 +1287,7 @@ export default function EntryDetail({
       workspace: { detailViewMode, focusMode, selectionMode },
     }}>
     <div
-      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
+      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""} ${originalReading ? "detail-panel--original-reading" : ""}`}
     >
       {!isFocusExpanded && (
       <ProblemSheetHeader>
@@ -1374,7 +1377,7 @@ export default function EntryDetail({
               })}
             </nav>
           )}
-          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && (
             <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
               <button
                 type="button"
@@ -1553,7 +1556,7 @@ export default function EntryDetail({
       )}
 
       <div className="detail-scroll" ref={detailScrollRef}>
-        <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
+        {(!originalReading || titleEditing) && <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
               <input
@@ -1623,7 +1626,7 @@ export default function EntryDetail({
             ))}
           </div>
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
-        </header>
+        </header>}
 
         <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
@@ -1636,7 +1639,7 @@ export default function EntryDetail({
               onStartReview={() => onStartReview?.(entry)}
             />
           )}
-          <h3 className="section-heading">
+          {!originalReading && <h3 className="section-heading">
             {isFocusExpanded
               ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
               : isConcept
@@ -1650,8 +1653,8 @@ export default function EntryDetail({
                   : detailViewMode === "analysis"
                     ? "학습 분석"
                     : isSheet ? "교재형 문제지" : "문제지"}
-          </h3>
-          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+          </h3>}
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && (
             <div className="sheet-reading-tools">
               <div className="sheet-selection-tools">
                 {selectionMode && (
@@ -1733,7 +1736,12 @@ export default function EntryDetail({
               <>
                 {!isSheet && Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
                 {isSheet && problemSheetDisplayMode === "exam" && !entry.sourcePageImages?.length && <p role="status">원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다. 원본 배치로 넘겨 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
-                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
+                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots}
+                  currentQuestionKey={originalStudyQuestions[focusedQuestionIndex] ? solutionQuestionKey(originalStudyQuestions[focusedQuestionIndex]) : undefined}
+                  onCurrentQuestionChange={key => {
+                    const matches = originalStudyQuestions.flatMap((question, index) => solutionQuestionKey(question) === key ? [index] : []);
+                    if (matches.length === 1) setFocusedQuestionIndex(matches[0]);
+                  }} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
                     memoMode={memoMode}
@@ -1765,7 +1773,7 @@ export default function EntryDetail({
                     }}
                   />
                 </StudyZoomViewport>}
-                <CollapsibleSection title="학습 내용" defaultOpen={false}>
+                {!originalReading && <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
                     entry={entry}
                     onWikiLinkClick={onWikiLinkClick}
@@ -1775,7 +1783,7 @@ export default function EntryDetail({
                     onAutoCreateLecture={handleAutoCreateLecture}
                     onEditLecture={onEdit}
                   />
-                </CollapsibleSection>
+                </CollapsibleSection>}
               </>
             )
           ) : isSheet && isFocusExpanded ? (
@@ -1937,7 +1945,7 @@ export default function EntryDetail({
         </section>
         </QuestionWorkspace>
 
-        <SecondaryStudyViews>
+        {!originalReading && <SecondaryStudyViews>
 
         {showPaperSupplementSections && <EntryImportAuditSection entry={entry} onOpenReview={() => handleStudyModeChange("analysis")} />}
 
@@ -2139,7 +2147,7 @@ export default function EntryDetail({
             onOpenEntry={onOpenEntry}
           />
         )}
-        </SecondaryStudyViews>
+        </SecondaryStudyViews>}
       </div>
       <ScrollToTopButton containerRef={detailScrollRef} className="scroll-to-top-button--detail" />
       <ReviewExportDialogs>
@@ -2208,6 +2216,7 @@ export default function EntryDetail({
       )}
       {isFocusable && (
         <EntryDetailStudyControls
+          questionLabel={originalReading ? questionIdentifier(focusedQuestion) ?? undefined : undefined}
           isSheet={isSheet}
           isConcept={isConcept}
           questionIndex={focusedQuestionIndex}
@@ -2233,7 +2242,7 @@ export default function EntryDetail({
           onToggleAnswers={() => setHideAnswers((value) => !value)}
           onReview={(result) => void handleReviewResult(
             result,
-            isSheet && focusMode !== "closed" ? focusedQuestion : undefined,
+            isSheet && (focusMode !== "closed" || originalReading) ? focusedQuestion : undefined,
           )}
           onToggleDifficult={handleToggleDifficultWithToast}
           onModeChange={handleStudyModeChange}

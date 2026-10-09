@@ -12,6 +12,6 @@ export function typesetMathExpression(value: string, displayMode = false): strin
     .replace(/(^|[^\\A-Za-z])(sin|cos|tan|log|ln|lim)(?=\s|[(_^])/g, "$1\\$2");
   // Inline TeX normally puts sum/limit bounds beside the operator. Textbook
   // expressions need display style even when embedded in a Korean sentence.
-  return !displayMode && /\\(?:sum|prod|int|lim|frac)\b/.test(expression)
+  return !displayMode && /\\(?:sum|prod|int|lim|d?frac)(?![A-Za-z])/.test(expression)
     ? `\\displaystyle ${expression}` : expression;
 }

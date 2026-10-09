@@ -18,6 +18,7 @@ import { decodeTextFile } from "../features/import/services/decodeTextFile";
 import { normalizeImportedMathCommands } from "./legacyMathCommands";
 import { isValidNormalizedCrop } from "./normalizedCrop";
 import { resolveImportProcessingStatus } from "./importProcessingStatus";
+import { validSolutionHotspot } from "../features/solutions/hotspotValidation";
 
 export type ImportDetectedFormat = "json" | "text";
 
@@ -101,6 +102,8 @@ interface ImportJsonShape {
   subject?: unknown;
   question?: unknown;
   questions?: unknown;
+  structuredQuestions?: unknown;
+  questionSolutionHotspots?: unknown;
   questionImages?: unknown;
   sourcePageImages?: unknown;
   questionSourceCrops?: unknown;
@@ -482,7 +485,17 @@ function parseImportedStudyTextInternal(
     }
 
     const cropNormalization = normalizeExternalQuestionSourceCrops(parsed.questionSourceCrops);
-    const structuredResult = normalizeExternalStructuredQuestions(parsed.questions);
+    const externalQuestions = normalizeExternalStructuredQuestions(parsed.questions);
+    const storedQuestions = normalizeExternalStructuredQuestions(parsed.structuredQuestions);
+    if (parsed.questions !== undefined && parsed.structuredQuestions !== undefined
+      && JSON.stringify(externalQuestions) !== JSON.stringify(storedQuestions)) {
+      throw new ImportParseError("questions와 structuredQuestions의 문항 정보가 다릅니다. 사용할 문항 데이터를 확인한 뒤 하나로 맞춰 주세요.");
+    }
+    const structuredResult = parsed.structuredQuestions !== undefined ? storedQuestions : externalQuestions;
+    if (parsed.questionSolutionHotspots !== undefined && (!Array.isArray(parsed.questionSolutionHotspots)
+      || !parsed.questionSolutionHotspots.every(validSolutionHotspot))) {
+      throw new ImportParseError("파란 점 연결의 문항 키·페이지·위치 정보가 올바르지 않습니다. 연결 데이터를 확인해 주세요.");
+    }
     const structuredQuestions = markCropReviewOnStructuredQuestions(
       structuredResult.questions,
       cropNormalization.invalidQuestionNumbers,
@@ -529,6 +542,7 @@ function parseImportedStudyTextInternal(
           questionImages: normalizeTextList(parsed.questionImages),
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
           questionSourceCrops: cropNormalization.crops,
+          questionSolutionHotspots: parsed.questionSolutionHotspots as EntryFormData["questionSolutionHotspots"],
           difficult: false,
           difficulty: "none",
           difficultyScore: maxAnswerDifficultyScore(answerOnlyKey),
@@ -598,6 +612,7 @@ function parseImportedStudyTextInternal(
           questionImages: normalizeTextList(parsed.questionImages),
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
           questionSourceCrops: cropNormalization.crops,
+          questionSolutionHotspots: parsed.questionSolutionHotspots as EntryFormData["questionSolutionHotspots"],
           difficult: false,
           difficulty: "none",
           difficultyScore,

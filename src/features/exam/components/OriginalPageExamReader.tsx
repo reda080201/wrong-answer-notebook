@@ -73,7 +73,11 @@ export default function OriginalPageExamReader({ filenames, selectedFilenames, c
     const viewport = viewportRef.current;
     if (!viewport) return;
     const observer = new ResizeObserver(([entry]) => {
-      if (entry) setViewportSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      // A temporarily hidden/collapsed parent must not erase a valid fitted
+      // scale. The next usable measurement replaces it after layout settles.
+      if (entry && entry.contentRect.width > 0 && entry.contentRect.height > 0) {
+        setViewportSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      }
     });
     observer.observe(viewport);
     return () => observer.disconnect();
