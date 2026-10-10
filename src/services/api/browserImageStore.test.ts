@@ -80,6 +80,32 @@ describe("browser image transaction durability", () => {
     await deleteBrowserImage("img_a.png");
     expect(localStorage.getItem("img_a.png")).toBeNull();
   });
+  it("serializes concurrent writes so a later delete cannot be overtaken by an earlier put", async () => {
+    const transactions: Array<{ oncomplete?: () => void; onerror?: () => void; onabort?: () => void; objectStore: () => { put: () => void; delete: () => void } }> = [];
+    const db = {
+      close: vi.fn(),
+      transaction: () => {
+        const transaction = { objectStore: () => ({ put: vi.fn(), delete: vi.fn() }) } as (typeof transactions)[number];
+        transactions.push(transaction);
+        return transaction;
+      },
+    };
+    vi.stubGlobal("indexedDB", { open: () => {
+      const request: Record<string, unknown> = { result: db };
+      queueMicrotask(() => (request.onsuccess as (() => void))());
+      return request;
+    } });
+    const put = putBrowserImage("img_ordered.png", "new");
+    const remove = deleteBrowserImage("img_ordered.png");
+    await vi.waitFor(() => expect(transactions).toHaveLength(1));
+    expect(transactions[0].objectStore).toBeTypeOf("function");
+    transactions[0].oncomplete?.();
+    await put;
+    await vi.waitFor(() => expect(transactions).toHaveLength(2));
+    transactions[1].oncomplete?.();
+    await remove;
+    expect(db.close).toHaveBeenCalledTimes(2);
+  });
   it("keeps the localStorage fallback", async () => {
     vi.stubGlobal("indexedDB", undefined);
     await putBrowserImage("img_a.png", "data");

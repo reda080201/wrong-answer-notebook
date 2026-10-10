@@ -260,7 +260,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
       {status ? <p className="muted">{status}</p> : null}
       <footer className="export-panel-footer">
         {onOpenSettings ? <button type="button" className="btn-secondary" onClick={onOpenSettings}>설정</button> : null}
-        <button type="button" className="btn-secondary" disabled={busy || !canSend} onClick={() => void handleCopyPrompt()}>질문 복사</button>
+        <button type="button" data-testid="chatgpt-copy-prompt" className="btn-secondary" disabled={busy || !canSend} onClick={() => void handleCopyPrompt()}>질문 복사</button>
         <button type="button" className="btn-secondary" disabled={busy} onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
         <button type="button" className="btn-primary" disabled={busy || !canSend} onClick={() => void handleShare()}>{busy ? "동기화 중..." : "MCP 동기화"}</button>
       </footer>

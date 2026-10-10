@@ -46,9 +46,11 @@ function wrongNumbers(session: ExamSession): string[] {
     session.responses
       .filter((item) => item.response.trim().length > 0)
       .filter((item) => {
-        const question = session.questions.find(
+        const matches = session.questions.filter(
           (candidate) => normalizeQuestionNumber(candidate.questionNumber) === normalizeQuestionNumber(item.questionNumber),
         );
+        if (matches.length !== 1) return false;
+        const [question] = matches;
         if (!question?.correctAnswer) return false;
         return question.correctAnswer.trim() !== item.response.trim();
       })
@@ -71,6 +73,12 @@ export function resolveExportQuestionNumbers(
 ): ResolveExportQuestionNumbersResult {
   const order = sheetOrder(input.entry);
   const orderSet = new Set(order);
+  const numberCounts = new Map<string, number>();
+  order.forEach(number => numberCounts.set(number, (numberCounts.get(number) ?? 0) + 1));
+  const ambiguous = (numbers: string[]): ResolveExportQuestionNumbersResult | undefined => {
+    const collisions = uniquePreserveOrder(numbers).filter(number => (numberCounts.get(number) ?? 0) > 1);
+    return collisions.length ? { questionNumbers: [], invalidNumbers: collisions, disabledReason: `문항 번호 ${collisions.join(", ")}번이 중복되어 공유 대상을 확인할 수 없습니다.` } : undefined;
+  };
 
   const inSheetOrder = (numbers: string[]) => {
     const wanted = new Set(numbers.map((value) => normalizeQuestionNumber(value)).filter(Boolean));
@@ -80,12 +88,16 @@ export function resolveExportQuestionNumbers(
     case "current": {
       const current = normalizeQuestionNumber(input.currentQuestionNumber ?? "");
       if (!current) return { questionNumbers: [], disabledReason: "현재 문항이 선택되지 않았습니다." };
+      const collision = ambiguous([current]);
+      if (collision) return collision;
       if (order.length > 0 && !orderSet.has(current)) return { questionNumbers: [], disabledReason: current + "번은 이 시험지에 없습니다.", invalidNumbers: [current] };
       return { questionNumbers: [current] };
     }
     case "selected": {
       const selected = uniquePreserveOrder(input.selectedNumbers ?? []);
       if (selected.length === 0) return { questionNumbers: [], disabledReason: "선택한 문항이 없습니다." };
+      const collision = ambiguous(selected);
+      if (collision) return collision;
       const invalid = selected.filter((number) => order.length > 0 && !orderSet.has(number));
       const valid = inSheetOrder(selected);
       if (valid.length === 0) return { questionNumbers: [], disabledReason: "선택한 문항이 시험지에서 확인되지 않습니다.", invalidNumbers: invalid };
@@ -96,22 +108,30 @@ export function resolveExportQuestionNumbers(
       if (input.examSession.status !== "submitted") return { questionNumbers: [], disabledReason: "틀린 문항은 시험 제출 후에 선택할 수 있습니다." };
       const numbers = inSheetOrder(wrongNumbers(input.examSession));
       if (numbers.length === 0) return { questionNumbers: [], disabledReason: "틀린 문항이 없습니다." };
+      const collision = ambiguous(numbers);
+      if (collision) return collision;
       return { questionNumbers: numbers };
     }
     case "important": {
       const numbers = inSheetOrder((input.entry.questionMeta ?? []).filter((item) => item.important).map((item) => item.questionNumber));
       if (numbers.length === 0) return { questionNumbers: [], disabledReason: "중요 표시된 문항이 없습니다." };
+      const collision = ambiguous(numbers);
+      if (collision) return collision;
       return { questionNumbers: numbers };
     }
     case "marked": {
       if (!input.examSession || input.examSession.entryId !== input.entry.id) return { questionNumbers: [], disabledReason: "검토 표시 문항은 연결된 시험 세션이 있을 때만 사용할 수 있습니다." };
       const numbers = inSheetOrder(markedNumbers(input.examSession));
       if (numbers.length === 0) return { questionNumbers: [], disabledReason: "검토 표시된 문항이 없습니다." };
+      const collision = ambiguous(numbers);
+      if (collision) return collision;
       return { questionNumbers: numbers };
     }
     case "manual": {
       const parsed = uniquePreserveOrder(parseQuestionSelectionRange(input.manualInput ?? ""));
       if (parsed.length === 0) return { questionNumbers: [], disabledReason: "문항 번호 형식을 확인해 주세요. 예: 1-5, 8, 10-14" };
+      const collision = ambiguous(parsed);
+      if (collision) return collision;
       const invalid = parsed.filter((number) => order.length > 0 && !orderSet.has(number));
       const valid = inSheetOrder(parsed);
       if (valid.length === 0) return { questionNumbers: [], disabledReason: "입력한 문항 번호가 시험지에 없습니다.", invalidNumbers: invalid };
@@ -120,6 +140,8 @@ export function resolveExportQuestionNumbers(
     case "whole":
     default: {
       if (order.length === 0) return { questionNumbers: [], disabledReason: "시험지에서 문항을 찾지 못했습니다." };
+      const collision = ambiguous(order);
+      if (collision) return collision;
       return { questionNumbers: order };
     }
   }

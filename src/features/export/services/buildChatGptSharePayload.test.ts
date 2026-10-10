@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildChatGptSharePayload } from "./buildChatGptSharePayload";
+import { resolveExportQuestionNumbers } from "./resolveExportQuestionNumbers";
 import type { ExamSession } from "../../../types";
 
 const entry = {
@@ -26,6 +27,16 @@ const baseOptions = {
 };
 
 describe("buildChatGptSharePayload", () => {
+  it("refuses a current-question selection when normalized source numbers collide", () => {
+    const duplicateEntry = {
+      ...(entry as object),
+      question: "[문제 1] 첫 번째 문항입니다.\n[문제 01번] 다른 문항입니다.",
+    } as never;
+    const result = resolveExportQuestionNumbers({ entry: duplicateEntry, scope: "current", currentQuestionNumber: "01번" });
+    expect(result.questionNumbers).toEqual([]);
+    expect(result.disabledReason).toContain("중복");
+    expect(result.invalidNumbers).toContain("1");
+  });
   it("shares a single legacy wrong answer only within the selected consent scope", () => {
     const source = { ...(entry as object), entryKind: "wrong_answer", question: "[문제 31] 단일 오답\n① 하나\n② 둘", questionContentSegments: undefined, answerKey: [], myAnswer: "내 응답", correctAnswer: "기존 정답", explanationParts: [{ text: "기존 해설" }] } as never;
     const options = { entry: source, questionNumbers: ["31"], scope: "current" as const };

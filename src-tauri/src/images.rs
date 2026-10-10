@@ -9,6 +9,9 @@ use crate::notebook_store::NotebookStore;
 use crate::{app_dir, write_bytes_atomic};
 
 pub(crate) const MAX_IMPORT_IMAGE_BYTES: u64 = 25 * 1024 * 1024;
+const MAX_IMAGE_DIMENSION: u32 = 16_384;
+const MAX_IMAGE_PIXELS: u64 = 64_000_000;
+const MAX_IMAGE_DECODED_BYTES: u64 = 256 * 1024 * 1024;
 
 pub(crate) fn images_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app_dir(app)?.join("images");
@@ -87,9 +90,30 @@ pub(crate) fn validate_image_magic(path: &Path, ext: &str, max_bytes: u64) -> Re
 
 pub(crate) fn validate_decoded_image(bytes: &[u8], ext: &str) -> Result<(), String> {
     validate_image_header_bytes(bytes, ext)?;
-    let image = image::ImageReader::new(std::io::Cursor::new(bytes))
+    let dimensions = image::ImageReader::new(std::io::Cursor::new(bytes))
         .with_guessed_format()
         .map_err(|error| error.to_string())?
+        .into_dimensions()
+        .map_err(|error| format!("이미지 크기를 확인할 수 없습니다: {error}"))?;
+    let pixels = u64::from(dimensions.0) * u64::from(dimensions.1);
+    if dimensions.0 == 0
+        || dimensions.1 == 0
+        || dimensions.0 > MAX_IMAGE_DIMENSION
+        || dimensions.1 > MAX_IMAGE_DIMENSION
+        || pixels > MAX_IMAGE_PIXELS
+        || pixels.saturating_mul(4) > MAX_IMAGE_DECODED_BYTES
+    {
+        return Err("이미지 해상도가 허용 범위를 넘습니다.".into());
+    }
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .map_err(|error| error.to_string())?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_IMAGE_DECODED_BYTES);
+    reader.limits(limits);
+    let image = reader
         .decode()
         .map_err(|error| format!("이미지를 디코딩할 수 없습니다: {error}"))?;
     if image.width() == 0 || image.height() == 0 {
@@ -476,6 +500,22 @@ mod tests {
                 save_import_image_bytes_to_dir(dir.path(), damaged, Some(&filename), None).is_err()
             );
         }
+    }
+
+    #[test]
+    fn rejects_dimensions_over_the_decode_budget_before_allocating_pixels() {
+        let image = image::DynamicImage::ImageRgb8(image::RgbImage::new(2, 2));
+        let mut bytes = Vec::new();
+        image
+            .write_to(
+                &mut std::io::Cursor::new(&mut bytes),
+                image::ImageFormat::Png,
+            )
+            .unwrap();
+        bytes[16..20].copy_from_slice(&(MAX_IMAGE_DIMENSION + 1).to_be_bytes());
+        assert!(validate_decoded_image(&bytes, "png")
+            .unwrap_err()
+            .contains("해상도"));
     }
 
     #[test]

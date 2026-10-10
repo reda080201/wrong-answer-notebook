@@ -1,6 +1,13 @@
 const DATABASE_NAME = "wrong-answer-notebook-images";
 const STORE_NAME = "images";
 const VERSION = 1;
+let mutationQueue: Promise<void> = Promise.resolve();
+
+function serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
+  const task = mutationQueue.then(operation, operation);
+  mutationQueue = task.then(() => undefined, () => undefined);
+  return task;
+}
 
 function supportsIndexedDb(): boolean {
   return typeof indexedDB !== "undefined";
@@ -41,7 +48,7 @@ async function writeImages(operation: (store: IDBObjectStore) => void, message: 
   }
 }
 
-async function migrateLegacyBrowserImages(): Promise<void> {
+async function migrateLegacyBrowserImagesUnlocked(): Promise<void> {
   if (!supportsIndexedDb()) return;
   const legacy = Object.fromEntries(
     Object.keys(localStorage)
@@ -53,7 +60,9 @@ async function migrateLegacyBrowserImages(): Promise<void> {
   await writeImages(store => {
     for (const [key, value] of Object.entries(legacy)) store.put(value, key);
   }, "기존 브라우저 이미지 이전에 실패했습니다.");
-  for (const key of Object.keys(legacy)) localStorage.removeItem(key);
+  for (const [key, value] of Object.entries(legacy)) {
+    if (localStorage.getItem(key) === value) localStorage.removeItem(key);
+  }
 }
 
 export async function putBrowserImage(key: string, value: string): Promise<void> {
@@ -61,29 +70,41 @@ export async function putBrowserImage(key: string, value: string): Promise<void>
     localStorage.setItem(key, value);
     return;
   }
-  await writeImages(store => { store.put(value, key); }, "브라우저 이미지 저장에 실패했습니다.");
+  await serializeMutation(() => writeImages(store => { store.put(value, key); }, "브라우저 이미지 저장에 실패했습니다."));
 }
 
-export async function getBrowserImage(key: string): Promise<string | null> {
-  if (!supportsIndexedDb()) return legacyValue(key);
+async function readIndexedImage(key: string): Promise<string | null> {
   const db = await openDatabase();
-  let value: string | null;
   try {
-    value = await new Promise<string | null>((resolve, reject) => {
-      const request = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).get(key);
-      request.onsuccess = () => resolve(typeof request.result === "string" ? request.result : null);
+    return await new Promise<string | null>((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, "readonly");
+      let value: string | null = null;
+      const request = transaction.objectStore(STORE_NAME).get(key);
+      request.onsuccess = () => { value = typeof request.result === "string" ? request.result : null; };
       request.onerror = () => reject(request.error ?? new Error("브라우저 이미지를 불러오지 못했습니다."));
+      transaction.oncomplete = () => resolve(value);
+      transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지를 불러오지 못했습니다."));
+      transaction.onabort = () => reject(transaction.error ?? new Error("브라우저 이미지 읽기가 중단되었습니다."));
     });
   } finally {
     db.close();
   }
+}
+
+export async function getBrowserImage(key: string): Promise<string | null> {
+  if (!supportsIndexedDb()) return legacyValue(key);
+  const value = await readIndexedImage(key);
   if (value !== null) return value;
-  const legacy = legacyValue(key);
-  if (legacy !== null) {
-    await putBrowserImage(key, legacy);
-    localStorage.removeItem(key);
-  }
-  return legacy;
+  return serializeMutation(async () => {
+    const current = await readIndexedImage(key);
+    if (current !== null) return current;
+    const legacy = legacyValue(key);
+    if (legacy !== null) {
+      await writeImages(store => { store.put(legacy, key); }, "기존 브라우저 이미지 이전에 실패했습니다.");
+      if (localStorage.getItem(key) === legacy) localStorage.removeItem(key);
+    }
+    return legacy;
+  });
 }
 
 export async function deleteBrowserImage(key: string): Promise<void> {
@@ -91,8 +112,10 @@ export async function deleteBrowserImage(key: string): Promise<void> {
     localStorage.removeItem(key);
     return;
   }
-  await writeImages(store => { store.delete(key); }, "브라우저 이미지 삭제에 실패했습니다.");
-  localStorage.removeItem(key);
+  await serializeMutation(async () => {
+    await writeImages(store => { store.delete(key); }, "브라우저 이미지 삭제에 실패했습니다.");
+    localStorage.removeItem(key);
+  });
 }
 
 export async function replaceBrowserImages(images: Record<string, string>): Promise<void> {
@@ -101,12 +124,14 @@ export async function replaceBrowserImages(images: Record<string, string>): Prom
     for (const [key, value] of Object.entries(images)) localStorage.setItem(key, value);
     return;
   }
-  await migrateLegacyBrowserImages();
-  await writeImages(store => {
-    store.clear();
-    for (const [key, value] of Object.entries(images)) store.put(value, key);
-  }, "브라우저 이미지 복원에 실패했습니다.");
-  for (const key of Object.keys(localStorage).filter((key) => key.startsWith("img_"))) localStorage.removeItem(key);
+  await serializeMutation(async () => {
+    await migrateLegacyBrowserImagesUnlocked();
+    await writeImages(store => {
+      store.clear();
+      for (const [key, value] of Object.entries(images)) store.put(value, key);
+    }, "브라우저 이미지 복원에 실패했습니다.");
+    for (const key of Object.keys(localStorage).filter((key) => key.startsWith("img_"))) localStorage.removeItem(key);
+  });
 }
 
 export async function hasBrowserImage(key: string): Promise<boolean> {
@@ -117,7 +142,7 @@ export async function listBrowserImages(): Promise<Record<string, string>> {
   if (!supportsIndexedDb()) {
     return Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""]));
   }
-  await migrateLegacyBrowserImages();
+  await serializeMutation(migrateLegacyBrowserImagesUnlocked);
   const db = await openDatabase();
   try {
     return await new Promise<Record<string, string>>((resolve, reject) => {
@@ -127,15 +152,16 @@ export async function listBrowserImages(): Promise<Record<string, string>> {
     const keysRequest = store.getAllKeys();
     let values: unknown[] | undefined;
     let keys: IDBValidKey[] | undefined;
-    const finish = () => {
-      if (!values || !keys) return;
+    transaction.oncomplete = () => {
+      if (!values || !keys) { reject(new Error("브라우저 이미지 목록을 읽지 못했습니다.")); return; }
       resolve(Object.fromEntries(keys.map((key, index) => [String(key), typeof values?.[index] === "string" ? values[index] as string : ""])));
     };
-    request.onsuccess = () => { values = request.result; finish(); };
-    keysRequest.onsuccess = () => { keys = keysRequest.result; finish(); };
+    request.onsuccess = () => { values = request.result; };
+    keysRequest.onsuccess = () => { keys = keysRequest.result; };
     request.onerror = () => reject(request.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
     keysRequest.onerror = () => reject(keysRequest.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
     transaction.onerror = () => reject(transaction.error ?? new Error("브라우저 이미지 목록을 읽지 못했습니다."));
+    transaction.onabort = () => reject(transaction.error ?? new Error("브라우저 이미지 목록 읽기가 중단되었습니다."));
     });
   } finally {
     db.close();

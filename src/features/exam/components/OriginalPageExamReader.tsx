@@ -112,7 +112,6 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
   }, [activeFilename]);
 
   const go = (nextIndex: number) => {
-    if (activeIndex < 0) return;
     const next = visiblePages[nextIndex];
     if (next) {
       setPageDirection(nextIndex < activeIndex ? "backward" : "forward");
@@ -132,6 +131,7 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
     if (event.key === "ArrowLeft") { event.preventDefault(); event.stopPropagation(); go(activeIndex - 1); }
     if (event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); go(activeIndex + 1); }
   }} onTouchStart={(event) => {
+    touchStart.current = null;
     if (event.target instanceof Element && event.target.closest("button, input, textarea, select, summary, [role='checkbox'], [contenteditable='true']")) return;
     const point = event.touches[0];
     touchStart.current = point ? { x: point.clientX, y: point.clientY } : null;
@@ -147,9 +147,9 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
     if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(activeIndex + (dx < 0 ? 1 : -1));
   }} onTouchCancel={() => { touchStart.current = null; }}>
     <header className="original-page-toolbar">
-      <button type="button" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}>← 이전 페이지</button>
+      <button type="button" aria-label="이전 페이지" onClick={() => go(activeIndex - 1)} disabled={activeIndex <= 0}><span aria-hidden="true">← </span>이전 페이지</button>
       <strong aria-live="polite">{!visiblePages.length ? "페이지를 선택해 주세요" : activeIndex < 0 ? "현재 문항의 연결 페이지 없음" : `${activeIndex + 1} / ${visiblePages.length} 페이지`}</strong>
-      <button type="button" onClick={() => go(activeIndex + 1)} disabled={activeIndex < 0 || activeIndex >= visiblePages.length - 1}>다음 페이지 →</button>
+      <button type="button" aria-label="다음 페이지" onClick={() => go(activeIndex < 0 ? 0 : activeIndex + 1)} disabled={!visiblePages.length || activeIndex >= visiblePages.length - 1}>다음 페이지<span aria-hidden="true"> →</span></button>
       <span className="original-page-toolbar__separator" aria-hidden="true" />
       <button type="button" onClick={() => changeZoom(value => value - 0.2)} disabled={zoom <= 0.2}>축소</button>
       <span>{displayedPercent}%</span>

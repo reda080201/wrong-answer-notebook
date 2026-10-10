@@ -20,4 +20,26 @@ describe("native import image validation", () => {
     await expect(validateImportImage(new File([validPngBytes], "image.png"))).rejects.toThrow("디코딩");
     expect(close).toHaveBeenCalledOnce();
   });
+  it("rejects oversized dimensions before invoking the bitmap decoder", async () => {
+    const bytes = validPngBytes.slice();
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(16, 16_385);
+    const decode = vi.fn(); vi.stubGlobal("createImageBitmap", decode);
+    await expect(validateImportImage(new File([bytes], "wide.png"))).rejects.toThrow("해상도");
+    expect(decode).not.toHaveBeenCalled();
+  });
+  it("rejects images whose total decoded pixel count exceeds the budget", async () => {
+    const bytes = validPngBytes.slice();
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    view.setUint32(16, 10_000); view.setUint32(20, 7_000);
+    const decode = vi.fn(); vi.stubGlobal("createImageBitmap", decode);
+    await expect(validateImportImage(new File([bytes], "pixels.png"))).rejects.toThrow("해상도");
+    expect(decode).not.toHaveBeenCalled();
+  });
+  it("rejects a zero-sized PNG header before decode", async () => {
+    const bytes = validPngBytes.slice();
+    new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).setUint32(16, 0);
+    const decode = vi.fn(); vi.stubGlobal("createImageBitmap", decode);
+    await expect(validateImportImage(new File([bytes], "empty.png"))).rejects.toThrow("해상도");
+    expect(decode).not.toHaveBeenCalled();
+  });
 });

@@ -30,7 +30,9 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
   const [notice, setNotice] = useState("");
   const hotspots = useMemo(() => (entry.questionSolutionHotspots ?? []).filter(hotspot => validSolutionHotspot(hotspot) && questions.filter(question => question.key === hotspot.questionKey).length === 1), [entry.questionSolutionHotspots, questions]);
   const linkedPages = (key: string) => {
-    const question = questions.find(question => question.key === key);
+    const matches = questions.filter(question => question.key === key);
+    if (matches.length !== 1) return [];
+    const question = matches[0];
     const sourcePage = question?.page && Number.isInteger(question.page) ? pages[question.page - 1] : undefined;
     return pages.filter(page => page === sourcePage || hotspots.some(hotspot => hotspot.questionKey === key && hotspot.sourcePageImage === page));
   };
@@ -51,13 +53,20 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
   const changePage = (page: string) => {
     setCurrentPage(page);
     const linked = questions.filter(question => questions.filter(other => other.key === question.key).length === 1 && linkedPages(question.key).includes(page));
-    const target = linked.find(question => question.key === currentQuestionKey) ?? linked[0];
-    if (target) {
-      onCurrentQuestionChange?.(target.key);
+    if (linked.some(question => question.key === currentQuestionKey)) {
       setNotice("");
+    } else if (linked.length === 1) {
+      onCurrentQuestionChange?.(linked[0].key);
+      setNotice("");
+    } else if (linked.length > 1) {
+      setNotice("이 페이지에 여러 문항이 연결되어 있습니다. 아래에서 현재 문항을 직접 선택하세요.");
     } else setNotice("이 페이지와 연결된 문항이 없습니다. 아래 현재 문항을 직접 선택하세요.");
   };
   const navigate = (key: string) => {
+    if (questions.filter(question => question.key === key).length !== 1) {
+      setNotice("이 문항 연결이 모호합니다. 원본 페이지 연결을 확인한 뒤 다시 시도하세요.");
+      return;
+    }
     setSolutionKey(key);
     onCurrentQuestionChange?.(key);
     const page = linkedPages(key).find(page => selectedPages.includes(page));
@@ -81,7 +90,10 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
         if (!next.includes(currentPage)) {
           const replacement = currentQuestionKey ? linkedPages(currentQuestionKey).find(page => next.includes(page)) : undefined;
           if (replacement) setCurrentPage(replacement);
-          else if (next[0]) changePage(next[0]);
+          else if (next[0]) {
+            setCurrentPage(next[0]);
+            setNotice("현재 문항의 연결 페이지가 선택 해제되어 다른 페이지를 표시합니다. 문항 선택은 유지됩니다.");
+          }
           else setCurrentPage("");
         }
       }} onChangePage={changePage} hotspots={hotspots} questionLabels={Object.fromEntries(questions.map(question => [question.key, question.number]))} onOpenSolution={navigate} />
