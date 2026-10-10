@@ -981,27 +981,38 @@ export default function EntryDetail({
 
   const findQuestionTarget = (questionNumber: string) => {
     const normalized = normalizeQuestionNumber(questionNumber);
-    return questionAnchors.find(
+    const matches = questionAnchors.filter(
       (block) =>
         block.kind === "question" &&
         questionIdentifier(block) === normalized,
     );
+    return matches.length === 1 ? matches[0] : undefined;
   };
 
   const answerMatchesQuestion = (item: SheetAnswerItem, question: QuestionBlock) => {
     const normalized = normalizeQuestionNumber(item.questionNumber);
-    if (normalized === questionIdentifier(question)) return true;
+    if (normalized === questionIdentifier(question)) {
+      const sameNumberQuestions = questionAnchors.filter(block => questionIdentifier(block) === normalized);
+      const sameNumberAnswers = sheetAnswerKey.filter(answer => normalizeQuestionNumber(answer.questionNumber) === normalized);
+      return sameNumberQuestions.length === 1 && sameNumberQuestions[0] === question && sameNumberAnswers.length === 1 && sameNumberAnswers[0] === item;
+    }
     // Legacy OCR imports can retain a positional label alongside the printed
     // number. Preserve both aliases until they have structured canonical data.
-    return !entry.structuredQuestions?.length && (
-      normalized === normalizeQuestionNumber(String(question.numberLabel ?? "")) ||
-      normalized === normalizeQuestionNumber(String(question.displayNumber ?? ""))
-    );
+    if (entry.structuredQuestions?.length) return false;
+    const legacyAliases = new Set([
+      normalizeQuestionNumber(String(question.numberLabel ?? "")),
+      normalizeQuestionNumber(String(question.displayNumber ?? "")),
+    ].filter(Boolean));
+    if (!legacyAliases.has(normalized)) return false;
+    const sameAliasQuestions = questionAnchors.filter(block => legacyAliases.has(questionIdentifier(block) ?? "") || legacyAliases.has(normalizeQuestionNumber(String(block.numberLabel ?? ""))));
+    const sameAliasAnswers = sheetAnswerKey.filter(answer => normalizeQuestionNumber(answer.questionNumber) === normalized);
+    return sameAliasQuestions.length === 1 && sameAliasQuestions[0] === question && sameAliasAnswers.length === 1 && sameAliasAnswers[0] === item;
   };
 
-  const focusedAnswer = focusedQuestion
-    ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, focusedQuestion))
-    : undefined;
+  const focusedAnswerMatches = focusedQuestion
+    ? sheetAnswerKey.filter((item) => answerMatchesQuestion(item, focusedQuestion))
+    : [];
+  const focusedAnswer = focusedAnswerMatches.length === 1 ? focusedAnswerMatches[0] : undefined;
   const theaterQuestion = theaterQuestionIndex !== null
     ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
     : undefined;
@@ -1015,9 +1026,10 @@ export default function EntryDetail({
     }
     return undefined;
   })();
-  const theaterAnswer = theaterQuestion
-    ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, theaterQuestion))
-    : undefined;
+  const theaterAnswerMatches = theaterQuestion
+    ? sheetAnswerKey.filter((item) => answerMatchesQuestion(item, theaterQuestion))
+    : [];
+  const theaterAnswer = theaterAnswerMatches.length === 1 ? theaterAnswerMatches[0] : undefined;
   const theaterQuestionMeta = theaterQuestion
     ? getQuestionMetaForBlock(entry, theaterQuestion)
     : undefined;
@@ -1025,6 +1037,7 @@ export default function EntryDetail({
     ? `${focusedQuestion.body} ${focusedQuestion.choices.map((choice) => choice.text).join(" ")}`.trim().length < 360
     : entry.question.trim().length < 360;
   const focusedFigureImageFilenames = focusedQuestion
+    && questionAnchors.filter(block => questionIdentifier(block) === questionIdentifier(focusedQuestion)).length === 1
     ? (entry.figures ?? [])
       .filter((figure) => {
         const normalized = normalizeQuestionNumber(figure.questionNumber);
@@ -1325,7 +1338,7 @@ export default function EntryDetail({
               {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
                 <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""} aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"} onClick={() => changeProblemSheetDisplayMode("questions")}>문항별</button>
-                <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
+                <button type="button" data-testid="problem-sheet-display-exam" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
               </div>
               <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
                 const next = !value;
@@ -1414,6 +1427,7 @@ export default function EntryDetail({
               </button>
               <button
                 type="button"
+                data-testid="problem-sheet-display-exam"
                 className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""}
                 aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"}
                 onClick={() => changeProblemSheetDisplayMode("exam")}
@@ -2292,7 +2306,7 @@ export default function EntryDetail({
           entry, questionNumbers: [number], scope: "current",
           preferences: { shareQuestionText: true, shareChoices: true, shareQuestionImages: false, shareSourcePageImages: false, shareUserResponse: true, shareScratchNote: true, shareExistingAnswersAndExplanations: true },
         });
-        sharePayload.questions[0].questionText ??= currentQuestion.body;
+        if (matchingQuestions.length === 1) sharePayload.questions[0].questionText ??= currentQuestion.body;
         sharePayload.questions[0].scratchNote = entry.memo;
         return <ChatGptHelpLauncher
           open={gptQuestionOpen}
@@ -2322,7 +2336,7 @@ export default function EntryDetail({
           remoteMcpConfigured={remoteMcpConfigured}
           onOpenSettings={onOpenChatGptSettings}
           questionContext={{
-            contextId: entry.id + ":" + currentQuestion.displayNumber,
+            contextId: entry.id + ":" + currentQuestion.start + ":" + currentQuestion.displayNumber,
             sharePayload,
             questionNumber: number,
             body: currentQuestion.body,
@@ -2334,6 +2348,7 @@ export default function EntryDetail({
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
+          key={`${entry.id}:${examSession?.id ?? "detail"}:${theaterQuestion ? questionIdentifier(theaterQuestion) : questionIdentifier(focusedQuestion) ?? "none"}:${selectedQuestionNumbers.join(",")}`}
           entry={entry}
           allEntries={allEntries}
           examSession={examSession}

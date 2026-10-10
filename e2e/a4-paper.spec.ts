@@ -36,7 +36,9 @@ for (const size of sizes) {
       }, { entry, navigation, figure });
       await page.goto("/");
       await openSyntheticSheet(page);
-      await page.getByRole("group", { name: "문제지 표시 방식" }).getByRole("button", { name: "시험지", exact: true }).click();
+      const examDisplayButton = page.getByRole("group", { name: "문제지 표시 방식" }).getByTestId("problem-sheet-display-exam");
+      await expect(examDisplayButton).toHaveText(/^(원본|텍스트) 시험지$/);
+      await examDisplayButton.click();
       for (const surface of ["paper", "practice", "real"] as const) {
         if (surface === "practice") await page.getByRole("button", { name: "문제 풀기", exact: true }).click();
         if (surface === "real") {
