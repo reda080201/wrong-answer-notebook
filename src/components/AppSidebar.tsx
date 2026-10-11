@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import SubjectList from "./SubjectList";
 import type {
   EntryKind,
@@ -41,7 +41,7 @@ interface AppSidebarProps {
   learningHub?: { active: boolean; total: number; subjectCounts: Record<string, number> };
   actions: { openNew(): void; openImport(): void; openLearningImport(): void; openExamBuilder?(): void };
   destination: SidebarDestination;
-  shell: { collapsed: boolean; onCollapsedChange?(collapsed: boolean): void };
+  shell: { collapsed: boolean; overlay?: boolean; onCollapsedChange?(collapsed: boolean): void };
 }
 
 export type SidebarDestination =
@@ -87,7 +87,22 @@ export default function AppSidebar({
   const { openNew, openImport, openLearningImport, openExamBuilder: onOpenExamBuilder } = actions;
   const isSectionDestination = destination.type === "section";
   const destinationSection = isSectionDestination ? destination.section : null;
-  const { collapsed, onCollapsedChange } = shell;
+  const { collapsed, overlay, onCollapsedChange } = shell;
+  const collapseButton = useRef<HTMLButtonElement>(null);
+  const closeOverlay = useCallback(() => {
+    onCollapsedChange?.(true);
+    collapseButton.current?.focus();
+  }, [onCollapsedChange]);
+  useEffect(() => {
+    if (!overlay) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented || document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      event.preventDefault();
+      closeOverlay();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [overlay, closeOverlay]);
   const sectionEntries = useMemo(
     () => entries.filter((entry) => entry.entryKind === activeSection),
     [entries, activeSection],
@@ -130,14 +145,18 @@ export default function AppSidebar({
     void navigationController.requestNavigation({ section, entryId: null });
   };
   return (
+    <>
+    {overlay && <button type="button" className="app-sidebar-backdrop" aria-label="앱 사이드바 닫기" tabIndex={-1} onClick={closeOverlay} />}
     <aside className={`sidebar app-sidebar${collapsed ? " app-sidebar--collapsed" : ""}`} aria-label="주요 탐색">
       <div className="logo">
         <div className="logo-icon" aria-hidden="true"><BookOpen size={18} /></div>
         {!collapsed && <h1>오답노트</h1>}
         <button
+          ref={collapseButton}
           type="button"
           className="app-sidebar-collapse ui-icon-button"
           aria-label={collapsed ? "앱 사이드바 펼치기" : "앱 사이드바 접기"}
+          aria-expanded={!collapsed}
           title={collapsed ? "사이드바 펼치기" : "사이드바 접기"}
           onClick={() => onCollapsedChange?.(!collapsed)}
         >
@@ -268,5 +287,6 @@ export default function AppSidebar({
         )}
       </div>
     </aside>
+    </>
   );
 }
