@@ -79,7 +79,9 @@ describe("EntryDetail sheet layout", () => {
     />);
     openSecondaryAction("집중 보기");
     fireEvent.click(screen.getByRole("button", { name: "하단 도구 열기" }));
-    fireEvent.click(screen.getByRole("button", { name: "GPT 질문" }));
+    const shareButton = screen.getByTestId("question-chatgpt-help");
+    expect(shareButton).toHaveTextContent("GPT 질문 · 1번");
+    fireEvent.click(shareButton);
     const dialog = screen.getByRole("dialog", { name: "ChatGPT에서 도움받기" });
     expect((within(dialog).getByRole("textbox", { name: "편집할 ChatGPT 프롬프트" }) as HTMLTextAreaElement).value).not.toContain("정답_31");
     fireEvent.click(within(dialog).getByLabelText("정답·해설 공유"));
@@ -173,16 +175,19 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "시험지" }));
+    const displayExam = screen.getByTestId("problem-sheet-display-exam");
+    expect(displayExam).toHaveTextContent("텍스트 시험지");
+    fireEvent.click(displayExam);
     expect(document.querySelector(".study-paper--exam")).toBeTruthy();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 보기" }));
-    expect(screen.getByRole("status")).toHaveTextContent("①");
+    expect(document.querySelector(".structured-problem-sheet-answer")).toHaveTextContent("①");
     expect(screen.getByRole("button", { name: "2번 정답 보기" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 숨기기" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(document.querySelector(".structured-problem-sheet-answer")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
   });
 
   it("persists the selected two-column sheet layout", () => {
@@ -834,10 +839,17 @@ describe("EntryDetail sheet layout", () => {
     );
 
     openSecondaryAction("집중 보기");
-    expect(screen.getByText("x + 1 = 2를 풀어라.")).toBeInTheDocument();
+    const focusedQuestion = document.querySelector(".wrong-focus-question");
+    expect(focusedQuestion).toBeInTheDocument();
+    const formula = focusedQuestion?.querySelector('[aria-label="수식"]');
+    const prose = focusedQuestion?.querySelector(".math-prose");
+    expect(formula).toBeInTheDocument();
+    expect(prose).toHaveTextContent("를 풀어라.");
+    expect(Boolean(formula && prose && (formula.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "정답" }));
-    expect(screen.getByText("x = 1")).toBeInTheDocument();
+    const answerFormula = document.querySelector('.answer-card--correct annotation[encoding="application/x-tex"]');
+    expect(answerFormula?.textContent).toBe("x = 1");
 
     fireEvent.click(screen.getByRole("button", { name: "해설" }));
     expect(screen.getByText("양변에서 1을 뺀다.")).toBeInTheDocument();

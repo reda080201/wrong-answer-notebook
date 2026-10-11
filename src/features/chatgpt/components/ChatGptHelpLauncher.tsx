@@ -138,11 +138,6 @@ export default function ChatGptHelpLauncher({
     }
   };
 
-  const handleCopyAndOpen = async () => {
-    const copied = await copyPrompt();
-    if (copied) await handleOpenChatGpt();
-  };
-
   const handleSendToMcpTunnel = async () => {
     setStatus(null);
     try {
@@ -167,7 +162,6 @@ export default function ChatGptHelpLauncher({
         <button type="button" className="btn-secondary" onClick={() => void copyPrompt()}>질문 복사</button>
         <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 동기화</button>
         <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
-        <button type="button" className="btn-primary" onClick={() => void handleCopyAndOpen()}>복사 후 열기</button>
         {onOpenSettings && <button type="button" className="btn-secondary" onClick={onOpenSettings}>연결 설정</button>}
       </div>}>
         <section className="chatgpt-help-panel">

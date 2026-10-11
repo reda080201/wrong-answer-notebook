@@ -41,7 +41,7 @@ export function buildChatGptSharePayload(options: {
     const block = matchingBlocks.length === 1 ? matchingBlocks[0] : undefined;
     const matchingSnapshots = options.examSession?.questions.filter(item => normalizeQuestionNumber(item.questionNumber) === normalized) ?? [];
     const sessionQuestion = matchingSnapshots.length === 1 ? matchingSnapshots[0] : undefined;
-    const response = options.examSession?.responses.find((item) => normalizeQuestionNumber(item.questionNumber) === questionNumber);
+    const response = options.examSession?.responses.find((item) => normalizeQuestionNumber(item.questionNumber) === normalized);
     const answers = options.entry.answerKey?.filter(item => normalizeQuestionNumber(item.questionNumber) === normalized) ?? [];
     const answer = matchingBlocks.length === 1 && answers.length === 1 ? answers[0] : undefined;
     const singleWrongAnswer = blocks.length === 1 && matchingBlocks.length === 1 && answers.length === 0

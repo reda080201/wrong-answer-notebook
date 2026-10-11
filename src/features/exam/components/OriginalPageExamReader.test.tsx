@@ -70,8 +70,9 @@ describe("OriginalPageExamReader touch navigation", () => {
     fireEvent.touchStart(reader, { touches: [touch(100, 240, reader)] });
     fireEvent.touchEnd(reader, { changedTouches: [touch(105, 100, reader)] });
     const nextButton = screen.getByRole("button", { name: "다음 페이지" });
+    fireEvent.touchStart(reader, { touches: [touch(240, 100, reader)] });
     fireEvent.touchStart(nextButton, { touches: [touch(240, 100, nextButton)] });
-    fireEvent.touchEnd(nextButton, { changedTouches: [touch(100, 105, nextButton)] });
+    fireEvent.touchEnd(reader, { changedTouches: [touch(100, 105, reader)] });
     fireEvent.touchStart(reader, { touches: [touch(240, 100, reader)] });
     fireEvent.touchCancel(reader);
     fireEvent.touchEnd(reader, { changedTouches: [touch(100, 105, reader)] });
