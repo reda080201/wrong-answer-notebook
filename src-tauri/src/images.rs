@@ -504,7 +504,8 @@ mod tests {
 
     #[test]
     fn rejects_dimensions_over_the_decode_budget_before_allocating_pixels() {
-        let image = image::DynamicImage::ImageRgb8(image::RgbImage::new(2, 2));
+        let image =
+            image::DynamicImage::ImageRgb8(image::RgbImage::new(MAX_IMAGE_DIMENSION + 1, 1));
         let mut bytes = Vec::new();
         image
             .write_to(
@@ -512,7 +513,6 @@ mod tests {
                 image::ImageFormat::Png,
             )
             .unwrap();
-        bytes[16..20].copy_from_slice(&(MAX_IMAGE_DIMENSION + 1).to_be_bytes());
         assert!(validate_decoded_image(&bytes, "png")
             .unwrap_err()
             .contains("해상도"));
