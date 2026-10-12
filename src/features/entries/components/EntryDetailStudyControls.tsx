@@ -5,6 +5,7 @@ type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
 interface EntryDetailStudyControlsProps {
   isSheet: boolean;
   isConcept: boolean;
+  questionLabel?: string;
   questionIndex: number;
   questionCount: number;
   hideAnswers: boolean;
@@ -29,8 +30,9 @@ interface EntryDetailStudyControlsProps {
   onOpenGptExport?(): void;
 }
 
-export default function EntryDetailStudyControls({ isSheet, isConcept, questionIndex, questionCount, hideAnswers, detailViewMode, reviewSaving, difficult, nextStudyAction, compact, showModeControls, quickMemoOpen, quickMemoText, onPrevious, onNext, onToggleAnswers, onReview, onToggleDifficult, onModeChange, onCompactChange, onQuickMemoOpenChange, onQuickMemoTextChange, onQuickMemoSubmit, onOpenGptExport }: EntryDetailStudyControlsProps) {
+export default function EntryDetailStudyControls({ questionLabel, isSheet, isConcept, questionIndex, questionCount, hideAnswers, detailViewMode, reviewSaving, difficult, nextStudyAction, compact, showModeControls, quickMemoOpen, quickMemoText, onPrevious, onNext, onToggleAnswers, onReview, onToggleDifficult, onModeChange, onCompactChange, onQuickMemoOpenChange, onQuickMemoTextChange, onQuickMemoSubmit, onOpenGptExport }: EntryDetailStudyControlsProps) {
   return <StudyControlBar
+    questionLabel={questionLabel}
     isSheet={isSheet}
     isConcept={isConcept}
     questionIndex={questionIndex}

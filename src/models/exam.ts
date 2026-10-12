@@ -1,4 +1,4 @@
-import type { QuestionContentSegment, SheetFigureItem, StructuredQuestion } from "./entry";
+import type { QuestionContentSegment, QuestionSolutionHotspot, SheetAnswerItem, SheetFigureItem, StructuredQuestion } from "./entry";
 import type { WrongAnswerEntry } from "./entry";
 
 export type ExamSessionStatus = "in_progress" | "submitted";
@@ -6,6 +6,9 @@ export type ExamSessionStatus = "in_progress" | "submitted";
 export type ExamMode = "practice" | "real";
 
 export interface ExamQuestionSnapshot {
+  questionSolutionHotspots?: QuestionSolutionHotspot[];
+  solutionAnswer?: SheetAnswerItem;
+  solutionFigures?: SheetFigureItem[];
   id: string;
   questionNumber: string;
   passage?: string;
@@ -19,6 +22,8 @@ export interface ExamQuestionSnapshot {
   questionImages: string[];
   /** 문항 직접 연결 정보가 없는 기존 시험지 원본 페이지 이미지입니다. */
   sourcePageImages?: string[];
+  /** Explicit source-page links for crops attached to this question. */
+  linkedSourcePageImages?: string[];
   figures: SheetFigureItem[];
   contentSegments?: QuestionContentSegment[];
   needsReview?: boolean;

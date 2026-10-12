@@ -14,6 +14,7 @@ import QuestionFocusPage, { type QuestionFocusItem } from "./QuestionFocusPage";
 import QuestionContentView from "./QuestionContentView";
 import { resolveEntryQuestionStimuli } from "../features/exam/services/examSession";
 import { readFigureTokenReferences } from "../utils/figureTokens";
+import { resolveGeneratedWrongAnswerContent } from "../utils/generatedWrongAnswerContent";
 import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
@@ -70,7 +71,12 @@ export default function StudyPaperView({
   const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
-  const figureImages = (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
+  const generatedWrongAnswerContent = entry.entryKind === "wrong_answer" && entry.generatedFromExamSessionId
+    ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
+    : { status: "unavailable" as const };
+  const figureImages = generatedWrongAnswerContent.status === "matched"
+    ? []
+    : (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
   const diagramItems = [
     ...(entry.answerKey ?? [])
       .filter((item) => item.diagramSpec || item.diagramType)
@@ -144,7 +150,10 @@ export default function StudyPaperView({
             {displayMode === "exam" && paperPresentation === "two-question" ? <QuestionFocusPage items={structuredQuestionNodes} currentQuestionNumber={currentQuestionNumber} onNavigateQuestion={onCurrentQuestionChange} title={entry.title} subject={entry.subject} /> : <ExamPaperCompositor enabled={displayMode === "exam"} items={structuredQuestionNodes} navigation={paperNavigation} currentQuestionNumber={currentQuestionNumber} onQuestionChange={onCurrentQuestionChange} title={entry.title} subject={entry.subject} />}
           </div>
         ) : <AnnotatableQuestion
+          key={entry.id}
           question={entry.question}
+          canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
+          canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}

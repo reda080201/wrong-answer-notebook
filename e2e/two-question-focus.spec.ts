@@ -32,7 +32,9 @@ test.describe("two-question focus view", () => {
     await expect(page.locator(".question-focus-reader")).toHaveCount(0);
     await display.getByRole("button", { name: "문항별", exact: true }).click();
     await expect(page.locator(".question-focus-reader")).toHaveCount(0);
-    await display.getByRole("button", { name: "시험지", exact: true }).click();
+    const examDisplayButton = display.getByTestId("problem-sheet-display-exam");
+    await expect(examDisplayButton).toHaveText(/^(원본|텍스트) 시험지$/);
+    await examDisplayButton.click();
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(2);
     await expect(focus.locator(".question-focus-spread:not([hidden]) footer")).toHaveText("1–2 / 5");
@@ -63,7 +65,9 @@ test.describe("two-question focus view", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "시험지함" }).click();
     await page.locator(".entry-card", { hasText: focusEntry.title }).click();
-    await page.getByRole("group", { name: "문제지 표시 방식" }).getByRole("button", { name: "시험지", exact: true }).click();
+    const examDisplayButton = page.getByRole("group", { name: "문제지 표시 방식" }).getByTestId("problem-sheet-display-exam");
+    await expect(examDisplayButton).toHaveText(/^(원본|텍스트) 시험지$/);
+    await examDisplayButton.click();
     const focus = page.locator(".question-focus-reader");
     await expect(focus.locator(".question-focus-spread:not([hidden]) .question-focus-item")).toHaveCount(1);
     await expect(focus).toHaveCSS("touch-action", "pan-y");

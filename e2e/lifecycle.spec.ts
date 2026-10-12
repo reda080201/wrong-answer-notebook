@@ -86,7 +86,7 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   const quickSave = page.getByRole("button", { name: "바로 저장" });
   await expect(quickSave).toBeEnabled();
   await quickSave.click();
-  await expect(page.getByRole("dialog", { name: "GPT 결과 가져오기" })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
 
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries") ?? "{}"));
   expect(stored.entries).toHaveLength(1);
@@ -95,3 +95,67 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   expect(stored.entries[0].structuredQuestions[0].contentSegments[1].type).toBe("equation");
   await page.screenshot({ path: testInfo.outputPath("import-direct-save-1100x750.png"), fullPage: true });
 });
+
+test("direct import survives a failed entry write and rapid retry without duplicates", async ({ page }) => {
+  await seedBrowserStorage(page, []);
+  await page.goto("/");
+  await page.getByRole("button", { name: "시험지함" }).click();
+  await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
+  await page.getByLabel("올인원 가져오기").setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
+  const save = page.getByRole("button", { name: "바로 저장", exact: true });
+  await expect(save).toBeEnabled();
+  await page.evaluate(() => {
+    const write = Storage.prototype.setItem;
+    let fail = true;
+    Storage.prototype.setItem = function(key, value) {
+      if (key === "wrong-answer-entries" && fail) { fail = false; throw new Error("isolated entry write failure"); }
+      return write.call(this, key, value);
+    };
+  });
+  await save.click();
+  await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "시험지 가져오기" }).getByRole("alert")).toHaveText("여러 항목을 추가하지 못했습니다. (브라우저 저장소에 데이터를 저장하지 못했습니다.)");
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(0);
+  const plannedIds = await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-import-workspace-draft")!).commitAttempt.entryIds);
+  await page.getByRole("button", { name: "저장 결과 확인·정리 재시도", exact: true }).dblclick();
+  await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
+  const entries = await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries);
+  expect(entries).toHaveLength(1);
+  expect(entries.map((entry: { id: string }) => entry.id)).toEqual(plannedIds);
+  await page.reload();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(1);
+});
+
+for (const phase of ["completed-receipt", "cleanup"] as const) {
+  test(`direct import recovers ${phase} failure after browser restart`, async ({ page }) => {
+    await seedBrowserStorage(page, []);
+    await page.goto("/");
+    await page.getByRole("button", { name: "시험지함" }).click();
+    await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
+    await page.getByLabel("올인원 가져오기").setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
+    await expect(page.getByRole("button", { name: "바로 저장", exact: true })).toBeEnabled();
+    await page.evaluate(phase => {
+      const write = Storage.prototype.setItem; const remove = Storage.prototype.removeItem;
+      let fail = true;
+      Storage.prototype.setItem = function(key, value) {
+        if (phase === "completed-receipt" && fail && key === "wrong-answer-import-workspace-draft" && JSON.parse(value).commitAttempt?.state === "completed") { fail = false; throw new Error("receipt write failed"); }
+        return write.call(this, key, value);
+      };
+      Storage.prototype.removeItem = function(key) {
+        if (phase === "cleanup" && fail && key === "wrong-answer-import-workspace-draft") { fail = false; throw new Error("draft cleanup failed"); }
+        return remove.call(this, key);
+      };
+    }, phase);
+    await page.getByRole("button", { name: "바로 저장", exact: true }).click();
+    await expect(page.getByRole("button", { name: "확정 기록 확인·정리", exact: true })).toBeEnabled();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(1);
+    await expect(page.getByRole("button", { name: "수정 후 저장", exact: true })).toBeDisabled();
+    await page.reload();
+    await page.getByRole("button", { name: "시험지함", exact: true }).click();
+    await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
+    await page.getByRole("button", { name: "확정 기록 확인·정리", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(1);
+    expect(await page.evaluate(() => localStorage.getItem("wrong-answer-import-workspace-draft"))).toBeNull();
+  });
+}

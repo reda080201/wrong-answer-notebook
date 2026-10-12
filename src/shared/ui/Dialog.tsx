@@ -33,6 +33,8 @@ export interface DialogProps {
   bodyClassName?: string;
   scrollMode?: DialogScrollMode;
   initialFocusRef?: RefObject<HTMLElement | null>;
+  /** Scoped fallback when navigation has removed the original opener. */
+  returnFocusFallback?: () => HTMLElement | null;
 }
 
 export default function Dialog({
@@ -53,13 +55,16 @@ export default function Dialog({
   bodyClassName,
   scrollMode = "body",
   initialFocusRef,
+  returnFocusFallback,
 }: DialogProps) {
   const generatedTitleId = useId();
   const resolvedTitleId = title ? (titleId ?? generatedTitleId) : undefined;
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeDisabledRef = useRef(closeDisabled);
   const onCloseRef = useRef(onClose);
+  const returnFocusFallbackRef = useRef(returnFocusFallback);
   const [dialogLayer] = useState(() => ++nextDialogLayer);
+  useEffect(() => { returnFocusFallbackRef.current = returnFocusFallback; }, [returnFocusFallback]);
 
   useEffect(() => {
     closeDisabledRef.current = closeDisabled;
@@ -125,7 +130,7 @@ export default function Dialog({
         if (ariaHidden === null) element.removeAttribute("aria-hidden");
         else element.setAttribute("aria-hidden", ariaHidden);
       });
-      previousFocus?.focus();
+      (previousFocus?.isConnected ? previousFocus : returnFocusFallbackRef.current?.())?.focus();
     };
   }, [dialogLayer, initialFocusRef, open]);
 

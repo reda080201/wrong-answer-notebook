@@ -71,6 +71,8 @@ interface SettingsModalProps {
     restore: () => Promise<void>;
     runIntegrity: () => Promise<void>;
     cleanupOrphans: () => Promise<void>;
+    restoreReloadPending?: boolean;
+    retryRestoreReload?: () => Promise<void>;
   };
   updateActions: {
     state: AppUpdateState;
@@ -214,6 +216,7 @@ export default function SettingsModal({
         {(settingsError || settingsMessage) && (
           <div className="settings-message">
             <span>{settingsError || settingsMessage}</span>
+            {dataActions.restoreReloadPending && dataActions.retryRestoreReload && <button type="button" className="btn-secondary" onClick={() => void dataActions.retryRestoreReload?.()}>다시 불러오기</button>}
             <button
               type="button"
               onClick={() => {

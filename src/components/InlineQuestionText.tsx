@@ -32,19 +32,19 @@ export default function InlineQuestionText({ text, figures = [], renderText }: {
   renderText?: (text: string, offset: number) => ReactNode;
 }) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
-  const parts: Array<{ text: string; start: number } | { id: string | undefined; start: number }> = [];
+  const parts: Array<{ text: string; start: number } | { id: string | undefined; start: number; end: number }> = [];
   let cursor = 0;
   for (const match of text.matchAll(FIGURE_TOKEN)) {
     const index = match.index ?? 0;
     if (index > cursor) parts.push({ text: text.slice(cursor, index), start: cursor });
     const id = match[1]?.trim();
-    parts.push({ id, start: index });
+    parts.push({ id, start: index, end: index + match[0].length });
     cursor = index + match[0].length;
   }
   if (cursor < text.length) parts.push({ text: text.slice(cursor), start: cursor });
   return <>{parts.map((part, index) => "id" in part
     ? part.id
-      ? <span key={`${part.id}-${index}`} className="question-inline-figure-slot"><InlineFigure id={part.id} figure={byId.get(part.id)} /></span>
+      ? <span key={`${part.id}-${index}`} className="question-inline-figure-slot" data-canonical-raw-start={part.start} data-canonical-raw-end={part.end} data-canonical-raw-atomic="true"><InlineFigure id={part.id} figure={byId.get(part.id)} /></span>
       : <span key={`missing-${index}`} className="question-inline-figure-warning" role="note">[그림 ID 확인 필요]</span>
     : <Fragment key={`text-${index}`}>{renderText ? renderText(part.text, part.start) : <MathText text={part.text} />}</Fragment>)}</>;
 }

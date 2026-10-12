@@ -13,6 +13,7 @@ export interface ImportReviewQuestionRenderProps {
 
 export interface ImportReviewWorkspaceProps {
   open: boolean;
+  editingBlocked?: boolean;
   title: ReactNode;
   onClose(): void;
   children?: ReactNode;
@@ -49,6 +50,7 @@ function ReviewSidebar({ sidebar, questionNavigator }: Pick<ImportReviewWorkspac
 
 export function ImportReviewWorkspace({
   open,
+  editingBlocked = false,
   title,
   onClose,
   children,
@@ -150,7 +152,7 @@ export function ImportReviewWorkspace({
       sidebar={resolvedSidebar}
       footer={structuredQuestions?.length ? <div className="import-review-footer-shell">{navigationFooter}{footer}</div> : footer}
     >
-      <div className="import-review-workspace">
+      <div className="import-review-workspace" inert={editingBlocked}>
         {(summary || status) && (
           <section className="import-review-workspace-summary" aria-label="검수 요약">
             <Toolbar align="between" label="검수 상태">

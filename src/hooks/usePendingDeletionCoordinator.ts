@@ -71,7 +71,7 @@ export interface PendingDeletionFinalizationResult {
 export async function finalizePendingDeletionRecords(
   records: PendingDeletion[],
   entries: WrongAnswerEntry[],
-  deleteAsset: (filename: string) => Promise<void>,
+  deleteAsset: (filename: string, excludePendingDeletionIds?: readonly string[]) => Promise<void>,
   now = Date.now(),
 ): Promise<PendingDeletionFinalizationResult> {
   const plan = buildFinalizationPlan(records, entries, now);
@@ -81,7 +81,7 @@ export async function finalizePendingDeletionRecords(
   const failedImages = new Set<string>();
   for (const image of candidateImages) {
     try {
-      await deleteAsset(image);
+      await deleteAsset(image, plan.actionable.map((record) => record.id));
     } catch {
       failedImages.add(image);
     }
@@ -123,7 +123,7 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
       const backend = getStorageBackend();
       if (!backend.loadPendingDeletions || !backend.savePendingDeletions) return;
       const records = await backend.loadPendingDeletions();
-      const result = await finalizePendingDeletionRecords(records, entriesRef.current, deleteImage);
+      const result = await finalizePendingDeletionRecords(records, entriesRef.current, (filename, excludeIds) => deleteImage(filename, { excludePendingDeletionIds: excludeIds }));
       const graphFailures = new Set<string>();
       if (onFinalizeEntry) {
         const liveEntryIds = new Set(entriesRef.current.map((entry) => entry.id));

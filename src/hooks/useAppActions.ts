@@ -1,6 +1,8 @@
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
+import { loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
+import { importEntryDigest, validatePlannedIds } from "../features/import-workspace/services/importCommitProof";
 import {
   cleanupOrphanImages,
   applyBrowserBackupAtomically,
@@ -34,7 +36,7 @@ import type {
   WrongAnswerEntry,
 } from "../types";
 import { findDuplicateEntries } from "../utils/duplicates";
-import { getEntryTitle } from "../utils/entry";
+import { getEntryTitle, normalizeEntry } from "../utils/entry";
 import {
   entryToFormData,
   mergeGptSolutionIntoEntry,
@@ -76,8 +78,8 @@ interface UseAppActionsOptions {
   activeSection: EntryKind;
   subjectFilter: string | null;
   addEntry: (form: EntryFormData) => Promise<string>;
-  addEntries: (forms: EntryFormData[]) => Promise<string[]>;
-  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[]) => Promise<string[]>;
+  addEntries: (forms: EntryFormData[], plannedIds?: string[], allowCreate?: boolean, fixedCreatedAt?: string) => Promise<string[]>;
+  addEntriesWithImportAssetSession: (sessionId: string, forms: EntryFormData[], plannedIds?: string[], allowCreate?: boolean, fixedCreatedAt?: string) => Promise<string[]>;
   updateEntry: (
     id: string,
     form: EntryFormData,
@@ -106,11 +108,15 @@ interface UseAppActionsOptions {
   patchSettings: (patch: Partial<AppSettings>) => Promise<void>;
   refreshSettings: () => Promise<boolean>;
   refreshExamSessions?: () => Promise<boolean>;
+  refreshReviewSessions?: () => Promise<boolean>;
+  setReviewSessionsRestoreReloadBlocked?: (blocked: boolean) => void;
   discardActiveSessionAfterRestore?: () => void;
+  discardActiveReviewAfterRestore?: () => void;
   refreshGeneratedExams?: () => Promise<boolean>;
   refreshLibraryFolders?: () => Promise<boolean>;
   refreshGptSolutionDrafts?: () => Promise<boolean>;
-  refreshKnowledgeGraph?: () => Promise<void>;
+  refreshKnowledgeGraph?: () => Promise<boolean | void>;
+  setKnowledgeGraphRestoreReloadBlocked?: (blocked: boolean) => void;
   runMaintenanceOperation?: <T>(task: () => Promise<T>) => Promise<T>;
   setActiveSection: (section: EntryKind) => void;
   setSelectedId: (id: string | null) => void;
@@ -141,11 +147,15 @@ export function useAppActions({
   patchSettings,
   refreshSettings,
   refreshExamSessions,
+  refreshReviewSessions,
+  setReviewSessionsRestoreReloadBlocked,
   discardActiveSessionAfterRestore,
+  discardActiveReviewAfterRestore,
   refreshGeneratedExams,
   refreshLibraryFolders,
   refreshGptSolutionDrafts,
   refreshKnowledgeGraph,
+  setKnowledgeGraphRestoreReloadBlocked,
   runMaintenanceOperation,
   setActiveSection,
   setSelectedId,
@@ -172,6 +182,59 @@ export function useAppActions({
   const [integrityReport, setIntegrityReport] =
     useState<IntegrityReport | null>(null);
   const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+  const [restoreReloadPending, setRestoreReloadPending] = useState(false);
+
+  const reloadRestoredData = async () => {
+    const safeReload = async (reload?: () => Promise<boolean>): Promise<boolean> => {
+      if (!reload) return true;
+      try {
+        return (await reload()) === true;
+      } catch {
+        return false;
+      }
+    };
+    const reloads = await Promise.all([
+      safeReload(refresh),
+      safeReload(refreshSettings),
+      safeReload(refreshExamSessions),
+      safeReload(refreshGeneratedExams),
+      safeReload(refreshLibraryFolders),
+      safeReload(refreshGptSolutionDrafts),
+      safeReload(refreshKnowledgeGraph ? async () => (await refreshKnowledgeGraph()) === true : undefined),
+      safeReload(refreshReviewSessions),
+    ]);
+    const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프", "복습 세션"];
+    const failed = reloads.map((success, index) => success !== true ? reloadNames[index] : null).filter((name): name is string => name !== null);
+    if (failed.length === 0) {
+      setReviewSessionsRestoreReloadBlocked?.(false);
+      setKnowledgeGraphRestoreReloadBlocked?.(false);
+    }
+    return failed;
+  };
+
+  const retryRestoreReload = async () => {
+    if (maintenanceRef.current) return;
+    maintenanceRef.current = Promise.resolve();
+    setSettingsMessage("복원한 데이터를 다시 불러오는 중입니다.");
+    try {
+      const reload = async () => {
+        const failed = await reloadRestoredData();
+        if (failed.length) {
+          setSettingsMessage(`백업은 복원됐지만 ${failed.join(", ")}을(를) 다시 불러오지 못했습니다.`);
+          return;
+        }
+        setRestoreReloadPending(false);
+        setSettingsMessage("복원한 데이터를 다시 불러왔습니다.");
+      };
+      const operation = runMaintenanceOperation ? runMaintenanceOperation(reload) : reload();
+      maintenanceRef.current = operation;
+      await operation;
+    } catch (cause) {
+      setSettingsMessage(`복원한 데이터를 다시 불러오지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
+    } finally {
+      maintenanceRef.current = null;
+    }
+  };
 
   const importFallbackSubject: Subject =
     subjectFilter && SUBJECTS.includes(subjectFilter as Subject)
@@ -518,14 +581,21 @@ export function useAppActions({
     importedEntries: Partial<EntryFormData>[],
     assetFiles: File[] = [],
     assetSession?: ImportAssetSessionManifest,
+    plannedIds?: string[],
   ) => {
-    if (!importedEntries.length) return;
+    if (maintenanceRef.current || restoreReloadPending) throw new Error("백업·복원 또는 재로딩이 끝난 뒤 가져오기를 저장해 주세요.");
+    if (!importedEntries.length) return [];
+    const commitDraft = plannedIds ? await loadImportWorkspaceDraft() : null;
+    if (plannedIds && (!commitDraft?.commitAttempt || JSON.stringify(commitDraft.commitAttempt.entryIds) !== JSON.stringify(plannedIds))) throw new Error("고정 ID에 대응하는 확정 기록을 찾을 수 없습니다.");
+    const receipt = commitDraft?.commitAttempt;
+    if (receipt && !receipt.attemptId) throw new Error("이전 확정 기록의 저장 내용을 입증할 수 없습니다. 항목 목록과 백업을 확인해 주세요.");
     let sourceToSaved: Record<string, string> = {};
     let savedFilenames: string[] = [];
     if (assetSession?.mode === "tauri-staged") {
       sourceToSaved = assetSession.sourceToStaged ?? {};
     }
-    if (assetSession?.mode !== "tauri-staged" && assetFiles.length) {
+    if (receipt?.preparedEntries) sourceToSaved = receipt.sourceToSaved ?? {};
+    if (!receipt?.preparedEntries && assetSession?.mode !== "tauri-staged" && assetFiles.length) {
       const referencedImages = new Set(
         importedEntries.flatMap(collectEntryImportImageReferences).map(normalizeImportImageKey),
       );
@@ -537,7 +607,7 @@ export function useAppActions({
       sourceToSaved = importedAssets.sourceToSaved;
     }
     try {
-      const forms = importedEntries.map((rawImported): EntryFormData => {
+      let forms = receipt?.preparedEntries ?? importedEntries.map((rawImported): EntryFormData => {
       const imported = rewriteImportAssetReferences(rawImported, sourceToSaved);
       const entryKind: EntryKind =
         imported.entryKind === "wrong_answer" ||
@@ -563,6 +633,7 @@ export function useAppActions({
         questionImages: imported.questionImages ?? [],
         sourcePageImages: imported.sourcePageImages ?? [],
         questionSourceCrops: imported.questionSourceCrops,
+        questionSolutionHotspots: imported.questionSolutionHotspots,
         entryKind,
         difficult: imported.difficult ?? false,
         difficulty: imported.difficulty ?? "none",
@@ -591,15 +662,30 @@ export function useAppActions({
         checklist: imported.checklist ?? [],
       };
       });
+      validatePlannedIds(forms, plannedIds);
+      if (receipt && !receipt.preparedEntries) {
+        forms = forms.map((form, index) => {
+          const normalized = normalizeEntry({ ...form, id: plannedIds![index], createdAt: receipt.createdAt!, updatedAt: receipt.createdAt! } as WrongAnswerEntry);
+          const { id, createdAt, updatedAt, ...prepared } = normalized;
+          void id; void createdAt; void updatedAt;
+          return prepared;
+        });
+      }
+      if (receipt && commitDraft) {
+        const entryDigests = await Promise.all(forms.map(importEntryDigest));
+        if (receipt.entryDigests && JSON.stringify(receipt.entryDigests) !== JSON.stringify(entryDigests)) throw new Error("확정 기록의 저장 내용이 손상되어 저장을 중단했습니다.");
+        await saveImportWorkspaceDraft({ ...commitDraft, commitAttempt: { ...receipt, preparedEntries: forms, entryDigests, sourceToSaved } });
+      }
       const ids = assetSession?.mode === "tauri-staged"
-        ? await addEntriesWithImportAssetSession(assetSession.id, forms)
-        : await addEntries(forms);
-      setShowImportModal(false);
+        ? receipt ? await addEntriesWithImportAssetSession(assetSession.id, forms, plannedIds, receipt.state !== "completed", receipt.createdAt) : await addEntriesWithImportAssetSession(assetSession.id, forms)
+        : receipt ? await addEntries(forms, plannedIds, receipt.state !== "completed", receipt.createdAt) : await addEntries(forms);
+      if (!plannedIds) setShowImportModal(false);
       setSolutionSourceEntry(undefined);
       setImportMode("import");
       setPendingImportFiles([]);
       setActiveSection(forms[0].entryKind);
       setSelectedId(ids[0] ?? null);
+      return ids;
     } catch (error) {
       if (assetSession?.mode !== "tauri-staged") {
         await Promise.all(savedFilenames.map((filename) => deleteImage(filename).catch(() => undefined)));
@@ -657,71 +743,68 @@ export function useAppActions({
   };
 
   const handleBackup = async () => {
-    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
-    const destination = await selectBackupDestination();
-    if (isTauri() && !destination) {
-      setSettingsMessage("백업이 취소되었습니다.");
-      return;
-    }
-    const operation = (async () => {
-      const writeBackup = () => createBackupAtDestination(destination, entries, settings);
-      const message = runMaintenanceOperation
-        ? await runMaintenanceOperation(writeBackup)
-        : await writeBackup();
-      setSettingsMessage(message);
-    })();
-    maintenanceRef.current = operation;
+    if (maintenanceRef.current) { setSettingsMessage("백업 또는 복원이 진행 중입니다."); return; }
+    maintenanceRef.current = Promise.resolve();
+    setSettingsMessage(null);
     try {
+      const destination = await selectBackupDestination();
+      if (isTauri() && !destination) { setSettingsMessage("백업이 취소되었습니다."); return; }
+      const operation = (async () => {
+        setSettingsMessage("백업을 만드는 중입니다.");
+        const writeBackup = () => createBackupAtDestination(destination, entries, settings);
+        const message = runMaintenanceOperation ? await runMaintenanceOperation(writeBackup) : await writeBackup();
+        if (isTauri()) await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
+        setSettingsMessage(message);
+      })();
+      maintenanceRef.current = operation;
       await operation;
+    } catch (cause) {
+      setSettingsMessage(`백업을 만들지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
     } finally {
       maintenanceRef.current = null;
-    }
-    if (isTauri()) {
-      await patchSettings({ autoBackup: { ...settings.autoBackup, lastBackupAt: new Date().toISOString() } });
     }
   };
 
   const handleRestore = async () => {
-    if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
-    if (maintenanceRef.current) throw new Error("백업 또는 복원이 진행 중입니다.");
-    const source = await selectBackupSource();
-    if (!source) return;
-    const operation = (async () => {
-      const restore = async () => {
-        const payload = await restoreBackupFromSource(source);
-        let restoreResult = payload;
-        if (payload && "entries" in payload) {
-          restoreResult = await applyBrowserBackupAtomically(payload);
-        }
-        discardActiveSessionAfterRestore?.();
-        const reloads = await Promise.all([
-          refresh(),
-          refreshSettings(),
-          refreshExamSessions?.(),
-          refreshGeneratedExams?.(),
-          refreshLibraryFolders?.(),
-          refreshGptSolutionDrafts?.(),
-          refreshKnowledgeGraph ? refreshKnowledgeGraph().then(() => true) : Promise.resolve(true),
-        ]);
-        const reloadNames = ["노트", "설정", "시험 세션", "생성 모의고사", "폴더", "GPT 해설 초안", "지식 그래프"];
-        const failedReloads = reloads
-          .map((success, index) => success !== true ? reloadNames[index] : null)
-          .filter((name): name is string => name !== null);
-        if (failedReloads.length) {
-          throw new Error(`백업은 복원됐지만 ${failedReloads.join(", ")}을(를) 다시 불러오지 못했습니다. 해당 데이터를 다시 불러온 뒤 계속해 주세요.`);
-        }
-        return restoreResult;
-      };
-      const payload = runMaintenanceOperation
-        ? await runMaintenanceOperation(restore)
-        : await restore();
-      setSettingsMessage(payload && "restored" in payload && payload.warnings.length
-        ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
-        : "백업 복원을 완료했습니다.");
-    })();
-    maintenanceRef.current = operation;
+    if (maintenanceRef.current) { setSettingsMessage("백업 또는 복원이 진행 중입니다."); return; }
+    maintenanceRef.current = Promise.resolve();
+    setSettingsMessage(null);
     try {
+      if (!(await confirm({ title: "백업 복원", message: "백업을 복원하면 현재 데이터가 덮어써질 수 있습니다. 계속할까요?" }))) return;
+      const source = await selectBackupSource();
+      if (!source) { setSettingsMessage("백업 복원을 취소했습니다."); return; }
+      const operation = (async () => {
+        setSettingsMessage("백업을 복원하는 중입니다.");
+        const restore = async () => {
+          setKnowledgeGraphRestoreReloadBlocked?.(true);
+          const payload = await restoreBackupFromSource(source);
+          const restoreResult = payload && "entries" in payload ? await applyBrowserBackupAtomically(payload) : payload;
+          setReviewSessionsRestoreReloadBlocked?.(true);
+          discardActiveSessionAfterRestore?.();
+          discardActiveReviewAfterRestore?.();
+          setReviewMode(null);
+          setReviewSeed([]);
+          setRestoreReloadPending(true);
+          const failedReloads = await reloadRestoredData();
+          if (failedReloads.length) {
+            setSettingsMessage(`백업은 복원됐지만 ${failedReloads.join(", ")}을(를) 다시 불러오지 못했습니다.`);
+            return { restoreResult, failedReloads };
+          }
+          setRestoreReloadPending(false);
+          return { restoreResult, failedReloads };
+        };
+        const result = runMaintenanceOperation ? await runMaintenanceOperation(restore) : await restore();
+        if ("failedReloads" in result && result.failedReloads.length) return;
+        const payload = "restoreResult" in result ? result.restoreResult : result;
+        setSettingsMessage(payload && "restored" in payload && payload.warnings.length
+          ? `백업 복원을 완료했습니다. 경고 ${payload.warnings.length}개: ${payload.warnings.join(" ")}`
+          : "백업 복원을 완료했습니다.");
+      })();
+      maintenanceRef.current = operation;
       await operation;
+    } catch (cause) {
+      setRestoreReloadPending(true);
+      setSettingsMessage(`백업을 복원하지 못했습니다. ${cause instanceof Error ? cause.message : "저장소 오류"}`);
     } finally {
       maintenanceRef.current = null;
     }
@@ -986,6 +1069,8 @@ export function useAppActions({
     integrityReport,
     settingsMessage,
     setSettingsMessage,
+    restoreReloadPending,
+    retryRestoreReload,
     importFallbackSubject,
     quickConceptSubject,
     handleSave,

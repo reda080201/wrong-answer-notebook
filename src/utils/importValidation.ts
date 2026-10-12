@@ -1,8 +1,10 @@
+import { validSolutionHotspot } from "../features/solutions/hotspotValidation";
 import type { EntryFormData, ImportAudit } from "../types";
 import { parseQuestionText } from "./textLayout";
 import { normalizeImportAudit, normalizeRejectedNotes } from "./importAudit";
 import { normalizeQuestionNumber } from "./questionMeta";
 import { cropValidationMessage, isValidNormalizedCrop } from "./normalizedCrop";
+import { getEntryQuestions } from "./entryQuestions";
 
 export type ImportValidationSeverity = "info" | "warning" | "error";
 
@@ -198,6 +200,21 @@ export function validateImportedStudyData(data: Partial<EntryFormData>, context:
   const rejectedNotes = normalizeRejectedNotes(data.rejectedNotes);
   issues.push(...structuredQuestionIssues);
 
+  if (data.questionSolutionHotspots !== undefined && (!Array.isArray(data.questionSolutionHotspots) || !data.questionSolutionHotspots.every(validSolutionHotspot))) {
+    issues.push({ id: "invalid-solution-hotspots", severity: "error", message: "파란 점의 페이지·문항 연결 또는 위치가 올바르지 않습니다." });
+  }
+  if (Array.isArray(data.questionSolutionHotspots) && data.questionSolutionHotspots.every(validSolutionHotspot) && !structuredQuestionIssues.length) {
+    const keys = getEntryQuestions({ question: data.question ?? "", structuredQuestions: data.structuredQuestions, questionContentSegments: data.questionContentSegments })
+      .map(question => JSON.stringify([normalizeQuestionNumber(question.questionNumber), question.section ?? ""]));
+    const ids = new Set<string>();
+    for (const [index, hotspot] of data.questionSolutionHotspots.entries()) {
+      if (ids.has(hotspot.id) || keys.filter(key => key === hotspot.questionKey).length !== 1
+        || !(data.sourcePageImages ?? []).includes(hotspot.sourcePageImage)) {
+        issues.push({ id: `unmatched-solution-hotspot-${index}`, severity: "error", message: `파란 점 ${index + 1}의 문항 또는 원본 페이지 연결을 확인해 주세요. 연결 ID는 중복될 수 없습니다.` });
+      }
+      ids.add(hotspot.id);
+    }
+  }
   for (const [index, crop] of ((data as EntryFormData & { questionSourceCrops?: unknown }).questionSourceCrops ?? [] as unknown[]).entries()) {
     if (!crop || typeof crop !== "object") continue;
     const value = crop as Record<string, unknown>;

@@ -1,3 +1,5 @@
+import QuestionSolutionSheet from "../../solutions/QuestionSolutionSheet";
+import { snapshotSolutionQuestions } from "../../solutions/solutionModel";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ExamPreferences, ExamSession } from "../../../types";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
@@ -20,6 +22,7 @@ interface Props {
   preferences?: ExamPreferences;
   disabled: boolean;
   practice?: boolean;
+  hideAnswers?: boolean;
   onNavigate(index: number): void;
   onResponse(number: string, patch: PaperResponsePatch): void;
   onSessionChange?(recipe: (session: ExamSession) => ExamSession): void;
@@ -27,30 +30,63 @@ interface Props {
 
 const EMPTY_SOURCE_PAGE_SELECTION: string[] = [];
 
-export default function ExamSessionPaper({ session, preferences, disabled, practice = false, onNavigate, onResponse, onSessionChange }: Props) {
+function sourcePages(session: Pick<ExamSession, "questions" | "sourcePageImages">): string[] {
+  return session.sourcePageImages?.length ? session.sourcePageImages
+    : [...new Set(session.questions.flatMap(question => question.sourcePageImages ?? []))];
+}
+
+function initialTextView(session: ExamSession): boolean {
+  if (session.selectedSourcePageImages === undefined) return session.mode === "real";
+  const linked = getQuestionSourcePages(session, session.questions[session.currentQuestionIndex], sourcePages(session));
+  return !linked.some(filename => session.selectedSourcePageImages?.includes(filename));
+}
+
+function getQuestionSourcePages(session: ExamSession, question: ExamSession["questions"][number] | undefined, sourcePageImages: string[]): string[] {
+  if (!question) return [];
+  const mappedPages = Object.entries(session.sourcePageQuestionMap ?? {})
+    .filter(([, numbers]) => numbers.includes(question.questionNumber))
+    .map(([filename]) => filename);
+  if (mappedPages.length) return mappedPages;
+  if (!question.source?.page) return [];
+  const questionPage = question.sourcePageImages?.[question.source.page - 1];
+  if (questionPage) return [questionPage];
+  if (session.sourcePageQuestionMap !== undefined || session.entryId.startsWith("generated:")) return [];
+  const legacyPage = sourcePageImages[question.source.page - 1];
+  return legacyPage ? [legacyPage] : [];
+}
+
+export default function ExamSessionPaper({ session, preferences, disabled, practice = false, hideAnswers = false, onNavigate, onResponse, onSessionChange }: Props) {
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
-  const [textView, setTextView] = useState(() => session.mode === "real"
-    && (session.selectedSourcePageImages === undefined
-      || !Object.values(session.sourcePageQuestionMap ?? {}).some((numbers) => numbers.length > 0)));
+  const [solutionKey, setSolutionKey] = useState<string | null>(null);
+  const returnFocusRegionRef = useRef<HTMLDivElement>(null);
+  const [revealedSolutions, setRevealedSolutions] = useState<Set<string>>(() => new Set());
+  const solutionPageNavigationRef = useRef<string | null>(null);
+  const [solutionNotice, setSolutionNotice] = useState("");
+  const solutionAllowed = session.mode !== "real" || session.status === "submitted";
+  const solutionQuestions = useMemo(() => solutionAllowed ? snapshotSolutionQuestions(session.questions) : [], [solutionAllowed, session.questions]);
+  const [textViewState, setTextViewState] = useState(() => ({ sessionId: session.id, textView: preferences?.showOriginalPages === false || initialTextView(session) }));
+  const textView = textViewState.sessionId === session.id ? textViewState.textView : preferences?.showOriginalPages === false || initialTextView(session);
+  const setTextView = (value: boolean) => setTextViewState({ sessionId: session.id, textView: value });
   const [practiceAnswerOpen, setPracticeAnswerOpen] = useState(true);
-  const sourcePageImages = useMemo(() => session.sourcePageImages?.length
-    ? session.sourcePageImages
-    : [...new Set(session.questions.flatMap(question => question.sourcePageImages ?? []))], [session.questions, session.sourcePageImages]);
+  const sourcePageImages = useMemo(() => sourcePages({ questions: session.questions, sourcePageImages: session.sourcePageImages }), [session.questions, session.sourcePageImages]);
   const selectedPages = useMemo(
     () => session.selectedSourcePageImages ?? (session.mode === "real" ? EMPTY_SOURCE_PAGE_SELECTION : sourcePageImages),
     [session.mode, session.selectedSourcePageImages, sourcePageImages],
   );
   const currentQuestion = session.questions[session.currentQuestionIndex];
-  const mappedCurrentPage = currentQuestion
-    ? Object.entries(session.sourcePageQuestionMap ?? {}).find(([, numbers]) => numbers.includes(currentQuestion.questionNumber))?.[0]
-      ?? (currentQuestion.source?.page ? sourcePageImages[currentQuestion.source.page - 1] : undefined)
-    : undefined;
+  const currentQuestionPages = getQuestionSourcePages(session, currentQuestion, sourcePageImages);
+  const selectedCurrentQuestionPages = currentQuestionPages.filter(filename => selectedPages.includes(filename));
+  const mappedCurrentPage = selectedCurrentQuestionPages[0] ?? currentQuestionPages[0];
+  const currentQuestionPage = selectedCurrentQuestionPages.includes(session.currentSourcePageImage ?? "")
+    ? session.currentSourcePageImage
+    : selectedCurrentQuestionPages[0];
   const previousQuestionNumber = useRef(currentQuestion?.questionNumber);
 
   useEffect(() => {
     if (previousQuestionNumber.current === currentQuestion?.questionNumber) return;
     previousQuestionNumber.current = currentQuestion?.questionNumber;
+    if (solutionPageNavigationRef.current === currentQuestion?.questionNumber) { solutionPageNavigationRef.current = null; return; }
     if (!sourcePageImages.length || !mappedCurrentPage || !selectedPages.includes(mappedCurrentPage) || session.currentSourcePageImage === mappedCurrentPage) return;
     const frame = requestAnimationFrame(() => onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: mappedCurrentPage })));
     return () => cancelAnimationFrame(frame);
@@ -80,26 +116,55 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
     });
   }, [disabled, focusPresentation, onResponse, practice, preferences?.showScratchNote, session.questions, session.responses]);
 
-  const originalPageMode = Boolean(sourcePageImages.length && preferences?.showOriginalPages !== false && !textView);
+  const originalPageMode = Boolean(sourcePageImages.length && !textView);
+  const navigateSolution = (key: string) => {
+    if (!solutionAllowed) return;
+    const index = session.questions.findIndex(question => question.id === key);
+    if (index < 0) return;
+    setSolutionKey(key);
+    solutionPageNavigationRef.current = session.questions[index].questionNumber;
+    onNavigate(index);
+    const page = session.questions[index].questionSolutionHotspots?.find(hotspot => selectedPages.includes(hotspot.sourcePageImage))?.sourcePageImage;
+    if (page) {
+      onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: page }));
+      setSolutionNotice("");
+    } else setSolutionNotice(sourcePageImages.length ? "이 문항의 선택된 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다." : "");
+  };
   const originalReader = <OriginalPageExamReader
+    hotspots={solutionAllowed ? session.questions.flatMap(question => question.questionSolutionHotspots ?? []) : []}
+    questionLabels={Object.fromEntries(solutionQuestions.map(question => [question.key, question.number]))}
+    onOpenSolution={solutionAllowed ? navigateSolution : undefined}
     filenames={sourcePageImages}
     selectedFilenames={selectedPages}
-    currentFilename={session.currentSourcePageImage ?? mappedCurrentPage}
-    onSelectPages={filenames => onSessionChange?.(latest => ({ ...latest, selectedSourcePageImages: filenames, currentSourcePageImage: filenames.includes(latest.currentSourcePageImage ?? "") ? latest.currentSourcePageImage : filenames[0] }))}
+    currentFilename={currentQuestionPages.length > 0 ? currentQuestionPage ?? "" : session.currentSourcePageImage ?? mappedCurrentPage}
+    emptyMessage={currentQuestionPages.length > 0 ? "선택한 페이지 중 이 문항에 연결된 페이지가 없습니다. 문항 텍스트 보기로 계속 풀거나 페이지를 다시 선택하세요." : undefined}
+    onSelectPages={filenames => {
+      const replacement = currentQuestionPages.find(filename => filenames.includes(filename));
+      if (!replacement) setTextView(true);
+      onSessionChange?.(latest => ({
+        ...latest,
+        selectedSourcePageImages: filenames,
+        currentSourcePageImage: currentQuestionPages.includes(latest.currentSourcePageImage ?? "")
+          && filenames.includes(latest.currentSourcePageImage ?? "") ? latest.currentSourcePageImage : replacement,
+      }));
+    }}
     onChangePage={filename => {
       onSessionChange?.(latest => ({ ...latest, currentSourcePageImage: filename }));
       const linkedNumbers = session.sourcePageQuestionMap?.[filename] ?? [];
       const pageNumber = sourcePageImages.indexOf(filename) + 1;
       const questionIndex = session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber)) >= 0
         ? session.questions.findIndex(question => linkedNumbers.includes(question.questionNumber))
-        : session.questions.findIndex(question => question.source?.page === pageNumber);
+        : session.sourcePageQuestionMap === undefined && !session.entryId.startsWith("generated:")
+          ? session.questions.findIndex(question => question.source?.page === pageNumber)
+          : -1;
       if (questionIndex >= 0 && questionIndex !== session.currentQuestionIndex) onNavigate(questionIndex);
     }}
   />;
 
-  return <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}>
-    <div className={`${originalPageMode ? "exam-session-paper exam-session-paper--original" : "exam-session-paper"}${practice && !practiceAnswerOpen ? " exam-session-paper--answer-collapsed" : ""}`}>
-      {sourcePageImages.length > 0 && preferences?.showOriginalPages !== false && <nav className="exam-source-view-switch" aria-label="문제 보기 방식"><div className="exam-source-view-switch__modes"><button type="button" aria-pressed={originalPageMode} onClick={() => setTextView(false)}>원본 문제지</button><button type="button" aria-pressed={!originalPageMode} onClick={() => setTextView(true)}>문항 텍스트</button></div>{practice && originalPageMode && <button type="button" className="exam-source-answer-toggle" aria-expanded={practiceAnswerOpen} onClick={() => setPracticeAnswerOpen(open => !open)}>{practiceAnswerOpen ? "답안 접기" : "답안 펼치기"}</button>}</nav>}
+  const paper = <>
+    <div ref={returnFocusRegionRef} className={`${originalPageMode ? "exam-session-paper exam-session-paper--original" : "exam-session-paper"}${practice && !practiceAnswerOpen ? " exam-session-paper--answer-collapsed" : ""}`}>
+      {sourcePageImages.length > 0 && <nav className="exam-source-view-switch" aria-label="문제 보기 방식"><div className="exam-source-view-switch__modes"><button type="button" aria-pressed={originalPageMode} onClick={() => setTextView(false)}>원본 문제지</button><button type="button" aria-pressed={!originalPageMode} onClick={() => setTextView(true)}>문항 텍스트</button></div>{practice && originalPageMode && <button type="button" className="exam-source-answer-toggle" aria-expanded={practiceAnswerOpen} onClick={() => setPracticeAnswerOpen(open => !open)}>{practiceAnswerOpen ? "답안 접기" : "답안 펼치기"}</button>}</nav>}
+      {!sourcePageImages.length && <p className="exam-source-mapping-note" role="status">원본 PDF 페이지가 연결되지 않아 문항 텍스트로 표시합니다. 원본 배치로 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
       {originalPageMode ? <div className={`exam-source-layout${practice ? " exam-source-layout--practice" : " exam-source-layout--real"}`}>{originalReader}{practice && practiceAnswerOpen && currentQuestion && <aside className="exam-source-answer-panel" aria-label="현재 문항 답안">
         <label className="exam-source-question-select">답을 입력할 문항<select value={currentQuestion.questionNumber} onChange={event => { const index = session.questions.findIndex(question => question.questionNumber === event.target.value); if (index >= 0) onNavigate(index); }}>
           {session.questions.map(question => <option key={question.id} value={question.questionNumber}>{question.questionNumber}번{question.points ? ` · ${question.points}점` : ""}</option>)}
@@ -123,6 +188,9 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       const index = session.questions.findIndex(question => question.questionNumber === number);
       if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
     }} />}
+    {solutionAllowed && currentQuestion && <button type="button" className="btn-secondary" onClick={() => navigateSolution(currentQuestion.id)}>현재 문항 정답·해설</button>}
     </div>
-  </StudyZoomViewport>;
+    {solutionAllowed && solutionKey && <QuestionSolutionSheet returnFocusRegionRef={returnFocusRegionRef} hidden={hideAnswers && !revealedSolutions.has(solutionKey)} onReveal={() => setRevealedSolutions(current => new Set(current).add(solutionKey))} questions={solutionQuestions} questionKey={solutionKey} onNavigate={navigateSolution} onClose={() => setSolutionKey(null)} pageNotice={solutionNotice} />}
+  </>;
+  return originalPageMode ? paper : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(session.entryId, "paper")}>{paper}</StudyZoomViewport>;
 }

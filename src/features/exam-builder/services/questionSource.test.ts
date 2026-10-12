@@ -14,4 +14,34 @@ describe("question source", () => {
     expect(migrated.source.sourceEntryTitle).toBe("Alpha 모의고사 3회");
     expect(migrated.sourceQuestionNumber).toBeUndefined();
   });
+
+  it("hydrates only explicit source-page and crop links for legacy snapshots without mutating stored data", () => {
+    const sourceEntry = {
+      ...entry,
+      sourcePageImages: ["page-1.png", "page-2.png"],
+      question: "1. 문제",
+      structuredQuestions: [{ questionNumber: "1", questionText: "문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [], source: { page: 2 } }],
+      questionSourceCrops: [{ questionNumber: "1", page: 1, image: "crop.png" }],
+    } as WrongAnswerEntry;
+    const snapshot = { id: "q", questionNumber: "1", question: "문제", choices: [], questionImages: [], figures: [] };
+    const generated = { position: 1, source: { sourceEntryId: "e1", sourceEntryTitle: "Alpha", sourceQuestionNumber: "1" }, snapshot, locked: false, selectionScore: 1, selectionReasons: [] } as GeneratedExamQuestion;
+    const normalized = migrateQuestionSource(generated, [sourceEntry]);
+    expect(normalized.snapshot.source?.page).toBe(2);
+    expect(normalized.snapshot.linkedSourcePageImages).toEqual(["page-1.png"]);
+    expect(snapshot).not.toHaveProperty("source");
+  });
+
+  it("does not infer a page from sequence or ambiguous source questions", () => {
+    const ambiguous = {
+      ...entry,
+      sourcePageImages: ["page-1.png", "page-2.png"],
+      question: "1. 문제\n\n1. 문제 복제",
+      structuredQuestions: [
+        { questionNumber: "1", questionText: "문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [], source: { page: 1 } },
+        { questionNumber: "1.", questionText: "문제 복제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [], source: { page: 2 } },
+      ],
+    } as WrongAnswerEntry;
+    const generated = { position: 1, source: { sourceEntryId: "e1", sourceEntryTitle: "Alpha", sourceQuestionNumber: "1" }, snapshot: { id: "q", questionNumber: "1", question: "문제", choices: [], questionImages: [], figures: [] }, locked: false, selectionScore: 1, selectionReasons: [] } as GeneratedExamQuestion;
+    expect(migrateQuestionSource(generated, [ambiguous]).snapshot.source).toBeUndefined();
+  });
 });

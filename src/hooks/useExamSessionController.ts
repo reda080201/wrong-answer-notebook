@@ -60,6 +60,7 @@ export function useExamSessionController({
 }: UseExamSessionControllerOptions) {
   const [session, setSession] = useState<ExamSession | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const startErrorSourceRef = useRef<WrongAnswerEntry | null>(null);
   const [startError, setStartError] = useState<{ entryId: string; message: string } | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -95,6 +96,20 @@ export function useExamSessionController({
         .filter((entry) => entry.generatedFromExamSessionId && entry.generatedFromQuestionNumber)
         .map((entry) => `${entry.generatedFromExamSessionId}:${normalizeExamQuestionNumber(entry.generatedFromQuestionNumber)}`),
     );
+  }, [existingEntries]);
+
+  useEffect(() => {
+    const previous = startErrorSourceRef.current;
+    if (!previous) return;
+    const current = existingEntries.find(entry => entry.id === previous.id);
+    if (current === previous) return;
+    startErrorSourceRef.current = current ?? null;
+    setStartError(error => {
+      if (!error || error.entryId !== previous.id) return error;
+      if (!current || !error.message.startsWith("정답이 연결되지 않은 문항")) return null;
+      const missing = createExamSession(current).questions.filter(question => !question.correctAnswer?.trim()).map(question => question.questionNumber);
+      return missing.length ? { entryId: current.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missing.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.` } : null;
+    });
   }, [existingEntries]);
 
   const reload = useCallback(async (): Promise<boolean> => {
@@ -200,6 +215,7 @@ export function useExamSessionController({
     const normalizedOptions: ExamOpenOptions = "status" in options
       ? { mode: options.mode ?? "practice", resumable: options }
       : options;
+    startErrorSourceRef.current = entry;
     setStartError(null);
     if (!loadedRef.current) {
       const message = loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.";

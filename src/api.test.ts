@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { validPngBytes } from "./test/fixtures/validPng";
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: vi.fn(() => false),
@@ -18,6 +19,7 @@ import {
   loadGeneratedExams,
   MAX_IMPORT_IMAGE_BYTES,
   cleanupOrphanImages,
+  deleteImage,
   clearImageUrlCache,
   getImageUrl,
   IMAGE_URL_CACHE_LIMIT,
@@ -78,7 +80,14 @@ describe("builtInPromptTemplates", () => {
 });
 
 describe("image file security limits", () => {
+  beforeEach(() => {
+    vi.stubGlobal("createImageBitmap", vi.fn(async (file: File) => {
+      if (file.size < validPngBytes.length) throw new Error("corrupt image");
+      return { width: 1, height: 1, close: vi.fn() };
+    }));
+  });
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     mockedIsTauri.mockReturnValue(false);
     localStorage.clear();
@@ -99,7 +108,7 @@ describe("image file security limits", () => {
   });
 
   it("stores browser image files in localStorage", async () => {
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bytes = validPngBytes;
     const file = new File([bytes], "tiny.png", { type: "image/png" });
 
     const names = await saveImageFiles([file]);
@@ -113,7 +122,7 @@ describe("image file security limits", () => {
   it("invokes save_image_bytes with arrayBuffer bytes in Tauri mode", async () => {
     mockedIsTauri.mockReturnValue(true);
     mockedInvoke.mockResolvedValue("stored-graph.png");
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bytes = validPngBytes;
     const file = new File([bytes], "graph.png", { type: "image/png" });
 
     const names = await saveImageFiles([file]);
@@ -158,8 +167,26 @@ describe("image file security limits", () => {
   });
 
   it("accepts a supported image with an empty MIME type", async () => {
-    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "empty-type.png", { type: "" });
+    const file = new File([validPngBytes], "empty-type.png", { type: "" });
     await expect(saveImageFiles([file])).resolves.toHaveLength(1);
+  });
+
+  it.each([false, true])("rejects header-only images before writing (Tauri %s)", async tauri => {
+    mockedIsTauri.mockReturnValue(tauri);
+    await expect(saveImageFiles([new File([validPngBytes.slice(0, 8)], "bad.png", { type: "image/png" })])).rejects.toThrow("디코딩");
+    expect(localStorage.length).toBe(0);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+  it("rejects decode failures, zero dimensions and extension mismatches", async () => {
+    const file = new File([validPngBytes], "valid.png");
+    vi.stubGlobal("createImageBitmap", vi.fn().mockRejectedValue(new Error("damaged")));
+    await expect(saveImageFiles([file])).rejects.toThrow("디코딩");
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 0, height: 1, close }));
+    await expect(saveImageFiles([file])).rejects.toThrow("디코딩");
+    expect(close).toHaveBeenCalledOnce();
+    await expect(saveImageFiles([new File([validPngBytes], "bad.jpg")])).rejects.toThrow("확장자");
+    expect(localStorage.length).toBe(0);
   });
 
   it("uses stored entries, including source pages and learning blocks, for browser orphan cleanup", async () => {
@@ -192,6 +219,33 @@ describe("image file security limits", () => {
     expect(localStorage.getItem("img_source.png")).toBeTruthy();
     expect(localStorage.getItem("img_block.png")).toBeTruthy();
     expect(localStorage.getItem("img_orphan.png")).toBeNull();
+  });
+
+  it("preserves an image removed from an entry while a saved exam still references it", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "saved", questions: [{ questionImages: ["img_exam.png"] }] }]));
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+
+    await deleteImage("img_exam.png");
+
+    expect(localStorage.getItem("img_exam.png")).toBe("data:image/png;base64,exam");
+  });
+
+  it("stops image deletion when a saved image-reference store is malformed", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, "not-json");
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+
+    await expect(deleteImage("img_exam.png")).rejects.toThrow("이미지 참조");
+    expect(localStorage.getItem("img_exam.png")).toBe("data:image/png;base64,exam");
+  });
+  it("stops deletion and orphan cleanup for parseable malformed references", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify({ broken: "lost array" }));
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+    await expect(deleteImage("img_exam.png")).rejects.toThrow("이미지 참조");
+    await expect(cleanupOrphanImages()).rejects.toThrow("이미지 참조");
+    expect(localStorage.getItem("img_exam.png")).toBeTruthy();
   });
 });
 
@@ -287,6 +341,26 @@ describe("browser backup restore transaction", () => {
       importWorkspaceDraft: null,
       reviewSessions: [],
     }));
+  });
+
+  it("backs up and restores a valid selection review session", async () => {
+    const session = {
+      id: "selection-session", mode: "selection", itemRefs: [{ kind: "entry", entryId: "entry-1" }],
+      currentIndex: 0, completedItemKeys: [], reviewEvents: [], createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+    localStorage.setItem("wrong-answer-review-sessions", JSON.stringify([session]));
+    let backupBlob: Blob | null = null;
+    vi.stubGlobal("URL", {
+      createObjectURL: vi.fn((blob: Blob) => { backupBlob = blob; return "blob:selection-backup"; }),
+      revokeObjectURL: vi.fn(),
+    });
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await expect(createBackupAtDestination(null, [], defaultSettings)).resolves.toContain("내려받았습니다");
+    const payload = JSON.parse(await backupBlob!.text());
+    expect(payload.reviewSessions).toEqual([session]);
+    await expect(applyBrowserBackupAtomically(payload)).resolves.toEqual({ restored: true, warnings: [] });
+    expect(JSON.parse(localStorage.getItem("wrong-answer-review-sessions")!)[0].mode).toBe("selection");
   });
 
   it("restores every browser persistent store atomically with a v2 payload", async () => {

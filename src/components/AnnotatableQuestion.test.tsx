@@ -202,4 +202,157 @@ describe("AnnotatableQuestion", () => {
     expect(screen.getByText("②")).toBeInTheDocument();
     expect(container.querySelectorAll(".question-choice")).toHaveLength(2);
   });
+
+  it("renders generated canonical text, figures, and following text in source order", async () => {
+    vi.mocked(getImageUrl).mockResolvedValue("mock://canonical.png");
+    const { container } = render(
+      <AnnotatableQuestion
+        question="앞 문장 뒤 문장"
+        canonicalSegments={[
+          { id: "before", type: "text", text: "앞 문장" },
+          { id: "figure-slot", type: "figure", figureId: "graph" },
+          { id: "after", type: "text", text: "뒤 문장" },
+        ]}
+        questionImages={[]}
+        figures={[{ id: "graph", questionNumber: "2", title: "그래프", caption: "", image: "graph.png", source: "original" }]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector(".question-source-figure img")).toHaveAttribute("src", "mock://canonical.png"));
+    const content = container.querySelector(".question-content-view")!;
+    const children = [...content.children];
+    expect(children[0]).toHaveTextContent("앞 문장");
+    expect(children[1]).toHaveClass("question-source-figure");
+    expect(children[2]).toHaveTextContent("뒤 문장");
+    expect(container.querySelector(".image-gallery--fill")).toBeNull();
+  });
+
+  it("stores canonical segment-local anchors for a new text annotation", () => {
+    const onAnnotationsChange = vi.fn();
+    const { container } = render(
+      <AnnotatableQuestion
+        question="문항 원문"
+        canonicalSegments={[{ id: "canonical-body", type: "text", text: "중요한 문장" }]}
+        questionImages={[]}
+        annotations={[]}
+        memoMode
+        activeTool="highlight"
+        onAnnotationsChange={onAnnotationsChange}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    const text = container.querySelector("[data-canonical-raw-start]")!.firstChild!;
+    const range = document.createRange();
+    range.setStart(text, 0);
+    range.setEnd(text, "중요".length);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(container.querySelector(".annotatable-text")!);
+
+    expect(onAnnotationsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: "text", canonicalAnchors: [{ segmentId: "canonical-body", start: 0, end: 2 }] }),
+    ]);
+  });
+
+  it("renders extracted choices once and keeps inline math available in canonical content", async () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question={"식은 \\(x^2\\)이다.\n① 첫 번째 선택지\n② 두 번째 선택지"}
+        canonicalSegments={[{ id: "body", type: "text", text: "식은 \\(x^2\\)이다." }]}
+        questionImages={[]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    expect(container.querySelector(".structured-question-choices")?.textContent).toContain("첫 번째 선택지");
+    expect(container.querySelector(".structured-question-choices")?.textContent).toContain("두 번째 선택지");
+    expect(container.querySelectorAll(".structured-question-choices li")).toHaveLength(2);
+    expect(container.querySelector(".math-fragment")).toBeInTheDocument();
+  });
+
+  it("maps annotation ranges across an inline figure and math token to the canonical raw offsets", async () => {
+    const source = "앞 [FIGURE:graph] 수식 \\(x^2\\) 뒤";
+    const onAnnotationsChange = vi.fn();
+    const { container } = render(
+      <AnnotatableQuestion
+        question={source}
+        canonicalSegments={[{ id: "body-with-assets", type: "text", text: source }]}
+        questionImages={[]}
+        figures={[{ id: "graph", questionNumber: "1", title: "그래프", caption: "", image: "graph.png", source: "original" }]}
+        annotations={[]}
+        memoMode
+        activeTool="highlight"
+        onAnnotationsChange={onAnnotationsChange}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    const tokens = [...container.querySelectorAll<HTMLElement>("[data-canonical-raw-start]")];
+    const firstText = tokens.find((token) => token.dataset.canonicalRawAtomic !== "true")!;
+    const lastText = [...tokens].reverse().find((token) => token.dataset.canonicalRawAtomic !== "true")!;
+    const range = document.createRange();
+    range.setStart(firstText.firstChild!, 0);
+    range.setEnd(lastText.firstChild!, " 뒤".length);
+    window.getSelection()!.removeAllRanges();
+    window.getSelection()!.addRange(range);
+    fireEvent.mouseUp(container.querySelector(".annotatable-text")!);
+
+    expect(onAnnotationsChange).toHaveBeenCalledWith([
+      expect.objectContaining({ kind: "text", canonicalAnchors: [{ segmentId: "body-with-assets", start: 0, end: source.length }] }),
+    ]);
+    expect(container.querySelector(".question-inline-figure-slot")).toBeInTheDocument();
+    expect(container.querySelector(".math-fragment")).toBeInTheDocument();
+  });
+
+  it("warns when an attached figure has no canonical position instead of moving it to the end", () => {
+    const { container } = render(
+      <AnnotatableQuestion
+        question="본문"
+        canonicalSegments={[{ id: "body-only", type: "text", text: "본문" }]}
+        questionImages={[]}
+        figures={[{ id: "unplaced", questionNumber: "1", title: "그림", caption: "", image: "graph.png", source: "original" }]}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+    expect(container.querySelector(".question-figure-missing")).toHaveTextContent("그림 위치 연결 확인 필요: unplaced");
+    expect(container.querySelector(".question-source-figure")).toBeNull();
+  });
+
+  it("maps an existing legacy annotation only when its text matches one canonical segment", () => {
+    const question = "앞의 중요 문장 뒤";
+    const start = question.indexOf("중요");
+    const { container } = render(
+      <AnnotatableQuestion
+        question={question}
+        canonicalSegments={[{ id: "legacy-match", type: "text", text: "중요 문장" }]}
+        questionImages={[]}
+        annotations={[{ id: "legacy-ann", target: "question", kind: "text", start, end: start + "중요 문장".length, tool: "highlight" }]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    expect(container.querySelector("mark[data-ann-id='legacy-ann']")).toHaveTextContent("중요 문장");
+    expect(screen.queryByRole("button", { name: /기존 필기/ })).not.toBeInTheDocument();
+  });
 });

@@ -18,6 +18,7 @@ export function collectEntryImportImageReferences(entry: Partial<EntryFormData>)
   return [
     ...(entry.questionImages ?? []),
     ...(entry.sourcePageImages ?? []),
+    ...(entry.questionSolutionHotspots ?? []).map(hotspot => hotspot.sourcePageImage),
     ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]),
     ...(entry.figures ?? []).flatMap(collectFigureImageReferences),
     ...(entry.explanationParts ?? []).flatMap((part) => part.images ?? []),
@@ -69,6 +70,10 @@ export function mapEntryImportImageReferences(
     ...entry,
     questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
+    questionSolutionHotspots: entry.questionSolutionHotspots?.flatMap(hotspot => {
+      const sourcePageImage = map(hotspot.sourcePageImage);
+      return sourcePageImage ? [{ ...hotspot, sourcePageImage }] : [];
+    }),
     questionSourceCrops: (entry.questionSourceCrops ?? []).flatMap((crop) => {
       const image = map(crop.image);
       if (!image) return [];

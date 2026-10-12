@@ -43,6 +43,9 @@ entryKind 규칙: 시험지는 반드시 problem_sheet, 개별 오답은 wrong_a
 
 이 모드는 실제 이미지 생성이 가능한 PNG 패키지 모드다. JSON 설명만 작성하지 말고 원본 도형 crop을 입력으로 사용해 cleaned PNG를 생성해라.
 
+완료 조건: import.json과 실제 자산을 포함한 ZIP artifact가 실제로 생성되어야 한다. ZIP을 생성한 뒤 다시 열어 모든 JSON 이미지 참조를 실제 ZIP entry와 대소문자까지 전수 대조하고, 절대경로·드라이브 경로·.. traversal·basename 충돌을 거부한다. PNG/JPG/WebP를 실제 디코딩해 width/height가 0보다 큰지 확인한다. original 자산은 필수이며 cleaned를 선언했다면 해당 파일도 필수다. semanticSpec은 실제 PNG의 대체물이 아니다. questions[]가 외부 canonical 문항이며 contentSegments의 figureId는 figures[].id에 존재해야 한다.
+실제 파일 생성이나 ZIP 재검증을 수행할 수 없는 환경에서는 실패 또는 미생성을 명시하고 가짜 filename과 완료 주장을 만들지 마라. gpt_self_check는 독립 검증이 아니며 second_pass_model과 구분한다. second_pass_model도 실제 별도 검증을 수행했을 때만 기록한다.
+
 도형 처리 순서:
 1. 원본 페이지 이미지와 도형별 원본 crop을 보존한다.
 2. 각 crop을 image-to-image로 정리해 cleaned PNG를 생성한다. 새 도형으로 재해석하지 말고 구도, 종횡비, 점과 라벨, 선분·곡선·원·축, 수치, 실선·점선, 열린점·닫힌점, 직각·평행·같은 길이 표시, 음영을 유지하고 손글씨와 촬영 노이즈만 제거한다.

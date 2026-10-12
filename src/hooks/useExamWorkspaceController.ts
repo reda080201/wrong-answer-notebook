@@ -16,6 +16,7 @@ export function useExamWorkspaceController(options: UseExamWorkspaceControllerOp
   });
   const generated = useGeneratedExamController({
     examPrintPreferences: options.examPrintPreferences,
+    entries: options.existingEntries,
     onOpenExam: exam.openGenerated,
   });
   return useMemo(() => ({

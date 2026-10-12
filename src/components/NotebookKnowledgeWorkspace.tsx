@@ -35,6 +35,8 @@ interface NotebookKnowledgeWorkspaceProps {
   knowledgeGraph?: {
     graph: KnowledgeGraphStore;
     error: string | null;
+    ready?: boolean;
+    maintenanceBlocked?: boolean;
     refresh(): Promise<void>;
     ensureEntity(entity: KnowledgeEntity): Promise<KnowledgeEntity>;
     createEntity(input: Omit<KnowledgeEntity, "createdAt" | "updatedAt">): Promise<KnowledgeEntity>;
@@ -95,6 +97,7 @@ export default function NotebookKnowledgeWorkspace({
       {learningView === "graph" && knowledgeGraph ? <KnowledgeGraphView
         graph={projectedGraph ?? knowledgeGraph.graph}
         persistenceError={knowledgeGraph.error}
+        writeBlocked={knowledgeGraph.ready === false || knowledgeGraph.maintenanceBlocked}
         onRetryPersistence={knowledgeGraph.refresh}
         onEnsureEntity={knowledgeGraph.ensureEntity}
         questionBankItems={buildQuestionBankItems(entries).filter((item) => !subjectFilter || item.subject === subjectFilter)}
