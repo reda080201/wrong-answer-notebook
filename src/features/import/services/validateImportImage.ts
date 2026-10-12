@@ -1,5 +1,42 @@
 import { IMPORT_LIMITS } from "./importLimits";
 
+function jpegOrientation(bytes: Uint8Array): number {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset++] !== 0xff) break;
+    while (bytes[offset] === 0xff) offset++;
+    const marker = bytes[offset++];
+    if (marker === 0xda || marker === 0xd9) break;
+    if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+    if (offset + 2 > bytes.length) break;
+    const length = view.getUint16(offset);
+    const end = offset + length;
+    if (length < 2 || end > bytes.length) break;
+    if (marker === 0xe1 && length >= 16 && String.fromCharCode(...bytes.slice(offset + 2, offset + 8)) === "Exif\0\0") {
+      const tiff = offset + 8;
+      const byteOrder = view.getUint16(tiff);
+      if (byteOrder !== 0x4949 && byteOrder !== 0x4d4d) return 1;
+      const little = byteOrder === 0x4949;
+      if (view.getUint16(tiff + 2, little) !== 42) return 1;
+      const directoryOffset = view.getUint32(tiff + 4, little);
+      const directory = tiff + directoryOffset;
+      if (directoryOffset < 8 || directory + 2 > end) return 1;
+      const count = view.getUint16(directory, little);
+      for (let index = 0; index < count; index++) {
+        const entry = directory + 2 + index * 12;
+        if (entry + 12 > end) return 1;
+        if (view.getUint16(entry, little) !== 0x0112) continue;
+        if (view.getUint16(entry + 2, little) !== 3 || view.getUint32(entry + 4, little) !== 1) return 1;
+        const orientation = view.getUint16(entry + 8, little);
+        return orientation >= 1 && orientation <= 8 ? orientation : 1;
+      }
+    }
+    offset = end;
+  }
+  return 1;
+}
+
 function readDimensions(bytes: Uint8Array, format: "png" | "jpeg" | "webp"): { width: number; height: number } | null {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (format === "png") return bytes.length >= 24 ? { width: view.getUint32(16), height: view.getUint32(20) } : null;
@@ -59,11 +96,15 @@ export async function validateImportImage(file: File): Promise<void> {
   const dimensions = readDimensions(bytes, format!);
   if (!dimensions) throw new Error(`이미지를 디코딩할 수 없습니다. 크기 정보를 확인하지 못했습니다: ${file.name}`);
   assertDecodedSize(dimensions.width, dimensions.height, file.name);
+  // SOF describes raw pixels; EXIF 5–8 swaps the displayed width and height.
+  const rotated = format === "jpeg" && jpegOrientation(bytes) >= 5;
+  const expectedWidth = rotated ? dimensions.height : dimensions.width;
+  const expectedHeight = rotated ? dimensions.width : dimensions.height;
   try {
-    const bitmap = await createImageBitmap(file);
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
     try {
       assertDecodedSize(bitmap.width, bitmap.height, file.name);
-      if (bitmap.width !== dimensions.width || bitmap.height !== dimensions.height) throw new Error("이미지 크기 정보가 내용과 일치하지 않습니다.");
+      if (bitmap.width !== expectedWidth || bitmap.height !== expectedHeight) throw new Error("이미지 크기 정보가 내용과 일치하지 않습니다.");
     }
     finally { bitmap.close(); }
   } catch (cause) { throw new Error(`이미지를 디코딩할 수 없습니다: ${file.name}`, { cause }); }

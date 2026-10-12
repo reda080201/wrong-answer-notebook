@@ -15,8 +15,16 @@ export function resolveCanonicalQuestionPresentation(questionText: string, canon
     };
   }
   const question = questions[0];
+  const rawBody = parseInput.slice(question.start, question.bodyEnd).trim();
+  const firstLine = rawBody.split(/\r?\n/, 1)[0].replace(/\s+/g, " ").trim();
+  const canonicalText = canonicalSegments
+    .filter((segment): segment is Extract<QuestionContentSegment, { type: "text" }> => segment.type === "text")
+    .map(segment => segment.text).join(" ").replace(/\s+/g, " ").trim();
+  // A stored canonical body can itself begin with "3번". Only remove the
+  // parser's source-number range when that range is absent from the body.
+  const prefixIsBody = hasQuestionNumber && firstLine && canonicalText.startsWith(firstLine);
   const segments = normalizeQuestionPresentationSegments({
-    questionText: question.body,
+    questionText: prefixIsBody ? rawBody : question.body,
     conditions: [],
     equations: [],
     contentSegments: canonicalSegments,

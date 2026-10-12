@@ -13,7 +13,7 @@ function database(abort: boolean, stored: string | null = null, readError = fals
       const tx: Record<string, unknown> = { error: null };
       transactions.push(tx);
       const request = () => {
-        const req: Record<string, unknown> = { result: stored };
+        const req: Record<string, unknown> = { result: stored ?? undefined };
         queueMicrotask(() => {
           if (readError) {
             req.error = new Error("read failed");
