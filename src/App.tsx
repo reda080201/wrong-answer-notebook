@@ -633,7 +633,7 @@ function AppContent() {
         learningHub={{ active: showLearningHub, total: learningHubSidebar.total, subjectCounts: learningHubSidebar.counts }}
         actions={{ openNew: actions.openNew, openImport: actions.openImport, openLearningImport: () => actions.setShowLearningImportModal(true), openExamBuilder: () => setShowExamBuilder(true) }}
         destination={sidebarDestination}
-        shell={{ collapsed: shell.appSidebarCollapsed, onCollapsedChange: shell.setAppSidebarCollapsed }}
+        shell={{ collapsed: shell.appSidebarCollapsed, overlay: shell.appSidebarOverlay, onCollapsedChange: shell.setAppSidebarCollapsed }}
       />
 
       <main className="main">

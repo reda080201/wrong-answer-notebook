@@ -25,6 +25,17 @@ const baseProps = {
 };
 
 describe("AppSidebar", () => {
+  it("closes the temporary sidebar with Escape or outside click and restores the toggle focus", () => {
+    const onCollapsedChange = vi.fn();
+    render(<AppSidebar {...baseProps} shell={{ collapsed: false, overlay: true, onCollapsedChange }} />);
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
+    expect(screen.getByRole("button", { name: "앱 사이드바 접기" })).toHaveFocus();
+    onCollapsedChange.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "앱 사이드바 닫기" }));
+    expect(onCollapsedChange).toHaveBeenCalledOnce();
+    expect(onCollapsedChange).toHaveBeenCalledWith(true);
+  });
   it("keeps every destination accessible in the collapsed icon rail", () => {
     render(
       <AppSidebar

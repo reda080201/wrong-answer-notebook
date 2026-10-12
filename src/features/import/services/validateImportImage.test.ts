@@ -1,9 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { validateImportImage } from "./validateImportImage";
 import { validPngBytes } from "../../../test/fixtures/validPng";
+import { orientedJpegBase64 } from "../../../test/fixtures/orientedJpeg";
 
 describe("native import image validation", () => {
   afterEach(() => vi.unstubAllGlobals());
+  it.each([1, 2, 3, 4, 5, 6, 7, 8])("accepts valid JPEG EXIF orientation %i without changing the size limits", async (orientation) => {
+    const swapped = orientation >= 5;
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: swapped ? 60 : 120, height: swapped ? 120 : 60, close }));
+    const bytes = Uint8Array.from(atob(orientedJpegBase64[orientation - 1]), c => c.charCodeAt(0));
+    await expect(validateImportImage(new File([bytes], "oriented.jpg"))).resolves.toBeUndefined();
+    expect(close).toHaveBeenCalledOnce();
+  });
+  it.each([1, 6])("rejects unrelated decoded dimensions even with EXIF orientation %i", async (orientation) => {
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 121, height: 60, close }));
+    const bytes = Uint8Array.from(atob(orientedJpegBase64[orientation - 1]), c => c.charCodeAt(0));
+    await expect(validateImportImage(new File([bytes], "mismatch.jpg"))).rejects.toThrow("디코딩");
+    expect(close).toHaveBeenCalledOnce();
+  });
   it("requires complete decoding and releases the bitmap", async () => {
     const close = vi.fn(); const decode = vi.fn().mockResolvedValue({ width: 1, height: 1, close });
     vi.stubGlobal("createImageBitmap", decode);
