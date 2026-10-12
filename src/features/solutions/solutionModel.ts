@@ -4,12 +4,14 @@ import type { ExamQuestionSnapshot, QuestionSolutionHotspot, SheetAnswerItem, Sh
 import { getEntryQuestions, type ResolvedEntryQuestion } from "../../utils/entryQuestions";
 import { readFigureTokenReferences } from "../../utils/figureTokens";
 import { normalizeQuestionNumber } from "../../utils/questionNumber";
+import { resolveQuestionAssets } from "../../utils/questionAssets";
 
 export interface SolutionQuestion {
   key: string;
   number: string;
   section?: string;
   page?: number;
+  sourcePages?: string[];
   answer?: SheetAnswerItem;
   figures: SheetFigureItem[];
 }
@@ -18,13 +20,14 @@ export function solutionQuestionKey(question: Pick<ResolvedEntryQuestion, "quest
   return JSON.stringify([normalizeQuestionNumber(question.questionNumber), question.section ?? ""]);
 }
 
-export function entrySolutionQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments" | "answerKey" | "figures">): SolutionQuestion[] {
+export function entrySolutionQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments" | "answerKey" | "figures"> & Partial<Pick<WrongAnswerEntry, "sourcePageImages" | "questionSourceCrops" | "supplementalResources">>): SolutionQuestion[] {
   const questions = getEntryQuestions(entry);
   return questions.map(question => {
     const number = normalizeQuestionNumber(question.questionNumber);
     const answers = (entry.answerKey ?? []).filter(answer => normalizeQuestionNumber(answer.questionNumber) === number);
     const uniqueNumber = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1;
     return { key: solutionQuestionKey(question), number: question.questionNumber, section: question.section, page: question.source?.page,
+      sourcePages: uniqueNumber ? resolveQuestionAssets(entry, question, { allowLegacySingleQuestionFallback: false }).sourcePages : [],
       answer: uniqueNumber && answers.length === 1 ? answers[0] : undefined, figures: entry.figures ?? [] };
   });
 }

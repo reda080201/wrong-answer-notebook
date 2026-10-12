@@ -34,7 +34,7 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
     if (matches.length !== 1) return [];
     const question = matches[0];
     const sourcePage = question?.page && Number.isInteger(question.page) ? pages[question.page - 1] : undefined;
-    return pages.filter(page => page === sourcePage || hotspots.some(hotspot => hotspot.questionKey === key && hotspot.sourcePageImage === page));
+    return pages.filter(page => page === sourcePage || question.sourcePages?.includes(page) || hotspots.some(hotspot => hotspot.questionKey === key && hotspot.sourcePageImage === page));
   };
   // Only an explicit question selection moves the page. Page changes below
   // choose a confirmed linked question before updating the parent's context.
@@ -45,7 +45,7 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
     if (!currentQuestionKey) return;
     const question = questions.find(question => question.key === currentQuestionKey);
     const sourcePage = question?.page && Number.isInteger(question.page) ? pages[question.page - 1] : undefined;
-    const linked = selectedPages.filter(page => page === sourcePage || hotspots.some(hotspot => hotspot.questionKey === currentQuestionKey && hotspot.sourcePageImage === page));
+    const linked = selectedPages.filter(page => page === sourcePage || question?.sourcePages?.includes(page) || hotspots.some(hotspot => hotspot.questionKey === currentQuestionKey && hotspot.sourcePageImage === page));
     if (linked.includes(currentPage)) { setNotice(""); return; }
     if (linked[0]) { setCurrentPage(linked[0]); setNotice(""); }
     else setNotice("선택한 문항의 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다.");

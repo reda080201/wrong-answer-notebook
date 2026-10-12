@@ -28,8 +28,9 @@ export function resolveQuestionFigures(
 
 /** Returns only assets explicitly associated with this canonical question. */
 export function resolveQuestionAssets(
-  entry: WrongAnswerEntry,
+  entry: Pick<WrongAnswerEntry, "figures" | "structuredQuestions" | "questionSourceCrops" | "sourcePageImages" | "supplementalResources">,
   question: Pick<ResolvedEntryQuestion, "questionNumber" | "figureIds" | "source">,
+  options: { allowLegacySingleQuestionFallback?: boolean } = {},
 ): QuestionAssetProjection {
   const number = normalizeQuestionNumber(question.questionNumber);
   const sourceCrops = (entry.questionSourceCrops ?? [])
@@ -40,11 +41,15 @@ export function resolveQuestionAssets(
   const exactSourcePages = [
     ...sourceCrops.map((crop) => crop.sourcePageImage),
     ...figures.map((figure) => figure.original?.sourcePageImage),
+    ...(entry.supplementalResources ?? [])
+      .filter(resource => resource.kind === "source_pages" && resource.questionNumbers?.some(value => normalizeQuestionNumber(value) === number))
+      .flatMap(resource => resource.images ?? [])
+      .filter(filename => entry.sourcePageImages?.includes(filename)),
   ];
   if (question.source?.page && entry.sourcePageImages?.[question.source.page - 1]) {
     exactSourcePages.push(entry.sourcePageImages[question.source.page - 1]);
   }
-  const isLegacySingleQuestion = !entry.structuredQuestions?.length && number === "1";
+  const isLegacySingleQuestion = options.allowLegacySingleQuestionFallback !== false && !entry.structuredQuestions?.length && number === "1";
   return {
     sourceCrops,
     sourcePages: unique(isLegacySingleQuestion && exactSourcePages.length === 0

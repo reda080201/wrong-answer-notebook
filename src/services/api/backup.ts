@@ -224,7 +224,22 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
   if (v2Payload?.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) {
     throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
   }
+  const retainedReferences = v2Payload ? new Set<string>()
+    : collectBrowserImageReferences([], { includeStoredEntries: false });
   const previousImages = await listBrowserImages();
+  const restoredImages = { ...payload.browserImages };
+  for (const filename of retainedReferences) {
+    const key = `img_${filename}`;
+    const existing = previousImages[key];
+    const incoming = restoredImages[key];
+    if (existing !== undefined && incoming !== undefined && existing !== incoming) {
+      throw new Error(`유지할 자료의 이미지와 백업 이미지가 충돌합니다 (${filename}). 원본을 확인한 뒤 다시 시도하세요.`);
+    }
+    if (existing === undefined && incoming === undefined) {
+      throw new Error(`유지할 자료의 이미지를 찾을 수 없습니다 (${filename}). 이미지 연결을 확인한 뒤 다시 시도하세요.`);
+    }
+    if (existing !== undefined) restoredImages[key] = existing;
+  }
   const managedKeys = new Set([
     ENTRIES_STORAGE_KEY,
     SETTINGS_STORAGE_KEY,
@@ -249,7 +264,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
       entries: payload.entries,
     });
     writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalizeSettings(payload.settings));
-    await replaceBrowserImages(payload.browserImages);
+    await replaceBrowserImages(restoredImages);
     if (v2Payload) {
       writeStorageJson(localStorage, EXAM_SESSIONS_STORAGE_KEY, v2Payload.examSessions);
       writeStorageJson(localStorage, GENERATED_EXAMS_STORAGE_KEY, v2Payload.generatedExams);
