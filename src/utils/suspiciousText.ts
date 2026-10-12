@@ -19,21 +19,21 @@ const KNOWN_OCR_FRAGMENTS = [
 function symbolRatio(text: string): number {
   const trimmed = text.replace(/\s/g, "");
   if (!trimmed) return 0;
-  const symbols = trimmed.match(/[^\p{L}\p{N}\s①-⑤㉠-㉤ㄱ-ㅎ가-힣.,!?()[\]{}<>+\-*/=≤≥:;'"%]/gu)?.length ?? 0;
+  const symbols = trimmed.match(/[^\p{L}\p{N}\s①-⑤㉠-㉤ㄱ-ㅎ가-힣.,!?()[\]{}<>+\-*/=≤≥:;'"%′’″‴⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ₙᵢₖ₊₋∏]/gu)?.length ?? 0;
   return symbols / trimmed.length;
 }
 
 function hasOddNonAsciiCharacter(line: string): boolean {
   return Array.from(line).some((ch) => {
     if (ch.charCodeAt(0) <= 127) return false;
-    return !/[가-힣ㄱ-ㅎㅏ-ㅣ①-⑤㉠-㉤Ⅰ-Ⅻ≤≥±×÷√π∞∑∫≠≦≧·…""''—–-]/u.test(ch);
+    return !/[가-힣ㄱ-ㅎㅏ-ㅣ①-⑤㉠-㉤Ⅰ-Ⅻ≤≥±×÷√π∞∑∏∫≠≦≧·…""''′’″‴⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ₙᵢₖ₊₋—–-]/u.test(ch);
   });
 }
 
 function isMathOrEquationLine(line: string): boolean {
   const trimmed = line.trim();
   return /\\(?:frac|sqrt|sum|int|left|right|begin|end)\b/.test(trimmed)
-    || /^[\d\s+\-*/=()[\]{}.,:;<>≤≥±×÷√π∞∑∫^_\\a-zA-Z]+$/u.test(trimmed);
+    || /^[\d\s+\-*/=()[\]{}.,:;<>≤≥±×÷√π∞∑∏∫^_\\a-zA-Z′’″‴⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ₙᵢₖ₊₋]+$/u.test(trimmed);
 }
 
 function addSegment(

@@ -3,6 +3,7 @@
 .app-shell > .main, .app-shell .content, .app-shell .detail-panel, .app-shell .entry-list { min-width: 0; }
 .app-sidebar { position: relative; display: flex; width: 220px; min-width: 220px; height: 100dvh; min-height: 0; flex-direction: column; padding: 16px; overflow: hidden; transition: width 160ms ease, min-width 160ms ease, padding 160ms ease; }
 .app-sidebar--collapsed { width: 60px; min-width: 60px; padding: 12px 8px; }
+.app-sidebar-backdrop { position: fixed; inset: 0; z-index: 59; border: 0; border-radius: 0; background: rgb(0 0 0 / 30%); cursor: pointer; }
 .app-sidebar .logo { min-height: 40px; margin-bottom: 16px; }
 .app-sidebar-collapse { margin-left: auto; flex: 0 0 auto; }
 .app-sidebar--collapsed .logo { flex-direction: column; gap: 8px; }

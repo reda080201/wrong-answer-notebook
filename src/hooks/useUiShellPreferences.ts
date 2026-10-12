@@ -1,4 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useSyncExternalStore } from "react";
+
+const SIDEBAR_NARROW_QUERY = "(max-width: 768px)";
+function subscribeNarrowSidebar(callback: () => void) {
+  const query = window.matchMedia?.(SIDEBAR_NARROW_QUERY);
+  query?.addEventListener("change", callback);
+  return () => query?.removeEventListener("change", callback);
+}
+function isNarrowSidebar() { return window.matchMedia?.(SIDEBAR_NARROW_QUERY).matches ?? false; }
 
 export const APP_SIDEBAR_COLLAPSED_KEY = "wrong-answer-app-sidebar-collapsed";
 export const ENTRY_PANE_COLLAPSED_KEY = "wrong-answer-entry-pane-collapsed";
@@ -39,6 +47,8 @@ function readWidth(): number {
 }
 
 export function useUiShellPreferences() {
+  const narrow = useSyncExternalStore(subscribeNarrowSidebar, isNarrowSidebar, () => false);
+  const [mobileCollapsed, setMobileCollapsed] = useState(true);
   const [preferences, setPreferences] = useState<UiShellPreferences>(() => ({
     appSidebarCollapsed: readBoolean(APP_SIDEBAR_COLLAPSED_KEY),
     entryPaneCollapsed: readBoolean(ENTRY_PANE_COLLAPSED_KEY),
@@ -47,9 +57,10 @@ export function useUiShellPreferences() {
   }));
 
   const setAppSidebarCollapsed = useCallback((collapsed: boolean) => {
+    if (narrow) { setMobileCollapsed(collapsed); return; }
     localStorage.setItem(APP_SIDEBAR_COLLAPSED_KEY, String(collapsed));
     setPreferences((current) => ({ ...current, appSidebarCollapsed: collapsed }));
-  }, []);
+  }, [narrow]);
   const setEntryPaneCollapsed = useCallback((collapsed: boolean) => {
     localStorage.setItem(ENTRY_PANE_COLLAPSED_KEY, String(collapsed));
     setPreferences((current) => ({ ...current, entryPaneCollapsed: collapsed }));
@@ -67,5 +78,6 @@ export function useUiShellPreferences() {
     setPreferences((current) => ({ ...current, entryPaneWidth: next }));
   }, []);
 
-  return { ...preferences, setAppSidebarCollapsed, setEntryPaneCollapsed, setEntryPaneOverride, setEntryPaneWidth };
+  const appSidebarCollapsed = narrow ? mobileCollapsed : preferences.appSidebarCollapsed;
+  return { ...preferences, appSidebarCollapsed, appSidebarOverlay: narrow && !appSidebarCollapsed, setAppSidebarCollapsed, setEntryPaneCollapsed, setEntryPaneOverride, setEntryPaneWidth };
 }
