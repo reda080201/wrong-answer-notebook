@@ -392,8 +392,8 @@ describe("browser backup restore transaction", () => {
   });
 
   it("keeps newer browser stores when applying a valid legacy v1 backup and reports a warning", async () => {
-    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "keep-session" }]));
-    localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, JSON.stringify([{ id: "keep-exam" }]));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify([{ id: "keep-session", questions: [] }]));
+    localStorage.setItem(GENERATED_EXAMS_STORAGE_KEY, JSON.stringify([{ id: "keep-exam", questions: [] }]));
 
     const result = await applyBrowserBackupAtomically({
       meta: { version: 1, createdAt: "2026-01-01T00:00:00.000Z", source: "browser" },

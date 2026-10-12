@@ -27,6 +27,15 @@ const pagesEntry = {
 const questionKey = (number: string) => JSON.stringify([number, ""]);
 
 describe("OriginalPageStudyView question and page synchronization", () => {
+  it("uses explicit source-page resources for a submitted wrong answer without adding fake dots", async () => {
+    const entry = { ...pagesEntry, questionSolutionHotspots: [], structuredQuestions: pagesEntry.structuredQuestions?.slice(0, 1).map(question => ({ ...question, source: undefined })),
+      supplementalResources: [{ id: "submitted-pages", kind: "source_pages" as const, title: "원본", questionNumbers: ["1"], images: ["page-2.png"], createdAt: "", updatedAt: "" }] };
+    render(<OriginalPageStudyView entry={entry} hidden={false} currentQuestionKey={questionKey("1")} />);
+    await screen.findByAltText("원본 문제지 페이지 2");
+    expect(screen.queryByText(/원본 페이지 연결이 없습니다/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "1번 정답·해설 열기" })).not.toBeInTheDocument();
+  });
+
   it("moves to a question's selected linked page and preserves the question when a page has several links", async () => {
     const onCurrentQuestionChange = vi.fn();
     const { rerender } = render(<OriginalPageStudyView entry={pagesEntry} hidden={false} currentQuestionKey={questionKey("1")} onCurrentQuestionChange={onCurrentQuestionChange} />);

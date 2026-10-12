@@ -17,6 +17,8 @@ vi.mock("../api", () => ({
 import { useExamSessionController } from "./useExamSessionController";
 import { updateExamResponse } from "../features/exam/services/examSession";
 import { createSessionFromGeneratedExam } from "../features/exam-builder/services/createSessionFromGeneratedExam";
+import { entrySolutionQuestions, solutionQuestionKey } from "../features/solutions/solutionModel";
+import { normalizeEntry } from "../utils/entry";
 
 const preferences = {
   shareUserResponse: false,
@@ -239,6 +241,33 @@ describe("useExamSessionController safety guards", () => {
     expect(commitExamSubmission.mock.calls[1][1]).toEqual([]);
   });
 
+  it("preserves the original page and solution links on a normal submitted wrong answer", async () => {
+    const commitExamSubmission = vi.fn((submitted: ExamSession) => successfulCommit(submitted));
+    const { result } = renderHook(() => useExamSessionController({ commitExamSubmission }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    const source: WrongAnswerEntry = {
+      ...entry,
+      question: "3. 본문\n① 하나\n② 둘",
+      sourcePageImages: ["page-1.png", "page-2.png"],
+      structuredQuestions: [{ questionNumber: "3", questionText: "본문", conditions: [], equations: [], choices: ["① 하나", "② 둘"], figureIds: [], source: { page: 2 }, contentSegments: [{ id: "body", type: "text", text: "본문" }, { id: "formula", type: "equation", latex: "x^2", display: true }] }],
+      answerKey: [{ id: "a3", questionNumber: "3", answer: "②", explanation: "해설", intent: "출제 의도", importantPoints: [] }],
+      questionSolutionHotspots: [{ id: "dot3", sourcePageImage: "page-2.png", questionKey: '["3",""]', x: 0.1, y: 0.2 }],
+    };
+    act(() => result.current.open(source));
+    act(() => result.current.updateSession(current => updateExamResponse(current, { questionNumber: "3", response: "①", scratchNote: "", markedForReview: false, updatedAt: "" })));
+    await act(async () => { await result.current.submit(result.current.session!); });
+    const forms = (commitExamSubmission.mock.calls[0] as unknown as [ExamSession, WrongAnswerEntry[]])[1];
+    const saved = normalizeEntry({ ...forms[0], id: "wrong3", createdAt: entry.createdAt, updatedAt: entry.updatedAt });
+    const [solution] = entrySolutionQuestions(saved);
+    expect(saved.sourcePageImages).toEqual(["page-2.png"]);
+    expect(solution.number).toBe("3");
+    expect(solution.page).toBe(1);
+    expect(solution.answer).toMatchObject({ answer: "②", explanation: "해설", intent: "출제 의도" });
+    expect(saved.questionSolutionHotspots).toEqual([expect.objectContaining({ questionKey: solution.key, sourcePageImage: "page-2.png" })]);
+    expect(saved.structuredQuestions?.[0].contentSegments?.map(segment => segment.id)).toEqual(["body", "formula"]);
+    expect(saved.supplementalResources).toEqual(expect.arrayContaining([expect.objectContaining({ sourceEntryId: source.id, questionNumbers: ["3"] })]));
+  });
+
   it("keeps generated exam identity separate from original sheet provenance", async () => {
     const commitExamSubmission = vi.fn((submitted: ExamSession, forms: unknown[]) =>
       Promise.resolve(transactionResult(submitted, forms.map((form, index) => ({
@@ -269,7 +298,7 @@ describe("useExamSessionController safety guards", () => {
       timeLimitMinutes: 50,
       questions: [
         { position: 1, snapshot: { ...snapshot, id: "sheet-a-q1" }, source: { sourceEntryId: "sheet-a", sourceEntryTitle: "문제지 A", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
-        { position: 2, snapshot: { ...snapshot, id: "sheet-b-q1", question: "문제지 B의 원문 1번" }, source: { sourceEntryId: "sheet-b", sourceEntryTitle: "문제지 B", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
+        { position: 2, snapshot: { ...snapshot, id: "sheet-b-q1", question: "문제지 B의 원문 1번", source: { page: 2 }, sourcePageImages: ["sheet-b-page1.png", "sheet-b-page2.png"], questionSolutionHotspots: [{ id: "dot", questionKey: "source-question-1", sourcePageImage: "sheet-b-page2.png", x: 0.2, y: 0.3 }], solutionAnswer: { id: "source-answer", questionNumber: "1", answer: "②", explanation: "B 해설", intent: "B 의도", importantPoints: [] } }, source: { sourceEntryId: "sheet-b", sourceEntryTitle: "문제지 B", sourceQuestionNumber: "1" }, locked: true, selectionScore: 1, selectionReasons: [] },
       ],
     } as unknown as GeneratedExam;
     const convertedSession = createSessionFromGeneratedExam(generatedExam, new Date("2026-01-01T00:00:00.000Z"), { mode: "real" });
@@ -291,6 +320,11 @@ describe("useExamSessionController safety guards", () => {
     expect(wrongForms).toHaveLength(1);
     expect(wrongForms[0].generatedFromExamSessionId).toBe("generated-session-q1-q1");
     expect(wrongForms[0].generatedFromQuestionNumber).toBe("2");
+    const [solution] = entrySolutionQuestions(wrongForms[0] as WrongAnswerEntry);
+    expect(solution.page).toBe(2);
+    expect(solution.number).toBe("2");
+    expect(solution.answer).toMatchObject({ questionNumber: "2", explanation: "B 해설", intent: "B 의도" });
+    expect(wrongForms[0].questionSolutionHotspots).toEqual([expect.objectContaining({ questionKey: solutionQuestionKey({ questionNumber: "2" }), sourcePageImage: "sheet-b-page2.png" })]);
     expect(wrongForms[0].supplementalResources).toEqual(expect.arrayContaining([
       expect.objectContaining({
         sourceEntryId: "sheet-b",

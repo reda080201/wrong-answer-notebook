@@ -27,11 +27,13 @@ function collectImageFilenames(value: unknown, referenced: Set<string>): void {
 
 export function getBrowserProtectedImageReferences(
   entries: WrongAnswerEntry[],
-  options: { excludePendingDeletionIds?: readonly string[] } = {},
+  options: { excludePendingDeletionIds?: readonly string[]; includeStoredEntries?: boolean } = {},
 ): Set<string> {
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   const excluded = new Set(options.excludePendingDeletionIds ?? []);
   for (const key of BROWSER_IMAGE_REFERENCE_KEYS) {
+    // A v1 restore replaces entries but retains the other reference stores.
+    if (key === ENTRIES_STORAGE_KEY && options.includeStoredEntries === false) continue;
     const stored = localStorage.getItem(key);
     if (stored === null) continue;
     let value: unknown;

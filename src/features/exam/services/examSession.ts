@@ -122,6 +122,7 @@ function buildExplicitSourcePageQuestionMap(
   };
   for (const question of questions) {
     const number = normalizeQuestionNumber(question.questionNumber);
+    for (const page of resolveQuestionAssets(entry, question, { allowLegacySingleQuestionFallback: false }).sourcePages) add(page, number);
     for (const hotspot of confirmedQuestionHotspots(entry, question)) add(hotspot.sourcePageImage, number);
     if (question.source?.page) add(entry.sourcePageImages?.[question.source.page - 1], number);
     for (const crop of entry.questionSourceCrops ?? []) {
