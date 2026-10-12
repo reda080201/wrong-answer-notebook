@@ -421,44 +421,60 @@ function StructuredQuestionBlock({
   const answerRevealed = Boolean(revealedAnswerNumbers?.has(normalizeNumberLabel(questionNumber)));
   const answerPopoverId = `exam-answer-${block.start}`;
 
+  const questionHeading = (
+    <div className="question-number">
+      {selectionMode && (
+        <label className="question-select-check">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleQuestionSelected?.(questionNumber)}
+          />
+          선택
+        </label>
+      )}
+      <span className="question-number-main" data-number={block.displayNumber}>{block.displayNumber}</span>
+      {normalizeNumberLabel(block.numberLabel) !== String(block.displayNumber) && (
+        <small>원문 {block.numberLabel}</small>
+      )}
+    </div>
+  );
+
   return (
     <section
       id={`sheet-question-${block.start}`}
       className={`question-text-block question-text-block--question question-text-block--${presentation}`}
     >
-      <div className="question-number">
-        {selectionMode && (
-          <label className="question-select-check">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => onToggleQuestionSelected?.(questionNumber)}
-            />
-            선택
-          </label>
-        )}
-        <span className="question-number-main" data-number={block.displayNumber}>{block.displayNumber}</span>
-        {normalizeNumberLabel(block.numberLabel) !== String(block.displayNumber) && (
-          <small>원문 {block.numberLabel}</small>
-        )}
-      </div>
-      {presentation === "questions" && onToggleQuestionImportant && (
-        <button
-          type="button"
-          className={`question-important-btn ${isImportant ? "active" : ""}`}
-          aria-pressed={isImportant}
-          onClick={() => onToggleQuestionImportant(questionNumber)}
-        >
-          {isImportant ? "★ 중요" : "☆ 중요"}
-        </button>
-      )}
-      {presentation === "questions" && (
-        <QuestionDifficultyEditor
-          questionNumber={questionNumber}
-          difficultyScore={difficultyScore}
-          onChange={onQuestionDifficultyScoreChange}
-        />
-      )}
+      {presentation === "questions" ? (
+        <header className="question-card-header">
+          {questionHeading}
+          {onToggleQuestionImportant && (
+            <button
+              type="button"
+              className={`question-important-btn ${isImportant ? "active" : ""}`}
+              aria-pressed={isImportant}
+              onClick={() => onToggleQuestionImportant(questionNumber)}
+            >
+              {isImportant ? "★ 중요" : "☆ 중요"}
+            </button>
+          )}
+          <QuestionDifficultyEditor
+            questionNumber={questionNumber}
+            difficultyScore={difficultyScore}
+            onChange={onQuestionDifficultyScoreChange}
+          />
+          {onOpenQuestionTheater && typeof questionIndex === "number" && (
+            <button
+              type="button"
+              className="question-theater-open"
+              onClick={() => onOpenQuestionTheater(questionIndex)}
+              aria-label={`문제 ${block.displayNumber} 크게 보기`}
+            >
+              <Maximize2 size={16} aria-hidden="true" />
+            </button>
+          )}
+        </header>
+      ) : questionHeading}
       <QuestionBodySegments
         segments={bodySegments}
         textAnnotations={textAnnotations}
@@ -529,16 +545,6 @@ function StructuredQuestionBlock({
             </div>
           )}
         </div>
-      )}
-      {presentation === "questions" && onOpenQuestionTheater && typeof questionIndex === "number" && (
-        <button
-          type="button"
-          className="question-theater-open"
-          onClick={() => onOpenQuestionTheater(questionIndex)}
-          aria-label={`문제 ${block.displayNumber} 크게 보기`}
-        >
-          <Maximize2 size={16} aria-hidden="true" />
-        </button>
       )}
     </section>
   );

@@ -410,7 +410,22 @@ export default function EntryForm({
           <button type="submit" form="entry-edit-form" className="btn-primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
         </div>}
       >
-        <form id="entry-edit-form" onSubmit={handleSubmit}>
+        <form id="entry-edit-form" onSubmit={handleSubmit} onInvalidCapture={(event) => {
+          const field = event.target as HTMLElement;
+          let parent = field.parentElement;
+          let revealed = false;
+          while (parent) {
+            if (parent instanceof HTMLDetailsElement && !parent.open) {
+              parent.open = true;
+              revealed = true;
+            }
+            parent = parent.parentElement;
+          }
+          if (revealed) {
+            event.preventDefault();
+            window.requestAnimationFrame(() => field.focus());
+          }
+        }}>
           <div className="form-body">
             <div className="form-row form-row--3 form-row--entry-meta">
               <div className="form-field">
@@ -447,257 +462,7 @@ export default function EntryForm({
                   ))}
                 </select>
               </div>
-              <div className="form-field">
-                <label>난이도</label>
-                <div className="difficulty-selector">
-                  {(
-                    [
-                      ["high", "상"],
-                      ["medium", "중"],
-                      ["low", "하"],
-                      ["none", "없음"],
-                    ] as const
-                  ).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      className={`difficulty-btn difficulty-btn--${value} ${
-                        (form.difficulty ?? "none") === value ? "active" : ""
-                      }`}
-                      onClick={() =>
-                        setForm((f) => ({
-                          ...f,
-                          difficulty: value,
-                          difficult: value === "high" || value === "medium",
-                          difficultyScore: difficultyScoreTouched
-                            ? f.difficultyScore
-                            : suggestedDifficultyScore(value),
-                        }))
-                      }
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="form-field">
-                <label htmlFor="difficulty-score">난이도 점수</label>
-                <div className="difficulty-score-input">
-                  <input
-                    id="difficulty-score"
-                    type="range"
-                    min={1}
-                    max={100}
-                    value={form.difficultyScore ?? suggestedDifficultyScore(form.difficulty) ?? 1}
-                    onChange={(event) => {
-                      setDifficultyScoreTouched(true);
-                      setForm((f) => ({
-                        ...f,
-                        difficultyScore: normalizeDifficultyScore(event.target.value),
-                      }));
-                    }}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={100}
-                    value={form.difficultyScore ?? ""}
-                    placeholder={`${suggestedDifficultyScore(form.difficulty) ?? ""}`}
-                    onChange={(event) => {
-                      setDifficultyScoreTouched(true);
-                      setForm((f) => ({
-                        ...f,
-                        difficultyScore: normalizeDifficultyScore(event.target.value),
-                      }));
-                    }}
-                    aria-label="난이도 점수 숫자 입력"
-                  />
-                  <button
-                    type="button"
-                    className="btn-secondary btn-sm"
-                    onClick={() => {
-                      setDifficultyScoreTouched(false);
-                      setForm((f) => ({ ...f, difficultyScore: undefined }));
-                    }}
-                  >
-                    자동
-                  </button>
-                </div>
-                <p className="form-hint">높을수록 어려움. 직접 입력하면 상/중/하 제안값보다 우선합니다.</p>
-              </div>
             </div>
-
-            <div className="form-row form-row--template">
-              <div className="form-field">
-                <label htmlFor="template">템플릿</label>
-                <select
-                  id="template"
-                  defaultValue=""
-                  onChange={(event) => {
-                    applyTemplate(event.target.value);
-                    event.currentTarget.value = "";
-                  }}
-                >
-                  <option value="">템플릿 선택</option>
-                  {templates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-field form-field--button">
-                <label aria-hidden="true">&nbsp;</label>
-                <button type="button" className="btn-secondary" onClick={saveCurrentTemplate}>
-                  현재 내용 템플릿 저장
-                </button>
-              </div>
-            </div>
-
-            <div className="form-row">
-              <div className="form-field checkbox-field">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={form.mastered}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, mastered: e.target.checked }))
-                    }
-                  />
-                  복습 완료
-                </label>
-              </div>
-            </div>
-
-            {form.entryKind !== "concept" && (
-              <div className="mistake-analysis-editor">
-                <div className="explanation-parts-header">
-                  <h3 className="form-section-title">오답 원인</h3>
-                </div>
-                <p className="form-hint">
-                  왜 틀렸는지를 구조화해 두면 약점 분석과 복습 방식 추천에 사용됩니다.
-                </p>
-                <div className="mistake-cause-chips" aria-label="오답 원인 선택">
-                  {MISTAKE_CAUSE_OPTIONS.map((option) => {
-                    const active = (form.mistakeAnalysis?.causes ?? []).some(
-                      (cause) => cause.type === option.type,
-                    );
-                    return (
-                      <button
-                        key={option.type}
-                        type="button"
-                        className={`mistake-cause-chip ${active ? "active" : ""}`}
-                        onClick={() => toggleMistakeCause(option.type)}
-                      >
-                        {option.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {(form.mistakeAnalysis?.causes ?? []).length > 0 && (
-                  <>
-                    <div className="form-row form-row--2">
-                      <div className="form-field">
-                        <label htmlFor="primaryCause">대표 원인</label>
-                        <select
-                          id="primaryCause"
-                          value={form.mistakeAnalysis?.primaryCause ?? ""}
-                          onChange={(event) => {
-                            const primaryCause = event.target.value as MistakeCauseType;
-                            setForm((current) => ({
-                              ...current,
-                              mistakeAnalysis: {
-                                ...(current.mistakeAnalysis ?? { causes: [] }),
-                                primaryCause,
-                                practiceMode: recommendedStrategyForCause(primaryCause),
-                                confidence: "user",
-                              },
-                            }));
-                          }}
-                        >
-                          {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
-                            <option key={cause.type} value={cause.type}>
-                              {mistakeCauseLabel(cause.type)}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="form-field">
-                        <label htmlFor="practiceMode">추천 훈련</label>
-                        <select
-                          id="practiceMode"
-                          value={form.mistakeAnalysis?.practiceMode ?? ""}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              mistakeAnalysis: {
-                                ...(current.mistakeAnalysis ?? { causes: [] }),
-                                practiceMode: event.target.value
-                                  ? (event.target.value as ReviewStrategy)
-                                  : undefined,
-                                confidence: "user",
-                              },
-                            }))
-                          }
-                        >
-                          <option value="">자동 추천</option>
-                          {Object.entries(PRACTICE_MODE_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                    </div>
-                    <div className="mistake-cause-detail-list">
-                      {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
-                        <div key={cause.type} className="mistake-cause-detail">
-                          <strong>{mistakeCauseLabel(cause.type)}</strong>
-                          <select
-                            aria-label={`${mistakeCauseLabel(cause.type)} 심각도`}
-                            value={cause.severity}
-                            onChange={(event) =>
-                              updateMistakeCause(cause.type, {
-                                severity: event.target.value as typeof cause.severity,
-                              })
-                            }
-                          >
-                            <option value="low">낮음</option>
-                            <option value="medium">보통</option>
-                            <option value="high">높음</option>
-                          </select>
-                          <input
-                            value={cause.note ?? ""}
-                            onChange={(event) =>
-                              updateMistakeCause(cause.type, { note: event.target.value })
-                            }
-                            placeholder="원인 메모"
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="form-field full">
-                      <label htmlFor="preventionNote">다음에 피할 방법</label>
-                      <textarea
-                        id="preventionNote"
-                        value={form.mistakeAnalysis?.preventionNote ?? ""}
-                        onChange={(event) =>
-                          setForm((current) => ({
-                            ...current,
-                            mistakeAnalysis: {
-                              ...(current.mistakeAnalysis ?? { causes: [] }),
-                              preventionNote: event.target.value,
-                              confidence: "user",
-                            },
-                          }))
-                        }
-                        placeholder="예: 조건에 밑줄 긋고, 단위 변환을 마지막에 한 번 더 확인"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
 
             <div className="form-field full">
               <label htmlFor="title">제목</label>
@@ -1173,6 +938,263 @@ export default function EntryForm({
                 />
               </div>
             ))}
+
+            <details className="entry-form-options">
+              <summary>부가 설정 <span>난이도 · 오답 분석 · 템플릿 · 복습 상태</span></summary>
+              <div className="entry-form-options-body">
+                <div className="form-row form-row--entry-meta">
+                  <div className="form-field">
+                    <label>난이도</label>
+                    <div className="difficulty-selector">
+                      {(
+                        [
+                          ["high", "상"],
+                          ["medium", "중"],
+                          ["low", "하"],
+                          ["none", "없음"],
+                        ] as const
+                      ).map(([value, label]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className={`difficulty-btn difficulty-btn--${value} ${
+                            (form.difficulty ?? "none") === value ? "active" : ""
+                          }`}
+                          onClick={() =>
+                            setForm((f) => ({
+                              ...f,
+                              difficulty: value,
+                              difficult: value === "high" || value === "medium",
+                              difficultyScore: difficultyScoreTouched
+                                ? f.difficultyScore
+                                : suggestedDifficultyScore(value),
+                            }))
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="form-field">
+                    <label htmlFor="difficulty-score">난이도 점수</label>
+                    <div className="difficulty-score-input">
+                      <input
+                        id="difficulty-score"
+                        type="range"
+                        min={1}
+                        max={100}
+                        value={form.difficultyScore ?? suggestedDifficultyScore(form.difficulty) ?? 1}
+                        onChange={(event) => {
+                          setDifficultyScoreTouched(true);
+                          setForm((f) => ({
+                            ...f,
+                            difficultyScore: normalizeDifficultyScore(event.target.value),
+                          }));
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={form.difficultyScore ?? ""}
+                        placeholder={`${suggestedDifficultyScore(form.difficulty) ?? ""}`}
+                        onChange={(event) => {
+                          setDifficultyScoreTouched(true);
+                          setForm((f) => ({
+                            ...f,
+                            difficultyScore: normalizeDifficultyScore(event.target.value),
+                          }));
+                        }}
+                        aria-label="난이도 점수 숫자 입력"
+                      />
+                      <button
+                        type="button"
+                        className="btn-secondary btn-sm"
+                        onClick={() => {
+                          setDifficultyScoreTouched(false);
+                          setForm((f) => ({ ...f, difficultyScore: undefined }));
+                        }}
+                      >
+                        자동
+                      </button>
+                    </div>
+                    <p className="form-hint">높을수록 어려움. 직접 입력하면 상/중/하 제안값보다 우선합니다.</p>
+                  </div>
+                </div>
+                <div className="form-row form-row--template">
+                  <div className="form-field">
+                    <label htmlFor="template">템플릿</label>
+                    <select
+                      id="template"
+                      defaultValue=""
+                      onChange={(event) => {
+                        applyTemplate(event.target.value);
+                        event.currentTarget.value = "";
+                      }}
+                    >
+                      <option value="">템플릿 선택</option>
+                      {templates.map((template) => (
+                        <option key={template.id} value={template.id}>
+                          {template.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-field form-field--button">
+                    <label aria-hidden="true">&nbsp;</label>
+                    <button type="button" className="btn-secondary" onClick={saveCurrentTemplate}>
+                      현재 내용 템플릿 저장
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-field checkbox-field">
+                    <label>
+                      <input
+                        type="checkbox"
+                        checked={form.mastered}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, mastered: e.target.checked }))
+                        }
+                      />
+                      복습 완료
+                    </label>
+                  </div>
+                </div>
+
+                {form.entryKind !== "concept" && (
+                  <div className="mistake-analysis-editor">
+                    <div className="explanation-parts-header">
+                      <h3 className="form-section-title">오답 원인</h3>
+                    </div>
+                    <p className="form-hint">
+                      왜 틀렸는지를 구조화해 두면 약점 분석과 복습 방식 추천에 사용됩니다.
+                    </p>
+                    <div className="mistake-cause-chips" aria-label="오답 원인 선택">
+                      {MISTAKE_CAUSE_OPTIONS.map((option) => {
+                        const active = (form.mistakeAnalysis?.causes ?? []).some(
+                          (cause) => cause.type === option.type,
+                        );
+                        return (
+                          <button
+                            key={option.type}
+                            type="button"
+                            className={`mistake-cause-chip ${active ? "active" : ""}`}
+                            onClick={() => toggleMistakeCause(option.type)}
+                          >
+                            {option.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {(form.mistakeAnalysis?.causes ?? []).length > 0 && (
+                      <>
+                        <div className="form-row form-row--2">
+                          <div className="form-field">
+                            <label htmlFor="primaryCause">대표 원인</label>
+                            <select
+                              id="primaryCause"
+                              value={form.mistakeAnalysis?.primaryCause ?? ""}
+                              onChange={(event) => {
+                                const primaryCause = event.target.value as MistakeCauseType;
+                                setForm((current) => ({
+                                  ...current,
+                                  mistakeAnalysis: {
+                                    ...(current.mistakeAnalysis ?? { causes: [] }),
+                                    primaryCause,
+                                    practiceMode: recommendedStrategyForCause(primaryCause),
+                                    confidence: "user",
+                                  },
+                                }));
+                              }}
+                            >
+                              {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
+                                <option key={cause.type} value={cause.type}>
+                                  {mistakeCauseLabel(cause.type)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-field">
+                            <label htmlFor="practiceMode">추천 훈련</label>
+                            <select
+                              id="practiceMode"
+                              value={form.mistakeAnalysis?.practiceMode ?? ""}
+                              onChange={(event) =>
+                                setForm((current) => ({
+                                  ...current,
+                                  mistakeAnalysis: {
+                                    ...(current.mistakeAnalysis ?? { causes: [] }),
+                                    practiceMode: event.target.value
+                                      ? (event.target.value as ReviewStrategy)
+                                      : undefined,
+                                    confidence: "user",
+                                  },
+                                }))
+                              }
+                            >
+                              <option value="">자동 추천</option>
+                              {Object.entries(PRACTICE_MODE_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="mistake-cause-detail-list">
+                          {(form.mistakeAnalysis?.causes ?? []).map((cause) => (
+                            <div key={cause.type} className="mistake-cause-detail">
+                              <strong>{mistakeCauseLabel(cause.type)}</strong>
+                              <select
+                                aria-label={`${mistakeCauseLabel(cause.type)} 심각도`}
+                                value={cause.severity}
+                                onChange={(event) =>
+                                  updateMistakeCause(cause.type, {
+                                    severity: event.target.value as typeof cause.severity,
+                                  })
+                                }
+                              >
+                                <option value="low">낮음</option>
+                                <option value="medium">보통</option>
+                                <option value="high">높음</option>
+                              </select>
+                              <input
+                                value={cause.note ?? ""}
+                                onChange={(event) =>
+                                  updateMistakeCause(cause.type, { note: event.target.value })
+                                }
+                                placeholder="원인 메모"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="form-field full">
+                          <label htmlFor="preventionNote">다음에 피할 방법</label>
+                          <textarea
+                            id="preventionNote"
+                            value={form.mistakeAnalysis?.preventionNote ?? ""}
+                            onChange={(event) =>
+                              setForm((current) => ({
+                                ...current,
+                                mistakeAnalysis: {
+                                  ...(current.mistakeAnalysis ?? { causes: [] }),
+                                  preventionNote: event.target.value,
+                                  confidence: "user",
+                                },
+                              }))
+                            }
+                            placeholder="예: 조건에 밑줄 긋고, 단위 변환을 마지막에 한 번 더 확인"
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </details>
 
             <div className="form-field full">
               <div className="form-label-row">
