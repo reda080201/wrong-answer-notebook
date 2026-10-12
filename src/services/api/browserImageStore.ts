@@ -48,6 +48,35 @@ async function writeImages(operation: (store: IDBObjectStore) => void, message: 
   }
 }
 
+async function migrateLegacyEntries(legacy: Record<string, string>) {
+  const values = new Map<string, string>();
+  const conflicts: string[] = [];
+  if (!Object.keys(legacy).length) return { values, conflicts };
+  await writeImages(store => {
+    for (const [key, value] of Object.entries(legacy)) {
+      // Read and conditional write share one transaction, including across tabs.
+      const request = store.get(key);
+      request.onsuccess = () => {
+        const current: unknown = request.result;
+        if (current !== undefined && current !== value) {
+          conflicts.push(key);
+          if (typeof current === "string") values.set(key, current);
+          return;
+        }
+        values.set(key, value);
+        if (current === undefined) {
+          try { store.put(value, key); }
+          catch { store.transaction.abort(); }
+        }
+      };
+    }
+  }, "기존 브라우저 이미지 이전에 실패했습니다.");
+  for (const [key, value] of Object.entries(legacy)) {
+    if (!conflicts.includes(key) && localStorage.getItem(key) === value) localStorage.removeItem(key);
+  }
+  return { values, conflicts };
+}
+
 async function migrateLegacyBrowserImagesUnlocked(): Promise<void> {
   if (!supportsIndexedDb()) return;
   const legacy = Object.fromEntries(
@@ -56,12 +85,9 @@ async function migrateLegacyBrowserImagesUnlocked(): Promise<void> {
       .map((key) => [key, localStorage.getItem(key)])
       .filter((entry): entry is [string, string] => typeof entry[1] === "string"),
   );
-  if (!Object.keys(legacy).length) return;
-  await writeImages(store => {
-    for (const [key, value] of Object.entries(legacy)) store.put(value, key);
-  }, "기존 브라우저 이미지 이전에 실패했습니다.");
-  for (const [key, value] of Object.entries(legacy)) {
-    if (localStorage.getItem(key) === value) localStorage.removeItem(key);
+  const { conflicts } = await migrateLegacyEntries(legacy);
+  if (conflicts.length) {
+    throw new Error(`기존 이미지와 현재 저장된 이미지가 충돌합니다 (${conflicts.join(", ")}). 두 원본을 보존했습니다. 백업·복원 전에 이미지 연결을 확인해 주세요.`);
   }
 }
 
@@ -100,8 +126,8 @@ export async function getBrowserImage(key: string): Promise<string | null> {
     if (current !== null) return current;
     const legacy = legacyValue(key);
     if (legacy !== null) {
-      await writeImages(store => { store.put(legacy, key); }, "기존 브라우저 이미지 이전에 실패했습니다.");
-      if (localStorage.getItem(key) === legacy) localStorage.removeItem(key);
+      const { values } = await migrateLegacyEntries({ [key]: legacy });
+      return values.get(key) ?? null;
     }
     return legacy;
   });
