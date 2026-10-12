@@ -1,3 +1,4 @@
+import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -41,6 +42,7 @@ import QuestionTheaterView from "../../../components/QuestionTheaterView";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
 import type { ChatGptSharePayload } from "../../../features/export/types";
+import { buildChatGptSharePayload } from "../../export/services/buildChatGptSharePayload";
 import type { GptSolutionPurpose } from "../../../features/export/components/ChatGptSharePanel";
 import ChatGptHelpLauncher from "../../../features/chatgpt/components/ChatGptHelpLauncher";
 import GptSolutionRoundtripModal from "../../../features/gpt-solution-roundtrip/components/GptSolutionRoundtripModal";
@@ -273,6 +275,8 @@ export default function EntryDetail({
     viewPreferences?.problemSheetDisplayMode ?? "questions",
   );
   const [originalStudyChoice, setOriginalStudyChoice] = useState<{ entryId: string; original: boolean } | null>(null);
+  const [originalImmersiveEntryId, setOriginalImmersiveEntryId] = useState<string | null>(null);
+  const originalImmersive = originalImmersiveEntryId === entry.id;
   const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
@@ -311,6 +315,7 @@ export default function EntryDetail({
     "highlight",
   );
   const consumedInitialTargetRef = useRef<number | null>(null);
+  const pendingSheetQuestionScrollRef = useRef<string | null>(null);
   const sheetSearchTriggerRef = useRef<HTMLButtonElement>(null);
   const sheetSearchInputRef = useRef<HTMLInputElement>(null);
 
@@ -322,6 +327,15 @@ export default function EntryDetail({
     if (key === "problemSheetDisplayMode") setProblemSheetDisplayMode(value as ProblemSheetDisplayMode);
     onViewPreferencesChange?.({ [key]: value } as Partial<ViewPreferences>);
   }, [onViewPreferencesChange]);
+
+  useEffect(() => {
+    if (!originalImmersive) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !event.defaultPrevented) setOriginalImmersiveEntryId(null);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [originalImmersive]);
 
   useEffect(() => {
     if (!viewPreferences) return;
@@ -366,6 +380,7 @@ export default function EntryDetail({
     () => (entry.structuredQuestions?.length ? getEntryQuestions(entry) : []),
     [entry],
   );
+  const originalStudyQuestions = useMemo(() => getEntryQuestions(entry), [entry]);
   const questionBlocks = useMemo(
     () => entry.structuredQuestions?.length
       ? resolvedSheetQuestions.map(resolvedQuestionToBlock)
@@ -376,6 +391,14 @@ export default function EntryDetail({
     () => questionBlocks.filter((block) => block.kind === "question"),
     [questionBlocks],
   );
+  useEffect(() => {
+    const questionStart = pendingSheetQuestionScrollRef.current;
+    if (!questionStart || detailViewMode !== "paper" || problemSheetDisplayMode !== "questions" || showOriginalStudy) return;
+    const target = document.getElementById(`sheet-question-${questionStart}`);
+    if (!target) return;
+    pendingSheetQuestionScrollRef.current = null;
+    requestAnimationFrame(() => target.scrollIntoView({ block: "start", behavior: "smooth" }));
+  }, [detailViewMode, focusedQuestionIndex, problemSheetDisplayMode, showOriginalStudy]);
   const focusedQuestion = questionAnchors[focusedQuestionIndex] as QuestionBlock | undefined;
   const questionIdentifier = useCallback((question?: QuestionBlock) => {
     if (!question) return null;
@@ -384,6 +407,16 @@ export default function EntryDetail({
     }
     return question.displayNumber ? String(question.displayNumber) : null;
   }, [entry.structuredQuestions?.length]);
+  const changeProblemSheetDisplayMode = (mode: ProblemSheetDisplayMode) => {
+    const current = questionAnchors[focusedQuestionIndex];
+    updateViewPreference("problemSheetDisplayMode", mode);
+    setOriginalStudyChoice({ entryId: entry.id, original: mode === "exam" && Boolean(entry.sourcePageImages?.length) });
+    if (mode === "questions" && current) {
+      pendingSheetQuestionScrollRef.current = entry.structuredQuestions?.length
+        ? `canonical-${normalizeQuestionNumber(String(current.numberLabel ?? current.displayNumber))}`
+        : String(current.start);
+    }
+  };
   const focusedPassage = (() => {
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
@@ -419,6 +452,7 @@ export default function EntryDetail({
   const hasMistakeAnalysis =
     (entry.mistakeAnalysis?.causes.length ?? 0) > 0 ||
     Boolean(entry.mistakeAnalysis?.preventionNote?.trim());
+  const originalReading = showOriginalStudy && Boolean(entry.sourcePageImages?.length) && !isFocusExpanded && !isConcept && !isLecture && detailViewMode === "paper";
   const showPaperSupplementSections = !isFocusExpanded && detailViewMode === "paper";
   const hasNextQuestion = isSheet && focusedQuestionIndex < questionAnchors.length - 1;
   const suspiciousSegments = useMemo(
@@ -947,27 +981,38 @@ export default function EntryDetail({
 
   const findQuestionTarget = (questionNumber: string) => {
     const normalized = normalizeQuestionNumber(questionNumber);
-    return questionAnchors.find(
+    const matches = questionAnchors.filter(
       (block) =>
         block.kind === "question" &&
         questionIdentifier(block) === normalized,
     );
+    return matches.length === 1 ? matches[0] : undefined;
   };
 
   const answerMatchesQuestion = (item: SheetAnswerItem, question: QuestionBlock) => {
     const normalized = normalizeQuestionNumber(item.questionNumber);
-    if (normalized === questionIdentifier(question)) return true;
+    if (normalized === questionIdentifier(question)) {
+      const sameNumberQuestions = questionAnchors.filter(block => questionIdentifier(block) === normalized);
+      const sameNumberAnswers = sheetAnswerKey.filter(answer => normalizeQuestionNumber(answer.questionNumber) === normalized);
+      return sameNumberQuestions.length === 1 && sameNumberQuestions[0] === question && sameNumberAnswers.length === 1 && sameNumberAnswers[0] === item;
+    }
     // Legacy OCR imports can retain a positional label alongside the printed
     // number. Preserve both aliases until they have structured canonical data.
-    return !entry.structuredQuestions?.length && (
-      normalized === normalizeQuestionNumber(String(question.numberLabel ?? "")) ||
-      normalized === normalizeQuestionNumber(String(question.displayNumber ?? ""))
-    );
+    if (entry.structuredQuestions?.length) return false;
+    const legacyAliases = new Set([
+      normalizeQuestionNumber(String(question.numberLabel ?? "")),
+      normalizeQuestionNumber(String(question.displayNumber ?? "")),
+    ].filter(Boolean));
+    if (!legacyAliases.has(normalized)) return false;
+    const sameAliasQuestions = questionAnchors.filter(block => legacyAliases.has(questionIdentifier(block) ?? "") || legacyAliases.has(normalizeQuestionNumber(String(block.numberLabel ?? ""))));
+    const sameAliasAnswers = sheetAnswerKey.filter(answer => normalizeQuestionNumber(answer.questionNumber) === normalized);
+    return sameAliasQuestions.length === 1 && sameAliasQuestions[0] === question && sameAliasAnswers.length === 1 && sameAliasAnswers[0] === item;
   };
 
-  const focusedAnswer = focusedQuestion
-    ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, focusedQuestion))
-    : undefined;
+  const focusedAnswerMatches = focusedQuestion
+    ? sheetAnswerKey.filter((item) => answerMatchesQuestion(item, focusedQuestion))
+    : [];
+  const focusedAnswer = focusedAnswerMatches.length === 1 ? focusedAnswerMatches[0] : undefined;
   const theaterQuestion = theaterQuestionIndex !== null
     ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
     : undefined;
@@ -981,9 +1026,10 @@ export default function EntryDetail({
     }
     return undefined;
   })();
-  const theaterAnswer = theaterQuestion
-    ? sheetAnswerKey.find((item) => answerMatchesQuestion(item, theaterQuestion))
-    : undefined;
+  const theaterAnswerMatches = theaterQuestion
+    ? sheetAnswerKey.filter((item) => answerMatchesQuestion(item, theaterQuestion))
+    : [];
+  const theaterAnswer = theaterAnswerMatches.length === 1 ? theaterAnswerMatches[0] : undefined;
   const theaterQuestionMeta = theaterQuestion
     ? getQuestionMetaForBlock(entry, theaterQuestion)
     : undefined;
@@ -991,6 +1037,7 @@ export default function EntryDetail({
     ? `${focusedQuestion.body} ${focusedQuestion.choices.map((choice) => choice.text).join(" ")}`.trim().length < 360
     : entry.question.trim().length < 360;
   const focusedFigureImageFilenames = focusedQuestion
+    && questionAnchors.filter(block => questionIdentifier(block) === questionIdentifier(focusedQuestion)).length === 1
     ? (entry.figures ?? [])
       .filter((figure) => {
         const normalized = normalizeQuestionNumber(figure.questionNumber);
@@ -1278,7 +1325,7 @@ export default function EntryDetail({
       workspace: { detailViewMode, focusMode, selectionMode },
     }}>
     <div
-      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""}`}
+      className={`detail-panel detail-panel--review detail-panel--sheet-${sheetLayout} detail-panel--focus-${focusMode} detail-panel--focus-text-${focusTextSize} ${isFocusExpanded ? "detail-panel--zoom" : ""} ${memoMode ? "detail-panel--memo" : ""} ${isFocusable ? "detail-panel--study-controls" : ""} ${studyControlCompact ? "detail-panel--control-compact" : ""} ${originalReading ? "detail-panel--original-reading" : ""} ${originalImmersive && originalReading ? "detail-panel--original-immersive" : ""}`}
     >
       {!isFocusExpanded && (
       <ProblemSheetHeader>
@@ -1290,8 +1337,8 @@ export default function EntryDetail({
               {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
               {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
-                <button type="button" className={problemSheetDisplayMode === "questions" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "questions"} onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}>문항별</button>
-                <button type="button" className={problemSheetDisplayMode === "exam" ? "active" : ""} aria-pressed={problemSheetDisplayMode === "exam"} onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}>시험지</button>
+                <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""} aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"} onClick={() => changeProblemSheetDisplayMode("questions")}>문항별</button>
+                <button type="button" data-testid="problem-sheet-display-exam" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
               </div>
               <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
                 const next = !value;
@@ -1368,23 +1415,24 @@ export default function EntryDetail({
               })}
             </nav>
           )}
-          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && (
             <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
               <button
                 type="button"
-                className={problemSheetDisplayMode === "questions" ? "active" : ""}
-                aria-pressed={problemSheetDisplayMode === "questions"}
-                onClick={() => updateViewPreference("problemSheetDisplayMode", "questions")}
+                className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""}
+                aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"}
+                onClick={() => changeProblemSheetDisplayMode("questions")}
               >
                 문항별
               </button>
               <button
                 type="button"
-                className={problemSheetDisplayMode === "exam" ? "active" : ""}
-                aria-pressed={problemSheetDisplayMode === "exam"}
-                onClick={() => updateViewPreference("problemSheetDisplayMode", "exam")}
+                data-testid="problem-sheet-display-exam"
+                className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""}
+                aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"}
+                onClick={() => changeProblemSheetDisplayMode("exam")}
               >
-                시험지
+                {entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}
               </button>
             </div>
           )}
@@ -1547,7 +1595,7 @@ export default function EntryDetail({
       )}
 
       <div className="detail-scroll" ref={detailScrollRef}>
-        <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
+        {(!originalReading || titleEditing) && <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
               <input
@@ -1617,7 +1665,7 @@ export default function EntryDetail({
             ))}
           </div>
           <span className="detail-date">{formatDate(entry.updatedAt)}</span>
-        </header>
+        </header>}
 
         <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
@@ -1630,7 +1678,7 @@ export default function EntryDetail({
               onStartReview={() => onStartReview?.(entry)}
             />
           )}
-          <h3 className="section-heading">
+          {!originalReading && <h3 className="section-heading">
             {isFocusExpanded
               ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
               : isConcept
@@ -1644,8 +1692,8 @@ export default function EntryDetail({
                   : detailViewMode === "analysis"
                     ? "학습 분석"
                     : isSheet ? "교재형 문제지" : "문제지"}
-          </h3>
-          {isSheet && !isFocusExpanded && detailViewMode === "paper" && (
+          </h3>}
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && (
             <div className="sheet-reading-tools">
               <div className="sheet-selection-tools">
                 {selectionMode && (
@@ -1725,8 +1773,14 @@ export default function EntryDetail({
               />
             ) : (
               <>
-                {Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
-                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
+                {!isSheet && Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
+                {isSheet && problemSheetDisplayMode === "exam" && !entry.sourcePageImages?.length && <p role="status">원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다. 원본 배치로 넘겨 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
+                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} onToggleImmersive={() => setOriginalImmersiveEntryId(value => value === entry.id ? null : entry.id)} immersive={originalImmersive}
+                  currentQuestionKey={originalStudyQuestions[focusedQuestionIndex] ? solutionQuestionKey(originalStudyQuestions[focusedQuestionIndex]) : undefined}
+                  onCurrentQuestionChange={key => {
+                    const matches = originalStudyQuestions.flatMap((question, index) => solutionQuestionKey(question) === key ? [index] : []);
+                    if (matches.length === 1) setFocusedQuestionIndex(matches[0]);
+                  }} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={entry}
                     memoMode={memoMode}
@@ -1758,7 +1812,7 @@ export default function EntryDetail({
                     }}
                   />
                 </StudyZoomViewport>}
-                <CollapsibleSection title="학습 내용" defaultOpen={false}>
+                {!originalReading && <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
                     entry={entry}
                     onWikiLinkClick={onWikiLinkClick}
@@ -1768,7 +1822,7 @@ export default function EntryDetail({
                     onAutoCreateLecture={handleAutoCreateLecture}
                     onEditLecture={onEdit}
                   />
-                </CollapsibleSection>
+                </CollapsibleSection>}
               </>
             )
           ) : isSheet && isFocusExpanded ? (
@@ -1930,7 +1984,7 @@ export default function EntryDetail({
         </section>
         </QuestionWorkspace>
 
-        <SecondaryStudyViews>
+        {!originalReading && <SecondaryStudyViews>
 
         {showPaperSupplementSections && <EntryImportAuditSection entry={entry} onOpenReview={() => handleStudyModeChange("analysis")} />}
 
@@ -2132,7 +2186,7 @@ export default function EntryDetail({
             onOpenEntry={onOpenEntry}
           />
         )}
-        </SecondaryStudyViews>
+        </SecondaryStudyViews>}
       </div>
       <ScrollToTopButton containerRef={detailScrollRef} className="scroll-to-top-button--detail" />
       <ReviewExportDialogs>
@@ -2201,6 +2255,7 @@ export default function EntryDetail({
       )}
       {isFocusable && (
         <EntryDetailStudyControls
+          questionLabel={isSheet && detailViewMode === "paper" ? questionIdentifier(focusedQuestion) ?? undefined : undefined}
           isSheet={isSheet}
           isConcept={isConcept}
           questionIndex={focusedQuestionIndex}
@@ -2226,7 +2281,7 @@ export default function EntryDetail({
           onToggleAnswers={() => setHideAnswers((value) => !value)}
           onReview={(result) => void handleReviewResult(
             result,
-            isSheet && focusMode !== "closed" ? focusedQuestion : undefined,
+            isSheet && (focusMode !== "closed" || originalReading) ? focusedQuestion : undefined,
           )}
           onToggleDifficult={handleToggleDifficultWithToast}
           onModeChange={handleStudyModeChange}
@@ -2245,7 +2300,14 @@ export default function EntryDetail({
       {chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (theaterQuestion || focusedQuestion) && (() => {
         const currentQuestion = theaterQuestion ?? focusedQuestion;
         if (!currentQuestion) return null;
-        const number = questionIdentifier(currentQuestion) ?? String(currentQuestion.displayNumber);
+        const number = normalizeQuestionNumber(String(currentQuestion.numberLabel ?? currentQuestion.displayNumber));
+        const matchingQuestions = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+        const sharePayload = buildChatGptSharePayload({
+          entry, questionNumbers: [number], scope: "current",
+          preferences: { shareQuestionText: true, shareChoices: true, shareQuestionImages: false, shareSourcePageImages: false, shareUserResponse: true, shareScratchNote: true, shareExistingAnswersAndExplanations: true },
+        });
+        if (matchingQuestions.length === 1) sharePayload.questions[0].questionText ??= currentQuestion.body;
+        sharePayload.questions[0].scratchNote = entry.memo;
         return <ChatGptHelpLauncher
           open={gptQuestionOpen}
           onOpenChange={setGptQuestionOpen}
@@ -2253,7 +2315,9 @@ export default function EntryDetail({
           mode="detail"
           preferences={chatGptPreferences}
           onPreferencesChange={onChatGptPreferencesChange}
-          onSyncContext={(sharing) => onSyncExportContext({
+          onSyncContext={async (sharing) => {
+            if (matchingQuestions.length !== 1) throw new Error("같은 번호의 문항 연결이 모호합니다. 문항 연결을 확인한 뒤 동기화하세요.");
+            await onSyncExportContext({
             scope: "current",
             questionNumbers: [number],
             submitted: false,
@@ -2264,13 +2328,16 @@ export default function EntryDetail({
               shareSourcePageImages: sharing.shareSourcePageImages,
               shareUserResponse: sharing.shareUserResponse,
               shareScratchNote: sharing.shareScratchNote,
-              shareExistingAnswersAndExplanations: false,
+              shareExistingAnswersAndExplanations: sharing.shareExistingAnswersAndExplanations,
             },
-          })}
+            });
+          }}
           onCheckLocalMcp={onCheckLocalMcp}
           remoteMcpConfigured={remoteMcpConfigured}
           onOpenSettings={onOpenChatGptSettings}
           questionContext={{
+            contextId: entry.id + ":" + currentQuestion.start + ":" + currentQuestion.displayNumber,
+            sharePayload,
             questionNumber: number,
             body: currentQuestion.body,
             choices: currentQuestion.choices.map((choice) => `${choice.marker} ${choice.text}`),
@@ -2281,6 +2348,7 @@ export default function EntryDetail({
 
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
+          key={`${entry.id}:${examSession?.id ?? "detail"}:${theaterQuestion ? questionIdentifier(theaterQuestion) : questionIdentifier(focusedQuestion) ?? "none"}:${selectedQuestionNumbers.join(",")}`}
           entry={entry}
           allEntries={allEntries}
           examSession={examSession}

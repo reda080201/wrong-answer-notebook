@@ -1375,9 +1375,9 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
             sess.get("questions")
                 .and_then(Value::as_array)
                 .and_then(|items| {
-                    items
+                    let matches: Vec<_> = items
                         .iter()
-                        .find(|item| {
+                        .filter(|item| {
                             item.get("questionNumber")
                                 .and_then(Value::as_str)
                                 .is_some_and(|value| {
@@ -1385,7 +1385,8 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
                                         == normalize_question_number(number)
                                 })
                         })
-                        .cloned()
+                        .collect();
+                    (matches.len() == 1).then(|| matches[0].clone())
                 })
         });
         let mut item = if entry.entry_kind == "wrong_answer" {
@@ -1400,20 +1401,15 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
             json!({"entryId":entry.id,"questionNumber":number,"question":Value::Null,"choices":[]})
         };
         if let Some(sess) = session.as_ref() {
-            if let Some(q) = sess
-                .get("questions")
-                .and_then(Value::as_array)
-                .and_then(|items| {
-                    items.iter().find(|item| {
-                        item.get("questionNumber")
-                            .and_then(Value::as_str)
-                            .is_some_and(|value| {
-                                normalize_question_number(value)
-                                    == normalize_question_number(number)
-                            })
-                    })
-                })
-            {
+            if let Some(q) = session_question.as_ref() {
+                if submitted {
+                    if let Some(question) = q.get("question") {
+                        item["question"] = question.clone();
+                    }
+                    if let Some(choices) = q.get("choices") {
+                        item["choices"] = choices.clone();
+                    }
+                }
                 if let Some(passage) = q.get("passage") {
                     item["passage"] = passage.clone();
                 }
@@ -1449,19 +1445,67 @@ fn export_context_payload(state: &BridgeHttpState, args: &Value) -> Result<Value
                 }
             }
         }
-        if share_existing_answers {
-            if let Some(question) = state
-                .store
-                .get_question(entry_id, number)
-                .map_err(store_error)?
+        if session.is_none() {
+            if share_note {
+                item["scratchNote"] = json!(entry.memo);
+            }
+            if share_user
+                && entry.entry_kind == "wrong_answer"
+                && crate::notebook_store::parse_question_blocks(&entry.question).len() == 1
             {
-                if let Some(answer_key) = question.answer_key {
-                    if let Some(answer) = answer_key.get("answer") {
+                item["userResponse"] = json!(entry.my_answer);
+            }
+        }
+        if share_existing_answers {
+            if submitted {
+                if let Some(question) = session_question.as_ref() {
+                    let solution = question.get("solutionAnswer");
+                    if let Some(answer) = solution
+                        .and_then(|value| value.get("answer"))
+                        .or_else(|| question.get("correctAnswer"))
+                    {
                         item["answer"] = answer.clone();
                     }
-                    if let Some(explanation) = answer_key.get("explanation") {
+                    if let Some(explanation) = solution
+                        .and_then(|value| value.get("explanation"))
+                        .or_else(|| question.get("explanation"))
+                    {
                         item["explanation"] = explanation.clone();
                     }
+                }
+            } else {
+                let answers: Vec<_> = entry
+                    .answer_key
+                    .iter()
+                    .filter(|answer| {
+                        answer
+                            .get("questionNumber")
+                            .and_then(Value::as_str)
+                            .is_some_and(|value| {
+                                normalize_question_number(value)
+                                    == normalize_question_number(number)
+                            })
+                    })
+                    .collect();
+                if answers.len() == 1 {
+                    if let Some(answer) = answers[0].get("answer") {
+                        item["answer"] = answer.clone();
+                    }
+                    if let Some(explanation) = answers[0].get("explanation") {
+                        item["explanation"] = explanation.clone();
+                    }
+                } else if answers.is_empty()
+                    && entry.entry_kind == "wrong_answer"
+                    && crate::notebook_store::parse_question_blocks(&entry.question).len() == 1
+                {
+                    item["answer"] = json!(entry.correct_answer);
+                    item["explanation"] = json!(entry
+                        .explanation_parts
+                        .iter()
+                        .map(|part| part.text.as_str())
+                        .filter(|text| !text.is_empty())
+                        .collect::<Vec<_>>()
+                        .join("\n"));
                 }
             }
         }
@@ -1893,6 +1937,70 @@ mod tests {
         assert_eq!(disclosed_question["answer"], "1");
         assert_eq!(disclosed_question["explanation"], "해설");
         assert_eq!(disclosed["answerProtection"], "released");
+    }
+
+    #[test]
+    fn export_context_preserves_single_wrong_answer_and_rejects_duplicate_answer_links() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        let mut entry = sample_entry();
+        entry.entry_kind = "wrong_answer".into();
+        entry.question = "1. 단일 오답".into();
+        entry.answer_key.clear();
+        entry.correct_answer = "기존 정답".into();
+        entry.my_answer = "내 응답".into();
+        entry.memo = "풀이 메모".into();
+        entry.explanation_parts = vec![crate::ExplanationPart {
+            id: "explanation".into(),
+            text: "기존 해설".into(),
+            images: vec![],
+        }];
+        store.save_entries(&[entry.clone()]).unwrap();
+        let state = test_bridge_http_state(store.clone(), dir.path().to_path_buf());
+        for allowed in [true, false] {
+            fs::write(dir.path().join("active-export-context.json"), serde_json::to_vec(&json!({"entryId":"sheet-1","processSessionId":"test-process","questionNumbers":["1"],"shareOptions":{"shareExistingAnswersAndExplanations":allowed,"shareUserResponse":allowed,"shareScratchNote":allowed}})).unwrap()).unwrap();
+            let payload = export_context_payload(&state, &json!({})).unwrap();
+            if allowed {
+                assert_eq!(payload["questions"][0]["answer"], "기존 정답");
+                assert_eq!(payload["questions"][0]["explanation"], "기존 해설");
+                assert_eq!(payload["questions"][0]["userResponse"], "내 응답");
+                assert_eq!(payload["questions"][0]["scratchNote"], "풀이 메모");
+            } else {
+                assert!(payload["questions"][0].get("answer").is_none());
+                assert!(payload["questions"][0].get("explanation").is_none());
+                assert!(payload["questions"][0].get("userResponse").is_none());
+                assert!(payload["questions"][0].get("scratchNote").is_none());
+            }
+        }
+        entry.answer_key = vec![
+            json!({"questionNumber":"1","answer":"A"}),
+            json!({"questionNumber":"01번","answer":"B"}),
+        ];
+        store.save_entries(&[entry]).unwrap();
+        fs::write(dir.path().join("active-export-context.json"), serde_json::to_vec(&json!({"entryId":"sheet-1","processSessionId":"test-process","questionNumbers":["1"],"shareOptions":{"shareExistingAnswersAndExplanations":true}})).unwrap()).unwrap();
+        assert!(
+            export_context_payload(&state, &json!({})).unwrap()["questions"][0]
+                .get("answer")
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn export_context_uses_the_submitted_snapshot_for_disclosed_answers() {
+        let dir = tempdir().unwrap();
+        let images = dir.path().join("images");
+        fs::create_dir_all(&images).unwrap();
+        let store = Arc::new(NotebookStore::new(dir.path().join("entries.json"), images));
+        store.save_entries(&[sample_entry()]).unwrap();
+        let state = test_bridge_http_state(store, dir.path().to_path_buf());
+        fs::write(dir.path().join("exam-sessions.json"), serde_json::to_vec(&json!([{"id":"submitted-session","questions":[{"questionNumber":"1","question":"저장 당시 본문","choices":["저장 선택지"],"correctAnswer":"저장 정답","explanation":"저장 해설"}]}])).unwrap()).unwrap();
+        fs::write(dir.path().join("active-export-context.json"), serde_json::to_vec(&json!({"entryId":"sheet-1","processSessionId":"test-process","questionNumbers":["1"],"sessionId":"submitted-session","submitted":true,"shareOptions":{"shareExistingAnswersAndExplanations":true}})).unwrap()).unwrap();
+        let payload = export_context_payload(&state, &json!({})).unwrap();
+        assert_eq!(payload["questions"][0]["question"], "저장 당시 본문");
+        assert_eq!(payload["questions"][0]["answer"], "저장 정답");
+        assert_eq!(payload["questions"][0]["explanation"], "저장 해설");
     }
 
     #[test]

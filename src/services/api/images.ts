@@ -7,6 +7,7 @@ import { errorMessage } from "./shared";
 import { getStorageBackendKind, proxyRequest } from "../storageBackend";
 import { deleteBrowserImage, getBrowserImage, putBrowserImage } from "./browserImageStore";
 import { getBrowserProtectedImageReferences, loadBrowserEntriesForImageReferences } from "./browserImageReferences";
+import { validateImportImage } from "../../features/import/services/validateImportImage";
 
 export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
@@ -38,16 +39,6 @@ export function createBrowserImageKey(filename: string): string {
   return `img_${uuidv4()}_${filename}`;
 }
 
-async function validateImageHeader(file: File, extension: string): Promise<void> {
-  const bytes = new Uint8Array((await file.arrayBuffer()).slice(0, 12));
-  const png = bytes.length >= 8 && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((value, index) => bytes[index] === value);
-  const jpeg = bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-  const webp = bytes.length >= 12 && String.fromCharCode(...bytes.slice(0, 4)) === "RIFF" && String.fromCharCode(...bytes.slice(8, 12)) === "WEBP";
-  if ((extension === "png" && !png) || (extension.startsWith("jp") && !jpeg) || (extension === "webp" && !webp)) {
-    throw new Error(`${file.name}의 이미지 형식 또는 magic header를 확인할 수 없습니다.`);
-  }
-}
-
 export async function saveImageFiles(files: FileList | File[]): Promise<string[]> {
   const names: string[] = [];
   try {
@@ -59,7 +50,7 @@ export async function saveImageFiles(files: FileList | File[]): Promise<string[]
       if (file.size > MAX_IMPORT_IMAGE_BYTES) {
         throw new Error(`${file.name} 파일이 너무 큽니다. 이미지는 파일당 25MB 이하만 저장할 수 있습니다.`);
       }
-      await validateImageHeader(file, extension);
+      await validateImportImage(file);
       const backendKind = getStorageBackendKind();
       if (backendKind === "tauri") {
         const bytes = new Uint8Array(await file.arrayBuffer());
@@ -227,14 +218,17 @@ export async function deleteImage(filename: string, options: { excludePendingDel
       return;
     }
     if (getStorageBackendKind() === "desktop-proxy") {
-      await proxyRequest(`/v1/images/${encodeURIComponent(filename)}`, { method: "DELETE" });
+      await proxyRequest(`/v1/images/${encodeURIComponent(filename)}`, {
+        method: "DELETE",
+        ...(options.excludePendingDeletionIds?.length ? { body: JSON.stringify({ excludePendingDeletionIds: options.excludePendingDeletionIds }) } : {}),
+      });
       clearImageUrlCache(filename);
       return;
     }
     if (!isTauri()) {
       return;
     }
-    await invoke("delete_image", { filename });
+    await invoke("delete_image", { filename, ...(options.excludePendingDeletionIds?.length ? { excludePendingDeletionIds: options.excludePendingDeletionIds } : {}) });
     clearImageUrlCache(filename);
   } catch (error) {
     throw new Error(errorMessage(error, "이미지를 삭제하지 못했습니다."), {

@@ -968,9 +968,9 @@ function AppContent() {
                 {!selected && <><br />새 {entryKindName(activeSection)}{activeSection === "wrong_answer" || activeSection === "concept" ? "을" : "를"} 추가하세요.</>}
               </p>
               {!selected && (activeSection === "problem_sheet" ? (
-                <button type="button" className="btn-primary" onClick={() => actions.openImport()}>첫 시험지 가져오기</button>
+                <button type="button" className="btn-primary" onClick={() => actions.openImport()}>{hasActiveSectionEntries ? "새 시험지 가져오기" : "첫 시험지 가져오기"}</button>
               ) : activeSection === "lecture" ? (
-                <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>첫 특강 가져오기</button>
+                <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>{hasActiveSectionEntries ? "새 특강 가져오기" : "첫 특강 가져오기"}</button>
               ) : activeSection === "concept" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openNew()}>{hasActiveSectionEntries ? "새 개념 만들기" : "첫 개념 만들기"}</button>
               ) : (

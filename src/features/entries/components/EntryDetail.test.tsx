@@ -67,6 +67,34 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("copies and syncs the focused source question's official answer only after consent", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const sync = vi.fn().mockResolvedValue(undefined);
+    render(<EntryDetail
+      entry={{ ...sheetEntry, question: "31. 원문 서른한 번째 문항\n① 하나\n② 둘\n99. 다른 문항\n① 다른 보기",
+        answerKey: [{ id: "answer-31", questionNumber: "31", answer: "정답_31", explanation: "해설_31", importantPoints: [] }, { id: "answer-99", questionNumber: "99", answer: "정답_99", explanation: "해설_99", importantPoints: [] }] }}
+      onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()}
+      chatGptPreferences={DEFAULT_CHATGPT_MCP_PREFERENCES} onChatGptPreferencesChange={vi.fn()} onSyncExportContext={sync}
+    />);
+    openSecondaryAction("집중 보기");
+    fireEvent.click(screen.getByRole("button", { name: "하단 도구 열기" }));
+    const shareButton = screen.getByTestId("question-chatgpt-help");
+    expect(shareButton).toHaveTextContent("GPT 질문 · 1번");
+    fireEvent.click(shareButton);
+    const dialog = screen.getByRole("dialog", { name: "ChatGPT에서 도움받기" });
+    expect((within(dialog).getByRole("textbox", { name: "편집할 ChatGPT 프롬프트" }) as HTMLTextAreaElement).value).not.toContain("정답_31");
+    fireEvent.click(within(dialog).getByLabelText("정답·해설 공유"));
+    fireEvent.click(screen.getByRole("button", { name: "공유 허용" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "질문 복사" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledOnce());
+    expect(writeText.mock.calls[0][0]).toContain("해설_31");
+    expect(writeText.mock.calls[0][0]).not.toContain("해설_99");
+    expect(sync).not.toHaveBeenCalled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "MCP 동기화" }));
+    await waitFor(() => expect(sync).toHaveBeenCalledWith(expect.objectContaining({ questionNumbers: ["31"], shareOptions: expect.objectContaining({ shareExistingAnswersAndExplanations: true }) })));
+  });
+
   it("uses the compact problem-sheet action to call the existing exam callback", () => {
     const onStartExam = vi.fn();
     render(
@@ -147,16 +175,19 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "시험지" }));
+    const displayExam = screen.getByTestId("problem-sheet-display-exam");
+    expect(displayExam).toHaveTextContent("텍스트 시험지");
+    fireEvent.click(displayExam);
     expect(document.querySelector(".study-paper--exam")).toBeTruthy();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 보기" }));
-    expect(screen.getByRole("status")).toHaveTextContent("①");
+    expect(document.querySelector(".structured-problem-sheet-answer")).toHaveTextContent("①");
     expect(screen.getByRole("button", { name: "2번 정답 보기" })).toBeDisabled();
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 숨기기" }));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(document.querySelector(".structured-problem-sheet-answer")).not.toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
   });
 
   it("persists the selected two-column sheet layout", () => {
@@ -808,10 +839,17 @@ describe("EntryDetail sheet layout", () => {
     );
 
     openSecondaryAction("집중 보기");
-    expect(screen.getByText("x + 1 = 2를 풀어라.")).toBeInTheDocument();
+    const focusedQuestion = document.querySelector(".wrong-focus-question");
+    expect(focusedQuestion).toBeInTheDocument();
+    const formula = focusedQuestion?.querySelector('[aria-label="수식"]');
+    const prose = focusedQuestion?.querySelector(".math-prose");
+    expect(formula).toBeInTheDocument();
+    expect(prose).toHaveTextContent("를 풀어라.");
+    expect(Boolean(formula && prose && (formula.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 
     fireEvent.click(screen.getByRole("button", { name: "정답" }));
-    expect(screen.getByText("x = 1")).toBeInTheDocument();
+    const answerFormula = document.querySelector('.answer-card--correct annotation[encoding="application/x-tex"]');
+    expect(answerFormula?.textContent).toBe("x = 1");
 
     fireEvent.click(screen.getByRole("button", { name: "해설" }));
     expect(screen.getByText("양변에서 1을 뺀다.")).toBeInTheDocument();

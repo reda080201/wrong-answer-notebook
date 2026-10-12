@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { validPngBytes } from "./test/fixtures/validPng";
 
 vi.mock("@tauri-apps/api/core", () => ({
   isTauri: vi.fn(() => false),
@@ -79,7 +80,14 @@ describe("builtInPromptTemplates", () => {
 });
 
 describe("image file security limits", () => {
+  beforeEach(() => {
+    vi.stubGlobal("createImageBitmap", vi.fn(async (file: File) => {
+      if (file.size < validPngBytes.length) throw new Error("corrupt image");
+      return { width: 1, height: 1, close: vi.fn() };
+    }));
+  });
   afterEach(() => {
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     mockedIsTauri.mockReturnValue(false);
     localStorage.clear();
@@ -100,7 +108,7 @@ describe("image file security limits", () => {
   });
 
   it("stores browser image files in localStorage", async () => {
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bytes = validPngBytes;
     const file = new File([bytes], "tiny.png", { type: "image/png" });
 
     const names = await saveImageFiles([file]);
@@ -114,7 +122,7 @@ describe("image file security limits", () => {
   it("invokes save_image_bytes with arrayBuffer bytes in Tauri mode", async () => {
     mockedIsTauri.mockReturnValue(true);
     mockedInvoke.mockResolvedValue("stored-graph.png");
-    const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    const bytes = validPngBytes;
     const file = new File([bytes], "graph.png", { type: "image/png" });
 
     const names = await saveImageFiles([file]);
@@ -159,8 +167,26 @@ describe("image file security limits", () => {
   });
 
   it("accepts a supported image with an empty MIME type", async () => {
-    const file = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "empty-type.png", { type: "" });
+    const file = new File([validPngBytes], "empty-type.png", { type: "" });
     await expect(saveImageFiles([file])).resolves.toHaveLength(1);
+  });
+
+  it.each([false, true])("rejects header-only images before writing (Tauri %s)", async tauri => {
+    mockedIsTauri.mockReturnValue(tauri);
+    await expect(saveImageFiles([new File([validPngBytes.slice(0, 8)], "bad.png", { type: "image/png" })])).rejects.toThrow("디코딩");
+    expect(localStorage.length).toBe(0);
+    expect(mockedInvoke).not.toHaveBeenCalled();
+  });
+  it("rejects decode failures, zero dimensions and extension mismatches", async () => {
+    const file = new File([validPngBytes], "valid.png");
+    vi.stubGlobal("createImageBitmap", vi.fn().mockRejectedValue(new Error("damaged")));
+    await expect(saveImageFiles([file])).rejects.toThrow("디코딩");
+    const close = vi.fn();
+    vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue({ width: 0, height: 1, close }));
+    await expect(saveImageFiles([file])).rejects.toThrow("디코딩");
+    expect(close).toHaveBeenCalledOnce();
+    await expect(saveImageFiles([new File([validPngBytes], "bad.jpg")])).rejects.toThrow("확장자");
+    expect(localStorage.length).toBe(0);
   });
 
   it("uses stored entries, including source pages and learning blocks, for browser orphan cleanup", async () => {
@@ -212,6 +238,14 @@ describe("image file security limits", () => {
 
     await expect(deleteImage("img_exam.png")).rejects.toThrow("이미지 참조");
     expect(localStorage.getItem("img_exam.png")).toBe("data:image/png;base64,exam");
+  });
+  it("stops deletion and orphan cleanup for parseable malformed references", async () => {
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    localStorage.setItem(EXAM_SESSIONS_STORAGE_KEY, JSON.stringify({ broken: "lost array" }));
+    localStorage.setItem("img_exam.png", "data:image/png;base64,exam");
+    await expect(deleteImage("img_exam.png")).rejects.toThrow("이미지 참조");
+    await expect(cleanupOrphanImages()).rejects.toThrow("이미지 참조");
+    expect(localStorage.getItem("img_exam.png")).toBeTruthy();
   });
 });
 

@@ -23,6 +23,7 @@ export default function HotspotLinkEditor({ pages, loadPageUrl, questions, hotsp
   const url = imageState.page === page ? imageState.url : "";
   const imageError = imageState.page === page ? imageState.error : "";
   const [candidates, setCandidates] = useState<HotspotCandidate[]>(() => initialCandidates ?? hotspots.map(hotspot => ({ ...hotspot, confirmed: true })));
+  const [previewZoom, setPreviewZoom] = useState(1);
   const [selected, setSelected] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -69,14 +70,15 @@ export default function HotspotLinkEditor({ pages, loadPageUrl, questions, hotsp
     } catch (cause) { setError(cause instanceof Error ? cause.message : "연결을 저장하지 못했습니다."); }
     finally { busyRef.current = false; setBusy(false); }
   };
-  return <Dialog open onClose={onClose} title="파란 점과 정답·해설 연결" size="xl" closeDisabled={busy} busy={busy}>
+  return <Dialog open onClose={onClose} title="파란 점과 정답·해설 연결" size="xl" className="solution-link-dialog" bodyClassName="solution-link-dialog__body" scrollMode="custom" closeDisabled={busy} busy={busy} footer={<><button type="button" onClick={onClose} disabled={busy}>취소</button><button type="button" className="btn-primary" onClick={() => void save()} disabled={busy}>{busy ? "저장 중…" : "확인한 연결 저장"}</button></>}>
     <div className="solution-link-editor">
       <p>파란 점을 찾은 뒤 문항을 선택하고 연결을 확인하세요. 페이지를 누르면 점을 추가하고, 점을 끌면 위치를 옮깁니다.</p>
-      <div className="solution-link-editor-toolbar"><label>원본 페이지 <select value={page} disabled={busy} onChange={event => { setError(null); setNotice(""); setPage(event.target.value); }}>{pages.map((filename, index) => <option value={filename} key={filename}>{index + 1}페이지</option>)}</select></label><button type="button" onClick={detect} disabled={busy || !url}>이 페이지 파란 점 찾기</button></div>
+      <div className="solution-link-editor-toolbar"><label>원본 페이지 <select value={page} disabled={busy} onChange={event => { setError(null); setNotice(""); setPreviewZoom(1); setPage(event.target.value); }}>{pages.map((filename, index) => <option value={filename} key={filename}>{index + 1}페이지</option>)}</select></label><button type="button" onClick={detect} disabled={busy || !url}>이 페이지 파란 점 찾기</button></div>
       {notice && <p role="status">{notice}</p>}{(error || imageError) && <p role="alert">{error || imageError}</p>}
       {!pages.length && <p>원본 페이지를 먼저 연결해 주세요.</p>}
       {uniqueQuestions.length < questions.length && <p role="alert">번호와 구분이 같은 문항은 연결할 수 없습니다. 문항 번호·구분을 먼저 수정해 주세요.</p>}
-      <div className="solution-link-editor-body"><div className="solution-link-editor-page"><div ref={stageRef} className="solution-hotspot-stage" onPointerDown={event => {
+      <div className="solution-link-editor-zoom" role="group" aria-label="연결 미리보기 확대 조절"><button type="button" disabled={busy || previewZoom <= .5} onClick={() => setPreviewZoom(value => Math.max(.5, value - .25))}>미리보기 축소</button><span>{Math.round(previewZoom * 100)}%</span><button type="button" disabled={busy || previewZoom >= 3} onClick={() => setPreviewZoom(value => Math.min(3, value + .25))}>미리보기 확대</button><button type="button" disabled={busy} onClick={() => setPreviewZoom(1)}>너비 맞춤</button></div>
+      <div className="solution-link-editor-body"><div className="solution-link-editor-page"><div ref={stageRef} className="solution-hotspot-stage" style={{ width: previewZoom * 100 + "%" }} onPointerDown={event => {
         if (busy || event.target !== imageRef.current || !imageRef.current?.naturalWidth) return;
         const position = atPointer(event); if (!position) return;
         const id = crypto.randomUUID(); change([...candidates, { id, sourcePageImage: page, questionKey: "", ...position, confirmed: false }]); setSelected(id);
@@ -87,7 +89,6 @@ export default function HotspotLinkEditor({ pages, loadPageUrl, questions, hotsp
         <label><input type="checkbox" checked={candidate.confirmed} disabled={busy || !candidate.questionKey} onChange={event => update(candidate.id, { confirmed: event.target.checked })} />이 위치와 문항의 연결 확인</label>
         <button type="button" disabled={busy} onClick={() => change(candidates.filter(item => item.id !== candidate.id))}>점 삭제</button>
       </div>)}</div></div>
-      <footer><button type="button" onClick={onClose} disabled={busy}>취소</button><button type="button" onClick={() => void save()} disabled={busy}>{busy ? "저장 중…" : "확인한 연결 저장"}</button></footer>
     </div>
   </Dialog>;
 }

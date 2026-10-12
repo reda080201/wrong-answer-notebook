@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Read;
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -74,15 +74,7 @@ pub(crate) fn read_staged_preview(
         .extension()
         .and_then(|value| value.to_str())
         .unwrap_or("");
-    crate::images::validate_image_header_bytes(&bytes, ext)?;
-    let image = image::ImageReader::new(Cursor::new(&bytes))
-        .with_guessed_format()
-        .map_err(|error| error.to_string())?
-        .decode()
-        .map_err(|error| format!("미리보기 이미지를 디코딩할 수 없습니다: {error}"))?;
-    if image.width() == 0 || image.height() == 0 {
-        return Err("빈 이미지를 표시할 수 없습니다.".into());
-    }
+    crate::images::validate_decoded_image(&bytes, ext)?;
     Ok(bytes)
 }
 

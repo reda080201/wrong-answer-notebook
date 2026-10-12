@@ -3,10 +3,11 @@ import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessi
 import { GENERATED_EXAMS_STORAGE_KEY } from "../../features/exam-builder/storage/generatedExamStorage";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
 import { getAllImageFilenames } from "../../utils/entry";
-import { readStorageJson } from "../storageJson";
-import { ENTRIES_STORAGE_KEY, isUnknownStorageValue, parseStoredEntries } from "./shared";
+import { ENTRIES_STORAGE_KEY, parseStoredEntries } from "./shared";
+import { assertImageReferenceStore } from "./imageReferenceValidation";
 
 const BROWSER_IMAGE_REFERENCE_KEYS = [
+  ENTRIES_STORAGE_KEY,
   EXAM_SESSIONS_STORAGE_KEY,
   GENERATED_EXAMS_STORAGE_KEY,
   GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY,
@@ -32,13 +33,18 @@ export function getBrowserProtectedImageReferences(
   const excluded = new Set(options.excludePendingDeletionIds ?? []);
   for (const key of BROWSER_IMAGE_REFERENCE_KEYS) {
     const stored = localStorage.getItem(key);
-    if (!stored) continue;
+    if (stored === null) continue;
     let value: unknown;
     try {
       value = JSON.parse(stored);
     } catch (cause) {
       throw new Error(`저장된 이미지 참조(${key})를 읽지 못했습니다.`, { cause });
     }
+    const kind = key === ENTRIES_STORAGE_KEY ? "entries" : key === EXAM_SESSIONS_STORAGE_KEY ? "exam"
+      : key === GENERATED_EXAMS_STORAGE_KEY ? "generated"
+        : key === GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY ? "gpt"
+          : key === "wrong-answer-import-workspace-draft" ? "workspace" : "pending";
+    assertImageReferenceStore(value, kind);
     if (key === "wrong-answer-pending-deletions" && Array.isArray(value)) {
       value = value.filter((record) => !record || typeof record !== "object" || !excluded.has(String((record as { id?: unknown }).id ?? "")));
     }
@@ -48,6 +54,11 @@ export function getBrowserProtectedImageReferences(
 }
 
 export function loadBrowserEntriesForImageReferences(): WrongAnswerEntry[] {
-  const stored = readStorageJson(localStorage, ENTRIES_STORAGE_KEY, isUnknownStorageValue);
-  return stored === null ? [] : parseStoredEntries(stored);
+  const raw = localStorage.getItem(ENTRIES_STORAGE_KEY);
+  if (raw === null) return [];
+  let stored: unknown;
+  try { stored = JSON.parse(raw); }
+  catch (cause) { throw new Error("저장된 항목의 이미지 참조를 읽지 못했습니다.", { cause }); }
+  assertImageReferenceStore(stored, "entries");
+  return parseStoredEntries(stored);
 }
