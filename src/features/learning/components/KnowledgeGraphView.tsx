@@ -1,4 +1,5 @@
-import { type ReactNode, useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { KnowledgeEntityUpdate } from "../../../hooks/useKnowledgeGraph";
 import { Link2, Plus, Unlink } from "lucide-react";
 import type { KnowledgeEntity, KnowledgeEntityType, KnowledgeGraphStore, KnowledgeRelationType } from "../../../types";
 import type { QuestionBankItem } from "../../question-bank/model/questionBankTypes";
@@ -15,7 +16,7 @@ interface KnowledgeGraphViewProps {
   onSaveQuestionLink(input: { id: string; entityId: string; entryId: string; questionNumber: string; relation: "tests"; provenance: "manual" }): Promise<void>;
   onRemoveRelation(id: string): Promise<void>;
   onRemoveQuestionLink(id: string): Promise<void>;
-  onUpdateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "subject" | "description" | "aliases">>): Promise<void>;
+  onUpdateEntity(id: string, patch: KnowledgeEntityUpdate): Promise<void>;
   onRemoveEntity(id: string): Promise<void>;
   onOpenQuestion(item: QuestionBankItem): void;
   onStartReview(items: QuestionBankItem[]): void;
@@ -93,6 +94,14 @@ export default function KnowledgeGraphView({
   const [pickerQuery, setPickerQuery] = useState("");
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [retryMutation, setRetryMutation] = useState<(() => Promise<void>) | null>(null);
+  const [undoAlias, setUndoAlias] = useState<{ entityId: string; alias: string } | null>(null);
+  const [aliasBusy, setAliasBusy] = useState(false);
+  const aliasBusyRef = useRef(false);
+  const aliasEpoch = useRef(0);
+  useEffect(() => {
+    if (writeBlocked) { aliasEpoch.current += 1; setUndoAlias(null); }
+    return () => { aliasEpoch.current += 1; };
+  }, [writeBlocked]);
   const runMutation = useCallback(async (operation: () => Promise<void>) => {
     try {
       await operation();
@@ -103,6 +112,21 @@ export default function KnowledgeGraphView({
       setRetryMutation(() => operation);
     }
   }, []);
+  const changeAlias = async (entityId: string, alias: string, restore: boolean) => {
+    if (writeBlocked || aliasBusyRef.current) return;
+    aliasBusyRef.current = true;
+    setAliasBusy(true);
+    const epoch = aliasEpoch.current;
+    try {
+      await runMutation(async () => {
+        if (aliasEpoch.current !== epoch) throw new Error("지식 그래프가 바뀌었습니다. 별칭을 다시 확인해 주세요.");
+        await onUpdateEntity(entityId, current => ({ aliases: restore
+          ? current.aliases.some(value => normalizeKnowledgeLabel(value) === normalizeKnowledgeLabel(alias)) ? current.aliases : [...current.aliases, alias]
+          : current.aliases.filter(value => value !== alias) }));
+        if (aliasEpoch.current === epoch) setUndoAlias(restore ? null : { entityId, alias });
+      });
+    } finally { aliasBusyRef.current = false; setAliasBusy(false); }
+  };
   const visibleGraphEntities = useMemo(() => graph.entities.filter((entity) => !subjectFilter || entity.subject === subjectFilter), [graph.entities, subjectFilter]);
   const selected = visibleGraphEntities.find((entity) => entity.id === selectedId) ?? visibleGraphEntities[0];
   const entities = useMemo(() => {
@@ -165,6 +189,7 @@ export default function KnowledgeGraphView({
         <label>종류 <select value={entityType} onChange={(event) => setEntityType(event.target.value as KnowledgeEntityType)}>{(Object.keys(entityTypeLabels) as KnowledgeEntityType[]).map((type) => <option key={type} value={type}>{entityTypeLabels[type]}</option>)}</select></label><button type="button" className="ui-button ui-button--secondary" disabled={writeBlocked} onClick={() => void createEntity()}><Plus size={16} />개념 추가</button>
       </header>
       {writeBlocked && <p role="status">지식 그래프를 다시 불러온 뒤 편집할 수 있습니다.</p>}
+      {undoAlias && !writeBlocked && graph.entities.some(entity => entity.id === undoAlias.entityId) && <div className="knowledge-graph-alias-undo" role="status">‘{undoAlias.alias}’ 별칭을 삭제했습니다. <button type="button" className="btn-secondary" disabled={aliasBusy} onClick={() => void changeAlias(undoAlias.entityId, undoAlias.alias, true)}>별칭 삭제 실행 취소</button></div>}
       {persistenceError && <p className="form-error knowledge-graph-persistence-error" role="alert">{persistenceError} {onRetryPersistence && <button type="button" className="btn-secondary btn-sm" onClick={() => void runMutation(onRetryPersistence)}>다시 시도</button>}</p>}
       <div className="knowledge-graph-layout">
         <aside className="knowledge-graph-outline">
@@ -188,7 +213,7 @@ export default function KnowledgeGraphView({
               entity={selected}
               onCommit={(entityId, subject) => runMutation(() => onUpdateEntity(entityId, { subject }))}
             />
-            <section><h3>별칭</h3><div className="knowledge-graph-question-picker">{selected.aliases.map((alias) => <button type="button" key={alias} onClick={() => void runMutation(() => onUpdateEntity(selected.id, { aliases: selected.aliases.filter((item) => item !== alias) }))}>{alias} <Unlink size={14} /></button>)}<button type="button" onClick={() => void (async () => { const alias = await prompt({ title: "별칭 추가", message: "별칭을 입력하세요." }); const next = alias?.trim(); if (!next || selected.aliases.some((item) => normalizeKnowledgeLabel(item) === normalizeKnowledgeLabel(next))) return; await runMutation(() => onUpdateEntity(selected.id, { aliases: [...selected.aliases, next] })); })()}>별칭 추가</button></div></section>
+            <section><h3>별칭</h3><div className="knowledge-graph-question-picker">{selected.aliases.map((alias) => <span className="knowledge-graph-alias" key={alias}><span>{alias}</span><button type="button" aria-label={`${alias} 별칭 삭제`} disabled={aliasBusy} onClick={() => void changeAlias(selected.id, alias, false)}><Unlink size={14} aria-hidden="true" />삭제</button></span>)}<button type="button" disabled={aliasBusy} onClick={() => void (async () => { const alias = await prompt({ title: "별칭 추가", message: "별칭을 입력하세요." }); const next = alias?.trim(); if (!next) return; await runMutation(() => onUpdateEntity(selected.id, current => ({ aliases: current.aliases.some(item => normalizeKnowledgeLabel(item) === normalizeKnowledgeLabel(next)) ? current.aliases : [...current.aliases, next] }))); })()}>별칭 추가</button></div></section>
             <section><h3>관련 개념</h3><div className="knowledge-graph-relations">{relatedEntities.length ? relatedEntities.map(({ relation, entity }) => <div className="knowledge-graph-relation" key={relation.id}><button type="button" onClick={() => setSelectedId(entity.id)}>{entity.name}</button><span>{relationLabels.find(([type]) => type === relation.type)?.[1] ?? relation.type}</span><button type="button" className="ui-icon-button" aria-label={`${entity.name} 연결 해제`} onClick={() => void runMutation(() => onRemoveRelation(relation.id))}><Unlink size={15} /></button></div>) : <p className="knowledge-graph-muted">연결된 개념이 없습니다.</p>}</div>
               <div className="knowledge-graph-link-controls"><select value={relationType} onChange={(event) => setRelationType(event.target.value as KnowledgeRelationType)} aria-label="관계 유형">{relationLabels.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><select aria-label="연결할 개념" defaultValue="" onChange={(event) => { const target = graph.entities.find((entity) => entity.id === event.target.value); if (target) void saveRelationWithEntities(target); }}><option value="">개념 연결</option>{graph.entities.filter((entity) => entity.id !== selected.id && (!subjectFilter || entity.subject === subjectFilter)).map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}</select></div>
             </section>

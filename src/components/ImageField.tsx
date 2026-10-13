@@ -62,7 +62,7 @@ export default function ImageField({
     }
   };
 
-  const handleDrop = async (event: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = async (event: React.DragEvent<HTMLButtonElement>) => {
     event.preventDefault();
     event.stopPropagation();
     setDragging(false);
@@ -85,7 +85,9 @@ export default function ImageField({
   return (
     <div className="form-field full">
       <label>{label}</label>
-      <div
+      <button
+        type="button"
+        aria-label={`${label} 이미지 추가`}
         className={`image-upload-area ${dragging ? "dragging" : ""}`}
         onClick={handleAdd}
         onDragOver={(event) => {
@@ -96,7 +98,7 @@ export default function ImageField({
         onDrop={handleDrop}
       >
         📷 {label} 이미지 추가 · 드래그 앤 드롭
-      </div>
+      </button>
       {uploadError && (
         <p className="image-field-error" role="alert">
           {uploadError}

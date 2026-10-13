@@ -20,6 +20,17 @@ interface ImportPreviewSummaryProps {
   reviewExpanded: boolean;
 }
 
+function ValidationIssues({ issues, label, limit = 6, className }: {
+  issues: ImportValidationReport["issues"]; label: string; limit?: number; className?: string;
+}) {
+  const renderIssue = (issue: ImportValidationReport["issues"][number]) => <p key={issue.id} className={`import-validation-issue ${className ?? `import-validation-issue--${issue.severity}`}`}>{issue.message}</p>;
+  return <div aria-label={`${label} 목록`}>
+    <p className="form-hint">{label} 총 {issues.length}개</p>
+    {issues.slice(0, limit).map(renderIssue)}
+    {issues.length > limit && <details className="import-validation-more"><summary>나머지 {issues.length - limit}개 보기</summary>{issues.slice(limit).map(renderIssue)}</details>}
+  </div>;
+}
+
 export default function ImportPreviewSummary({
   title,
   detectedFormat,
@@ -97,22 +108,16 @@ export default function ImportPreviewSummary({
               <strong>적용 불가</strong>
               <p>누락 문제를 해결해야 적용할 수 있습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.</p>
               {expectedQuestionNumbers.length > 0 && <p>사용자 입력 기준 누락이 감지되었습니다.</p>}
-              {validationPolicy.blocking.slice(0, 6).map((issue) => (
-                <p key={issue.id} className="import-validation-issue import-validation-issue--error">{issue.message}</p>
-              ))}
+              <ValidationIssues issues={validationPolicy.blocking} label="적용 불가" className="import-validation-issue--error" />
             </div>
           )}
           {hasConfirmableIssues && (
             <div className="import-validation-section import-validation-section--confirmable">
               <strong>검토 권장</strong>
-              {validationPolicy.confirmable.slice(0, 6).map((issue) => (
-                <p key={issue.id} className="import-validation-issue import-validation-issue--error">{issue.message}</p>
-              ))}
+              <ValidationIssues issues={validationPolicy.confirmable} label="검토 권장" className="import-validation-issue--error" />
             </div>
           )}
-          {validationPolicy.other.slice(0, 8).map((issue) => (
-            <p key={issue.id} className={`import-validation-issue import-validation-issue--${issue.severity}`}>{issue.message}</p>
-          ))}
+          {validationPolicy.other.length > 0 && <ValidationIssues issues={validationPolicy.other} label="기타 검토" limit={8} />}
         </details>
       )}
     </>

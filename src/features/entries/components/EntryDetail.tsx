@@ -191,7 +191,7 @@ function loadStudyControlCompact(): boolean {
 }
 
 function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
-  if (event.ctrlKey || event.metaKey || event.altKey) return true;
+  if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return true;
   const target = event.target as HTMLElement | null;
   if (!target) return false;
   const tagName = target.tagName?.toLowerCase();
@@ -201,7 +201,7 @@ function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
     tagName === "textarea" ||
     tagName === "select" ||
     target.isContentEditable ||
-    Boolean(target.closest("[role='dialog'], .form-modal, .import-modal, .review-panel, .study-quick-memo"))
+    Boolean(target.closest("button, a, summary, [role='button'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='slider'], [role='combobox'], [role='listbox'], [role='option'], [role='dialog'], .form-modal, .import-modal, .review-panel, .study-quick-memo"))
   );
 }
 
@@ -1112,6 +1112,8 @@ export default function EntryDetail({
       if (shouldIgnoreStudyShortcut(event)) return;
       const key = event.key.toLowerCase();
 
+      if (["1", "2", "3"].includes(key) && focusMode === "closed" && theaterQuestionIndex === null) return;
+
       if (event.code === "Space" || key === " ") {
         event.preventDefault();
         setHideAnswers((value) => !value);
@@ -1180,6 +1182,8 @@ export default function EntryDetail({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     handleReviewResult,
+    focusMode,
+    theaterQuestionIndex,
     handleStudyModeChange,
     hideAnswers,
     isFocusable,

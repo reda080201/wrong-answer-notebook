@@ -53,7 +53,7 @@ import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordin
 import Snackbar from "./shared/ui/Snackbar";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
-import { NotificationProvider } from "./shared/ui/NotificationProvider";
+import { NotificationProvider, NotificationRegion } from "./shared/ui/NotificationProvider";
 import { useKnowledgeGraph } from "./hooks/useKnowledgeGraph";
 import { canReconcileKnowledgeGraph } from "./utils/knowledgeGraphReconciliationGate";
 
@@ -1016,16 +1016,17 @@ function AppContent() {
           return entry ? { entry, mode: actions.supplementalTarget.mode } : null;
         })(), closeImport: actions.closeSupplementalImport, applyMerge: actions.applySupplementalMerge, managerEntry: actions.supplementalManagerEntryId ? entries.find((entry) => entry.id === actions.supplementalManagerEntryId) ?? null : null, closeManager: actions.closeSupplementalManager, rename: actions.renameSupplementalResource, remove: actions.deleteSupplementalResource, linkTarget: actions.supplementalLinkEntryId ? entries.find((entry) => entry.id === actions.supplementalLinkEntryId) ?? null : null, linkCandidates: entries.filter((entry) => entry.entryKind === "lecture" || entry.entryKind === "concept"), closeLink: actions.closeLearningEntryLink, link: actions.linkLearningEntry }}
       />
-      {pendingDeletions.latestUndoable && (
-        <Snackbar actionLabel="실행 취소" onAction={() => void pendingDeletions.undo(pendingDeletions.latestUndoable!)}>
+      <NotificationRegion>{pendingDeletions.latestUndoable && (
+        <Snackbar actionLabel="실행 취소" onAction={() => pendingDeletions.undo(pendingDeletions.latestUndoable!)}>
           {`"${pendingDeletions.latestUndoable.entry.title || "항목"}"을(를) 삭제했습니다.`}
         </Snackbar>
       )}
       {pendingDeletions.error && (
-        <Snackbar actionLabel="다시 시도" onAction={() => void pendingDeletions.finalizeExpired()}>
+        <Snackbar actionLabel="다시 시도" onAction={() => pendingDeletions.finalizeExpired()}>
           삭제 항목 정리를 완료하지 못했습니다.
         </Snackbar>
       )}
+      </NotificationRegion>
       {showExamBuilder && (
         <ExamBuilderWizard
           entries={entries}

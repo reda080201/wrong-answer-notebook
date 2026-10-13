@@ -1,4 +1,5 @@
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
+import { useState } from "react";
 import { parseQuestionText } from "../utils/textLayout";
 import { getEntryQuestions } from "../utils/entryQuestions";
 import { normalizeQuestionNumber, normalizeQuestionMeta } from "../utils/questionMeta";
@@ -68,6 +69,7 @@ export default function StudyPaperView({
   currentQuestionNumber,
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
+  const [expandedDiagramsEntryId, setExpandedDiagramsEntryId] = useState<string | null>(null);
   const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
@@ -182,14 +184,14 @@ export default function StudyPaperView({
         />}
 
         {displayMode === "questions" && diagramItems.length > 0 && (
-          <details className="study-paper-diagrams" aria-label="학습 시각화">
+          <details key={`diagrams-${entry.id}`} className="study-paper-diagrams" aria-label="학습 시각화" onToggle={event => setExpandedDiagramsEntryId(event.currentTarget.open ? entry.id : null)}>
             <summary className="study-paper-section-title">
               <span />
-              <strong>GPT 학습용 시각화</strong>
+              <strong>GPT 학습용 시각화 {diagramItems.length}개</strong>
               <span />
             </summary>
             <div className="study-paper-diagram-grid">
-              {diagramItems.slice(0, 1).map((item) => (
+              {expandedDiagramsEntryId === entry.id && diagramItems.map((item) => (
                 <div key={item.id} className="study-paper-diagram-item">
                   <span className="formula-chip">{item.label}</span>
                   <DiagramCard diagramType={item.diagramType} diagramSpec={item.diagramSpec} />

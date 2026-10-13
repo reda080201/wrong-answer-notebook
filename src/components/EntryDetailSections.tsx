@@ -126,7 +126,8 @@ export function ConceptChecklistSection({
     <CollapsibleSection title="개념 체크리스트" defaultOpen>
       <div className="concept-checklist">
         {checklist.map((item) => (
-          <label key={item.id} className="concept-checklist-item">
+          <div key={item.id} className="concept-checklist-item">
+            <label className="concept-checklist-label">
             <input
               type="checkbox"
               checked={item.checked}
@@ -135,14 +136,16 @@ export function ConceptChecklistSection({
               ))}
             />
             <span>{item.text}</span>
+            </label>
             <button
               type="button"
+              aria-label={`${item.text} 삭제`}
               className="btn-icon danger"
               onClick={() => onChange(checklist.filter((current) => current.id !== item.id))}
             >
               삭제
             </button>
-          </label>
+          </div>
         ))}
         <div className="concept-checklist-add">
           <input

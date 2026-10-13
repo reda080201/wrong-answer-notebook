@@ -25,6 +25,23 @@ describe("useKnowledgeGraph load readiness", () => {
   });
   beforeEach(() => vi.clearAllMocks());
 
+  it("applies alias removal and undo against the latest queued entity", async () => {
+    const original = { id: "entity", type: "concept", name: "개념", aliases: ["별칭", "보존"], provenance: "manual", createdAt: "2026-01-01", updatedAt: "2026-01-01" };
+    const saveKnowledgeGraph = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(getStorageBackend).mockReturnValue({ loadKnowledgeGraph: vi.fn().mockResolvedValue({ entities: [original], relations: [], questionLinks: [] }), saveKnowledgeGraph } as never);
+    const { result } = renderHook(() => useKnowledgeGraph());
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    await act(async () => {
+      await Promise.all([
+        result.current.updateEntity("entity", current => ({ aliases: current.aliases.filter(alias => alias !== "별칭") })),
+        result.current.updateEntity("entity", current => ({ aliases: [...current.aliases, "새 별칭"], description: "새 설명" })),
+        result.current.updateEntity("entity", current => ({ aliases: [...current.aliases, "별칭"] })),
+      ]);
+    });
+    expect(result.current.graph.entities[0].aliases).toEqual(["보존", "새 별칭", "별칭"]);
+    expect(result.current.graph.entities[0].description).toBe("새 설명");
+  });
+
   it("marks an empty graph ready only after a successful load", async () => {
     vi.mocked(getStorageBackend).mockReturnValue({
       loadKnowledgeGraph: vi.fn().mockResolvedValue({ entities: [], relations: [], questionLinks: [] }),

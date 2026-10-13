@@ -209,6 +209,7 @@ function ChecklistCard({
           {checklist.map((item) => (
             <li key={item.id} className={item.checked ? "checked" : ""}>
               <span aria-hidden="true">{item.checked ? "[x]" : "[ ]"}</span>
+              <span className="sr-only">{item.checked ? "완료: " : "미완료: "}</span>
               <MathText text={item.text} />
             </li>
           ))}

@@ -1,14 +1,26 @@
-import { render, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../types";
 import { resolveEntryQuestionStimuli } from "../features/exam/services/examSession";
 import StudyPaperView from "./StudyPaperView";
+import { createEmptyEntryDraft } from "../features/entries/model/entryDraft";
+
+vi.mock("./DiagramCard", () => ({ default: () => <div data-testid="diagram">학습 그림</div> }));
 
 vi.mock("../api", () => ({
   getImageUrl: vi.fn((filename: string) => Promise.resolve(`mock://${filename}`)),
 }));
 
 describe("StudyPaperView shared passage figures", () => {
+  it("makes all learning diagrams accessible only after expanding their section", async () => {
+    const entry = { ...createEmptyEntryDraft(), id: "diagrams", createdAt: "", updatedAt: "", question: "1. 문제",
+      answerKey: [1, 2, 3].map(number => ({ id: `a${number}`, questionNumber: String(number), answer: "", explanation: "", importantPoints: [], diagramType: "derivative-tangent" as const })) };
+    const { container } = render(<StudyPaperView entry={entry} memoMode={false} activeTool="highlight" onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} sheetLayout="single" />);
+    expect(screen.queryAllByTestId("diagram")).toHaveLength(0);
+    fireEvent.click(screen.getByText("GPT 학습용 시각화 3개"));
+    await waitFor(() => expect(screen.getAllByTestId("diagram")).toHaveLength(3));
+    expect(container.querySelector(".study-paper-diagrams")).toHaveTextContent("3번 시각화");
+  });
   it("renders a figure referenced in a shared passage for canonical questions", async () => {
     const entry = {
       id: "sheet-passage-figure",
