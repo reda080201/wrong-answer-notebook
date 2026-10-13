@@ -45,6 +45,19 @@
 .problem-sheet-primary-controls { min-width: 0; flex-wrap: wrap; }
 .form-error { margin: 8px 12px; }
 
+.toolbar .review-launcher > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  padding: 8px 12px;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+  font-weight: 650;
+}
+.review-today-count { font-size: .8rem; font-weight: 400; }
+
 @media (max-width: 1100px) {
   .toolbar { display: grid; grid-template-columns: minmax(220px, 1fr) auto auto auto; gap: 8px; padding: 10px 12px; align-items: center; }
   .toolbar .search-input { min-width: 220px; width: 100%; }
@@ -60,7 +73,9 @@
 
 @media (max-width: 640px) {
   .entry-list { width: min(240px, 36vw); min-width: min(240px, 36vw); }
-  .toolbar .review-launcher { display: none; }
+  .app-shell .toolbar { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .app-shell .toolbar .search-input { grid-column: 1 / -1; min-width: 0; }
+  .toolbar .review-launcher { display: block; justify-self: end; }
 }
 
 .entry-list .entry-card {

@@ -127,6 +127,22 @@
   font: var(--type-meta);
 }
 
+.modal-card.entry-form-dialog {
+  width: min(100%, 720px);
+}
+
+.modal-card.exam-builder-modal {
+  width: min(100%, 928px);
+}
+
+.exam-builder-modal > .dialog-body { padding: 0; }
+.exam-builder-modal > .dialog-header { align-items: flex-start; }
+.exam-builder-modal > .dialog-header p { margin: .25rem 0 0; color: var(--ink-secondary); }
+.exam-builder-modal > .dialog-header h2 { margin: .25rem 0; }
+.exam-builder-modal > .dialog-header > button { flex: 0 0 auto; }
+.exam-builder-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .5rem; }
+.exam-builder-modal .exam-builder-presets { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
 .entry-form-dialog > .dialog-body {
   padding: 0;
   overflow: auto;
@@ -141,20 +157,26 @@
   min-height: 0;
 }
 
-.entry-form-dialog .form-body > * { order: 8; }
-.entry-form-dialog .form-body > .form-row--3 { order: 0; }
-.entry-form-dialog .form-body > .form-row--entry-meta {
+.entry-form-dialog .form-row--entry-meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
 }
-.entry-form-dialog .form-body > .form-field:has(#title) { order: 1; }
-.entry-form-dialog .form-body > .sheet-group-editor { order: 2; }
-.entry-form-dialog .form-body > .form-field:has(#question) { order: 3; }
-.entry-form-dialog .form-body > .image-field { order: 4; }
-.entry-form-dialog .form-body > .form-row:has(#myAnswer),
-.entry-form-dialog .form-body > .answer-key-editor { order: 5; }
-.entry-form-dialog .form-body > .form-row--template { order: 8; }
+.entry-form-options { border: 1px solid var(--line-subtle); border-radius: 10px; }
+.entry-form-options > summary { padding: 12px; cursor: pointer; font-weight: 650; }
+.entry-form-options > summary > span { margin-left: 8px; font-size: .85rem; font-weight: 400; color: var(--ink-secondary); }
+.entry-form-options-body { display: grid; gap: 16px; padding: 0 16px 16px; }
+
+@media (max-width: 900px) {
+  .exam-builder-modal .exam-builder-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .entry-form-dialog .form-row--entry-meta,
+  .exam-builder-modal .exam-builder-presets,
+  .exam-builder-modal .exam-builder-grid { grid-template-columns: minmax(0, 1fr); }
+  .entry-form-options > summary > span { display: block; margin: 4px 0 0; }
+}
 
 .entry-form-dialog .form-footer {
   width: 100%;

@@ -25,6 +25,50 @@
   opacity: 1;
 }
 
+.question-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px;
+  border-bottom: 1px solid var(--line-subtle);
+  margin-bottom: 12px;
+}
+
+.study-paper .question-card-header > .question-number {
+  flex: 1 1 100px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.question-card-header > .question-important-btn,
+.question-card-header > .question-theater-open {
+  position: static;
+  flex: 0 0 auto;
+  margin: 0;
+  opacity: 1;
+}
+
+.question-card-header > .question-difficulty-tools {
+  margin: 0;
+  flex-wrap: wrap;
+}
+
+.question-card-header > .question-score-editor {
+  order: 1;
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .study-paper .question-card-header > .question-number { flex-basis: 100%; }
+}
+
 .question-theater {
   position: fixed;
   inset: 0;

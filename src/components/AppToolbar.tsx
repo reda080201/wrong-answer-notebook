@@ -65,8 +65,8 @@ export default function AppToolbar({
     <div className="toolbar">
       <SearchField className="search-input" value={search} onChange={setSearch} placeholder={placeholder} ariaLabel="자료 검색" />
       <button type="button" className="toolbar-filter-button" aria-expanded={filterOpen} onClick={() => setFilterOpen(true)}>필터{activeChips.length ? ` ${activeChips.length}` : ""}</button>
-      {showReviewLauncher && <Menu label="복습" triggerAriaLabel="복습 메뉴" className="review-launcher">
-        <button type="button" onClick={() => startReview("today")}>오늘 복습</button>
+      {showReviewLauncher && <Menu label={<>복습 <span className="review-today-count">오늘 {todayReviewCount}개</span><span aria-hidden="true">▾</span></>} triggerAriaLabel="복습 메뉴" className="review-launcher">
+        <button type="button" onClick={() => startReview("today")}>오늘 복습 ({todayReviewCount}개)</button>
         <button type="button" onClick={() => startReview(activeSection === "problem_sheet" ? "important" : "random")}>
           {activeSection === "problem_sheet" ? "중요 문제 복습" : "랜덤 복습"}
         </button>
