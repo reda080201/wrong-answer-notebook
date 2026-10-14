@@ -1,3 +1,6 @@
+import { parseQuestionText } from "../utils/textLayout";
+import { normalizeQuestionNumber } from "../utils/questionNumber";
+import { canonicalAnnotationOwner, canonicalAnnotationText, type CanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import type { QuestionContentSegment, SheetFigureItem } from "../types";
 import MathText from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
@@ -41,8 +44,11 @@ interface QuestionContentViewProps {
   segments?: QuestionContentSegment[];
   figures?: SheetFigureItem[];
   appendUnreferencedFigures?: boolean;
+  /** Figure tokens already rendered in the shared passage. */
+  referencedPassage?: string;
   annotations?: TextRangeAnnotation[];
   legacyQuestion?: string;
+  annotationContext?: CanonicalAnnotationContext;
   choices?: string[];
 }
 
@@ -56,7 +62,7 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
   return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption><ZoomableImageViewer filenames={[representation.image]} /></figure>;
 }
 
-export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegment[], annotations: TextRangeAnnotation[], legacyQuestion?: string) {
+export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegment[], annotations: TextRangeAnnotation[], legacyQuestion?: string, context?: CanonicalAnnotationContext) {
   const ranges = new Map<string, Array<{ id: string; start: number; end: number; tool: TextRangeAnnotation["tool"] }>>();
   const unresolved: TextRangeAnnotation[] = [];
   const add = (segmentId: string, annotation: TextRangeAnnotation, start: number, end: number) => {
@@ -66,7 +72,12 @@ export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegmen
   };
   for (const annotation of annotations) {
     if (annotation.canonicalAnchors?.length) {
-      const textSegments = new Map(segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "text" | "condition" }> => segment.type === "text" || segment.type === "condition").map((segment) => [segment.id, segment.text]));
+      if (context) {
+        const owner = canonicalAnnotationOwner(annotation, context);
+        if (!owner || !context.questionKey) { unresolved.push(annotation); continue; }
+        if (owner !== context.questionKey) continue;
+      } else if (annotation.canonicalQuestionKey) { unresolved.push(annotation); continue; }
+      const textSegments = new Map(segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "text" | "condition" }> => segment.type === "text" || segment.type === "condition").map((segment) => [segment.id, canonicalAnnotationText(segment)!]));
       const validAnchors = annotation.canonicalAnchors.filter((anchor) => {
         const content = textSegments.get(anchor.segmentId);
         return content !== undefined && Number.isInteger(anchor.start) && Number.isInteger(anchor.end) && anchor.start >= 0 && anchor.end > anchor.start && anchor.end <= content.length;
@@ -77,6 +88,20 @@ export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegmen
     }
     const fragment = legacyQuestion?.slice(annotation.start, annotation.end);
     if (!fragment) { unresolved.push(annotation); continue; }
+    if (context) {
+      const sourceBlocks = parseQuestionText(legacyQuestion ?? "").filter(block => block.kind === "question" && annotation.start >= block.start && annotation.end <= block.end);
+      const sourceNumber = sourceBlocks.length === 1 && sourceBlocks[0].kind === "question" ? normalizeQuestionNumber(sourceBlocks[0].numberLabel || String(sourceBlocks[0].displayNumber)) : undefined;
+      const sourceOwners = sourceNumber ? context.questions.filter(question => { try { return JSON.parse(question.key)[0] === sourceNumber; } catch { return false; } }) : [];
+      const candidates = sourceOwners.length === 1 ? sourceOwners : context.questions;
+      const owners = candidates.flatMap(question => question.segments.flatMap(segment => {
+        const text = canonicalAnnotationText(segment);
+        if (text === undefined) return [];
+        const first = text.indexOf(fragment);
+        return first < 0 ? [] : text.indexOf(fragment, first + fragment.length) >= 0 ? [question.key, question.key] : [question.key];
+      }));
+      if (owners.length !== 1 || !context.questionKey) { unresolved.push(annotation); continue; }
+      if (owners[0] !== context.questionKey) continue;
+    }
     const matches: Array<{ segmentId: string; start: number }> = [];
     for (const segment of segments) {
       if (segment.type !== "text" && segment.type !== "condition") continue;
@@ -93,17 +118,17 @@ export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegmen
   return { ranges, unresolved };
 }
 
-export default function QuestionContentView({ text, segments, figures = [], appendUnreferencedFigures = true, annotations = [], legacyQuestion, choices = [] }: QuestionContentViewProps) {
+export default function QuestionContentView({ text, segments, figures = [], appendUnreferencedFigures = true, referencedPassage, annotations = [], legacyQuestion, annotationContext, choices = [] }: QuestionContentViewProps) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
   const rendered = segments?.length ? segments : [{ id: "fallback", type: "text" as const, text }];
-  const { ranges } = resolveCanonicalAnnotationRanges(rendered, annotations, legacyQuestion);
+  const { ranges } = resolveCanonicalAnnotationRanges(rendered, annotations, legacyQuestion, annotationContext);
   const figureIdsInText = (value: string) => [...value.matchAll(/\[FIGURE(?::([^\]]*))?(?:\]|$)/gi)]
     .map((match) => match[1]?.trim()).filter((id): id is string => Boolean(id));
   const referenced = new Set<string>([...rendered.flatMap((segment) => {
     if (segment.type === "figure") return [segment.figureId];
     if (segment.type !== "text" && segment.type !== "condition") return [];
     return figureIdsInText(segment.text);
-  }), ...choices.flatMap(figureIdsInText)]);
+  }), ...choices.flatMap(figureIdsInText), ...figureIdsInText(referencedPassage ?? "")]);
   const unreferencedFigures = figures.filter((figure) => !referenced.has(figure.id));
   return <div className="question-content-view">
     {rendered.map((segment) => {

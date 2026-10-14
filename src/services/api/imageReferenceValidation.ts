@@ -3,7 +3,7 @@ const record = (value: unknown): value is RecordValue => value !== null && typeo
 const records = (value: unknown): value is RecordValue[] => Array.isArray(value) && value.every(record);
 const strings = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === "string");
 const imageLists = new Set(["images", "questionImages", "explanationImages", "sourcePageImages", "selectedSourcePageImages", "linkedSourcePageImages", "imageReferences", "questionImageAssets", "sourcePageAssets"]);
-const objectLists = new Set(["questions", "structuredQuestions", "figures", "solutionFigures", "learningBlocks", "explanationParts", "questionSourceCrops", "questionSolutionHotspots", "contentSegments", "groups", "assets", "preparedEntries"]);
+const objectLists = new Set(["questions", "structuredQuestions", "figures", "solutionFigures", "learningBlocks", "explanationParts", "questionSourceCrops", "questionSolutionHotspots", "contentSegments", "groups", "assets", "preparedEntries", "originalQuestions"]);
 
 /** Validate before normalization/filtering: dropped malformed containers can hide references. */
 export function hasSafeImageReferenceShape(value: unknown): boolean {
@@ -12,10 +12,10 @@ export function hasSafeImageReferenceShape(value: unknown): boolean {
   return Object.entries(value).every(([key, child]) => {
     if (imageLists.has(key) && !strings(child)) return false;
     if (objectLists.has(key) && !records(child)) return false;
-    if (["image", "filename", "stagedFilename", "sourcePageImage", "renderedQuestionPng"].includes(key) && child !== null && typeof child !== "string") return false;
+    if (["image", "imageId", "filename", "stagedFilename", "sourcePageImage", "renderedQuestionPng"].includes(key) && child !== null && typeof child !== "string") return false;
     if (["sourceToSaved", "sourceToStaged"].includes(key) && (!record(child) || !Object.values(child).every(value => typeof value === "string"))) return false;
     if (key === "questionContentSegments" && (!record(child) || !Object.values(child).every(records))) return false;
-    if ((key === "questionSnapshot" || key === "entry" || key === "commitAttempt" || key === "assetSession") && !record(child)) return false;
+    if ((key === "questionSnapshot" || key === "entry" || key === "commitAttempt" || key === "assetSession" || key === "originalStructuredQuestion") && !record(child)) return false;
     return hasSafeImageReferenceShape(child);
   });
 }

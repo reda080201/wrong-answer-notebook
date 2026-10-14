@@ -1,3 +1,4 @@
+import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
 import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -418,7 +419,10 @@ export default function EntryDetail({
         : String(current.start);
     }
   };
+  const focusedCanonicalMatches = focusedQuestion ? originalStudyQuestions.filter(question => question.questionNumber === (questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber))) : [];
+  const focusedCanonicalQuestion = focusedCanonicalMatches.length === 1 ? focusedCanonicalMatches[0] : undefined;
   const focusedPassage = (() => {
+    if (focusedCanonicalQuestion?.passage) return { kind: "passage" as const, ...focusedCanonicalQuestion.passage };
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
     for (let index = currentIndex - 1; index >= 0; index -= 1) {
@@ -1020,6 +1024,7 @@ export default function EntryDetail({
   const theaterCanonicalMatches = theaterQuestion ? originalStudyQuestions.filter((question) => question.questionNumber === (questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber))) : [];
   const theaterCanonicalQuestion = theaterCanonicalMatches.length === 1 ? theaterCanonicalMatches[0] : undefined;
   const theaterPassage = (() => {
+    if (theaterCanonicalQuestion?.passage) return { kind: "passage" as const, ...theaterCanonicalQuestion.passage };
     if (!theaterQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === theaterQuestion);
     for (let index = currentIndex - 1; index >= 0; index -= 1) {
@@ -1837,6 +1842,9 @@ export default function EntryDetail({
               <>
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
                   <FocusedQuestionView
+                    canonicalQuestion={focusedCanonicalQuestion}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, focusedCanonicalQuestion?.questionNumber, focusedCanonicalQuestion?.section)}
+                    legacyQuestion={entry.question}
                     passage={focusedPassage}
                     questionBlock={focusedQuestion}
                     questionImages={entry.questionImages}
@@ -1903,7 +1911,8 @@ export default function EntryDetail({
                   <AnnotatableQuestion
                     key={entry.id}
                     question={entry.question}
-                    canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
+              canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
                     canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
                     figures={entry.figures ?? []}
@@ -1972,6 +1981,7 @@ export default function EntryDetail({
             <AnnotatableQuestion
               key={entry.id}
               question={entry.question}
+              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
               canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
               canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
               questionImages={entry.questionImages}

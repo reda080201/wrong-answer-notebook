@@ -1,3 +1,4 @@
+import { applyQuestionCompatibilityEdits, COMPATIBILITY_REVIEW_WARNING, type CompatibilityEdit } from "../../../utils/questionCompatibility";
 import type { EntryFormData, ExplanationPart, QuestionContentSegment, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../../../types";
 import { normalizeStructuredQuestionType } from "../../../utils/structuredQuestionType";
 import { stripLegacyChoiceSeparator } from "../../../utils/legacyChoiceSeparator";
@@ -34,6 +35,7 @@ export interface ImportWorkspaceWarning { id: string; severity: ImportWarningSev
 export interface ImportAnswerDraft extends Partial<SheetAnswerItem> { id: string; questionId?: string; confidence?: number; confirmed?: boolean; }
 export interface ImportFigureDraft extends SheetFigureItem { assetId?: string; confirmed?: boolean; }
 export interface ImportQuestionDraft {
+  originalStructuredQuestion?: StructuredQuestion;
   id: string; groupId: string; order: number; displayQuestionNumber: string; sourceQuestionNumber?: string; passage?: string;
   section?: string; questionType?: string; conditions?: string[]; equations?: string[]; points?: number;
   contentSegments: QuestionContentSegment[]; choices: Array<{ id: string; marker: string; content: string }>;
@@ -45,9 +47,9 @@ export interface ImportQuestionDraft {
 export type ImportEntryMetadata = Partial<Pick<EntryFormData,
   "problemSource" | "importAudit" | "questionMeta" | "sheetGroup" | "tags" |
   "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks" |
-  "questionSourceCrops" | "questionSolutionHotspots"
+  "questionSourceCrops" | "questionSolutionHotspots" | "memo" | "myAnswer" | "correctAnswer" | "annotations" | "difficult" | "mastered"
 >> & { unknownFields?: Record<string, unknown> };
-export interface ImportDraftGroup { solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
+export interface ImportDraftGroup { compatibilityText?: string; originalQuestions?: Array<{ id: string; question: StructuredQuestion }>; solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }
 export interface ImportCommitAttempt { entryIds: string[]; groupIds: string[]; state: "pending" | "completed"; attemptId?: string; createdAt?: string; entryDigests?: string[]; preparedEntries?: EntryFormData[]; sourceToSaved?: Record<string, string>; }
 export interface ImportWorkspace { commitAttempt?: ImportCommitAttempt; id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
@@ -172,12 +174,18 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
     figureIds: [...(item.figureIds ?? [])],
   };
   });
-  const questionText = structuredQuestions.map((item) => [
-    `${item.questionNumber}. ${item.questionText}`,
-    ...item.conditions,
-    ...item.equations,
-    ...item.choices,
-  ].filter(Boolean).join("\n")).join("\n\n");
+  const originalIds = new Set(group.originalQuestions?.map(item => item.id) ?? []);
+  const byId = new Map(questions.map((item, index) => [item.id, structuredQuestions[index]]));
+  const edits: CompatibilityEdit[] = (group.originalQuestions ?? []).map(item => ({ before: item.question, after: byId.get(item.id) }));
+  const extraQuestions = questions.filter(item => !originalIds.has(item.id));
+  for (const item of extraQuestions) edits.push({ before: undefined, after: byId.get(item.id), passage: item.passage });
+  const compatibility = applyQuestionCompatibilityEdits(group.compatibilityText ?? "", edits.length ? edits : structuredQuestions.map(after => ({ before: undefined, after })));
+  const questionText = compatibility.text;
+  if (compatibility.unresolved.length) for (const item of structuredQuestions) {
+    if (!compatibility.unresolved.includes(item.questionNumber)) continue;
+    item.needsReview = true;
+    item.warning = [...new Set([item.warning, COMPATIBILITY_REVIEW_WARNING].filter(Boolean))].join(" ");
+  }
   const questionContentSegments = Object.fromEntries(structuredQuestions.map((item) => [item.questionNumber, cloneContentSegments(item.contentSegments)]));
   const explanationParts = [...(group.explanationParts ?? []), ...questions.flatMap((item) => item.explanationParts)];
   const seenExplanations = new Set<string>();
@@ -198,19 +206,23 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
     question: questionText,
     questionImages: [...new Set(questions.flatMap((item) => item.questionImageAssets))],
     sourcePageImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))],
-    figures: questions.flatMap((item) => item.figures),
+    figures: [...new Map(questions.flatMap(item => item.figures).map(figure => {
+      const collisions = questions.flatMap(item => item.figures).filter(item => item.id === figure.id);
+      if (collisions.some(item => JSON.stringify(item) !== JSON.stringify(figure))) throw new Error(`그림 ${figure.id}의 연결이 서로 달라 검토가 필요합니다.`);
+      return [figure.id, figure] as const;
+    })).values()],
     structuredQuestions,
     questionContentSegments,
     answerKey: questions.flatMap((item) => item.answer ? [item.answer as SheetAnswerItem] : []),
     explanationParts: dedupedExplanationParts,
     tags: metadata.tags ?? [],
-    difficult: false,
+    difficult: metadata.difficult ?? false,
     difficulty: metadata.difficulty ?? "none",
     difficultyScore: metadata.difficultyScore,
-    myAnswer: "",
-    correctAnswer: "",
-    annotations: [],
-    memo: "",
-    mastered: false,
+    myAnswer: metadata.myAnswer ?? "",
+    correctAnswer: metadata.correctAnswer ?? "",
+    annotations: structuredClone(metadata.annotations ?? []),
+    memo: metadata.memo ?? "",
+    mastered: metadata.mastered ?? false,
   };
 }

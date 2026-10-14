@@ -1,3 +1,4 @@
+import type { CanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Maximize2 } from "lucide-react";
 import { getImageUrl } from "../api";
@@ -61,8 +62,10 @@ interface AnnotatableQuestionProps {
   selectedQuestionNumbers?: string[];
   onToggleQuestionSelected?: (questionNumber: string) => void;
   sourceEntry?: WrongAnswerEntry;
+  canonicalAnnotationContext?: CanonicalAnnotationContext;
   canonicalSegments?: QuestionContentSegment[];
   canonicalChoices?: string[];
+  canonicalPassage?: string;
   canonicalReviewRequired?: boolean;
   presentation?: "questions" | "exam";
   revealedAnswerNumbers?: Set<string>;
@@ -72,6 +75,7 @@ interface AnnotatableQuestionProps {
 
 interface FocusedQuestionViewProps {
   canonicalQuestion?: ResolvedEntryQuestion;
+  canonicalAnnotationContext?: CanonicalAnnotationContext;
   legacyQuestion?: string;
   passage?: PassageBlock | ParagraphBlock;
   questionBlock: QuestionBlock;
@@ -722,6 +726,7 @@ function shouldShowSourceNumber(block: QuestionBlock): boolean {
 
 export function FocusedQuestionView({
   canonicalQuestion,
+  canonicalAnnotationContext,
   legacyQuestion,
   passage,
   questionBlock,
@@ -744,7 +749,9 @@ export function FocusedQuestionView({
         <AnnotatableQuestion
           question={legacyQuestion ?? canonicalQuestion.questionText}
           canonicalSegments={canonicalQuestion.contentSegments}
+          canonicalAnnotationContext={canonicalAnnotationContext}
           canonicalChoices={canonicalQuestion.choices}
+          canonicalPassage={canonicalQuestion.passage?.text ?? passage?.text}
           figures={figures}
           questionImages={showImages ? questionImages : []}
           annotations={annotations}
@@ -1144,7 +1151,9 @@ export default function AnnotatableQuestion({
   onToggleQuestionSelected,
   sourceEntry,
   canonicalSegments,
+  canonicalAnnotationContext,
   canonicalChoices,
+  canonicalPassage,
   canonicalReviewRequired = false,
   presentation = "questions",
   revealedAnswerNumbers,
@@ -1162,6 +1171,7 @@ export default function AnnotatableQuestion({
     if (!memoMode || activeTool === "erase" || !textRef.current || (!question.trim() && !canonicalSegments?.length))
       return;
     if (canonicalSegments?.length && !showOriginalAnnotations) {
+      if (canonicalAnnotationContext && !canonicalAnnotationContext.questionKey) return;
       const selection = window.getSelection();
       if (!selection || selection.isCollapsed || !selection.rangeCount) return;
       const range = selection.getRangeAt(0);
@@ -1197,7 +1207,7 @@ export default function AnnotatableQuestion({
       // Canonical anchors are authoritative. Keep legacy offsets empty so older
       // renderers never paint an unrelated range in the compatibility string.
       const ann = createTextAnnotation(0, 0, activeTool);
-      onAnnotationsChange([...annotations, { ...ann, canonicalAnchors }]);
+      onAnnotationsChange([...annotations, { ...ann, canonicalAnchors, ...(canonicalAnnotationContext?.questionKey ? { canonicalQuestionKey: canonicalAnnotationContext.questionKey } : {}) }]);
       selection.removeAllRanges();
       return;
     }
@@ -1206,7 +1216,7 @@ export default function AnnotatableQuestion({
     const ann = createTextAnnotation(offsets.start, offsets.end, activeTool);
     onAnnotationsChange([...annotations, ann]);
     window.getSelection()?.removeAllRanges();
-  }, [memoMode, activeTool, question, annotations, onAnnotationsChange, canonicalSegments, showOriginalAnnotations]);
+  }, [memoMode, activeTool, question, annotations, onAnnotationsChange, canonicalSegments, canonicalAnnotationContext, showOriginalAnnotations]);
 
   const handleTextClick = (e: React.MouseEvent) => {
     if (!memoMode || activeTool !== "erase") return;
@@ -1237,10 +1247,13 @@ export default function AnnotatableQuestion({
               ? resolveCanonicalQuestionPresentation(question, canonicalSegments)
               : { segments: canonicalSegments, choices: canonicalChoices };
             const normalized = presentation.segments;
-            const unresolved = resolveCanonicalAnnotationRanges(normalized, textAnns, question).unresolved;
+            const unresolved = resolveCanonicalAnnotationRanges(normalized, textAnns, question, canonicalAnnotationContext).unresolved;
             return <>
+              {canonicalAnnotationContext && !canonicalAnnotationContext.questionKey && <p role="status">문항 번호와 구분 정보가 중복되어 필기를 연결할 수 없습니다. 문항 정보를 먼저 확인해 주세요.</p>}
               {unresolved.length > 0 && <button type="button" className="text-button" onClick={() => setShowOriginalAnnotations(true)}>기존 필기 {unresolved.length}개를 원문 보기에서 확인</button>}
-              <QuestionContentView text={question} segments={normalized} figures={figures} appendUnreferencedFigures={false} choices={presentation.choices} annotations={textAnns} legacyQuestion={question} />
+              {unresolved.filter(annotation => annotation.canonicalAnchors?.length).length > 0 && <p role="status">문항 연결을 확인할 수 없는 기존 필기는 자동 표시하지 않습니다.</p>}
+              {canonicalAnnotationContext?.questionKey && unresolved.filter(annotation => annotation.canonicalAnchors?.length).map(annotation => <button key={annotation.id} type="button" className="btn-secondary btn-sm" onClick={() => onAnnotationsChange(annotations.map(item => item.id === annotation.id ? { ...item, canonicalQuestionKey: canonicalAnnotationContext.questionKey } : item))}>기존 필기를 이 문항에 연결</button>)}
+              <QuestionContentView referencedPassage={canonicalPassage} annotationContext={canonicalAnnotationContext} text={question} segments={normalized} figures={figures} appendUnreferencedFigures={false} choices={presentation.choices} annotations={textAnns} legacyQuestion={question} />
             </>;
           })() : <StructuredQuestionText
             question={question}
