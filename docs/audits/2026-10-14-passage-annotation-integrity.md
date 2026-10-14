@@ -19,6 +19,15 @@
 | R05 / P2 | 작업실 entry projection에서 memo를 빈 문자열로 덮었다. memo와 지원하는 기존 메타데이터를 가져오기 draft에 유지한다. 함께 보존되는 이미지 주석은 파일명 변환·참조 보호에도 연결한다. | 작업실 저장 후 텍스트 메모와 실제 백업에 `작업실에서도 유지할 메모`가 남았고 복원 후에도 표시됐다. 이미지 주석 파일명 변환은 코드 검토·린트·빌드로 확인했으며 실제 이미지 필기 작성은 미확인이다. |
 | R06 / P2 | 실전 결과 필터의 aria-pressed만 바뀌고 시각적 선택 스타일이 없었다. 공통 버튼 스타일과 선택·disabled·focus-visible CSS를 적용한다. | 1100×750, 1024px, 680px에서 오답 필터를 눌러 선택 버튼의 파란 배경·흰 글자와 필터 결과를 확인했다. |
 
+## GitHub에서 추가로 확인한 레거시 편집 회귀
+
+- 첫 CI의 Frontend 검사에서 기존 `applies edited preview fields and edited answer key values for legacy flat import` 1건이 실패했다(1,133 통과). 원문 보존 정책을 구조화 데이터가 없는 레거시 입력에까지 적용하면서 기존 선택지 줄바꿈 정리를 생략한 원인이었다.
+- 구조화 문항이 있는 입력에는 원문 보존을 유지하고, 레거시 입력에는 기존 `cleanQuestionText`를 적용하도록 수정했다. 공통 지문과 그림 표식의 문자열은 삭제하지 않는다.
+- 레거시 본문 textarea가 생성된 단일 text projection을 갱신하지 않는 경로도 수정했다. 원문 문항과 단일 text가 유일하게 대응될 때 같은 segment ID로 갱신한다. 복잡하거나 모호한 구조는 원문을 유지하며 저장을 막고 작업실 수정을 안내한다.
+- 직접 앱에 실패했던 레거시 JSON을 붙여넣고 본문·정답·풀이·메모를 수정해 저장했다. 실제 백업의 question은 `1. 수정 문제\n① 보기`, 같은 segment ID의 text는 `수정 문제`, 정답④·수정 풀이·수정 메모로 확인됐다.
+- 수정한 두 파일의 ESLint 오류 0·기존 경고 5, 재빌드 성공을 확인했다.
+- 기존 테스트의 assertion·fixture·timeout은 변경하지 않았다. 위 실패 head의 E2E·Rust는 성공, Tauri는 Frontend 실패로 건너뛰었다. 이 결과를 최종 head 결과와 혼동하지 않는다.
+
 ## 추가 직접 확인
 
 - 실전 2문항을 각각 오답·정답으로 응답해 제출: 응답 2, 정답 1, 오답 1, 정답률 50%. 자동 오답의 공통 지문과 선택 복습을 확인했다.
@@ -56,3 +65,5 @@
 ![실전 결과 필터 680px](media/2026-10-14-passage-annotation-integrity/result-filter-680.png)
 ![좁은 화면의 오답 복습 공통 지문](media/2026-10-14-passage-annotation-integrity/review-passage-680.png)
 ![기존 필기의 명시적 문항 연결](media/2026-10-14-passage-annotation-integrity/legacy-annotation-relinked.png)
+
+![레거시 입력 수정 저장 결과](media/2026-10-14-passage-annotation-integrity/legacy-input-fixed.png)

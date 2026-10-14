@@ -59,7 +59,7 @@ import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
 import ImportSaveFooter from "./ImportSaveFooter";
-import { canonicalizeImportDraftForSave, updateImportDraftQuestions } from "../services/importSavePolicy";
+import { canonicalizeImportDraftForSave, updateImportDraftQuestions, updateLegacyImportDraftQuestion } from "../services/importSavePolicy";
 import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { validateImportImage } from "../services/validateImportImage";
 import { validateImportAssetReferences } from "../services/zipImport";
@@ -1042,8 +1042,15 @@ export default function ImportFromGptModal({
 
   const updateLegacyQuestionText = (value: string) => {
     setDraft((current) => {
-      setStructuredReviewError(null);
-      return { ...current, question: value };
+      if (!current) return current;
+      try {
+        const updated = updateLegacyImportDraftQuestion(current, value);
+        setStructuredReviewError(null);
+        return updated;
+      } catch (error) {
+        setStructuredReviewError(error instanceof Error ? error.message : "본문 연결을 확인할 수 없습니다.");
+        return current;
+      }
     });
   };
 
