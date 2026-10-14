@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { prefersCompactExamLayout } from "../features/exam/services/examLayout";
 import type { ExamPrintPreferences, GeneratedExam, WrongAnswerEntry } from "../types";
 import { normalizeGeneratedExamSources } from "../features/exam-builder/services/questionSource";
 import { buildGeneratedExamPrintModel } from "../features/exam-builder/services/buildGeneratedExamPrintModel";
@@ -40,7 +41,7 @@ export function useGeneratedExamController({
       mode,
       timeLimitMinutes: mode === "real" ? options?.timeLimitMinutes ?? exam.timeLimitMinutes ?? 50 : undefined,
       showTimer: mode === "real" ? options?.showTimer ?? true : options?.showTimer,
-      answerSheetOpen: mode === "real" ? options?.answerSheetOpen ?? true : options?.answerSheetOpen,
+      answerSheetOpen: mode === "real" ? options?.answerSheetOpen ?? !prefersCompactExamLayout() : options?.answerSheetOpen,
       answerSheetLayout: mode === "real" ? options?.answerSheetLayout ?? "auto" : options?.answerSheetLayout,
     });
     setListOpen(false);

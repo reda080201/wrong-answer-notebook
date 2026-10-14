@@ -106,6 +106,10 @@
 }
 
 @media (max-width: 1100px) {
-  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; }
+  .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, auto); }
   .toolbar-active-chips { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .app-shell .toolbar { grid-template-columns: auto minmax(0, 1fr) auto auto; }
+  .app-shell .toolbar .search-input { grid-column: 1 / -1; }
 }

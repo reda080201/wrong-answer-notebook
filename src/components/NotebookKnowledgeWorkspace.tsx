@@ -13,6 +13,7 @@ import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistratio
 import KnowledgeGraphView from "../features/learning/components/KnowledgeGraphView";
 import type { KnowledgeEntity, KnowledgeGraphStore, KnowledgeRelationType } from "../types";
 import { useState } from "react";
+import type { KnowledgeEntityUpdate } from "../hooks/useKnowledgeGraph";
 import { projectLegacyKnowledgeGraph } from "../features/learning/utils/knowledgeGraphProjection";
 
 type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
@@ -44,7 +45,7 @@ interface NotebookKnowledgeWorkspaceProps {
     saveQuestionLink(input: { id: string; entityId: string; entryId: string; questionNumber: string; relation: "tests"; provenance: "manual" }): Promise<void>;
     removeRelation(id: string): Promise<void>;
     removeQuestionLink(id: string): Promise<void>;
-    updateEntity(id: string, patch: Partial<Pick<KnowledgeEntity, "name" | "type" | "subject" | "description" | "aliases">>): Promise<void>;
+    updateEntity(id: string, patch: KnowledgeEntityUpdate): Promise<void>;
     removeEntity(id: string): Promise<void>;
   };
   subjectFilter?: string | null;

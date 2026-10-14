@@ -1,3 +1,4 @@
+import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
 import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -39,6 +40,7 @@ import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
 import QuestionTheaterView from "../../../components/QuestionTheaterView";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
 import type { ChatGptSharePayload } from "../../../features/export/types";
@@ -191,7 +193,7 @@ function loadStudyControlCompact(): boolean {
 }
 
 function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
-  if (event.ctrlKey || event.metaKey || event.altKey) return true;
+  if (event.defaultPrevented || event.isComposing || event.repeat || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return true;
   const target = event.target as HTMLElement | null;
   if (!target) return false;
   const tagName = target.tagName?.toLowerCase();
@@ -201,7 +203,7 @@ function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
     tagName === "textarea" ||
     tagName === "select" ||
     target.isContentEditable ||
-    Boolean(target.closest("[role='dialog'], .form-modal, .import-modal, .review-panel, .study-quick-memo"))
+    Boolean(target.closest("button, a, summary, [role='button'], [role='checkbox'], [role='radio'], [role='switch'], [role='tab'], [role='menuitem'], [role='menuitemcheckbox'], [role='menuitemradio'], [role='slider'], [role='combobox'], [role='listbox'], [role='option'], [role='dialog'], .form-modal, .import-modal, .review-panel, .study-quick-memo"))
   );
 }
 
@@ -417,7 +419,10 @@ export default function EntryDetail({
         : String(current.start);
     }
   };
+  const focusedCanonicalMatches = focusedQuestion ? originalStudyQuestions.filter(question => question.questionNumber === (questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber))) : [];
+  const focusedCanonicalQuestion = focusedCanonicalMatches.length === 1 ? focusedCanonicalMatches[0] : undefined;
   const focusedPassage = (() => {
+    if (focusedCanonicalQuestion?.passage) return { kind: "passage" as const, ...focusedCanonicalQuestion.passage };
     if (!focusedQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === focusedQuestion);
     for (let index = currentIndex - 1; index >= 0; index -= 1) {
@@ -1016,7 +1021,10 @@ export default function EntryDetail({
   const theaterQuestion = theaterQuestionIndex !== null
     ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
     : undefined;
+  const theaterCanonicalMatches = theaterQuestion ? originalStudyQuestions.filter((question) => question.questionNumber === (questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber))) : [];
+  const theaterCanonicalQuestion = theaterCanonicalMatches.length === 1 ? theaterCanonicalMatches[0] : undefined;
   const theaterPassage = (() => {
+    if (theaterCanonicalQuestion?.passage) return { kind: "passage" as const, ...theaterCanonicalQuestion.passage };
     if (!theaterQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === theaterQuestion);
     for (let index = currentIndex - 1; index >= 0; index -= 1) {
@@ -1112,6 +1120,8 @@ export default function EntryDetail({
       if (shouldIgnoreStudyShortcut(event)) return;
       const key = event.key.toLowerCase();
 
+      if (["1", "2", "3"].includes(key) && focusMode === "closed" && theaterQuestionIndex === null) return;
+
       if (event.code === "Space" || key === " ") {
         event.preventDefault();
         setHideAnswers((value) => !value);
@@ -1180,6 +1190,8 @@ export default function EntryDetail({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     handleReviewResult,
+    focusMode,
+    theaterQuestionIndex,
     handleStudyModeChange,
     hideAnswers,
     isFocusable,
@@ -1830,6 +1842,9 @@ export default function EntryDetail({
               <>
                 <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "focus")}>
                   <FocusedQuestionView
+                    canonicalQuestion={focusedCanonicalQuestion}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, focusedCanonicalQuestion?.questionNumber, focusedCanonicalQuestion?.section)}
+                    legacyQuestion={entry.question}
                     passage={focusedPassage}
                     questionBlock={focusedQuestion}
                     questionImages={entry.questionImages}
@@ -1896,7 +1911,8 @@ export default function EntryDetail({
                   <AnnotatableQuestion
                     key={entry.id}
                     question={entry.question}
-                    canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
+              canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
                     canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
                     figures={entry.figures ?? []}
@@ -1965,6 +1981,7 @@ export default function EntryDetail({
             <AnnotatableQuestion
               key={entry.id}
               question={entry.question}
+              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
               canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
               canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
               questionImages={entry.questionImages}
@@ -2194,6 +2211,7 @@ export default function EntryDetail({
       </ReviewExportDialogs>
       {theaterQuestion && theaterQuestionIndex !== null && (
         <QuestionTheaterView
+          canonicalQuestion={theaterCanonicalQuestion}
           passage={theaterPassage}
           questionBlock={theaterQuestion}
           questionIndex={
@@ -2210,7 +2228,7 @@ export default function EntryDetail({
           questionMeta={theaterQuestionMeta}
           sourceEntry={entry}
           questionImages={entry.questionImages}
-          figures={entry.figures ?? []}
+          figures={theaterCanonicalQuestion ? resolveQuestionFigures(entry, theaterCanonicalQuestion) : entry.figures ?? []}
           annotations={entry.annotations ?? []}
           memoMode={memoMode}
           activeTool={activeTool}

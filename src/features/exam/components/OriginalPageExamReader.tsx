@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { prefersCompactExamLayout } from "../services/examLayout";
 import type { QuestionSolutionHotspot } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
 import { validSolutionHotspot } from "../../solutions/solutionModel";
@@ -32,7 +33,7 @@ function initialZoomState(preferenceKey?: string): ZoomState {
       }
     } catch { /* Use the readable width-fit default when stored view settings are unavailable. */ }
   }
-  return { mode: preferenceKey ? "width" : "page", value: 1 };
+  return { mode: preferenceKey || prefersCompactExamLayout() ? "width" : "page", value: 1 };
 }
 
 export default function OriginalPageExamReader({ preferenceKey, filenames, selectedFilenames, currentFilename, emptyMessage, onSelectPages, onChangePage, hotspots = [], onOpenSolution, questionLabels = {} }: Props) {

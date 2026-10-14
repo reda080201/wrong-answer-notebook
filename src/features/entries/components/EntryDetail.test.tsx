@@ -67,6 +67,27 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("preserves native button keys and records numeric shortcuts only during explicit study", async () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    render(<EntryDetail entry={{ ...sheetEntry, entryKind: "wrong_answer", question: "1. 확인 문항", correctAnswer: "답" }} onReview={onReview}
+      onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    const hiddenBefore = localStorage.getItem("wrong-answer-answer-hidden");
+    const edit = screen.getByRole("button", { name: /^수정$/ });
+    const space = new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true, cancelable: true });
+    edit.dispatchEvent(space);
+    expect(space.defaultPrevented).toBe(false);
+    expect(localStorage.getItem("wrong-answer-answer-hidden")).toBe(hiddenBefore);
+    fireEvent.keyDown(window, { key: "3" });
+    expect(onReview).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /^집중 보기$/ }));
+    fireEvent.keyDown(window, { key: "3", isComposing: true });
+    fireEvent.keyDown(window, { key: "3", repeat: true });
+    expect(onReview).not.toHaveBeenCalled();
+    fireEvent.keyDown(window, { key: "3" });
+    await waitFor(() => expect(onReview).toHaveBeenCalledOnce());
+    expect(onReview).toHaveBeenCalledWith(expect.objectContaining({ id: sheetEntry.id }), "good");
+  });
+
   it("copies and syncs the focused source question's official answer only after consent", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
@@ -315,7 +336,7 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByText("1번 문제를 중요 표시했습니다.")).toBeInTheDocument();
   });
 
-  it("switches between textbook paper, solution, and analysis modes", () => {
+  it("switches between textbook paper, solution, and analysis modes", async () => {
     render(
       <EntryDetail
         entry={{
@@ -376,7 +397,8 @@ describe("EntryDetail sheet layout", () => {
 
     expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문항별" })).toBeInTheDocument();
-    expect(screen.getByText("접선 시각화")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("GPT 학습용 시각화 1개"));
+    expect(await screen.findByText("접선 시각화")).toBeVisible();
     fireEvent.click(screen.getByRole("button", { name: /학습 내용/ }));
     expect(screen.getByText("개념·루틴·주의점")).toBeInTheDocument();
 
@@ -520,7 +542,8 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "정의 암기 삭제" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /^정의 암기$/ }));
+    expect(screen.getByRole("button", { name: "정의 암기 삭제" }).closest("label")).toBeNull();
 
     expect(onChecklistChange).toHaveBeenCalledWith([
       { id: "todo-1", text: "정의 암기", checked: true },
@@ -841,9 +864,10 @@ describe("EntryDetail sheet layout", () => {
     openSecondaryAction("집중 보기");
     const focusedQuestion = document.querySelector(".wrong-focus-question");
     expect(focusedQuestion).toBeInTheDocument();
-    const formula = focusedQuestion?.querySelector('[aria-label="수식"]');
+    const formula = focusedQuestion?.querySelector(".math-fragment");
     const prose = focusedQuestion?.querySelector(".math-prose");
     expect(formula).toBeInTheDocument();
+    expect(formula?.querySelector(".katex-mathml math")).not.toBeNull();
     expect(prose).toHaveTextContent("를 풀어라.");
     expect(Boolean(formula && prose && (formula.compareDocumentPosition(prose) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
 

@@ -4,7 +4,10 @@ import type { ReviewEvent, ReviewItem, ReviewResult, ReviewSession, ReviewSubmis
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
 import ContentBlock from "./ContentBlock";
 import { LinkifiedText } from "../utils/wikiLinks";
-import { parseQuestionText, type QuestionBlock } from "../utils/textLayout";
+import type { QuestionBlock } from "../utils/textLayout";
+import { getEntryQuestions, resolvedQuestionToBlock, type ResolvedEntryQuestion } from "../utils/entryQuestions";
+import { resolveQuestionFigures } from "../utils/questionAssets";
+import QuestionContentView from "./QuestionContentView";
 import { getQuestionMetaForBlock, normalizeQuestionNumber } from "../utils/questionMeta";
 import { difficultyScoreLabel, resolveQuestionDifficultyScore } from "../utils/difficulty";
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
@@ -377,6 +380,7 @@ export default function ReviewPanel({
           {current.kind === "sheet-question" && sheetQuestion ? (
             <SheetQuestionReviewCard
               block={sheetQuestion.block}
+              question={sheetQuestion.question}
               answer={sheetQuestion.answer}
               entry={currentEntry}
               onWikiLinkClick={onWikiLinkClick}
@@ -384,12 +388,20 @@ export default function ReviewPanel({
             />
           ) : (
             <div className="review-question">
-              <LinkifiedText
+              {current.kind === "sheet-question" && !sheetQuestion && <p role="note">복습 문항을 유일하게 연결하지 못했습니다. 원문을 열어 문항 연결을 확인하세요.</p>}
+              {(() => {
+                const questions = current.kind === "entry" ? getEntryQuestions(currentEntry) : [];
+                const candidates = currentEntry.generatedFromQuestionNumber
+                  ? questions.filter((question) => normalizeQuestionNumber(question.questionNumber) === normalizeQuestionNumber(currentEntry.generatedFromQuestionNumber))
+                  : questions;
+                const question = candidates.length === 1 ? candidates[0] : undefined;
+                return question?.contentSegments?.length ? <>{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage.text} figures={resolveQuestionFigures(currentEntry, question)} appendUnreferencedFigures={false} /></section>}<QuestionContentView referencedPassage={question.passage?.text} text={question.questionText} segments={question.contentSegments} choices={question.choices} figures={resolveQuestionFigures(currentEntry, question)} appendUnreferencedFigures={false} /></> : <LinkifiedText
                 text={currentEntry.question}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
                 conceptContext={buildConceptLinkContext(currentEntry)}
-              />
+              />;
+              })()}
             </div>
           )}
 
@@ -464,30 +476,28 @@ export default function ReviewPanel({
 
 function resolveSheetQuestion(entry: WrongAnswerEntry, questionNumber: string) {
   const normalized = normalizeQuestionNumber(questionNumber);
-  const block = parseQuestionText(entry.question)
-    .filter((item): item is QuestionBlock => item.kind === "question")
-    .find(
-      (item) =>
-        normalizeQuestionNumber(item.displayNumber) === normalized ||
-        normalizeQuestionNumber(item.numberLabel) === normalized,
-    );
-  if (!block) return null;
-  const answer = (entry.answerKey ?? []).find(
+  const matches = getEntryQuestions(entry).filter((item) => normalizeQuestionNumber(item.questionNumber) === normalized);
+  if (matches.length !== 1) return null;
+  const question = matches[0];
+  const block = resolvedQuestionToBlock(question);
+  const answers = (entry.answerKey ?? []).filter(
     (item) =>
       normalizeQuestionNumber(item.questionNumber) === normalized ||
       normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(block.numberLabel),
   );
-  return { block, answer };
+  return { block, question, answer: answers.length === 1 ? answers[0] : undefined };
 }
 
 function SheetQuestionReviewCard({
   block,
+  question,
   answer,
   entry,
   onWikiLinkClick,
   existingTargets,
 }: {
   block: QuestionBlock;
+  question: ResolvedEntryQuestion;
   answer?: SheetAnswerItem;
   entry: WrongAnswerEntry;
   onWikiLinkClick: (target: string) => void;
@@ -509,8 +519,9 @@ function SheetQuestionReviewCard({
           오답 원인: {meta.mistakeAnalysis.causes.map((cause) => mistakeCauseLabel(cause.type)).join(", ")}
         </p>
       ) : null}
-      <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={buildConceptLinkContext(entry, block.numberLabel)} />
-      {block.choices.length > 0 && (
+      {question.passage && <section className="exam-passage"><QuestionContentView text={question.passage.text} figures={resolveQuestionFigures(entry, question)} appendUnreferencedFigures={false} /></section>}
+      {question.contentSegments?.length ? <QuestionContentView referencedPassage={question.passage?.text} text={question.questionText} segments={question.contentSegments} choices={question.choices} figures={resolveQuestionFigures(entry, question)} appendUnreferencedFigures={false} /> : <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={buildConceptLinkContext(entry, block.numberLabel)} />}
+      {!question.contentSegments?.length && block.choices.length > 0 && (
         <ol className="review-choice-list">
           {block.choices.map((choice) => (
             <li key={`${choice.marker}-${choice.text}`}>

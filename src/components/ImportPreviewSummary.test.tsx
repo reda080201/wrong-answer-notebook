@@ -1,8 +1,23 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import ImportPreviewSummary from "./ImportPreviewSummary";
 
 describe("ImportPreviewSummary", () => {
+  it("exposes every blocking reason beyond the first six and updates the remaining count", () => {
+    const issues = Array.from({ length: 9 }, (_, index) => ({ id: `error-${index}`, severity: "error" as const, message: `저장 차단 사유 ${index + 1}` }));
+    const props = { questionCount: 1, imageCount: 0, figureCount: 0, answerCount: 0, hasMemo: false, rejectedNotes: [], expectedQuestionNumbers: [], reviewExpanded: true,
+      validationReport: { questionNumbers: [], answerNumbers: [], issues }, validationPolicy: { blocking: issues, confirmable: [], other: [] } };
+    const { rerender } = render(<ImportPreviewSummary {...props} />);
+    const list = screen.getByLabelText("적용 불가 목록");
+    expect(within(list).getByText("저장 차단 사유 9")).not.toBeVisible();
+    fireEvent.click(within(list).getByText("나머지 3개 보기"));
+    expect(within(list).getByText("저장 차단 사유 9")).toBeVisible();
+    const remaining = issues.slice(6);
+    rerender(<ImportPreviewSummary {...props} validationReport={{ ...props.validationReport, issues: remaining }} validationPolicy={{ blocking: remaining, confirmable: [], other: [] }} />);
+    expect(screen.getByText("적용 불가 총 3개")).toBeVisible();
+    expect(screen.queryByText(/나머지 .*개 보기/)).not.toBeInTheDocument();
+    expect(screen.getByText("저장 차단 사유 9")).toBeVisible();
+  });
   it("renders audit metadata without turning review warnings into a save gate", () => {
 
     render(

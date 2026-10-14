@@ -52,7 +52,6 @@ import { supplementalModeLabel } from "../../../features/supplemental-resources/
 import ImportValidationSummary from "./ImportValidationSummary";
 import TextReviewSplitView from "./TextReviewSplitView";
 import StructuredQuestionReviewEditor from "./StructuredQuestionReviewEditor";
-import { renderStructuredQuestionsCompatibilityText } from "../../../utils/entryQuestions";
 import {
   removeFigureFromImportDraft,
 } from "../services/importDraftCanonical";
@@ -60,7 +59,7 @@ import ImportReviewWorkspace from "./ImportReviewWorkspace";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 import ImportActiveQuestionReview from "./ImportActiveQuestionReview";
 import ImportSaveFooter from "./ImportSaveFooter";
-import { canonicalizeImportDraftForSave } from "../services/importSavePolicy";
+import { canonicalizeImportDraftForSave, updateImportDraftQuestions, updateLegacyImportDraftQuestion } from "../services/importSavePolicy";
 import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { validateImportImage } from "../services/validateImportImage";
 import { validateImportAssetReferences } from "../services/zipImport";
@@ -1043,8 +1042,15 @@ export default function ImportFromGptModal({
 
   const updateLegacyQuestionText = (value: string) => {
     setDraft((current) => {
-      setStructuredReviewError(null);
-      return { ...current, question: value };
+      if (!current) return current;
+      try {
+        const updated = updateLegacyImportDraftQuestion(current, value);
+        setStructuredReviewError(null);
+        return updated;
+      } catch (error) {
+        setStructuredReviewError(error instanceof Error ? error.message : "본문 연결을 확인할 수 없습니다.");
+        return current;
+      }
     });
   };
 
@@ -1645,14 +1651,7 @@ export default function ImportFromGptModal({
                       questions={draft.structuredQuestions}
                       onChange={(questions) => {
                         setStructuredReviewError(null);
-                        setDraft((current) => ({
-                          ...current,
-                          structuredQuestions: questions,
-                          question: renderStructuredQuestionsCompatibilityText(questions),
-                          questionContentSegments: Object.fromEntries(
-                            questions.map((question) => [question.questionNumber, question.contentSegments]),
-                          ),
-                        }));
+                        setDraft((current) => current ? updateImportDraftQuestions(current, questions) : current);
                       }}
                     />
                   ) : (
@@ -1953,12 +1952,7 @@ export default function ImportFromGptModal({
                 setDraft((current) => {
                   if (!current) return current;
                   const questions = (current.structuredQuestions ?? []).map((item, itemIndex) => itemIndex === index ? updatedQuestion : item);
-                  return {
-                    ...current,
-                    structuredQuestions: questions,
-                    question: renderStructuredQuestionsCompatibilityText(questions),
-                    questionContentSegments: Object.fromEntries(questions.map((questionItem) => [questionItem.questionNumber, questionItem.contentSegments])),
-                  };
+                  return updateImportDraftQuestions(current, questions);
                 });
               }}
             />

@@ -191,7 +191,7 @@ function MathFragment({ segment }: { segment: Extract<MathDisplaySegment, { type
     try { katex.render(typesetMathExpression(segment.expression, segment.displayMode), container, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
     catch { container.className = "math-fragment--invalid"; container.textContent = "수식 형식 확인 필요"; }
   }, [segment.displayMode, segment.expression]);
-  return <span ref={containerRef} className={segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment"} aria-label="수식" />;
+  return <span ref={containerRef} className={segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment"} />;
 }
 
 export default function MathText({ text }: { text: string }) {

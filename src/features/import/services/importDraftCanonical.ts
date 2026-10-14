@@ -29,7 +29,7 @@ export function removeFigureFromImportDraft(
     figures: (draft.figures ?? []).filter((figure) => figure.id !== figureId),
     structuredQuestions,
     questionContentSegments,
-    question: structuredQuestions?.length
+    question: draft.question?.trim() ? draft.question : structuredQuestions?.length
       ? renderStructuredQuestionsCompatibilityText(structuredQuestions)
       : draft.question,
   };

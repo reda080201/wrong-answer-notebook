@@ -164,6 +164,28 @@ export async function hasBrowserImage(key: string): Promise<boolean> {
   return (await getBrowserImage(key)) !== null;
 }
 
+/** Inspect keys without loading all base64 image bodies or migrating data. */
+export async function listBrowserImageKeys(): Promise<string[]> {
+  return serializeMutation(async () => {
+    const legacy = Object.keys(localStorage).filter((key) => key.startsWith("img_") && Boolean(localStorage.getItem(key)));
+    if (!supportsIndexedDb()) return legacy;
+    const db = await openDatabase();
+    try {
+      const keys = await new Promise<string[]>((resolve, reject) => {
+        const transaction = db.transaction(STORE_NAME, "readonly");
+        const request = transaction.objectStore(STORE_NAME).getAllKeys();
+        let result: string[] | undefined;
+        request.onsuccess = () => { result = request.result.map(String); };
+        request.onerror = () => reject(request.error ?? new Error("이미지 목록을 읽지 못했습니다."));
+        transaction.oncomplete = () => result ? resolve(result) : reject(new Error("이미지 목록을 읽지 못했습니다."));
+        transaction.onerror = () => reject(transaction.error ?? new Error("이미지 목록을 읽지 못했습니다."));
+        transaction.onabort = () => reject(transaction.error ?? new Error("이미지 목록 읽기가 중단되었습니다."));
+      });
+      return [...new Set([...legacy, ...keys])];
+    } finally { db.close(); }
+  });
+}
+
 export async function listBrowserImages(): Promise<Record<string, string>> {
   if (!supportsIndexedDb()) {
     return Object.fromEntries(Object.keys(localStorage).filter((key) => key.startsWith("img_")).map((key) => [key, localStorage.getItem(key) ?? ""]));

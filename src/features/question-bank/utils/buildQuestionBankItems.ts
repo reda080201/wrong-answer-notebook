@@ -37,7 +37,7 @@ function isMastered(entry: WrongAnswerEntry, meta?: QuestionMeta): boolean {
   return meta?.review?.phase === "archived" || (!meta && entry.mastered);
 }
 
-function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, source?: { page?: number }, figureIds: string[] = [], questionStatus?: ResolvedEntryQuestion["processingStatus"], questionNeedsReview = false, questionWarning?: string): QuestionBankItem {
+function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices: number, now: Date, source?: { page?: number }, figureIds: string[] = [], questionStatus?: ResolvedEntryQuestion["processingStatus"], questionNeedsReview = false, questionWarning?: string, question?: ResolvedEntryQuestion): QuestionBankItem {
   const meta = findMeta(entry, number);
   const answer = findAnswer(entry, number);
   const classification = resolveQuestionClassification(entry, meta);
@@ -66,6 +66,7 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     questionId: answer?.id,
     subject: classification.subject,
     questionText: text,
+    presentation: question?.contentSegments?.length ? { passage: question.passage?.text, text: question.questionText, segments: question.contentSegments, choices: question.choices, figures: resolveQuestionFigures(entry, question) } : undefined,
     source: resolveProblemSource(entry.problemSource),
     classification: { ...classification, answerType: resolvedAnswerType },
     answer: answerText || undefined,
@@ -89,13 +90,15 @@ export function buildQuestionBankItems(entries: WrongAnswerEntry[], now = new Da
   return entries.flatMap((entry) => {
     if (entry.entryKind === "problem_sheet") {
       return getEntryQuestions(entry)
-        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, block.source, block.figureIds, block.processingStatus, block.needsReview, block.warning));
+        .map((block) => makeItem(entry, block.questionNumber, [block.questionText, ...block.choices].filter(Boolean).join("\n"), block.choices.length, now, block.source, block.figureIds, block.processingStatus, block.needsReview, block.warning, block));
     }
     if (entry.entryKind !== "wrong_answer" || !entry.question.trim()) return [];
-    const number = normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber
+    const number = entry.generatedFromQuestionNumber ?? normalizeQuestionMeta(entry.questionMeta)[0]?.questionNumber
       ?? entry.answerKey?.[0]?.questionNumber
       ?? "1";
     const parsed = parseQuestionText(entry.question).find((block): block is QuestionBlock => block.kind === "question");
-    return [makeItem(entry, number, entry.question.trim(), parsed?.choices.length ?? 0, now)];
+    const matches = getEntryQuestions(entry).filter((question) => normalizeQuestionNumber(question.questionNumber) === normalizeQuestionNumber(number));
+    const question = matches.length === 1 ? matches[0] : undefined;
+    return [makeItem(entry, number, entry.question.trim(), question?.choices.length ?? parsed?.choices.length ?? 0, now, question?.source, question?.figureIds, question?.processingStatus, question?.needsReview, question?.warning, question)];
   });
 }

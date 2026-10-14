@@ -3,6 +3,16 @@ import { describe, expect, it } from "vitest";
 import MathText from "./MathText";
 
 describe("MathText", () => {
+  it("keeps MathML content exposed without replacing it with a generic math label", () => {
+    const { container } = render(<MathText text={"앞 $x^2$ 뒤"} />);
+    expect(container.querySelector('.math-fragment[aria-label="수식"]')).toBeNull();
+    const math = container.querySelector(".katex-mathml math msup");
+    expect(math?.namespaceURI).toBe("http://www.w3.org/1998/Math/MathML");
+    expect(math?.textContent).toBe("x2");
+    expect(container.querySelector(".katex-html")).toHaveAttribute("aria-hidden", "true");
+    expect(screen.getByText("앞", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("뒤", { exact: false })).toBeInTheDocument();
+  });
   it("renders inline and display LaTeX with KaTeX", () => {
     const { container } = render(<MathText text={"값은 $x^2$이고 $$y=2x$$이다."} />);
     expect(container.querySelectorAll(".katex")).toHaveLength(2);

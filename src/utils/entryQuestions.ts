@@ -1,3 +1,4 @@
+import { resolveEntryQuestionStimuli, type EntryQuestionStimulus } from "./questionStimuli";
 import type { ProcessingStatus, QuestionContentSegment, SheetFigureItem, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
@@ -6,12 +7,16 @@ import { stripLegacyChoiceSeparator } from "./legacyChoiceSeparator";
 import { reconcileEntryQuestions } from "./questionCanonical";
 import { normalizeQuestionPresentationSegments } from "./questionPresentation";
 import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "./figureTokens";
+import { resolveGeneratedWrongAnswerContent } from "./generatedWrongAnswerContent";
+import { resolveCanonicalQuestionPresentation } from "./canonicalQuestionPresentation";
 
 export interface ResolvedEntryQuestion {
   /** Stable source identity. Never use position as a persistence key. */
   questionNumber: string;
   /** One-based order within this entry, for navigation only. */
   position: number;
+  /** Read-only shared passage projection from the preserved compatibility source. */
+  passage?: EntryQuestionStimulus;
   section?: string;
   questionType?: StructuredQuestion["questionType"];
   questionText: string;
@@ -64,10 +69,27 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number, 
   };
 }
 
-export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures">>): ResolvedEntryQuestion[] {
+function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures" | "generatedFromExamSessionId" | "generatedFromQuestionNumber">>): ResolvedEntryQuestion[] {
   const canonical = reconcileEntryQuestions(entry).entry;
   if (canonical.structuredQuestions?.length) {
-    return canonical.structuredQuestions.map((question, index) => projectStructuredQuestion({ ...question, choices: question.choices.map(stripLegacyChoiceSeparator) }, index, canonical.figures));
+    const number = normalizeQuestionNumber(canonical.generatedFromQuestionNumber ?? "");
+    const matches = canonical.structuredQuestions.filter((question) => normalizeQuestionNumber(question.questionNumber) === number);
+    const extras = canonical.structuredQuestions.filter((question) => normalizeQuestionNumber(question.questionNumber) !== number);
+    // Earlier versions could persist synthetic recovered source-number blocks.
+    // Scope display only when their provenance is demonstrable; keep raw data.
+    const recoveredSourceOnly = Boolean(canonical.generatedFromExamSessionId && number && matches.length === 1 && extras.length
+      && extras.every((question) => question.needsReview && question.warning === "기존 호환 본문에서 복구된 문항입니다. 원문을 확인하세요."
+        && !(canonical.answerKey ?? []).some((answer) => normalizeQuestionNumber(answer.questionNumber) === normalizeQuestionNumber(question.questionNumber))
+        && !(canonical.questionMeta ?? []).some((meta) => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(question.questionNumber))
+        && !Object.keys(canonical.questionContentSegments ?? {}).some((key) => normalizeQuestionNumber(key) === normalizeQuestionNumber(question.questionNumber))));
+    const questions = recoveredSourceOnly ? matches : canonical.structuredQuestions;
+    return questions.map((question, index) => projectStructuredQuestion({ ...question, choices: question.choices.map(stripLegacyChoiceSeparator) }, index, canonical.figures));
+  }
+
+  const generated = canonical.generatedFromExamSessionId ? resolveGeneratedWrongAnswerContent(canonical) : { status: "unavailable" as const };
+  if (generated.status === "matched" && canonical.generatedFromQuestionNumber) {
+    const presentation = resolveCanonicalQuestionPresentation(canonical.question, generated.segments);
+    return [projectStructuredQuestion({ questionNumber: canonical.generatedFromQuestionNumber, questionText: "", conditions: [], equations: [], choices: presentation.choices, contentSegments: presentation.segments, figureIds: presentation.segments.flatMap((segment) => segment.type === "figure" ? [segment.figureId] : []) }, 0, canonical.figures)];
   }
 
   return parseQuestionText(canonical.question)
@@ -96,6 +118,16 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
         figureIds: [...new Set(references.map(({ id }) => id).filter(Boolean))],
       };
     });
+}
+
+export function getEntryQuestions(entry: Parameters<typeof resolveEntryQuestions>[0]): ResolvedEntryQuestion[] {
+  const stimuli = resolveEntryQuestionStimuli(entry);
+  const questions = resolveEntryQuestions(entry);
+  return questions.map(question => {
+    const number = normalizeQuestionNumber(question.questionNumber);
+    const passage = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1 ? stimuli.get(number) : undefined;
+    return passage ? { ...question, passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : question;
+  });
 }
 
 /**

@@ -1,12 +1,14 @@
+import { createCanonicalAnnotationContext, getEntryCanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
+import { useState } from "react";
 import { parseQuestionText } from "../utils/textLayout";
+import { resolveQuestionFigures } from "../utils/questionAssets";
 import { getEntryQuestions } from "../utils/entryQuestions";
 import { normalizeQuestionNumber, normalizeQuestionMeta } from "../utils/questionMeta";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import AnnotatableQuestion from "./AnnotatableQuestion";
 import DiagramCard from "./DiagramCard";
 import ZoomableImageViewer from "./ZoomableImageViewer";
-import StructuredQuestionRenderer from "../features/entries/components/StructuredQuestionRenderer";
 import ExamPaperCompositor, { type ExamPaperLayout } from "./ExamPaperCompositor";
 import type { PaperNavigationMode } from "./paperPagination";
 import { Maximize2 } from "lucide-react";
@@ -68,6 +70,7 @@ export default function StudyPaperView({
   currentQuestionNumber,
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
+  const [expandedDiagramsEntryId, setExpandedDiagramsEntryId] = useState<string | null>(null);
   const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
@@ -99,7 +102,7 @@ export default function StudyPaperView({
   const seenStimuli = new Set<string>();
   const structuredQuestionNodes: QuestionFocusItem[] = structuredQuestions.map((question, index) => {
     const number = normalizeQuestionNumber(question.questionNumber);
-    const stimulus = stimulusByQuestion.get(number);
+    const stimulus = question.passage ?? stimulusByQuestion.get(number);
     const stimulusIncluded = Boolean(stimulus && !seenStimuli.has(stimulus.id));
     if (stimulus) seenStimuli.add(stimulus.id);
     const stimulusFigureIds = new Set(readFigureTokenReferences([stimulus?.text]).map(({ id }) => id));
@@ -109,7 +112,8 @@ export default function StudyPaperView({
     const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
     const revealed = revealedAnswerNumbers?.has(number);
     return {
-      id: number || `question-${index}`,
+      id: `${number || "question"}-${index}`,
+      questionNumber: number,
       groupId: stimulus?.id,
       stimulusNode: stimulusIncluded && stimulus ? <section className="exam-passage"><QuestionContentView text={stimulus.text} figures={stimulusFigures} /></section> : undefined,
       stimulusIncluded,
@@ -118,7 +122,8 @@ export default function StudyPaperView({
           <div><span className="question-identity">{question.questionNumber}번</span><small className="question-sequence">{question.position} / {questionCount}</small>{question.points !== undefined && <small>{question.points}점</small>}{question.needsReview && <small className="answer-review-badge">검토 필요</small>}</div>
           <div className="structured-problem-sheet-actions">{selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}{onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}{onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}{answer ? <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 ${revealed ? "숨기기" : "보기"}`} aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 보기`} disabled title="연결된 정답이 없습니다.">답</button>}</div>
         </header>
-        <StructuredQuestionRenderer question={question} entry={entry} context={{ questionNumber: question.questionNumber, position: question.position }} />
+        {stimulusIncluded && stimulus && !(displayMode === "exam" && paperPresentation === "two-question") && <section className="exam-passage"><QuestionContentView text={stimulus.text} figures={stimulusFigures} appendUnreferencedFigures={false} /></section>}
+        <AnnotatableQuestion question={entry.question} canonicalSegments={question.contentSegments ?? [{ id: "body", type: "text", text: question.questionText }]} canonicalChoices={question.choices} canonicalPassage={stimulus?.text} canonicalAnnotationContext={createCanonicalAnnotationContext(structuredQuestions, question)} figures={resolveQuestionFigures(entry, question)} questionImages={[]} annotations={entry.annotations ?? []} memoMode={memoMode} activeTool={activeTool} onAnnotationsChange={onAnnotationsChange} onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
         {revealed && answer && <div role="status" className="structured-problem-sheet-answer"><strong>정답</strong> {answer.answer} {onOpenQuestionSolution && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionSolution(number)}>해설 보기</button>}</div>}
         {question.warning && <p className="structured-problem-sheet-warning">{question.warning}</p>}
       </article>,
@@ -152,6 +157,7 @@ export default function StudyPaperView({
         ) : <AnnotatableQuestion
           key={entry.id}
           question={entry.question}
+          canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
           canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
           canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
           questionImages={entry.questionImages}
@@ -182,14 +188,14 @@ export default function StudyPaperView({
         />}
 
         {displayMode === "questions" && diagramItems.length > 0 && (
-          <details className="study-paper-diagrams" aria-label="학습 시각화">
+          <details key={`diagrams-${entry.id}`} className="study-paper-diagrams" aria-label="학습 시각화" onToggle={event => setExpandedDiagramsEntryId(event.currentTarget.open ? entry.id : null)}>
             <summary className="study-paper-section-title">
               <span />
-              <strong>GPT 학습용 시각화</strong>
+              <strong>GPT 학습용 시각화 {diagramItems.length}개</strong>
               <span />
             </summary>
             <div className="study-paper-diagram-grid">
-              {diagramItems.slice(0, 1).map((item) => (
+              {expandedDiagramsEntryId === entry.id && diagramItems.map((item) => (
                 <div key={item.id} className="study-paper-diagram-item">
                   <span className="formula-chip">{item.label}</span>
                   <DiagramCard diagramType={item.diagramType} diagramSpec={item.diagramSpec} />

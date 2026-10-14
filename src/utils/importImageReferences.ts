@@ -17,6 +17,7 @@ export function collectFigureImageReferences(figure: SheetFigureItem): string[] 
 export function collectEntryImportImageReferences(entry: Partial<EntryFormData>): string[] {
   return [
     ...(entry.questionImages ?? []),
+    ...(entry.annotations ?? []).flatMap(annotation => annotation.kind === "image" ? [annotation.imageId] : []),
     ...(entry.sourcePageImages ?? []),
     ...(entry.questionSolutionHotspots ?? []).map(hotspot => hotspot.sourcePageImage),
     ...(entry.questionSourceCrops ?? []).flatMap((crop) => [crop.image, crop.sourcePageImage]),
@@ -68,6 +69,12 @@ export function mapEntryImportImageReferences(
   };
   return {
     ...entry,
+    ...(entry.annotations !== undefined ? { annotations: entry.annotations.map(annotation => {
+      if (annotation.kind !== "image") return annotation;
+      const imageId = map(annotation.imageId);
+      if (!imageId) throw new Error("이미지 필기의 원본 파일 연결을 확인할 수 없습니다.");
+      return { ...annotation, imageId };
+    }) } : {}),
     questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     questionSolutionHotspots: entry.questionSolutionHotspots?.flatMap(hotspot => {

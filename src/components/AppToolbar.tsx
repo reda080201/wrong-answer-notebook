@@ -28,6 +28,8 @@ interface AppToolbarProps {
   todayReviewCount: number;
   startReview: (mode: "today" | "random" | "difficult" | "important") => void;
   onOpenSettings: () => void;
+  examHistoryCount?: number;
+  onOpenExamHistory?: () => void;
 }
 
 export default function AppToolbar({
@@ -43,6 +45,8 @@ export default function AppToolbar({
   todayReviewCount,
   startReview,
   onOpenSettings,
+  examHistoryCount = 0,
+  onOpenExamHistory,
 }: AppToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
   const sortOptions = getSortOptionsForSection(activeSection);
@@ -74,6 +78,7 @@ export default function AppToolbar({
           {activeSection === "problem_sheet" ? "어려운 문항 복습" : "어려움 집중"}
         </button>
       </Menu>}
+      {onOpenExamHistory && examHistoryCount > 0 && <button type="button" className="exam-history-trigger btn-secondary" onClick={onOpenExamHistory}>이력 <span>{examHistoryCount}</span></button>}
       <button type="button" className="toolbar-settings-button btn-icon" aria-label="설정" title="설정" onClick={onOpenSettings}>
         ⚙
       </button>

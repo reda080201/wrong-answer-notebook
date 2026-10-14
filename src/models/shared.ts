@@ -8,6 +8,8 @@ export interface TextRangeAnnotation {
   end: number;
   tool: AnnotationTool;
   /** Optional anchors into canonical question text segments. Legacy offsets remain valid. */
+  /** Optional entry-local question identity; old anchors remain readable. */
+  canonicalQuestionKey?: string;
   canonicalAnchors?: Array<{ segmentId: string; start: number; end: number }>;
 }
 
