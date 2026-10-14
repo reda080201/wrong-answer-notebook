@@ -86,4 +86,3 @@ export function updateQuestionCompatibilityText(original: string, next: Structur
   const edits: CompatibilityEdit[] = previous.map((before, index) => ({ before, after: next[index] }));
   return applyQuestionCompatibilityEdits(original, [...edits, ...next.slice(previous.length).map(after => ({ after }))]);
 }
-
