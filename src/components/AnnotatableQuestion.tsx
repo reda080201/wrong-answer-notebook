@@ -36,6 +36,7 @@ import InlineQuestionText from "./InlineQuestionText";
 import { resolveCanonicalQuestionPresentation } from "../utils/canonicalQuestionPresentation";
 import QuestionContentView, { resolveCanonicalAnnotationRanges } from "./QuestionContentView";
 import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "../utils/figureTokens";
+import type { ResolvedEntryQuestion } from "../utils/entryQuestions";
 
 interface AnnotatableQuestionProps {
   question: string;
@@ -61,6 +62,7 @@ interface AnnotatableQuestionProps {
   onToggleQuestionSelected?: (questionNumber: string) => void;
   sourceEntry?: WrongAnswerEntry;
   canonicalSegments?: QuestionContentSegment[];
+  canonicalChoices?: string[];
   canonicalReviewRequired?: boolean;
   presentation?: "questions" | "exam";
   revealedAnswerNumbers?: Set<string>;
@@ -69,6 +71,8 @@ interface AnnotatableQuestionProps {
 }
 
 interface FocusedQuestionViewProps {
+  canonicalQuestion?: ResolvedEntryQuestion;
+  legacyQuestion?: string;
   passage?: PassageBlock | ParagraphBlock;
   questionBlock: QuestionBlock;
   questionImages: string[];
@@ -717,6 +721,8 @@ function shouldShowSourceNumber(block: QuestionBlock): boolean {
 }
 
 export function FocusedQuestionView({
+  canonicalQuestion,
+  legacyQuestion,
   passage,
   questionBlock,
   questionImages,
@@ -730,6 +736,29 @@ export function FocusedQuestionView({
   showImages,
   suspiciousSegments = [],
 }: FocusedQuestionViewProps) {
+  if (canonicalQuestion?.contentSegments?.length) {
+    return <article className="focused-question-view">
+      {passage && <section className="focused-passage"><span className="focused-section-label">지문</span><InlineQuestionText text={passage.text} figures={figures} /></section>}
+      <section className="focused-question-card">
+        <header className="focused-question-header"><h3>문제 {canonicalQuestion.questionNumber}</h3></header>
+        <AnnotatableQuestion
+          question={legacyQuestion ?? canonicalQuestion.questionText}
+          canonicalSegments={canonicalQuestion.contentSegments}
+          canonicalChoices={canonicalQuestion.choices}
+          figures={figures}
+          questionImages={showImages ? questionImages : []}
+          annotations={annotations}
+          memoMode={memoMode}
+          activeTool={activeTool}
+          onAnnotationsChange={onAnnotationsChange}
+          onWikiLinkClick={onWikiLinkClick}
+          existingTargets={existingTargets}
+          zoomableImages
+        />
+        {canonicalQuestion.warning && <p role="note">{canonicalQuestion.warning}</p>}
+      </section>
+    </article>;
+  }
   const questionAnns = filterQuestionAnnotations(annotations);
   const textAnns = questionAnns.filter(
     (a): a is Extract<Annotation, { kind: "text" }> => a.kind === "text",
@@ -1115,6 +1144,7 @@ export default function AnnotatableQuestion({
   onToggleQuestionSelected,
   sourceEntry,
   canonicalSegments,
+  canonicalChoices,
   canonicalReviewRequired = false,
   presentation = "questions",
   revealedAnswerNumbers,
@@ -1203,7 +1233,9 @@ export default function AnnotatableQuestion({
         >
           {canonicalReviewRequired && <p className="question-content-review-notice" role="status">문항 원문과 순서 연결을 확인해 주세요.</p>}
           {canonicalSegments?.length && !showOriginalAnnotations ? (() => {
-            const presentation = resolveCanonicalQuestionPresentation(question, canonicalSegments);
+            const presentation = canonicalChoices === undefined
+              ? resolveCanonicalQuestionPresentation(question, canonicalSegments)
+              : { segments: canonicalSegments, choices: canonicalChoices };
             const normalized = presentation.segments;
             const unresolved = resolveCanonicalAnnotationRanges(normalized, textAnns, question).unresolved;
             return <>

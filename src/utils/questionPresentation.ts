@@ -136,6 +136,11 @@ export function normalizeQuestionPresentationSegments(input: {
     previousConditionLabel = segment.type === "figure" ? previousConditionLabel : undefined;
   }
   const represented = new Set(source.map(fingerprint));
+  const projectedConditions = new Set(input.conditions.filter((text) => {
+    const body = conditionParts(undefined, text);
+    return !body.label && source.filter((segment) => segment.type === "condition"
+      && normalizeText(conditionParts(segment.label, segment.text).text) === normalizeText(body.text)).length === 1;
+  }).map(normalizeText));
   const usedIds = new Set(source.map((segment) => segment.id));
   let supplementSequence = 0;
   const createSupplementId = () => {
@@ -182,10 +187,19 @@ export function normalizeQuestionPresentationSegments(input: {
     fallback.shift();
   }
   for (const segment of fallback) {
+    if (segment.type === "condition") {
+      // Legacy conditions are a projection of canonical conditions. Match an
+      // unlabelled projection only when exactly one canonical unit owns it.
+      const body = conditionParts(undefined, segment.text);
+      const matches = input.contentSegments?.filter((candidate) => candidate.type === "condition"
+        && normalizeText(conditionParts(candidate.label, candidate.text).text) === normalizeText(body.text));
+      if (!body.label && matches?.length === 1) continue;
+    }
     if (segment.type === "text") {
       const lines = normalizedLines(segment.text);
       if (lines.length > 1) {
         for (const [lineIndex, originalLine] of lines.entries()) {
+          if (projectedConditions.has(normalizeText(originalLine))) continue;
           const line = removeExactRepresentedFragments(originalLine, representedFragments);
           if (!line || representedLines.has(line)) continue;
           if (!insertLegacyLineNearExactAnchor(source, line, createSupplementId)) insertLegacyLineByNeighbors(source, lines, lineIndex, createSupplementId);

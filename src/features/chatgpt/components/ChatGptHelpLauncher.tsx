@@ -62,7 +62,7 @@ export default function ChatGptHelpLauncher({
   };
   const [selectedQuestion, setSelectedQuestion] = useState(() => recommendedChatGptQuestions(mode)[0]);
   const [status, setStatus] = useState<string | null>(null);
-  const identity = JSON.stringify([mode, questionContext?.contextId, questionContext?.questionNumber]);
+  const identity = JSON.stringify([mode, questionContext?.contextId, questionContext?.questionNumber, preferences]);
   const [disclosure, setDisclosure] = useState({ identity, allowed: false });
   const shareExistingAnswersAndExplanations = mode !== "pre-submit" && disclosure.identity === identity && disclosure.allowed;
   const setShareExistingAnswersAndExplanations = (allowed: boolean) => setDisclosure({ identity, allowed });

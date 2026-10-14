@@ -3,6 +3,11 @@ import { normalizeStructuredQuestionType } from "../../../utils/structuredQuesti
 import { stripLegacyChoiceSeparator } from "../../../utils/legacyChoiceSeparator";
 import { normalizeQuestionPresentationSegments } from "../../../utils/questionPresentation";
 
+function projectCondition(segment: Extract<QuestionContentSegment, { type: "condition" }>): string {
+  return segment.label && !segment.text.trimStart().startsWith(segment.label)
+    ? `${segment.label} ${segment.text}` : segment.text;
+}
+
 export type ImportWorkspaceStatus = "analyzing" | "review_required" | "ready" | "saving" | "completed" | "failed";
 export type ImportQuestionStatus = "ready" | "needs_review" | "missing_answer" | "duplicate_number" | "unassigned_image" | "invalid";
 export type ImportWarningSeverity = "info" | "warning" | "error";
@@ -112,7 +117,7 @@ export function updateDraftContentSegment(question: ImportQuestionDraft, segment
     if (segment.type === "equation") return { ...segment, latex: value };
     return segment;
   });
-  const conditions = contentSegments.filter((segment): segment is Extract<QuestionContentSegment, { type: "condition" }> => segment.type === "condition").map((segment) => segment.text).filter(Boolean);
+  const conditions = contentSegments.filter((segment): segment is Extract<QuestionContentSegment, { type: "condition" }> => segment.type === "condition").map(projectCondition).filter(Boolean);
   const equations = contentSegments.filter((segment): segment is Extract<QuestionContentSegment, { type: "equation" }> => segment.type === "equation").map((segment) => segment.latex).filter(Boolean);
   return {
     ...question,
@@ -134,7 +139,7 @@ export function draftContentSegments(question: ImportQuestionDraft): QuestionCon
 
 function projectSemanticFields(question: ImportQuestionDraft, segments: QuestionContentSegment[]) {
   const text = segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "text" }> => segment.type === "text").map((segment) => segment.text).join("\n").trim();
-  const conditions = segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "condition" }> => segment.type === "condition").map((segment) => segment.text).filter(Boolean);
+  const conditions = segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "condition" }> => segment.type === "condition").map(projectCondition).filter(Boolean);
   const equations = segments.filter((segment): segment is Extract<QuestionContentSegment, { type: "equation" }> => segment.type === "equation").map((segment) => segment.latex).filter(Boolean);
   return {
     questionText: text || question.sourceText?.trim() || "",

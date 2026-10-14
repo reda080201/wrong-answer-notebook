@@ -39,6 +39,7 @@ import StudyPaperView from "../../../components/StudyPaperView";
 import StudyFlowStrip from "../../../components/StudyFlowStrip";
 import StudyZoomViewport, { getQuestionZoomStorageKey } from "../../../components/StudyZoomViewport";
 import QuestionTheaterView from "../../../components/QuestionTheaterView";
+import { resolveQuestionFigures } from "../../../utils/questionAssets";
 import LectureReaderView from "../../../components/LectureReaderView";
 import ExportHubModal from "../../../features/export/components/ExportHubModal";
 import type { ChatGptSharePayload } from "../../../features/export/types";
@@ -1016,6 +1017,8 @@ export default function EntryDetail({
   const theaterQuestion = theaterQuestionIndex !== null
     ? questionAnchors[theaterQuestionIndex] as QuestionBlock | undefined
     : undefined;
+  const theaterCanonicalMatches = theaterQuestion ? originalStudyQuestions.filter((question) => question.questionNumber === (questionIdentifier(theaterQuestion) ?? String(theaterQuestion.displayNumber))) : [];
+  const theaterCanonicalQuestion = theaterCanonicalMatches.length === 1 ? theaterCanonicalMatches[0] : undefined;
   const theaterPassage = (() => {
     if (!theaterQuestion) return undefined;
     const currentIndex = questionBlocks.findIndex((block) => block === theaterQuestion);
@@ -2198,6 +2201,7 @@ export default function EntryDetail({
       </ReviewExportDialogs>
       {theaterQuestion && theaterQuestionIndex !== null && (
         <QuestionTheaterView
+          canonicalQuestion={theaterCanonicalQuestion}
           passage={theaterPassage}
           questionBlock={theaterQuestion}
           questionIndex={
@@ -2214,7 +2218,7 @@ export default function EntryDetail({
           questionMeta={theaterQuestionMeta}
           sourceEntry={entry}
           questionImages={entry.questionImages}
-          figures={entry.figures ?? []}
+          figures={theaterCanonicalQuestion ? resolveQuestionFigures(entry, theaterCanonicalQuestion) : entry.figures ?? []}
           annotations={entry.annotations ?? []}
           memoMode={memoMode}
           activeTool={activeTool}

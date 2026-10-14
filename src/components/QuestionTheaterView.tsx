@@ -5,6 +5,7 @@ import type { Annotation, AnnotationTool, QuestionMeta, ReviewResult, SheetAnswe
 import type { PassageBlock, ParagraphBlock, QuestionBlock } from "../utils/textLayout";
 import { LinkifiedText } from "../utils/wikiLinks";
 import MathText from "./MathText";
+import type { ResolvedEntryQuestion } from "../utils/entryQuestions";
 import Dialog from "../shared/ui/Dialog";
 import Menu from "../shared/ui/Menu";
 import { FocusedQuestionView } from "./AnnotatableQuestion";
@@ -17,6 +18,7 @@ import {
 } from "../utils/difficulty";
 
 interface QuestionTheaterViewProps {
+  canonicalQuestion?: ResolvedEntryQuestion;
   passage?: PassageBlock | ParagraphBlock;
   questionBlock: QuestionBlock;
   questionIndex: number;
@@ -54,6 +56,7 @@ function loadSplitRatio() {
 }
 
 export default function QuestionTheaterView({
+  canonicalQuestion,
   passage,
   questionBlock,
   questionIndex,
@@ -244,6 +247,8 @@ export default function QuestionTheaterView({
             </div>
             )}
             <FocusedQuestionView
+              canonicalQuestion={canonicalQuestion}
+              legacyQuestion={sourceEntry?.question}
               passage={passage}
               questionBlock={questionBlock}
               questionImages={questionImages}

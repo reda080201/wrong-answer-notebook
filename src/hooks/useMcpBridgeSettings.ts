@@ -130,6 +130,9 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
       const status = await testMcpBridgeConnectionApi();
       const runtimeStatus = toRuntimeStatus(status);
       setRuntimeStatus(runtimeStatus);
+      if (runtimeStatus.status !== "listening" && runtimeStatus.status !== "connected") {
+        throw new Error(status.lastError || "로컬 MCP 브리지가 연결 대기 상태가 아닙니다.");
+      }
       setSettingsMessage(`연결 테스트 성공 (포트 ${status.port}).`);
       return runtimeStatus;
     }

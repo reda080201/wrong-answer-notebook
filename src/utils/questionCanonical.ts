@@ -11,7 +11,7 @@ export interface QuestionCanonicalDiagnostics {
   message?: string;
 }
 
-type CanonicalEntryLike = Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures">>;
+type CanonicalEntryLike = Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures" | "generatedFromExamSessionId" | "generatedFromQuestionNumber">>;
 
 export interface QuestionReconciliationResult<T extends CanonicalEntryLike = WrongAnswerEntry> {
   entry: T;
@@ -50,7 +50,15 @@ export function diagnoseQuestionSources(entry: CanonicalEntryLike): QuestionCano
     ...sources.questionMeta.numbers,
     ...sources.questionContentSegments.numbers,
   ];
-  const expectedNumbers = corroboratingNumbers.length
+  // A generated wrong answer is one snapshot. A source number at the start of
+  // its prose is provenance, not an additional question to recover.
+  const generatedNumber = normalizeQuestionNumber(entry.generatedFromQuestionNumber ?? "");
+  const singleGeneratedSnapshot = Boolean(entry.generatedFromExamSessionId && generatedNumber
+    && sources.structuredQuestions.numbers.length === 1
+    && sources.structuredQuestions.numbers[0] === generatedNumber
+    && sources.structuredQuestions.duplicates.length === 0
+    && corroboratingNumbers.every((number) => number === generatedNumber));
+  const expectedNumbers = singleGeneratedSnapshot ? [generatedNumber] : corroboratingNumbers.length
     ? [...new Set([...corroboratingNumbers, ...sources.compatibilityText.numbers])]
     : [...sources.structuredQuestions.numbers];
   const structured = new Set(sources.structuredQuestions.numbers);

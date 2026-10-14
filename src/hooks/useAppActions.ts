@@ -43,7 +43,7 @@ import {
   type GptSolutionApplyMode,
 } from "../utils/gptSolution";
 import { resolveSheetGroupId } from "../utils/sheetGroup";
-import { runClientIntegrityCheck } from "../utils/integrity";
+import { readClientImageInventory, runClientIntegrityCheck } from "../utils/integrity";
 import {
   applyReviewResult,
   getDifficultReviewItems,
@@ -732,14 +732,21 @@ export function useAppActions({
   };
 
   const runIntegrity = async () => {
-    const nativeReport = await runNativeIntegrityCheck().catch(() => null);
-    const report = nativeReport ?? runClientIntegrityCheck(entries, settings);
+    try {
+    setIntegrityReport(null);
+    setSettingsMessage("무결성 검사 중…");
+    const nativeReport = await runNativeIntegrityCheck();
+    const report = nativeReport ?? runClientIntegrityCheck(entries, settings, await readClientImageInventory(entries));
     setIntegrityReport(report);
     setSettingsMessage(
       report.issues.length === 0
         ? "무결성 검사에서 문제가 발견되지 않았습니다."
         : `무결성 검사에서 ${report.issues.length}개 항목을 확인했습니다.`,
     );
+    } catch (error) {
+      setIntegrityReport(null);
+      setSettingsMessage(error instanceof Error ? error.message : "무결성 검사를 완료하지 못했습니다. 다시 검사하세요.");
+    }
   };
 
   const handleBackup = async () => {
