@@ -202,3 +202,15 @@
 .import-mode-tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--border); }
 .import-mode-tabs button { min-height: 36px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-muted); font-weight: 650; }
 .import-mode-tabs button.active { border-bottom-color: var(--accent); color: var(--accent); }
+
+.text-review-panel[role="dialog"] { width: min(1120px, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); }
+.text-review-panel > .dialog-body { min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.text-review-panel .text-review-grid { min-width: 0; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+.text-review-panel .text-review-grid > * { min-width: 0; }
+.text-review-panel .modal-head { flex-wrap: wrap; gap: 12px; }
+.text-review-panel textarea { box-sizing: border-box; width: 100%; }
+@media (max-width: 760px) {
+  .text-review-panel .text-review-grid { grid-template-columns: minmax(0, 1fr); }
+  .text-review-panel .text-review-editor textarea { min-height: 220px; }
+  .text-review-panel .text-review-head-actions { flex-wrap: wrap; }
+}

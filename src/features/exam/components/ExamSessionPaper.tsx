@@ -105,7 +105,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
         <header className="exam-question-heading"><strong>{question.questionNumber}.</strong>{typeof question.points === "number" && <span>[{question.points}점]</span>}</header>
         {(question.warning || question.sourceWarning) && <p className="exam-question-warning">{question.warning || question.sourceWarning}</p>}
         {!focusPresentation && question.passage && firstInGroup && <section className="exam-passage"><QuestionContentView text={question.passage} figures={question.figures} /></section>}
-        <QuestionContentView text={question.question} segments={question.contentSegments} figures={question.figures} />
+        <QuestionContentView referencedPassage={question.passage} text={question.question} segments={question.contentSegments} figures={question.figures} />
         <ExamResponseEditor question={question} response={response} disabled={disabled} onChange={value => onResponse(question.questionNumber, { response: value })} />
         <label className="real-exam-review"><input type="checkbox" aria-label={`${question.questionNumber}번 검토 표시`} checked={response?.markedForReview ?? false} disabled={disabled} onChange={event => onResponse(question.questionNumber, { markedForReview: event.target.checked })} />검토 표시</label>
         {practice && preferences?.showScratchNote !== false && <details><summary>풀이 메모</summary><label className="exam-note-field">{question.questionNumber}번 풀이 메모<textarea value={response?.scratchNote ?? ""} disabled={disabled} onChange={event => onResponse(question.questionNumber, { scratchNote: event.target.value })} /></label></details>}

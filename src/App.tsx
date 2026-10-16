@@ -51,6 +51,7 @@ import { canResumeReviewSession } from "./features/review/storage/reviewSessionI
 import { useNavigationHistory } from "./hooks/useNavigationHistory";
 import { usePendingDeletionCoordinator } from "./hooks/usePendingDeletionCoordinator";
 import Snackbar from "./shared/ui/Snackbar";
+import { prefersCompactExamLayout } from "./features/exam/services/examLayout";
 import OnboardingTour from "./shared/ui/OnboardingTour";
 import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 import { NotificationProvider, NotificationRegion } from "./shared/ui/NotificationProvider";
@@ -542,7 +543,7 @@ function AppContent() {
     }
     setRealExamMinutes(defaultMinutes);
     setRealExamShowTimer(settings.examPreferences.showTimer);
-    setRealExamAnswerSheetOpen(settings.examPreferences.realExamAnswerSheetOpen ?? true);
+    setRealExamAnswerSheetOpen(prefersCompactExamLayout() ? false : settings.examPreferences.realExamAnswerSheetOpen ?? true);
     setRealExamAnswerSheetLayout(settings.examPreferences.defaultAnswerSheetLayout ?? "auto");
     setRealExamStartEntry(selected);
   };
@@ -673,6 +674,8 @@ function AppContent() {
           todayReviewCount={todayReviewCount}
           startReview={actions.startReview}
           onOpenSettings={() => openSettings()}
+          examHistoryCount={selectedIsVisible && selected?.entryKind === "problem_sheet" && !examSession ? selectedExamHistory.length : 0}
+          onOpenExamHistory={() => setExamHistoryOpen(true)}
         />}
 
         {!showLearningHub && !showQuestionBank && !showLibraryExplorer && activeSection === "problem_sheet" && (
@@ -815,7 +818,6 @@ function AppContent() {
           ) : selected && selectedIsVisible ? (
             <>
               {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
-              {selected.entryKind === "problem_sheet" && !examSession && selectedExamHistory.length > 0 && <button type="button" className="exam-history-trigger btn-secondary" onClick={() => setExamHistoryOpen(true)}>이력 <span>{selectedExamHistory.length}</span></button>}
               {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
               <EntryDetail
               entry={selected}
@@ -1128,7 +1130,7 @@ function AppContent() {
             </label>
             <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.showTimer ?? realExamShowTimer} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamShowTimer(event.target.checked)} /> 타이머 표시</label>
             <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetOpen(event.target.checked)} /> 답안지 열기</label>
-            <p className="form-hint">타이머와 답안지를 함께 엽니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
+            <p className="form-hint">선택한 설정으로 시험을 시작합니다. 답안지는 시험 중에도 펼치거나 접을 수 있습니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
             <div className="dialog-actions">
               <button type="button" className="btn-secondary" onClick={() => setRealExamStartEntry(null)}>취소</button>
               <button
