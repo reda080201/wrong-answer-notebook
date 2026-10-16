@@ -67,6 +67,7 @@ interface AnnotatableQuestionProps {
   canonicalChoices?: string[];
   canonicalPassage?: string;
   canonicalReviewRequired?: boolean;
+  canonicalReviewMessage?: string;
   presentation?: "questions" | "exam";
   revealedAnswerNumbers?: Set<string>;
   onToggleAnswerReveal?: (questionNumber: string) => void;
@@ -1155,6 +1156,7 @@ export default function AnnotatableQuestion({
   canonicalChoices,
   canonicalPassage,
   canonicalReviewRequired = false,
+  canonicalReviewMessage = "문항 원문과 순서 연결을 확인해 주세요.",
   presentation = "questions",
   revealedAnswerNumbers,
   onToggleAnswerReveal,
@@ -1241,7 +1243,7 @@ export default function AnnotatableQuestion({
           onMouseUp={applyTextAnnotation}
           onClick={handleTextClick}
         >
-          {canonicalReviewRequired && <p className="question-content-review-notice" role="status">문항 원문과 순서 연결을 확인해 주세요.</p>}
+          {canonicalReviewRequired && <p className="question-content-review-notice" role="status">{canonicalReviewMessage}</p>}
           {canonicalSegments?.length && !showOriginalAnnotations ? (() => {
             const presentation = canonicalChoices === undefined
               ? resolveCanonicalQuestionPresentation(question, canonicalSegments)
