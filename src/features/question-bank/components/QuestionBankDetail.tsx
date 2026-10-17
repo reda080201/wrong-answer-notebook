@@ -104,7 +104,9 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
 
   const content = item && <div className="question-bank-detail">
       <div className="question-bank-card__chips"><span>{PROBLEM_SOURCE_LABELS[item.source.type]}</span><span>{item.subject}</span>{item.classification.unit && <span>{item.classification.unit}</span>}{item.classification.subunit && <span>{item.classification.subunit}</span>}</div>
-      {item.presentation ? <QuestionContentView {...item.presentation} appendUnreferencedFigures={false} /> : <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>}
+      {item.presentation?.passage && <section className="exam-passage"><QuestionContentView text={item.presentation.passage} figures={item.presentation.figures} appendUnreferencedFigures={false} /></section>}
+      {item.presentation ? <QuestionContentView referencedPassage={item.presentation.passage} {...item.presentation} appendUnreferencedFigures={false} /> : <pre className="question-bank-detail__question"><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></pre>}
+
       {metricRows.length ? <dl>{metricRows.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl> : <p className="question-bank-detail__empty-metrics">평가 정보 없음</p>}
       <section><h4>정답</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.answer ?? "연결되지 않음")} /></p></section>
       <section><h4>해설</h4><p><MathText text={normalizeLegacyMathCommandsForDisplay(item.explanation ?? "연결되지 않음")} /></p></section>

@@ -1,3 +1,4 @@
+import { resolveEntryQuestionStimuli, type EntryQuestionStimulus } from "./questionStimuli";
 import type { ProcessingStatus, QuestionContentSegment, SheetFigureItem, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
@@ -14,6 +15,8 @@ export interface ResolvedEntryQuestion {
   questionNumber: string;
   /** One-based order within this entry, for navigation only. */
   position: number;
+  /** Read-only shared passage projection from the preserved compatibility source. */
+  passage?: EntryQuestionStimulus;
   section?: string;
   questionType?: StructuredQuestion["questionType"];
   questionText: string;
@@ -66,7 +69,8 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number, 
   };
 }
 
-export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures" | "generatedFromExamSessionId" | "generatedFromQuestionNumber">>): ResolvedEntryQuestion[] {
+function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures" | "generatedFromExamSessionId" | "generatedFromQuestionNumber">>): ResolvedEntryQuestion[] {
+
   const canonical = reconcileEntryQuestions(entry).entry;
   if (canonical.structuredQuestions?.length) {
     const number = normalizeQuestionNumber(canonical.generatedFromQuestionNumber ?? "");
@@ -115,6 +119,16 @@ export function getEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "st
         figureIds: [...new Set(references.map(({ id }) => id).filter(Boolean))],
       };
     });
+}
+
+export function getEntryQuestions(entry: Parameters<typeof resolveEntryQuestions>[0]): ResolvedEntryQuestion[] {
+  const stimuli = resolveEntryQuestionStimuli(entry);
+  const questions = resolveEntryQuestions(entry);
+  return questions.map(question => {
+    const number = normalizeQuestionNumber(question.questionNumber);
+    const passage = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1 ? stimuli.get(number) : undefined;
+    return passage ? { ...question, passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : question;
+  });
 }
 
 /**

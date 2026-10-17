@@ -19,7 +19,8 @@ export interface QuestionBankItem {
   subject: string;
   questionText: string;
   /** Display-only canonical projection; never written to storage. */
-  presentation?: { text: string; segments: QuestionContentSegment[]; choices: string[]; figures: SheetFigureItem[] };
+  presentation?: { passage?: string; text: string; segments: QuestionContentSegment[]; choices: string[]; figures: SheetFigureItem[] };
+
   source: ProblemSourceInfo;
   classification: ResolvedQuestionClassification;
   answer?: string;

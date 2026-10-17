@@ -1,3 +1,4 @@
+import { getEntryCanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { X } from "lucide-react";
 import { writeUiStorageValue } from "../services/uiStorage";
@@ -248,6 +249,8 @@ export default function QuestionTheaterView({
             )}
             <FocusedQuestionView
               canonicalQuestion={canonicalQuestion}
+              canonicalAnnotationContext={sourceEntry ? getEntryCanonicalAnnotationContext(sourceEntry, canonicalQuestion?.questionNumber, canonicalQuestion?.section) : undefined}
+
               legacyQuestion={sourceEntry?.question}
               passage={passage}
               questionBlock={questionBlock}

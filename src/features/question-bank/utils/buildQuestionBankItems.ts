@@ -66,7 +66,8 @@ function makeItem(entry: WrongAnswerEntry, number: string, text: string, choices
     questionId: answer?.id,
     subject: classification.subject,
     questionText: text,
-    presentation: question?.contentSegments?.length ? { text: question.questionText, segments: question.contentSegments, choices: question.choices, figures: resolveQuestionFigures(entry, question) } : undefined,
+    presentation: question?.contentSegments?.length ? { passage: question.passage?.text, text: question.questionText, segments: question.contentSegments, choices: question.choices, figures: resolveQuestionFigures(entry, question) } : undefined,
+
     source: resolveProblemSource(entry.problemSource),
     classification: { ...classification, answerType: resolvedAnswerType },
     answer: answerText || undefined,
