@@ -396,6 +396,7 @@ export default function ReviewPanel({
                   : questions;
                 const question = candidates.length === 1 ? candidates[0] : undefined;
                 return question?.contentSegments?.length ? <>{question.passage && <section className="exam-passage"><QuestionContentView text={question.passage.text} figures={resolveQuestionFigures(currentEntry, question)} appendUnreferencedFigures={false} /></section>}<QuestionContentView referencedPassage={question.passage?.text} text={question.questionText} segments={question.contentSegments} choices={question.choices} figures={resolveQuestionFigures(currentEntry, question)} appendUnreferencedFigures={false} /></> : <LinkifiedText
+
                 text={currentEntry.question}
                 onLinkClick={onWikiLinkClick}
                 existingTargets={existingTargets}
@@ -521,6 +522,7 @@ function SheetQuestionReviewCard({
       ) : null}
       {question.passage && <section className="exam-passage"><QuestionContentView text={question.passage.text} figures={resolveQuestionFigures(entry, question)} appendUnreferencedFigures={false} /></section>}
       {question.contentSegments?.length ? <QuestionContentView referencedPassage={question.passage?.text} text={question.questionText} segments={question.contentSegments} choices={question.choices} figures={resolveQuestionFigures(entry, question)} appendUnreferencedFigures={false} /> : <LinkifiedText text={block.body} onLinkClick={onWikiLinkClick} existingTargets={existingTargets} conceptContext={buildConceptLinkContext(entry, block.numberLabel)} />}
+
       {!question.contentSegments?.length && block.choices.length > 0 && (
         <ol className="review-choice-list">
           {block.choices.map((choice) => (

@@ -66,6 +66,7 @@ interface AnnotatableQuestionProps {
   canonicalSegments?: QuestionContentSegment[];
   canonicalChoices?: string[];
   canonicalPassage?: string;
+
   canonicalReviewRequired?: boolean;
   presentation?: "questions" | "exam";
   revealedAnswerNumbers?: Set<string>;
@@ -76,6 +77,7 @@ interface AnnotatableQuestionProps {
 interface FocusedQuestionViewProps {
   canonicalQuestion?: ResolvedEntryQuestion;
   canonicalAnnotationContext?: CanonicalAnnotationContext;
+
   legacyQuestion?: string;
   passage?: PassageBlock | ParagraphBlock;
   questionBlock: QuestionBlock;
@@ -727,6 +729,7 @@ function shouldShowSourceNumber(block: QuestionBlock): boolean {
 export function FocusedQuestionView({
   canonicalQuestion,
   canonicalAnnotationContext,
+
   legacyQuestion,
   passage,
   questionBlock,
@@ -752,6 +755,7 @@ export function FocusedQuestionView({
           canonicalAnnotationContext={canonicalAnnotationContext}
           canonicalChoices={canonicalQuestion.choices}
           canonicalPassage={canonicalQuestion.passage?.text ?? passage?.text}
+
           figures={figures}
           questionImages={showImages ? questionImages : []}
           annotations={annotations}
@@ -1154,6 +1158,7 @@ export default function AnnotatableQuestion({
   canonicalAnnotationContext,
   canonicalChoices,
   canonicalPassage,
+
   canonicalReviewRequired = false,
   presentation = "questions",
   revealedAnswerNumbers,
