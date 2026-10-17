@@ -70,6 +70,7 @@ function projectStructuredQuestion(question: StructuredQuestion, index: number, 
 }
 
 function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "structuredQuestions" | "questionContentSegments"> & Partial<Pick<WrongAnswerEntry, "answerKey" | "questionMeta" | "figures" | "generatedFromExamSessionId" | "generatedFromQuestionNumber">>): ResolvedEntryQuestion[] {
+
   const canonical = reconcileEntryQuestions(entry).entry;
   if (canonical.structuredQuestions?.length) {
     const number = normalizeQuestionNumber(canonical.generatedFromQuestionNumber ?? "");

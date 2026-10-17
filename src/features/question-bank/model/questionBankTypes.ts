@@ -20,6 +20,7 @@ export interface QuestionBankItem {
   questionText: string;
   /** Display-only canonical projection; never written to storage. */
   presentation?: { passage?: string; text: string; segments: QuestionContentSegment[]; choices: string[]; figures: SheetFigureItem[] };
+
   source: ProblemSourceInfo;
   classification: ResolvedQuestionClassification;
   answer?: string;

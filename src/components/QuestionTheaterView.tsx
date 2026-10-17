@@ -250,6 +250,7 @@ export default function QuestionTheaterView({
             <FocusedQuestionView
               canonicalQuestion={canonicalQuestion}
               canonicalAnnotationContext={sourceEntry ? getEntryCanonicalAnnotationContext(sourceEntry, canonicalQuestion?.questionNumber, canonicalQuestion?.section) : undefined}
+
               legacyQuestion={sourceEntry?.question}
               passage={passage}
               questionBlock={questionBlock}

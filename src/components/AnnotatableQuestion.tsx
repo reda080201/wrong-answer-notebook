@@ -66,6 +66,7 @@ interface AnnotatableQuestionProps {
   canonicalSegments?: QuestionContentSegment[];
   canonicalChoices?: string[];
   canonicalPassage?: string;
+
   canonicalReviewRequired?: boolean;
   canonicalReviewMessage?: string;
   presentation?: "questions" | "exam";
@@ -77,6 +78,7 @@ interface AnnotatableQuestionProps {
 interface FocusedQuestionViewProps {
   canonicalQuestion?: ResolvedEntryQuestion;
   canonicalAnnotationContext?: CanonicalAnnotationContext;
+
   legacyQuestion?: string;
   passage?: PassageBlock | ParagraphBlock;
   questionBlock: QuestionBlock;
@@ -728,6 +730,7 @@ function shouldShowSourceNumber(block: QuestionBlock): boolean {
 export function FocusedQuestionView({
   canonicalQuestion,
   canonicalAnnotationContext,
+
   legacyQuestion,
   passage,
   questionBlock,
@@ -753,6 +756,7 @@ export function FocusedQuestionView({
           canonicalAnnotationContext={canonicalAnnotationContext}
           canonicalChoices={canonicalQuestion.choices}
           canonicalPassage={canonicalQuestion.passage?.text ?? passage?.text}
+
           figures={figures}
           questionImages={showImages ? questionImages : []}
           annotations={annotations}
@@ -1155,6 +1159,7 @@ export default function AnnotatableQuestion({
   canonicalAnnotationContext,
   canonicalChoices,
   canonicalPassage,
+
   canonicalReviewRequired = false,
   canonicalReviewMessage = "문항 원문과 순서 연결을 확인해 주세요.",
   presentation = "questions",
