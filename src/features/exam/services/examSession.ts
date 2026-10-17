@@ -20,7 +20,8 @@ export { resolveEntryQuestionStimuli } from "../../../utils/questionStimuli";
 export type { EntryQuestionStimulus } from "../../../utils/questionStimuli";
 import { resolveEntryQuestionStimuli } from "../../../utils/questionStimuli";
 
-export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
+/** Shared immutable content projection for ordinary and generated exams. */
+export function createExamQuestionSnapshots(entry: WrongAnswerEntry): ExamQuestionSnapshot[] {
   const blocks = parseQuestionText(entry.question);
   const questions = getEntryQuestions(entry);
   const legacyQuestions = blocks.filter((item): item is QuestionBlock => item.kind === "question");
@@ -76,6 +77,12 @@ export function createExamSession(entry: WrongAnswerEntry, now = new Date(), opt
       source: block.source ? structuredClone(block.source) : undefined,
     };
   });
+  return snapshots;
+}
+
+export function createExamSession(entry: WrongAnswerEntry, now = new Date(), options: ExamSessionCreationOptions = {}): ExamSession {
+  const snapshots = createExamQuestionSnapshots(entry);
+  const questions = getEntryQuestions(entry);
   const mode = options.mode === "real" ? "real" : "practice";
   const sourcePageQuestionMap = buildExplicitSourcePageQuestionMap(entry, questions);
   const startedAt = now.toISOString();

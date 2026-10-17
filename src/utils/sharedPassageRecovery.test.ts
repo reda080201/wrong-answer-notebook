@@ -28,6 +28,10 @@ describe("read-only legacy passage recovery", () => {
     expect(shown.questions[0].warning).toContain("원본 문제지");
     const duplicate = { ...session, questions: [...session.questions, { ...session.questions[0], id: "other", questionNumber: "01번" }] };
     expect(presentSessionSharedPassages(duplicate, [source]).questions[0].passage).toBeUndefined();
+    const changedContent = { ...source, question: source.question.replace("첫 문제", "바뀐 문제") };
+    expect(presentSessionSharedPassages(session, [changedContent]).questions[0].passage).toBeUndefined();
+    const changedSegments = { ...session, questions: session.questions.map(question => ({ ...question, contentSegments: [{ id: "body-1", type: "text" as const, text: "다른 본문" }] })) };
+    expect(presentSessionSharedPassages(changedSegments, [source]).questions[0].passage).toBeUndefined();
   });
   it("prepends the recovered passage to a legacy wrong answer but keeps its raw text and anchors intact", () => {
     const session = legacySession(), question = session.questions[0];

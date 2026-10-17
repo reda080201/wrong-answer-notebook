@@ -27,6 +27,23 @@ const session: ExamSession = {
   ],
 };
 describe("shared exam paper interactions", () => {
+  it("keeps an unlinked first practice question in text mode instead of navigating to another page's question", () => {
+    const onNavigate = vi.fn();
+    render(<ExamSessionPaper session={{ ...session, mode: "practice", sourcePageImages: ["third.png"], sourcePageQuestionMap: { "third.png": ["3"] } }} disabled={false} onNavigate={onNavigate} onResponse={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "문항 텍스트" })).toHaveAttribute("aria-pressed", "true");
+    expect(onNavigate).not.toHaveBeenCalled();
+    expect(screen.queryByAltText("원본 문제지 페이지 1")).not.toBeInTheDocument();
+  });
+  it("does not keep a linked question's page when selecting an unlinked question in the same session", async () => {
+    const linked = { ...session, mode: "practice" as const, sourcePageImages: ["first.png"], sourcePageQuestionMap: { "first.png": ["1"] }, currentSourcePageImage: "first.png" };
+    const props = { disabled: false, onNavigate: vi.fn(), onResponse: vi.fn() };
+    const { rerender } = render(<ExamSessionPaper {...props} session={linked} />);
+    expect(await screen.findByAltText("원본 문제지 페이지 1")).toBeVisible();
+    rerender(<ExamSessionPaper {...props} session={{ ...linked, currentQuestionIndex: 1 }} />);
+    expect(screen.getByRole("button", { name: "문항 텍스트" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByAltText("원본 문제지 페이지 1")).not.toBeInTheDocument();
+    expect(props.onNavigate).not.toHaveBeenCalled();
+  });
   it.each(["practice", "real"] as const)("restores text fallback for %s when saved selection excludes this question", mode => {
     const saved = { ...session, mode, sourcePageImages: ["first.png", "second.png"], sourcePageQuestionMap: { "first.png": ["1"], "second.png": ["2"] }, selectedSourcePageImages: ["second.png"], responses: [{ questionNumber: "1", response: "②", scratchNote: "", markedForReview: false, updatedAt: session.updatedAt }] };
     render(<ExamSessionPaper session={saved} disabled={false} onNavigate={vi.fn()} onResponse={vi.fn()} />);
@@ -101,6 +118,8 @@ describe("shared exam paper interactions", () => {
     await act(async () => rerender(<ExamSessionPaper {...props} session={unlinkedReal} />));
     expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
     await act(async () => rerender(<ExamSessionPaper {...props} session={{ ...session, id: "practice-c", mode: "practice", sourcePageImages: ["page.png"] }} />));
+    expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("문항 텍스트");
+    await act(async () => rerender(<ExamSessionPaper {...props} session={{ ...session, id: "practice-d", mode: "practice", sourcePageImages: ["page.png"], sourcePageQuestionMap: { "page.png": ["1"] } }} />));
     expect(container.querySelector(".exam-source-view-switch__modes button[aria-pressed='true']")?.textContent).toContain("원본 문제지");
   });
 

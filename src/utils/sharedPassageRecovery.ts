@@ -3,6 +3,7 @@ import { getEntryQuestions } from "./entryQuestions";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { readFigureTokenReferences } from "./figureTokens";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
+import { createExamQuestionSnapshots } from "../features/exam/services/examSession";
 
 const REVIEW_NOTICE = "기존 시험의 공통 지문 연결을 확인하지 못했습니다. 원본 문제지에서 지문을 확인해 주세요.";
 type Recovery = { status: "matched"; text: string; id: string; figures: SheetFigureItem[] } | { status: "unavailable" } | { status: "ambiguous" };
@@ -20,11 +21,15 @@ function recover(question: ExamQuestionSnapshot, session: ExamSession, entries: 
   if (matches.length !== 1) return { status: "ambiguous" };
   const match = matches[0];
   if (!match.passage) return { status: match.warning?.includes("공통 지문") ? "ambiguous" : "unavailable" };
+  // Legacy text-only sources acquire the same ordered fallback segments when
+  // a session is created. Compare that projection, not undefined vs body-1.
+  const projected = createExamQuestionSnapshots(source).filter(item => normalizeQuestionNumber(item.questionNumber) === number);
+  const sourceSegments = match.contentSegments ?? (projected.length === 1 ? projected[0].contentSegments : undefined);
   const sourceTime = Date.parse(source.updatedAt), sessionTime = Date.parse(session.startedAt);
   if (!Number.isFinite(sourceTime) || !Number.isFinite(sessionTime) || sourceTime > sessionTime
     || match.questionText.trim() !== question.question.trim() || !same(match.choices, question.choices)
     || !same(match.conditions, question.conditions ?? []) || !same(match.equations, question.equations ?? [])
-    || (question.contentSegments?.length && !same(match.contentSegments, question.contentSegments))) return { status: "ambiguous" };
+    || (question.contentSegments?.length && !same(sourceSegments, question.contentSegments))) return { status: "ambiguous" };
   const ids = new Set(readFigureTokenReferences([match.passage.text]).map(item => item.id));
   const figures = (source.figures ?? []).filter(figure => ids.has(figure.id)).map(figure => {
     const representation = resolveFigureRepresentation(figure);
@@ -39,7 +44,7 @@ function recover(question: ExamQuestionSnapshot, session: ExamSession, entries: 
 export function presentSessionSharedPassages(session: ExamSession, entries: WrongAnswerEntry[]): ExamSession {
   let changed = false;
   const questions = session.questions.map(question => {
-    if (question.passage?.trim()) return question;
+    if (question.passage?.trim() || (question.passage === "" && question.stimulusGroupId === "")) return question;
     if (session.questions.filter(item => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(question.questionNumber)).length !== 1) return question;
     const result = recover(question, session, entries);
     if (result.status === "unavailable") return question;
@@ -60,6 +65,7 @@ export function presentWrongAnswerSharedPassage(entry: WrongAnswerEntry, session
   const own = getEntryQuestions(entry);
   if (own.length !== 1 || snapshots.length !== 1 || !session) return entry;
   const snapshot = snapshots[0];
+  if (snapshot.passage === "" && snapshot.stimulusGroupId === "") return entry;
   let result: Recovery = snapshot.passage?.trim()
     ? { status: "matched" as const, text: snapshot.passage, id: snapshot.stimulusGroupId ?? snapshot.id, figures: snapshot.figures }
     : recover(snapshot, session, entries);

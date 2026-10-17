@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
 import { defaultBlueprintForPreset } from "../model/examBlueprint";
 import { generateExam, questionQualityScore } from "./generateExam";
+import { createSessionFromGeneratedExam } from "./createSessionFromGeneratedExam";
+import { presentSessionSharedPassages } from "../../../utils/sharedPassageRecovery";
 
 function sheet(id: string, body: string, score: number, important = false): WrongAnswerEntry {
   return {
@@ -10,6 +12,32 @@ function sheet(id: string, body: string, score: number, important = false): Wron
 }
 
 describe("generateExam", () => {
+  it("records intentional absence of shared content so source deletion does not add a false recovery warning", () => {
+    const source = sheet("standalone", "독립 문항", 60);
+    const exam = generateExam({ entries: [source], title: "독립 문항", preset: "real_exam", blueprint: defaultBlueprintForPreset("real_exam", 1), seed: "standalone" });
+    expect(exam.questions[0].snapshot).toMatchObject({ passage: "", stimulusGroupId: "" });
+    const session = createSessionFromGeneratedExam(exam);
+    expect(presentSessionSharedPassages(session, [])).toBe(session);
+    expect(session.questions[0].warning).toBeUndefined();
+  });
+  it("stores shared passages and their figures independently of the original entry", () => {
+    const source = { ...sheet("passage-source", "첫 문제", 60),
+      question: "[1~2] 다음 자료\nx=2이다. [FIGURE:shared]\n\n1. 첫 문제\n① 가\n② 나\n\n2. 둘째 문제\n① 다\n② 라",
+      figures: [{ id: "shared", questionNumber: "", title: "공통 그림", caption: "공통 자료", source: "described_only" as const, description: "공통 그림" }],
+    };
+    const before = structuredClone(source);
+    const exam = generateExam({ entries: [source], title: "지문 보존", preset: "real_exam", blueprint: defaultBlueprintForPreset("real_exam", 2), seed: "passage", filters: { similarity: "unlimited" } });
+    expect(exam.questions).toHaveLength(2);
+    for (const item of exam.questions) {
+      expect(item.snapshot.passage).toContain("x=2");
+      expect(item.snapshot.figures.map(figure => figure.id)).toContain("shared");
+    }
+    expect(exam.questions[0].snapshot.stimulusGroupId).toBe(exam.questions[1].snapshot.stimulusGroupId);
+    expect(exam.questions[0].snapshot.stimulusGroupId).toContain(source.id);
+    const resumed = presentSessionSharedPassages(createSessionFromGeneratedExam(JSON.parse(JSON.stringify(exam))), []);
+    expect(resumed.questions.every(question => question.passage?.includes("x=2"))).toBe(true);
+    expect(source).toEqual(before);
+  });
   const entries = [sheet("a", "쉬운 고품질 문제", 25), sheet("b", "어려운 문제", 90, true), sheet("c", "다른 문제", 70)];
   it("is deterministic for the same seed and removes exact duplicate source questions", () => {
     const input = { entries, title: "세트", preset: "real_exam" as const, blueprint: defaultBlueprintForPreset("real_exam", 2), seed: "same" };

@@ -1,5 +1,6 @@
 import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
+import { createExamQuestionSnapshots } from "../../exam/services/examSession";
 import { v4 as uuidv4 } from "uuid";
 import type { ExamBlueprint, ExamGenerationReport, ExamQuestionSnapshot, GeneratedExam, GeneratedExamPreset, GeneratedExamQuestion, QuestionMeta, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionMeta, normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -78,12 +79,14 @@ export function questionQualityScore(entry: WrongAnswerEntry, number: string, me
   return clamp(score);
 }
 
-function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string): ExamQuestionSnapshot {
+function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string, snapshots: ExamQuestionSnapshot[]): ExamQuestionSnapshot {
   const answer = entry.answerKey?.find((item) => normalizeQuestionNumber(item.questionNumber) === number);
   const matched = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
   const hotspots = matched.length === 1 ? confirmedQuestionHotspots(entry, matched[0]) : [];
   const structuredMatches = (entry.structuredQuestions ?? []).filter((item) => normalizeQuestionNumber(item.questionNumber) === number);
   const structuredSource = structuredMatches.length === 1 ? structuredMatches[0]?.source : undefined;
+  const canonicalMatches = snapshots.filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+  const canonical = canonicalMatches.length === 1 ? canonicalMatches[0] : undefined;
   const sourcePages = entry.sourcePageImages ?? [];
   const linkedSourcePageImages = [...new Set((entry.questionSourceCrops ?? [])
     .filter((crop) => normalizeQuestionNumber(crop.questionNumber) === number)
@@ -103,13 +106,20 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string)
     question: block.body,
     choices: block.choices.map((choice) => `${choice.marker} ${choice.text}`),
     questionImages: [],
-    sourcePageImages: sourcePages,
-    linkedSourcePageImages,
     figures: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number),
     contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => normalizeQuestionNumber(key) === number)?.[1],
     source: structuredSource ? structuredClone(structuredSource) : undefined,
     correctAnswer: answer?.answer,
     explanation: answer?.explanation,
+    ...structuredClone(canonical ?? {}),
+    // source.page is an index in the complete original asset list.
+    sourcePageImages: structuredClone(sourcePages),
+    linkedSourcePageImages,
+    // A complete new snapshot distinguishes "no shared passage" from an
+    // older snapshot whose shared content has never been captured.
+    passage: canonical ? canonical.passage ?? "" : undefined,
+    stimulusGroupId: canonical ? canonical.stimulusGroupId ? `${entry.id}:${canonical.stimulusGroupId}` : "" : undefined,
+    ...(!canonical ? { needsReview: true, warning: "문항 연결이 유일하지 않아 원본 확인이 필요합니다." } : {}),
   };
 }
 
@@ -117,6 +127,7 @@ function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Cand
   const cutoff = filters.excludeRecentDays ? Date.now() - filters.excludeRecentDays * 86_400_000 : 0;
   const candidates: Candidate[] = [];
   for (const entry of entries.filter((item) => item.entryKind === "problem_sheet").filter((item) => !filters.entryIds?.length || filters.entryIds.includes(item.id)).filter((item) => !filters.subject || item.subject === filters.subject)) {
+    const snapshots = createExamQuestionSnapshots(entry);
     for (const block of parseQuestionText(entry.question).filter((item): item is QuestionBlock => item.kind === "question")) {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber));
       const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
@@ -135,7 +146,7 @@ function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Cand
       const importance = clamp(meta?.rating?.importanceScore ?? (meta?.important ? 85 : 45));
       const quality = questionQualityScore(entry, number, meta);
       const weakness = clamp((meta?.review?.lapseCount ?? 0) * 15 + (meta?.needsReview ? 25 : 0) + (entry.difficult ? 15 : 0));
-      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number), difficulty, importance, quality, weakness, hash: stringHash(`${block.body}\n${block.choices.map((choice) => choice.text).join("|")}`) });
+      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number, snapshots), difficulty, importance, quality, weakness, hash: stringHash(`${block.body}\n${block.choices.map((choice) => choice.text).join("|")}`) });
     }
   }
   return candidates;
