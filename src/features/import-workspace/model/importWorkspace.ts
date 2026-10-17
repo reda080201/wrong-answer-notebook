@@ -3,6 +3,7 @@ import type { EntryFormData, ExplanationPart, QuestionContentSegment, SheetAnswe
 import { normalizeStructuredQuestionType } from "../../../utils/structuredQuestionType";
 import { stripLegacyChoiceSeparator } from "../../../utils/legacyChoiceSeparator";
 import { normalizeQuestionPresentationSegments } from "../../../utils/questionPresentation";
+import { normalizeQuestionNumber } from "../../../utils/questionNumber";
 
 function projectCondition(segment: Extract<QuestionContentSegment, { type: "condition" }>): string {
   return segment.label && !segment.text.trimStart().startsWith(segment.label)
@@ -152,9 +153,16 @@ function projectSemanticFields(question: ImportQuestionDraft, segments: Question
 
 export function questionDraftToEntryData(group: ImportDraftGroup, question?: ImportQuestionDraft): Partial<EntryFormData> {
   const questions = question ? [question] : group.questions;
+  const sourcePageImages = [...new Set(questions.flatMap(item => item.sourcePageAssets))];
   const structuredQuestions: StructuredQuestion[] = questions.map((item) => {
     const contentSegments = draftContentSegments(item);
     const semantic = projectSemanticFields(item, contentSegments);
+    const source = item.source ? { ...item.source } : undefined;
+    if (source?.page !== undefined && item.sourcePageAssets.length) {
+      const filename = Number.isInteger(source.page) && source.page > 0 ? item.sourcePageAssets[source.page - 1] : undefined;
+      if (!filename) throw new Error(`${item.displayQuestionNumber}번의 원본 페이지 연결을 확인해 주세요.`);
+      source.page = sourcePageImages.indexOf(filename) + 1;
+    }
     return {
     questionNumber: item.displayQuestionNumber,
     ...(item.section ? { section: item.section } : {}),
@@ -167,7 +175,7 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
     equations: semantic.equations,
     choices: item.choices.map((choice) => `${choice.marker} ${choice.content}`.trim()),
     contentSegments,
-    ...(item.source ? { source: { ...item.source } } : {}),
+    ...(source ? { source } : {}),
     ...(item.needsReview !== undefined || item.status !== "ready" ? { needsReview: Boolean(item.needsReview || item.status !== "ready") } : {}),
     ...(item.status === "invalid" ? { processingStatus: "rejected" as const } : item.status !== "ready" ? { processingStatus: "needs_review" as const } : {}),
     ...(item.warning ? { warning: item.warning } : {}),
@@ -197,15 +205,23 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
   });
   const metadata = group.entryMetadata ?? {};
   const { unknownFields, ...knownMetadata } = metadata;
+  const questionSourceCrops = metadata.questionSourceCrops?.map(crop => {
+    const matches = questions.filter(item => normalizeQuestionNumber(item.displayQuestionNumber) === normalizeQuestionNumber(crop.questionNumber));
+    const filename = crop.sourcePageImage ?? (matches.length === 1 && crop.page ? matches[0].sourcePageAssets[crop.page - 1] : undefined);
+    if (filename && sourcePageImages.includes(filename)) return { ...crop, sourcePageImage: filename, page: sourcePageImages.indexOf(filename) + 1 };
+    if (matches.length && crop.page && matches.some(item => item.sourcePageAssets.length)) throw new Error(`${crop.questionNumber}번 crop의 원본 페이지 연결을 확인해 주세요.`);
+    return { ...crop };
+  });
   return {
     ...unknownFields,
     ...knownMetadata,
+    ...(questionSourceCrops ? { questionSourceCrops } : {}),
     entryKind: "problem_sheet",
     title: group.title,
     subject: group.subject ?? "기타",
     question: questionText,
     questionImages: [...new Set(questions.flatMap((item) => item.questionImageAssets))],
-    sourcePageImages: [...new Set(questions.flatMap((item) => item.sourcePageAssets))],
+    sourcePageImages,
     figures: [...new Map(questions.flatMap(item => item.figures).map(figure => {
       const collisions = questions.flatMap(item => item.figures).filter(item => item.id === figure.id);
       if (collisions.some(item => JSON.stringify(item) !== JSON.stringify(figure))) throw new Error(`그림 ${figure.id}의 연결이 서로 달라 검토가 필요합니다.`);

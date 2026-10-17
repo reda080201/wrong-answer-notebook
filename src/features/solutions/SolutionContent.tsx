@@ -1,9 +1,13 @@
 import type { SheetAnswerItem, SheetFigureItem } from "../../types";
 import QuestionContentView from "../../components/QuestionContentView";
 import MathText from "../../components/MathText";
+import { readFigureTokenReferences } from "../../utils/figureTokens";
 
 export default function SolutionContent({ answer, figures = [], showAnswer = true }: { answer: SheetAnswerItem; figures?: SheetFigureItem[]; showAnswer?: boolean }) {
-  const content = (text: string) => <QuestionContentView text={text} figures={figures} appendUnreferencedFigures={false} />;
+  const content = (text: string) => {
+    const ids = new Set(readFigureTokenReferences([text]).map(reference => reference.id));
+    return <QuestionContentView text={text} figures={figures.filter(figure => ids.has(figure.id))} appendUnreferencedFigures={false} />;
+  };
   return <div className="solution-content">
     {showAnswer && <section><h3>정답</h3><MathText text={answer.answer || "정답 정보 없음"} /></section>}
     {answer.intent?.trim() && <section><h3>출제 의도</h3>{content(answer.intent)}</section>}

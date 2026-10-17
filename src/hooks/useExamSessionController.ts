@@ -24,6 +24,7 @@ import { createEmptyEntryDraft, normalizeEntryDraftForSave } from "../features/e
 import { createSerialTaskQueue } from "./useSerialTaskQueue";
 import { normalizeQuestionNumber } from "../utils/questionMeta";
 import { wrongAnswerPresentation } from "../features/exam/services/wrongAnswerPresentation";
+import { presentSessionSharedPassages } from "../utils/sharedPassageRecovery";
 
 const normalizeExamQuestionNumber = (value: string | number | undefined | null) =>
   normalizeQuestionNumber(value);
@@ -289,7 +290,8 @@ export function useExamSessionController({
       submittedAt: new Date().toISOString(),
       score,
     };
-    const wrongQuestions = submitted.questions.filter((question) => {
+    const presentationSession = presentSessionSharedPassages(submitted, existingEntries);
+    const wrongQuestions = presentationSession.questions.filter((question) => {
       const result = score.questionResults.find((item) => item.questionNumber === question.questionNumber);
       return result?.hasResponse && !result.correct;
     });
@@ -299,7 +301,7 @@ export function useExamSessionController({
     }).map((question) => {
       const response = submitted.responses.find((item) => item.questionNumber === question.questionNumber);
       const draft = createEmptyEntryDraft("wrong_answer");
-      const presentation = wrongAnswerPresentation(submitted, question);
+      const presentation = wrongAnswerPresentation(presentationSession, question);
       const sourceEntryId = question.sourceEntryId ?? (!submitted.entryId.startsWith("generated:") ? submitted.entryId : undefined);
       const sourceQuestionNumber = question.sourceQuestionNumber ?? (!submitted.entryId.startsWith("generated:") ? question.questionNumber : undefined);
       const sourceProvenance = sourceEntryId && sourceQuestionNumber
@@ -359,7 +361,7 @@ export function useExamSessionController({
     } finally {
       submissionInFlightRef.current = false;
     }
-  }, [commitExamSubmission, loadError]);
+  }, [commitExamSubmission, loadError, existingEntries]);
 
   useEffect(() => {
     if (!session) {

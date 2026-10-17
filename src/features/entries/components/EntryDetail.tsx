@@ -75,6 +75,8 @@ import EntryDetailViewHelpDialog from "./EntryDetailViewHelpDialog";
 
 interface EntryDetailProps {
   entry: WrongAnswerEntry;
+  /** Read-only legacy passage recovery; editing and persistence still use entry. */
+  presentationEntry?: WrongAnswerEntry;
   onSaveSolutionHotspots?: (hotspots: NonNullable<WrongAnswerEntry["questionSolutionHotspots"]>) => Promise<void>;
   onEdit: () => void;
   onDelete: () => void;
@@ -209,6 +211,7 @@ function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
 
 export default function EntryDetail({
   entry,
+  presentationEntry = entry,
   onSaveSolutionHotspots,
   onEdit,
   onDelete,
@@ -364,9 +367,9 @@ export default function EntryDetail({
   const isWrongAnswer = entry.entryKind === "wrong_answer";
   const generatedWrongAnswerContent = useMemo(
     () => isWrongAnswer && entry.generatedFromExamSessionId
-      ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
+      ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: presentationEntry.questionContentSegments })
       : { status: "unavailable" as const },
-    [isWrongAnswer, entry.generatedFromExamSessionId, entry.generatedFromQuestionNumber, entry.questionContentSegments],
+    [isWrongAnswer, entry.generatedFromExamSessionId, entry.generatedFromQuestionNumber, presentationEntry.questionContentSegments],
   );
   const isFocusable = !isConcept && !isLecture;
   const isFocusExpanded = isFocusable && focusMode === "expanded";
@@ -379,10 +382,10 @@ export default function EntryDetail({
       item.importantPoints.length,
   );
   const resolvedSheetQuestions = useMemo(
-    () => (entry.structuredQuestions?.length ? getEntryQuestions(entry) : []),
-    [entry],
+    () => (presentationEntry.structuredQuestions?.length ? getEntryQuestions(presentationEntry) : []),
+    [presentationEntry],
   );
-  const originalStudyQuestions = useMemo(() => getEntryQuestions(entry), [entry]);
+  const originalStudyQuestions = useMemo(() => getEntryQuestions(presentationEntry), [presentationEntry]);
   const questionBlocks = useMemo(
     () => entry.structuredQuestions?.length
       ? resolvedSheetQuestions.map(resolvedQuestionToBlock)
@@ -1787,14 +1790,14 @@ export default function EntryDetail({
               <>
                 {!isSheet && Boolean(entry.sourcePageImages?.length) && <nav className="exam-source-view-switch" aria-label="학습 문제 보기 방식"><button type="button" aria-pressed={showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: true })}>원본 문제지</button><button type="button" aria-pressed={!showOriginalStudy} onClick={() => setOriginalStudyChoice({ entryId: entry.id, original: false })}>문항 텍스트</button></nav>}
                 {isSheet && problemSheetDisplayMode === "exam" && !entry.sourcePageImages?.length && <p role="status">원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다. 원본 배치로 넘겨 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
-                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={entry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} onToggleImmersive={() => setOriginalImmersiveEntryId(value => value === entry.id ? null : entry.id)} immersive={originalImmersive}
+                {showOriginalStudy && Boolean(entry.sourcePageImages?.length) ? <OriginalPageStudyView key={entry.id} entry={presentationEntry} hidden={hideAnswers} onSaveHotspots={onSaveSolutionHotspots} onToggleImmersive={() => setOriginalImmersiveEntryId(value => value === entry.id ? null : entry.id)} immersive={originalImmersive}
                   currentQuestionKey={originalStudyQuestions[focusedQuestionIndex] ? solutionQuestionKey(originalStudyQuestions[focusedQuestionIndex]) : undefined}
                   onCurrentQuestionChange={key => {
                     const matches = originalStudyQuestions.flatMap((question, index) => solutionQuestionKey(question) === key ? [index] : []);
                     if (matches.length === 1) setFocusedQuestionIndex(matches[0]);
                   }} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
-                    entry={entry}
+                    entry={presentationEntry}
                     memoMode={memoMode}
                     activeTool={activeTool}
                     onAnnotationsChange={onAnnotationsChange}
@@ -1911,11 +1914,12 @@ export default function EntryDetail({
                   <AnnotatableQuestion
                     key={entry.id}
                     question={entry.question}
-                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, entry.generatedFromQuestionNumber)}
               canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-                    canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
+                    canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous" || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
+                    canonicalReviewMessage={originalStudyQuestions.find(question => question.warning?.includes("공통 지문"))?.warning}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
-                    figures={entry.figures ?? []}
+                    figures={presentationEntry.figures ?? []}
                     annotations={entry.annotations ?? []}
                     memoMode={memoMode}
                     activeTool={activeTool}
@@ -1981,11 +1985,12 @@ export default function EntryDetail({
             <AnnotatableQuestion
               key={entry.id}
               question={entry.question}
-              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
+              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, entry.generatedFromQuestionNumber)}
               canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-              canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
+              canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous" || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
+              canonicalReviewMessage={originalStudyQuestions.find(question => question.warning?.includes("공통 지문"))?.warning}
               questionImages={entry.questionImages}
-              figures={entry.figures ?? []}
+              figures={presentationEntry.figures ?? []}
               annotations={entry.annotations ?? []}
               memoMode={memoMode}
               activeTool={activeTool}
@@ -2319,9 +2324,9 @@ export default function EntryDetail({
         const currentQuestion = theaterQuestion ?? focusedQuestion;
         if (!currentQuestion) return null;
         const number = normalizeQuestionNumber(String(currentQuestion.numberLabel ?? currentQuestion.displayNumber));
-        const matchingQuestions = getEntryQuestions(entry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
+        const matchingQuestions = getEntryQuestions(presentationEntry).filter(question => normalizeQuestionNumber(question.questionNumber) === number);
         const sharePayload = buildChatGptSharePayload({
-          entry, questionNumbers: [number], scope: "current",
+          entry: presentationEntry, questionNumbers: [number], scope: "current",
           preferences: { shareQuestionText: true, shareChoices: true, shareQuestionImages: false, shareSourcePageImages: false, shareUserResponse: true, shareScratchNote: true, shareExistingAnswersAndExplanations: true },
         });
         if (matchingQuestions.length === 1) sharePayload.questions[0].questionText ??= currentQuestion.body;
@@ -2367,7 +2372,7 @@ export default function EntryDetail({
       {showExportHub && examPrintPreferences && onExamPrintPreferencesChange && onSyncExportContext && chatGptPreferences && onChatGptPreferencesChange && (
         <ExportHubModal
           key={`${entry.id}:${examSession?.id ?? "detail"}:${theaterQuestion ? questionIdentifier(theaterQuestion) : questionIdentifier(focusedQuestion) ?? "none"}:${selectedQuestionNumbers.join(",")}`}
-          entry={entry}
+          entry={presentationEntry}
           allEntries={allEntries}
           examSession={examSession}
           currentQuestionNumber={

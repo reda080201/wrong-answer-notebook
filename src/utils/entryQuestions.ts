@@ -1,4 +1,4 @@
-import { resolveEntryQuestionStimuli, type EntryQuestionStimulus } from "./questionStimuli";
+import { resolveEntryQuestionStimulusProjection, type EntryQuestionStimulus } from "./questionStimuli";
 import type { ProcessingStatus, QuestionContentSegment, SheetFigureItem, StructuredQuestion, WrongAnswerEntry } from "../types";
 import { normalizeQuestionNumber } from "./questionNumber";
 import { parseQuestionText, type QuestionBlock } from "./textLayout";
@@ -122,12 +122,14 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
 }
 
 export function getEntryQuestions(entry: Parameters<typeof resolveEntryQuestions>[0]): ResolvedEntryQuestion[] {
-  const stimuli = resolveEntryQuestionStimuli(entry);
+  const { stimuli, warnings } = resolveEntryQuestionStimulusProjection(entry);
   const questions = resolveEntryQuestions(entry);
   return questions.map(question => {
     const number = normalizeQuestionNumber(question.questionNumber);
     const passage = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1 ? stimuli.get(number) : undefined;
-    return passage ? { ...question, passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : question;
+    const warning = [question.warning, warnings.get(number)].filter(Boolean).join(" ") || undefined;
+    return { ...question, warning, needsReview: question.needsReview || Boolean(warnings.get(number)),
+      ...(passage ? { passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : {}) };
   });
 }
 

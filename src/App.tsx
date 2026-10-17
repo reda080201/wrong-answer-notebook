@@ -41,6 +41,7 @@ import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
 import { getEntryQuestions, renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
+import { presentSessionSharedPassages, presentWrongAnswerSharedPassage } from "./utils/sharedPassageRecovery";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
 import { useAppModalController } from "./hooks/useAppModalController";
 import { getRemainingExamSeconds } from "./features/exam/services/realExam";
@@ -272,6 +273,10 @@ function AppContent() {
     sectionEntryCount,
   } = navigation;
   const selectedIsVisible = selected ? filtered.some((entry) => entry.id === selected.id) : false;
+  // Read-only projections never enter the editable entry or the session save queue.
+  const studyEntries = useMemo(() => entries.map(entry => presentWrongAnswerSharedPassage(entry, savedExamSessions, entries)), [entries, savedExamSessions]);
+  const studySelected = selected ? studyEntries.find(entry => entry.id === selected.id) : undefined;
+  const studyExamSession = useMemo(() => examSession ? presentSessionSharedPassages(examSession, entries) : null, [examSession, entries]);
   const hasActiveSectionEntries = entries.some((entry) => entry.entryKind === activeSection);
   const selectedEntryPaneOverride = selectedId ? shell.entryPaneOverrides[selectedId] : undefined;
 
@@ -417,6 +422,8 @@ function AppContent() {
   const resumableReviewSession = actions.reviewMode
     ? reviewSessions.sessions.find((candidate) => canResumeReviewSession(candidate, actions.reviewMode!, actions.reviewSeed))
     : undefined;
+  const studyReviewSeed = useMemo(() => actions.reviewSeed.map(item => ({ ...item,
+    entry: studyEntries.find(entry => entry.id === item.entry.id) ?? item.entry })), [actions.reviewSeed, studyEntries]);
 
   useEffect(() => {
     setContextSettingsMessage(actions.settingsMessage);
@@ -704,7 +711,7 @@ function AppContent() {
           ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
               mode="question-bank"
-              entries={entries}
+              entries={studyEntries}
               learningHubTarget={learningHubTarget}
               questionBankPreferences={settings.questionBankPreferences}
               patchQuestionBankPreferences={patchQuestionBankPreferences}
@@ -785,7 +792,7 @@ function AppContent() {
 
           {examSession ? (
             <ExamSessionOverlay
-              session={examSession}
+              session={studyExamSession ?? examSession}
               generated={Boolean(activeGeneratedExam)}
               hideAnswers={settings.viewPreferences.hideAnswers}
               examPreferences={settings.examPreferences}
@@ -821,6 +828,7 @@ function AppContent() {
               {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
               <EntryDetail
               entry={selected}
+              presentationEntry={studySelected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {
                 openExamSession(selected, { mode: "practice", resumable: selectedPracticeSession });
               } : undefined}
@@ -954,7 +962,7 @@ function AppContent() {
                 }
               }}
               remoteMcpConfigured={Boolean(settings.chatGptMcpPreferences.remoteBaseUrl)}
-              questionBankItems={buildQuestionBankItems(entries)}
+              questionBankItems={buildQuestionBankItems(studyEntries)}
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
                onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
                gptSolutionDraftStore={gptSolutionDrafts}
@@ -1005,7 +1013,7 @@ function AppContent() {
         learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
         review={{
           mode: actions.reviewMode,
-          seed: actions.reviewSeed,
+          seed: studyReviewSeed,
           setMode: actions.setReviewMode,
           handle: actions.handleReview,
           session: resumableReviewSession,

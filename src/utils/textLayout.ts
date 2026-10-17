@@ -1,3 +1,5 @@
+import { questionStimulusHead } from "./questionStimulusHead";
+
 export interface TextRange {
   start: number;
   end: number;
@@ -268,7 +270,7 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
     } else if (isChoiceContinuationBoundary(line.text) && hasBlankLineBefore(text, line.start)) {
       // A separated 자료/표 heading starts the next stimulus group, not the
       // preceding choice's continuation or question body.
-      continue;
+      break;
     } else {
       bodyRanges.push({ start: line.start, end: line.end });
     }
@@ -293,10 +295,7 @@ function parseQuestionBlock(text: string, lines: LineInfo[], displayNumber: numb
 }
 
 function isChoiceContinuationBoundary(line: string): boolean {
-  const trimmed = line.trim();
-  return /^(?:\[|<)\s*(?:자료|제시문|지문|도표|그래프|그림|표)(?:\s*[A-Za-z가-힣0-9]+)?\s*(?:\]|>)$/.test(trimmed)
-    || /^표\s*(?::|：)\s*$/.test(trimmed)
-    || /^표\s+\d+\b/.test(trimmed);
+  return Boolean(questionStimulusHead(line));
 }
 
 function hasBlankLineBefore(text: string, start: number): boolean {
