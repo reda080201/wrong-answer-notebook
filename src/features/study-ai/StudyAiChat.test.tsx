@@ -15,6 +15,43 @@ afterEach(() => localStorage.clear());
 async function open() { fireEvent.click(screen.getByRole("button", { name: "AI 학습 대화 열기" })); await waitFor(() => expect(screen.queryByText("대화 불러오는 중…")).not.toBeInTheDocument()); }
 async function send(text: string) { fireEvent.change(screen.getByLabelText("메시지"), { target: { value: text } }); fireEvent.click(screen.getByRole("button", { name: "전송" })); await waitFor(() => expect(screen.getAllByText("AI 답변").length).toBeGreaterThan(0)); }
 describe("study AI chat integration", () => {
+    it("contains keyboard focus only in the compact modal and restores background access and the opener", async () => {
+        let compact = true;
+        let notify = () => {};
+        vi.stubGlobal("matchMedia", vi.fn(() => ({ get matches() { return compact; }, addEventListener: (_: string, fn: () => void) => { notify = fn; }, removeEventListener: vi.fn() })));
+        const rectangles = vi.spyOn(HTMLElement.prototype, "getClientRects").mockReturnValue([new DOMRect(0, 0, 10, 10)] as unknown as DOMRectList);
+        try {
+            const { container } = render(<><button>배경 조작</button><StudyAiChat {...props}/></>);
+            await open();
+            const panel = screen.getByRole("dialog", { name: "AI 학습 대화" });
+            expect(panel).toHaveAttribute("aria-modal", "true");
+            expect(container).toHaveProperty("inert", true);
+            fireEvent.change(screen.getByLabelText("메시지"), { target: { value: "보내기 전 문장" } });
+            const sendButton = screen.getByRole("button", { name: "전송" });
+            const first = screen.getByRole("button", { name: "API 설정" });
+            sendButton.focus();
+            fireEvent.keyDown(sendButton, { key: "Tab" });
+            expect(first).toHaveFocus();
+            fireEvent.keyDown(first, { key: "Tab", shiftKey: true });
+            expect(sendButton).toHaveFocus();
+            screen.getByText("배경 조작").focus();
+            expect(first).toHaveFocus();
+            act(() => { compact = false; notify(); });
+            expect(panel).toHaveAttribute("aria-modal", "false");
+            expect(container.inert).not.toBe(true);
+            screen.getByText("배경 조작").focus();
+            expect(screen.getByText("배경 조작")).toHaveFocus();
+            act(() => { compact = true; notify(); });
+            fireEvent.keyDown(first, { key: "Escape" });
+            expect(screen.queryByRole("dialog", { name: "AI 학습 대화" })).not.toBeInTheDocument();
+            expect(container.inert).not.toBe(true);
+            expect(screen.getByRole("button", { name: "AI 학습 대화 열기" })).toHaveFocus();
+            expect(requestStudyAi).not.toHaveBeenCalled();
+        } finally {
+            rectangles.mockRestore();
+            vi.unstubAllGlobals();
+        }
+    });
     it("starts without materials and does not call the provider by opening, selecting, or saving locally", async () => {
         render(<StudyAiChat {...props}/>);
         await open();

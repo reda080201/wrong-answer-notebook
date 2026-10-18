@@ -18,6 +18,12 @@ describe("AI exam composer integration",()=>{
     fireEvent.click(screen.getByRole("button",{name:/^구성안 요청$/}));await screen.findByText("균형 배치");expect(onSave).not.toHaveBeenCalled();expect(requestStudyAi).toHaveBeenCalledTimes(1);
     const sent=vi.mocked(requestStudyAi).mock.calls[0][0];expect(sent.context).toContain("문제 본문");expect(sent.context).not.toContain('"answer"');expect(sent.context).not.toContain('"explanation"');
     vi.mocked(requestStudyAi).mockRejectedValueOnce(new Error("네트워크 실패"));fireEvent.click(screen.getByRole("button",{name:/^구성안 다시 제안$/}));await screen.findByText("네트워크 실패");expect(screen.getByText("균형 배치")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button",{name:/^검토한 구성 저장$/}));await waitFor(()=>expect(onSave).toHaveBeenCalledTimes(1));expect(onSave.mock.calls[0][0].questions.map((q:{source:{sourceEntryTitle:string}})=>q.source.sourceEntryTitle)).toEqual(["원본 one","원본 two"]);expect(onClose).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("원본 one · 원문 1번")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("출처 표시"));
+    expect(screen.queryByText("원본 one · 원문 1번")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("출처 표시"));
+    expect(screen.getByText("원본 one · 원문 1번")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText("출처 표시"));
+    fireEvent.click(screen.getByRole("button",{name:/^검토한 구성 저장$/}));await waitFor(()=>expect(onSave).toHaveBeenCalledTimes(1));expect(onSave.mock.calls[0][0].showSourceReferences).toBe(false);expect(onSave.mock.calls[0][0].questions.map((q:{source:{sourceEntryTitle:string}})=>q.source.sourceEntryTitle)).toEqual(["원본 one","원본 two"]);expect(onClose).toHaveBeenCalledTimes(1);
   });
 });
