@@ -94,9 +94,25 @@ export function resolveQuestionSourceStatus(source: QuestionSourceReference, ent
 export function formatQuestionSourceLabel(source: QuestionSourceReference): string {
   const title = source.sourceEntryTitle?.trim() || "출처 미확인";
   const number = source.sourceQuestionNumber?.trim() || "?";
-  return `${title} ${number}번`;
+  const details = [source.sourceExamName, source.sourceExamRound, source.sourceSection].filter((value, index, all) => value && !title.includes(value) && all.indexOf(value) === index);
+  return [title, ...details, `원문 ${number}번`].join(" · ");
 }
 
 export function sourceStatusLabel(status: QuestionSourceStatus): string {
   return status === "linked" ? "원본 연결됨" : status === "missing" ? "원본 삭제됨" : status === "snapshot_only" ? "snapshot 보존" : "출처 확인 불가";
+}
+
+export function hydrateSessionSourceReferences(session: import("../../../types").ExamSession, exams: import("../../../types").GeneratedExam[]): import("../../../types").ExamSession {
+  const examId = session.entryId.startsWith("generated:") ? session.entryId.slice("generated:".length) : undefined;
+  const matches = exams.filter(e => e.id === examId);
+  if (matches.length !== 1) return session;
+  let changed = false;
+  const questions = session.questions.map(q => {
+    if (q.sourceReference) return q;
+    const sourceMatches = matches[0].questions.filter(p => p.position === (q.generatedQuestionPosition ?? Number(q.questionNumber)) && (!q.sourceEntryId || p.source?.sourceEntryId === q.sourceEntryId) && (!q.sourceQuestionNumber || normalizeQuestionNumber(p.source?.sourceQuestionNumber) === normalizeQuestionNumber(q.sourceQuestionNumber)));
+    if (sourceMatches.length !== 1 || !sourceMatches[0].source) return q;
+    changed = true;
+    return { ...q, sourceReference: structuredClone(sourceMatches[0].source) };
+  });
+  return changed ? { ...session, questions } : session;
 }

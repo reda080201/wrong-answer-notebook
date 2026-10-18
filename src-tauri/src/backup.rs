@@ -27,6 +27,7 @@ pub(crate) const PERSISTENT_DATA_FILES: &[&str] = &[
     "settings.json",
     "exam-sessions.json",
     "generated-exams.json",
+    "ai-study.json",
     "gpt-solution-drafts.json",
     "library-folders.json",
     "import-workspace-draft.json",
@@ -80,13 +81,29 @@ fn collect_workspace_files(
 }
 
 #[tauri::command]
-pub(crate) fn create_backup_zip(app: tauri::AppHandle, backup_path: String) -> Result<(), String> {
-    create_backup_zip_at(&app, Path::new(&backup_path))
+pub(crate) fn create_backup_zip(
+    app: tauri::AppHandle,
+    backup_path: String,
+    include_ai_conversations: Option<bool>,
+) -> Result<(), String> {
+    create_backup_zip_with_options(
+        &app,
+        Path::new(&backup_path),
+        include_ai_conversations.unwrap_or(false),
+    )
 }
 
 pub(crate) fn create_backup_zip_at(
     app: &tauri::AppHandle,
     backup_path: &Path,
+) -> Result<(), String> {
+    create_backup_zip_with_options(app, backup_path, false)
+}
+
+fn create_backup_zip_with_options(
+    app: &tauri::AppHandle,
+    backup_path: &Path,
+    include_ai_conversations: bool,
 ) -> Result<(), String> {
     crate::exam_submission::ensure_no_pending_exam_submission_journal(
         &app_dir(app)?.join(crate::exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
@@ -98,6 +115,11 @@ pub(crate) fn create_backup_zip_at(
         return Err("백업 데이터 JSON이 허용 용량을 초과했습니다.".into());
     }
     let image_dir = images_dir(app)?;
+    let excluded_chat_images = if include_ai_conversations {
+        std::collections::HashSet::new()
+    } else {
+        crate::notebook_store::ai_exclusive_image_filenames(&app_dir(app)?)?
+    };
     let mut images: Vec<(String, PathBuf, u64)> = Vec::new();
     let mut total_image_bytes = 0u64;
     if image_dir.exists() {
@@ -109,6 +131,9 @@ pub(crate) fn create_backup_zip_at(
             let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
                 continue;
             };
+            if excluded_chat_images.contains(filename) {
+                continue;
+            }
             if validate_image_filename(filename).is_err() {
                 continue;
             }
@@ -167,6 +192,9 @@ pub(crate) fn create_backup_zip_at(
         .copied()
         .filter(|name| *name != "entries.json" && *name != "settings.json")
     {
+        if filename == "ai-study.json" && !include_ai_conversations {
+            continue;
+        }
         let path = app_dir(app)?.join(filename);
         if !path.is_file() {
             continue;
@@ -299,6 +327,7 @@ fn validate_optional_store_json(name: &str, bytes: &[u8]) -> Result<(), String> 
     let value: serde_json::Value = serde_json::from_slice(bytes)
         .map_err(|error| format!("백업의 {name} JSON이 올바르지 않습니다: {error}"))?;
     match name {
+        "ai-study.json" => crate::ai::validate_ai_study_store(&value),
         "exam-sessions.json"
         | "generated-exams.json"
         | "gpt-solution-drafts.json"
@@ -487,9 +516,78 @@ pub(crate) fn restore_backup_zip(
         }
     }
 
+    let restore_ai = optional_files
+        .iter()
+        .any(|(name, _)| name == "ai-study.json");
+    if !restore_ai {
+        let chat_path = app_dir.join("ai-study.json");
+        if chat_path.exists() {
+            let value: serde_json::Value =
+                serde_json::from_slice(&fs::read(&chat_path).map_err(|e| e.to_string())?)
+                    .map_err(|e| e.to_string())?;
+            crate::ai::validate_ai_study_store(&value)?;
+            fn names(value: &serde_json::Value, out: &mut std::collections::HashSet<String>) {
+                match value {
+                    serde_json::Value::String(s) => {
+                        if crate::validate_image_filename(s).is_ok()
+                            && s.rsplit('.').next().is_some_and(|ext| {
+                                matches!(
+                                    ext.to_lowercase().as_str(),
+                                    "png" | "jpg" | "jpeg" | "webp" | "gif"
+                                )
+                            })
+                        {
+                            out.insert(s.clone());
+                        }
+                    }
+                    serde_json::Value::Array(a) => a.iter().for_each(|v| names(v, out)),
+                    serde_json::Value::Object(o) => o.values().for_each(|v| names(v, out)),
+                    _ => {}
+                }
+            }
+            let mut referenced = std::collections::HashSet::new();
+            names(&value, &mut referenced);
+            for filename in referenced {
+                let path = image_dir.join(&filename);
+                let canonical_root = image_dir.canonicalize().map_err(|e| e.to_string())?;
+                let canonical_path = path.canonicalize().map_err(|e| e.to_string())?;
+                let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+                #[cfg(windows)]
+                {
+                    use std::os::windows::fs::MetadataExt;
+                    if metadata.file_attributes() & 0x400 != 0 {
+                        return Err("AI 대화 이미지의 reparse 경로는 허용하지 않습니다.".into());
+                    }
+                }
+                if !canonical_root.starts_with(app_dir.canonicalize().map_err(|e| e.to_string())?)
+                    || !canonical_path.starts_with(&canonical_root)
+                    || !metadata.is_file()
+                    || metadata.file_type().is_symlink()
+                {
+                    return Err("AI 대화 이미지 경로를 안전하게 확인하지 못했습니다.".into());
+                }
+                let mut bytes = Vec::new();
+                fs::File::open(&canonical_path)
+                    .map_err(|e| e.to_string())?
+                    .take(MAX_IMPORT_IMAGE_BYTES + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(|e| e.to_string())?;
+                if bytes.len() as u64 > MAX_IMPORT_IMAGE_BYTES {
+                    return Err("AI 대화 이미지가 복원 한도를 넘습니다.".into());
+                }
+                if let Some((_, incoming)) = images.iter().find(|(name, _)| *name == filename) {
+                    if incoming != &bytes {
+                        return Err(format!("AI 대화 이미지 {filename}이 백업과 충돌합니다."));
+                    }
+                } else {
+                    images.push((filename, bytes));
+                }
+            }
+        }
+    }
     let restored_entries =
         restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
-    let managed_targets = [
+    let mut managed_targets = vec![
         data_file(&app)?,
         settings_file(&app)?,
         app_dir.join("exam-sessions.json"),
@@ -502,6 +600,9 @@ pub(crate) fn restore_backup_zip(
         image_dir.clone(),
         app_dir.join("import-workspaces"),
     ];
+    if restore_ai {
+        managed_targets.push(app_dir.join("ai-study.json"));
+    }
     let rollback_dir = app_dir.join(format!(".restore-rollback-{}", Uuid::new_v4()));
     fs::create_dir_all(&rollback_dir).map_err(|e| e.to_string())?;
     let mut moved: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -522,6 +623,9 @@ pub(crate) fn restore_backup_zip(
             .copied()
             .filter(|name| *name != "entries.json" && *name != "settings.json")
         {
+            if name == "ai-study.json" && !restore_ai {
+                continue;
+            }
             move_target(
                 app_dir.join(name),
                 &format!("optional-{}", name.replace('/', "_")),

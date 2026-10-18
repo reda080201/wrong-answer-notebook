@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../../../types";
@@ -1449,5 +1450,20 @@ describe("EntryDetail view settings integration", () => {
     openViewSettings();
     fireEvent.click(screen.getByRole("button", { name: "2단" }));
     expect(onViewPreferencesChange).toHaveBeenCalledWith({ sheetLayout: "columns" });
+  });
+});
+
+
+describe("source target navigation", () => {
+  it("keeps the requested original question through StrictMode effect replay", async () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
+    render(<StrictMode><EntryDetail
+      entry={{ ...sheetEntry, question: "1. 첫 문항\n① 하나\n② 둘\n2. 둘째 문항\n① 셋\n② 넷", sourcePageImages: ["page.png"] }}
+      initialQuestionTarget={{ questionNumber: "2", requestId: 42 }}
+      onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()}
+      onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()}
+    /></StrictMode>);
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "학습할 현재 문항" })).toHaveValue(JSON.stringify(["2", ""])));
   });
 });

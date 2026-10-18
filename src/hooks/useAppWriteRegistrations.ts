@@ -1,3 +1,4 @@
+import { flushAiStudyWrites, setAiStudyMaintenanceBlocked } from "../features/study-ai/storage";
 import { useCallback, useRef } from "react";
 
 export type TransientWriteRegistration = {
@@ -17,10 +18,12 @@ export function useAppWriteRegistrations() {
     questionBankPreferenceRef.current = registration;
   }, []);
   const flushTransientWrites = useCallback(async () => {
+    await flushAiStudyWrites();
     await workspaceDraftRef.current?.flush();
     await questionBankPreferenceRef.current?.flush();
   }, []);
   const setTransientWritesMaintenanceBlocked = useCallback((blocked: boolean) => {
+    setAiStudyMaintenanceBlocked(blocked);
     workspaceDraftRef.current?.setMaintenanceBlocked?.(blocked);
     questionBankPreferenceRef.current?.setMaintenanceBlocked?.(blocked);
   }, []);

@@ -1,3 +1,4 @@
+import { AI_STUDY_STORAGE_KEY, isAiStudyStore } from "../../features/study-ai/model";
 import type { WrongAnswerEntry } from "../../types";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../../features/exam/storage/examSessionStorage";
 import { GENERATED_EXAMS_STORAGE_KEY } from "../../features/exam-builder/storage/generatedExamStorage";
@@ -7,6 +8,7 @@ import { ENTRIES_STORAGE_KEY, parseStoredEntries } from "./shared";
 import { assertImageReferenceStore } from "./imageReferenceValidation";
 
 const BROWSER_IMAGE_REFERENCE_KEYS = [
+  AI_STUDY_STORAGE_KEY,
   ENTRIES_STORAGE_KEY,
   EXAM_SESSIONS_STORAGE_KEY,
   GENERATED_EXAMS_STORAGE_KEY,
@@ -27,11 +29,13 @@ function collectImageFilenames(value: unknown, referenced: Set<string>): void {
 
 export function getBrowserProtectedImageReferences(
   entries: WrongAnswerEntry[],
-  options: { excludePendingDeletionIds?: readonly string[]; includeStoredEntries?: boolean } = {},
+  options: { excludePendingDeletionIds?: readonly string[]; includeStoredEntries?: boolean; onlyKeys?: readonly string[]; excludeAiStudy?: boolean } = {},
 ): Set<string> {
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   const excluded = new Set(options.excludePendingDeletionIds ?? []);
   for (const key of BROWSER_IMAGE_REFERENCE_KEYS) {
+    if (options.excludeAiStudy && key === AI_STUDY_STORAGE_KEY) continue;
+    if (options.onlyKeys && !options.onlyKeys.includes(key)) continue;
     // A v1 restore replaces entries but retains the other reference stores.
     if (key === ENTRIES_STORAGE_KEY && options.includeStoredEntries === false) continue;
     const stored = localStorage.getItem(key);
@@ -46,7 +50,8 @@ export function getBrowserProtectedImageReferences(
       : key === GENERATED_EXAMS_STORAGE_KEY ? "generated"
         : key === GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY ? "gpt"
           : key === "wrong-answer-import-workspace-draft" ? "workspace" : "pending";
-    assertImageReferenceStore(value, kind);
+    if (key === AI_STUDY_STORAGE_KEY) { if (!isAiStudyStore(value)) throw new Error("AI 대화의 이미지 참조 형식이 잘못되었습니다."); }
+    else assertImageReferenceStore(value, kind);
     if (key === "wrong-answer-pending-deletions" && Array.isArray(value)) {
       value = value.filter((record) => !record || typeof record !== "object" || !excluded.has(String((record as { id?: unknown }).id ?? "")));
     }

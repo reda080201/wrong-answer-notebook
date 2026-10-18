@@ -37,7 +37,11 @@ fn safe_shape(value: &Value) -> bool {
                 | "contentSegments"
                 | "groups"
                 | "assets"
-                | "preparedEntries" => records(child),
+                | "preparedEntries"
+                | "contexts"
+                | "materials"
+                | "conversations"
+                | "drafts" => records(child),
                 "questionContentSegments" => child
                     .as_object()
                     .is_some_and(|map| map.values().all(records)),
@@ -63,6 +67,46 @@ fn safe_shape(value: &Value) -> bool {
 /// Image deletion must validate raw documents before any normalization or filtering.
 pub(crate) fn validate_reference_document(value: &Value, name: &str) -> Result<(), String> {
     let valid = match name {
+        "ai-study.json" => {
+            fn materials(value: &Value) -> bool {
+                records(value)
+                    && value.as_array().unwrap().iter().all(|m| {
+                        m["snapshot"].is_object()
+                            && strings(&m["snapshot"]["questionImages"])
+                            && records(&m["snapshot"]["figures"])
+                            && safe_shape(&m["snapshot"])
+                    })
+            }
+            fn proposal(value: &Value) -> bool {
+                value.is_null()
+                    || (records(&value["questions"])
+                        && value["questions"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .all(|q| q["snapshot"].is_object() && safe_shape(&q["snapshot"])))
+            }
+            value["version"].as_u64() == Some(1)
+                && records(&value["conversations"])
+                && value["conversations"].as_array().unwrap().iter().all(|c| {
+                    materials(&c["materials"])
+                        && proposal(&c["proposal"])
+                        && (c.get("contexts").is_none()
+                            || (records(&c["contexts"])
+                                && c["contexts"]
+                                    .as_array()
+                                    .unwrap()
+                                    .iter()
+                                    .all(|ctx| materials(&ctx["materials"]))))
+                })
+                && (value.get("drafts").is_none()
+                    || (records(&value["drafts"])
+                        && value["drafts"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .all(|d| materials(&d["materials"]) && proposal(&d["proposal"]))))
+        }
         "entries.json" => records(if value.is_array() {
             value
         } else {
@@ -104,7 +148,7 @@ pub(crate) fn validate_reference_document(value: &Value, name: &str) -> Result<(
         }
         _ => value.is_object() || records(value),
     };
-    if valid && safe_shape(value) {
+    if valid && (name == "ai-study.json" || safe_shape(value)) {
         Ok(())
     } else {
         Err(format!(

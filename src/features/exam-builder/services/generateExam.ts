@@ -35,7 +35,7 @@ export interface GenerateExamInput {
   now?: Date;
 }
 
-interface Candidate {
+export interface ExamCandidate {
   entry: WrongAnswerEntry;
   block: QuestionBlock;
   number: string;
@@ -123,9 +123,9 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string,
   };
 }
 
-function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Candidate[] {
+export function collectExamCandidates(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): ExamCandidate[] {
   const cutoff = filters.excludeRecentDays ? Date.now() - filters.excludeRecentDays * 86_400_000 : 0;
-  const candidates: Candidate[] = [];
+  const candidates: ExamCandidate[] = [];
   for (const entry of entries.filter((item) => item.entryKind === "problem_sheet").filter((item) => !filters.entryIds?.length || filters.entryIds.includes(item.id)).filter((item) => !filters.subject || item.subject === filters.subject)) {
     const snapshots = createExamQuestionSnapshots(entry);
     for (const block of parseQuestionText(entry.question).filter((item): item is QuestionBlock => item.kind === "question")) {
@@ -152,7 +152,7 @@ function collect(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): Cand
   return candidates;
 }
 
-function score(candidate: Candidate, preset: GeneratedExamPreset, target?: { min?: number; max?: number }): number {
+function score(candidate: ExamCandidate, preset: GeneratedExamPreset, target?: { min?: number; max?: number }): number {
   const targetDifficulty = target?.min !== undefined && target?.max !== undefined ? 100 - Math.abs((target.min + target.max) / 2 - candidate.difficulty) : 50;
   const reviewNeed = candidate.weakness;
   if (preset === "hard") return candidate.difficulty * .5 + candidate.quality * .3 + candidate.importance * .2;
@@ -166,7 +166,7 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
   const now = input.now ?? new Date();
   const filters = input.filters ?? {};
   const excludedCounts: Record<string, number> = {};
-  const candidates = collect(input.entries, filters);
+  const candidates = collectExamCandidates(input.entries, filters);
   const rng = seeded(input.seed);
   const maxPerSource = filters.maxPerSource ?? Math.max(1, Math.ceil(input.blueprint.totalQuestions * .3));
   const selected: GeneratedExamQuestion[] = [...(input.lockedQuestions ?? [])].slice(0, input.blueprint.totalQuestions).map((question, index) => {
@@ -206,5 +206,5 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
     for (const unit of candidate?.entry.tags ?? []) report.unitDistribution[unit] = (report.unitDistribution[unit] ?? 0) + 1;
   }
   if (selected.length < input.blueprint.totalQuestions) report.warnings.push(`후보가 부족해 ${input.blueprint.totalQuestions - selected.length}개 슬롯을 채우지 못했습니다.`);
-  return { id: uuidv4(), title: input.title.trim() || `${input.blueprint.name} ${now.toLocaleDateString("ko-KR")}`, subject: input.filters?.subject ?? (selected[0] ? candidates.find((candidate) => candidate.entry.id === sourceOf(selected[0]).sourceEntryId)?.entry.subject ?? "기타" : "기타"), blueprintId: input.blueprint.id, preset: input.preset, createdAt: now.toISOString(), updatedAt: now.toISOString(), seed: input.seed, status: "draft", timeLimitMinutes: input.blueprint.timeLimitMinutes, totalPoints: input.blueprint.totalPoints, questions: selected, generationReport: report };
+  return { showSourceReferences: true, id: uuidv4(), title: input.title.trim() || `${input.blueprint.name} ${now.toLocaleDateString("ko-KR")}`, subject: input.filters?.subject ?? (selected[0] ? candidates.find((candidate) => candidate.entry.id === sourceOf(selected[0]).sourceEntryId)?.entry.subject ?? "기타" : "기타"), blueprintId: input.blueprint.id, preset: input.preset, createdAt: now.toISOString(), updatedAt: now.toISOString(), seed: input.seed, status: "draft", timeLimitMinutes: input.blueprint.timeLimitMinutes, totalPoints: input.blueprint.totalPoints, questions: selected, generationReport: report };
 }

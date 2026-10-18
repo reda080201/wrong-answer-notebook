@@ -1,3 +1,4 @@
+import { AI_STUDY_STORAGE_KEY, AI_BACKUP_PREFERENCE_KEY, isAiStudyStore, type AiStudyStore } from "../../features/study-ai/model";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, KnowledgeGraphStore, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
@@ -52,6 +53,7 @@ export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
   importWorkspaceDraft: ImportWorkspace | null;
   reviewSessions?: ReviewSession[];
   knowledgeGraph?: KnowledgeGraphStore;
+  aiStudy?: AiStudyStore;
 }
 
 export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
@@ -77,10 +79,17 @@ async function readBrowserBackupSnapshot(
     "가져오기 작업실 초안",
     null,
   );
+  const browserImages = await listBrowserImages();
+  if (localStorage.getItem(AI_BACKUP_PREFERENCE_KEY) !== "true") {
+    const chat = collectBrowserImageReferences([], { onlyKeys: [AI_STUDY_STORAGE_KEY] });
+    const others = collectBrowserImageReferences(entries, { excludeAiStudy: true });
+    for (const filename of chat) if (!others.has(filename)) delete browserImages[`img_${filename}`];
+  }
   return {
+    ...(localStorage.getItem(AI_BACKUP_PREFERENCE_KEY) === "true" ? { aiStudy: readBrowserValue(AI_STUDY_STORAGE_KEY, isAiStudyStore, "AI 대화", { version: 1 as const, conversations: [] }) } : {}),
     entries,
     settings: storedSettings === null ? fallbackSettings : normalizeSettings(storedSettings as AppSettings),
-    browserImages: await listBrowserImages(),
+    browserImages,
     examSessions: readBrowserArray<ExamSession>(EXAM_SESSIONS_STORAGE_KEY, "모의고사 세션"),
     generatedExams: readBrowserArray<GeneratedExam>(GENERATED_EXAMS_STORAGE_KEY, "생성 모의고사"),
     libraryFolders: readBrowserValue(LIBRARY_FOLDERS_STORAGE_KEY, isLibraryFolderArray, "폴더 목록", []),
@@ -201,6 +210,7 @@ function isBrowserBackupPayload(value: unknown): value is BackupPayload {
     && isGeneratedExamArray(v2.generatedExams)
     && isLibraryFolderArray(v2.libraryFolders)
     && isGptSolutionRoundtripDraftArray(v2.gptSolutionDrafts)
+    && (v2.aiStudy === undefined || isAiStudyStore(v2.aiStudy))
     && (v2.reviewSessions === undefined || isReviewSessionArray(v2.reviewSessions))
     && (v2.importWorkspaceDraft === null || isImportWorkspace(v2.importWorkspaceDraft));
 }
@@ -224,7 +234,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
   if (v2Payload?.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) {
     throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
   }
-  const retainedReferences = v2Payload ? new Set<string>()
+  const retainedReferences = v2Payload ? v2Payload.aiStudy ? new Set<string>() : collectBrowserImageReferences([], { includeStoredEntries: false, onlyKeys: [AI_STUDY_STORAGE_KEY] })
     : collectBrowserImageReferences([], { includeStoredEntries: false });
   const previousImages = await listBrowserImages();
   const restoredImages = { ...payload.browserImages };
@@ -247,6 +257,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
     ...Object.keys(payload.browserImages),
   ]);
   if (v2Payload) {
+    if (v2Payload.aiStudy) managedKeys.add(AI_STUDY_STORAGE_KEY);
     managedKeys.add(EXAM_SESSIONS_STORAGE_KEY);
     managedKeys.add(GENERATED_EXAMS_STORAGE_KEY);
     managedKeys.add(LIBRARY_FOLDERS_STORAGE_KEY);
@@ -266,6 +277,7 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
     writeStorageJson(localStorage, SETTINGS_STORAGE_KEY, normalizeSettings(payload.settings));
     await replaceBrowserImages(restoredImages);
     if (v2Payload) {
+      if (v2Payload.aiStudy) writeStorageJson(localStorage, AI_STUDY_STORAGE_KEY, v2Payload.aiStudy);
       writeStorageJson(localStorage, EXAM_SESSIONS_STORAGE_KEY, v2Payload.examSessions);
       writeStorageJson(localStorage, GENERATED_EXAMS_STORAGE_KEY, v2Payload.generatedExams);
       writeStorageJson(localStorage, LIBRARY_FOLDERS_STORAGE_KEY, v2Payload.libraryFolders);
@@ -335,7 +347,7 @@ export async function createBackupAtDestination(
   }
   if (isTauri()) {
     if (!backupPath) return "백업이 취소되었습니다.";
-    await invoke("create_backup_zip", { backupPath });
+    await invoke("create_backup_zip", { backupPath, includeAiConversations: localStorage.getItem(AI_BACKUP_PREFERENCE_KEY) === "true" });
     return `백업을 저장했습니다: ${backupPath}`;
   }
   const snapshot = await readBrowserBackupSnapshot(entries, settings);

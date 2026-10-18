@@ -34,3 +34,6 @@
   .exam-source-answer-panel { border-inline-start: 0; border-top: 1px solid var(--border); }
   .exam-source-answer-toggle { position: static; }
 }
+
+.exam-session-paper__tools { min-width: 0; }
+.exam-session-paper__tools > .question-source-reference { padding: 4px 8px; }

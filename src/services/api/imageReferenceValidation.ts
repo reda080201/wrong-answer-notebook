@@ -3,7 +3,7 @@ const record = (value: unknown): value is RecordValue => value !== null && typeo
 const records = (value: unknown): value is RecordValue[] => Array.isArray(value) && value.every(record);
 const strings = (value: unknown) => Array.isArray(value) && value.every(item => typeof item === "string");
 const imageLists = new Set(["images", "questionImages", "explanationImages", "sourcePageImages", "selectedSourcePageImages", "linkedSourcePageImages", "imageReferences", "questionImageAssets", "sourcePageAssets"]);
-const objectLists = new Set(["questions", "structuredQuestions", "figures", "solutionFigures", "learningBlocks", "explanationParts", "questionSourceCrops", "questionSolutionHotspots", "contentSegments", "groups", "assets", "preparedEntries", "originalQuestions"]);
+const objectLists = new Set(["questions", "structuredQuestions", "figures", "solutionFigures", "learningBlocks", "explanationParts", "questionSourceCrops", "questionSolutionHotspots", "contentSegments", "groups", "assets", "preparedEntries", "originalQuestions", "contexts", "materials", "conversations", "drafts"]);
 
 /** Validate before normalization/filtering: dropped malformed containers can hide references. */
 export function hasSafeImageReferenceShape(value: unknown): boolean {

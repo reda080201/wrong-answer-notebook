@@ -105,6 +105,26 @@ fn collect_json_file_references(
     Ok(())
 }
 
+/// Omit chat-only assets from an opt-out backup while keeping images shared by other stores.
+pub(crate) fn ai_exclusive_image_filenames(root: &Path) -> Result<HashSet<String>, String> {
+    let mut chat = HashSet::new();
+    collect_json_file_references(&root.join("ai-study.json"), &mut chat)?;
+    let mut others = HashSet::new();
+    for name in [
+        "entries.json",
+        "exam-sessions.json",
+        "generated-exams.json",
+        "gpt-solution-drafts.json",
+        "import-workspace-draft.json",
+        "pending-deletions.json",
+    ] {
+        collect_json_file_references(&root.join(name), &mut others)?;
+    }
+    collect_json_tree_references(&root.join("import-workspaces"), &mut others)?;
+    chat.retain(|name| !others.contains(name));
+    Ok(chat)
+}
+
 fn collect_json_tree_references(
     path: &Path,
     referenced: &mut HashSet<String>,
@@ -551,6 +571,7 @@ impl NotebookStore {
             for filename in [
                 "exam-sessions.json",
                 "generated-exams.json",
+                "ai-study.json",
                 "gpt-solution-drafts.json",
                 "import-workspace-draft.json",
             ] {

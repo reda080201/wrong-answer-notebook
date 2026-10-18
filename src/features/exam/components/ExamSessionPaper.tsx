@@ -1,3 +1,4 @@
+import SourceReference from "../../exam-builder/components/SourceReference";
 import QuestionSolutionSheet from "../../solutions/QuestionSolutionSheet";
 import { snapshotSolutionQuestions } from "../../solutions/solutionModel";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -66,9 +67,9 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   const solutionAllowed = session.mode !== "real" || session.status === "submitted";
   const solutionQuestions = useMemo(() => solutionAllowed ? snapshotSolutionQuestions(session.questions) : [], [solutionAllowed, session.questions]);
   const questionId = session.questions[session.currentQuestionIndex]?.id;
-  const [textViewState, setTextViewState] = useState(() => ({ sessionId: session.id, questionId, textView: preferences?.showOriginalPages === false || initialTextView(session) }));
-  const textView = textViewState.sessionId === session.id && textViewState.questionId === questionId ? textViewState.textView : preferences?.showOriginalPages === false || initialTextView(session);
-  const setTextView = (value: boolean) => setTextViewState({ sessionId: session.id, questionId, textView: value });
+  const [textViewState, setTextViewState] = useState(() => ({ sessionId: session.id, questionId, userText: false, textView: preferences?.showOriginalPages === false || initialTextView(session) }));
+  const textView = textViewState.sessionId === session.id && (textViewState.userText || textViewState.questionId === questionId) ? textViewState.textView : preferences?.showOriginalPages === false || initialTextView(session);
+  const setTextView = (value: boolean, userSelected = false) => setTextViewState({ sessionId: session.id, questionId, userText: userSelected && value, textView: value });
   const [practiceAnswerOpen, setPracticeAnswerOpen] = useState(true);
   const sourcePageImages = useMemo(() => sourcePages({ questions: session.questions, sourcePageImages: session.sourcePageImages }), [session.questions, session.sourcePageImages]);
   const selectedPages = useMemo(
@@ -103,6 +104,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       questionNumber: question.questionNumber,
       groupId: question.stimulusGroupId,
       node: <article id={sanitizeExamQuestionDomId(question.questionNumber)} className="exam-question-paper" aria-label={`문제 ${question.questionNumber}`}>
+        {session.showSourceReferences !== false && <SourceReference source={question.sourceReference} />}
         <header className="exam-question-heading"><strong>{question.questionNumber}.</strong>{typeof question.points === "number" && <span>[{question.points}점]</span>}</header>
         {(question.warning || question.sourceWarning) && <p className="exam-question-warning">{question.warning || question.sourceWarning}</p>}
         {!focusPresentation && question.passage && firstInGroup && <section className="exam-passage"><QuestionContentView text={question.passage} figures={question.figures} /></section>}
@@ -115,7 +117,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
         stimulusIncluded: firstInGroup,
       };
     });
-  }, [disabled, focusPresentation, onResponse, practice, preferences?.showScratchNote, session.questions, session.responses]);
+  }, [disabled, focusPresentation, onResponse, practice, preferences?.showScratchNote, session.questions, session.responses, session.showSourceReferences]);
 
   const originalPageMode = Boolean(sourcePageImages.length && !textView);
   const navigateSolution = (key: string) => {
@@ -164,9 +166,13 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
 
   const paper = <>
     <div ref={returnFocusRegionRef} className={`${originalPageMode ? "exam-session-paper exam-session-paper--original" : "exam-session-paper"}${practice && !practiceAnswerOpen ? " exam-session-paper--answer-collapsed" : ""}`}>
+      <div className="exam-session-paper__tools">
+      {session.questions.some(q => q.sourceReference) && <label><input type="checkbox" checked={session.showSourceReferences !== false} onChange={e => onSessionChange?.(latest => ({ ...latest, showSourceReferences: e.target.checked }))} />출처 표시</label>}
+      {originalPageMode && session.showSourceReferences !== false && <SourceReference source={currentQuestion?.sourceReference} />}
       {sourcePageImages.length > 0 && textView && selectedCurrentQuestionPages.length === 0 && <p className="exam-source-mapping-note" role="status">현재 문항에 선택된 원본 페이지가 없어 문항 텍스트로 표시합니다. 원본 문제지에서 페이지 연결을 확인해 주세요.</p>}
-      {sourcePageImages.length > 0 && <nav className="exam-source-view-switch" aria-label="문제 보기 방식"><div className="exam-source-view-switch__modes"><button type="button" aria-pressed={originalPageMode} onClick={() => setTextView(false)}>원본 문제지</button><button type="button" aria-pressed={!originalPageMode} onClick={() => setTextView(true)}>문항 텍스트</button></div>{practice && originalPageMode && <button type="button" className="exam-source-answer-toggle" aria-expanded={practiceAnswerOpen} onClick={() => setPracticeAnswerOpen(open => !open)}>{practiceAnswerOpen ? "답안 접기" : "답안 펼치기"}</button>}</nav>}
+      {sourcePageImages.length > 0 && <nav className="exam-source-view-switch" aria-label="문제 보기 방식"><div className="exam-source-view-switch__modes"><button type="button" aria-pressed={originalPageMode} onClick={() => setTextView(false, true)}>원본 문제지</button><button type="button" aria-pressed={!originalPageMode} onClick={() => setTextView(true, true)}>문항 텍스트</button></div>{practice && originalPageMode && <button type="button" className="exam-source-answer-toggle" aria-expanded={practiceAnswerOpen} onClick={() => setPracticeAnswerOpen(open => !open)}>{practiceAnswerOpen ? "답안 접기" : "답안 펼치기"}</button>}</nav>}
       {!sourcePageImages.length && <p className="exam-source-mapping-note" role="status">원본 PDF 페이지가 연결되지 않아 문항 텍스트로 표시합니다. 원본 배치로 보려면 PDF의 전체 페이지 이미지를 함께 가져와 주세요.</p>}
+      </div>
       {originalPageMode ? <div className={`exam-source-layout${practice ? " exam-source-layout--practice" : " exam-source-layout--real"}`}>{originalReader}{practice && practiceAnswerOpen && currentQuestion && <aside className="exam-source-answer-panel" aria-label="현재 문항 답안">
         <label className="exam-source-question-select">답을 입력할 문항<select value={currentQuestion.questionNumber} onChange={event => { const index = session.questions.findIndex(question => question.questionNumber === event.target.value); if (index >= 0) onNavigate(index); }}>
           {session.questions.map(question => <option key={question.id} value={question.questionNumber}>{question.questionNumber}번{question.points ? ` · ${question.points}점` : ""}</option>)}

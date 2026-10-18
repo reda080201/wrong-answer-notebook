@@ -6,6 +6,7 @@ export type ExamSessionStatus = "in_progress" | "submitted";
 export type ExamMode = "practice" | "real";
 
 export interface ExamQuestionSnapshot {
+  sourceReference?: QuestionSourceReference;
   questionSolutionHotspots?: QuestionSolutionHotspot[];
   solutionAnswer?: SheetAnswerItem;
   solutionFigures?: SheetFigureItem[];
@@ -71,6 +72,7 @@ export interface ExamSessionScore {
 }
 
 export interface ExamSession {
+  showSourceReferences?: boolean;
   id: string;
   entryId: string;
   title: string;
@@ -192,6 +194,7 @@ export interface ExamGenerationReport {
 }
 
 export interface GeneratedExam {
+  showSourceReferences?: boolean;
   id: string;
   title: string;
   subject: string;
