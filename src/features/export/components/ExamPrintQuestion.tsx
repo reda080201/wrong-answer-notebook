@@ -29,10 +29,10 @@ export default function ExamPrintQuestion({ question, imageUrls, workspaceSize }
   };
   return (
     <section className={`exam-print-question${long ? " is-long" : ""}`}>
+      {question.sourceLabel ? <p className="exam-print-source-label">{question.sourceLabel}</p> : null}
       <header>
         <span className="exam-print-question-number">{question.displayNumber}.</span>
       </header>
-      {question.sourceLabel ? <p className="exam-print-source-label">원본: {question.sourceLabel}</p> : null}
       {(question.segments ?? []).map((segment) => {
         if (segment.type === "condition") {
           return (

@@ -225,3 +225,11 @@ describe("shared exam paper interactions", () => {
     expect(screen.getByText("공통 지문")).toBeVisible();
   });
 });
+
+it("keeps an explicit text-paper choice while navigating linked questions so the next answer control is not replaced",()=>{
+  const linked:ExamSession={...session,id:"explicit-text",mode:"practice",currentQuestionIndex:0,sourcePageImages:["first.png","second.png"],sourcePageQuestionMap:{"first.png":["1"],"second.png":["2"]},questions:[{...session.questions[0],id:"one",questionNumber:"1",sourcePageImages:["first.png"],source:{page:1}},{...session.questions[0],id:"two",questionNumber:"2",sourcePageImages:["second.png"],source:{page:1}}]};
+  const props={disabled:false,practice:true,onNavigate:vi.fn(),onResponse:vi.fn()};
+  const view=render(<ExamSessionPaper {...props} session={linked}/>);fireEvent.click(screen.getByRole("button",{name:"문항 텍스트"}));
+  view.rerender(<ExamSessionPaper {...props} session={{...linked,currentQuestionIndex:1}}/>);
+  expect(screen.getByRole("button",{name:"문항 텍스트"})).toHaveAttribute("aria-pressed","true");expect(screen.queryByRole("region",{name:"원본 문제지 페이지 보기"})).not.toBeInTheDocument();
+});

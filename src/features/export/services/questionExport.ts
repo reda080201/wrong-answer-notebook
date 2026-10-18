@@ -58,25 +58,27 @@ function stripSource(item: QuestionExportItem): QuestionExportItem {
 
 function buildMarkdown(title: string, questions: QuestionExportItem[], options: QuestionExportOptions): string {
   return [`# ${title}`, "", ...questions.flatMap((item) => [
+    options.includeSourceReferences && item.source ? formatQuestionSourceLabel(item.source) : "",
     `## ${item.displayQuestionNumber}번`, "", item.passage ?? "", item.question,
     options.includeAnswers && item.answer ? `정답: ${item.answer}` : "",
     options.includeExplanations && item.explanation ? `해설: ${item.explanation}` : "", "",
     ...(item.questionImages ?? []).map((image) => `[문항 이미지: ${image}]`),
     ...item.figures.map((figure) => figure.image ? `[그림: ${figure.image}]` : figure.caption ? `[설명 도표: ${figure.caption}]` : ""),
     ...item.choices, "",
-    options.includeSourceReferences && item.source ? `<details>\n<summary>원본 출처</summary>\n\n${formatQuestionSourceLabel(item.source)}\n\n</details>` : "",
+
     "",
   ])].join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 function buildText(title: string, questions: QuestionExportItem[], options: QuestionExportOptions): string {
   return [`${title}`, "=".repeat(Math.min(80, Math.max(10, title.length))), "", ...questions.flatMap((item) => [
+    options.includeSourceReferences && item.source ? formatQuestionSourceLabel(item.source) : "",
     `${item.displayQuestionNumber}번`, item.passage ?? "", item.question,
     options.includeAnswers && item.answer ? `정답: ${item.answer}` : "",
     options.includeExplanations && item.explanation ? `해설: ${item.explanation}` : "",
     ...(item.questionImages ?? []).map((image) => `[문항 이미지: ${image}]`),
     ...item.figures.map((figure) => figure.image ? `[그림: ${figure.image}]` : figure.caption ? `[설명 도표: ${figure.caption}]` : ""),
-    ...item.choices, options.includeSourceReferences && item.source ? `원본: ${formatQuestionSourceLabel(item.source)}` : "", "",
+    ...item.choices, "",
   ])].join("\n");
 }
 
@@ -179,7 +181,7 @@ export async function buildQuestionExportZip(input: { title: string; subject: st
 }
 
 export function generatedExamToQuestionExport(exam: GeneratedExam, includeSourceReferences = true): { title: string; subject: string; questions: QuestionExportItem[] } {
-  return { title: exam.title, subject: exam.subject, questions: exam.questions.map((item) => ({ position: item.position, displayQuestionNumber: String(item.position), source: includeSourceReferences ? item.source : undefined, passage: item.snapshot.passage, questionImages: item.snapshot.questionImages, sourcePageImages: item.snapshot.sourcePageImages, question: item.snapshot.question, contentSegments: item.snapshot.contentSegments, choices: item.snapshot.choices, figures: item.snapshot.figures, answer: item.snapshot.correctAnswer, explanation: item.snapshot.explanation })) };
+  return { title: exam.title, subject: exam.subject, questions: exam.questions.map((item) => ({ position: item.position, displayQuestionNumber: String(item.position), source: includeSourceReferences && exam.showSourceReferences !== false ? item.source : undefined, passage: item.snapshot.passage, questionImages: item.snapshot.questionImages, sourcePageImages: item.snapshot.sourcePageImages, question: item.snapshot.question, contentSegments: item.snapshot.contentSegments, choices: item.snapshot.choices, figures: item.snapshot.figures, answer: item.snapshot.correctAnswer, explanation: item.snapshot.explanation })) };
 }
 
 export function entryToQuestionExport(entry: WrongAnswerEntry, questionNumbers: string[], includeSourceReferences = false): { title: string; subject: string; questions: QuestionExportItem[] } {

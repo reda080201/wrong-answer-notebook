@@ -1,3 +1,4 @@
+import { publishStudySelection } from "../../study-ai/activeSelection";
 import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
 import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
@@ -530,6 +531,8 @@ export default function EntryDetail({
   }, [detailViewMode, isSheet]);
 
   useEffect(() => {
+    // Reset the consumed target together with the display state, including effect replay.
+    consumedInitialTargetRef.current = null;
     setFocusedQuestionIndex(0);
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
@@ -1303,6 +1306,11 @@ export default function EntryDetail({
         })}
       </div>
     );
+
+  useEffect(() => {
+    publishStudySelection({ entryId: entry.id, questionNumber: resolvedSheetQuestions[focusedQuestionIndex]?.questionNumber, selectedNumbers: selectedQuestionNumbers });
+    return () => publishStudySelection(null);
+  }, [entry.id, focusedQuestionIndex, resolvedSheetQuestions, selectedQuestionNumbers]);
 
   const renderAnswerToolbar = () => (
     <div className="sheet-answer-toolbar">

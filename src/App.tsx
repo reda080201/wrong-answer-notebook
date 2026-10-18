@@ -1,3 +1,7 @@
+import { entryAiMaterials } from "./features/study-ai/model";
+import { hydrateSessionSourceReferences } from "./features/exam-builder/services/questionSource";
+import StudyAiChat from "./features/study-ai/StudyAiChat";
+import { SourceNavigationContext } from "./features/exam-builder/components/sourceNavigationContext";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
@@ -627,7 +631,9 @@ function AppContent() {
   ], [actions, appNavigationController, openSettings]);
 
   return (
+    <SourceNavigationContext.Provider value={async source => { const entry = entries.find(e => e.id === source.sourceEntryId); if (!entry) { await confirm({ title: "원본 이동 불가", message: "원본 항목이 삭제되었거나 찾을 수 없습니다. 생성 당시 출처는 보존되어 있습니다." }); return; } if (entryAiMaterials(entry).filter(m=>normalizeQuestionNumber(m.source.sourceQuestionNumber)===normalizeQuestionNumber(source.sourceQuestionNumber)).length !== 1) { await confirm({title:"원문 문항 확인 필요",message:"원문 문항이 없거나 번호가 중복되어 안전하게 이동할 수 없습니다."});return; } if (examSession && !(await closeExamSession())) return; await appNavigationController.requestNavigation({ section: entry.entryKind ?? "wrong_answer", entryId: entry.id, question: { entryId: entry.id, questionNumber: source.sourceQuestionNumber } }); }}>
     <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
+    <StudyAiChat entries={entries} selectedEntryId={selectedId} session={examSession ? hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams) : null} onSaveExam={generatedExamController.persist} onStartExam={async exam => { await generatedExamController.persist(exam); generatedExamController.openExam(exam); }} onSettings={() => openSettings("ai")} />
     <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
@@ -792,7 +798,7 @@ function AppContent() {
 
           {examSession ? (
             <ExamSessionOverlay
-              session={studyExamSession ?? examSession}
+              session={hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams)}
               generated={Boolean(activeGeneratedExam)}
               hideAnswers={settings.viewPreferences.hideAnswers}
               examPreferences={settings.examPreferences}
@@ -1186,6 +1192,7 @@ function AppContent() {
       />
     </div>
     </ConceptLinkProvider>
+    </SourceNavigationContext.Provider>
   );
 }
 

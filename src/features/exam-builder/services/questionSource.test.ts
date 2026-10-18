@@ -7,7 +7,7 @@ const entry = { id: "e1", title: "Alpha 모의고사 3회", subject: "수학", t
 
 describe("question source", () => {
   it("formats the original title without duplicating round information", () => {
-    expect(formatQuestionSourceLabel(createQuestionSource(entry, "13", { question: "문제", choices: [] }))).toBe("Alpha 모의고사 3회 13번");
+    expect(formatQuestionSourceLabel(createQuestionSource(entry, "13", { question: "문제", choices: [] }))).toBe("Alpha 모의고사 3회 · 원문 13번");
   });
   it("migrates legacy flat fields into one source object", () => {
     const migrated = migrateQuestionSource({ position: 1, source: undefined as never, sourceEntryId: "e1", sourceQuestionNumber: "13", snapshot: { id: "q", questionNumber: "13", question: "문제", choices: [], questionImages: [], figures: [] }, locked: false, selectionScore: 1, selectionReasons: [] } as GeneratedExamQuestion, [entry]);
