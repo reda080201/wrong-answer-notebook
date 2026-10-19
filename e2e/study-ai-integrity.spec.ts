@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 const key = "wrong-answer-ai-study-v1";
+test.beforeEach(async ({ page }) => {
+    await page.addInitScript(() => localStorage.setItem("wrong-answer-theme", "light"));
+});
 for (const width of [1100, 680]) {
     test(`AI failed-turn retry survives reload without duplicate user records at ${width}px`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 750 });
@@ -24,6 +27,8 @@ for (const width of [1100, 680]) {
         const sendBox = await panel.getByRole("button", { name: "전송", exact:true }).boundingBox();
         expect(sendBox).not.toBeNull();
         expect(sendBox!.y + sendBox!.height).toBeLessThanOrEqual(750);
+        await panel.locator(".ai-message--user").scrollIntoViewIfNeeded();
+        await expect(panel.locator(".ai-message--user")).toBeInViewport();
         await page.screenshot({ path: testInfo.outputPath(`ai-retry-${width}x750.png`) });
     });
 }
