@@ -5,6 +5,19 @@ afterEach(async()=>{setAiStudyMaintenanceBlocked(false);await flushAiStudyWrites
 const conversation:AiConversation={id:"c",title:"대화",updatedAt:new Date().toISOString(),contextId:"ctx",messages:[],materials:[],sharing:DEFAULT_AI_SHARING};
 const draft:AiExamDraft={id:"composer",materials:[],sharing:DEFAULT_AI_SHARING,config:{title:"구성",subject:"수학",count:2,minutes:30,points:10,maxPerSource:2,easy:0,medium:0,hard:0,unitCounts:{},prioritizeImportance:true,instruction:""},excluded:[],template:"free"};
 describe("AI store queue",()=>{
+  it.each(["draft", "message", "status"])("rejects malformed %s identity/state before writing",async(kind)=>{
+    const messages=kind==="message"?[{id:"same",role:"user",text:"a",contextId:"ctx"},{id:"same",role:"assistant",text:"b",contextId:"ctx"}]:kind==="status"?[{id:"m",role:"assistant",text:"b",contextId:"ctx",status:"unknown"}]:[];
+    const corrupt=JSON.stringify({version:1,conversations:[{...conversation,messages}],...(kind==="draft"?{drafts:[draft,draft]}:{})});
+    localStorage.setItem(AI_STUDY_STORAGE_KEY,corrupt);await expect(loadAiStudyStore()).rejects.toThrow();
+    await expect(saveAiStudyStore({version:1,conversations:[]})).rejects.toThrow();expect(localStorage.getItem(AI_STUDY_STORAGE_KEY)).toBe(corrupt);
+  });
+  it("preserves duplicate-ID records as corrupt data instead of deleting both records",async()=>{
+    const id=crypto.randomUUID();const corrupt=JSON.stringify({version:1,conversations:[{...conversation,id,title:"first"},{...conversation,id,title:"second"}]});
+    localStorage.setItem(AI_STUDY_STORAGE_KEY,corrupt);
+    await expect(deleteAiConversation(id)).rejects.toThrow("ID");
+    expect(localStorage.getItem(AI_STUDY_STORAGE_KEY)).toBe(corrupt);
+    await expect(flushAiStudyWrites()).resolves.toBeUndefined();
+  });
   it("deletes a conversation and its owned draft in one commit, preserving both on write failure",async()=>{
     const subject={...conversation,id:"delete-fail"};
     await saveAiStudyStore({version:1,conversations:[subject,{...conversation,id:"other"}]});

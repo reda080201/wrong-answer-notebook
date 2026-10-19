@@ -4,6 +4,21 @@ const key = "wrong-answer-ai-study-v1";
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("wrong-answer-theme", "light"));
 });
+test("AI launcher waits for a blocking settings dialog and retains the unsent input", async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 750 });
+    await page.goto("/", { waitUntil: "domcontentloaded" });
+    const launcher = page.getByRole("button", { name: "AI 학습 대화 열기" });
+    await launcher.click();
+    const panel = page.getByRole("dialog", { name: "AI 학습 대화" });
+    await panel.getByLabel("메시지").fill("전송하지 않은 입력");
+    await panel.getByRole("button", { name: "API 설정", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: /설정/ })).toBeVisible();
+    await expect(launcher).toBeHidden();
+    await page.keyboard.press("Escape");
+    await expect(launcher).toBeVisible();
+    await launcher.click();
+    await expect(panel.getByLabel("메시지")).toHaveValue("전송하지 않은 입력");
+});
 for (const width of [1100, 680]) {
     test(`AI failed-turn retry survives reload without duplicate user records at ${width}px`, async ({ page }, testInfo) => {
         await page.setViewportSize({ width, height: 750 });

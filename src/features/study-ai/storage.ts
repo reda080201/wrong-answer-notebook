@@ -20,16 +20,27 @@ export async function flushAiStudyWrites() {
     for (const operation of [...pending.values()]) await persistConversation(operation, true);
     await lastWrite;
 }
+function assertUsableStore(value: unknown): asserts value is AiStudyStore {
+    if (!isAiStudyStore(value)) throw new Error("AI 대화 기록 형식이 잘못되었습니다. 기존 기록을 보존했습니다.");
+    const groups: Array<Array<{ id: string }>> = [value.conversations, value.drafts ?? []];
+    for (const conversation of value.conversations) {
+        groups.push(conversation.messages, conversation.materials, conversation.contexts ?? []);
+        for (const context of conversation.contexts ?? []) groups.push(context.materials);
+        if (!conversation.contextId.trim() || conversation.messages.some(m => m.status !== undefined && !["complete", "stopped", "failed"].includes(m.status)))
+            throw new Error("AI 문맥 ID 또는 메시지 상태가 잘못되었습니다. 기존 기록을 보존했습니다.");
+    }
+    for (const draft of value.drafts ?? []) groups.push(draft.materials);
+    if (groups.some(group => group.some(item => !item.id.trim()) || new Set(group.map(item => item.id)).size !== group.length))
+        throw new Error("AI 기록 ID가 비어 있거나 중복되었습니다. 기존 기록을 보존했습니다.");
+}
 async function readStore(): Promise<AiStudyStore> {
     const value: unknown = isTauri() ? await invoke("load_ai_study_store") : getStorageBackendKind() === "desktop-proxy" ? (() => { throw new Error("AI 대화 기록은 설치 앱에서 사용하세요."); })() : JSON.parse(localStorage.getItem(AI_STUDY_STORAGE_KEY) ?? JSON.stringify(emptyAiStudyStore()));
-    if (!isAiStudyStore(value))
-        throw new Error("AI 대화 기록 형식이 잘못되었습니다. 기존 기록을 보존했습니다.");
+    assertUsableStore(value);
     return value;
 }
 export async function loadAiStudyStore(): Promise<AiStudyStore> { await queue; return readStore(); }
 async function writeStore(store: AiStudyStore): Promise<void> {
-    if (!isAiStudyStore(store))
-        throw new Error("AI 대화·구성 초안 형식이 잘못되었습니다.");
+    assertUsableStore(store);
     if (new TextEncoder().encode(JSON.stringify(store)).length > 16 * 1024 * 1024)
         throw new Error("AI 기록이 16MiB를 넘습니다. 오래된 대화를 삭제하세요.");
     if (isTauri())
@@ -39,11 +50,14 @@ async function writeStore(store: AiStudyStore): Promise<void> {
     else
         localStorage.setItem(AI_STUDY_STORAGE_KEY, JSON.stringify(store));
 }
-function enqueue(update: (current: AiStudyStore) => AiStudyStore, recovery = false): Promise<void> {
+function enqueue(update: (current: AiStudyStore) => AiStudyStore, recovery = false, hasUnsavedPayload = true): Promise<void> {
     if (blocked && !recovery)
         return Promise.reject(new Error("백업·복원 중에는 AI 기록 저장을 기다려 주세요."));
     const task = queue.then(async () => writeStore(update(await readStore())));
-    lastWrite = task;
+    // A rejected deletion leaves the stored document intact and has no unsaved
+    // payload to flush. Its caller still receives the failure, while recovery
+    // remains available for a corrupt document.
+    lastWrite = hasUnsavedPayload ? task : task.catch(() => undefined);
     queue = task.catch(() => undefined);
     return task;
 }
@@ -58,7 +72,6 @@ async function persistConversation(operation: { conversation: AiConversation; cr
     }, recovery);
     if (create) createdHere.add(conversation.id);
     if (pending.get(conversation.id)?.revision === operation.revision) pending.delete(conversation.id);
-    window.dispatchEvent(new Event("ai-study-saved"));
 }
 /** Failed writes remain recoverable in memory; flushing them is part of maintenance. */
 export function saveAiConversation(conversation: AiConversation, create = false): Promise<void> {
@@ -74,7 +87,7 @@ export function deleteAiConversation(id: string): Promise<void> {
     return enqueue(current => ({ ...current,
         conversations: current.conversations.filter(c => c.id !== id),
         drafts: (current.drafts ?? []).filter(d => d.id !== `conversation:${id}`),
-    })).then(() => { deletedHere.add(id); createdHere.delete(id); });
+    }), false, false).then(() => { deletedHere.add(id); createdHere.delete(id); });
 }
 /** Chat and composer writes merge under the same queue so neither drops the other's records. */
 export function saveAiStudyStore(store: AiStudyStore): Promise<void> {
@@ -90,4 +103,4 @@ export function saveAiExamDraft(draft: AiExamDraft): Promise<void> {
         return { ...current, drafts: [snapshot, ...(current.drafts ?? []).filter(d => d.id !== snapshot.id)] };
     });
 }
-export function clearAiExamDraft(id: string): Promise<void> { return enqueue(current => ({ ...current, drafts: (current.drafts ?? []).filter(d => d.id !== id) })); }
+export function clearAiExamDraft(id: string): Promise<void> { return enqueue(current => ({ ...current, drafts: (current.drafts ?? []).filter(d => d.id !== id) }), false, false); }

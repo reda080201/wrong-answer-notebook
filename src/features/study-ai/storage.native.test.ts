@@ -6,6 +6,12 @@ import { deleteAiConversation, discardPendingAiStudyWrites, flushAiStudyWrites, 
 vi.mock("@tauri-apps/api/core", () => ({ isTauri: () => true, invoke: vi.fn() }));
 afterEach(async () => { setAiStudyMaintenanceBlocked(false);discardPendingAiStudyWrites();await flushAiStudyWrites().catch(()=>undefined);vi.resetAllMocks(); });
 describe("AI native persistence adapter", () => {
+    it("preserves duplicate native records and blocks ambiguous deletion",async()=>{
+        const c={id:"duplicate-native",title:"one",updatedAt:"2026-01-01",contextId:"ctx",messages:[],materials:[],sharing:DEFAULT_AI_SHARING};
+        vi.mocked(invoke).mockResolvedValue({version:1,conversations:[c,{...c,title:"two"}]});
+        await expect(deleteAiConversation(c.id)).rejects.toThrow("ID");
+        expect(vi.mocked(invoke).mock.calls.every(([command])=>command==="load_ai_study_store")).toBe(true);
+    });
     it("commits deletion as one native save and preserves the old document on a rejected save",async()=>{
         let disk:AiStudyStore={version:1,conversations:[{id:"native-c",title:"대화",updatedAt:"2026-01-01",contextId:"ctx",messages:[],materials:[],sharing:DEFAULT_AI_SHARING}],drafts:[]};
         let fail=true;let saves=0;

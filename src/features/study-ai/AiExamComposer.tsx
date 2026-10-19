@@ -1,14 +1,15 @@
 import MathText from "../../components/MathText";
 import { clearAiExamDraft, loadAiStudyStore, saveAiExamDraft } from "./storage";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { GeneratedExam, WrongAnswerEntry } from "../../types";
+import type { GeneratedExam, GeneratedExamQuestion, WrongAnswerEntry } from "../../types";
+import { normalizeQuestionNumber } from "../../utils/questionMeta";
 import { useAppDialog } from "../../shared/ui/AppDialogProvider";
 import Dialog from "../../shared/ui/Dialog";
 import QuestionContentView from "../../components/QuestionContentView";
 import SourceReference from "../exam-builder/components/SourceReference";
 import AiMaterialPicker from "./AiMaterialPicker";
 import { buildAiContext, DEFAULT_AI_SHARING, type AiMaterial, type AiSharing } from "./model";
-import { AI_EXAM_TEMPLATES, examMaterials, limitExamMaterials, proposalFromSelection, proposalInstruction, validateExamSelection, type AiExamConfig } from "./examProposal";
+import { AI_EXAM_TEMPLATES, examMaterials, limitExamMaterials, proposalFromSelection, proposalInstruction, resolveProposalMaterial, validateExamSelection, type AiExamConfig } from "./examProposal";
 import { requestStudyAi } from "./api";
 import { assertStudyAiSourcesAllowed } from "./requestPolicy";
 export default function AiExamComposer({ entries, initialMaterials = [], initialProposal, onProposal, onSave, onStart, onClose, onBack, draftId = "composer" }: {
@@ -79,7 +80,11 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
         setSaving(false);
     } };
     useEffect(()=>{const handle=(event:Event)=>{if((event as CustomEvent<boolean>).detail){abort.current?.abort();setDraftReady(false);setError("백업·복원 작업으로 초안 쓰기를 중지했습니다. 기존 초안을 보존하고 닫은 뒤 다시 여세요.");}};window.addEventListener("ai-study-maintenance",handle);return()=>window.removeEventListener("ai-study-maintenance",handle);},[]);
-    const candidates = useMemo(() => limitExamMaterials(materials.filter(m => (!config.subject || m.source.sourceSubject === config.subject) && !excluded.includes(m.id) && (!onlyReviewed || !m.snapshot.needsReview) && (!requireAnswers || m.snapshot.correctAnswer) && (!requireExplanations || m.snapshot.explanation)), 80, config.prioritizeImportance), [materials, config.subject, config.prioritizeImportance, excluded, onlyReviewed, requireAnswers, requireExplanations]);
+    const candidates = useMemo(() => {
+        const originalKey = (m: AiMaterial) => JSON.stringify([m.source.sourceEntryId, normalizeQuestionNumber(m.source.sourceQuestionNumber)]);
+        const excludedOriginals = new Set(materials.filter(m => excluded.includes(m.id) && m.source.sourceEntryId && normalizeQuestionNumber(m.source.sourceQuestionNumber)).map(originalKey));
+        return limitExamMaterials(materials.filter(m => (!config.subject || m.source.sourceSubject === config.subject) && !excluded.includes(m.id) && !excludedOriginals.has(originalKey(m)) && (!onlyReviewed || !m.snapshot.needsReview) && (!requireAnswers || m.snapshot.correctAnswer) && (!requireExplanations || m.snapshot.explanation)), 80, config.prioritizeImportance);
+    }, [materials, config.subject, config.prioritizeImportance, excluded, onlyReviewed, requireAnswers, requireExplanations]);
     const units = [...new Set(materials.flatMap(m => m.units))];
     const changeScope = async(next:AiMaterial[],options:AiSharing)=>{
       if(lock.current || !draftReady)return;lock.current=true;setScopeBusy(true);
@@ -108,7 +113,7 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
                 throw new Error("공통 지문 묶음의 일부가 범위나 필터에서 빠졌습니다. 묶음 전체를 추가하거나 해당 문항을 제외하세요.");
             const context = buildAiContext(candidates, sharing);
             assertStudyAiSourcesAllowed(candidates.map(m => m.source.sourceEntryId));
-            const response = await requestStudyAi({ context: context.text, images: context.images, sourceEntryIds: candidates.map(m => m.source.sourceEntryId), json: true, messages: [{ role: "user", text: proposalInstruction(config, proposal) }] }, controller.signal);
+            const response = await requestStudyAi({ context: context.text, images: context.images, sourceEntryIds: candidates.map(m => m.source.sourceEntryId), json: true, messages: [{ role: "user", text: proposalInstruction(config, proposal, candidates) }] }, controller.signal);
             if(controller.signal.aborted || !alive.current)return;
             const next = proposalFromSelection(response, candidates, config, proposal);
             await persistDraft(next);
@@ -136,7 +141,9 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
         setSaving(true);
         setError("");
         try {
-            const selected = proposal.questions.map(q => ({ id: candidates.find(m => m.source.sourceEntryId === q.source.sourceEntryId && m.source.sourceQuestionNumber === q.source.sourceQuestionNumber)?.id ?? "", points: q.points ?? q.snapshot.points ?? 0, reason: q.selectionReasons.join(" ") }));
+            const selected = proposal.questions.map(q => {
+                return { id: resolveProposalMaterial(q, candidates).id, points: q.points ?? q.snapshot.points ?? 0, reason: q.selectionReasons.join(" ") };
+            });
             validateExamSelection(selected, candidates, config);
             assertStudyAiSourcesAllowed(proposal.questions.map(q => q.source.sourceEntryId));
             const value = { ...proposal, questions: proposal.questions.map(q => ({ ...q, snapshot: { ...q.snapshot, points: q.points ?? q.snapshot.points } })), title: config.title, subject: config.subject || proposal.subject, timeLimitMinutes: config.minutes, totalPoints: config.points, status: "ready" as const };
@@ -172,6 +179,14 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
         catch (e) { setError(e instanceof Error ? e.message : "초안 저장 실패"); }
         finally { lock.current = false; setSaving(false); }
     };
+    const toggleExcluded = (question: GeneratedExamQuestion) => {
+        if (lock.current || question.locked || !draftReady) return;
+        const number = normalizeQuestionNumber(question.source.sourceQuestionNumber);
+        const ids = materials.filter(m => question.source.sourceEntryId && number && m.source.sourceEntryId === question.source.sourceEntryId && normalizeQuestionNumber(m.source.sourceQuestionNumber) === number).map(m => m.id);
+        if (!ids.length) { setError("제외할 원본 문항을 확인할 수 없습니다. 후보 범위를 확인하세요."); return; }
+        setExcluded(excluded.some(id => ids.includes(id)) ? excluded.filter(id => !ids.includes(id)) : [...new Set([...excluded, ...ids])]);
+        if (proposal) updateProposal({ ...proposal });
+    };
     return <Dialog open onClose={() => void closeDraft()} className="ai-exam-composer" ariaLabel="AI 모의고사 구성" closeDisabled={busy || saving || scopeBusy} header={<><h2>AI 모의고사 구성</h2><button type="button" disabled={busy || saving || scopeBusy || draftLoading || !draftReady} onClick={() => void closeDraft()} aria-label="AI 구성 닫기">✕</button></>} footer={<div className="ai-inline-actions">{busy ? <button onClick={() => abort.current?.abort()}>응답 중지</button> : <button disabled={scopeBusy || saving || !draftReady || draftLoading} onClick={() => void propose()}>구성안 {proposal ? "다시 제안" : "요청"}</button>}<button disabled={!proposal || busy || saving || scopeBusy || !draftReady || draftLoading} onClick={() => void save(false)}>검토한 구성 저장</button><button disabled={!proposal || busy || saving || scopeBusy || !draftReady || draftLoading} onClick={() => void save(true)}>저장하고 풀기</button></div>}>
     {draftLoading && <p role="status">구성 초안 불러오는 중…</p>}
     {!draftLoading && !draftReady && <button onClick={onClose}>기존 초안 보존하고 닫기</button>}
@@ -186,7 +201,6 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
     <AiMaterialPicker available={available} selected={materials} sharing={sharing} disabled={busy || saving || scopeBusy || draftLoading || !draftReady} onChange={(m, s) => void changeScope(m, s)}/>
     <p role="status">선택 {materials.length}문항 · 이번 요청 검토 후보 {candidates.length}문항 · 필터·제외·한도 밖 {materials.length - candidates.length}문항. 한 요청은 공통 지문 묶음을 유지하며 최대 80문항입니다. 더 큰 범위는 자료를 나누어 검토하세요.</p>
     {error && <p role="alert" className="form-error">{error}</p>}
-    {proposal && <section><h3>구성안 · {proposal.questions.length}문항</h3>{proposal.generationReport.warnings.map((w, i) => <p key={i}>{w}</p>)}<label><input type="checkbox" checked={proposal.showSourceReferences !== false} onChange={e => updateProposal({ ...proposal, showSourceReferences: e.target.checked })}/>출처 표시</label><ol className="ai-proposal-list">{proposal.questions.map((q, index) => <li key={`${q.source.sourceEntryId}-${q.source.sourceQuestionNumber}`}>{proposal.showSourceReferences !== false && <SourceReference source={q.source} onBeforeNavigate={async()=>{await persistDraft();onClose();}}/>}<div className="ai-proposal-heading"><strong>{q.position}번</strong><label>배점<input type="number" min="1" value={q.points ?? q.snapshot.points ?? 0} onChange={e => updateProposal({ ...proposal, questions: proposal.questions.map((v, i) => i === index ? { ...v, points: Number(e.target.value) } : v) })}/></label></div>{q.snapshot.passage && (!q.snapshot.stimulusGroupId || proposal.questions[index-1]?.snapshot.stimulusGroupId !== q.snapshot.stimulusGroupId) && <section className="exam-passage"><QuestionContentView text={q.snapshot.passage} figures={q.snapshot.figures}/></section>}<QuestionContentView text={q.snapshot.question} segments={q.snapshot.contentSegments} figures={q.snapshot.figures}/>{q.snapshot.choices.length>0&&<ol className="ai-proposal-choices">{q.snapshot.choices.map((choice,i)=><li key={i}><MathText text={choice}/></li>)}</ol>}<p>{q.selectionReasons.join(" · ")}</p><div className="ai-inline-actions"><button disabled={busy || saving || scopeBusy || draftLoading || !draftReady} onClick={() => updateProposal({ ...proposal, questions: proposal.questions.map((v, i) => i === index ? { ...v, locked: !v.locked } : v) })}>{q.locked ? "고정됨" : "문항 고정"}</button><button disabled={busy || saving || q.locked} onClick={() => { const m = materials.find(m => m.source.sourceEntryId === q.source.sourceEntryId && m.source.sourceQuestionNumber === q.source.sourceQuestionNumber); if (m)
-        setExcluded(excluded.includes(m.id) ? excluded.filter(id => id !== m.id) : [...excluded, m.id]); updateProposal({ ...proposal }); }}>{excluded.some(id => materials.find(m => m.id === id)?.source.sourceEntryId === q.source.sourceEntryId && materials.find(m => m.id === id)?.source.sourceQuestionNumber === q.source.sourceQuestionNumber) ? "제외 취소" : "제외하고 대체 요청"}</button>{[-1, 1].map(offset => <button key={offset} disabled={busy || saving || q.locked || !proposal.questions[index + offset] || proposal.questions[index + offset]?.locked} onClick={() => { const list = [...proposal.questions]; [list[index], list[index + offset]] = [list[index + offset], list[index]]; updateProposal({ ...proposal, questions: list.map((q, i) => ({ ...q, position: i + 1 })) }); }}>{offset < 0 ? "위로" : "아래로"}</button>)}</div></li>)}</ol></section>}
+    {proposal && <section><h3>구성안 · {proposal.questions.length}문항</h3>{proposal.generationReport.warnings.map((w, i) => <p key={i}>{w}</p>)}<label><input type="checkbox" checked={proposal.showSourceReferences !== false} onChange={e => updateProposal({ ...proposal, showSourceReferences: e.target.checked })}/>출처 표시</label><ol className="ai-proposal-list">{proposal.questions.map((q, index) => <li key={`${q.source.sourceEntryId}-${q.source.sourceQuestionNumber}`}>{proposal.showSourceReferences !== false && <SourceReference source={q.source} onBeforeNavigate={async()=>{await persistDraft();onClose();}}/>}<div className="ai-proposal-heading"><strong>{q.position}번</strong><label>배점<input type="number" min="1" value={q.points ?? q.snapshot.points ?? 0} onChange={e => updateProposal({ ...proposal, questions: proposal.questions.map((v, i) => i === index ? { ...v, points: Number(e.target.value) } : v) })}/></label></div>{q.snapshot.passage && (!q.snapshot.stimulusGroupId || proposal.questions[index-1]?.snapshot.stimulusGroupId !== q.snapshot.stimulusGroupId) && <section className="exam-passage"><QuestionContentView text={q.snapshot.passage} figures={q.snapshot.figures}/></section>}<QuestionContentView text={q.snapshot.question} segments={q.snapshot.contentSegments} figures={q.snapshot.figures}/>{q.snapshot.choices.length>0&&<ol className="ai-proposal-choices">{q.snapshot.choices.map((choice,i)=><li key={i}><MathText text={choice}/></li>)}</ol>}<p>{q.selectionReasons.join(" · ")}</p><div className="ai-inline-actions"><button disabled={busy || saving || scopeBusy || draftLoading || !draftReady} onClick={() => updateProposal({ ...proposal, questions: proposal.questions.map((v, i) => i === index ? { ...v, locked: !v.locked } : v) })}>{q.locked ? "고정됨" : "문항 고정"}</button><button disabled={busy || saving || q.locked} onClick={() => toggleExcluded(q)}>{excluded.some(id => materials.find(m => m.id === id)?.source.sourceEntryId === q.source.sourceEntryId && materials.find(m => m.id === id)?.source.sourceQuestionNumber === q.source.sourceQuestionNumber) ? "제외 취소" : "제외하고 대체 요청"}</button>{[-1, 1].map(offset => <button key={offset} disabled={busy || saving || q.locked || !proposal.questions[index + offset] || proposal.questions[index + offset]?.locked} onClick={() => { const list = [...proposal.questions]; [list[index], list[index + offset]] = [list[index + offset], list[index]]; updateProposal({ ...proposal, questions: list.map((q, i) => ({ ...q, position: i + 1 })) }); }}>{offset < 0 ? "위로" : "아래로"}</button>)}</div></li>)}</ol></section>}
   </Dialog>;
 }
