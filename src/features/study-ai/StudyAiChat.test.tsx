@@ -33,7 +33,7 @@ describe("study AI chat integration", () => {
         localStorage.setItem(AI_STUDY_STORAGE_KEY,JSON.stringify(original));render(<StudyAiChat {...props}/>);await open();
         const write=Storage.prototype.setItem;
         const failure=vi.spyOn(Storage.prototype,"setItem").mockImplementation(function(this:Storage,key:string,value:string){if(key===AI_STUDY_STORAGE_KEY&&!JSON.parse(value).conversations.some((c:{id:string})=>c.id==="delete-chat"))throw new Error("삭제 저장 실패");write.call(this,key,value);});
-        fireEvent.click(screen.getByText("대화 관리"));fireEvent.click(screen.getByRole("button",{name:"삭제",exact:true}));await screen.findByText("삭제 저장 실패");
+        fireEvent.click(screen.getByText("대화 관리"));fireEvent.click(screen.getByRole("button",{name:"삭제"}));await screen.findByText("삭제 저장 실패");
         expect(JSON.parse(localStorage.getItem(AI_STUDY_STORAGE_KEY)!)).toEqual(original);expect(screen.getByRole("combobox",{name:"대화 기록"})).toHaveValue("delete-chat");failure.mockRestore();
     });
     it("finishes its initial reload under StrictMode effect replay",async()=>{
