@@ -69,6 +69,11 @@ export function parseExamSelection(text: string): {
     return { summary: parsed.summary, questions };
 }
 export function validateExamSelection(selection: AiExamSelection[], candidates: AiMaterial[], config: AiExamConfig, locked: GeneratedExamQuestion[] = []): void {
+    if (!Number.isInteger(config.count) || config.count < 1 || config.count > 100 || !Number.isFinite(config.minutes) || config.minutes <= 0 || !Number.isInteger(config.maxPerSource) || config.maxPerSource < 1
+        || [config.easy, config.medium, config.hard, ...Object.values(config.unitCounts)].some(n => !Number.isInteger(n) || n < 0))
+        throw new Error("문항 수·시간·출처 제한·난이도 및 단원 조건을 확인하세요.");
+    if (!Number.isFinite(config.points) || config.points <= 0 || selection.some(q => !Number.isFinite(q.points) || q.points <= 0 || q.points > 100))
+        throw new Error("배점은 유한한 양수여야 하며 문항당 100점 이하여야 합니다.");
     if (selection.length !== config.count)
         throw new Error(`요청한 ${config.count}문항과 구성안 ${selection.length}문항이 다릅니다. 후보와 조건을 확인하세요.`);
     const map = new Map(candidates.map(c => [c.id, c]));

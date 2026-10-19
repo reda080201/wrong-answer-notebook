@@ -55,6 +55,10 @@ describe("study AI boundaries", () => {
     });
 });
 describe("AI proposal validation and immutable materialization", () => {
+    it("rejects manual negative or non-finite points even when the sum matches", () => {
+        expect(() => validateExamSelection([{ ...selection[0], points: -5 }, { ...selection[1], points: 15 }], materials, config)).toThrow("배점");
+        expect(() => validateExamSelection([{ ...selection[0], points: NaN }, selection[1]], materials, config)).toThrow("배점");
+    });
     it("distinguishes two original number-one questions from different source sheets",()=>{
       const a=material("sheet-a"),b=material("sheet-b");const exam=proposalFromSelection(JSON.stringify({summary:"두 출처",questions:[{id:a.id,points:5,reason:"A"},{id:b.id,points:5,reason:"B"}]}),[a,b],config);const session=createSessionFromGeneratedExam(exam);
       expect(session.questions.map(q=>q.questionNumber)).toEqual(["1","2"]);expect(session.questions.map(q=>q.sourceReference?.sourceQuestionNumber)).toEqual(["1","1"]);expect(session.questions.map(q=>q.sourceReference?.sourceEntryTitle)).toEqual(["원본 sheet-a","원본 sheet-b"]);

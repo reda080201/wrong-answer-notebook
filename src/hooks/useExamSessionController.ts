@@ -250,12 +250,17 @@ export function useExamSessionController({
     return { ok: true, session: next };
   }, [loadError]);
 
-  const openGenerated = useCallback((exam: GeneratedExam, options: ExamOpenOptions = {}) => {
+  const openGenerated = useCallback((exam: GeneratedExam, options: ExamOpenOptions = {}): ExamOpenResult => {
     if (!loadedRef.current) {
-      setStartError({ entryId: exam.id, message: loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요." });
-      return;
+      const message = loadError ?? "시험 기록을 불러오는 중입니다. 잠시 후 다시 시도해 주세요.";
+      setStartError({ entryId: exam.id, message });
+      return { ok: false, code: "sessions_not_loaded", message };
     }
-    if (!exam.questions.length) return;
+    if (!exam.questions.length) {
+      const message = "문항이 없는 모의고사는 시작할 수 없습니다.";
+      setStartError({ entryId: exam.id, message });
+      return { ok: false, code: "no_questions", message };
+    }
     const mode = options.mode ?? (exam.preset === "real_exam" ? "real" : "practice");
     const resumable = options.resumable ?? savedSessionsRef.current
       .filter((item) => item.entryId === `generated:${exam.id}` && item.status === "in_progress" && (item.mode ?? "practice") === mode)
@@ -266,11 +271,12 @@ export function useExamSessionController({
       const resumed = normalizeExamSession(resumable);
       sessionRef.current = resumed;
       setSession(resumed);
-      return;
+      return { ok: true, session: resumed };
     }
     const next = createSessionFromGeneratedExam(exam, new Date(), { ...options, mode });
     sessionRef.current = next;
     setSession(next);
+    return { ok: true, session: next };
   }, [loadError]);
 
   const submit = useCallback(async (current: ExamSession) => {
