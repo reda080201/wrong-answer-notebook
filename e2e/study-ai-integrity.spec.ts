@@ -28,7 +28,9 @@ for (const width of [1100, 680]) {
     });
 }
 
-test("AI deletion failure preserves the conversation and owned draft in real browser storage", async ({ page }) => {
+for (const width of [1100, 680]) {
+test(`AI deletion failure preserves the conversation and owned draft in real browser storage at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 750 });
     const sharing = { body: true, choices: true, images: false, answers: false, explanations: false, memo: false, learning: false };
     const store = { version: 1, conversations: [{ id: "delete-e2e", title: "삭제 검증", updatedAt: "2026-10-19", contextId: "ctx", materials: [], sharing, messages: [] }], drafts: [{ id: "conversation:delete-e2e", materials: [], sharing, config: { title: "초안", subject: "수학", count: 1, minutes: 30, points: 10, maxPerSource: 1, easy: 0, medium: 0, hard: 0, unitCounts: {}, prioritizeImportance: true, instruction: "" }, excluded: [], template: "free" }] };
     await page.goto("/", { waitUntil: "domcontentloaded" });
@@ -53,3 +55,4 @@ test("AI deletion failure preserves the conversation and owned draft in real bro
     await page.getByRole("button",{name:"AI 학습 대화 열기"}).click();
     await expect(panel.getByRole("combobox",{name:"대화 기록"})).toHaveValue("delete-e2e");
 });
+}

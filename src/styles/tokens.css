@@ -42,6 +42,7 @@
   --shadow-dialog: 0 18px 48px rgb(15 23 42 / 18%);
   --z-popover: 40;
   --z-dialog: 80;
+  --z-confirm: 1400;
   --z-toast: 100;
 }
 
