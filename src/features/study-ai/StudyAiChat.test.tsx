@@ -18,6 +18,16 @@ afterEach(async () => { await flushAiStudyWrites().catch(() => undefined); disca
 async function open() { fireEvent.click(screen.getByRole("button", { name: "AI 학습 대화 열기" })); await waitFor(() => expect(screen.queryByText("대화 불러오는 중…")).not.toBeInTheDocument()); }
 async function send(text: string) { fireEvent.change(screen.getByLabelText("메시지"), { target: { value: text } }); fireEvent.click(screen.getByRole("button", { name: "전송" })); await waitFor(() => expect(screen.getAllByText("AI 답변").length).toBeGreaterThan(0)); }
 describe("study AI chat integration", () => {
+    it("invalidates a pending sharing confirmation on real-exam entry and releases the scope controls",async()=>{
+        const view=render(<StudyAiChat {...props}/>);await open();
+        fireEvent.click(screen.getByRole("button",{name:"현재 문항 추가"}));await waitFor(()=>expect(screen.getByText(/AI가 볼 자료: 1문항 · 본문/)).toBeInTheDocument());
+        fireEvent.click(screen.getByText(/범위 설정/));
+        let allow!:(value:boolean)=>void;dialogs.confirm.mockImplementationOnce(()=>new Promise(resolve=>{allow=resolve;}));
+        fireEvent.click(screen.getByLabelText("정답",{exact:true}));await waitFor(()=>expect(dialogs.confirm).toHaveBeenCalledTimes(1));
+        const real={id:"real",entryId:entry.id,title:entry.title,mode:"real",status:"in_progress",questions:[],currentQuestionIndex:0,responses:[]} as unknown as ExamSession;
+        view.rerender(<StudyAiChat {...props} session={real}/>);await act(async()=>{allow(true);});
+        expect(screen.getByLabelText("정답",{exact:true})).not.toBeChecked();expect(screen.getByLabelText("정답",{exact:true})).toBeEnabled();expect(requestStudyAi).not.toHaveBeenCalled();
+    });
     it("preserves both the conversation and its draft when the deletion commit fails",async()=>{
         const original={version:1,conversations:[{id:"delete-chat",title:"삭제 대상",updatedAt:"2026-01-01",contextId:"ctx",messages:[],materials:[],sharing:DEFAULT_AI_SHARING}],drafts:[{id:"conversation:delete-chat",materials:[],sharing:DEFAULT_AI_SHARING,config:{title:"초안",subject:"수학",count:1,minutes:30,points:10,maxPerSource:1,easy:0,medium:0,hard:0,unitCounts:{},prioritizeImportance:true,instruction:""},excluded:[],template:"free"}]};
         localStorage.setItem(AI_STUDY_STORAGE_KEY,JSON.stringify(original));render(<StudyAiChat {...props}/>);await open();

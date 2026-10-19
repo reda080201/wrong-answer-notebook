@@ -56,7 +56,11 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         setStudyAiSession(session);
         const current = storeRef.current.conversations.find(c => c.id === activeId);
         try { assertStudyAiSourcesAllowed(current?.materials.map(m => m.source.sourceEntryId) ?? []); }
-        catch { generation.current++; controller.current?.abort(); }
+        catch {
+            const epoch = ++generation.current;
+            controller.current?.abort(); lock.current = false;
+            queueMicrotask(() => { if (epoch === generation.current) setScopeBusy(false); });
+        }
     }, [session, activeId]);
     useEffect(() => () => setStudyAiSession(null), []);
     const blockedIds = useMemo(() => new Set(realActive ? [session!.entryId, ...session!.questions.map(q => q.sourceReference?.sourceEntryId ?? q.sourceEntryId ?? session!.entryId)] : []), [realActive, session]);
