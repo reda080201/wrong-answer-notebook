@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRealExamProtection, assertRealExamSourcesAllowed } from "../features/exam/services/realExamProtection";
 import { createPortal } from "react-dom";
 import type { ReviewEvent, ReviewItem, ReviewResult, ReviewSession, ReviewSubmission, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { getEntryTitle, hasExplanationContent } from "../utils/entry";
@@ -57,6 +58,7 @@ export default function ReviewPanel({
   session,
   onSessionSave,
 }: ReviewPanelProps) {
+  const protection = useRealExamProtection();
   const [index, setIndex] = useState(session?.currentIndex ?? 0);
   const [revealed, setRevealed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -222,6 +224,7 @@ export default function ReviewPanel({
     setSaveError(null);
     try {
       const eventId = completedEvent?.id ?? crypto.randomUUID();
+      assertRealExamSourcesAllowed([current.entry.id]);
       const reviewedAt = completedEvent?.reviewedAt ?? new Date().toISOString();
       await onReview(current, {
         result,
@@ -352,7 +355,7 @@ export default function ReviewPanel({
         </div>
       )}
 
-      {!current || !currentEntry ? (
+      {currentEntry && (protection.unavailable || protection.sourceIds.has(currentEntry.id)) ? <section role="status"><p>진행 중 실전 시험의 자료는 제출 후 복습할 수 있습니다. 시험을 닫아도 보호는 유지됩니다.</p><button type="button" onClick={requestClose}>복습 닫기</button></section> : !current || !currentEntry ? (
         reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
           <section className="review-complete" aria-label="복습 완료 요약">
             <h3>복습을 마쳤습니다</h3>

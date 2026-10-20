@@ -11,6 +11,7 @@ import { sanitizeExamQuestionDomId } from "../services/examDom";
 import QuestionFocusPage from "../../../components/QuestionFocusPage";
 import OriginalPageExamReader from "./OriginalPageExamReader";
 import "./ExamSessionPaper.css";
+import { useRealExamProtection } from "../services/realExamProtection";
 
 export interface PaperResponsePatch {
   response?: string;
@@ -57,6 +58,7 @@ function getQuestionSourcePages(session: ExamSession, question: ExamSession["que
 }
 
 export default function ExamSessionPaper({ session, preferences, disabled, practice = false, hideAnswers = false, onNavigate, onResponse, onSessionChange }: Props) {
+  const protection = useRealExamProtection();
   const measurementKey = useMemo(() => session.questions.map(question => JSON.stringify({ id: question.id, number: question.questionNumber, question: question.question, passage: question.passage, type: question.questionType, choices: question.choices, contentSegments: question.contentSegments, figures: question.figures, points: question.points })).join("|"), [session.questions]);
   const focusPresentation = preferences?.paperPresentation === "two-question";
   const [solutionKey, setSolutionKey] = useState<string | null>(null);
@@ -65,7 +67,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
   const solutionPageNavigationRef = useRef<string | null>(null);
   const [solutionNotice, setSolutionNotice] = useState("");
   const solutionAllowed = session.mode !== "real" || session.status === "submitted";
-  const solutionQuestions = useMemo(() => solutionAllowed ? snapshotSolutionQuestions(session.questions) : [], [solutionAllowed, session.questions]);
+  const solutionQuestions = useMemo(() => solutionAllowed && !protection.unavailable ? snapshotSolutionQuestions(session.questions.filter(question => !protection.sourceIds.has(question.sourceReference?.sourceEntryId ?? question.sourceEntryId ?? session.entryId))) : [], [solutionAllowed, session.questions, session.entryId, protection]);
   const questionId = session.questions[session.currentQuestionIndex]?.id;
   const [textViewState, setTextViewState] = useState(() => ({ sessionId: session.id, questionId, userText: false, textView: preferences?.showOriginalPages === false || initialTextView(session) }));
   const textView = textViewState.sessionId === session.id && (textViewState.userText || textViewState.questionId === questionId) ? textViewState.textView : preferences?.showOriginalPages === false || initialTextView(session);
@@ -121,7 +123,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
 
   const originalPageMode = Boolean(sourcePageImages.length && !textView);
   const navigateSolution = (key: string) => {
-    if (!solutionAllowed) return;
+    if (!solutionAllowed || !solutionQuestions.some(question => question.key === key)) return;
     const index = session.questions.findIndex(question => question.id === key);
     if (index < 0) return;
     setSolutionKey(key);
@@ -196,7 +198,7 @@ export default function ExamSessionPaper({ session, preferences, disabled, pract
       const index = session.questions.findIndex(question => question.questionNumber === number);
       if (index >= 0 && index !== session.currentQuestionIndex) onNavigate(index);
     }} />}
-    {solutionAllowed && currentQuestion && <button type="button" className="btn-secondary" onClick={() => navigateSolution(currentQuestion.id)}>현재 문항 정답·해설</button>}
+    {solutionAllowed && currentQuestion && (solutionQuestions.some(question => question.key === currentQuestion.id) ? <button type="button" className="btn-secondary" onClick={() => navigateSolution(currentQuestion.id)}>현재 문항 정답·해설</button> : <p role="status">이 문항은 미제출 실전 시험과 연결되어 해설을 보호하고 있습니다.</p>)}
     </div>
     {solutionAllowed && solutionKey && <QuestionSolutionSheet returnFocusRegionRef={returnFocusRegionRef} hidden={hideAnswers && !revealedSolutions.has(solutionKey)} onReveal={() => setRevealedSolutions(current => new Set(current).add(solutionKey))} questions={solutionQuestions} questionKey={solutionKey} onNavigate={navigateSolution} onClose={() => setSolutionKey(null)} pageNotice={solutionNotice} />}
   </>;

@@ -2,7 +2,8 @@ import { entryAiMaterials } from "./features/study-ai/model";
 import { hydrateSessionSourceReferences } from "./features/exam-builder/services/questionSource";
 import StudyAiChat from "./features/study-ai/StudyAiChat";
 import { SourceNavigationContext } from "./features/exam-builder/components/sourceNavigationContext";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { setSavedRealExamProtection, useRealExamProtection, assertRealExamSourcesAllowed } from "./features/exam/services/realExamProtection";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -13,7 +14,7 @@ import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
 import SettingsModal from "./components/SettingsModal";
 import { createPreUpdateBackup, deleteImage, saveImageFiles } from "./api";
-import { syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
+import { clearMcpSharedContexts, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useAppActions } from "./hooks/useAppActions";
 import { useAppNavigationState } from "./hooks/useAppNavigationState";
 import { useEntries } from "./hooks/useEntries";
@@ -193,6 +194,15 @@ function AppContent() {
     submit: handleExamSubmit,
   } = examWorkspace;
 
+  const realProtection = useRealExamProtection();
+  useLayoutEffect(() => {
+    setSavedRealExamProtection(savedExamSessions, examSessionsLoading || Boolean(examSessionsLoadError), entries, examWorkspace.generated.exams);
+  }, [savedExamSessions, examSessionsLoading, examSessionsLoadError, entries, examWorkspace.generated.exams]);
+  useEffect(() => () => setSavedRealExamProtection([]), []);
+  useEffect(() => {
+    if (realProtection.sourceIds.size || realProtection.unavailable) void clearMcpSharedContexts().catch(() => setExamSaveError("실전 자료의 이전 MCP 공유를 해제하지 못했습니다. 연결을 확인해 주세요."));
+  }, [realProtection, setExamSaveError]);
+
   const generatedExamController = examWorkspace.generated;
   const {
     flush: flushGeneratedExams,
@@ -279,6 +289,7 @@ function AppContent() {
   const selectedIsVisible = selected ? filtered.some((entry) => entry.id === selected.id) : false;
   // Read-only projections never enter the editable entry or the session save queue.
   const studyEntries = useMemo(() => entries.map(entry => presentWrongAnswerSharedPassage(entry, savedExamSessions, entries)), [entries, savedExamSessions]);
+  const accessibleStudyEntries = useMemo(() => realProtection.unavailable ? [] : studyEntries.filter(entry => !realProtection.sourceIds.has(entry.id)), [studyEntries, realProtection]);
   const studySelected = selected ? studyEntries.find(entry => entry.id === selected.id) : undefined;
   const studyExamSession = useMemo(() => examSession ? presentSessionSharedPassages(examSession, entries) : null, [examSession, entries]);
   const hasActiveSectionEntries = entries.some((entry) => entry.entryKind === activeSection);
@@ -462,6 +473,7 @@ function AppContent() {
     const session = examSessionRef.current;
     if (!session) throw new Error("현재 응시 중인 모의고사 세션이 없습니다.");
     const current = session.questions[session.currentQuestionIndex];
+    assertRealExamSourcesAllowed([current?.sourceReference?.sourceEntryId ?? current?.sourceEntryId ?? session.entryId]);
     const response = current
       ? session.responses.find((item) => item.questionNumber === current.questionNumber)
       : undefined;
@@ -632,7 +644,7 @@ function AppContent() {
 
   return (
     <SourceNavigationContext.Provider value={async source => { const entry = entries.find(e => e.id === source.sourceEntryId); if (!entry) { await confirm({ title: "원본 이동 불가", message: "원본 항목이 삭제되었거나 찾을 수 없습니다. 생성 당시 출처는 보존되어 있습니다." }); return; } if (entryAiMaterials(entry).filter(m=>normalizeQuestionNumber(m.source.sourceQuestionNumber)===normalizeQuestionNumber(source.sourceQuestionNumber)).length !== 1) { await confirm({title:"원문 문항 확인 필요",message:"원문 문항이 없거나 번호가 중복되어 안전하게 이동할 수 없습니다."});return; } if (examSession && !(await closeExamSession())) return; await appNavigationController.requestNavigation({ section: entry.entryKind ?? "wrong_answer", entryId: entry.id, question: { entryId: entry.id, questionNumber: source.sourceQuestionNumber } }); }}>
-    <ConceptLinkProvider entries={entries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
+    <ConceptLinkProvider entries={accessibleStudyEntries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <StudyAiChat entries={entries} selectedEntryId={selectedId} session={examSession ? hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams) : null} onSaveExam={generatedExamController.persist} onStartExam={exam => { const result = generatedExamController.openExam(exam); if (!result.ok) throw new Error(result.message); }} onSettings={() => openSettings("ai")} />
     <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
@@ -717,7 +729,7 @@ function AppContent() {
           ) : showQuestionBank ? (
             <NotebookKnowledgeWorkspace
               mode="question-bank"
-              entries={studyEntries}
+              entries={accessibleStudyEntries}
               learningHubTarget={learningHubTarget}
               questionBankPreferences={settings.questionBankPreferences}
               patchQuestionBankPreferences={patchQuestionBankPreferences}
@@ -745,7 +757,7 @@ function AppContent() {
           ) : showLearningHub ? (
             <NotebookKnowledgeWorkspace
               mode="learning-hub"
-              entries={entries}
+              entries={accessibleStudyEntries}
               learningHubTarget={learningHubTarget}
               questionBankPreferences={settings.questionBankPreferences}
               patchQuestionBankPreferences={patchQuestionBankPreferences}
@@ -832,7 +844,11 @@ function AppContent() {
             <>
               {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
               {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
-              <EntryDetail
+              {realProtection.unavailable || realProtection.sourceIds.has(selected.id) ? <section className="empty-state" role="status">
+                <h2>{selected.title}</h2>
+                <p>{realProtection.unavailable ? "시험 기록을 확인하지 못해 학습·해설·공유를 잠시 차단했습니다." : "진행 중 실전 시험의 자료입니다. 제출 후 학습·해설·공유를 사용할 수 있습니다. 시험을 닫아도 보호는 유지됩니다."}</p>
+                {realProtection.unavailable ? <button type="button" onClick={() => void reloadExamSessions()}>시험 기록 다시 불러오기</button> : realProtection.sessions.filter(item => item.entryId === selected.id || item.questions.some(question => question.sourceEntryId === selected.id || question.sourceReference?.sourceEntryId === selected.id)).map(item => <button key={item.id} type="button" onClick={() => { const latest = savedExamSessions.find(saved => saved.id === item.id); if (latest) setExamSession(latest); }}>실전 이어서 · {item.title}</button>)}
+              </section> : <EntryDetail
               entry={selected}
               presentationEntry={studySelected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {
@@ -869,6 +885,7 @@ function AppContent() {
               examPreferences={settings.examPreferences}
               onExamPrintPreferencesChange={(patch) => void patchExamPrintPreferences(patch)}
               onSyncExportContext={async (payload) => {
+                assertRealExamSourcesAllowed([selected.id]);
                 const context: McpExportContext = {
                   entryId: selected.id,
                   sessionId: savedExamSessions.find((item) => item.entryId === selected.id)?.id ?? null,
@@ -972,7 +989,7 @@ function AppContent() {
               onSimilarQuestionLinksChange={(entry, links) => patchEntry(entry.id, { similarQuestionLinks: links })}
                onApplyGptSolutionRoundtrip={(entry, patch) => patchEntry(entry.id, patch)}
                gptSolutionDraftStore={gptSolutionDrafts}
-             />
+             />}
             </>
           ) : (
             <div className="detail-panel empty-state">
@@ -1082,7 +1099,7 @@ function AppContent() {
           });
           if (confirmed) await generatedExamController.remove(id);
         }}
-        onPrint={generatedExamController.print}
+        onPrint={async exam => { assertRealExamSourcesAllowed([`generated:${exam.id}`, ...exam.questions.map(question => question.source.sourceEntryId)]); await generatedExamController.print(exam); }}
       />
       {showSettings && (
         <SettingsModal

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { deleteImage, saveImageFiles } from "../../../api";
 import type {
@@ -88,6 +88,7 @@ interface ImportFromGptModalProps {
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
   onOpenWorkspace?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
+  recoveryNotice?: ReactNode;
   commitLocked?: boolean;
   onRecoverCommit?: () => Promise<void>;
   fallbackSubject: Subject;
@@ -300,6 +301,7 @@ export default function ImportFromGptModal({
   onApply,
   onApplyEntries,
   onOpenWorkspace,
+  recoveryNotice,
   commitLocked = false,
   onRecoverCommit,
   fallbackSubject,
@@ -1120,6 +1122,7 @@ export default function ImportFromGptModal({
           <ImportSaveFooter commitLocked={commitLocked} solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onOpenWorkspace={onOpenWorkspace && draft ? () => void openWorkspace() : undefined} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />
         </div>}
       >
+        {!rawText.trim() && !draft && !draftOverride && !assetFiles.length && !images.length && !visualResult && !visualProgress && !zipProgress && recoveryNotice}
         {commitLocked && error && <p className="form-save-error" role="alert">{error}</p>}
         {commitLocked && <section className="import-commit-recovery" role="status"><p>확정 저장 기록이 남아 있습니다. 저장 결과 확인·정리만 실행할 수 있습니다.</p><button type="button" disabled={saving} onClick={() => void importSaveCoordinator.run(async () => { if (!onRecoverCommit) throw new Error("저장 결과 확인 경로가 없습니다."); await onRecoverCommit(); onClose(); })}>확정 기록 확인·정리</button></section>}
         {!isSolutionMode && !isSupplementalMode && <nav inert={commitLocked} className="import-mode-tabs" aria-label="시험지 가져오기 방식">
