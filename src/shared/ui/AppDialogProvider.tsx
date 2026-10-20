@@ -65,6 +65,7 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
           onClose={() => close(request.kind === "confirm" ? false : null)}
           title={title}
           className="app-dialog-card"
+          backdropClassName="modal-backdrop app-dialog-backdrop"
           size="sm"
           initialFocusRef={request.kind === "prompt" ? promptInputRef : undefined}
           footer={(

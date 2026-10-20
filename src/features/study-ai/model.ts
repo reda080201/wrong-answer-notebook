@@ -137,6 +137,20 @@ export function buildAiContext(materials: AiMaterial[], sharing: AiSharing): {
     return { text, images };
 }
 export function activeContextMessages(c: AiConversation) { return c.messages.filter(m => m.contextId === c.contextId && m.status !== "failed" && m.status !== "stopped").map(m => ({ role: m.role, text: m.text })); }
+/** A retry addresses the existing turn, never a new copy of its text. */
+export function retryableUserMessage(c: AiConversation) {
+    const messages = c.messages.filter(m => m.contextId === c.contextId);
+    const target = [...messages].reverse().find(m => m.role === "user");
+    const index = target ? messages.indexOf(target) : -1;
+    if (index < 0 || messages.slice(index + 1).some(m => m.role === "assistant" && (m.status === "complete" || m.status === undefined))) return undefined;
+    return messages[index];
+}
+export function retryContextMessages(c: AiConversation, messageId: string) {
+    const target = retryableUserMessage(c);
+    if (!target || target.id !== messageId) throw new Error("현재 문맥에서 실패하거나 중지된 마지막 질문만 재시도할 수 있습니다.");
+    const index = c.messages.findIndex(m => m.id === messageId);
+    return activeContextMessages({ ...c, messages: c.messages.slice(0, index + 1) });
+}
 export function changeAiScope(c: AiConversation, materials: AiMaterial[], sharing: AiSharing): AiConversation {
     return { ...c, contexts: [...(c.contexts ?? []), ...(c.messages.some(m => m.contextId === c.contextId) ? [{ id: c.contextId, materials: structuredClone(c.materials), sharing: { ...c.sharing } }] : [])], materials: structuredClone(materials), sharing: { ...sharing }, contextId: crypto.randomUUID(), updatedAt: new Date().toISOString(), proposal: undefined };
 }

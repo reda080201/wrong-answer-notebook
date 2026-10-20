@@ -9,6 +9,64 @@ vi.mock("../../shared/ui/AppDialogProvider",()=>({useAppDialog:()=>({confirm:asy
 const entry=(id:string):WrongAnswerEntry=>({id,title:`원본 ${id}`,subject:"수학",entryKind:"problem_sheet",question:"1. 문제 본문\n① A\n② B",tags:[],questionImages:[],memo:"메모",answerKey:[{id:`a-${id}`,questionNumber:"1",answer:"①",explanation:"해설",importantPoints:[]}],questionMeta:[],createdAt:"2026-01-01",updatedAt:"2026-01-01",explanationParts:[],annotations:[],difficulty:"medium",difficult:false,mastered:false,myAnswer:"",correctAnswer:""});
 afterEach(()=>{localStorage.clear();vi.clearAllMocks();});
 describe("AI exam composer integration",()=>{
+  it("excludes all attached versions of the selected original question before requesting a replacement",async()=>{
+    const entries=[entry("one"),entry("two")];const original=entryAiMaterials(entries[0])[0],replacement=entryAiMaterials(entries[1])[0];
+    const version={...original,id:"session-version",snapshot:{...original.snapshot,id:"session-version-snapshot"}};
+    vi.mocked(requestStudyAi).mockResolvedValueOnce(JSON.stringify({summary:"첫 구성",questions:[{id:version.id,points:10,reason:"선정"}]})).mockResolvedValueOnce(JSON.stringify({summary:"교체 구성",questions:[{id:replacement.id,points:10,reason:"교체"}]}));
+    render(<AiExamComposer entries={entries} initialMaterials={[original,version,replacement]} onSave={vi.fn()} onStart={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(()=>expect(screen.getByRole("button",{name:"구성안 요청"})).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("문항 수",{exact:true}),{target:{value:"1"}});fireEvent.change(screen.getByLabelText("총점",{exact:true}),{target:{value:"10"}});
+    fireEvent.click(screen.getByRole("button",{name:"구성안 요청"}));await screen.findByText("첫 구성");
+    fireEvent.click(screen.getByRole("button",{name:"제외하고 대체 요청"}));fireEvent.click(screen.getByRole("button",{name:"구성안 다시 제안"}));await screen.findByText("교체 구성");
+    expect(JSON.parse(vi.mocked(requestStudyAi).mock.calls[1][0].context).map((m:{id:string})=>m.id)).toEqual([replacement.id]);
+  });
+  it("does not borrow the source rating when a selected session snapshot is unrated",async()=>{
+    const entries=[entry("one")];const original={...entryAiMaterials(entries[0])[0],difficulty:20};
+    const sessionCopy={...original,id:"unrated-session",difficulty:undefined,snapshot:{...original.snapshot,id:"unrated-session-snapshot"}};
+    vi.mocked(requestStudyAi).mockResolvedValueOnce(JSON.stringify({summary:"미평가 snapshot 구성",questions:[{id:sessionCopy.id,points:10,reason:"시험 snapshot"}]}));
+    const onSave=vi.fn();render(<AiExamComposer entries={entries} initialMaterials={[original,sessionCopy]} onSave={onSave} onStart={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(()=>expect(screen.getByRole("button",{name:"구성안 요청"})).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("문항 수",{exact:true}),{target:{value:"1"}});fireEvent.change(screen.getByLabelText("총점",{exact:true}),{target:{value:"10"}});
+    fireEvent.click(screen.getByRole("button",{name:"구성안 요청"}));await screen.findByText("미평가 snapshot 구성");
+    fireEvent.change(screen.getByLabelText("하 난이도 수",{exact:true}),{target:{value:"1"}});fireEvent.click(screen.getByRole("button",{name:"검토한 구성 저장"}));
+    await screen.findByText(/미평가 문항으로 난이도 배분/);expect(onSave).not.toHaveBeenCalled();
+  });
+  it("validates the selected session snapshot when the same original question is attached twice",async()=>{
+    const entries=[entry("one")];const original={...entryAiMaterials(entries[0])[0],difficulty:20};
+    const sessionCopy={...original,id:"session-copy",difficulty:80,snapshot:{...original.snapshot,id:"session-snapshot",question:"선택한 시험 snapshot"}};
+    vi.mocked(requestStudyAi).mockResolvedValueOnce(JSON.stringify({summary:"상 난이도 구성",questions:[{id:sessionCopy.id,points:10,reason:"선택 snapshot"}]}));
+    const onSave=vi.fn().mockResolvedValue(undefined);
+    render(<AiExamComposer entries={entries} initialMaterials={[original,sessionCopy]} onSave={onSave} onStart={vi.fn()} onClose={vi.fn()}/>);
+    await waitFor(()=>expect(screen.getByRole("button",{name:"구성안 요청"})).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("문항 수",{exact:true}),{target:{value:"1"}});fireEvent.change(screen.getByLabelText("총점",{exact:true}),{target:{value:"10"}});fireEvent.change(screen.getByLabelText("상 난이도 수",{exact:true}),{target:{value:"1"}});
+    fireEvent.click(screen.getByRole("button",{name:"구성안 요청"}));await screen.findByText("상 난이도 구성");
+    fireEvent.click(screen.getByRole("button",{name:"검토한 구성 저장"}));await waitFor(()=>expect(onSave).toHaveBeenCalledTimes(1));
+    expect(onSave.mock.calls[0][0].questions[0].snapshot.id).toBe("session-snapshot");
+  });
+  it("retries only the start after the reviewed exam was already saved",async()=>{
+    const entries=[entry("one")];const materials=entries.flatMap(entryAiMaterials);
+    vi.mocked(requestStudyAi).mockResolvedValueOnce(JSON.stringify({summary:"구성",questions:[{id:materials[0].id,points:10,reason:"선정"}]}));
+    const onSave=vi.fn().mockResolvedValue(undefined), onStart=vi.fn().mockRejectedValueOnce(new Error("시작 실패")).mockResolvedValue(undefined);
+    render(<AiExamComposer entries={entries} initialMaterials={materials} onSave={onSave} onStart={onStart} onClose={vi.fn()}/>);
+    await waitFor(()=>expect(screen.getByRole("button",{name:"구성안 요청"})).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("문항 수",{exact:true}),{target:{value:"1"}});fireEvent.change(screen.getByLabelText("총점",{exact:true}),{target:{value:"10"}});
+    fireEvent.click(screen.getByRole("button",{name:"구성안 요청"}));await screen.findByText("선정");
+    fireEvent.click(screen.getByRole("button",{name:"저장하고 풀기"}));await screen.findByText(/시험은 저장되었습니다.*시작 실패/);
+    fireEvent.click(screen.getByRole("button",{name:"저장하고 풀기"}));
+    await waitFor(()=>expect(onStart).toHaveBeenCalledTimes(2));expect(onSave).toHaveBeenCalledTimes(1);
+    expect(onStart.mock.calls[1][0].id).toBe(onSave.mock.calls[0][0].id);
+  });
+  it("keeps the composer open and never starts when exam persistence fails",async()=>{
+    const entries=[entry("one")];const materials=entries.flatMap(entryAiMaterials);
+    vi.mocked(requestStudyAi).mockResolvedValueOnce(JSON.stringify({summary:"구성",questions:[{id:materials[0].id,points:10,reason:"선정"}]}));
+    const onStart=vi.fn(),onClose=vi.fn();
+    render(<AiExamComposer entries={entries} initialMaterials={materials} onSave={vi.fn().mockRejectedValue(new Error("시험 저장 실패"))} onStart={onStart} onClose={onClose}/>);
+    await waitFor(()=>expect(screen.getByRole("button",{name:"구성안 요청"})).toBeEnabled());
+    fireEvent.change(screen.getByLabelText("문항 수",{exact:true}),{target:{value:"1"}});fireEvent.change(screen.getByLabelText("총점",{exact:true}),{target:{value:"10"}});
+    fireEvent.click(screen.getByRole("button",{name:"구성안 요청"}));await screen.findByText("선정");
+    fireEvent.click(screen.getByRole("button",{name:"저장하고 풀기"}));await screen.findByText("시험 저장 실패");
+    expect(onStart).not.toHaveBeenCalled();expect(onClose).not.toHaveBeenCalled();
+  });
   it("materializes a provider selection from local snapshots, retains it on failure, and only saves on explicit confirmation",async()=>{
     const entries=[entry("one"),entry("two")];const materials=entries.flatMap(entryAiMaterials);const onSave=vi.fn().mockResolvedValue(undefined);const onClose=vi.fn();
     vi.mocked(requestStudyAi).mockImplementationOnce(async()=>JSON.stringify({summary:"균형 배치",questions:materials.map(m=>({id:m.id,points:5,reason:"중요도 반영"}))}));

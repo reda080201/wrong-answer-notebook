@@ -58,6 +58,19 @@ function successfulCommit(submitted: ExamSession): Promise<ExamSubmissionTransac
 }
 
 describe("useExamSessionController safety guards", () => {
+  it("returns an explicit failure when a generated exam cannot open", async () => {
+    let resolveLoad!: (sessions: ExamSession[]) => void;
+    loadExamSessions.mockReturnValueOnce(new Promise<ExamSession[]>(resolve => { resolveLoad = resolve; }));
+    const { result } = renderHook(() => useExamSessionController({ commitExamSubmission: successfulCommit }));
+    const generated = { id: "generated-not-ready", questions: [] } as unknown as GeneratedExam;
+    let outcome: unknown;
+    act(() => { outcome = result.current.openGenerated(generated); });
+    expect(outcome).toMatchObject({ ok: false, code: "sessions_not_loaded" });
+    await act(async () => { resolveLoad([]); });
+    act(() => { outcome = result.current.openGenerated(generated); });
+    expect(outcome).toMatchObject({ ok: false, code: "no_questions" });
+    expect(result.current.session).toBeNull();
+  });
   beforeEach(() => {
     loadExamSessions.mockReset();
     saveExamSessions.mockReset();

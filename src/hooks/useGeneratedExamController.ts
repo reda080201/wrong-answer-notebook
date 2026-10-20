@@ -5,12 +5,12 @@ import { normalizeGeneratedExamSources } from "../features/exam-builder/services
 import { buildGeneratedExamPrintModel } from "../features/exam-builder/services/buildGeneratedExamPrintModel";
 import { printExamDocument } from "../features/export/services/printExamDocument";
 import { useGeneratedExams } from "./useGeneratedExams";
-import type { ExamOpenOptions } from "./useExamSessionController";
+import type { ExamOpenOptions, ExamOpenResult } from "./useExamSessionController";
 
 interface UseGeneratedExamControllerOptions {
   examPrintPreferences: ExamPrintPreferences;
   entries: WrongAnswerEntry[];
-  onOpenExam(exam: GeneratedExam, options?: ExamOpenOptions): void;
+  onOpenExam(exam: GeneratedExam, options?: ExamOpenOptions): ExamOpenResult;
 }
 
 export function useGeneratedExamController({
@@ -36,7 +36,7 @@ export function useGeneratedExamController({
 
   const openExam = useCallback((exam: GeneratedExam, options?: ExamOpenOptions) => {
     const mode = options?.mode ?? (exam.preset === "real_exam" ? "real" : "practice");
-    onOpenExam(exam, {
+    const result = onOpenExam(exam, {
       ...options,
       mode,
       timeLimitMinutes: mode === "real" ? options?.timeLimitMinutes ?? exam.timeLimitMinutes ?? 50 : undefined,
@@ -44,7 +44,8 @@ export function useGeneratedExamController({
       answerSheetOpen: mode === "real" ? options?.answerSheetOpen ?? !prefersCompactExamLayout() : options?.answerSheetOpen,
       answerSheetLayout: mode === "real" ? options?.answerSheetLayout ?? "auto" : options?.answerSheetLayout,
     });
-    setListOpen(false);
+    if (result.ok) setListOpen(false);
+    return result;
   }, [onOpenExam]);
 
   const print = useCallback(async (exam: GeneratedExam) => {

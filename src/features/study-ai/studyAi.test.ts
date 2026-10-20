@@ -55,6 +55,19 @@ describe("study AI boundaries", () => {
     });
 });
 describe("AI proposal validation and immutable materialization", () => {
+    it("does not replace a locked snapshot with another version of the same original question",()=>{
+        const original=material("locked"),other={...original,id:"other-version",snapshot:{...original.snapshot,id:"other-snapshot"}};
+        const single={...config,count:1};const exam=proposalFromSelection(JSON.stringify({summary:"고정",questions:[{id:original.id,points:10,reason:"선정"}]}),[original],single);
+        expect(()=>validateExamSelection([{id:other.id,points:10,reason:"다른 버전"}],[original,other],single,[{...exam.questions[0],locked:true}])).toThrow("고정");
+    });
+    it("rejects duplicate candidate identities instead of validating the last matching snapshot",()=>{
+        const a=material("first"),b={...material("second"),id:a.id};
+        expect(()=>validateExamSelection([{id:a.id,points:10,reason:"선정"}],[a,b],{...config,count:1})).toThrow("ID");
+    });
+    it("rejects manual negative or non-finite points even when the sum matches", () => {
+        expect(() => validateExamSelection([{ ...selection[0], points: -5 }, { ...selection[1], points: 15 }], materials, config)).toThrow("배점");
+        expect(() => validateExamSelection([{ ...selection[0], points: NaN }, selection[1]], materials, config)).toThrow("배점");
+    });
     it("distinguishes two original number-one questions from different source sheets",()=>{
       const a=material("sheet-a"),b=material("sheet-b");const exam=proposalFromSelection(JSON.stringify({summary:"두 출처",questions:[{id:a.id,points:5,reason:"A"},{id:b.id,points:5,reason:"B"}]}),[a,b],config);const session=createSessionFromGeneratedExam(exam);
       expect(session.questions.map(q=>q.questionNumber)).toEqual(["1","2"]);expect(session.questions.map(q=>q.sourceReference?.sourceQuestionNumber)).toEqual(["1","1"]);expect(session.questions.map(q=>q.sourceReference?.sourceEntryTitle)).toEqual(["원본 sheet-a","원본 sheet-b"]);
