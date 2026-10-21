@@ -190,6 +190,20 @@ export default function StudyPaperView({
           zoomableImages
         />}
 
+        {structuredQuestions.length > 0 && entry.questionImages.length > 0 && <section aria-label="첨부 문제 이미지">
+          <AnnotatableQuestion
+            question=""
+            questionImages={entry.questionImages}
+            annotations={entry.annotations ?? []}
+            memoMode={memoMode}
+            activeTool={activeTool}
+            onAnnotationsChange={onAnnotationsChange}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+            zoomableImages
+          />
+        </section>}
+
         {displayMode === "questions" && diagramItems.length > 0 && (
           <details key={`diagrams-${entry.id}`} className="study-paper-diagrams" aria-label="학습 시각화" onToggle={event => setExpandedDiagramsEntryId(event.currentTarget.open ? entry.id : null)}>
             <summary className="study-paper-section-title">
