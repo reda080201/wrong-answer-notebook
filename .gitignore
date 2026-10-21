@@ -16,6 +16,7 @@ updater-private-key*
 private-key.pem
 
 # Local editor and audit artifacts
+/%SystemDrive%/
 /.vscode/
 /.cursor/
 /*AUDIT_REPORT*.md

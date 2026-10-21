@@ -13,7 +13,7 @@ import AppToolbar from "./components/AppToolbar";
 import EntryDetail from "./features/entries/components/EntryDetail";
 import EntryListPane from "./components/EntryListPane";
 import ExamSessionOverlay from "./components/ExamSessionOverlay";
-import SettingsModal from "./components/SettingsModal";
+import { deferDialog } from "./shared/ui/deferDialog";
 import { createPreUpdateBackup, deleteImage, saveImageFiles } from "./api";
 import { clearMcpSharedContexts, syncMcpBridgeActiveExamContext, syncMcpBridgeExportContext } from "./api";
 import { useAppActions } from "./hooks/useAppActions";
@@ -24,7 +24,6 @@ import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext 
 import type { SettingsTab } from "./components/SettingsModal";
 import { entryKindIcon, entryKindName, entryKindWithParticle } from "./utils/appUi";
 import { collectAllImageReferences } from "./utils/entry";
-import ExamBuilderWizard from "./features/exam-builder/components/ExamBuilderWizard";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { useAppDialog } from "./shared/ui/AppDialogProvider";
@@ -64,6 +63,9 @@ import CommandPalette, { type AppCommand } from "./shared/ui/CommandPalette";
 import { NotificationProvider, NotificationRegion } from "./shared/ui/NotificationProvider";
 import { useKnowledgeGraph } from "./hooks/useKnowledgeGraph";
 import { canReconcileKnowledgeGraph } from "./utils/knowledgeGraphReconciliationGate";
+
+const SettingsModal = deferDialog(() => import("./components/SettingsModal"), "설정");
+const ExamBuilderWizard = deferDialog(() => import("./features/exam-builder/components/ExamBuilderWizard"), "문제 모음 구성");
 
 export function appendUniqueLearningBlocks(existingBlocks: LearningBlock[], newBlocks: LearningBlock[]): LearningBlock[] {
   return [...existingBlocks, ...newBlocks.filter((block) => !existingBlocks.some((existing) => (

@@ -3,9 +3,8 @@ import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
 import { getImportAssetPreviewUrl } from "../services/api/importAssets";
 import { getImageUrl } from "../api";
 import EntryForm from "../features/entries/components/EntryForm";
-import ImportFromGptModal, { VisualPaperImportError, type VisualPaperImportResult } from "../features/import/components/ImportFromGptModal";
-import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
-import ReviewPanel from "./ReviewPanel";
+import { VisualPaperImportError, type VisualPaperImportResult } from "../features/import/services/visualPaperImportResult";
+import type { LearningImportAnalysis } from "./LearningImportModal";
 import Dialog from "../shared/ui/Dialog";
 import ProtectedExamContent from "../features/exam/components/ProtectedExamContent";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
@@ -34,9 +33,6 @@ import ImportDraftRecovery from "../features/import-workspace/components/ImportD
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
 import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
 import { commitImportWorkspace } from "../features/import-workspace/services/commitImportWorkspace";
-import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
-import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
-import SupplementalLinkModal from "../features/supplemental-resources/components/SupplementalLinkModal";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import type { AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
 import type { ImportAssetSessionManifest, ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
@@ -48,6 +44,14 @@ import { rasterizeVisualImportFile, type VisualImportProgress } from "../utils/v
 import { normalizeQuestionNumber } from "../utils/questionMeta";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 import type { AppModalControllerGroup } from "../hooks/useAppModalController";
+import { deferDialog } from "../shared/ui/deferDialog";
+
+const ImportFromGptModal = deferDialog(() => import("../features/import/components/ImportFromGptModal"), "시험지 가져오기");
+const LearningImportModal = deferDialog(() => import("./LearningImportModal"), "학습 자료 가져오기");
+const ReviewPanel = deferDialog(() => import("./ReviewPanel"), "복습");
+const SupplementalMergeModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalMergeModal"), "보충 자료 병합");
+const SupplementalResourceManagerModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalResourceManagerModal"), "보충 자료 관리");
+const SupplementalLinkModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalLinkModal"), "보충 자료 연결");
 
 type PendingSupplementalImport = {
   target: WrongAnswerEntry;

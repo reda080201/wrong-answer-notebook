@@ -70,18 +70,9 @@ import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import type { ImportAssetSessionManifest } from "../../import-workspace/model/importWorkspace";
 import type { VisualImportProgress } from "../../../utils/visualImportFiles";
 
-export interface VisualPaperImportResult {
-  responseText: string;
-  sourcePageImages: string[];
-  assetSession: ImportAssetSessionManifest;
-}
-
-export class VisualPaperImportError extends Error {
-  constructor(message: string, readonly assetSession?: ImportAssetSessionManifest) {
-    super(message);
-    this.name = "VisualPaperImportError";
-  }
-}
+import { VisualPaperImportError, type VisualPaperImportResult } from "../services/visualPaperImportResult";
+export { VisualPaperImportError } from "../services/visualPaperImportResult";
+export type { VisualPaperImportResult } from "../services/visualPaperImportResult";
 
 interface ImportFromGptModalProps {
   onClose: () => void;

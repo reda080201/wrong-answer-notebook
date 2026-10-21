@@ -23,8 +23,7 @@ function ImageThumb({
 
   useEffect(() => {
     let cancelled = false;
-    setSrc("");
-    setError(false);
+    // ImageThumb is keyed by filename; a different file already gets fresh state.
     getImageUrl(filename)
       .then((url) => {
         if (!cancelled) setSrc(url);
