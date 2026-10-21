@@ -127,9 +127,14 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
 export function getEntryQuestions(entry: Parameters<typeof resolveEntryQuestions>[0]): ResolvedEntryQuestion[] {
   const { stimuli, warnings } = resolveEntryQuestionStimulusProjection(entry);
   const questions = resolveEntryQuestions(entry);
+  const numberCounts = new Map<string, number>();
+  for (const question of questions) {
+    const number = normalizeQuestionNumber(question.questionNumber);
+    numberCounts.set(number, (numberCounts.get(number) ?? 0) + 1);
+  }
   return questions.map(question => {
     const number = normalizeQuestionNumber(question.questionNumber);
-    const passage = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1 ? stimuli.get(number) : undefined;
+    const passage = numberCounts.get(number) === 1 ? stimuli.get(number) : undefined;
     const warning = [question.warning, warnings.get(number)].filter(Boolean).join(" ") || undefined;
     return { ...question, warning, needsReview: question.needsReview || Boolean(warnings.get(number)),
       ...(passage ? { passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : {}) };

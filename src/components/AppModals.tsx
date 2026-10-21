@@ -69,7 +69,7 @@ interface AppModalsProps {
   workspaceActions: { registerDraftFlush(registration: TransientWriteRegistration): void };
   form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
-  importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"], plannedIds?: string[]): Promise<string[] | void> };
+  importFlow: { cancelPending?(): Promise<void>; show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"], plannedIds?: string[]): Promise<string[] | void> };
   learningImport: {
     show: boolean;
     setShow(show: boolean): void;
@@ -248,6 +248,7 @@ export default function AppModals({
   };
   const directCommitRef = useRef<ImportWorkspace | null>(null);
   const [directCommitLocked, setDirectCommitLocked] = useState(false);
+  const [recoveryRevision, setRecoveryRevision] = useState(0);
   const directTaskRef = useRef<Promise<void> | null>(null);
   const directMaintenanceRef = useRef(false);
   useEffect(() => {
@@ -256,10 +257,10 @@ export default function AppModals({
     void loadImportWorkspaceDraft().then(draft => {
       if (!active || directTaskRef.current) return;
       if (draft?.commitAttempt) { directCommitRef.current = draft; setDirectCommitLocked(true); }
-      else setDirectCommitLocked(false);
+      else { directCommitRef.current = null; setDirectCommitLocked(false); }
     }).catch(() => { if (active) setDirectCommitLocked(true); });
     return () => { active = false; };
-  }, [showImportModal, importMode]);
+  }, [showImportModal, importMode, workspace, recoveryRevision]);
   useEffect(() => {
     if (workspace) return;
     registerWorkspaceDraftFlush({ flush: async () => { await directTaskRef.current; }, setMaintenanceBlocked: blocked => { directMaintenanceRef.current = blocked; } });
@@ -483,7 +484,20 @@ export default function AppModals({
           onClose={closeImportModal}
           onApply={handleImportApply}
           onApplyEntries={handleDirectEntries}
-          recoveryNotice={importMode === "import" ? <ImportDraftRecovery onResume={async draft => {
+          recoveryNotice={importMode === "import" ? <ImportDraftRecovery key={recoveryRevision} onCancel={async () => {
+            if (directTaskRef.current || directMaintenanceRef.current) throw new Error("진행 중 저장·백업·복원이 끝난 뒤 다시 시도하세요.");
+            if (!importFlow.cancelPending) throw new Error("이 버전에서는 저장 전 취소를 지원하지 않습니다. 작업실에서 확인하세요.");
+            await importFlow.cancelPending();
+            directCommitRef.current = null;
+            setDirectCommitLocked(false);
+            setRecoveryRevision(value => value + 1);
+          }} onVerify={async () => {
+            const draft = await loadImportWorkspaceDraft();
+            if (!draft?.commitAttempt) { setDirectCommitLocked(false); setRecoveryRevision(value => value + 1); return; }
+            directCommitRef.current = draft;
+            await handleDirectEntries(draft.commitAttempt.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession);
+            closeImportModal();
+          }} onResume={async draft => {
             if (directTaskRef.current || directMaintenanceRef.current) throw new Error("진행 중 저장·백업·복원이 끝난 뒤 다시 시도하세요.");
             if (!draft.commitAttempt) { const result = await validateWorkspaceAssets(draft); if (!result.valid) throw new Error(result.message); }
             setWorkspace(draft); closeImportModal();

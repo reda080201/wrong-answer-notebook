@@ -105,7 +105,7 @@ export default function StructuredQuestionReviewEditor({
                             }))}
                           />
                           <div className="structured-question-review-preview" aria-label={`${question.questionNumber}번 ${label} 미리보기`}>
-                            <MathText text={value} />
+                            <MathText text={segment.type === "equation" ? `$$${value}$$` : value} />
                           </div>
                         </div>
                       </div>

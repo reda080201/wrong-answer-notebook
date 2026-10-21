@@ -51,9 +51,9 @@ export type SidebarDestination =
   | { type: "library" };
 
 const sectionTabs = [
+  ["problem_sheet", "시험지함", FileText],
   ["wrong_answer", "오답노트", NotebookPen],
   ["concept", "개념노트", Lightbulb],
-  ["problem_sheet", "시험지함", FileText],
   ["lecture", "특강자료", GraduationCap],
 ] as const;
 
@@ -249,7 +249,6 @@ export default function AppSidebar({
         </details>
 
         <div className="filter-section">
-          <h3>과목</h3>
           <SubjectList
             subjectOrder={subjectOrder}
             subjectFilter={subjectFilter}

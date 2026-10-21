@@ -324,10 +324,10 @@ export default function ReviewPanel({
   }, [completedEvent, current, editingCompleted, index, reviewItems.length, handleReview]);
 
   const currentEntry = current?.entry;
-  const sheetQuestion =
+  const sheetQuestion = useMemo(() =>
     current?.kind === "sheet-question"
       ? resolveSheetQuestion(current.entry, current.questionNumber)
-      : null;
+      : null, [current]);
   return createPortal((
     <div ref={panelRef} className="review-panel" role="dialog" aria-modal="true" aria-label={title} aria-busy={saving} tabIndex={-1}>
       <div className="review-panel-header">

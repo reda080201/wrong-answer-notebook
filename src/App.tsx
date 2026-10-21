@@ -88,6 +88,7 @@ function AppContent() {
     refresh,
     addEntry,
     addEntries,
+    cancelUncommittedImport,
     commitExamSubmission,
     addEntriesWithImportAssetSession,
     updateEntry,
@@ -1047,7 +1048,7 @@ function AppContent() {
         workspaceActions={{ registerDraftFlush: registerWorkspaceDraftFlush }}
         form={{ show: actions.showForm, editingEntry: actions.editingEntry, handleSave: actions.handleSave, close: actions.closeForm, activeSection, prefilledTitle: actions.prefilledTitle, importedInitialData: actions.importedInitialData }}
         settings={{ value: settings, saveTemplate: actions.saveTemplate, aiProviderStatus, setLastImportTemplate, savePromptTemplate: actions.savePromptTemplate, open: openSettings }}
-        importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply }}
+        importFlow={{ show: actions.showImportModal, mode: actions.importMode, solutionSourceEntry: actions.solutionSourceEntry, fallbackSubject: actions.importFallbackSubject, close: actions.closeImportModal, apply: actions.handleImportApply, applyEntries: actions.handleImportedEntriesApply, cancelPending: cancelUncommittedImport }}
         learningImport={{ show: actions.showLearningImportModal, setShow: actions.setShowLearningImportModal, apply: actions.handleLearningImportApply }}
         review={{
           mode: actions.reviewMode,
@@ -1196,15 +1197,15 @@ function AppContent() {
           </div>
         )}
       </Dialog>
-      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="저장 후 종료할 수 없습니다." closeDisabled={closeFlushSaving} busy={closeFlushSaving} footer={
+      <Dialog open={Boolean(closeFlushError)} onClose={clearCloseFlushError} title="일부 변경을 저장하지 못했습니다" closeDisabled={closeFlushSaving} busy={closeFlushSaving} footer={
         <div className="dialog-actions">
           <button type="button" className="btn-secondary" onClick={clearCloseFlushError} disabled={closeFlushSaving}>종료 취소</button>
-          <button type="button" className="btn-danger" onClick={() => void closeWithoutSaving()} disabled={closeFlushSaving}>저장하지 않고 종료</button>
-          <button type="button" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
+          <button type="button" className="btn-danger" onClick={() => void closeWithoutSaving(true)} disabled={closeFlushSaving}>저장하지 않고 종료</button>
+          <button type="button" className="btn-primary" onClick={() => void retryClose.current?.()} disabled={closeFlushSaving}>다시 저장 후 종료</button>
         </div>
       }>
         <p>{closeFlushError}</p>
-        <p className="form-hint">저장되지 않은 변경을 버리지 않도록 창을 닫지 않았습니다.</p>
+        <p className="form-hint">아직 종료하지 않았습니다. 다시 저장하거나 앱으로 돌아갈 수 있습니다. ‘저장하지 않고 종료’를 선택하면 미저장 변경이 사라질 수 있으며, 추가 확인 없이 종료합니다.</p>
       </Dialog>
       <OnboardingTour
         open={onboardingOpen}

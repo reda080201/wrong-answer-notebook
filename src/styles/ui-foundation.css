@@ -27,7 +27,7 @@
 .ui-button--secondary { background: var(--surface); color: var(--text); }
 .ui-button--quiet { border-color: transparent; background: transparent; color: var(--text); }
 .ui-button--danger { border-color: var(--danger); color: var(--danger); }
-.btn-danger { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
+.btn-danger { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 8px; font: inherit; font-weight: 600; border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
 .ui-button--primary { border-color: var(--accent); background: var(--accent); color: white; }
 .ui-button--primary:hover { background: var(--accent-hover); }
 .ui-icon-button { display: inline-grid; width: 36px; height: 36px; min-width: 36px; place-items: center; border-radius: 8px; }
@@ -123,9 +123,13 @@
 
 /* Sidebar owns the vertical scroll region; the shell and list remain fixed. */
 .app-sidebar .section-tabs, .app-sidebar .logo, .app-sidebar .sidebar-summary, .app-sidebar .sidebar-footer { flex: 0 0 auto; }
-.app-sidebar-scroll-region { min-height: 0; flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; }
+.app-sidebar-scroll-region { min-height: 0; flex: 1 1 auto; overflow: hidden; }
 .app-sidebar > .app-sidebar-scroll-region { display: flex; flex-direction: column; }
-.app-sidebar-scroll-region > .filter-section { flex: 0 0 auto; overflow: visible; }
+.app-sidebar-scroll-region > .filter-section { min-height: 0; flex: 1 1 auto; display: flex; overflow: hidden; }
+.app-sidebar .subject-list { min-height: 0; width: 100%; }
+.app-sidebar .subject-list-heading, .app-sidebar .subject-hint { flex: 0 0 auto; }
+.app-sidebar .subject-list-options { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; padding-right: 4px; display: flex; flex-direction: column; gap: 3px; }
+.app-sidebar .sidebar-summary[open] { max-height: min(28dvh, 240px); overflow-y: auto; }
 .sidebar-summary { margin: var(--space-2) 0; padding: var(--space-2) 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 .sidebar-summary summary { cursor: pointer; color: var(--text-muted); font-size: 13px; font-weight: 600; }
 .sidebar-summary dl { display: grid; gap: var(--space-1); margin: var(--space-2) 0 0; }
