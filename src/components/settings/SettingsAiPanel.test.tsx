@@ -37,7 +37,7 @@ function renderPanel(onConfigChange = vi.fn().mockResolvedValue(true)) {
 describe("SettingsAiPanel", () => {
   it("keeps model edits local until blur", () => {
     const { onConfigChange } = renderPanel();
-    const model = screen.getByRole("textbox", { name: "모델", exact: true });
+    const model = screen.getByRole("textbox", { name: "모델" });
     fireEvent.change(model, { target: { value: "openrouter/new-model" } });
     expect(onConfigChange).not.toHaveBeenCalled();
     fireEvent.blur(model);
@@ -56,7 +56,7 @@ describe("SettingsAiPanel", () => {
 
   it("does not commit a second time when Enter is followed by blur", () => {
     const { onConfigChange } = renderPanel();
-    const model = screen.getByRole("textbox", { name: "모델", exact: true });
+    const model = screen.getByRole("textbox", { name: "모델" });
     model.focus();
     fireEvent.change(model, { target: { value: "openrouter/new-model" } });
     fireEvent.keyDown(model, { key: "Enter" });
