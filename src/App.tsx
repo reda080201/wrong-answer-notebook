@@ -2,8 +2,9 @@ import { entryAiMaterials } from "./features/study-ai/model";
 import { hydrateSessionSourceReferences } from "./features/exam-builder/services/questionSource";
 import StudyAiChat from "./features/study-ai/StudyAiChat";
 import { SourceNavigationContext } from "./features/exam-builder/components/sourceNavigationContext";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { setSavedRealExamProtection, useRealExamProtection, assertRealExamSourcesAllowed } from "./features/exam/services/realExamProtection";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRealExamProtection, assertRealExamSourcesAllowed } from "./features/exam/services/realExamProtection";
+import { useSavedRealExamProtection } from "./hooks/useSavedRealExamProtection";
 import { isTauri } from "@tauri-apps/api/core";
 import "./App.css";
 import AppModals from "./components/AppModals";
@@ -195,10 +196,6 @@ function AppContent() {
   } = examWorkspace;
 
   const realProtection = useRealExamProtection();
-  useLayoutEffect(() => {
-    setSavedRealExamProtection(savedExamSessions, examSessionsLoading || Boolean(examSessionsLoadError), entries, examWorkspace.generated.exams);
-  }, [savedExamSessions, examSessionsLoading, examSessionsLoadError, entries, examWorkspace.generated.exams]);
-  useEffect(() => () => setSavedRealExamProtection([]), []);
   useEffect(() => {
     if (realProtection.sourceIds.size || realProtection.unavailable) void clearMcpSharedContexts().catch(() => setExamSaveError("실전 자료의 이전 MCP 공유를 해제하지 못했습니다. 연결을 확인해 주세요."));
   }, [realProtection, setExamSaveError]);
@@ -260,6 +257,18 @@ function AppContent() {
     }),
   });
   const { runMaintenanceOperation } = persistence;
+  const protectionRecovery = useSavedRealExamProtection({
+    sessions: savedExamSessions,
+    sessionLoading: examSessionsLoading,
+    sessionLoadError: examSessionsLoadError,
+    entries,
+    exams: generatedExamController.exams,
+    generatedLoading: generatedExamController.loading,
+    generatedLoadError: generatedExamController.loadError,
+    reloadSessions: reloadExamSessions,
+    reloadGenerated: reloadGeneratedExams,
+    runMaintenanceOperation,
+  });
 
   const navigation = useAppNavigationState({ entries, subjectOrder });
   const {
@@ -846,8 +855,12 @@ function AppContent() {
               {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
               {realProtection.unavailable || realProtection.sourceIds.has(selected.id) ? <section className="empty-state" role="status">
                 <h2>{selected.title}</h2>
-                <p>{realProtection.unavailable ? "시험 기록을 확인하지 못해 학습·해설·공유를 잠시 차단했습니다." : "진행 중 실전 시험의 자료입니다. 제출 후 학습·해설·공유를 사용할 수 있습니다. 시험을 닫아도 보호는 유지됩니다."}</p>
-                {realProtection.unavailable ? <button type="button" onClick={() => void reloadExamSessions()}>시험 기록 다시 불러오기</button> : realProtection.sessions.filter(item => item.entryId === selected.id || item.questions.some(question => question.sourceEntryId === selected.id || question.sourceReference?.sourceEntryId === selected.id)).map(item => <button key={item.id} type="button" onClick={() => { const latest = savedExamSessions.find(saved => saved.id === item.id); if (latest) setExamSession(latest); }}>실전 이어서 · {item.title}</button>)}
+                <p>{realProtection.unavailable ? "시험 기록 또는 원본 출처를 확인하지 못해 학습·해설·공유를 잠시 차단했습니다. 다시 불러온 뒤에도 안내가 남으면 미제출 실전 시험의 원본 연결을 확인해 주세요." : "진행 중 실전 시험의 자료입니다. 제출 후 학습·해설·공유를 사용할 수 있습니다. 시험을 닫아도 보호는 유지됩니다."}</p>
+                {realProtection.unavailable ? <>
+                  <button type="button" disabled={protectionRecovery.loading || protectionRecovery.retrying} onClick={() => void protectionRecovery.retry()}>{protectionRecovery.loading || protectionRecovery.retrying ? "시험 기록·출처 확인 중…" : "시험 기록·출처 다시 불러오기"}</button>
+                  {protectionRecovery.retryError && <p role="alert">{protectionRecovery.retryError}</p>}
+                </> : null}
+                {realProtection.sessions.filter(item => realProtection.unavailable || item.entryId === selected.id || item.questions.some(question => question.sourceEntryId === selected.id || question.sourceReference?.sourceEntryId === selected.id)).map(item => <button key={item.id} type="button" onClick={() => { const latest = savedExamSessions.find(saved => saved.id === item.id); if (latest) setExamSession(latest); }}>실전 이어서 · {item.title}</button>)}
               </section> : <EntryDetail
               entry={selected}
               presentationEntry={studySelected}

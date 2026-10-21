@@ -47,3 +47,45 @@ it("resolves unique legacy generated-session provenance before protecting source
   setSavedRealExamProtection([legacy], false, [], [generated]);
   expect(() => assertRealExamSourcesAllowed(["original"])).toThrow();
 });
+
+const legacyExam = () => ({ ...exam("legacy", "unused"), questions: [{ id: "legacy-q", questionNumber: "1" }] }) as ExamSession;
+const legacySource = () => ({ id: "legacy", questions: [{ position: 1, source: { sourceEntryId: "original", sourceQuestionNumber: "7" } }] }) as GeneratedExam;
+
+it("fails closed until legacy generated-session source data is available", () => {
+  setSavedRealExamProtection([legacyExam()], false, [], []);
+  expect(getRealExamProtection().unavailable).toBe(true);
+  expect(() => assertRealExamSourcesAllowed(["original"])).toThrow();
+  expect(() => assertRealExamSourcesAllowed([])).not.toThrow();
+  setSavedRealExamProtection([legacyExam()], false, [], [legacySource()]);
+  expect(getRealExamProtection().unavailable).toBe(false);
+  expect(() => assertRealExamSourcesAllowed(["original"])).toThrow();
+  expect(() => assertRealExamSourcesAllowed(["other"])).not.toThrow();
+});
+
+it.each(["missing", "duplicate-exam", "duplicate-position", "empty-source"])("keeps unresolved %s provenance closed after loading finishes", (reason) => {
+  const generated = legacySource();
+  const sources = reason === "missing" ? [] : reason === "duplicate-exam" ? [generated, generated]
+    : reason === "duplicate-position" ? [{ ...generated, questions: [...generated.questions, ...generated.questions] }]
+    : [{ ...generated, questions: [{ ...generated.questions[0], source: { ...generated.questions[0].source, sourceEntryId: " " } }] }];
+  setSavedRealExamProtection([legacyExam()], false, [], sources);
+  expect(getRealExamProtection().unavailable).toBe(true);
+  expect(() => assertRealExamSourcesAllowed(["original"])).toThrow();
+});
+
+it("only releases unresolved protection once every affected real session is terminal", () => {
+  const first = legacyExam();
+  const second = { ...first, id: "legacy-second" };
+  setSavedRealExamProtection([first, second]);
+  setActiveRealExamProtection({ ...first, status: "submitted" });
+  expect(getRealExamProtection().unavailable).toBe(true);
+  setSavedRealExamProtection([{ ...first, status: "submitted" }, { ...second, status: "submitted" }]);
+  expect(getRealExamProtection().unavailable).toBe(false);
+  expect(() => assertRealExamSourcesAllowed(["original"])).not.toThrow();
+});
+
+it("does not require generated provenance when a session already has direct source IDs", () => {
+  setSavedRealExamProtection([exam("direct", "original")]);
+  expect(getRealExamProtection().unavailable).toBe(false);
+  expect(() => assertRealExamSourcesAllowed(["original"])).toThrow();
+  expect(() => assertRealExamSourcesAllowed(["other"])).not.toThrow();
+});
