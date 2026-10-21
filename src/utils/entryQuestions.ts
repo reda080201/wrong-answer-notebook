@@ -97,8 +97,9 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
     .filter((block): block is QuestionBlock => block.kind === "question")
     .map((block, index) => {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
-      const segments = number && canonical.questionContentSegments?.[number]
-        ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments[number] })
+      const segmentKeys = Object.keys(canonical.questionContentSegments ?? {}).filter(key => normalizeQuestionNumber(key) === number);
+      const segments = number && segmentKeys.length === 1
+        ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments![segmentKeys[0]] })
         : undefined;
       const references = readFigureTokenReferences([
         block.body,
@@ -106,6 +107,7 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
         ...segments?.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []) ?? [],
       ]);
       const tokenWarning = figureTokenWarning(unresolvedFigureTokens(references.map(({ raw }) => raw), canonical.figures ?? []));
+      const warning = [tokenWarning, segmentKeys.length > 1 ? "문항 순서 연결이 중복되어 원문을 표시합니다. 연결을 검토해 주세요." : undefined].filter(Boolean).join(" ") || undefined;
       return {
         questionNumber: number || String(index + 1),
         position: index + 1,
@@ -114,8 +116,8 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
         questionText: block.body,
         choices: block.choices.map((choice) => stripLegacyChoiceSeparator(`${choice.marker} ${choice.text}`.trim())),
         contentSegments: segments,
-        needsReview: Boolean(tokenWarning),
-        warning: tokenWarning,
+        needsReview: Boolean(warning),
+        warning,
         figureIds: [...new Set(references.map(({ id }) => id).filter(Boolean))],
       };
     });

@@ -41,6 +41,8 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [zoomState, setZoomState] = useState<ZoomState>(() => initialZoomState(preferenceKey));
   const [failedImages, setFailedImages] = useState<Set<string>>(() => new Set());
+  const loadGeneration = useRef({ cancelled: false });
+  const retryingImages = useRef(new Set<string>());
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [imageSize, setImageSize] = useState({ filename: "", width: 0, height: 0 });
@@ -74,21 +76,40 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
   const [pageDirection, setPageDirection] = useState("forward");
 
   useEffect(() => {
-    let cancelled = false;
+    const generation = { cancelled: false };
+    loadGeneration.current = generation;
+    retryingImages.current.clear();
     Promise.allSettled(filenames.map(async (filename) => [filename, await getImageUrl(filename)] as const))
       .then((results) => {
-        if (cancelled) return;
+        if (generation.cancelled) return;
         const nextUrls: Record<string, string> = {};
         const nextFailures = new Set<string>();
         results.forEach((result, index) => {
-          if (result.status === "fulfilled") nextUrls[result.value[0]] = result.value[1];
+          if (result.status === "fulfilled" && result.value[1]?.trim()) nextUrls[result.value[0]] = result.value[1];
           else if (filenames[index]) nextFailures.add(filenames[index]);
         });
         setUrls(nextUrls);
         setFailedImages(nextFailures);
       });
-    return () => { cancelled = true; };
+    return () => { generation.cancelled = true; };
   }, [filenames]);
+
+  const retryImage = async (filename: string) => {
+    if (retryingImages.current.has(filename)) return;
+    retryingImages.current.add(filename);
+    const generation = loadGeneration.current;
+    setFailedImages(current => { const next = new Set(current); next.delete(filename); return next; });
+    setUrls(current => { const next = { ...current }; delete next[filename]; return next; });
+    try {
+      const url = await getImageUrl(filename);
+      if (!url?.trim()) throw new Error("원본 이미지가 없습니다.");
+      if (!generation.cancelled) setUrls(current => ({ ...current, [filename]: url }));
+    } catch {
+      if (!generation.cancelled) setFailedImages(current => new Set(current).add(filename));
+    } finally {
+      if (!generation.cancelled) retryingImages.current.delete(filename);
+    }
+  };
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -175,7 +196,7 @@ export default function OriginalPageExamReader({ preferenceKey, filenames, selec
       </div>
     </details>
     <div ref={viewportRef} className={`original-page-viewport${zoomState.mode === "page" ? " original-page-viewport--fit-page" : ""}`} tabIndex={0} aria-label="원본 페이지. 좌우 방향키로 넘길 수 있습니다.">
-      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p> : urls[activeFilename] ? <div key={activeFilename} className={`solution-hotspot-stage original-page-frame original-page-frame--${pageDirection}`} style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} data-solution-question-key={hotspot.questionKey} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
+      {!activeFilename ? <div className="original-page-no-selection" role="status"><h3>표시할 문제 페이지를 선택하세요</h3><p>{emptyMessage ?? "페이지 선택을 펼쳐 풀이에 사용할 페이지를 고르세요."}</p><button type="button" onClick={() => onSelectPages([...filenames])}>모든 페이지 표시</button></div> : failedImages.has(activeFilename) ? <div><p role="alert">이 페이지를 불러오지 못했습니다. 다른 페이지는 계속 볼 수 있습니다. 문항 텍스트 보기에서 계속 풀 수도 있습니다.</p><button type="button" onClick={() => void retryImage(activeFilename)}>이 페이지 다시 불러오기</button></div> : urls[activeFilename] ? <div key={activeFilename} className={`solution-hotspot-stage original-page-frame original-page-frame--${pageDirection}`} style={{ width: `${displayWidth}px` }}><img className="original-page-image" src={urls[activeFilename]} alt={`원본 문제지 페이지 ${filenames.indexOf(activeFilename) + 1}`} draggable={false} style={{ width: `${displayWidth}px` }} onLoad={(event) => setImageSize({ filename: activeFilename, width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })} onError={() => setFailedImages(current => new Set(current).add(activeFilename))} />{activeHotspots.map(hotspot => <button type="button" key={hotspot.id} data-solution-question-key={hotspot.questionKey} className="solution-hotspot solution-hotspot--manual" style={{ left: `${hotspot.x * 100}%`, top: `${hotspot.y * 100}%` }} aria-label={`${questionLabels[hotspot.questionKey]}번 정답·해설 열기`} onPointerDown={event => event.stopPropagation()} onTouchStart={event => event.stopPropagation()} onClick={event => { event.stopPropagation(); openHotspot(hotspot); }} />)}</div> : <p role="status">원본 페이지를 불러오는 중…</p>}
     </div>
     <Dialog open={overlapChoices.length > 0} onClose={() => setOverlapChoices([])} title="열 문항의 해설을 선택하세요">{overlapChoices.map(hotspot => <button type="button" key={hotspot.id} onClick={() => { setOverlapChoices([]); onOpenSolution?.(hotspot.questionKey); }}>{questionLabels[hotspot.questionKey]}번 정답·해설</button>)}</Dialog>
   </section>;

@@ -71,12 +71,13 @@ export default function StudyPaperView({
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
   const [expandedDiagramsEntryId, setExpandedDiagramsEntryId] = useState<string | null>(null);
-  const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
-  const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
-  const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const generatedWrongAnswerContent = entry.entryKind === "wrong_answer" && entry.generatedFromExamSessionId
     ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
     : { status: "unavailable" as const };
+  const hasResolvableSegments = Object.keys(entry.questionContentSegments ?? {}).length > 0 && generatedWrongAnswerContent.status !== "ambiguous";
+  const structuredQuestions = entry.structuredQuestions?.length || (generatedWrongAnswerContent.status !== "ambiguous" && (hasResolvableSegments || displayMode === "exam")) ? getEntryQuestions(entry) : [];
+  const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
+  const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const figureImages = generatedWrongAnswerContent.status === "matched"
     ? []
     : (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));

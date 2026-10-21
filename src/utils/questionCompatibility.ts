@@ -68,6 +68,11 @@ export function applyQuestionCompatibilityEdits(original: string, edits: Compati
     if (local.some((item, index) => index > 0 && item.start < local[index - 1].end)) ambiguous = true;
     if (ambiguous) { unresolved.push(after.questionNumber); continue; }
     for (const item of local.reverse()) fragment = fragment.slice(0, item.start) + item.text + fragment.slice(item.end);
+    const addedChoices = after.choices.slice(before.choices.length).filter(value => value.trim());
+    if (addedChoices.length) {
+      const trailingSpace = fragment.match(/\s*$/)?.[0] || "\n";
+      fragment = `${fragment.trimEnd()}\n${addedChoices.join("\n")}${trailingSpace}`;
+    }
     if (before.questionNumber !== after.questionNumber) {
       const header = fragment.slice(0, block.bodyStart - block.start);
       const updatedHeader = header.replace(/(\d{1,3})(?=\s*(?:[.)]|\]|번))/, after.questionNumber);

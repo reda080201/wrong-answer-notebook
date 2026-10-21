@@ -21,6 +21,21 @@ const question: StructuredQuestion = {
 };
 
 describe("StructuredQuestionReviewEditor", () => {
+  it("supports explicit choice addition and removal without changing segment anchors", () => {
+    const onChange = vi.fn();
+    const { rerender } = render(<StructuredQuestionReviewEditor questions={[question]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "1번 선택지 2 삭제" }));
+    const removed = onChange.mock.calls.at(-1)![0] as StructuredQuestion[];
+    expect(removed[0].choices).toEqual(["① 1"]);
+    rerender(<StructuredQuestionReviewEditor questions={removed} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "1번 선택지 추가" }));
+    const added = onChange.mock.calls.at(-1)![0] as StructuredQuestion[];
+    expect(added[0].choices).toEqual(["① 1", "② "]);
+    expect(added[0].contentSegments).toEqual(question.contentSegments);
+    rerender(<StructuredQuestionReviewEditor questions={[{ ...question, choices: ["① 하나", "③ 셋"] }]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "1번 선택지 추가" }));
+    expect(onChange.mock.calls.at(-1)![0][0].choices).toEqual(["① 하나", "③ 셋", "② "]);
+  });
   it("edits ordered text segments while preserving figure and table anchors", () => {
     const onChange = vi.fn();
     render(<StructuredQuestionReviewEditor questions={[question]} onChange={onChange} />);

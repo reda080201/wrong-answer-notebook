@@ -14,6 +14,8 @@ import { SUBJECTS } from "../../../types";
 import ImageField from "../../../components/ImageField";
 import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
 import Dialog from "../../../shared/ui/Dialog";
+import StructuredQuestionReviewEditor from "../../import/components/StructuredQuestionReviewEditor";
+import { editableEntryQuestions, hasAmbiguousEntryQuestionData, saveEntryQuestionEdits } from "../model/questionEditing";
 import {
   createEntryDraftFromEntry,
   createEmptyEntryDraft,
@@ -102,7 +104,10 @@ export default function EntryForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const initialSignatureRef = useRef("");
+  const questionEditBaseRef = useRef<EntryFormData>(emptyForm);
   const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(false);
+  const hasCanonicalQuestions = Boolean(form.structuredQuestions?.length || Object.keys(form.questionContentSegments ?? {}).length);
+  const questionEditingBlocked = hasAmbiguousEntryQuestionData(form);
 
   useEffect(() => {
     let nextForm: EntryFormData;
@@ -125,6 +130,12 @@ export default function EntryForm({
       setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
+    }
+    questionEditBaseRef.current = structuredClone(nextForm);
+    const questions = editableEntryQuestions(nextForm);
+    if (questions.length) {
+      nextForm = { ...nextForm, structuredQuestions: questions };
+      setForm(nextForm);
     }
     initialSignatureRef.current = JSON.stringify(nextForm);
     setDiscardConfirmOpen(false);
@@ -296,6 +307,12 @@ export default function EntryForm({
     setForm((current) => ({
       ...current,
       ...template.data,
+      ...(current.structuredQuestions?.length ? {
+        question: current.question,
+        structuredQuestions: current.structuredQuestions,
+        questionContentSegments: current.questionContentSegments,
+        annotations: current.annotations,
+      } : {}),
       entryKind: template.entryKind,
       questionImages: template.data.questionImages
         ? [...template.data.questionImages]
@@ -308,7 +325,7 @@ export default function EntryForm({
         : current.explanationParts,
       tags: template.data.tags ? [...template.data.tags] : current.tags,
       figures: template.data.figures ? template.data.figures.map((figure) => ({ ...figure })) : current.figures,
-      annotations: template.data.annotations ? [...template.data.annotations] : current.annotations,
+      annotations: current.structuredQuestions?.length ? current.annotations : template.data.annotations ? [...template.data.annotations] : current.annotations,
     }));
   };
 
@@ -354,7 +371,7 @@ export default function EntryForm({
     setSaving(true);
     setSaveError(null);
     try {
-      await onSave(form, removedImages);
+      await onSave(saveEntryQuestionEdits(questionEditBaseRef.current, form), removedImages);
       onClose();
     } catch (error) {
       setSaveError(
@@ -572,6 +589,19 @@ export default function EntryForm({
               </div>
             )}
 
+            {Boolean(form.structuredQuestions?.length) && <div className="form-field full">
+              <StructuredQuestionReviewEditor
+                id="entry-question-editor"
+                questions={form.structuredQuestions!}
+                disabled={saving || questionEditingBlocked}
+                onChange={questions => {
+                  setForm(current => ({ ...current, structuredQuestions: questions }));
+                  setSaveError(null);
+                }}
+              />
+            </div>}
+            {questionEditingBlocked && <p className="form-field full" role="alert">문항 번호가 중복되어 본문을 안전하게 수정할 수 없습니다. 가져오기 작업실에서 문항 연결을 확인해 주세요.</p>}
+
             <div className="form-field full">
               <label htmlFor="question">
                 {form.entryKind === "problem_sheet"
@@ -583,6 +613,8 @@ export default function EntryForm({
               <textarea
                 id="question"
                 value={form.question}
+                readOnly={hasCanonicalQuestions}
+                aria-describedby={hasCanonicalQuestions ? "entry-question-source-help" : undefined}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, question: e.target.value }))
                 }
@@ -594,7 +626,7 @@ export default function EntryForm({
                       : "문제 본문 (이미지와 함께 사용 가능)"
                 }
               />
-              <div className="textarea-actions">
+              {hasCanonicalQuestions ? <p id="entry-question-source-help">본문·조건·수식·선택지는 위 문항별 편집에서 수정하세요. 이 원문은 저장할 때 함께 갱신됩니다. 연결이 모호하면 원문을 보존하고 저장 전에 안내합니다.</p> : <div className="textarea-actions">
                 <button
                   type="button"
                   className="btn-secondary btn-sm"
@@ -604,7 +636,7 @@ export default function EntryForm({
                 >
                   텍스트 정리
                 </button>
-              </div>
+              </div>}
             </div>
 
             <ImageField
