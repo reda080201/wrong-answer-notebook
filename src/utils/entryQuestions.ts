@@ -98,7 +98,8 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
     .map((block, index) => {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
       const segmentKeys = Object.keys(canonical.questionContentSegments ?? {}).filter(key => normalizeQuestionNumber(key) === number);
-      const segments = number && segmentKeys.length === 1
+      const generatedUnresolved = Boolean(canonical.generatedFromExamSessionId && Object.keys(canonical.questionContentSegments ?? {}).length && generated.status !== "matched");
+      const segments = number && segmentKeys.length === 1 && !generatedUnresolved
         ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments![segmentKeys[0]] })
         : undefined;
       const references = readFigureTokenReferences([
@@ -107,7 +108,7 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
         ...segments?.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []) ?? [],
       ]);
       const tokenWarning = figureTokenWarning(unresolvedFigureTokens(references.map(({ raw }) => raw), canonical.figures ?? []));
-      const warning = [tokenWarning, segmentKeys.length > 1 ? "문항 순서 연결이 중복되어 원문을 표시합니다. 연결을 검토해 주세요." : undefined].filter(Boolean).join(" ") || undefined;
+      const warning = [tokenWarning, segmentKeys.length > 1 || generatedUnresolved ? "문항 순서 연결이 중복되거나 불명확해 원문을 표시합니다. 연결을 검토해 주세요." : undefined].filter(Boolean).join(" ") || undefined;
       return {
         questionNumber: number || String(index + 1),
         position: index + 1,

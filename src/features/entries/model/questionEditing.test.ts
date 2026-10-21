@@ -77,6 +77,8 @@ describe("entry question editing", () => {
     expect(editableEntryQuestions(data)).toEqual([]);
     expect(saveEntryQuestionEdits(data, { ...data, title: "제목 수정" }).questionContentSegments).toEqual(data.questionContentSegments);
     expect(() => saveEntryQuestionEdits(data, { ...data, question: "새 본문" })).toThrow("연결이 모호");
+    expect(hasAmbiguousEntryQuestionData({ ...data, generatedFromQuestionNumber: undefined })).toBe(true);
+    expect(editableEntryQuestions({ ...data, generatedFromQuestionNumber: undefined })).toEqual([]);
   });
 
   it("moves exact legacy and canonical annotations, preserving image annotations", () => {

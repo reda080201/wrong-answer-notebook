@@ -74,8 +74,10 @@ export default function StudyPaperView({
   const generatedWrongAnswerContent = entry.entryKind === "wrong_answer" && entry.generatedFromExamSessionId
     ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
     : { status: "unavailable" as const };
-  const hasResolvableSegments = Object.keys(entry.questionContentSegments ?? {}).length > 0 && generatedWrongAnswerContent.status !== "ambiguous";
-  const structuredQuestions = entry.structuredQuestions?.length || (generatedWrongAnswerContent.status !== "ambiguous" && (hasResolvableSegments || displayMode === "exam")) ? getEntryQuestions(entry) : [];
+  const canResolveGenerated = !entry.generatedFromExamSessionId || generatedWrongAnswerContent.status === "matched";
+  const generatedContentReviewRequired = Boolean(entry.generatedFromExamSessionId && Object.keys(entry.questionContentSegments ?? {}).length && !canResolveGenerated);
+  const hasResolvableSegments = Object.keys(entry.questionContentSegments ?? {}).length > 0 && canResolveGenerated;
+  const structuredQuestions = entry.structuredQuestions?.length || (canResolveGenerated && (hasResolvableSegments || displayMode === "exam")) ? getEntryQuestions(entry) : [];
   const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
   const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const figureImages = generatedWrongAnswerContent.status === "matched"
@@ -160,7 +162,7 @@ export default function StudyPaperView({
           question={entry.question}
           canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
           canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-          canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
+          canonicalReviewRequired={generatedContentReviewRequired}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}

@@ -600,7 +600,7 @@ export default function EntryForm({
                 }}
               />
             </div>}
-            {questionEditingBlocked && <p className="form-field full" role="alert">문항 번호가 중복되어 본문을 안전하게 수정할 수 없습니다. 가져오기 작업실에서 문항 연결을 확인해 주세요.</p>}
+            {questionEditingBlocked && <p className="form-field full" role="alert">문항 번호 또는 본문 연결이 모호해 안전하게 수정할 수 없습니다. 가져오기 작업실에서 문항 연결을 확인해 주세요.</p>}
 
             <div className="form-field full">
               <label htmlFor="question">
@@ -626,7 +626,7 @@ export default function EntryForm({
                       : "문제 본문 (이미지와 함께 사용 가능)"
                 }
               />
-              {hasCanonicalQuestions ? <p id="entry-question-source-help">본문·조건·수식·선택지는 위 문항별 편집에서 수정하세요. 이 원문은 저장할 때 함께 갱신됩니다. 연결이 모호하면 원문을 보존하고 저장 전에 안내합니다.</p> : <div className="textarea-actions">
+              {hasCanonicalQuestions ? <p id="entry-question-source-help">{questionEditingBlocked ? "문항 연결을 먼저 확인해 주세요. 확인 전에는 원문을 보존하며 본문 수정을 막습니다." : "본문·조건·수식·선택지는 위 문항별 편집에서 수정하세요. 이 원문은 저장할 때 함께 갱신됩니다. 연결이 모호하면 원문을 보존하고 저장 전에 안내합니다."}</p> : <div className="textarea-actions">
                 <button
                   type="button"
                   className="btn-secondary btn-sm"

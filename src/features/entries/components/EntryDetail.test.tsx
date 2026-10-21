@@ -981,8 +981,8 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".wrong-focus-question .question-content-view")?.children[2]).toHaveTextContent("뒤 문장");
   });
 
-  it("keeps ambiguous generated content in the legacy view with a review notice in both modes", () => {
-    const entry: WrongAnswerEntry = { ...sheetEntry, entryKind: "wrong_answer", generatedFromExamSessionId: "session", generatedFromQuestionNumber: "7", question: "1. 보존할 원문", questionContentSegments: {
+  it.each(["7", undefined])("keeps unresolved generated identity %s in the legacy view with a review notice in both modes", number => {
+    const entry: WrongAnswerEntry = { ...sheetEntry, entryKind: "wrong_answer", generatedFromExamSessionId: "session", generatedFromQuestionNumber: number, question: "1. 보존할 원문", questionContentSegments: {
       "1": [{ id: "one", type: "text", text: "선택하면 안 되는 첫 본문" }],
       "2": [{ id: "two", type: "text", text: "다른 본문" }],
     } };

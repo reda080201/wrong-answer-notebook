@@ -52,7 +52,7 @@ export function hasAmbiguousQuestionIdentity(questions: StructuredQuestion[]): b
 export function hasAmbiguousEntryQuestionData(data: EntryFormData): boolean {
   const keys = Object.keys(data.questionContentSegments ?? {}).map(normalizeQuestionNumber);
   return hasAmbiguousQuestionIdentity(data.structuredQuestions ?? []) || keys.some(key => !key) || new Set(keys).size !== keys.length
-    || Boolean(data.generatedFromExamSessionId && !data.structuredQuestions?.length && resolveGeneratedWrongAnswerContent(data).status === "ambiguous");
+    || Boolean(data.generatedFromExamSessionId && !data.structuredQuestions?.length && keys.length && resolveGeneratedWrongAnswerContent(data).status !== "matched");
 }
 
 function movedRange(before: string, after: string, start: number, end: number) {
