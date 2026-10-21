@@ -7,6 +7,7 @@ import ImportFromGptModal, { VisualPaperImportError, type VisualPaperImportResul
 import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
 import ReviewPanel from "./ReviewPanel";
 import Dialog from "../shared/ui/Dialog";
+import ProtectedExamContent from "../features/exam/components/ProtectedExamContent";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -29,6 +30,7 @@ import type {
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
 import { reviewSessionCompletedCount, reviewSessionFingerprint } from "../features/review/storage/reviewSessionIdentity";
+import ImportDraftRecovery from "../features/import-workspace/components/ImportDraftRecovery";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
 import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
 import { commitImportWorkspace } from "../features/import-workspace/services/commitImportWorkspace";
@@ -436,6 +438,7 @@ export default function AppModals({
     <>
       {workspace && <ImportWorkspaceView resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
       {showForm && (
+        <ProtectedExamContent sourceId={editingEntry?.id} onClose={closeForm}>
         <EntryForm
           entry={editingEntry}
           onSave={handleSave}
@@ -447,6 +450,7 @@ export default function AppModals({
           memoTemplates={settings.memoTemplates}
           onSaveTemplate={saveTemplate}
         />
+        </ProtectedExamContent>
       )}
       {showImportModal && (
         <ImportFromGptModal
@@ -475,6 +479,11 @@ export default function AppModals({
           onClose={closeImportModal}
           onApply={handleImportApply}
           onApplyEntries={handleDirectEntries}
+          recoveryNotice={importMode === "import" ? <ImportDraftRecovery onResume={async draft => {
+            if (directTaskRef.current || directMaintenanceRef.current) throw new Error("진행 중 저장·백업·복원이 끝난 뒤 다시 시도하세요.");
+            if (!draft.commitAttempt) { const result = await validateWorkspaceAssets(draft); if (!result.valid) throw new Error(result.message); }
+            setWorkspace(draft); closeImportModal();
+          }} /> : undefined}
           commitLocked={directCommitLocked}
           onRecoverCommit={async () => { const draft = await loadImportWorkspaceDraft(); if (!draft?.commitAttempt) throw new Error("확정 기록을 읽지 못했습니다. 항목 목록과 초안을 확인해 주세요."); directCommitRef.current = draft; await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
           onOpenWorkspace={handleWorkspaceEntries}

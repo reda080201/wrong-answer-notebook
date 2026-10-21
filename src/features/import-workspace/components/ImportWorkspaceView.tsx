@@ -118,15 +118,7 @@ export default function ImportWorkspaceView({ initialWorkspace, resolvePageUrl, 
     });
     return () => registerDraftFlush(null);
   }, [cancelAutosaveAndDrain, persistDraft, registerDraftFlush, updateMaintenanceBlocked]);
-  useEffect(() => {
-    let active = true;
-    void loadImportWorkspaceDraft().then((draft) => {
-      if (active) { recoveryPendingRef.current = Boolean(draft); setRecoveryAvailable(Boolean(draft)); }
-    }).catch((error) => {
-      if (active) { setRecoveryAvailable(true); setRecoveryError(error instanceof Error ? error.message : "복구 초안을 읽지 못했습니다."); }
-    }).finally(() => { if (active) setRecoveryChecking(false); });
-    return () => { active = false; };
-  }, []);
+
 
   const retryDraftSave = async () => {
     if (rejectMaintenanceMutation()) return;
@@ -310,6 +302,16 @@ export default function ImportWorkspaceView({ initialWorkspace, resolvePageUrl, 
     setCommitUncertain(true);
     throw new Error("이전 가져오기 저장 결과를 모두 확인할 수 없습니다. 항목 목록과 백업을 확인하세요. 중복 생성을 막기 위해 재가져오기를 중단했습니다.");
   };
+
+  useEffect(() => {
+    let active = true;
+    void loadImportWorkspaceDraft().then((draft) => {
+      if (active) { recoveryPendingRef.current = Boolean(draft); setRecoveryAvailable(Boolean(draft)); if (draft?.id === initialWorkspace.id) void recoverDraft(); }
+    }).catch((error) => {
+      if (active) { setRecoveryAvailable(true); setRecoveryError(error instanceof Error ? error.message : "복구 초안을 읽지 못했습니다."); }
+    }).finally(() => { if (active) setRecoveryChecking(false); });
+    return () => { active = false; };
+  }, []);
 
   const save = async () => {
     if (maintenanceBlockedRef.current || actionBusyRef.current || recoveryAvailable || recoveryChecking) return;

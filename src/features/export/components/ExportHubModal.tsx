@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRealExamProtection } from "../../exam/services/realExamProtection";
 import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { downloadMarkdown } from "../../../utils/exportEntry";
 import { buildGptExportPayload } from "../../../utils/gptExport";
@@ -47,6 +48,7 @@ interface ExportHubModalProps {
 }
 
 export default function ExportHubModal(props: ExportHubModalProps) {
+  const protection = useRealExamProtection();
   const {
     entry,
     allEntries,
@@ -154,6 +156,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
       setPngPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
     } catch (error) { setPngError(error instanceof Error ? error.message : "문항 PNG를 만들지 못했습니다."); } finally { setPngBusy(false); }
   };
+  if (protection.unavailable || protection.sourceIds.has(entry.id)) return <Dialog open title="실전 시험 자료 보호" onClose={onClose}><p role="status">진행 중 실전 시험의 자료는 제출 후 공유·내보내기할 수 있습니다.</p><button type="button" onClick={onClose}>닫기</button></Dialog>;
   return (
     <Dialog open onClose={onClose} className="modal-card export-hub-modal" ariaLabel="공유·내보내기" backdropClassName="modal-backdrop export-hub-backdrop">
         <header className="modal-header">

@@ -45,6 +45,11 @@ function segmentLabel(segment: QuestionContentSegment, index: number): string {
   return "표 배치";
 }
 
+function newChoice(choices: string[]): string {
+  const marker = [..."①②③④⑤⑥⑦⑧⑨⑩"].find(value => !choices.some(choice => choice.trimStart().startsWith(value)));
+  return marker ? `${marker} ` : "";
+}
+
 export default function StructuredQuestionReviewEditor({
   id = "structured-question-review",
   questions,
@@ -130,8 +135,11 @@ export default function StructuredQuestionReviewEditor({
                           : item,
                       ))}
                     />
+                    <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 선택지 ${choiceIndex + 1} 삭제`} onClick={() => onChange(questions.map((item, index) => index === questionIndex ? { ...item, choices: item.choices.filter((_, index) => index !== choiceIndex) } : item))}>선택지 삭제</button>
                   </label>
                 )) : <p className="structured-question-review-empty">연결된 선택지가 없습니다.</p>}
+                <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 선택지 추가`} onClick={() => onChange(questions.map((item, index) => index === questionIndex ? { ...item, choices: [...item.choices, newChoice(item.choices)] } : item))}>선택지 추가</button>
+                <small>선택지를 추가하거나 삭제했다면 정답 연결도 확인해 주세요.</small>
               </fieldset>
             </article>
           );
