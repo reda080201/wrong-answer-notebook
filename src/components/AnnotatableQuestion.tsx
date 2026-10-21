@@ -992,8 +992,7 @@ function AnnotatableImage({
 
   useEffect(() => {
     let cancelled = false;
-    setSrc("");
-    setImageError(false);
+    // Both callers key this image by filename, without remounting the question.
     getImageUrl(filename)
       .then((url) => {
         if (!cancelled) setSrc(url);
