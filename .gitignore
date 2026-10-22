@@ -37,4 +37,9 @@ private-key.pem
 /-p/
 /echo/
 /ok/
-/tools/
+/tools/*
+!/tools/diagram_pipeline/
+/.venv-diagrams/
+/build/diagram-pipeline/
+__pycache__/
+.pytest_cache/

@@ -300,7 +300,7 @@
 .app-update-banner span { margin-right: auto; }
 .app-update-banner button { border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: .25rem .55rem; cursor: pointer; }
 .figure-comparison { margin-top: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-subtle); background: var(--surface-muted); }
-.figure-comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.figure-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .figure-comparison-grid figure, .figure-comparison-grid > div { min-width: 0; margin: 0; }
 .figure-comparison-grid figcaption { font-weight: 700; margin-bottom: 0.35rem; }
 .figure-comparison-grid img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: var(--surface); }
@@ -312,3 +312,17 @@
 @media (max-width: 900px) {
   .figure-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.figure-comparison-viewport { max-height: 360px; overflow: auto; background: var(--surface); }
+.figure-review-card { min-width: 0; padding: 12px; margin-block: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.figure-comparison input[type="range"] { max-width: 100%; }
+.figure-comparison > small { display: block; margin-block: 6px; line-height: 1.5; }
+.figure-comparison-confirm { display: flex; align-items: center; gap: 8px; min-height: 36px; padding-block: 6px; }
+.modal-backdrop.figure-comparison-backdrop { z-index: 1100; }
+[role="dialog"].figure-comparison-dialog { width: min(1100px, calc(100vw - 32px)); max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 12px; }
+.figure-comparison-dialog > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+.figure-comparison-dialog > .dialog-body { padding: 16px; }
+.figure-comparison-dialog .figure-review-card { border: 0; margin: 0; padding: 0; }
+.figure-comparison-dialog .figure-comparison-viewport { max-height: 50dvh; }
+.figure-comparison-dialog .figure-comparison-grid img { max-height: 360px; }
+@media (max-width: 700px) { .figure-comparison-grid { grid-template-columns: minmax(0, 1fr); } }
