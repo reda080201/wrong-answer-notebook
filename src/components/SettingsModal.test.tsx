@@ -197,6 +197,7 @@ describe("SettingsModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "보기" }));
     expect(screen.getByText("원본 페이지 보존")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "AI & 연결" }));
+    fireEvent.click(screen.getByRole("button", { name: /^가져오기 기본값$/ }));
     expect(screen.getByText("가져오기 검토 기본 펼침")).toBeInTheDocument();
   });
 });

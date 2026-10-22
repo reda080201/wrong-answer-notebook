@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { assertRealExamSourcesAllowed, useRealExamProtection } from "../../exam/services/realExamProtection";
 import type { ChatGptMcpPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
 import { clearMcpSharedContexts, getMcpSharedContextStatus } from "../../../api";
 import { openChatGpt, recommendedChatGptQuestions } from "../../chatgpt/services/chatGptConnection";
@@ -61,6 +62,7 @@ interface ChatGptSharePanelProps {
 }
 
 export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
+  const protection = useRealExamProtection();
   const {
     entry,
     examSession,
@@ -139,6 +141,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
     setBusy(true);
     setStatus(null);
     try {
+      assertRealExamSourcesAllowed([entry.id]);
       await onSyncExportContext({
         scope,
         questionNumbers: scopeResult.questionNumbers,
@@ -157,6 +160,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
   const handleCopyPrompt = async () => {
     if (!canSend) return;
     try {
+      assertRealExamSourcesAllowed([entry.id]);
       await navigator.clipboard.writeText(prompt);
       setStatus("질문을 복사했습니다. ChatGPT에 붙여넣으세요.");
     } catch (error) {
@@ -194,6 +198,7 @@ export default function ChatGptSharePanel(props: ChatGptSharePanelProps) {
       setBusy(false);
     }
   };
+  if (protection.unavailable || protection.sourceIds.has(entry.id)) return <p role="status">진행 중 실전 시험의 자료는 제출 후 공유할 수 있습니다.</p>;
   return (
     <div className="export-chatgpt-share-panel">
       <header className="export-panel-header">

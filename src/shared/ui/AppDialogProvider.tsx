@@ -73,7 +73,7 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
               <button type="button" className="btn-secondary" data-dialog-initial-focus={request.kind === "confirm" || undefined} onClick={() => close(request.kind === "confirm" ? false : null)}>
                 {request.options.cancelLabel ?? "취소"}
               </button>
-              <button type="button" className={request.kind === "confirm" && request.options.variant === "destructive" ? "btn-danger" : undefined} onClick={() => close(request.kind === "confirm" ? true : promptValue)}>
+              <button type="button" className={request.kind === "confirm" && request.options.variant === "destructive" ? "btn-danger" : "btn-primary"} onClick={() => close(request.kind === "confirm" ? true : promptValue)}>
                 {request.options.confirmLabel ?? "확인"}
               </button>
             </>

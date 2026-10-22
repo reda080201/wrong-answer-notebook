@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface SubjectListProps {
   subjectOrder: string[];
@@ -17,6 +17,8 @@ export default function SubjectList({
   onSelect,
   onReorder,
 }: SubjectListProps) {
+  const optionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { optionsRef.current?.querySelector<HTMLElement>(".subject-item.active")?.scrollIntoView({ block: "nearest" }); }, [subjectFilter]);
   const [manageOrder, setManageOrder] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
@@ -30,8 +32,9 @@ export default function SubjectList({
   };
 
   return (
-    <nav className="subject-list">
+    <nav className="subject-list" aria-label="과목 선택">
       <div className="subject-list-heading"><span>과목</span><button type="button" className="btn-ghost btn-sm" aria-pressed={manageOrder} onClick={() => setManageOrder((value) => !value)}>{manageOrder ? "관리 완료" : "관리"}</button></div>
+      <div ref={optionsRef} className="subject-list-options">
       <button
         type="button"
         className={`subject-item ${!subjectFilter ? "active" : ""}`}
@@ -76,6 +79,7 @@ export default function SubjectList({
         </div>
       ))}
 
+      </div>
       {manageOrder && <p className="subject-hint">과목을 드래그해 순서를 바꿀 수 있습니다</p>}
     </nav>
   );

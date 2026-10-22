@@ -5,6 +5,8 @@ import { createPortal } from "react-dom";
 import type { SettingsTab } from "./SettingsModal";
 import ExamSessionView from "../features/exam/components/ExamSessionView";
 import RealExamSessionView from "../features/exam/components/RealExamSessionView";
+import Dialog from "../shared/ui/Dialog";
+import { useRealExamProtection } from "../features/exam/services/realExamProtection";
 
 interface ExamSessionOverlayProps {
   session: ExamSession;
@@ -53,11 +55,13 @@ export default function ExamSessionOverlay({
   saveError,
   onRetrySave,
 }: ExamSessionOverlayProps) {
+  const protection = useRealExamProtection();
   useEffect(() => {
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = previous; };
   }, []);
+  if (!(session.mode === "real" && session.status === "in_progress") && (protection.unavailable || protection.sourceIds.has(session.entryId) || session.questions.some(question => protection.sourceIds.has(question.sourceReference?.sourceEntryId ?? question.sourceEntryId ?? session.entryId)))) return <Dialog open title="실전 시험 자료 보호" onClose={onClose}><p role="status">미제출 실전 시험과 연결된 연습·채점 결과는 해당 실전을 제출한 뒤 확인할 수 있습니다.</p><button type="button" onClick={onClose}>시험 닫기</button></Dialog>;
   const content = session.mode === "real" ? <RealExamSessionView
     session={session}
     onChange={onChange}

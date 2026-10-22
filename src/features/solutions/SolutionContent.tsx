@@ -6,7 +6,7 @@ import { readFigureTokenReferences } from "../../utils/figureTokens";
 export default function SolutionContent({ answer, figures = [], showAnswer = true }: { answer: SheetAnswerItem; figures?: SheetFigureItem[]; showAnswer?: boolean }) {
   const content = (text: string) => {
     const ids = new Set(readFigureTokenReferences([text]).map(reference => reference.id));
-    return <QuestionContentView text={text} figures={figures.filter(figure => ids.has(figure.id))} appendUnreferencedFigures={false} />;
+    return <QuestionContentView text={text.replace(/\[\[([^\n]+?)\]\]/g, "$1")} figures={figures.filter(figure => ids.has(figure.id))} appendUnreferencedFigures={false} />;
   };
   return <div className="solution-content">
     {showAnswer && <section><h3>정답</h3><MathText text={answer.answer || "정답 정보 없음"} /></section>}

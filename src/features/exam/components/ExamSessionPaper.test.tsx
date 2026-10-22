@@ -135,6 +135,7 @@ describe("shared exam paper interactions", () => {
     const onSessionChange = vi.fn();
     const props = { session: linkedSession, disabled: false, onNavigate: vi.fn(), onResponse: vi.fn(), onSessionChange };
     const { rerender } = render(<ExamSessionPaper {...props} preferences={{ showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" }} />);
+    fireEvent.click(screen.getByRole("button", { name: "보기·도구" }));
     fireEvent.click(screen.getByText("문제 페이지 선택"));
     const checkboxes = screen.getAllByRole("checkbox");
     fireEvent.click(checkboxes[0]);
@@ -159,6 +160,7 @@ describe("shared exam paper interactions", () => {
     const props = { session: linkedSession, disabled: false, onNavigate: vi.fn(), onResponse: vi.fn(), onSessionChange };
     const preferences = { showScratchNote: true, showOriginalPages: true, showNavigator: true, autoAdvanceOnAnswer: false, warnUnansweredOnSubmit: true, showTimer: true, showMcpHelp: false, paperNavigation: "vertical-pages" as const };
     const { unmount } = render(<ExamSessionPaper {...props} preferences={preferences} />);
+    fireEvent.click(screen.getByRole("button", { name: "보기·도구" }));
     fireEvent.click(screen.getByText("문제 페이지 선택"));
     fireEvent.click(screen.getAllByRole("checkbox")[0]);
 

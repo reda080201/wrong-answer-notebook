@@ -54,6 +54,7 @@ describe("OriginalPageStudyView question and page synchronization", () => {
   it("keeps the current question when its page is deselected and uses the next selected page", async () => {
     render(<OriginalPageStudyView entry={pagesEntry} hidden={false} currentQuestionKey={questionKey("1")} />);
     await screen.findByAltText("원본 문제지 페이지 1");
+    fireEvent.click(screen.getByRole("button", { name: "보기·도구" }));
     fireEvent.click(screen.getByText(/문제 페이지 선택/));
     fireEvent.click(screen.getByLabelText("페이지 1"));
     expect(screen.getByLabelText("학습할 현재 문항")).toHaveValue(questionKey("1"));

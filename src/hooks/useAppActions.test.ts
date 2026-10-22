@@ -601,6 +601,17 @@ describe("useAppActions", () => {
       });
     });
 
+    it("releases the maintenance lock after file cancellation so backup can run again", async () => {
+      vi.mocked(api.selectBackupSource).mockResolvedValue(null);
+      vi.mocked(api.selectBackupDestination).mockResolvedValue(null);
+      const { result } = createHook();
+      await act(async () => { await result.current.handleRestore(); });
+      expect(result.current.settingsMessage).toContain("취소");
+      await act(async () => { await result.current.handleBackup(); });
+      expect(api.createBackupAtDestination).toHaveBeenCalledTimes(1);
+      expect(api.restoreBackupFromSource).not.toHaveBeenCalled();
+    });
+
     it("reloads exam sessions after a browser backup restore", async () => {
       const refreshExamSessions = vi.fn(async () => true);
       const refreshReviewSessions = vi.fn(async () => true);

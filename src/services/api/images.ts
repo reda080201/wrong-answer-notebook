@@ -8,6 +8,7 @@ import { getStorageBackendKind, proxyRequest } from "../storageBackend";
 import { deleteBrowserImage, getBrowserImage, putBrowserImage } from "./browserImageStore";
 import { getBrowserProtectedImageReferences, loadBrowserEntriesForImageReferences } from "./browserImageReferences";
 import { validateImportImage } from "../../features/import/services/validateImportImage";
+import { pickBrowserFiles } from "./browserFilePicker";
 
 export const IMAGE_URL_CACHE_LIMIT = 128;
 const imageUrlCache = new Map<string, string>();
@@ -112,26 +113,8 @@ export function rewriteImportAssetReferences<T extends Partial<EntryFormData>>(d
 }
 
 async function pickImagesBrowser(): Promise<string[]> {
-  return new Promise((resolve, reject) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.multiple = true;
-    input.onchange = async () => {
-      const files = input.files;
-      if (!files?.length) {
-        resolve([]);
-        return;
-      }
-      try {
-        const names = await saveImageFiles(files);
-        resolve(names);
-      } catch (error) {
-        reject(error);
-      }
-    };
-    input.click();
-  });
+  const files = await pickBrowserFiles("image/*", true);
+  return files.length ? saveImageFiles(files) : [];
 }
 
 function fileToDataUrl(file: File): Promise<string> {

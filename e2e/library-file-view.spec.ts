@@ -30,6 +30,7 @@ test.describe("Library file view", () => {
         }));
       });
       await page.goto("/", { waitUntil: "domcontentloaded" });
+      if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
       await page.getByRole("button", { name: "보관함", exact: true }).click();
 
       const library = page.getByRole("region", { name: "학습 자료 보관함" });

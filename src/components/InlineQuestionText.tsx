@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import type { SheetFigureItem } from "../types";
-import { getImageUrl } from "../api";
+import { useImagePreviewResolver } from "../shared/ui/ImagePreviewContext";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 import MathText from "./MathText";
 
 const FIGURE_TOKEN = /\[FIGURE(?::([^\]]*))?(?:\]|$)/gi;
 
 function InlineFigure({ figure, id }: { figure?: SheetFigureItem; id: string }) {
+  const getImageUrl = useImagePreviewResolver();
   const representation = figure ? resolveFigureRepresentation(figure) : undefined;
   const filename = representation?.image;
   const [result, setResult] = useState<{ filename: string; url?: string; failed: boolean }>();
@@ -16,7 +17,7 @@ function InlineFigure({ figure, id }: { figure?: SheetFigureItem; id: string }) 
     if (!filename) return () => { active = false; };
     void getImageUrl(filename).then((url) => { if (active) setResult({ filename, url, failed: false }); }).catch(() => { if (active) setResult({ filename, failed: true }); });
     return () => { active = false; };
-  }, [filename]);
+  }, [filename, getImageUrl]);
 
   const url = filename && result?.filename === filename ? result.url : undefined;
   if (url) return <img className="question-inline-figure" src={url} alt={figure?.title || "문항 그림"} />;

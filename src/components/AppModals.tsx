@@ -3,10 +3,10 @@ import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
 import { getImportAssetPreviewUrl } from "../services/api/importAssets";
 import { getImageUrl } from "../api";
 import EntryForm from "../features/entries/components/EntryForm";
-import ImportFromGptModal, { VisualPaperImportError, type VisualPaperImportResult } from "../features/import/components/ImportFromGptModal";
-import LearningImportModal, { type LearningImportAnalysis } from "./LearningImportModal";
-import ReviewPanel from "./ReviewPanel";
+import { VisualPaperImportError, type VisualPaperImportResult } from "../features/import/services/visualPaperImportResult";
+import type { LearningImportAnalysis } from "./LearningImportModal";
 import Dialog from "../shared/ui/Dialog";
+import ProtectedExamContent from "../features/exam/components/ProtectedExamContent";
 import { deleteImage, discardImportAssetSession, generateImportWithAi, stageImportAssetFiles, validateImportAssetSession, type ImportAssetStageResult } from "../api";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -29,12 +29,10 @@ import type {
 import type { GptSolutionApplyMode } from "../utils/gptSolution";
 import type { SettingsTab } from "./SettingsModal";
 import { reviewSessionCompletedCount, reviewSessionFingerprint } from "../features/review/storage/reviewSessionIdentity";
+import ImportDraftRecovery from "../features/import-workspace/components/ImportDraftRecovery";
 import ImportWorkspaceView from "../features/import-workspace/components/ImportWorkspaceView";
 import { clearImportWorkspaceDraft, loadImportWorkspaceDraft, saveImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
 import { commitImportWorkspace } from "../features/import-workspace/services/commitImportWorkspace";
-import SupplementalMergeModal from "../features/supplemental-resources/components/SupplementalMergeModal";
-import SupplementalResourceManagerModal from "../features/supplemental-resources/components/SupplementalResourceManagerModal";
-import SupplementalLinkModal from "../features/supplemental-resources/components/SupplementalLinkModal";
 import type { SupplementalImportMode } from "../features/supplemental-resources/model/supplementalResource";
 import type { AnswerMergeResolution } from "../features/supplemental-resources/services/mergeAnswerKey";
 import type { ImportAssetSessionManifest, ImportQuestionDraft, ImportWorkspace } from "../features/import-workspace/model/importWorkspace";
@@ -46,6 +44,14 @@ import { rasterizeVisualImportFile, type VisualImportProgress } from "../utils/v
 import { normalizeQuestionNumber } from "../utils/questionMeta";
 import type { TransientWriteRegistration } from "../hooks/useAppWriteRegistrations";
 import type { AppModalControllerGroup } from "../hooks/useAppModalController";
+import { deferDialog } from "../shared/ui/deferDialog";
+
+const ImportFromGptModal = deferDialog(() => import("../features/import/components/ImportFromGptModal"), "시험지 가져오기");
+const LearningImportModal = deferDialog(() => import("./LearningImportModal"), "학습 자료 가져오기");
+const ReviewPanel = deferDialog(() => import("./ReviewPanel"), "복습");
+const SupplementalMergeModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalMergeModal"), "보충 자료 병합");
+const SupplementalResourceManagerModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalResourceManagerModal"), "보충 자료 관리");
+const SupplementalLinkModal = deferDialog(() => import("../features/supplemental-resources/components/SupplementalLinkModal"), "보충 자료 연결");
 
 type PendingSupplementalImport = {
   target: WrongAnswerEntry;
@@ -63,7 +69,7 @@ interface AppModalsProps {
   workspaceActions: { registerDraftFlush(registration: TransientWriteRegistration): void };
   form: { show: boolean; editingEntry?: WrongAnswerEntry; handleSave(data: EntryFormData, removedImages: string[]): Promise<void>; close(): void; activeSection: EntryKind; prefilledTitle: string; importedInitialData?: Partial<EntryFormData> };
   settings: { value: AppSettings; saveTemplate(template: EntryTemplate): Promise<void>; aiProviderStatus: AiProviderStatus | null; setLastImportTemplate(templateId: string): Promise<void>; savePromptTemplate(template: PromptTemplate): Promise<void>; open?(tab?: SettingsTab): void };
-  importFlow: { show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"], plannedIds?: string[]): Promise<string[] | void> };
+  importFlow: { cancelPending?(): Promise<void>; show: boolean; mode: "import" | "solution"; solutionSourceEntry?: WrongAnswerEntry; fallbackSubject: Subject; close(): void; apply(data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[]): void; applyEntries(entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportWorkspace["assetSession"], plannedIds?: string[]): Promise<string[] | void> };
   learningImport: {
     show: boolean;
     setShow(show: boolean): void;
@@ -224,9 +230,25 @@ export default function AppModals({
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: existingSession ?? (assetFiles.length ? { id: staged?.sessionId ?? `memory-${uuidv4()}`, mode: staged ? "tauri-staged" : "memory-only", manifestVersion: staged ? 1 : undefined, createdAt: staged ? now : undefined, sourceToStaged: staged?.sourceToStaged, assets: staged?.assets ?? assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined), groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
+  const workspaceFileUrls = useRef(new Map<File, string>());
+  useEffect(() => {
+    for (const [file, url] of workspaceFileUrls.current) {
+      if (!workspaceAssetFiles.includes(file)) { URL.revokeObjectURL(url); workspaceFileUrls.current.delete(file); }
+    }
+  }, [workspaceAssetFiles]);
+  useEffect(() => {
+    const urls = workspaceFileUrls.current;
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); };
+  }, []);
   const resolveWorkspacePageUrl = useCallback(async (filename: string, session?: ImportAssetSessionManifest) => {
     const file = workspaceAssetFiles.find(item => item.name === filename || item.name === filename.split(/[\\/]/).pop());
-    if (file) return URL.createObjectURL(file);
+    if (file) {
+      const cached = workspaceFileUrls.current.get(file);
+      if (cached) return cached;
+      const url = URL.createObjectURL(file);
+      workspaceFileUrls.current.set(file, url);
+      return url;
+    }
     if (session?.mode === "tauri-staged") return getImportAssetPreviewUrl(session, filename);
     return getImageUrl(filename);
   }, [workspaceAssetFiles]);
@@ -242,6 +264,7 @@ export default function AppModals({
   };
   const directCommitRef = useRef<ImportWorkspace | null>(null);
   const [directCommitLocked, setDirectCommitLocked] = useState(false);
+  const [recoveryRevision, setRecoveryRevision] = useState(0);
   const directTaskRef = useRef<Promise<void> | null>(null);
   const directMaintenanceRef = useRef(false);
   useEffect(() => {
@@ -250,10 +273,10 @@ export default function AppModals({
     void loadImportWorkspaceDraft().then(draft => {
       if (!active || directTaskRef.current) return;
       if (draft?.commitAttempt) { directCommitRef.current = draft; setDirectCommitLocked(true); }
-      else setDirectCommitLocked(false);
+      else { directCommitRef.current = null; setDirectCommitLocked(false); }
     }).catch(() => { if (active) setDirectCommitLocked(true); });
     return () => { active = false; };
-  }, [showImportModal, importMode]);
+  }, [showImportModal, importMode, workspace, recoveryRevision]);
   useEffect(() => {
     if (workspace) return;
     registerWorkspaceDraftFlush({ flush: async () => { await directTaskRef.current; }, setMaintenanceBlocked: blocked => { directMaintenanceRef.current = blocked; } });
@@ -436,6 +459,7 @@ export default function AppModals({
     <>
       {workspace && <ImportWorkspaceView resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
       {showForm && (
+        <ProtectedExamContent sourceId={editingEntry?.id} onClose={closeForm}>
         <EntryForm
           entry={editingEntry}
           onSave={handleSave}
@@ -447,6 +471,7 @@ export default function AppModals({
           memoTemplates={settings.memoTemplates}
           onSaveTemplate={saveTemplate}
         />
+        </ProtectedExamContent>
       )}
       {showImportModal && (
         <ImportFromGptModal
@@ -475,6 +500,24 @@ export default function AppModals({
           onClose={closeImportModal}
           onApply={handleImportApply}
           onApplyEntries={handleDirectEntries}
+          recoveryNotice={importMode === "import" ? <ImportDraftRecovery key={recoveryRevision} onCancel={async () => {
+            if (directTaskRef.current || directMaintenanceRef.current) throw new Error("진행 중 저장·백업·복원이 끝난 뒤 다시 시도하세요.");
+            if (!importFlow.cancelPending) throw new Error("이 버전에서는 저장 전 취소를 지원하지 않습니다. 작업실에서 확인하세요.");
+            await importFlow.cancelPending();
+            directCommitRef.current = null;
+            setDirectCommitLocked(false);
+            setRecoveryRevision(value => value + 1);
+          }} onVerify={async () => {
+            const draft = await loadImportWorkspaceDraft();
+            if (!draft?.commitAttempt) { setDirectCommitLocked(false); setRecoveryRevision(value => value + 1); return; }
+            directCommitRef.current = draft;
+            await handleDirectEntries(draft.commitAttempt.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession);
+            closeImportModal();
+          }} onResume={async draft => {
+            if (directTaskRef.current || directMaintenanceRef.current) throw new Error("진행 중 저장·백업·복원이 끝난 뒤 다시 시도하세요.");
+            if (!draft.commitAttempt) { const result = await validateWorkspaceAssets(draft); if (!result.valid) throw new Error(result.message); }
+            setWorkspace(draft); closeImportModal();
+          }} /> : undefined}
           commitLocked={directCommitLocked}
           onRecoverCommit={async () => { const draft = await loadImportWorkspaceDraft(); if (!draft?.commitAttempt) throw new Error("확정 기록을 읽지 못했습니다. 항목 목록과 초안을 확인해 주세요."); directCommitRef.current = draft; await handleDirectEntries(draft.commitAttempt?.preparedEntries ?? commitImportWorkspace(draft).entries, undefined, draft.assetSession); }}
           onOpenWorkspace={handleWorkspaceEntries}

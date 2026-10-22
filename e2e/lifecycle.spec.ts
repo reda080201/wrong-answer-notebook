@@ -46,12 +46,17 @@ test.describe("synthetic real-exam lifecycle", () => {
     const resumeTrigger = page.getByRole("button", { name: "실전 이어서" });
     await expect(resumeTrigger).toBeVisible();
     await resumeTrigger.click();
-    const resumeDialog = page.getByRole("dialog", { name: "실전 모의고사 시작" });
-    await expect(resumeDialog).toContainText("진행 중인 실전 모의고사");
-    await resumeDialog.getByRole("button", { name: "이어서 풀기" }).click();
+    await expect(page.getByRole("region", { name: "실전 모의고사" })).toBeVisible();
+    await expect(page.getByRole("dialog", { name: "실전 모의고사 시작" })).toHaveCount(0);
+    await expect(page.locator(".real-exam-paper [data-paper-item]")).toHaveCount(30);
+    await expect(page.getByRole("article", { name: "문제 20", exact: true })).toBeVisible();
+    await expect(page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "답안지 펼치기" })).toBeVisible();
     await page.getByRole("complementary", { name: "답안지" }).getByRole("button", { name: "답안지 펼치기" }).click();
     await expect(page.getByRole("complementary", { name: "답안지" }).getByLabel("2번 답안", { exact: true })).toHaveValue("short-2");
     await expect(page.getByRole("button", { name: /^20번 미응답/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^20번 미응답/ })).toHaveAttribute("aria-current", "step");
+    await page.getByRole("button", { name: "1번 응답", exact: true }).click();
+    await expect(page.locator(".real-exam-paper").getByRole("group", { name: "1번 선택지", exact: true }).getByRole("button", { name: "① 1", exact: true })).toHaveAttribute("aria-pressed", "true");
 
     await page.screenshot({ path: testInfo.outputPath("real-exam-resumed-1100x750.png"), fullPage: true });
   });
@@ -83,6 +88,7 @@ test("imports a synthetic v2 problem sheet through summary, review, and direct s
   await input.setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
 
   await expect(page.getByText("올인원 가져오기 완료: 1개 항목")).toBeVisible();
+  await page.getByText("다른 저장 방법", { exact: true }).click();
   const quickSave = page.getByRole("button", { name: "바로 저장" });
   await expect(quickSave).toBeEnabled();
   await quickSave.click();
@@ -102,6 +108,7 @@ test("direct import survives a failed entry write and rapid retry without duplic
   await page.getByRole("button", { name: "시험지함" }).click();
   await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
   await page.getByLabel("올인원 가져오기").setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
+  await page.getByText("다른 저장 방법", { exact: true }).click();
   const save = page.getByRole("button", { name: "바로 저장", exact: true });
   await expect(save).toBeEnabled();
   await page.evaluate(() => {
@@ -117,7 +124,7 @@ test("direct import survives a failed entry write and rapid retry without duplic
   await expect(page.getByRole("dialog", { name: "시험지 가져오기" }).getByRole("alert")).toHaveText("여러 항목을 추가하지 못했습니다. (브라우저 저장소에 데이터를 저장하지 못했습니다.)");
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(0);
   const plannedIds = await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-import-workspace-draft")!).commitAttempt.entryIds);
-  await page.getByRole("button", { name: "저장 결과 확인·정리 재시도", exact: true }).dblclick();
+  await page.getByRole("button", { name: "저장 결과 확인·정리", exact: true }).dblclick();
   await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
   const entries = await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries);
   expect(entries).toHaveLength(1);
@@ -133,6 +140,7 @@ for (const phase of ["completed-receipt", "cleanup"] as const) {
     await page.getByRole("button", { name: "시험지함" }).click();
     await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
     await page.getByLabel("올인원 가져오기").setInputFiles(resolve("e2e/fixtures/synthetic-import.json"));
+    await page.getByText("다른 저장 방법", { exact: true }).click();
     await expect(page.getByRole("button", { name: "바로 저장", exact: true })).toBeEnabled();
     await page.evaluate(phase => {
       const write = Storage.prototype.setItem; const remove = Storage.prototype.removeItem;
@@ -147,13 +155,13 @@ for (const phase of ["completed-receipt", "cleanup"] as const) {
       };
     }, phase);
     await page.getByRole("button", { name: "바로 저장", exact: true }).click();
-    await expect(page.getByRole("button", { name: "확정 기록 확인·정리", exact: true })).toBeEnabled();
+    await expect(page.getByRole("button", { name: "저장 결과 확인·정리", exact: true })).toBeEnabled();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(1);
-    await expect(page.getByRole("button", { name: "수정 후 저장", exact: true })).toBeDisabled();
+    await expect(page.getByTestId("import-primary-action")).toBeHidden();
     await page.reload();
     await page.getByRole("button", { name: "시험지함", exact: true }).click();
     await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
-    await page.getByRole("button", { name: "확정 기록 확인·정리", exact: true }).click();
+    await page.getByRole("button", { name: "저장 결과 확인·정리", exact: true }).click();
     await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem("wrong-answer-entries")!).entries)).toHaveLength(1);
     expect(await page.evaluate(() => localStorage.getItem("wrong-answer-import-workspace-draft"))).toBeNull();

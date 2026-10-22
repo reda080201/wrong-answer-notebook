@@ -146,6 +146,7 @@ export default function SettingsModal({
 
   const bridgePortValue = mcpBridgePortInput ?? String(mcpBridgeSettings.port);
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
+  const [connectionSection, setConnectionSection] = useState<"api" | "external" | "import">(() => initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(categoryForTab(initialTab ?? "theme"));
   const [studySubtab, setStudySubtab] = useState<"library" | "exam" | "templates">(
     initialTab === "exam" || initialTab === "templates" ? initialTab : "library",
@@ -153,6 +154,7 @@ export default function SettingsModal({
   useEffect(() => {
     if (initialTab) {
       setActiveCategory(categoryForTab(initialTab));
+      if (initialTab === "ai" || initialTab === "gpt-mcp" || initialTab === "chatgpt") setConnectionSection(initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
       if (initialTab === "library" || initialTab === "exam" || initialTab === "templates") setStudySubtab(initialTab);
     }
   }, [initialTab]);
@@ -243,16 +245,19 @@ export default function SettingsModal({
 
             {activeCategory === "ai_connection" && (
               <>
-              <SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} operationPending={aiProviderOperationPending} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} />
-              <SettingsMcpPanel preferences={settings.gptMcpPreferences} onPatch={patchGptMcp} bridgePanel={renderMcpBridgePanel()} />
-              <SettingsChatGptPanel
+              <nav className="settings-study-subnav" aria-label="AI 연결 하위 메뉴">
+                {([["api", "앱 내 AI"], ["external", "외부 도구 연결"], ["import", "가져오기 기본값"]] as const).map(([id, label]) => <button type="button" key={id} aria-current={connectionSection === id ? "page" : undefined} className={connectionSection === id ? "is-active" : ""} onClick={() => setConnectionSection(id)}>{label}</button>)}
+              </nav>
+              {connectionSection === "api" && <><h3 className="settings-section-title">앱 내 AI</h3><p className="settings-section-description">제공자와 모델을 연결하면 앱 안에서 대화하거나 문제 모음을 구성할 수 있습니다.</p><SettingsAiPanel provider={settings.aiProvider} status={aiProviderStatus} statusLoading={aiProviderStatusLoading} operationPending={aiProviderOperationPending} statusError={aiProviderStatusError} keyInput={aiProviderKeyInput} onKeyInputChange={setAiProviderKeyInput} onConfigChange={updateAiProviderConfig} onStoreKey={storeAiProviderKey} onRemoveKey={removeAiProviderKey} onTestConnection={() => void testAiProvider()} /></>}
+              {connectionSection !== "api" && <SettingsMcpPanel section={connectionSection} preferences={settings.gptMcpPreferences} onPatch={patchGptMcp} bridgePanel={connectionSection === "external" ? renderMcpBridgePanel() : null} />}
+              {connectionSection === "external" && <details className="settings-disclosure" open={initialTab === "chatgpt"}><summary>ChatGPT 외부 연결 설정</summary><SettingsChatGptPanel
                 preferences={settings.chatGptMcpPreferences}
                 status={mcpBridgeStatus}
                 onPatch={patchChatGpt}
                 onSaveRemoteBaseUrl={async (raw) => {
                   try { await saveRemoteBaseUrl(raw); } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."); }
                 }}
-              />
+              /></details>}
               </>
             )}
 

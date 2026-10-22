@@ -59,7 +59,7 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
       onCurrentQuestionChange?.(linked[0].key);
       setNotice("");
     } else if (linked.length > 1) {
-      setNotice("이 페이지에 여러 문항이 연결되어 있습니다. 아래에서 현재 문항을 직접 선택하세요.");
+      setNotice("이 페이지에 여러 문항이 연결되어 있습니다. 현재 문항을 직접 선택하세요.");
     } else setNotice("이 페이지와 연결된 문항이 없습니다. 아래 현재 문항을 직접 선택하세요.");
   };
   const navigate = (key: string) => {
@@ -79,13 +79,11 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
         {!currentQuestionKey && <option value="">문항 선택</option>}
         {questions.map((question, index) => <option key={question.key + index} value={question.key} disabled={questions.filter(other => other.key === question.key).length !== 1}>{question.number}번{question.section ? " · " + question.section : ""}</option>)}
       </select></label>
-      <button type="button" className="btn-secondary" onClick={() => setInfoOpen(true)}>자료 정보</button>
-      {onSaveHotspots && <button type="button" className="btn-secondary" onClick={() => setEditing(true)}>파란 점·해설 연결 편집</button>}
       <button type="button" className="btn-secondary" aria-pressed={immersive} onClick={onToggleImmersive}>{immersive ? "집중 보기 닫기" : "원본 집중 보기"}</button>
     </div>
-    {(notice || !hotspots.length) && <p className="original-page-study__notice" role="status">{notice || "파란 점과 문항의 연결을 확인하면 원본 문제지에서 정답·해설을 열 수 있습니다."}</p>}
+    {notice && <p className="original-page-study__notice" role="status">{notice}</p>}
     <div className="original-page-study__reader">
-      <OriginalPageExamReader preferenceKey={`original-page-study:${entry.id}`} filenames={pages} selectedFilenames={selectedPages} currentFilename={currentPage} onSelectPages={next => {
+      <OriginalPageExamReader extraTools={<><button type="button" onClick={() => setInfoOpen(true)}>자료 정보</button>{onSaveHotspots && <button type="button" onClick={() => setEditing(true)}>파란 점·해설 연결 편집</button>}{!hotspots.length && <p className="form-hint">파란 점과 문항을 연결하면 원본에서 해설을 열 수 있습니다.</p>}</>} preferenceKey={`original-page-study:${entry.id}`} filenames={pages} selectedFilenames={selectedPages} currentFilename={currentPage} onSelectPages={next => {
         setSelectedPages(next);
         if (!next.includes(currentPage)) {
           const replacement = currentQuestionKey ? linkedPages(currentQuestionKey).find(page => next.includes(page)) : undefined;
@@ -98,7 +96,7 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
         }
       }} onChangePage={changePage} hotspots={hotspots} questionLabels={Object.fromEntries(questions.map(question => [question.key, question.number]))} onOpenSolution={navigate} />
     </div>
-    <Dialog open={infoOpen} onClose={() => setInfoOpen(false)} title="자료 정보" size="lg" footer={<button type="button" onClick={() => setInfoOpen(false)}>닫기</button>}>
+    <Dialog open={infoOpen} onClose={() => setInfoOpen(false)} title="자료 정보" size="lg" footer={<button type="button" className="btn-secondary" onClick={() => setInfoOpen(false)}>닫기</button>}>
       <h3>{entry.title}</h3><p>{entry.subject} · {questions.length}문항 · 원본 {pages.length}페이지</p>
       {entry.tags.length > 0 && <p>{entry.tags.map(tag => "#" + tag).join(" ")}</p>}
       {entry.memo && <p className="math-prose">{entry.memo}</p>}

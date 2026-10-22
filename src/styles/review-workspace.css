@@ -6,7 +6,12 @@
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--surface-canvas, #f8fafc);
   color: var(--text-primary, #182230);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
+.review-panel:has(> .form-error) { grid-template-rows: auto auto minmax(0, 1fr); }
 
 .review-panel-header {
   min-height: 64px;
@@ -38,13 +43,18 @@
 .review-complete,
 .review-empty {
   align-self: start;
-  width: min(960px, calc(100% - 32px));
+  width: min(1180px, calc(100% - 48px));
+  max-width: none;
   min-height: 0;
   max-height: calc(100% - 32px);
   overflow: auto;
-  margin: 0 auto;
-  padding: 16px 0 56px;
+  margin: 16px auto;
+  padding: clamp(20px, 3vw, 40px);
+  box-sizing: border-box;
+  background: var(--surface);
 }
+.review-card h3 { margin-top: 12px; color: var(--text-muted); font-size: 14px; line-height: 1.6; font-weight: 500; }
+.review-card .review-question, .review-card .sheet-question-review { font-size: 17px; line-height: 1.9; }
 
 .review-actions {
   position: sticky;
@@ -54,7 +64,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 0;
-  background: var(--surface-canvas, #f8fafc);
+  background: var(--surface);
   border-top: 1px solid var(--border-subtle, #d8dee8);
 }
 

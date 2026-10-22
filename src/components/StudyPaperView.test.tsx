@@ -12,6 +12,21 @@ vi.mock("../api", () => ({
 }));
 
 describe("StudyPaperView shared passage figures", () => {
+  it.each([false, true])("keeps attached images and their annotations with canonical content (structured=%s)", async structured => {
+    const entry: WrongAnswerEntry = { ...createEmptyEntryDraft(), id: "attached", createdAt: "", updatedAt: "", title: "첨부 자료", question: "1. 본문",
+      generatedFromExamSessionId: "session", generatedFromQuestionNumber: "2", questionImages: ["attached.png"],
+      questionContentSegments: { "2": [{ id: "body", type: "text", text: "본문" }] },
+      ...(structured ? { structuredQuestions: [{ questionNumber: "2", questionText: "본문", choices: [], conditions: [], equations: [], contentSegments: [{ id: "body", type: "text" as const, text: "본문" }], figureIds: [] }] } : {}),
+      annotations: [{ id: "image-note", target: "question", kind: "image", imageId: "attached.png", x: .1, y: .1, width: .2, height: .2, tool: "highlight" }],
+    };
+    const onAnnotationsChange = vi.fn();
+    const { container } = render(<StudyPaperView entry={entry} memoMode={true} activeTool="erase" onAnnotationsChange={onAnnotationsChange} onWikiLinkClick={vi.fn()} existingTargets={new Set()} sheetLayout="single" />);
+    await waitFor(() => expect(container.querySelector('img[src="mock://attached.png"]')).toBeInTheDocument());
+    const mark = screen.getByRole("button", { name: "이미지 주석 지우기" });
+    expect(mark).toHaveStyle({ left: "10%", top: "10%", width: "20%", height: "20%" });
+    fireEvent.click(mark);
+    expect(onAnnotationsChange).toHaveBeenCalledWith([]);
+  });
   it("makes all learning diagrams accessible only after expanding their section", async () => {
     const entry = { ...createEmptyEntryDraft(), id: "diagrams", createdAt: "", updatedAt: "", question: "1. 문제",
       answerKey: [1, 2, 3].map(number => ({ id: `a${number}`, questionNumber: String(number), answer: "", explanation: "", importantPoints: [], diagramType: "derivative-tangent" as const })) };

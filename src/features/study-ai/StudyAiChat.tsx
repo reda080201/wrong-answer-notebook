@@ -13,6 +13,8 @@ import { useStudySelection } from "./activeSelection";
 import { requestStudyAi } from "./api";
 import { useChatPanelAccessibility } from "./useChatPanelAccessibility";
 import "./studyAi.css";
+import { listenForStudyAiOpen } from "./StudyAiButton";
+import { useRealExamProtection } from "../exam/services/realExamProtection";
 function newConversation(): AiConversation { return { id: crypto.randomUUID(), title: "새 대화", updatedAt: new Date().toISOString(), messages: [], materials: [], sharing: { ...DEFAULT_AI_SHARING }, contextId: crypto.randomUUID() }; }
 export default function StudyAiChat({ entries, selectedEntryId, session, onSaveExam, onStartExam, onSettings }: {
     entries: WrongAnswerEntry[];
@@ -45,13 +47,16 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const generation = useRef(0);
     const controller = useRef<AbortController | null>(null);
     const launcher = useRef<HTMLButtonElement>(null);
+    const returnFocus = useRef<HTMLButtonElement>(null);
+    useEffect(() => listenForStudyAiOpen(opener => { returnFocus.current = opener; setOpen(true); }), []);
     const panelRef = useRef<HTMLElement>(null);
-    const compact = useChatPanelAccessibility(open, panelRef, launcher);
+    const compact = useChatPanelAccessibility(open, panelRef, returnFocus);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const scroll = useRef<HTMLDivElement>(null);
     const active = store.conversations.find(c => c.id === activeId);
     const selection = useStudySelection();
-    const realActive = session?.mode === "real" && session.status === "in_progress";
+    const protection = useRealExamProtection();
+    const realActive = protection.sessions.length > 0 || (session?.mode === "real" && session.status === "in_progress");
     useLayoutEffect(() => {
         setStudyAiSession(session);
         const current = storeRef.current.conversations.find(c => c.id === activeId);
@@ -61,17 +66,18 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             controller.current?.abort(); lock.current = false;
             queueMicrotask(() => { if (epoch === generation.current) setScopeBusy(false); });
         }
-    }, [session, activeId]);
+    }, [session, activeId, protection]);
     useEffect(() => () => setStudyAiSession(null), []);
-    const blockedIds = useMemo(() => new Set(realActive ? [session!.entryId, ...session!.questions.map(q => q.sourceReference?.sourceEntryId ?? q.sourceEntryId ?? session!.entryId)] : []), [realActive, session]);
-    const available = useMemo(() => entries.filter(e => !blockedIds.has(e.id)).flatMap(entryAiMaterials), [entries, blockedIds]);
+    const blockedIds = protection.sourceIds;
+    const available = useMemo(() => protection.unavailable ? [] : entries.filter(e => !blockedIds.has(e.id)).flatMap(entryAiMaterials).filter(material => !blockedIds.has(material.source.sourceEntryId)), [entries, blockedIds, protection.unavailable]);
     const currentMaterials = useMemo(() => {
         if (session) {
-            if (realActive)
+            if ((session.mode === "real" && session.status === "in_progress") || protection.unavailable)
                 return [];
             const q = session.questions[session.currentQuestionIndex];
             if (!q)
                 return [];
+            if (blockedIds.has(q.sourceReference?.sourceEntryId ?? q.sourceEntryId ?? session.entryId)) return [];
             return [{ id: `session:${session.id}:${q.id}`, source: q.sourceReference ?? { sourceEntryId: q.sourceEntryId ?? session.entryId, sourceEntryTitle: session.title, sourceQuestionNumber: q.sourceQuestionNumber ?? q.questionNumber, sourceStatus: "snapshot_only" as const }, snapshot: structuredClone(q), groupMemberIds: q.stimulusGroupId ? session.questions.filter(other => other.stimulusGroupId === q.stimulusGroupId).map(other => `session:${session.id}:${other.id}`) : undefined, units: [] }] satisfies AiMaterial[];
         }
         if (!selectedEntryId)
@@ -79,7 +85,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         const choices = available.filter(m => m.source.sourceEntryId === selectedEntryId);
         const number = selection?.entryId === selectedEntryId ? selection.questionNumber : undefined;
         return number ? choices.filter(m => normalizeQuestionNumber(m.source.sourceQuestionNumber) === normalizeQuestionNumber(number)) : choices.length === 1 ? choices : [];
-    }, [session, realActive, selectedEntryId, available, selection]);
+    }, [session, selectedEntryId, available, selection, blockedIds, protection.unavailable]);
     const reload = async (allowDiscard = false) => {
         if (lock.current || reloadLock.current || maintenance) return;
         reloadLock.current = true;
@@ -274,7 +280,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             }
         }
     };
-    const close = () => { setOpen(false); launcher.current?.focus(); };
+    const close = () => { setOpen(false); (returnFocus.current?.isConnected ? returnFocus.current : launcher.current)?.focus(); };
     const panel = open && <aside ref={panelRef} tabIndex={-1} role="dialog" aria-label="AI 학습 대화" aria-modal={compact} className="study-ai-panel" onKeyDown={e => {
             if (e.key === "Escape") {
                 e.stopPropagation();
@@ -323,7 +329,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     <div className="ai-messages" ref={scroll} aria-live="polite">
     {loading && <p>대화 불러오는 중…</p>}
     {scopeNotice && <p className="ai-scope-notice" role="status">{scopeNotice}</p>}
-    {!loading && !active?.messages.length && <p>자유롭게 대화하세요. 문제를 함께 보려면 먼저 자료를 추가하세요.</p>}{active?.messages.map(m => <article key={m.id} className={`ai-message ai-message--${m.role}`}><strong>{m.role === "user" ? "나" : "AI"}</strong>{m.contextId !== active.contextId && <small>이전 문맥 · 재전송하지 않음</small>}<AiMessageContent text={blockedIds.size && [...(active?.materials ?? []), ...(active?.contexts?.find(ctx => ctx.id === m.contextId)?.materials ?? [])].some(material => blockedIds.has(material.source.sourceEntryId)) ? "진행 중 실전 시험에 연결된 이전 대화는 제출 후 확인할 수 있습니다." : m.text}/>{busy && m.role === "assistant" && m.id === active?.messages.at(-1)?.id ? <small>응답 생성 중…</small> : m.status === "failed" || m.status === "stopped" ? <small>{m.status === "failed" ? "실패" : "중지"} · 다음 요청에 포함하지 않음</small> : null}</article>)}
+    {!loading && !active?.messages.length && <p>자유롭게 대화하세요. 문제를 함께 보려면 먼저 자료를 추가하세요.</p>}{active?.messages.map(m => <article key={m.id} className={`ai-message ai-message--${m.role}`}><strong>{m.role === "user" ? "나" : "AI"}</strong>{m.contextId !== active.contextId && <small>이전 문맥 · 재전송하지 않음</small>}<AiMessageContent text={(protection.unavailable || blockedIds.size > 0) && [...(active?.materials ?? []), ...(active?.contexts?.find(ctx => ctx.id === m.contextId)?.materials ?? [])].some(material => protection.unavailable || blockedIds.has(material.source.sourceEntryId)) ? "진행 중 실전 시험에 연결된 이전 대화는 제출 후 확인할 수 있습니다." : m.text}/>{busy && m.role === "assistant" && m.id === active?.messages.at(-1)?.id ? <small>응답 생성 중…</small> : m.status === "failed" || m.status === "stopped" ? <small>{m.status === "failed" ? "실패" : "중지"} · 다음 요청에 포함하지 않음</small> : null}</article>)}
     {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
@@ -339,5 +345,5 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                     void send(last.text, { conversationId: active!.id, contextId: active!.contextId, messageId: last.id });
             }}>마지막 질문 재시도</button></div></form><small>API 사용 요금은 연결한 제공자 계정에 청구됩니다. 대화 기록은 이 기기에 보관합니다.</small></footer>
   </aside>;
-    return <>{createPortal(<><button ref={launcher} type="button" className="study-ai-launcher" aria-label="AI 학습 대화 열기" aria-expanded={open} onClick={() => setOpen(v => !v)}>AI</button>{panel}</>, document.body)}{composer && active && <AiExamComposer draftId={`conversation:${active.id}`} entries={entries.filter(e => !blockedIds.has(e.id))} initialMaterials={active.materials} initialProposal={active.proposal} onProposal={async (exam) => { await updateConversation({ ...storeRef.current.conversations.find(c => c.id === active.id)!, proposal: exam }); }} onClose={() => { setComposer(false); setOpen(true); }} onSave={onSaveExam} onStart={async exam=>{await onStartExam(exam);setComposer(false);setOpen(false);}}/>}</>;
+    return <>{createPortal(<><button ref={launcher} type="button" className="study-ai-launcher" aria-label="AI 학습 대화 열기" aria-expanded={open} onClick={event => { returnFocus.current = event.currentTarget; setOpen(v => !v); }}>AI</button>{panel}</>, document.body)}{composer && active && <AiExamComposer draftId={`conversation:${active.id}`} entries={entries.filter(e => !blockedIds.has(e.id))} initialMaterials={active.materials} initialProposal={active.proposal} onProposal={async (exam) => { await updateConversation({ ...storeRef.current.conversations.find(c => c.id === active.id)!, proposal: exam }); }} onClose={() => { setComposer(false); setOpen(true); }} onSave={onSaveExam} onStart={async exam=>{await onStartExam(exam);setComposer(false);setOpen(false);}}/>}</>;
 }

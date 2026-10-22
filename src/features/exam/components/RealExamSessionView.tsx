@@ -1,3 +1,4 @@
+import StudyAiButton from "../../study-ai/StudyAiButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { prefersCompactExamLayout } from "../services/examLayout";
 import type { ExamPreferences, ExamSession } from "../../../types";
@@ -169,7 +170,7 @@ export default function RealExamSessionView({ session, onChange, onUpdateSession
     <section className="real-exam-session" aria-label="실전 모의고사">
       <header className="real-exam-header">
         <div><span>실전 모드</span><h2>{session.title}</h2></div>
-        <div className="real-exam-header-status">
+        <div className="real-exam-header-status"><StudyAiButton />
           <strong aria-label="남은 시간">{session.deadlineAt ? (session.showTimer === false ? "타이머 숨김" : formatTime(remaining)) : "시간 제한 없음"}</strong>
           <span>응답 {session.responses.filter((item) => item.response.trim()).length}/{session.questions.length}</span>
           <button type="button" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>

@@ -17,6 +17,7 @@ import { getAllImageFilenames } from "../utils/entry";
 import { reconcileSolutionHotspots } from "../features/solutions/solutionModel";
 import { useSerialTaskQueue } from "./useSerialTaskQueue";
 import { classifyImportRetry, validatePlannedIds } from "../features/import-workspace/services/importCommitProof";
+import { clearImportWorkspaceDraft, loadImportWorkspaceDraft } from "../features/import-workspace/hooks/useImportWorkspaceAutosave";
 
 type Mutation<T> = (current: WrongAnswerEntry[]) => { next: WrongAnswerEntry[]; value: T; unchanged?: boolean } | Promise<{ next: WrongAnswerEntry[]; value: T; unchanged?: boolean }>;
 export type EntryPatch = Partial<WrongAnswerEntry> | ((entry: WrongAnswerEntry) => Partial<WrongAnswerEntry>);
@@ -110,6 +111,28 @@ export function useEntries() {
   const setEntriesMaintenanceBlocked = useCallback((blocked: boolean) => {
     maintenanceBlockedRef.current = blocked;
   }, []);
+
+  // A failed receipt is not permission to overwrite or delete a saved entry.
+  const cancelUncommittedImport = useCallback(async () => {
+    if (maintenanceBlockedRef.current || reloadingRef.current || !loadedRef.current) throw new Error("저장·백업·복원이 끝난 뒤 다시 시도해 주세요.");
+    const previousOperation = lastOperationRef.current;
+    const task = enqueue(async () => {
+      if (maintenanceBlockedRef.current || reloadingRef.current || !loadedRef.current) throw new Error("저장소를 사용할 수 없습니다. 다시 불러온 뒤 시도해 주세요.");
+      const draft = await loadImportWorkspaceDraft();
+      if (!draft?.commitAttempt) return;
+      const stored = await loadEntries();
+      const ids = new Set(draft.commitAttempt.entryIds);
+      if (draft.commitAttempt.state === "completed" || stored.some(entry => ids.has(entry.id))) throw new Error("이미 저장된 항목이 있어 취소할 수 없습니다. 작업실에서 저장 결과를 확인해 주세요. 항목과 이미지는 보존했습니다.");
+      await clearImportWorkspaceDraft();
+      // Ambiguous promoted/staged assets remain protected from this action.
+      // Only a later reference-aware image cleanup may remove unused assets.
+      setError(null);
+    });
+    // A rejected inspection did not alter entries and must not become a new
+    // perpetual close error. Preserve any earlier actual write failure.
+    lastOperationRef.current = task.then(() => undefined, () => previousOperation);
+    await task;
+  }, [enqueue]);
 
   const persist = useCallback(
     async (nextEntries: WrongAnswerEntry[]) => {
@@ -497,6 +520,7 @@ export function useEntries() {
     clearError,
     addEntry,
     addEntries,
+    cancelUncommittedImport,
     commitExamSubmission,
     addEntriesWithImportAssetSession,
     updateEntry,
