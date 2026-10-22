@@ -17,7 +17,7 @@ from . import VERSION
 from .security import MAX_IMAGE, MAX_JSON, PipelineError, crop_box, digest, json_bytes, load_json, plain_path, read_bytes, relative_path, write_new
 
 SCHEMA = "diagram-pipeline-v1"
-PACKAGES = ("pypdfium2", "Pillow", "numpy", "opencv-python-headless", "matplotlib")
+PACKAGES = ("PyMuPDF", "pypdfium2", "Pillow", "numpy", "opencv-python-headless", "matplotlib")
 
 
 def versions():
@@ -30,11 +30,14 @@ def versions():
 def environment_fingerprint():
     font = importlib.metadata.distribution("matplotlib").locate_file("matplotlib/mpl-data/fonts/ttf/DejaVuSans.ttf")
     code = b"".join(read_bytes(file) for file in sorted(Path(__file__).parent.glob("*.py")))
-    return {"libraries": versions(), "font": {"name": "DejaVu Sans", "sha256": digest(read_bytes(font))}, "codeSha256": digest(code), "dpi": {"source": 200, "vectorCandidate": 300, "redraw": 150}, "seed": 0}
+    return {"libraries": versions(), "font": {"name": "DejaVu Sans", "sha256": digest(read_bytes(font))}, "codeSha256": digest(code), "dpi": {"svg": 96, "source": 200, "vectorCandidate": 300, "redraw": 150}, "seed": 0}
 
 
 def generation_input_hash(source, figure):
-    return digest(json_bytes({"sourceSha256": source["sha256"], **{key: figure.get(key) for key in ("page", "crop", "questionCrop", "method", "spec", "parameters")}}))
+    payload = {"sourceSha256": source["sha256"], **{key: figure.get(key) for key in ("page", "crop", "questionCrop", "method", "spec", "parameters")}}
+    if "svg" in figure:
+        payload["svg"] = figure["svg"]
+    return digest(json_bytes(payload))
 
 
 def terminate_worker(process):
@@ -60,8 +63,8 @@ def run_worker(job, out, key):
     result_path = out / "jobs" / f"{key}.result.json"
     write_new(job_path, json_bytes(job))
     environment = {**os.environ, "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1", "MPLCONFIGDIR": str(out / "font-cache")}
-    command = [sys.executable, "-m", "tools.diagram_pipeline._worker", str(job_path), str(result_path)]
-    process = subprocess.Popen(command, shell=False, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    command = [sys.executable, "-I", str(Path(__file__).with_name("_worker_entry.py")), str(job_path.absolute()), str(result_path.absolute())]
+    process = subprocess.Popen(command, shell=False, env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0)
     errors = deque(maxlen=16)
 
     def drain_errors():
@@ -97,11 +100,11 @@ def inspect_input(path: Path, out: Path):
     path, out = plain_path(path), plain_path(out)
     content = read_bytes(path)
     suffix = path.suffix.lower()
-    if suffix not in (".pdf", ".png", ".jpg", ".jpeg", ".webp"):
-        raise PipelineError("Input must be PDF/PNG/JPEG/WebP")
+    if suffix not in (".pdf", ".png", ".jpg", ".jpeg", ".webp", ".svg"):
+        raise PipelineError("Input must be PDF/PNG/JPEG/WebP/SVG")
     if suffix == ".pdf" and not content.startswith(b"%PDF-"):
         raise PipelineError("PDF content/extension mismatch")
-    source = {"id": f"source-{digest(content)[:20]}", "path": f"inputs/{digest(content)}{suffix}", "sha256": digest(content), "kind": "pdf" if suffix == ".pdf" else "image"}
+    source = {"id": f"source-{digest(content)[:20]}", "path": f"inputs/{digest(content)}{suffix}", "sha256": digest(content), "kind": "pdf" if suffix == ".pdf" else "svg" if suffix == ".svg" else "image"}
     write_new(out / source["path"], content)
     info = run_worker({"action": "inspect", "input": str(out / source["path"]), "source": source}, out, "inspect")
     source["pages"] = info["pages"]
@@ -173,6 +176,15 @@ def render(path: Path, out: Path):
         if digest(data) != source["sha256"]:
             raise PipelineError("Input source hash mismatch")
         write_new(relative_path(out, source["path"]), data)
+    for figure in manifest["figures"]:
+        candidate = figure.get("svg")
+        if candidate:
+            if not isinstance(candidate, dict) or not isinstance(candidate.get("path"), str):
+                raise PipelineError("SVG candidate needs a relative path and SHA-256")
+            data = read_bytes(relative_path(path.parent, candidate["path"]), MAX_JSON)
+            if digest(data) != candidate.get("sha256"):
+                raise PipelineError("SVG candidate hash mismatch")
+            write_new(relative_path(out, candidate["path"]), data)
     failed = []
     for entry in manifest["entries"]:
         for question in entry["questions"]:

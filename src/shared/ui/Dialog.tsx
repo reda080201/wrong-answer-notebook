@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } fr
 import "../../styles/dialog-shell.css";
 
 const FOCUSABLE_SELECTOR = [
+  "summary",
   "button:not([disabled])",
   "[href]",
   "input:not([disabled])",
@@ -37,7 +38,7 @@ export interface DialogProps {
   returnFocusFallback?: () => HTMLElement | null;
 }
 
-export default function Dialog({
+function OpenDialog({
   open,
   onClose,
   children,
@@ -85,7 +86,16 @@ export default function Dialog({
       element.inert = true;
       element.setAttribute("aria-hidden", "true");
     });
-    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []);
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []).filter(element => {
+      if (element.closest("[hidden], [inert]")) return false;
+      const closed = element.closest("details:not([open])");
+      if (closed && !closed.querySelector(":scope > summary")?.contains(element)) return false;
+      for (let node: HTMLElement | null = element; node && node !== dialog; node = node.parentElement) {
+        const style = window.getComputedStyle(node);
+        if (style.display === "none" || style.visibility === "hidden") return false;
+      }
+      return true;
+    });
     const frame = window.requestAnimationFrame(() => {
       const autoFocusTarget = initialFocusRef?.current ?? dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
       (autoFocusTarget ?? focusable()[0] ?? dialog)?.focus();
@@ -113,10 +123,10 @@ export default function Dialog({
       }
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog)) {
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialog || !dialog?.contains(document.activeElement))) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
         event.preventDefault();
         first.focus();
       }
@@ -143,6 +153,7 @@ export default function Dialog({
     <div
       className={backdropClassName}
       role="presentation"
+      style={{ zIndex: 2000 + dialogLayer }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && closeOnBackdrop && !closeDisabled) onClose();
       }}
@@ -165,4 +176,9 @@ export default function Dialog({
     </div>
   );
   return createPortal(dialogTree, document.body);
+}
+
+/** Allocate a fresh layer when opened, including dialogs mounted closed in advance. */
+export default function Dialog(props: DialogProps) {
+  return props.open ? <OpenDialog {...props} /> : null;
 }

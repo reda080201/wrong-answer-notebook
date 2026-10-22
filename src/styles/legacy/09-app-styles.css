@@ -144,7 +144,7 @@
 
 .gpt-task-package p {
   margin: 0 0 10px;
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.82rem;
   line-height: 1.5;
 }

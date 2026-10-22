@@ -75,6 +75,7 @@ export default function NotebookKnowledgeWorkspace({
   if (mode === "question-bank") {
     return (
       <QuestionBankView
+        onOpenImport={onOpenImport}
         entries={entries}
         preferences={questionBankPreferences}
         onPreferencesChange={patchQuestionBankPreferences}

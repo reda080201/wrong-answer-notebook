@@ -963,7 +963,7 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--muted);
+  color: var(--text-muted);
   font-weight: 700;
   cursor: pointer;
 }

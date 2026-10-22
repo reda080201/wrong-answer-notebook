@@ -36,7 +36,7 @@ export default function TextReviewSplitView({ id, label, value, onChange }: Text
       <div className="import-text-review-pane import-text-review-preview">
         <h4 id={`${id}-preview`}>{label} 수식 미리보기</h4>
         <div aria-labelledby={`${id}-preview`} className="import-text-review-content">
-          <MathText text={value} />
+          <MathText text={value} onEditError={focusSegment} />
         </div>
         {suspicious.length > 0 && (
           <nav className="import-suspicious-navigator" aria-label="의심 구간 이동">

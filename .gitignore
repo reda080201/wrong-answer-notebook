@@ -44,3 +44,6 @@ private-key.pem
 /build/diagram-pipeline/
 __pycache__/
 .pytest_cache/
+
+/build/diagram-wheels/
+/build/diagram-runtime/

@@ -8,7 +8,7 @@
 /* Shared dialog surface; feature classes are additive. */
 .modal-backdrop { position: fixed; inset: 0; z-index: var(--z-dialog); display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: rgb(15 23 42 / 48%); }
 .app-dialog-backdrop { z-index: var(--z-confirm); }
-.modal-card { width: min(100%, 480px); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface-primary); color: var(--ink-primary); box-shadow: var(--shadow-dialog); }
+.modal-card { width: min(100%, 480px); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-dialog); background: var(--surface-primary); color: var(--ink-primary); box-shadow: var(--shadow-dialog); }
 .modal-card > .dialog-body { padding: var(--space-5); line-height: 1.6; }
 .modal-card > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--line-subtle); }
 .modal-card > .dialog-header h2 { margin: 0; font-size: 19px; }
@@ -18,7 +18,7 @@
 .review-resume-dialog-body > .review-resume-dialog-content { display: grid; gap: 12px; }
 .review-resume-dialog-content > p { margin: 0; line-height: 1.5; }
 .review-resume-dialog-content > .form-hint { margin-top: 0; }
-@media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: 14px; } }
+@media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: var(--radius-dialog); } }
 
 .import-modal {
   display: grid;

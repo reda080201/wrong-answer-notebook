@@ -83,11 +83,12 @@ export function AppDialogProvider({ children }: { children: ReactNode }) {
           {request.kind === "prompt" && (
             <input
               ref={promptInputRef}
+              aria-label={title}
               autoFocus
               value={promptValue}
               onChange={(event) => setPromptValue(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") close(promptValue);
+                if (event.key === "Enter" && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); close(promptValue); }
               }}
             />
           )}

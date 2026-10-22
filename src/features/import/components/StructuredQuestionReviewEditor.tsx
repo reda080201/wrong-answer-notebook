@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import MathText from "../../../components/MathText";
 import type { QuestionContentSegment, StructuredQuestion } from "../../../types";
 import {
@@ -56,9 +56,12 @@ export default function StructuredQuestionReviewEditor({
   onChange,
   disabled = false,
 }: StructuredQuestionReviewEditorProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  const activeIndex = Math.min(selectedIndex, Math.max(0, questions.length - 1));
+  const activeQuestion = questions[activeIndex];
   const renderedQuestions = useMemo(
-    () => questions.map((question) => ({ question, segments: materialize(question) })),
-    [questions],
+    () => activeQuestion ? [{ question: activeQuestion, segments: materialize(activeQuestion) }] : [],
+    [activeQuestion],
   );
 
   return (
@@ -67,13 +70,15 @@ export default function StructuredQuestionReviewEditor({
         <strong>문항별 구조화 검수</strong>
         <span>본문·조건·수식은 원래 순서대로 편집하고 그림과 표 배치는 유지됩니다.</span>
       </div>
+      {questions.length > 1 && <nav className="structured-question-review-navigation" aria-label="편집 문항 이동"><button type="button" className="btn-secondary" disabled={activeIndex === 0} onClick={() => setSelectedIndex(activeIndex - 1)}>이전 문항</button><label>편집할 문항 <select value={activeIndex} onChange={event => setSelectedIndex(Number(event.target.value))}>{questions.map((question, index) => <option key={index} value={index}>{question.questionNumber}번</option>)}</select></label><span>{activeIndex + 1} / {questions.length}</span><button type="button" className="btn-secondary" disabled={activeIndex === questions.length - 1} onClick={() => setSelectedIndex(activeIndex + 1)}>다음 문항</button></nav>}
       <div className="structured-question-review-list">
-        {renderedQuestions.map(({ question, segments }, questionIndex) => {
+        {renderedQuestions.map(({ question, segments }) => {
+          const questionIndex = activeIndex;
           let semanticIndex = 0;
           return (
             <article
               id={`${id}-question-${questionIndex}`}
-              key={question.questionNumber}
+              key={`${questionIndex}:${question.questionNumber}`}
               className="structured-question-review-card"
               data-question-number={question.questionNumber}
             >
@@ -105,7 +110,13 @@ export default function StructuredQuestionReviewEditor({
                             }))}
                           />
                           <div className="structured-question-review-preview" aria-label={`${question.questionNumber}번 ${label} 미리보기`}>
-                            <MathText text={segment.type === "equation" ? `$$${value}$$` : value} />
+                            <MathText text={segment.type === "equation" ? `$$${value}$$` : value} onEditError={disabled ? undefined : (start, end) => {
+                              const field = document.getElementById(fieldId) as HTMLTextAreaElement | null;
+                              if (!field) return;
+                              field.focus();
+                              const prefix = segment.type === "equation" ? 2 : 0;
+                              field.setSelectionRange(Math.max(0, start - prefix), Math.min(value.length, end - prefix));
+                            }} />
                           </div>
                         </div>
                       </div>

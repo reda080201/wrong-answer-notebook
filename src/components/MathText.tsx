@@ -181,25 +181,36 @@ export function tokenizeMathForDisplay(text: string): MathDisplaySegment[] {
 
 export function splitMathText(text: string): MathDisplaySegment[] { return tokenizeMathForDisplay(text); }
 
-function MathFragment({ segment }: { segment: Extract<MathDisplaySegment, { type: "math" }> }) {
+function MathFragment({ segment, onEditError }: { segment: Extract<MathDisplaySegment, { type: "math" }>; onEditError?: () => void }) {
   const containerRef = useRef<HTMLSpanElement>(null);
   useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     container.textContent = "";
+    container.removeAttribute("role");
     container.className = segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment";
     try { katex.render(typesetMathExpression(segment.expression, segment.displayMode), container, { displayMode: segment.displayMode, throwOnError: true, trust: false, strict: "warn", output: "htmlAndMathml" }); }
-    catch { container.className = "math-fragment--invalid"; container.textContent = "수식 형식 확인 필요"; }
-  }, [segment.displayMode, segment.expression]);
+    catch { container.className = "math-fragment--invalid"; container.textContent = segment.raw; const warning = document.createElement("small"); warning.textContent = "수식 형식 확인 필요"; container.append(warning); if (onEditError) { const edit = document.createElement("button"); edit.type = "button"; edit.className = "btn-secondary btn-sm"; edit.textContent = "수식 수정"; edit.onclick = onEditError; container.append(edit); } container.setAttribute("role", "status"); }
+  }, [segment.displayMode, segment.expression, segment.raw, onEditError]);
   return <span ref={containerRef} className={segment.displayMode ? "math-fragment math-fragment--display" : "math-fragment"} />;
 }
 
-const MathText = memo(function MathText({ text }: { text: string }) {
-  const segments = useMemo(() => tokenizeMathForDisplay(text), [text]);
-  return <>{segments.map((segment, index) => {
+const MathText = memo(function MathText({ text, onEditError }: { text: string; onEditError?: (start: number, end: number) => void }) {
+  const segments = useMemo(() => {
+    const positioned: Array<{ segment: MathDisplaySegment; start: number; end: number }> = [];
+    let offset = 0;
+    for (const segment of tokenizeMathForDisplay(text)) {
+      const start = offset;
+      offset += segment.type === "text" ? segment.value.length : segment.raw.length;
+      positioned.push({ segment, start, end: offset });
+    }
+    return positioned;
+  }, [text]);
+  return <>{segments.map(({ segment, start, end }, index) => {
+    const edit = onEditError ? () => onEditError(start, end) : undefined;
     if (segment.type === "text") return <span className="math-prose" key={`text-${index}`}>{segment.value}</span>;
-    if (segment.type === "invalid-math") return <span key={`invalid-${index}`} className="math-fragment--invalid" role="status">수식 형식 확인 필요</span>;
-    return <MathFragment key={`${segment.raw}-${index}`} segment={segment} />;
+    if (segment.type === "invalid-math") return <span key={`invalid-${index}`} className="math-fragment--invalid" role="status"><code>{segment.raw}</code><small>수식 형식 확인 필요</small>{edit && <button type="button" className="btn-secondary btn-sm" onClick={edit}>수식 수정</button>}</span>;
+    return <MathFragment key={`${segment.raw}-${index}`} segment={segment} onEditError={edit} />;
   })}</>;
 });
 export default MathText;

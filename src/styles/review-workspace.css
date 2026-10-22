@@ -5,7 +5,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   background: var(--surface-canvas, #f8fafc);
-  color: var(--text-primary, #182230);
+  color: var(--ink-primary);
   padding: 0;
   border: 0;
   border-radius: 0;

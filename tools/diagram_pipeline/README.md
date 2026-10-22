@@ -6,7 +6,7 @@ PNG/import workflow without changing the existing Import-v2 public format.
 Creates **real PNG files** from immutable PDF/photo evidence and an explicit reviewed
 manifest. It does not OCR equations, infer geometry, call an AI API, or prove that
 a supplied diagram specification matches an exam. All generated candidates remain
-`needs_review` when imported. Python is not bundled with or executed by the app.
+`needs_review` when imported. The installed app does not execute Python. A separate, non-release portable runtime probe is available for deployment validation.
 
 ## Reproducible Windows installation
 
@@ -98,7 +98,7 @@ would be unsafe. Copy `manifest.json` to `reviewed.json` and fill these fields;
 
 Expressions allow `x`, `pi`, `e`, numeric literals, arithmetic, and one-argument
 `sin/cos/tan/exp/log/sqrt/abs`. AST length/depth, exponent and result limits apply.
-No Python evaluation, external TeX, arbitrary SVG/XML, OCR or model execution.
+No Python evaluation, external TeX, arbitrary XML, OCR or model execution. The bounded SVG subset below is supported.
 Mathtext uses bundled DejaVu Sans; missing glyphs/clipped labels fail and preserve
 originals. Environment reports include font/code hashes, versions, DPI and seed.
 
@@ -157,8 +157,7 @@ notices. Exact Windows-wheel notices are retained under `notices/pdfium/`.
 Pillow 13: MIT-CMU; NumPy: BSD with bundled-library notices; Matplotlib: PSF-style with
 font notices; OpenCV: Apache-2.0 plus wheel components (including FFmpeg LGPL).
 Inspect the actual wheel's complete license set before binary redistribution.
-This PR distributes source/locks/notices, **not** a Python/PDFium runtime. No
-PyMuPDF dependency or commercial-license assumption is introduced.
+Source and locks add PyMuPDF 1.28.2 (AGPL-3.0 / Artifex commercial). No commercial license is assumed or purchased. The runtime builder emits a **non-release probe**, marked releaseApproved:false. Do not put it in an official installer until the project distribution, complete component notices and AGPL/commercial terms have been reviewed. See https://pymupdf.readthedocs.io/en/latest/about.html#license-and-copyright.
 
 Pinned wheel metadata records the following primary license expressions/families.
 Broad classifiers are kept broad; this table does not replace bundled component,
@@ -180,9 +179,68 @@ font, data or binary-library notices inside the actual wheels.
 | pluggy | 1.7.0 | MIT |
 | Pygments | 2.21.0 | BSD-2-Clause |
 | pyparsing | 3.3.3 | MIT |
+| PyMuPDF | 1.28.2 | AGPL-3.0 / Artifex commercial; bundled MuPDF |
 | pypdfium2 | 5.14.0 | BSD-3-Clause, Apache-2.0, dependency notices |
 | pytest | 9.0.3 | MIT |
 | python-dateutil | 3.0.0 | BSD/Apache metadata; see wheel notices |
 | ruff | 0.14.14 | MIT |
 | six | 1.17.0 | MIT |
 | tzdata | 2026.5 | Apache-2.0; data notices |
+
+
+## Windows SVG renderer (1.1)
+
+CairoSVG, GTK/Cairo and scikit-image are not required or imported. PDFium PDF
+rendering and Matplotlib Agg reconstruction remain unchanged. PyMuPDF is the
+SVG renderer; there is no automatic resvg fallback. A reproducible native SVG
+failure is required before considering another backend.
+
+UTF-8 SVG supports paths, lines, polygons, circles, basic text, groups, clipping
+and bounded non-recursive local use references. Absolute viewport units/viewBox
+are required; percentages, DTD/entities, script/foreignObject/image/style elements,
+external/data/file/network references and unsupported attributes are rejected.
+Unsupported files retain their original bytes; they are not silently simplified.
+Text and font declarations are preserved, not OCR-corrected. Compare actual label
+glyphs on the target platform: raster ink tests are not proof of text or math identity.
+
+`inspect --input source.svg` preserves SVG bytes and produces a PNG source page.
+A figure with method `auto` uses direct SVG rasterization and preserves its crop.
+For a PDF/photo crop with a separately authored candidate use:
+
+```json
+{"method":"svg_render","svg":{"path":"candidate.svg","sha256":"actual-file-sha256"},"parameters":{"dpi":96}}
+```
+
+The candidate is copied unchanged, byte-bound to the generation record, rendered
+inside the 60s/1GiB worker and re-rendered during verify. DPI defaults to 96 and is
+bounded to 36..1200. Viewport aspect ratio is retained; all existing pixel/file
+limits apply. Neither the candidate nor its successful rendering approves math.
+The internal manifest has optional SVG/renderer metadata; Import-v2 stays unchanged.
+
+```powershell
+./.venv-diagrams/Scripts/python.exe -m tools.diagram_pipeline.examples.create_svg_demo --out-dir build/diagram-pipeline/svg-demo
+./.venv-diagrams/Scripts/python.exe -m tools.diagram_pipeline render --manifest build/diagram-pipeline/svg-demo/inspected/reviewed.json --out-dir build/diagram-pipeline/svg-demo/rendered
+./.venv-diagrams/Scripts/python.exe -m tools.diagram_pipeline package --manifest build/diagram-pipeline/svg-demo/rendered/manifest.json --output build/diagram-pipeline/svg-demo/import-v2.zip
+```
+
+### Portable runtime probe (not a signed app release)
+
+`requirements.runtime.lock` contains runtime-only wheels. `requirements.lock`
+also includes development/test tools. Both are hash-pinned Windows x64 / Python3.12.
+Python3.15 compatibility must be reported separately; the user's global packages
+are never reused by the deployment probe and no source-build fallback is allowed.
+
+```powershell
+./.venv-diagrams/Scripts/python.exe -m tools.diagram_pipeline.build_runtime --python-home C:/path/to/base-python312 --out-dir build/diagram-runtime/probe
+./build/diagram-runtime/probe/runtime/python.exe -I ./build/diagram-runtime/probe/run_pipeline.py --help
+```
+
+Use a new output directory. The builder copies the base stdlib/native runtime,
+installs only locked binary wheels, retains wheel metadata/notices and writes a
+hashed runtime-report.json. It performs no installer replacement. The launcher
+uses an absolute packaged Python path, `-I`, fixed Python source and separate argv;
+a future native caller must use Command directly, never cmd.exe or a shell string.
+Workers use an absolute isolated bootstrap, independent of cwd/PYTHONPATH. Pass manifest paths as separate arguments and keep
+stdout JSON and stderr diagnostics separate. Cancellation owns the entire
+worker tree; the installed app must not install packages on first launch.
+No runtime is committed or uploaded as a redistributable installer in this change.

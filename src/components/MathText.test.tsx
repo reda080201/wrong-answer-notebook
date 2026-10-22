@@ -50,9 +50,10 @@ describe("MathText", () => {
     expect(screen.getByText(/가격은/)).toBeInTheDocument();
   });
 
-  it("keeps surrounding text and marks invalid LaTeX without exposing raw source", () => {
+  it("keeps surrounding text and preserves invalid LaTeX source with a warning", () => {
     render(<MathText text={"잘못된 $\\notacommand{$ 수식"} />);
     expect(screen.getByText("수식 형식 확인 필요")).toBeInTheDocument();
+    expect(screen.getByText(String.raw`$\notacommand{$`, { exact: false })).toBeInTheDocument();
     expect(screen.getByText("수식")).toBeInTheDocument();
   });
 

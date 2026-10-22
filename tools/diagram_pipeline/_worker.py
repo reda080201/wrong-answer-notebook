@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 
 from .resources import limit_worker
-from .security import PipelineError, digest, json_bytes, load_json, read_bytes, write_new
+from .security import MAX_JSON, PipelineError, digest, json_bytes, load_json, read_bytes, write_new
 
 
 def process(job):
@@ -13,10 +13,18 @@ def process(job):
     data = read_bytes(path)
     if digest(data) != source["sha256"]:
         raise PipelineError("Source changed after inspection")
+    def source_page(page_number):
+        if source["kind"] == "pdf":
+            return pdf_page(path, page_number)
+        if source["kind"] == "svg":
+            from .svg_renderer import render_svg
+            return render_svg(data)[0]
+        return decode(data, path.suffix)
+
     if job["action"] == "inspect":
         if source["kind"] == "pdf":
             return {"pages": pdf_info(path)}
-        image = decode(data, path.suffix)
+        image = source_page(1)
         return {"pages": [{"number": 1, "width": image.width, "height": image.height, "rotation": 0, "objectCounts": {}}]}
     if job["action"] == "verify":
         from PIL import ImageChops
@@ -36,7 +44,7 @@ def process(job):
         figure = job["figure"]
         page = decoded["sourcePage"]
         if not job.get("pageVerified"):
-            expected = pdf_page(path, figure["page"]) if source["kind"] == "pdf" else decode(data, path.suffix)
+            expected = source_page(figure["page"])
             if expected.size != page.size or ImageChops.difference(expected, page).getbbox() is not None:
                 raise PipelineError("Source page pixels do not match the actual input")
         for name, crop in [("original", figure["crop"]), ("questionCrop", figure.get("questionCrop"))]:
@@ -47,13 +55,25 @@ def process(job):
             expected = crop_image(page, crop)
             if expected.size != decoded[name].size or ImageChops.difference(expected, decoded[name]).getbbox() is not None:
                 raise PipelineError(f"{name} pixels do not match the declared source region")
+        if figure.get("method") == "svg_render" or (source["kind"] == "svg" and figure.get("method", "auto") == "auto"):
+            from .svg_renderer import render_svg
+            candidate = figure.get("svg")
+            svg = read_bytes(relative_path(root, candidate["path"]), MAX_JSON) if candidate else data
+            if candidate and digest(svg) != candidate.get("sha256"):
+                raise PipelineError("SVG candidate hash mismatch")
+            expected, _ = render_svg(svg, dpi=figure.get("parameters", {}).get("dpi", 96))
+            if not candidate:
+                expected = crop_image(expected, figure["crop"])
+            actual = decode(read_bytes(relative_path(root, artifacts["cleaned"]["path"]), MAX_IMAGE), ".png")
+            if expected.size != actual.size or ImageChops.difference(expected, actual).getbbox() is not None:
+                raise PipelineError("SVG output pixels differ from the recorded source")
         return {"machineChecks": "passed", "sourceRegionMatch": True, "mathematicalEquivalence": "not_proven"}
     figure = job["figure"]
     out = Path(job["out"])
     page_number = figure["page"]
     if not isinstance(page_number, int) or isinstance(page_number, bool) or not 1 <= page_number <= len(source["pages"]):
         raise PipelineError("Source page is out of range")
-    page = pdf_page(path, page_number) if source["kind"] == "pdf" else decode(data, path.suffix)
+    page = source_page(page_number)
     original = crop_image(page, figure["crop"])
     artifacts = {}
 
@@ -76,7 +96,23 @@ def process(job):
             # Object existence is provenance, not evidence of semantic equality.
             counts = source["pages"][page_number - 1].get("objectCounts", {})
             method = "pdf_vector_render" if source["kind"] == "pdf" and counts.get("2", 0) else "raster_cleanup"
-        if method == "pdf_vector_render":
+        if source["kind"] == "svg" and figure.get("method", "auto") == "auto":
+            method = "svg_render"
+        if method == "svg_render":
+            from .security import relative_path
+            from .svg_renderer import render_svg
+            candidate = figure.get("svg")
+            svg = read_bytes(relative_path(out, candidate["path"]), MAX_JSON) if candidate else data
+            if candidate and digest(svg) != candidate.get("sha256"):
+                raise PipelineError("SVG candidate hash mismatch")
+            if not candidate and source["kind"] != "svg":
+                raise PipelineError("SVG rendering needs an explicit SVG candidate")
+            cleaned, metadata = render_svg(svg, dpi=figure.get("parameters", {}).get("dpi", 96))
+            if not candidate:
+                cleaned = crop_image(cleaned, figure["crop"])
+            artifacts["cleaned"] = save("cleaned", cleaned)
+            result["renderer"] = {**metadata, "outputWidth": cleaned.width, "outputHeight": cleaned.height}
+        elif method == "pdf_vector_render":
             if source["kind"] != "pdf":
                 raise PipelineError("Vector rendering requires a PDF source")
             cleaned = pdf_page(path, page_number, dpi=300, crop=figure["crop"])

@@ -1089,6 +1089,7 @@ function AppContent() {
         />
       )}
       <GeneratedExamsDialog
+        onCreate={() => setShowExamBuilder(true)}
         open={showGeneratedExams}
         closing={generatedExamController.closing}
         closeError={generatedExamController.closeError}

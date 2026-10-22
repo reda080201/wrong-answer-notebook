@@ -335,7 +335,7 @@
 
 .solution-empty,
 .solution-empty-panel {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .solution-explanation-parts {
@@ -384,7 +384,7 @@
 }
 
 .study-analysis-stats dt {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
@@ -399,7 +399,7 @@
 }
 
 .study-analysis-empty {
-  color: var(--muted);
+  color: var(--text-muted);
 }
 
 .study-analysis-list,

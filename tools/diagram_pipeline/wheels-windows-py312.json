@@ -118,5 +118,11 @@
     "Version": "2026.5",
     "wheel": "tzdata-2026.5-py2.py3-none-any.whl",
     "sha256": "b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac"
+  },
+  {
+    "Name": "PyMuPDF",
+    "Version": "1.28.2",
+    "wheel": "pymupdf-1.28.2-cp310-abi3-win_amd64.whl",
+    "sha256": "ebd244918798502d7b4504c90410d1711a4d7675a32584ca30f1bab419ecbffe"
   }
 ]

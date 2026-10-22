@@ -34,6 +34,14 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.diagram_pipeline package --manifest build/diagram-pipeline/ci/rendered/manifest.json --output build/diagram-pipeline/ci/import-v2.zip
           exit $LASTEXITCODE
+      - name: Validate isolated Windows runtime without GTK or system Python
+        shell: pwsh
+        run: |
+          $diagramPythonHome = python -c "import sys; print(sys.base_prefix)"
+          python -m tools.diagram_pipeline.build_runtime --python-home $diagramPythonHome --out-dir build/diagram-runtime/ci
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.diagram_pipeline.verify_runtime --bundle build/diagram-runtime/ci --out-dir build/diagram-pipeline/portable-ci
+          exit $LASTEXITCODE
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -42,6 +50,9 @@ jobs:
             build/diagram-pipeline/ci/import-v2.zip
             build/diagram-pipeline/ci/rendered/manifest.json
             build/diagram-pipeline/ci/rendered/assets/
+            build/diagram-pipeline/portable-ci/verification-report.json
+            build/diagram-pipeline/portable-ci/import-v2.zip
+            build/diagram-pipeline/portable-ci/rendered/assets/
           if-no-files-found: ignore
   frontend:
     name: Frontend check

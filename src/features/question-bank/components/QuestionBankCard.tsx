@@ -18,7 +18,7 @@ export default function QuestionBankCard({ item, onOpen, onInspect, selected = f
     item.hasExplanation ? "해설 있음" : null,
   ].filter((value): value is string => Boolean(value)).slice(0, 2);
   return <article className={`question-bank-card${selected ? " is-selected" : ""}`} aria-label={`${item.entryTitle} ${item.questionNumber}번`} aria-current={selected ? "true" : undefined}>
-    <button type="button" className="question-bank-card__main" onClick={() => onInspect(item)} aria-label={`${item.entryTitle} ${item.questionNumber}번 검사기 선택`}>
+    <button type="button" className="question-bank-card__main" onClick={() => onInspect(item)} aria-label={`${item.entryTitle} ${item.questionNumber}번 문항 미리보기`}>
       <header><strong><span className="question-bank-card__number">{item.questionNumber}번</span>{item.entryTitle}</strong><span className={statuses[0] === "오답" || statuses[0] === "복습 예정" ? "question-bank-card__warning" : undefined}>{statuses[0] ?? "문항"}</span></header>
       <p><MathText text={normalizeLegacyMathCommandsForDisplay(item.questionText)} /></p>
     </button>

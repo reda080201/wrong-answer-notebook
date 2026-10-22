@@ -62,7 +62,7 @@
 }
 
 .study-paper-cover dt {
-  color: var(--muted);
+  color: var(--text-muted);
   font-size: 0.72rem;
 }
 
