@@ -154,8 +154,35 @@ exam files, derived crops and private reports must not be committed.
 
 pypdfium2: Apache-2.0/BSD-3-Clause; PDFium and bundled components have separate
 notices. Exact Windows-wheel notices are retained under `notices/pdfium/`.
-Pillow: HPND; NumPy: BSD with bundled-library notices; Matplotlib: PSF-style with
+Pillow 13: MIT-CMU; NumPy: BSD with bundled-library notices; Matplotlib: PSF-style with
 font notices; OpenCV: Apache-2.0 plus wheel components (including FFmpeg LGPL).
 Inspect the actual wheel's complete license set before binary redistribution.
 This PR distributes source/locks/notices, **not** a Python/PDFium runtime. No
 PyMuPDF dependency or commercial-license assumption is introduced.
+
+Pinned wheel metadata records the following primary license expressions/families.
+Broad classifiers are kept broad; this table does not replace bundled component,
+font, data or binary-library notices inside the actual wheels.
+
+| Package | Locked version | Wheel license metadata |
+|---|---|---|
+| colorama | 0.4.6 | BSD |
+| contourpy | 1.4.0 | BSD-3-Clause |
+| cycler | 0.12.1 | BSD |
+| fonttools | 4.67.0 | MIT |
+| iniconfig | 2.3.1 | MIT |
+| kiwisolver | 1.5.1 | BSD |
+| matplotlib | 3.11.2 | PSF-style; font/component notices |
+| numpy | 2.3.5 | BSD; bundled library notices |
+| opencv-python-headless | 4.14.0.94 | Apache; wheel/component notices |
+| packaging | 26.3 | Apache-2.0 OR BSD-2-Clause |
+| pillow | 13.0.0 | MIT-CMU |
+| pluggy | 1.7.0 | MIT |
+| Pygments | 2.21.0 | BSD-2-Clause |
+| pyparsing | 3.3.3 | MIT |
+| pypdfium2 | 5.14.0 | BSD-3-Clause, Apache-2.0, dependency notices |
+| pytest | 9.0.3 | MIT |
+| python-dateutil | 3.0.0 | BSD/Apache metadata; see wheel notices |
+| ruff | 0.14.14 | MIT |
+| six | 1.17.0 | MIT |
+| tzdata | 2026.5 | Apache-2.0; data notices |

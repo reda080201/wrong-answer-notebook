@@ -64,7 +64,7 @@
 - head ae2c07f의 [GitHub 실행39749853179](https://github.com/reda080201/wrong-answer-notebook/actions/runs/39749853179): Frontend/E2E/Rust/Tauri/Python 전부성공. 최종 push의 동일 head 결과는 PR 본문에 추가한다.
 - 첫 head의 CI YAML 설치 명령에서 :all:가 plain scalar와 충돌해 job 시작 전 실패했다. block scalar로 고쳤고 다음 head의5개 job이 성공했다.
 - OSV 공개API에서 고정20개 이름·버전을 조회했다. pytest9.0.2의 UNIX tmpdir 공지 [GHSA-6w46-j5rx-g56g](https://github.com/advisories/GHSA-6w46-j5rx-g56g)를 확인해9.0.3 wheel/해시로 변경했다. 최종 조회 매칭0개. 알려진 공지 조회이며 무취약성을 증명하지 않는다.
-- pypdfium2 Apache/BSD 및 실제 고정 Windows wheel의 PDFium/하위18개 고지를 notices/pdfium에 포함한다. Pillow HPND, NumPy BSD, Matplotlib PSF-style/폰트, OpenCV Apache 및 wheel 하위 고지는 README에 기록했다.
+- pypdfium2 Apache/BSD 및 실제 고정 Windows wheel의 PDFium/하위18개 고지를 notices/pdfium에 포함한다. 실제 wheel 메타데이터를 대조해 Pillow13 MIT-CMU, NumPy BSD, Matplotlib PSF-style/폰트, OpenCV Apache 및 하위 의존성까지20개 라이선스를 README에 기록했다. wheel에 포함된 폰트·데이터·하위 바이너리 고지는 별도로 유지한다.
 - 설치 설명과 명령/manifest 계약은 [CLI README](../../tools/diagram_pipeline/README.md). 런타임 바이너리 재배포를 하지 않으며 이후 번들 시 실제 wheel의 모든 고지를 다시 확인해야 한다.
 
 ## 남은 위험·통합
