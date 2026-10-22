@@ -19,7 +19,8 @@ jobs:
           cache: pip
           cache-dependency-path: tools/diagram_pipeline/requirements.lock
       - name: Install locked Windows wheels
-        run: python -m pip install --require-hashes --only-binary=:all: -r tools/diagram_pipeline/requirements.lock
+        run: |
+          python -m pip install --require-hashes --only-binary=:all: -r tools/diagram_pipeline/requirements.lock
       - name: Static analysis
         run: python -m ruff check tools/diagram_pipeline
       - name: Diagram and security regression tests
