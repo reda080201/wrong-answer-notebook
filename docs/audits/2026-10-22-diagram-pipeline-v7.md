@@ -71,7 +71,7 @@
 - P0/P1: 이번 확인에서 새 데이터 손실/자동 승인/허용하지 않은 코드 실행은 재현되지 않았다. 이는 미확인 경로의 안전 보장이 아니다.
 - P2:A4 로컬 전체 검사 실패의 원인 미확정. 실제 ZIP의 기존 main 수식 미리보기 경고(조건부 함수/조건 문자열 등)와 대량 검토·저장 지연이 남는다. #160의 별도 수식/UI 변경과 구분한다. 실제 PDF 수학적 대조는 불가능했다.
 - P3:기존55개 lint경고, 메인JS1932.35kB(gzip572.02kB)/PDF502.93kB chunk경고, entryPaneOverrides 정리는 별도다. #159의 로딩 개선을 이 PR에 포함하지 않았다.
-- #160과 ImportFromGptModal/ImportWorkspaceView의 연결 지점이 겹친다. 실제 병합 때 resolver/저장 guard를 함께 보존해야 하며 자동 병합/기존 PR 닫기를 하지 않는다.
+- #160과의 읽기 전용 merge-tree 계산에서 ImportWorkspaceView.tsx와 legacy/11-app-styles.css 충돌을 확인했다. ImportFromGptModal은 자동 결합됐다. 실제 병합 때 resolver/저장 guard와 양쪽 UI 스타일을 함께 보존해야 하며 이번 작업에서 병합하거나 기존 PR을 닫지 않는다.
 - **Merge-ready NO**: 로컬 필수 전체 E2E 실패 원인이 미해결이다. GitHub 성공을 로컬 전체 성공으로 대체하지 않는다. 최종 CI/추가 결과는 PR에 기록한다.
 
 ## 화면(모두 공개 합성 자료)

@@ -22,5 +22,3 @@ def reviewed(tmp_path):
     reviewed_path = tmp_path / "inspect" / "reviewed.json"
     reviewed_path.write_bytes(json_bytes(manifest))
     return reviewed_path, manifest
-
-
