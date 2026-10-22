@@ -36,7 +36,7 @@ describe("figure representation policy", () => {
     expect(classifyFigureVerificationTrust(undefined)).toBe("untrusted_missing");
   });
 
-  it("uses deterministic cleanup and qualified second-pass output without claiming user approval", () => {
+  it("uses internal cleanup but keeps second-model candidates under review", () => {
     const cleanup = figure({
       cleaned: { image: "cleanup.png", generatedBy: "deterministic_cleanup", generatedAt: "", sourceImageHash: "hash", promptVersion: "v1" },
       processingStatus: "ready",
@@ -49,7 +49,7 @@ describe("figure representation policy", () => {
       semanticSpec: { type: "function_graph" },
       verification: { status: "verified", confidence: 0.7, checks: { topologyMatch: true, visualLayoutPreserved: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" },
     });
-    expect(resolveFigureRepresentation(secondPass)).toMatchObject({ kind: "cleaned", needsReview: false });
+    expect(resolveFigureRepresentation(secondPass)).toMatchObject({ kind: "original", needsReview: true });
     expect(secondPass.verification?.verificationSource).toBe("second_pass_model");
   });
 

@@ -29,6 +29,9 @@
 .question-inline-figure-slot { display: inline-flex; max-width: min(100%, 320px); vertical-align: middle; }
 .question-inline-figure { display: inline-block; max-width: 100%; max-height: 180px; object-fit: contain; vertical-align: middle; }
 .question-inline-figure-warning { display: inline-block; padding: 2px 5px; border: 1px dashed var(--warning-border, var(--border)); color: var(--warning-text, var(--text-muted)); font-size: .9em; }
+.question-source-figure .zoom-viewer-launcher, .structured-question-figure .zoom-viewer-launcher { display: flex; min-width: 0; }
+.question-source-figure .zoom-viewer-launcher > button, .structured-question-figure .zoom-viewer-launcher > button { width: min(100%, 520px); max-width: 100%; }
+.question-source-figure .zoom-viewer-launcher > button > img, .structured-question-figure .zoom-viewer-launcher > button > img { width: 100%; height: auto; max-height: 360px; object-fit: contain; }
 .question-source-figure { margin: 1rem 0; }.question-source-figure figcaption { color: var(--text-muted); font-size: .85rem; }.question-table-wrap { overflow-x: auto; }.question-table-wrap table { width: max-content; min-width: 100%; }
 .exam-note-field, .exam-answer-field { display: grid; gap: .35rem; margin-top: 1rem; }.exam-question-navigation { position: sticky; bottom: 0; justify-content: center; padding: .7rem; background: color-mix(in srgb, var(--panel-bg) 94%, transparent); border-top: 1px solid var(--border); }
 .exam-gpt-actions, .exam-result-summary { width: min(100%, 960px); margin: 1rem auto; padding: 1rem; border: 1px solid var(--border); background: var(--surface); }.exam-gpt-actions p { margin: .35rem 0 .75rem; color: var(--text-muted); }
