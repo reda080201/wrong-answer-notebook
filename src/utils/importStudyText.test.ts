@@ -63,7 +63,7 @@ describe("importStudyText", () => {
       });
     });
 
-    it("strips a forged machine validator claim while retaining a valid second-pass claim", () => {
+    it("keeps a second-pass claim as provenance without granting automatic approval", () => {
       const sanitized = sanitizeExternalImportTrust({ figures: [
         { id: "machine", questionNumber: "1", original: { image: "original.png" }, cleaned: { image: "cleaned.png", generatedBy: "gpt" }, processingStatus: "ready", verification: { status: "verified", confidence: 1, blockingIssues: [], warnings: [], verificationSource: "machine_checked" } },
         { id: "second", questionNumber: "2", original: { image: "original-2.png" }, cleaned: { image: "cleaned-2.png", generatedBy: "gpt" }, semanticSpec: { type: "function_graph" }, processingStatus: "ready", verification: { status: "verified", confidence: 1, checks: { topologyMatch: true, visualLayoutPreserved: true }, blockingIssues: [], warnings: [], verificationSource: "second_pass_model" } },
@@ -71,7 +71,8 @@ describe("importStudyText", () => {
       expect(sanitized.figures[0].verification).toMatchObject({ verificationSource: "none" });
       expect(sanitized.figures[0]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original" });
       expect(sanitized.figures[1].verification).toMatchObject({ verificationSource: "second_pass_model" });
-      expect(sanitized.figures[1]).toMatchObject({ processingStatus: "ready" });
+      expect(sanitized.figures[1]).toMatchObject({ processingStatus: "needs_review", preferredRepresentation: "original", needsReview: true });
+      expect(sanitized.figures[1].verification).toMatchObject({ status: "needs_review", userApproved: false });
     });
   });
 

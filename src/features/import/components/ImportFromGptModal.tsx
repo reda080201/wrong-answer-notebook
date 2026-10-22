@@ -41,11 +41,11 @@ import ImportEntriesPreviewModal from "../../../components/ImportEntriesPreviewM
 import { cloneEntryDraft, mergeEntryDraft } from "../../../features/entries/model/entryDraft";
 import { IMPORT_LIMITS } from "../../../features/import/services/importLimits";
 import { readZipImport, type ZipImportAsset } from "../../../features/import/services/zipImport";
-import { applyAutomaticFigurePreference } from "../../../features/figures/services/figureRepresentation";
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../../../utils/importImageReferences";
 import Dialog from "../../../shared/ui/Dialog";
 import { useAppDialog } from "../../../shared/ui/AppDialogProvider";
-import FigureComparisonPanel from "../../../features/figures/components/FigureComparisonPanel";
+import FigureReviewCard from "../../../features/figures/components/FigureReviewCard";
+import { useImportFigureUrls } from "../../figures/components/useImportFigureUrls";
 import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 import type { SupplementalImportMode } from "../../../features/supplemental-resources/model/supplementalResource";
 import { supplementalModeLabel } from "../../../features/supplemental-resources/model/supplementalResource";
@@ -377,7 +377,7 @@ export default function ImportFromGptModal({
   const visualCleanupSessionRef = useRef<ImportAssetSessionManifest | null>(null);
   const closeAfterVisualAbortRef = useRef(false);
   const closeAfterCleanupRef = useRef(false);
-  const [figureComparisonReady, setFigureComparisonReady] = useState<Record<string, boolean>>({});
+  const resolveFigureUrl = useImportFigureUrls(assetFiles);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const zipAbortRef = useRef<AbortController | null>(null);
   const parseErrorRef = useRef<string | null>(null);
@@ -1821,23 +1821,7 @@ export default function ImportFromGptModal({
                             </small>
                             {figure.needsReview && <small className="answer-review-badge">검토 필요</small>}
                             {figure.caption && <p>{figure.caption}</p>}
-                            {(figure.original || figure.cleaned || figure.semanticSpec) && (
-                              <>
-                                <div className="import-figure-actions" aria-label={`${figure.questionNumber || "?"}번 그림 표현`}>
-                                  <span>원본 {figure.original?.image ? "있음" : "없음"}</span>
-                                  <span>GPT 정리본 {figure.cleaned?.image ? "있음" : "없음"}</span>
-                                  <span>구조 데이터 {figure.semanticSpec ? "있음" : "없음"}</span>
-                                </div>
-                                <div className="import-figure-actions">
-                                  {figure.original?.image && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "원본과 정리본 비교가 끝난 뒤 선택할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "original", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() }, needsReview: false })}>원본 사용</button>}
-                                  {figure.cleaned?.image && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "원본과 정리본 비교가 끝난 뒤 승인할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "cleaned", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() }, needsReview: false, image: figure.cleaned?.image, source: "gpt_cleaned" })}>GPT 정리본 승인</button>}
-                                  {figure.semanticSpec && <button type="button" className="btn-secondary btn-sm" disabled={!figureComparisonReady[figure.id]} title={!figureComparisonReady[figure.id] ? "구조 렌더링 비교가 끝난 뒤 선택할 수 있습니다." : undefined} onClick={() => updateFigure(figure.id, { preferredRepresentation: "semantic_render", representationSelectionSource: "user", verification: { ...(figure.verification ?? { status: "needs_review", confidence: 0, checks: {}, blockingIssues: [], warnings: [] }), userApproved: true, verificationSource: "user", verifiedAt: new Date().toISOString() } })}>구조 렌더링 사용</button>}
-                                  <button type="button" className="btn-secondary btn-sm" onClick={() => updateFigure(figure.id, applyAutomaticFigurePreference({ ...figure, representationSelectionSource: "automatic", preferredRepresentation: undefined }))}>자동 선택 다시 적용</button>
-                                </div>
-                                {figure.verification && <small>검증 {Math.round(figure.verification.confidence * 100)}% · 차단 {figure.verification.blockingIssues.length}건 · 경고 {figure.verification.warnings.length}건</small>}
-                                <FigureComparisonPanel figure={figure} onReady={(ready) => setFigureComparisonReady((current) => current[figure.id] === ready ? current : { ...current, [figure.id]: ready })} />
-                              </>
-                            )}
+                            {(figure.original || figure.cleaned || figure.semanticSpec) && <FigureReviewCard figure={figure} disabled={commitLocked || saving} resolveImageUrl={resolveFigureUrl} onChange={patch => updateFigure(figure.id, patch)} />}
                             {!figure.image && (
                               <div className="import-figure-actions">
                                 <button
@@ -1962,6 +1946,8 @@ export default function ImportFromGptModal({
               figures={figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
               sourcePageImages={draft?.sourcePageImages ?? []}
               detailOpen={importDetailOpen}
+              disabled={commitLocked || saving}
+              resolveImageUrl={resolveFigureUrl}
               onUpdateAnswer={updateAnswer}
               onRemoveAnswer={removeAnswer}
               onUpdateFigure={updateFigure}

@@ -47,22 +47,18 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
     const suppliedSource = verificationValue?.verificationSource;
     const trustedClaimOnly = suppliedSource === "user" || suppliedSource === "local_validator" || suppliedSource === "machine_checked";
     const cleaned = figure.cleaned && typeof figure.cleaned === "object" ? figure.cleaned as Record<string, unknown> : undefined;
-    const verifiedAutomatic = suppliedSource === "second_pass_model"
-      && verificationValue?.status === "verified"
-      && Array.isArray(verificationValue.blockingIssues)
-      && verificationValue.blockingIssues.length === 0;
     // A package cannot claim that our local deterministic pipeline produced an
     // image. Keep the asset for comparison, but reserve automatic selection for
     // evidence the application can independently evaluate.
     const claimedDeterministicGenerator = cleaned?.generatedBy === "deterministic_cleanup"
       || cleaned?.generatedBy === "deterministic_redraw";
-    const canRemainReady = figure.processingStatus !== "rejected" && verifiedAutomatic && !claimedDeterministicGenerator;
+    // A second model's claim is still external evidence, never local approval.
     const verification = verificationValue
       ? {
         ...verificationValue,
         verificationSource: trustedClaimOnly ? "none" : (verificationValue.verificationSource === "gpt_self_check" || verificationValue.verificationSource === "second_pass_model" ? verificationValue.verificationSource : "none"),
         userApproved: false,
-        status: canRemainReady ? verificationValue.status : "needs_review",
+        status: figure.processingStatus === "rejected" ? "rejected" : "needs_review",
       }
       : undefined;
     return {
@@ -71,9 +67,9 @@ export function sanitizeExternalImportTrust(entry: unknown): unknown {
       cleaned: cleaned && claimedDeterministicGenerator
         ? { ...cleaned, generatedBy: "gpt", untrustedGeneratedBy: cleaned.generatedBy }
         : cleaned,
-      preferredRepresentation: canRemainReady ? figure.preferredRepresentation : "original",
-      processingStatus: canRemainReady && figure.processingStatus !== "rejected" ? "ready" : "needs_review",
-      needsReview: Boolean(figure.needsReview) || !canRemainReady,
+      preferredRepresentation: "original",
+      processingStatus: figure.processingStatus === "rejected" ? "rejected" : "needs_review",
+      needsReview: true,
       verification,
     };
   };
