@@ -4,6 +4,7 @@ from contextlib import closing
 from pathlib import Path
 
 import pytest
+from PIL import Image, ImageDraw
 
 from tools.diagram_pipeline.pipeline import inspect_input, package, render, run_worker
 from tools.diagram_pipeline.security import PipelineError, json_bytes, load_json, relative_path
@@ -103,3 +104,33 @@ def test_existing_symlink_or_junction_is_rejected(tmp_path):
         link.symlink_to(target, target_is_directory=True)
     with pytest.raises(PipelineError, match="Symlink/reparse"):
         relative_path(tmp_path, "link/image.png")
+
+
+def test_scanned_pdf_uses_observed_raster_without_inventing_a_spec(tmp_path):
+    image = Image.new("RGB", (360, 240), "white")
+    ImageDraw.Draw(image).line((20, 210, 180, 30, 340, 210), fill="black", width=3)
+    source = tmp_path / "scan.pdf"
+    image.save(source, "PDF", resolution=100)
+    info = inspect_input(source, tmp_path / "inspect")
+    path = Path(info["manifest"])
+    data = load_json(path)
+    assert data["sources"][0]["pages"][0]["objectCounts"].get("3", 0) > 0
+    data["entries"] = [{"id": "scan", "questions": [{"key": "q", "number": "1", "questionText": "Scanned triangle", "contentSegments": [{"id": "f", "type": "figure", "figureId": "triangle"}]}]}]
+    data["figures"] = [{"id": "triangle", "entryId": "scan", "questionKey": "q", "sourceId": data["sources"][0]["id"], "page": 1, "method": "auto", "crop": {"x": 0, "y": 0, "width": 1, "height": 1}}]
+    reviewed = path.with_name("reviewed.json")
+    reviewed.write_bytes(json_bytes(data))
+    render(reviewed, tmp_path / "rendered")
+    figure = load_json(tmp_path / "rendered/manifest.json")["figures"][0]
+    assert figure["result"]["method"] == "raster_cleanup"
+    assert figure["result"]["mathematicalEquivalence"] == "not_proven"
+    assert "spec" not in figure
+    package(tmp_path / "rendered/manifest.json", tmp_path / "scan.zip")
+
+
+@pytest.mark.parametrize("suffix,format_name", [(".png", "PNG"), (".jpg", "JPEG"), (".webp", "WEBP")])
+def test_supported_real_raster_inputs(tmp_path, suffix, format_name):
+    from tools.diagram_pipeline.image_io import decode
+    source = tmp_path / ("input" + suffix)
+    Image.new("RGB", (31, 27), "white").save(source, format_name)
+    decoded = decode(source.read_bytes(), suffix)
+    assert decoded.size == (31, 27)

@@ -1,4 +1,7 @@
-# Offline diagram pipeline v1
+# Offline diagram pipeline — v7 import integration
+
+The internal manifest protocol is `diagram-pipeline-v1`; this implements the v7
+PNG/import workflow without changing the existing Import-v2 public format.
 
 Creates **real PNG files** from immutable PDF/photo evidence and an explicit reviewed
 manifest. It does not OCR equations, infer geometry, call an AI API, or prove that
@@ -101,8 +104,10 @@ originals. Environment reports include font/code hashes, versions, DPI and seed.
 
 ## Trust, artifacts and failure handling
 
-Source pages/crops, original crops and candidates are separate real files. SHA-256
-checks prove byte identity, not mathematical meaning. `verify` always returns
+Source pages/crops, original crops and candidates are separate real files. `verify`
+re-renders the preserved source file and checks page/crop pixels against the
+declared displayed ROI, including source-page identity. SHA-256 checks prove byte
+identity, not mathematical meaning. `verify` always returns
 `mathematicalEquivalence: "not_proven"`. Wrong labels in an explicit spec do not
 magically become a mathematical PASS. There is no similarity-score approval.
 
@@ -125,6 +130,7 @@ ZIPs are never replaced. SHA mismatches, damaged images and invalid references
 block packaging. Failed redraws leave original evidence and a failed report;
 correct the spec and render to a new directory. Interrupted jobs do not publish a
 ZIP. Identical completed render runs can reuse only hash-verified cached output.
+Worker stderr is drained with a bounded final 64KiB diagnostic tail.
 
 Exit codes: `0` command complete (review may still be required), `2` invalid input /
 processing failure, `3` missing Python dependency, `130` user interruption. Progress
