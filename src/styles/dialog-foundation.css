@@ -229,3 +229,22 @@
 .settings-connection-guide ol { margin: 8px 0; padding-left: 22px; }
 .settings-connection-guide li + li { margin-top: 6px; }
 .settings-connection-guide p { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+
+.import-modal-body > .import-grid { flex: 0 0 auto; min-height: 0; }
+@media (max-width: 1399px) {
+  .import-modal .import-grid { display: flex; flex-direction: column; align-items: stretch; }
+  .import-modal .import-pane { flex: 0 0 auto; }
+}
+.settings-disclosure { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+.settings-disclosure > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.settings-disclosure[open] > summary { margin-bottom: 12px; }
+.settings-disclosure .settings-connection-guide { padding: 0; border: 0; }
+.settings-section-title { font-size: 18px; margin: 0 0 8px; }
+.settings-section-description { color: var(--text-muted); font-size: 14px; margin: 0 0 16px; }
+.import-save-more { position: relative; }
+.import-save-more > summary { cursor: pointer; list-style: none; padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+.import-save-more[open] > div { position: absolute; right: 0; bottom: calc(100% + 8px); display: grid; gap: 6px; min-width: 180px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-dialog); }
+
+.import-inline-editor { border-top: 1px solid var(--border); padding-top: 12px; }
+.import-inline-editor > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.form-hint { line-height: 1.6; }

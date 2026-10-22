@@ -335,6 +335,7 @@ export default function ImportFromGptModal({
     ? availablePromptTemplates[0]?.id ?? ""
     : selectedPromptTemplateId ?? availablePromptTemplates[0]?.id ?? "";
   const [rawText, setRawText] = useState("");
+  const [inlineReviewOpen, setInlineReviewOpen] = useState(false);
   const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct" | "visual">(isSolutionMode || isSupplementalMode ? "gpt" : "file");
   const [filename, setFilename] = useState<string | undefined>();
   const [images, setImages] = useState<string[]>([]);
@@ -1308,7 +1309,7 @@ export default function ImportFromGptModal({
               </details>
               {copyMessage && <p className="form-hint" role="status">{copyMessage}</p>}
 
-              {importInputMode !== "visual" && <div className="form-field full">
+              {(importInputMode === "gpt" || importInputMode === "direct") && <div className="form-field full">
                 <label htmlFor="gpt-import-text">{importInputMode === "direct" ? "JSON 또는 텍스트 직접 입력" : "GPT 답변 붙여넣기"}</label>
                 <textarea
                   id="gpt-import-text"
@@ -1492,7 +1493,7 @@ export default function ImportFromGptModal({
 }`}</pre>
               </details>
 
-              {!isSolutionMode && importInputMode !== "direct" && (
+              {!isSolutionMode && importInputMode === "gpt" && (
                 <>
                   <ImagePreprocessor
                     onAddImage={(filenameToAdd) => {
@@ -1639,7 +1640,8 @@ export default function ImportFromGptModal({
                   )}
 
                   <>
-                  {draft.structuredQuestions?.length ? (
+                  <details className="import-inline-editor" open={importInputMode !== "file" || inlineReviewOpen} onToggle={event => setInlineReviewOpen(event.currentTarget.open)}><summary>문항 내용 편집</summary>
+                  {(importInputMode !== "file" || inlineReviewOpen) && (draft.structuredQuestions?.length ? (
                     <StructuredQuestionReviewEditor
                       id="import-question"
                       questions={draft.structuredQuestions}
@@ -1655,7 +1657,7 @@ export default function ImportFromGptModal({
                       value={draft.question ?? ""}
                       onChange={updateLegacyQuestionText}
                     />
-                  )}
+                  ))}</details>
                   {structuredReviewError && <p className="image-field-error" role="alert">{structuredReviewError}</p>}
                   <div className="form-field full">
                     <label htmlFor="import-memo">메모</label>

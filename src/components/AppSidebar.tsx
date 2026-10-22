@@ -165,7 +165,7 @@ export default function AppSidebar({
       </div>
 
       <div className="section-tabs">
-        {sectionTabs.map(([key, label, Icon]) => (
+        {sectionTabs.filter(([key]) => key !== "lecture").map(([key, label, Icon]) => (
           <button
             key={key}
             type="button"
@@ -181,7 +181,8 @@ export default function AppSidebar({
             {!collapsed && <span>{label}</span>}
           </button>
         ))}
-        <>
+        <details className="sidebar-secondary-navigation" open={destination.type !== "section" || destination.section === "lecture" ? true : undefined}><summary>더 보기</summary>
+        <button type="button" className={`section-tab-btn ${destinationSection === "lecture" ? "active" : ""}`} aria-label="특강자료" title={collapsed ? "특강자료" : undefined} aria-current={destinationSection === "lecture" ? "page" : undefined} onClick={() => handleSectionSelect("lecture")}><GraduationCap size={18} aria-hidden="true" />{!collapsed && <span>특강자료</span>}</button>
         {(
           <button
             type="button"
@@ -221,7 +222,7 @@ export default function AppSidebar({
             {!collapsed && <span>보관함</span>}
           </button>
         )}
-        </>
+        </details>
       </div>
 
       {!collapsed && !isLibraryDestination && <div className="app-sidebar-scroll-region">
@@ -263,12 +264,13 @@ export default function AppSidebar({
       <div className="sidebar-footer">
         {collapsed && isSectionDestination && <button
           type="button"
+          data-import-launcher={destinationSection === "problem_sheet" ? "true" : undefined}
           className="ui-icon-button sidebar-collapsed-create"
           aria-label={destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : `새 ${entryKindName(destination.section)} 추가`}
           title={destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : `새 ${entryKindName(destination.section)} 추가`}
           onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}
         ><Plus size={18} aria-hidden="true" /></button>}
-        {!collapsed && isSectionDestination && <button type="button" className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}>
+        {!collapsed && isSectionDestination && <button type="button" data-import-launcher={destinationSection === "problem_sheet" ? "true" : undefined} className="btn-new" onClick={destinationSection === "problem_sheet" ? openImport : destinationSection === "lecture" ? openLearningImport : openNew}>
           + {destinationSection === "problem_sheet" ? "시험지 가져오기" : destinationSection === "lecture" ? "특강 자료 가져오기" : destination.type === "section" ? `새 ${entryKindName(destination.section)} 추가` : ""}
         </button>}
         {!collapsed && isSectionDestination && destinationSection !== "wrong_answer" && (

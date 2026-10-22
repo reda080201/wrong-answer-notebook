@@ -933,7 +933,7 @@ export default function EntryForm({
               </button>
             </div>
             <p className="form-hint">
-              해설이 여러 개면 블록을 나누면, 복습 화면에서 해설 1, 해설 2로
+              해설을 여러 블록으로 나누면, 복습 화면에서 해설 1, 해설 2로
               구분됩니다.
             </p>
 

@@ -78,11 +78,37 @@ function stackSimpleFractions(value: string, depth = 0): string {
   return result;
 }
 
+/** Only explicit, top-level large gaps can become row boundaries. Nested TeX
+ * environments, delimiters and command arguments must retain their layout. */
+function layoutExplicitRows(value: string): string {
+  if (value.length < 80 || /\\(?:begin|end|left|right)\b/.test(value)) return value;
+  let depth = 0, parentheses = 0, start = 0;
+  const rows: string[] = [];
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === "\\") {
+      if (!depth && !parentheses && /^\\qquad(?![A-Za-z])/.test(value.slice(i))) {
+        rows.push(value.slice(start, i).trim());
+        i += 5; start = i + 1;
+      } else if (/^[{}()[\]\\]$/.test(value[i + 1] ?? "")) i++;
+      continue;
+    }
+    if (value[i] === "{") depth++;
+    else if (value[i] === "}") depth--;
+    else if (value[i] === "(" || value[i] === "[") parentheses++;
+    else if (value[i] === ")" || value[i] === "]") parentheses--;
+    if (depth < 0 || parentheses < 0) return value;
+  }
+  rows.push(value.slice(start).trim());
+  if (depth || parentheses || rows.length < 2 || rows.some(row => !row)) return value;
+  return `\\begin{gathered}${rows.join("\\\\")}\\end{gathered}`;
+}
+
 /** Display adapter only: never rewrite stored question text or annotation offsets. */
 export function typesetMathExpression(value: string, displayMode = false): string {
   const superscripts: Record<string, string> = { "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4", "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "ⁿ": "n", "ⁱ": "i", "⁺": "+", "⁻": "-" };
   const subscripts: Record<string, string> = { "₀": "0", "₁": "1", "₂": "2", "₃": "3", "₄": "4", "₅": "5", "₆": "6", "₇": "7", "₈": "8", "₉": "9", "ₐ": "a", "ₑ": "e", "ₒ": "o", "ₓ": "x", "ₕ": "h", "ₖ": "k", "ₗ": "l", "ₘ": "m", "ₙ": "n", "ₚ": "p", "ₛ": "s", "ₜ": "t", "ᵢ": "i", "₊": "+", "₋": "-" };
-  const expression = stackSimpleFractions(value
+  let expression = stackSimpleFractions(value
+    .replace(/(^|[^\\A-Za-z])([A-Z]\s*=\s*)\{(\s*-?\d+(?:\s*,\s*-?\d+)+\s*)\}/g, "$1$2\\{$3\\}")
     .replace(/[′’]/g, "'").replace(/″/g, "''").replace(/‴/g, "'''")
     .replace(/([A-Za-z)\]])((?:\\prime\s*)+)(?![A-Za-z])/g, "$1^{$2}")
     .replace(/∑|Σ(?=\s*[_^])/g, "\\sum ")
@@ -93,6 +119,7 @@ export function typesetMathExpression(value: string, displayMode = false): strin
     .replace(/√\s*(\d+(?:\.\d+)?|[A-Za-z])/g, "\\sqrt{$1}")
     .replace(/\\operatorname\{Area\}|(?<![A-Za-z\\])Area(?=\s*\()/g, "\\text{넓이}")
     .replace(/(^|[^\\A-Za-z])(sin|cos|tan|log|ln|lim)(?=\s|[(_^])/g, "$1\\$2"));
+  if (displayMode) expression = layoutExplicitRows(expression);
   // Inline TeX normally puts sum/limit bounds beside the operator. Textbook
   // expressions need display style even when embedded in a Korean sentence.
   return !displayMode && /\\(?:sum|prod|int|lim|d?frac)(?![A-Za-z])/.test(expression)

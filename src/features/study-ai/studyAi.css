@@ -40,3 +40,6 @@ body:has([role="dialog"][data-dialog-layer]) > .study-ai-panel {
     visibility: hidden;
     pointer-events: none;
 }
+
+/* A session owns its bottom navigation; AI lives in its header instead. */
+body:has(.exam-session-view, .real-exam-session) > .study-ai-launcher { display: none; }

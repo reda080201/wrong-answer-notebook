@@ -47,3 +47,15 @@
 .exam-result-actions button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 @media (max-width: 900px) { .exam-session-body .exam-question-paper { margin-block: 12px; padding: 20px 16px; } .scroll-to-top-button { right: 12px; bottom: 64px; } .scroll-to-top-button--detail { bottom: 12px; } }
 @media (max-width: 760px) { .exam-session-header .exam-header-actions { width: 100%; justify-content: flex-start; } }
+
+.exam-session-view .exam-question-navigation > button,
+.exam-session-view .exam-header-actions > button,
+.real-exam-header-status > button:not(.ui-icon-button) {
+  min-height: 38px; padding: 7px 12px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--surface); color: var(--text); font: inherit;
+}
+.exam-session-view .exam-question-navigation > button:disabled { opacity: .45; cursor: default; }
+.exam-session-view .exam-question-navigation > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.real-exam-header { flex-wrap: wrap; }
+.real-exam-header > div:first-child { min-width: 0; flex: 1 1 240px; overflow-wrap: anywhere; }
+.real-exam-header-status { flex-wrap: wrap; gap: 8px; margin-left: auto; }

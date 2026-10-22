@@ -46,6 +46,7 @@ describe("SettingsAiPanel", () => {
 
   it("commits the base URL once when Enter blurs the field", () => {
     const { onConfigChange } = renderPanel();
+    fireEvent.click(screen.getByText("고급 연결 설정", { exact: true }));
     const baseUrl = screen.getByRole("textbox", { name: /^기본 URL/ });
     baseUrl.focus();
     fireEvent.change(baseUrl, { target: { value: "https://example.test/v1" } });

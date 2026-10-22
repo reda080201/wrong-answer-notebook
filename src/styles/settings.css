@@ -103,3 +103,11 @@
   .settings-modal-tabs > [aria-label="설정 섹션"] { display: flex; gap: var(--space-1); }
   .settings-modal-tabs button { flex: 0 0 auto; }
 }
+
+@media (max-width: 820px) {
+  .settings-modal-tabs { padding: 8px 12px; }
+  .settings-modal-tabs > nav { width: 100%; min-width: 0; }
+  .settings-modal-tabs .settings-navigation-list { display: flex; flex-direction: row; gap: 4px; overflow-x: auto; margin: 0; padding: 0; }
+  .settings-modal-tabs .settings-navigation-list > li { flex: 0 0 auto; }
+  .settings-modal-tabs button { white-space: nowrap; min-height: 36px; }
+}

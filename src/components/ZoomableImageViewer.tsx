@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent } from "react";
-import { getImageUrl } from "../api";
+import { useImagePreviewResolver } from "../shared/ui/ImagePreviewContext";
 import Dialog from "../shared/ui/Dialog";
 
 const MIN_SCALE = 0.5;
@@ -10,6 +10,7 @@ function clampScale(value: number) {
 }
 
 export default function ZoomableImageViewer({ filenames }: { filenames: string[] }) {
+  const getImageUrl = useImagePreviewResolver();
   const [sources, setSources] = useState<Array<{ filename: string; url: string }>>([]);
   const [open, setOpen] = useState(false);
   const [index, setIndex] = useState(0);
@@ -29,7 +30,7 @@ export default function ZoomableImageViewer({ filenames }: { filenames: string[]
         if (!cancelled) setSources([]);
       });
     return () => { cancelled = true; };
-  }, [filenames]);
+  }, [filenames, getImageUrl]);
 
   useEffect(() => {
     if (!open) return;

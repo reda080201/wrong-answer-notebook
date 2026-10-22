@@ -13,6 +13,7 @@ import { useStudySelection } from "./activeSelection";
 import { requestStudyAi } from "./api";
 import { useChatPanelAccessibility } from "./useChatPanelAccessibility";
 import "./studyAi.css";
+import { listenForStudyAiOpen } from "./StudyAiButton";
 import { useRealExamProtection } from "../exam/services/realExamProtection";
 function newConversation(): AiConversation { return { id: crypto.randomUUID(), title: "새 대화", updatedAt: new Date().toISOString(), messages: [], materials: [], sharing: { ...DEFAULT_AI_SHARING }, contextId: crypto.randomUUID() }; }
 export default function StudyAiChat({ entries, selectedEntryId, session, onSaveExam, onStartExam, onSettings }: {
@@ -46,8 +47,10 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const generation = useRef(0);
     const controller = useRef<AbortController | null>(null);
     const launcher = useRef<HTMLButtonElement>(null);
+    const returnFocus = useRef<HTMLButtonElement>(null);
+    useEffect(() => listenForStudyAiOpen(opener => { returnFocus.current = opener; setOpen(true); }), []);
     const panelRef = useRef<HTMLElement>(null);
-    const compact = useChatPanelAccessibility(open, panelRef, launcher);
+    const compact = useChatPanelAccessibility(open, panelRef, returnFocus);
     const inputRef = useRef<HTMLTextAreaElement>(null);
     const scroll = useRef<HTMLDivElement>(null);
     const active = store.conversations.find(c => c.id === activeId);
@@ -277,7 +280,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             }
         }
     };
-    const close = () => { setOpen(false); launcher.current?.focus(); };
+    const close = () => { setOpen(false); (returnFocus.current?.isConnected ? returnFocus.current : launcher.current)?.focus(); };
     const panel = open && <aside ref={panelRef} tabIndex={-1} role="dialog" aria-label="AI 학습 대화" aria-modal={compact} className="study-ai-panel" onKeyDown={e => {
             if (e.key === "Escape") {
                 e.stopPropagation();
@@ -342,5 +345,5 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                     void send(last.text, { conversationId: active!.id, contextId: active!.contextId, messageId: last.id });
             }}>마지막 질문 재시도</button></div></form><small>API 사용 요금은 연결한 제공자 계정에 청구됩니다. 대화 기록은 이 기기에 보관합니다.</small></footer>
   </aside>;
-    return <>{createPortal(<><button ref={launcher} type="button" className="study-ai-launcher" aria-label="AI 학습 대화 열기" aria-expanded={open} onClick={() => setOpen(v => !v)}>AI</button>{panel}</>, document.body)}{composer && active && <AiExamComposer draftId={`conversation:${active.id}`} entries={entries.filter(e => !blockedIds.has(e.id))} initialMaterials={active.materials} initialProposal={active.proposal} onProposal={async (exam) => { await updateConversation({ ...storeRef.current.conversations.find(c => c.id === active.id)!, proposal: exam }); }} onClose={() => { setComposer(false); setOpen(true); }} onSave={onSaveExam} onStart={async exam=>{await onStartExam(exam);setComposer(false);setOpen(false);}}/>}</>;
+    return <>{createPortal(<><button ref={launcher} type="button" className="study-ai-launcher" aria-label="AI 학습 대화 열기" aria-expanded={open} onClick={event => { returnFocus.current = event.currentTarget; setOpen(v => !v); }}>AI</button>{panel}</>, document.body)}{composer && active && <AiExamComposer draftId={`conversation:${active.id}`} entries={entries.filter(e => !blockedIds.has(e.id))} initialMaterials={active.materials} initialProposal={active.proposal} onProposal={async (exam) => { await updateConversation({ ...storeRef.current.conversations.find(c => c.id === active.id)!, proposal: exam }); }} onClose={() => { setComposer(false); setOpen(true); }} onSave={onSaveExam} onStart={async exam=>{await onStartExam(exam);setComposer(false);setOpen(false);}}/>}</>;
 }

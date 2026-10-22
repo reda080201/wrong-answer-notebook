@@ -174,6 +174,7 @@ test("lecture fullscreen occupies the viewport and closes with Escape", async ({
   await page.setViewportSize({ width: 1100, height: 750 });
   await seedEntries(page);
   await page.goto("/", { waitUntil: "domcontentloaded" });
+  if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
   await page.getByRole("button", { name: "특강자료" }).click();
   await page.locator(".entry-card", { hasText: "합성 함수 특강" }).click();
   const trigger = page.getByRole("button", { name: "특강 전체 화면" });

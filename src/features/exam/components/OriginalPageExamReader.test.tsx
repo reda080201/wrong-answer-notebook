@@ -69,6 +69,7 @@ describe("OriginalPageExamReader touch navigation", () => {
   it("retries an image decode error without resetting zoom or the selected pages", async () => {
     renderReader();
     const image = await screen.findByAltText("원본 문제지 페이지 1");
+    fireEvent.click(screen.getByRole("button", { name: "보기·도구" }));
     fireEvent.click(screen.getByRole("button", { name: "확대" }));
     const percent = screen.getByText(/\d+%/).textContent;
     fireEvent.error(image);

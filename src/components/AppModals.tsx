@@ -230,9 +230,25 @@ export default function AppModals({
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: existingSession ?? (assetFiles.length ? { id: staged?.sessionId ?? `memory-${uuidv4()}`, mode: staged ? "tauri-staged" : "memory-only", manifestVersion: staged ? 1 : undefined, createdAt: staged ? now : undefined, sourceToStaged: staged?.sourceToStaged, assets: staged?.assets ?? assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined), groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
+  const workspaceFileUrls = useRef(new Map<File, string>());
+  useEffect(() => {
+    for (const [file, url] of workspaceFileUrls.current) {
+      if (!workspaceAssetFiles.includes(file)) { URL.revokeObjectURL(url); workspaceFileUrls.current.delete(file); }
+    }
+  }, [workspaceAssetFiles]);
+  useEffect(() => {
+    const urls = workspaceFileUrls.current;
+    return () => { urls.forEach(url => URL.revokeObjectURL(url)); urls.clear(); };
+  }, []);
   const resolveWorkspacePageUrl = useCallback(async (filename: string, session?: ImportAssetSessionManifest) => {
     const file = workspaceAssetFiles.find(item => item.name === filename || item.name === filename.split(/[\\/]/).pop());
-    if (file) return URL.createObjectURL(file);
+    if (file) {
+      const cached = workspaceFileUrls.current.get(file);
+      if (cached) return cached;
+      const url = URL.createObjectURL(file);
+      workspaceFileUrls.current.set(file, url);
+      return url;
+    }
     if (session?.mode === "tauri-staged") return getImportAssetPreviewUrl(session, filename);
     return getImageUrl(filename);
   }, [workspaceAssetFiles]);
