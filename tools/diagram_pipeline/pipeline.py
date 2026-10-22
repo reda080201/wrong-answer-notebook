@@ -37,6 +37,24 @@ def generation_input_hash(source, figure):
     return digest(json_bytes({"sourceSha256": source["sha256"], **{key: figure.get(key) for key in ("page", "crop", "questionCrop", "method", "spec", "parameters")}}))
 
 
+def terminate_worker(process):
+    if process.poll() is not None:
+        return
+    if os.name == "nt":
+        # A Windows venv executable can be a launcher with a separate Python
+        # child. Killing just Popen.pid can leave that worker and stderr alive.
+        import ctypes
+        directory = ctypes.create_unicode_buffer(32768)
+        length = ctypes.windll.kernel32.GetSystemDirectoryW(directory, len(directory))
+        if not 0 < length < len(directory):
+            raise PipelineError("Cannot locate the Windows process-tree terminator")
+        result = subprocess.run([str(Path(directory.value) / "taskkill.exe"), "/PID", str(process.pid), "/T", "/F"], shell=False, capture_output=True, timeout=10, creationflags=subprocess.CREATE_NO_WINDOW)
+        if result.returncode and process.poll() is None:
+            raise PipelineError("Could not terminate the isolated worker process tree")
+    else:
+        process.kill()
+
+
 def run_worker(job, out, key):
     job_path = out / "jobs" / f"{key}.json"
     result_path = out / "jobs" / f"{key}.result.json"
@@ -65,11 +83,14 @@ def run_worker(job, out, key):
     except subprocess.TimeoutExpired as exc:
         raise PipelineError("Isolated worker exceeded the 60 second limit; evidence retained") from exc
     finally:
-        if process.poll() is None:
-            process.kill()
-        process.wait()
-        reader.join(timeout=1)
-        process.stderr.close()
+        try:
+            terminate_worker(process)
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.wait()
+            reader.join(timeout=1)
+            process.stderr.close()
 
 
 def inspect_input(path: Path, out: Path):

@@ -7,6 +7,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from tools.diagram_pipeline.pipeline import inspect_input, package, render, run_worker
+from tools.diagram_pipeline import pipeline
 from tools.diagram_pipeline.security import PipelineError, json_bytes, load_json, relative_path
 
 
@@ -86,9 +87,47 @@ def test_worker_timeout_and_cancel_terminate_process(monkeypatch, tmp_path, exce
         assert isinstance(command, list)
         return process
     monkeypatch.setattr(subprocess, "Popen", popen)
+    monkeypatch.setattr(pipeline, "terminate_worker", lambda child: child.kill())
     with pytest.raises((PipelineError, KeyboardInterrupt)):
         run_worker({"action": "test"}, tmp_path, "test")
     assert process.killed
+
+
+def test_cancellation_terminates_the_actual_windows_venv_child(tmp_path):
+    import ctypes
+    import os
+    import sys
+    import time
+    record = tmp_path / "actual-child-pid"
+    script = tmp_path / "family.py"
+    child_code = "import os,sys,time;from pathlib import Path;Path(sys.argv[1]).write_text(str(os.getpid()));time.sleep(120)"
+    script.write_text("import subprocess,sys,time\nsubprocess.Popen([sys.executable,'-c'," + repr(child_code) + ",sys.argv[1]])\ntime.sleep(120)\n", encoding="utf-8")
+    process = subprocess.Popen([sys.executable, str(script), str(record)], shell=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    child_pid = None
+    handle = None
+    try:
+        until = time.monotonic() + 15
+        while not record.exists() and time.monotonic() < until:
+            time.sleep(.02)
+        assert record.exists(), "The real Python child must start before cancellation"
+        child_pid = int(record.read_text())
+        if os.name == "nt":
+            kernel = ctypes.windll.kernel32
+            kernel.OpenProcess.restype = ctypes.c_void_p
+            handle = kernel.OpenProcess(0x100000, False, child_pid)
+            assert handle, "Hold a real child handle before termination, avoiding PID reuse"
+        pipeline.terminate_worker(process)
+        process.wait(timeout=10)
+        if handle:
+            kernel.WaitForSingleObject.argtypes = (ctypes.c_void_p, ctypes.c_uint32)
+            assert kernel.WaitForSingleObject(handle, 3000) == 0, "Actual worker survived launcher termination"
+    finally:
+        pipeline.terminate_worker(process)
+        if handle:
+            kernel.CloseHandle.argtypes = (ctypes.c_void_p,)
+            kernel.CloseHandle(handle)
+        if os.name != "nt" and child_pid:
+            os.kill(child_pid, 9)
 
 
 def test_existing_symlink_or_junction_is_rejected(tmp_path):

@@ -25,6 +25,7 @@
 - 그림별 단일 worker의 기본60초·1GiB Windows Job Object, 자식 생성 제한, 취소/시간 초과 종료. 이는 worker commit 제한이며 전체 앱 RAM 상한이나 완전한 샌드박스가 아니다.
 - traversal/절대·drive 경로/symlink/junction/reparse/서로 다른 기존 출력 덮어쓰기를 거부한다. 이미지25MiB/edge16384/64MP/추정RGBA256MiB, PDF500MiB/300페이지, 객체·윤곽 수 제한.
 - worker stderr는 마지막64KiB만 유지한다. ZIP은 자산별로 작성하고 다시 열어 CRC/참조/해시를 검사한 뒤 덮어쓰기 없는 원자적 publish를 한다.
+- Windows venv 실행 파일이 실제 Python 자식을 별도로 띄우는 경계를 추가로 확인했다. 부모 PID만 종료하던 처리를 시스템 taskkill의 /T 종료로 수정했고, 실제 자식 핸들을 잡아 종료를 확인하는 회귀가 1.44초에 통과했다. 모의 프로세스 종료 검사와 구분한다.
 - `verify`는 수학적 동일성을 항상 `not_proven`으로 기록한다. 외부 `confirmed:true`, 보고서, 해시, 모델 주장도 앱 승인 근거가 아니다.
 
 ## 사용자 자료와 합성 자료
@@ -50,7 +51,7 @@
 
 - 독립 npm ci. 첫 E2E 부팅에서 설치 stamp 누락으로 npm ci가 다시 시작됐다가 중단돼 .bin이 불완전해졌고, 별도 npm ci를 끝까지 실행해 복구했다. 코드나 package-lock 변경으로 덮지 않았다.
 - npm run check: unit200파일/1,236개 통과, lint오류0·기존경고55, version/debug/MCP/Tauri/startup/release/CSS 계약과 TypeScript/Vite build 통과.
-- Python44개 통과: 실제 PNG→ZIP 재열기, 벡터·회전·스캔 PDF, PNG/JPEG/WebP, AST 거부, 오라벨/선 누락을 수학적 통과로 처리하지 않음, 손상 파일/잘못된 경로/변경된 원본ROI/중복 번호/미배치/타임아웃·취소 종료. Ruff/pip check 통과.
+- 최종 Python45개 통과(189.80초): 실제 PNG→ZIP 재열기, 벡터·회전·스캔 PDF, PNG/JPEG/WebP, AST 거부, 오라벨/선 누락을 수학적 통과로 처리하지 않음, 손상 파일/잘못된 경로/변경된 원본ROI/중복 번호/미배치/타임아웃·취소 및 실제 Windows 자식 종료. Ruff/pip check 통과.
 - Python 실행 시간에는 장시간 호스트/도구 정지가 포함돼 정상 처리 성능 수치로 사용할 수 없다.
 - 전체 로컬 E2E53개 중51개 통과/2개 실패. 새 CLI ZIP3개(1100/680 저장·재진입, 위조SHA 차단)는 모두 통과.
 - 실패1:A4가로1100 연습 화면의 oversized 페이지 수가5초 내0이었다. 실패2:A4가로1920 실전 진입 후 reader 문항 수0, 로그에는 탐색 완료 대기가 있었다.

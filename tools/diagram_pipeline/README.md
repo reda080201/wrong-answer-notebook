@@ -119,6 +119,9 @@ store a user representation choice. Both images remain referenced/protected.
 Generation uses one isolated worker at a time: 60s wall limit and 1GiB process
 commit limit via Windows Job Objects (plus no child processes). POSIX resource
 limits are implemented but that environment is not covered by this Windows lock.
+Windows cancellation terminates the entire launcher/worker process tree using
+the system taskkill utility; killing only a virtual-environment launcher PID
+would leave its actual Python child alive. Cleanup errors are reported.
 The memory limit applies to the worker, not the whole app/system. Input image
 limits match the app: 25MiB, 16,384px per edge, 64MP, RGBA estimate ≤256MiB. PDF
 input ≤500MiB/300 pages; object/contour counts are bounded. ZIP creation streams
