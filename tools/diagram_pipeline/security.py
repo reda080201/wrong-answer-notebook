@@ -58,9 +58,18 @@ def read_bytes(path: Path, limit: int = MAX_INPUT) -> bytes:
     return data
 
 
+def _unique_pairs(items):
+    result = {}
+    for key, value in items:
+        if key in result:
+            raise PipelineError(f"Duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
 def load_json(path: Path):
     try:
-        return json.loads(read_bytes(path, MAX_JSON), parse_constant=lambda s: (_ for _ in ()).throw(PipelineError(f"Nonfinite JSON: {s}")))
+        return json.loads(read_bytes(path, MAX_JSON), object_pairs_hook=_unique_pairs, parse_constant=lambda s: (_ for _ in ()).throw(PipelineError(f"Nonfinite JSON: {s}")))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise PipelineError(f"Invalid JSON: {path.name}") from exc
 

@@ -147,9 +147,9 @@ def process(job):
                 result["messages"].append(f"Traced {len(contours)} observed contours; labels/topology not independently verified")
             artifacts["cleaned"] = save("cleaned", Image.fromarray(binary))
             result["messages"].append("Threshold/deskew can alter fine marks; compare with original")
-        elif method == "computational_redraw":
-            from .drawing import redraw
-            content, messages = redraw(figure.get("spec"))
+        elif method in ("computational_redraw", "computational_preview"):
+            from .drawing import redraw, preview_redraw
+            content, messages = (preview_redraw if method == "computational_preview" else redraw)(figure.get("spec"))
             artifacts["cleaned"] = save("cleaned", None, content)
             result["messages"].extend(messages)
             result["messages"].append("Rendered the supplied spec; correspondence to the source is not proven")
@@ -161,6 +161,9 @@ def process(job):
     except (ValueError, OSError, KeyError, TypeError, MemoryError) as exc:
         result.update(status="failed", method=figure.get("method"), failure=f"{type(exc).__name__}: {exc}")
         artifacts.pop("cleaned", None)
+        if figure.get("allowCandidateFallback") is True and "original" in artifacts and "sourcePage" in artifacts:
+            result.update(status="original_fallback", generationState="failed", integrityState="unchecked")
+            result["messages"].append("Candidate failed; preserved original for review")
     return result
 
 

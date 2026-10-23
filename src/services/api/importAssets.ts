@@ -23,12 +23,12 @@ export interface ImportAssetCommitResult {
   entries?: WrongAnswerEntry[];
 }
 
-export async function stageImportAssetFiles(files: File[]): Promise<ImportAssetStageResult | null> {
+export async function stageImportAssetFiles(files: File[], existingSessionId?: string): Promise<ImportAssetStageResult | null> {
   const backendKind = getStorageBackendKind();
   if (backendKind === "isolated-browser" || !files.length) return null;
-  const sessionId = backendKind === "tauri"
+  const sessionId = existingSessionId ?? (backendKind === "tauri"
     ? await invoke<string>("create_import_asset_session")
-    : (await proxyRequest<{ sessionId: string }>("/v1/import-sessions", { method: "POST" })).sessionId;
+    : (await proxyRequest<{ sessionId: string }>("/v1/import-sessions", { method: "POST" })).sessionId);
   const sourceToStaged: Record<string, string> = {};
   const assets: ImportAssetStageResult["assets"] = [];
   try {

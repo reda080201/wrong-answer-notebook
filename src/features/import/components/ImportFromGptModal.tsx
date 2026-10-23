@@ -1,3 +1,4 @@
+import { VisionImportBridge } from "../vision/VisionImportBridge";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { deleteImage, saveImageFiles } from "../../../api";
@@ -78,7 +79,7 @@ interface ImportFromGptModalProps {
   onClose: () => void;
   onApply: (data: Partial<EntryFormData>, applyMode?: GptSolutionApplyMode, assetFiles?: File[], savedImageFilenames?: string[], sourceFilename?: string) => Promise<void> | void;
   onApplyEntries?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
-  onOpenWorkspace?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => Promise<void> | void;
+  onOpenWorkspace?: (entries: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest, visionJob?: import("../vision/visionJob").VisionJobDraft, originalFiles?: File[]) => Promise<void> | void;
   recoveryNotice?: ReactNode;
   commitLocked?: boolean;
   onRecoverCommit?: () => Promise<void>;
@@ -88,6 +89,7 @@ interface ImportFromGptModalProps {
   aiProviderStatus?: AiProviderStatus | null;
   onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
   onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void) => Promise<VisualPaperImportResult>;
+  onAnalyzeVisualFiles?: (file: File[], signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void) => Promise<VisualPaperImportResult>;
   onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
@@ -301,6 +303,7 @@ export default function ImportFromGptModal({
   aiProviderStatus,
   onGenerateWithAi,
   onAnalyzeVisualFile,
+  onAnalyzeVisualFiles,
   onDiscardAssetSession,
   selectedPromptTemplateId,
   onPromptTemplateSelect,
@@ -362,6 +365,7 @@ export default function ImportFromGptModal({
   const [visualProgress, setVisualProgress] = useState<{ phase: "rasterize" | "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean } | null>(null);
   const [visualResult, setVisualResult] = useState<VisualPaperImportResult | null>(null);
   const [visualCleanupSession, setVisualCleanupSession] = useState<ImportAssetSessionManifest | null>(null);
+  const [failedVision, setFailedVision] = useState<{ text: string; files: File[] } | null>(null);
   const [visualCleanupError, setVisualCleanupError] = useState<string | null>(null);
   const visualControllerRef = useRef<AbortController | null>(null);
   const visualRequestIdRef = useRef(0);
@@ -645,8 +649,8 @@ export default function ImportFromGptModal({
     }
   };
 
-  const analyzeVisualPaper = async (file?: File) => {
-    if (!file) return;
+  const analyzeVisualPaper = async (file?: File | File[]) => {
+    if (!file || Array.isArray(file) && !file.length) return;
     if (!onAnalyzeVisualFile) {
       setError("PDF/이미지 분석은 데스크톱 앱과 사용 가능한 AI provider가 필요합니다.");
       return;
@@ -662,14 +666,33 @@ export default function ImportFromGptModal({
     setError(null);
     setVisualProgress({ phase: "rasterize", current: 0, indeterminate: true });
     try {
-      const result = await onAnalyzeVisualFile(file, controller.signal, setVisualProgress);
+      const reportProgress: Parameters<NonNullable<typeof onAnalyzeVisualFile>>[2] = progress => {
+        if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setVisualProgress(progress);
+      };
+      const result = await (Array.isArray(file) && onAnalyzeVisualFiles ? onAnalyzeVisualFiles(file, controller.signal, reportProgress) : onAnalyzeVisualFile(Array.isArray(file) ? file[0] : file, controller.signal, reportProgress));
       if (requestId !== visualRequestIdRef.current || controller.signal.aborted) {
         await discardVisualSession(result.assetSession);
         return;
       }
       setHasUnsavedInput(true);
       setVisualResult(result);
+      setFailedVision(null);
       visualResultRef.current = result;
+      const imported = parseAllInOneImport(result.responseText, "visual-paper-import.json", fallbackSubject);
+      if (imported.entries.length > 1) {
+        if (!onOpenWorkspace) throw new Error("여러 자료의 관측 결과는 작업실에서 함께 검토해야 합니다. 작업 묶음 내보내기를 사용할 수 있습니다.");
+        const mapping = result.assetSession.sourceToStaged ?? {};
+        const map = (filename: string) => {
+          const staged = mapping[normalizeImportImageKey(filename)];
+          if (!staged) throw new Error(`관측 원본 자산 연결이 없습니다: ${filename}`);
+          return staged;
+        };
+        const entries = imported.entries.map(entry => ({ ...entry, ...mapEntryImportImageReferences(entry, map) }));
+        await onOpenWorkspace(entries, [], result.assetSession, result.visionJob, result.originalFiles);
+        preserveVisualSessionRef.current = true;
+        onClose();
+        return;
+      }
       setRawText(result.responseText);
       setFilename("visual-paper-import.json");
       setDraftOverride(null);
@@ -677,8 +700,9 @@ export default function ImportFromGptModal({
       setEntryKindResolution(null);
       setImportWarnings([]);
       setImages([]);
-      setCopyMessage("분석 결과를 불러왔습니다. 검토 후 가져오기를 선택하세요.");
+      setCopyMessage("관측 결과와 원본을 불러왔습니다. PNG 후보 생성은 별도이며 원본을 검토해 저장할 수 있습니다.");
     } catch (analysisError) {
+      if (analysisError instanceof VisualPaperImportError && analysisError.analysisText) { setFailedVision({ text: analysisError.analysisText, files: analysisError.originalFiles ?? [] }); setHasUnsavedInput(true); }
       if (analysisError instanceof VisualPaperImportError && analysisError.assetSession) {
         setVisualCleanupSession(analysisError.assetSession);
         visualCleanupSessionRef.current = analysisError.assetSession;
@@ -1030,7 +1054,7 @@ export default function ImportFromGptModal({
 
   const openWorkspace = async () => {
     if (!draft || !onOpenWorkspace || isSolutionMode || isSupplementalMode) return;
-    const opened = await importSaveCoordinator.run(async () => { await onOpenWorkspace([canonicalizeImportDraftForSave(draft)], assetFiles, visualResult?.assetSession); });
+    const opened = await importSaveCoordinator.run(async () => { await onOpenWorkspace([canonicalizeImportDraftForSave(draft)], assetFiles, visualResult?.assetSession, visualResult?.visionJob, visualResult?.originalFiles); });
     if (opened) { if (visualResult?.assetSession) preserveVisualSessionRef.current = true; onClose(); }
   };
 
@@ -1138,12 +1162,13 @@ export default function ImportFromGptModal({
                     <div><h3>PDF / 이미지 시험지 가져오기</h3><p>원본 페이지를 보존하고, 분석 결과를 검토한 뒤 시험지로 저장합니다. 최대 12페이지까지 분석합니다.</p></div>
                   </div>
                   <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
-                  <input ref={visualFileInputRef} id="visual-paper-file" className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => void analyzeVisualPaper(event.target.files?.[0])} />
+                  <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => void analyzeVisualPaper(onAnalyzeVisualFiles ? Array.from(event.target.files ?? []) : event.target.files?.[0])} />
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
                     <span>{visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…"}</span>
                     {visualProgress?.total ? <progress max={visualProgress.total} value={visualProgress.current} /> : <progress />}
                     <button type="button" className="btn-secondary btn-sm" onClick={() => visualControllerRef.current?.abort()}>분석 취소</button>
                   </div>}
+                  <VisionImportBridge key={visualResult?.assetSession.id ?? (failedVision ? "failed-vision" : "external-vision")} initialAnalysis={visualResult?.visionAnalysisText ?? failedVision?.text} initialFiles={visualResult?.originalFiles ?? failedVision?.files} expectedSources={visualResult?.visionJob?.sourceFiles} initialDraftText={visualResult?.visionJob?.draftAnalysisText} disabled={saving || aiGenerating} onDraftChange={text => { setHasUnsavedInput(true); setVisualResult(current => { if (!current?.visionJob) return current; const next = { ...current, visionJob: { ...current.visionJob, draftAnalysisText: text } }; visualResultRef.current = next; return next; }); }} />
                   {visualResult && <p className="form-hint" role="status">원본 {visualResult.sourcePageImages.length}페이지를 보존했습니다. {questionCount || "문항 수를 확인해 주세요"}문항을 검토한 뒤 저장할 수 있습니다.</p>}
                   {error && <p className="form-error" role="alert">{error}</p>}
                   {!aiProviderStatus?.available && <div className="form-hint">AI 분석을 사용할 수 없습니다. {onOpenSettings && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenSettings("ai")}>AI 설정 열기</button>}</div>}

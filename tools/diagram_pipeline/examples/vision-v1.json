@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "wrong-answer-notebook-vision-v1",
+  "document": {
+    "title": "합성 예제: 수직선 문항",
+    "subject": "수학",
+    "materialKind": "problem_sheet",
+    "pageCount": 1
+  },
+  "sources": [
+    { "sourceKey": "upload-1", "pageCount": 1 }
+  ],
+  "entries": [
+    {
+      "entryKey": "synthetic-exam",
+      "title": "합성 예제: 수직선 문항",
+      "subject": "수학",
+      "questions": [
+        {
+          "questionKey": "q-page1-ordinal1",
+          "questionNumber": "1",
+          "source": {
+            "sourceKey": "upload-1",
+            "page": 1,
+            "questionRect": { "x": 0.05, "y": 0.06, "width": 0.9, "height": 0.28 }
+          },
+          "questionText": "다음 수직선을 보고 옳은 것을 고르시오.",
+          "contentSegments": [
+            { "id": "q1-t1", "type": "text", "text": "다음 수직선을 보고 옳은 것을 고르시오." },
+            { "id": "q1-g1", "type": "figure", "figureKey": "fig-line-1" }
+          ],
+          "choices": ["① x > -2", "② x < 2"],
+          "figureKeys": ["fig-line-1"],
+          "uncertainties": []
+        }
+      ]
+    }
+  ],
+  "figures": [
+    {
+      "figureKey": "fig-line-1",
+      "entryKey": "synthetic-exam",
+      "questionKey": "q-page1-ordinal1",
+      "source": {
+        "sourceKey": "upload-1",
+        "page": 1,
+        "rect": { "x": 0.2, "y": 0.14, "width": 0.6, "height": 0.13 }
+      },
+      "figureType": "number_line",
+      "strategyHint": "raster_cleanup",
+      "observed": { "labels": ["-2", "2"], "openPoints": ["-2"], "closedPoints": ["2"] },
+      "proposedSpec": null,
+      "uncertainties": [],
+      "needsReview": true
+    }
+  ],
+  "audit": {
+    "detectedQuestionNumbers": ["1"],
+    "missingQuestionNumbers": [],
+    "uncertainQuestionNumbers": [],
+    "warnings": ["합성 형식 예제로 실제 source 파일과 연결되지 않음. 저장/ZIP 생성 완료 사례가 아님."]
+  }
+}

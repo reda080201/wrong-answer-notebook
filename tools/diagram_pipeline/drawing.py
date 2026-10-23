@@ -7,13 +7,58 @@ from .security import PipelineError, dimensions, number
 
 
 def redraw(spec):
+    if not isinstance(spec, dict) or spec.get("confirmed") is not True:
+        raise PipelineError("Redraw requires a human-reviewed explicit spec (not app approval)")
+    return _render_spec(spec)
+
+
+def preview_redraw(spec):
+    """Unconfirmed model proposal, always untrusted and comparison-only."""
+    if not isinstance(spec, dict) or "confirmed" in spec:
+        raise PipelineError("Preview cannot carry confirmation")
+    _validate_preview_spec(spec)
+    content, messages = _render_spec(spec)
+    return content, [*messages, "Unconfirmed model proposal; source equivalence not proven"]
+
+
+def _validate_preview_spec(spec):
+    """Never silently ignore a model's unsupported mark or endpoint convention."""
+    common = {"type", "size", "xlim", "ylim", "points", "segments", "circles", "regions", "marks", "relations", "labels"}
+    extra = {"number_line": {"intervals"}, "function_graph": {"curves", "xticks", "yticks", "functionRegions"}, "plane_geometry": set(), "table": {"rows", "pngRequired"}}
+    if spec.get("type") not in extra or set(spec) - common - extra[spec["type"]]:
+        raise PipelineError("Unsupported preview diagram fields/type; preserve original")
+    collections = {
+        "points": ({"id", "x", "y", "label", "labelDx", "labelDy", "marker", "open"}, {"id", "x"}),
+        "segments": ({"from", "to", "style"}, {"from", "to"}),
+        "circles": ({"center", "radius"}, {"center", "radius"}),
+        "regions": ({"points", "hatch"}, {"points"}),
+        "marks": ({"type", "points"}, {"type", "points"}),
+        "relations": ({"type", "points"}, {"type", "points"}),
+        "labels": ({"x", "y", "text"}, {"x", "y", "text"}),
+        "intervals": ({"bounds"}, {"bounds"}),
+        "curves": ({"expression", "intervals", "style"}, {"expression", "intervals"}),
+        "functionRegions": ({"bounds", "lower", "upper"}, {"bounds", "lower", "upper"}),
+    }
+    for field, (allowed, required) in collections.items():
+        values = spec.get(field, [])
+        if not isinstance(values, list) or len(values) > 200:
+            raise PipelineError(f"Invalid preview {field}")
+        for item in values:
+            if not isinstance(item, dict) or set(item) - allowed or not required <= set(item):
+                raise PipelineError(f"Unsupported preview {field} fields; preserve original")
+            for flag in ("open", "marker"):
+                if flag in item and not isinstance(item[flag], bool):
+                    raise PipelineError(f"Preview {flag} must be boolean")
+            if "style" in item and item["style"] not in ("solid", "dashed"):
+                raise PipelineError("Unsupported preview line style")
+
+
+def _render_spec(spec):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import numpy as np
 
-    if not isinstance(spec, dict) or spec.get("confirmed") is not True:
-        raise PipelineError("Redraw requires a human-reviewed explicit spec (not app approval)")
     width, height = spec.get("size", [1000, 650])
     dimensions(width, height)
     if width * height > 4_000_000:
