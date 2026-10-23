@@ -14,6 +14,11 @@ for (const width of [1100, 680]) {
     await page.getByRole("button", { name: "PDF / 이미지 분석", exact: true }).click();
     await expect(page.getByRole("button", { name: "PDF / 이미지 분석", exact: true })).toHaveAttribute("aria-pressed", "true");
     await page.locator("summary").filter({ hasText: "PNG 생성 작업 묶음" }).click();
+    await page.getByLabel("v8 관측 JSON", { exact: true }).fill('{"invalid":true}');
+    await page.getByRole("button", { name: "관측 형식 확인", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "관측 JSON 형식을 확인하지 못했습니다" })).toBeVisible();
+    await page.locator("summary").filter({ hasText: "오류 상세" }).click();
+    await expect(page.locator("pre").filter({ hasText: "$.schemaVersion" })).toBeVisible();
     await page.getByLabel("v8 관측 JSON", { exact: true }).fill(await readFile(resolve("tools/diagram_pipeline/examples/vision-v1.json"), "utf8"));
     await page.getByLabel("v8 원본 파일", { exact: true }).setInputFiles({ name: "source.png", mimeType: "image/png", buffer: Buffer.from(validPngBytes) });
     await page.getByRole("button", { name: "관측 형식 확인", exact: true }).click();

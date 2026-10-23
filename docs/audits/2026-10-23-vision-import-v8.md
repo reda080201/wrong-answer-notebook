@@ -62,16 +62,33 @@ it is not OCR validation of a private exam. Public fixture: `e2e/fixtures/vision
   This is not a full local unit pass. Bundled Node 24.19 also reproduced the default
   fork startup stall; system Node was 24.17. Cause remains unconfirmed. No timeouts
   were increased and no tests were skipped.
-- Local Windows cargo check: pass (single build job). Remaining local full E2E,
-  clippy/test/Tauri compile and final-head CI results are recorded in the PR report.
+- Local Windows cargo check: pass (single build job). Rust clippy/test and Windows Tauri compilation are executed by the same-head Windows CI;
+  local check/fmt are separate evidence. No installed executable was replaced.
 - First published head 5ada831f: GitHub Frontend (215 files / 1348 tests), E2E
   (59 tests), Python (87 tests plus actual PNG/ZIP/runtime probe), Rust (92 tests),
   and Tauri compile all passed in run 39916802053. Final-head results are tracked
   separately and must not be inferred from this earlier head.
 
+- Full local E2E: **57 passed / 2 failed**. A4 vertical 1100x750 lost the
+  practice reader during navigation; A4 vertical 1536x970 measured a non-oversized
+  page at ratio 0.62025 instead of 0.70707. Existing expectations/timeouts unchanged.
+  These are unresolved local failures, not a complete pass or a proven v8 regression.
+- First local final focused reruns also stalled at worker startup and were stopped.
+  Earlier related 64-test pass remains checkpoint evidence, not final full validation.
+- 5f0bd9aa same-head CI Frontend/E2E/Python/Rust passed; Tauri was still running at
+  this recording. The final PR report records the later head including UI error-summary
+  improvements and must supply that head's five conclusions.
+
 ## UI evidence
 
-These are browser E2E captures, not installed Windows-app manual checks.
+Direct browser use on a fresh isolated origin (1501) confirmed actual generated ZIP
+import, original/candidate loading, explicit compare confirmation/selection, save once,
+refresh and reopening with the selected candidate retained. Light theme and 1100/680px
+were inspected. Invalid observation JSON was also checked; its raw one-line error led
+to the Korean summary + expandable error detail improvement, covered by the new E2E.
+No real AI provider request was made. Test tab/server were closed after inspection.
+
+The saved captures below are browser E2E evidence, not installed Windows-app captures.
 
 Screenshots: `build/diagram-pipeline/v8/bridge-680.png` and `comparison-1100.png` locally;
 new E2E also writes `vision-bridge-{width}.png` and `vision-comparison-{width}.png`
@@ -89,5 +106,6 @@ to test-results, uploaded by the existing E2E CI artifact step.
 - P0/P1: no new reproduced data-loss or approval bypass in completed checks; unverified
   routes are not certified safe. P2: default local fork/full validation investigation.
   P3: existing bundle warnings and entryPaneOverrides cleanup remain separate.
-- MVP-ready: pending final checks. Merge-ready: **NO** until mandatory results are known.
+- MVP-ready: **YES for the synthetic local CLI/import bridge**; real OCR/provider accuracy remains unverified.
+  Merge-ready: **NO** while local full-unit startup and two A4 E2E failures remain unresolved.
   Release-ready: **NO** (deployment/license gate outside this change).
