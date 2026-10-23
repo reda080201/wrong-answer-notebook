@@ -37,6 +37,8 @@ def generation_input_hash(source, figure):
     payload = {"sourceSha256": source["sha256"], **{key: figure.get(key) for key in ("page", "crop", "questionCrop", "method", "spec", "parameters")}}
     if "svg" in figure:
         payload["svg"] = figure["svg"]
+    if "allowCandidateFallback" in figure:
+        payload["allowCandidateFallback"] = figure["allowCandidateFallback"]
     return digest(json_bytes(payload))
 
 
@@ -119,8 +121,8 @@ def validate_manifest(manifest):
     sources = manifest.get("sources")
     entries = manifest.get("entries")
     figures = manifest.get("figures")
-    if not isinstance(sources, list) or not sources or not isinstance(entries, list) or not entries or not isinstance(figures, list) or not figures or len(figures) > 300:
-        raise PipelineError("Manifest needs sources, entries and 1..300 explicit figures")
+    if not isinstance(sources, list) or not sources or not isinstance(entries, list) or not entries or not isinstance(figures, list) or len(figures) > 300:
+        raise PipelineError("Manifest needs sources, entries and 0..300 explicit figures")
     for collection in (sources, entries, figures):
         ids = [item.get("id") for item in collection if isinstance(item, dict)]
         if len(ids) != len(collection) or any(not isinstance(key, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", key) for key in ids) or len(set(ids)) != len(ids):
@@ -135,6 +137,12 @@ def validate_manifest(manifest):
             if not str(question.get("number", "")).strip():
                 raise PipelineError("Question display number is required")
             questions[entry["id"], key] = question
+            if "sourceRefs" in question and (not isinstance(question["sourceRefs"], list) or not 1 <= len(question["sourceRefs"]) <= 30 or question["sourceRefs"][0] != question.get("source")):
+                raise PipelineError("Question sourceRefs must start with its primary source")
+            for reference in question.get("sourceRefs", [question.get("source")]):
+                if reference is None:
+                    continue
+                _validate_reference(reference, source_map)
             reference = question.get("source")
             if reference is not None:
                 if not isinstance(reference, dict) or reference.get("sourceId") not in source_map:
@@ -155,6 +163,16 @@ def validate_manifest(manifest):
         if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= len(source.get("pages", [])):
             raise PipelineError("Invalid source page")
     return source_map, questions
+
+
+def _validate_reference(reference, sources):
+    if not isinstance(reference, dict) or reference.get("sourceId") not in sources:
+        raise PipelineError("Question source reference is missing")
+    page = reference.get("page")
+    if isinstance(page, bool) or not isinstance(page, int) or not 1 <= page <= len(sources[reference["sourceId"]]["pages"]):
+        raise PipelineError("Question source page out of range")
+    if "crop" in reference:
+        crop_box(reference["crop"])
 
 
 def render(path: Path, out: Path):
@@ -188,17 +206,22 @@ def render(path: Path, out: Path):
     failed = []
     for entry in manifest["entries"]:
         for question in entry["questions"]:
-            reference = question.get("source")
-            if not reference:
-                continue
-            source = source_map[reference["sourceId"]]
-            region = reference.get("crop", {"x": 0, "y": 0, "width": 1, "height": 1})
-            figure = {"page": reference["page"], "crop": region, "method": "original"}
-            if reference.get("crop"):
-                figure["questionCrop"] = region
-            key = "question-" + digest(json_bytes([entry["id"], question["key"]]))[:24]
-            question["sourceResult"] = run_worker({"action": "render", "input": str(relative_path(out, source["path"])), "source": source, "figure": figure, "out": str(out)}, out, key)
-            question["sourceResult"]["generationInputHash"] = generation_input_hash(source, figure)
+            refs = question.get("sourceRefs", [question.get("source")])
+            question["sourceResults"] = []
+            for ordinal, reference in enumerate(refs):
+                if not reference:
+                    continue
+                source = source_map[reference["sourceId"]]
+                region = reference.get("crop", {"x": 0, "y": 0, "width": 1, "height": 1})
+                figure = {"page": reference["page"], "crop": region, "method": "original"}
+                if reference.get("crop"):
+                    figure["questionCrop"] = region
+                key = "question-" + digest(json_bytes([entry["id"], question["key"], ordinal]))[:24]
+                result = run_worker({"action": "render", "input": str(relative_path(out, source["path"])), "source": source, "figure": figure, "out": str(out)}, out, key)
+                result["generationInputHash"] = generation_input_hash(source, figure)
+                question["sourceResults"].append({"reference": reference, "result": result})
+            if question["sourceResults"]:
+                question["sourceResult"] = question["sourceResults"][0]["result"]
     for index, figure in enumerate(manifest["figures"]):
         print(f"render {index + 1}/{len(manifest['figures'])}: {figure['id']}", file=sys.stderr)
         source = source_map[figure["sourceId"]]
@@ -225,12 +248,15 @@ def verify(path: Path):
     jobs = [(sources[figure["sourceId"]], figure, figure.get("result")) for figure in manifest["figures"]]
     for entry in manifest["entries"]:
         for question in entry["questions"]:
-            if "sourceResult" in question:
-                reference = question["source"]
+            results = question.get("sourceResults", [{"reference": question.get("source"), "result": question.get("sourceResult")}])
+            for source_result in results:
+                if not source_result["result"]:
+                    continue
+                reference = source_result["reference"]
                 figure = {"page": reference["page"], "crop": reference.get("crop", {"x": 0, "y": 0, "width": 1, "height": 1}), "method": "original"}
                 if reference.get("crop"):
                     figure["questionCrop"] = reference["crop"]
-                jobs.append((sources[reference["sourceId"]], figure, question["sourceResult"]))
+                jobs.append((sources[reference["sourceId"]], figure, source_result["result"]))
     verified_pages = set()
     for index, (source, figure, result) in enumerate(jobs):
         if not result or result.get("status") == "failed":
@@ -291,12 +317,15 @@ def package(path: Path, output: Path):
                     return result
                 return value
 
-            q = replace({k: v for k, v in question.items() if k not in ("key", "number", "source", "sourceResult")})
+            q = replace({k: v for k, v in question.items() if k not in ("key", "number", "source", "sourceRefs", "sourceResult", "sourceResults")})
             q["questionNumber"] = str(question["number"])
             q["figureIds"] = list(mapping.values())
             pages = []
-            if question.get("sourceResult"):
-                artifacts = question["sourceResult"]["artifacts"]
+            results = question.get("sourceResults", [{"reference": question.get("source"), "result": question.get("sourceResult")}])
+            for source_ordinal, source_result in enumerate(results):
+                if not source_result["result"]:
+                    continue
+                artifacts = source_result["result"]["artifacts"]
                 add_artifacts({k: v for k, v in artifacts.items() if k != "original"})
                 page_asset = artifacts["sourcePage"]["path"]
                 if page_asset not in data["sourcePageImages"]:
@@ -304,7 +333,7 @@ def package(path: Path, output: Path):
                 page_index = data["sourcePageImages"].index(page_asset) + 1
                 pages.append(page_index)
                 if "questionCrop" in artifacts:
-                    data["questionSourceCrops"].append({"id": "crop-" + digest(json_bytes([entry["id"], question["key"]]))[:24], "questionNumber": str(question["number"]), "image": artifacts["questionCrop"]["path"], "sourcePageImage": page_asset, "page": page_index, "cropRect": question["source"]["crop"]})
+                    data["questionSourceCrops"].append({"id": "crop-" + digest(json_bytes([entry["id"], question["key"], source_ordinal]))[:24], "questionNumber": str(question["number"]), "image": artifacts["questionCrop"]["path"], "sourcePageImage": page_asset, "page": page_index, "cropRect": source_result["reference"]["crop"]})
             visible_flow = json_bytes({k: v for k, v in q.items() if k != "figureIds"}).decode("utf-8")
             if any(identifier not in visible_flow for identifier in mapping.values()):
                 raise PipelineError("Every figure needs an explicit segment/token location; tail placement is not inferred")
@@ -318,6 +347,8 @@ def package(path: Path, output: Path):
                 pages.append(page_index)
                 original = artifacts["original"]
                 exported = {"id": mapping[figure["id"]], "questionNumber": str(question["number"]), "title": figure.get("title", "그림"), "caption": figure.get("caption", ""), "original": {"image": original["path"], "sourcePageImage": page_asset, "crop": figure["crop"]}, "image": original["path"], "source": "original", "preferredRepresentation": "original", "processingStatus": "needs_review", "needsReview": True}
+                if figure["result"].get("failure"):
+                    exported["caption"] = "후보 생성 실패 · 원본 보존 · 비교 검토 필요: " + figure["result"]["failure"][:500]
                 if "cleaned" in artifacts:
                     exported["cleaned"] = {"image": artifacts["cleaned"]["path"], "generatedBy": figure["result"]["method"], "generatedAt": manifest["createdAt"], "sourceImageHash": original["sha256"], "promptVersion": f"diagram-pipeline-{VERSION}"}
                 data["figures"].append(exported)

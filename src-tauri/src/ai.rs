@@ -187,10 +187,33 @@ fn read_ai_images(
             "AI 분석 이미지는 한 번에 {MAX_AI_IMAGE_COUNT}개 이하만 사용할 수 있습니다."
         ));
     }
+    read_ai_images_from(app, image_filenames, None)
+}
+
+fn read_ai_images_from(
+    app: &tauri::AppHandle,
+    image_filenames: &[String],
+    session_id: Option<&str>,
+) -> Result<Vec<(String, String)>, String> {
+    if image_filenames.len() > MAX_AI_IMAGE_COUNT {
+        return Err("AI 이미지 개수 한도를 넘었습니다.".into());
+    }
     let mut total_bytes = 0_u64;
     let mut images = Vec::with_capacity(image_filenames.len());
     for filename in image_filenames {
         let mime_type = vision_image_mime(filename)?;
+        if let Some(session) = session_id {
+            let bytes =
+                crate::import_assets::read_staged_preview(&app_dir(app)?, session, filename)?;
+            total_bytes = total_bytes
+                .checked_add(bytes.len() as u64)
+                .ok_or("AI 이미지 용량 오류")?;
+            if bytes.len() as u64 > MAX_AI_IMAGE_BYTES || total_bytes > MAX_AI_IMAGE_TOTAL_BYTES {
+                return Err("AI 분석 이미지 용량 한도를 넘었습니다.".into());
+            }
+            images.push((mime_type.to_string(), BASE64_STANDARD.encode(bytes)));
+            continue;
+        }
         let path = image_path(app, filename)?;
         if !path.exists() {
             return Err(format!("AI 분석 이미지가 없습니다: {filename}"));
@@ -1277,6 +1300,8 @@ pub(crate) struct StudyAiRequest {
     context: String,
     images: Vec<String>,
     #[serde(default)]
+    image_session_id: Option<String>,
+    #[serde(default)]
     json: bool,
 }
 type StudyCancellation = std::collections::HashMap<
@@ -1410,7 +1435,7 @@ async fn run_study_ai(
         .map(|m| serde_json::json!({"role":m.role,"content":m.text}))
         .collect();
     // Reuse the audited decoder, exact asset lookup and image byte/count limits.
-    let images = read_ai_images(app, &request.images)?;
+    let images = read_ai_images_from(app, &request.images, request.image_session_id.as_deref())?;
     let (url, body, kind, streaming) = match provider {
         AiProviderType::GoogleGemini
         | AiProviderType::GeminiFlashLite

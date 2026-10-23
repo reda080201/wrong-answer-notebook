@@ -1,4 +1,4 @@
-import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Channel, invoke, isTauri } from "@tauri-apps/api/core";
 import type { AiProviderSettings, AiProviderStatus, AiProviderType } from "../../types";
 import type { SimilarQuestionRankingRequest, SimilarQuestionRankingResponse } from "../../features/question-bank/utils/similarQuestionLinks";
 import { errorMessage } from "./shared";
@@ -60,11 +60,23 @@ export async function generateImportWithAi(
   inputText: string,
   imageFilenames: string[] = [],
   signal?: AbortSignal,
+  imageSessionId?: string,
 ): Promise<string> {
   if (!isTauri()) {
     throw new Error("AI provider는 데스크톱 앱에서만 사용할 수 있습니다.");
   }
   if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
+  if (imageSessionId) {
+    const requestId = crypto.randomUUID();
+    const cancel = () => { void invoke("cancel_study_ai", { requestId }).catch(() => undefined); };
+    signal?.addEventListener("abort", cancel, { once: true });
+    try {
+      if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
+      const response = await invoke<string>("request_study_ai", { requestId, request: { messages: [{ role: "user", text: inputText }], context: prompt, images: imageFilenames, imageSessionId, json: true }, onDelta: new Channel<string>() });
+      if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
+      return response;
+    } finally { signal?.removeEventListener("abort", cancel); }
+  }
   const response = await invoke<string>("generate_import_with_ai", { prompt, inputText, imageFilenames });
   if (signal?.aborted) throw new DOMException("AI 분석을 취소했습니다.", "AbortError");
   return response;
