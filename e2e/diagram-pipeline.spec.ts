@@ -31,6 +31,7 @@ for (const width of [1100, 680]) {
     await page.screenshot({ path: testInfo.outputPath(`diagram-comparison-${width}.png`) });
     await review.getByRole("button", { name: "취소", exact: true }).click();
     const importer = page.getByRole("dialog", { name: "시험지 가져오기", exact: true });
+    await importer.locator("summary").filter({ hasText: "다른 저장 방법" }).click();
     await importer.getByRole("button", { name: "바로 저장", exact: true }).click();
     await expect(importer).toBeHidden();
     await page.reload({ waitUntil: "domcontentloaded" });

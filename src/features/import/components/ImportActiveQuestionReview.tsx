@@ -1,13 +1,11 @@
 import type { SheetAnswerItem, SheetFigureItem } from "../../../types";
 import FigureReviewCard from "../../figures/components/FigureReviewCard";
-import ImageGallery from "../../../components/ImageGallery";
 import ImportAnswerReviewList from "./ImportAnswerReviewList";
 
 interface ImportActiveQuestionReviewProps {
   questionNumber: string;
   answers: SheetAnswerItem[];
   figures: SheetFigureItem[];
-  sourcePageImages: string[];
   detailOpen: boolean;
   disabled?: boolean;
   resolveImageUrl?: (filename: string) => Promise<string>;
@@ -21,7 +19,6 @@ export default function ImportActiveQuestionReview({
   questionNumber,
   answers,
   figures,
-  sourcePageImages,
   detailOpen,
   disabled,
   resolveImageUrl,
@@ -54,7 +51,6 @@ export default function ImportActiveQuestionReview({
           ))}
         </section>
       )}
-      {sourcePageImages.length > 0 && <aside className="import-active-source" aria-label={`${questionNumber}번 원본 페이지`}><h3>원본 페이지</h3><ImageGallery filenames={sourcePageImages} variant="fill" /></aside>}
     </section>
   );
 }

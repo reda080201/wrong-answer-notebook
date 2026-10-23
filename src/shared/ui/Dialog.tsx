@@ -1,6 +1,7 @@
 import { createPortal } from "react-dom";
 import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import "../../styles/dialog-shell.css";
+import { NotificationDialogHost } from "./NotificationProvider";
 
 const FOCUSABLE_SELECTOR = [
   "summary",
@@ -140,7 +141,7 @@ function OpenDialog({
         if (ariaHidden === null) element.removeAttribute("aria-hidden");
         else element.setAttribute("aria-hidden", ariaHidden);
       });
-      (previousFocus?.isConnected ? previousFocus : returnFocusFallbackRef.current?.())?.focus();
+      (previousFocus?.isConnected && previousFocus !== document.body ? previousFocus : returnFocusFallbackRef.current?.())?.focus();
     };
   }, [dialogLayer, initialFocusRef, open]);
 
@@ -171,6 +172,7 @@ function OpenDialog({
       >
         {(header || titleNode) && <header className="dialog-header">{titleNode}{header}</header>}
         <div className={["dialog-body", bodyClassName].filter(Boolean).join(" ")}>{children}</div>
+        <NotificationDialogHost layer={dialogLayer} />
         {footer && <footer className="dialog-footer">{footer}</footer>}
       </div>
     </div>

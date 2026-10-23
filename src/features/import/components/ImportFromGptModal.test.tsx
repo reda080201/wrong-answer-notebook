@@ -2,7 +2,7 @@ import { validPngBytes } from "../../../test/fixtures/validPng";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
-import { deleteImage, pickImages, saveImageFiles } from "../../../api";
+import { deleteImage, getImageUrl, pickImages, saveImageFiles } from "../../../api";
 import type { WrongAnswerEntry } from "../../../types";
 import type { ImportAssetSessionManifest } from "../../import-workspace/model/importWorkspace";
 import v2WrapperFixture from "../../../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
@@ -64,6 +64,30 @@ function structuredFixtureFile(questions: unknown[]): File {
 }
 
 describe("ImportFromGptModal", () => {
+  it("previews the linked ZIP original before storage without reading a stored namesake", async () => {
+    const document = JSON.parse(await quickSaveFixtureFile().text());
+    document.entries[0].sourcePageImages = ["page1.png", "page2.png"];
+    document.entries[0].questions[0].source = { page: 2 };
+    const zip = new JSZip();
+    zip.file("import.json", JSON.stringify(document));
+    zip.file("page1.png", validPngBytes); zip.file("page2.png", validPngBytes);
+    const objectUrl = vi.spyOn(URL, "createObjectURL").mockImplementation(blob => `blob:zip-${(blob as File).name}`);
+    const revoke = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    vi.mocked(getImageUrl).mockClear();
+    try {
+      render(<ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={vi.fn()} />);
+      fireEvent.change(screen.getByLabelText("올인원 가져오기"), { target: { files: [new File([await zip.generateAsync({ type: "arraybuffer" })], "sources.zip", { type: "application/zip" })] } });
+      await screen.findByText(/올인원 가져오기 완료/);
+      const reviewButton = screen.getByRole("button", { name: "전체 화면 검수" });
+      await waitFor(() => expect(reviewButton).toBeEnabled());
+      fireEvent.click(reviewButton);
+      await screen.findByRole("dialog", { name: "빠른 저장 시험지 검수" });
+      expect(await screen.findByAltText("연결된 원본")).toHaveAttribute("src", "blob:zip-page2.png");
+      expect(getImageUrl).not.toHaveBeenCalledWith("page2.png");
+      expect(getImageUrl).not.toHaveBeenCalledWith("page1.png");
+      expect(screen.queryByAltText("자료 원본 페이지")).not.toBeInTheDocument();
+    } finally { objectUrl.mockRestore(); revoke.mockRestore(); }
+  });
   it("uses the matching label for every automatically inferred entry kind", () => {
     expect(entryKindAutoLabel("problem_sheet")).toBe("문제지로 자동 판정됨");
     expect(entryKindAutoLabel("wrong_answer")).toBe("개별 오답으로 자동 판정됨");

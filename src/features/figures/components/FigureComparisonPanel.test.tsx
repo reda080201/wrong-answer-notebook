@@ -25,4 +25,15 @@ describe("diagram comparison readiness", () => {
     fireEvent.error(cleaned);
     await waitFor(() => expect(ready).toHaveBeenLastCalledWith(false));
   });
+  it("shows retry only after failure and requires fresh comparison after retry", async () => {
+    render(<FigureComparisonPanel figure={figure} />);
+    expect(screen.queryByRole("button", { name: "비교 이미지 다시 불러오기" })).not.toBeInTheDocument();
+    fireEvent.error(await screen.findByAltText("정리본 후보"));
+    fireEvent.click(screen.getByRole("button", { name: "비교 이미지 다시 불러오기" }));
+    expect(screen.queryByRole("button", { name: "비교 이미지 다시 불러오기" })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox")).toBeDisabled();
+    fireEvent.load(await screen.findByAltText("원본 도형 crop"));
+    fireEvent.load(await screen.findByAltText("정리본 후보"));
+    expect(screen.getByRole("checkbox")).not.toBeChecked();
+  });
 });

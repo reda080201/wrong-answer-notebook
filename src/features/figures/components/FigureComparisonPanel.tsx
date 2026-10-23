@@ -7,10 +7,11 @@ export interface FigureComparisonProps {
   figure: SheetFigureItem;
   onReady?: (ready: boolean) => void;
   resolveImageUrl?: (filename: string) => Promise<string>;
+  onRetry?: () => void;
 }
 const methods: Record<string, string> = { pdf_vector_render: "PDF 원본 벡터 렌더", raster_cleanup: "이미지 정리", raster_tracing: "윤곽 추적", computational_redraw: "계산 기반 재구성", deterministic_cleanup: "이미지 정리", deterministic_redraw: "계산 기반 재구성", gpt: "AI 후보" };
 
-function Comparison({ figure, onReady, resolveImageUrl = getImageUrl }: FigureComparisonProps) {
+function Comparison({ figure, onReady, onRetry, resolveImageUrl = getImageUrl }: FigureComparisonProps) {
   const [urls, setUrls] = useState<{ original?: string; cleaned?: string }>({});
   const [failed, setFailed] = useState<string[]>([]);
   const [loaded, setLoaded] = useState<{ resolver?: typeof resolveImageUrl; original?: boolean; cleaned?: boolean }>({});
@@ -56,11 +57,11 @@ function Comparison({ figure, onReady, resolveImageUrl = getImageUrl }: FigureCo
       </> : <p>{failed.includes(kind) ? "이미지를 읽지 못했습니다." : figure[kind]?.image ? "이미지 불러오는 중…" : kind === "original" ? "원본 없음 · 후보 승인 불가" : "정리본 없음"}</p>}
     </figure>)}</div>
     {figure.semanticSpec && <details><summary>구조 데이터 미리보기</summary><SemanticFigureView spec={figure.semanticSpec} title={figure.title} /></details>}
-    {!!failed.length && <p role="alert">이미지 로드 실패 · 원본을 보존하며 비교 승인을 차단합니다.</p>}
+    {!!failed.length && <div role="alert"><p>이미지 로드 실패 · 원본을 보존하며 비교 승인을 차단합니다.</p><button type="button" className="btn-secondary btn-sm" onClick={onRetry}>비교 이미지 다시 불러오기</button></div>}
     {urls.original && urls.cleaned && <div className="figure-comparison-overlay"><button type="button" className="btn-secondary btn-sm" onClick={() => setOverlay(value => !value)} aria-pressed={overlay}>겹쳐보기{overlay ? " 끄기" : ""}</button>{overlay && <><label>투명도 <input type="range" min="0" max="1" step="0.05" value={opacity} onChange={event => setOpacity(Number(event.target.value))} /></label><div className="figure-comparison-stack"><img src={urls.original} alt="원본 겹쳐보기" /><img src={urls.cleaned} alt="정리본 겹쳐보기" style={{ opacity }} /></div></>}</div>}
     <label className="figure-comparison-confirm"><input type="checkbox" checked={confirmed} disabled={!comparable} onChange={event => setConfirmed(event.target.checked)} /> 원본과 정리본을 비교했습니다</label>
     <small>파일 검사나 생성 성공만으로 점·라벨·함수의 일치를 보장하지 않습니다.</small>
-    {figure.verification && <ul className="figure-comparison-issues">{[...figure.verification.blockingIssues, ...figure.verification.warnings].map((issue, index) => <li key={`${issue.type}-${index}`}>{issue.message}</li>)}</ul>}
+    {figure.verification && (figure.verification.blockingIssues.length > 0 || figure.verification.warnings.length > 0) && <details><summary>상세 검사 결과</summary><ul className="figure-comparison-issues">{[...figure.verification.blockingIssues, ...figure.verification.warnings].map((issue, index) => <li key={`${issue.type}-${index}`}>{issue.message}</li>)}</ul></details>}
   </section>;
 }
 
@@ -68,5 +69,5 @@ export default function FigureComparisonPanel(props: FigureComparisonProps) {
   const [retry, setRetry] = useState(0);
   // Changed assets/specs own fresh load/consent state; old promises are ignored.
   const identity = JSON.stringify([props.figure.id, props.figure.original, props.figure.cleaned, props.figure.semanticSpec, retry]);
-  return <><Comparison key={identity} {...props} /><button type="button" className="btn-secondary btn-sm" onClick={() => { props.onReady?.(false); setRetry(value => value + 1); }}>비교 이미지 다시 불러오기</button></>;
+  return <Comparison key={identity} {...props} onRetry={() => { props.onReady?.(false); setRetry(value => value + 1); }} />;
 }

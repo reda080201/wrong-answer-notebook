@@ -64,7 +64,7 @@ import { useImportSaveCoordinator } from "../hooks/useImportSaveCoordinator";
 import { validateImportImage } from "../services/validateImportImage";
 import { validateImportAssetReferences } from "../services/zipImport";
 import { FileUp, Maximize2 } from "lucide-react";
-import ImageGallery from "../../../components/ImageGallery";
+import ImportSourcePreview from "./ImportSourcePreview";
 import FeatureErrorBoundary from "../../../components/FeatureErrorBoundary";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import type { ImportAssetSessionManifest } from "../../import-workspace/model/importWorkspace";
@@ -371,7 +371,7 @@ export default function ImportFromGptModal({
   const visualCleanupSessionRef = useRef<ImportAssetSessionManifest | null>(null);
   const closeAfterVisualAbortRef = useRef(false);
   const closeAfterCleanupRef = useRef(false);
-  const resolveFigureUrl = useImportFigureUrls(assetFiles);
+  const resolveFigureUrl = useImportFigureUrls(assetFiles, visualResult?.assetSession);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const zipAbortRef = useRef<AbortController | null>(null);
   const parseErrorRef = useRef<string | null>(null);
@@ -1887,39 +1887,7 @@ export default function ImportFromGptModal({
         structuredQuestions={draft?.structuredQuestions}
         activeQuestionIndex={activeReviewQuestionIndex}
         onActiveQuestionChange={setActiveReviewQuestionIndex}
-        sourcePane={({ question: activeQuestion }) => {
-          const linkedFigures = figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber));
-          const figureImages = linkedFigures.flatMap((figure) => [
-            figure.image,
-            figure.original?.image,
-            figure.original?.sourcePageImage,
-            figure.cleaned?.image,
-          ]).filter((image): image is string => Boolean(image));
-          const availableSourceImages = draft?.sourcePageImages ?? [];
-          const availableQuestionImages = draft?.questionImages ?? [];
-          const sourceReference = activeQuestion.source?.reference
-            ? normalizeImportImageKey(activeQuestion.source.reference)
-            : null;
-          const referencedImages = sourceReference
-            ? [...availableSourceImages, ...availableQuestionImages].filter(
-                (image) => normalizeImportImageKey(image) === sourceReference,
-              )
-            : [];
-          const pageImage = activeQuestion.source?.page
-            ? availableSourceImages[activeQuestion.source.page - 1]
-            : undefined;
-          const sourceImages = [...new Set([
-            ...figureImages,
-            ...referencedImages,
-            ...(pageImage ? [pageImage] : []),
-          ])];
-          return sourceImages.length ? (
-            <div className="import-review-source-content">
-              <strong>{activeQuestion.questionNumber}번 원본</strong>
-              {sourceImages.length > 0 && <ImageGallery filenames={sourceImages} variant="fill" />}
-            </div>
-          ) : <p>연결된 원본이 없습니다.</p>;
-        }}
+        sourcePane={({ question: activeQuestion, index }) => draft ? <ImportSourcePreview key={index} question={activeQuestion} draft={draft} resolveImageUrl={resolveFigureUrl} /> : undefined}
         renderQuestion={({ question: activeQuestion, index }) => (
           <>
             <StructuredQuestionReviewEditor
@@ -1940,7 +1908,6 @@ export default function ImportFromGptModal({
               questionNumber={activeQuestion.questionNumber}
               answers={answerKey.filter((item) => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
               figures={figures.filter((figure) => normalizeQuestionNumber(figure.questionNumber) === normalizeQuestionNumber(activeQuestion.questionNumber))}
-              sourcePageImages={draft?.sourcePageImages ?? []}
               detailOpen={importDetailOpen}
               disabled={commitLocked || saving}
               resolveImageUrl={resolveFigureUrl}
