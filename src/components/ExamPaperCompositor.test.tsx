@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import ExamPaperCompositor, { type ExamPaperItem } from "./ExamPaperCompositor";
 
 const originalRect = HTMLElement.prototype.getBoundingClientRect;
@@ -103,6 +103,57 @@ describe("ExamPaperCompositor", () => {
   it("removes canonical target IDs from the hidden measurement tree", () => {
     render(<ExamPaperCompositor enabled items={[{ id: "q9", node: <article id="sheet-question-canonical-9">9번</article> }]} />);
     expect(document.querySelectorAll("#sheet-question-canonical-9")).toHaveLength(1);
+  });
+
+  it("reserves loaded lazy image dimensions in offscreen measurement clones", () => {
+    const dimensions = new Map<string, [string | null, string | null]>();
+    const width = vi.spyOn(HTMLImageElement.prototype, "naturalWidth", "get").mockReturnValue(240);
+    const height = vi.spyOn(HTMLImageElement.prototype, "naturalHeight", "get").mockReturnValue(140);
+    const complete = vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockReturnValue(true);
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      if (this.closest(".exam-paper-measure")) this.querySelectorAll<HTMLImageElement>("img").forEach(image => dimensions.set(image.alt, [image.getAttribute("width"), image.getAttribute("height")]));
+      return { width: 339, height: 400, top: 0, left: 0, right: 339, bottom: 400, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const { container } = render(<ExamPaperCompositor enabled items={[{ id: "images", node: <article><img src="/figure.png" alt="intrinsic" loading="lazy" /><img src="/figure.png" alt="one-dimension" width="120" loading="lazy" /><img src="/figure.png" alt="explicit" width="80" height="90" loading="lazy" /></article> }]} />);
+      expect(dimensions.get("intrinsic")).toEqual(["240", "140"]);
+      expect(dimensions.get("one-dimension")).toEqual(["120", "70"]);
+      expect(dimensions.get("explicit")).toEqual(["80", "90"]);
+      expect(container.querySelector('img[alt="intrinsic"]')).not.toHaveAttribute("width");
+      expect(container.querySelector('img[alt="intrinsic"]')).toHaveAttribute("loading", "lazy");
+    } finally { width.mockRestore(); height.mockRestore(); complete.mockRestore(); }
+  });
+
+  it("observes replacement items after repagination and measures their later growth", async () => {
+    const observed = new Map<Element, ResizeObserverCallback>();
+    const previousObserver = globalThis.ResizeObserver;
+    class TrackingResizeObserver {
+      private targets = new Set<Element>();
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) { this.targets.add(target); observed.set(target, this.callback); }
+      unobserve(target: Element) { this.targets.delete(target); observed.delete(target); }
+      disconnect() { for (const target of this.targets) observed.delete(target); this.targets.clear(); }
+    }
+    vi.stubGlobal("ResizeObserver", TrackingResizeObserver);
+    let lastHeight = 600;
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      const height = this.textContent === "third" ? lastHeight : 600;
+      return { width: 706, height, top: 0, left: 0, right: 706, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const { container, unmount } = render(<ExamPaperCompositor enabled layout="single" items={[item("first"), item("second"), item("third")]} />);
+      expect(screen.getAllByLabelText(/시험지 .*페이지/)).toHaveLength(3);
+      const current = container.querySelector('[data-paper-item="third"]')!;
+      expect(observed.has(current)).toBe(true);
+      lastHeight = 1200;
+      act(() => observed.get(current)!([{ target: current } as ResizeObserverEntry], {} as ResizeObserver));
+      await waitFor(() => expect(screen.getByLabelText("시험지 3페이지")).toHaveClass("exam-paper-page--oversized"));
+      expect(observed.has(container.querySelector('[data-paper-item="third"]')!)).toBe(true);
+      unmount();
+      expect(observed.size).toBe(0);
+    } finally {
+      vi.stubGlobal("ResizeObserver", previousObserver);
+    }
   });
 
   it("isolates an item taller than a printable column instead of clipping it", () => {

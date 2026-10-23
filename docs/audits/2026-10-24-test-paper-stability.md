@@ -1,0 +1,51 @@
+# Test worker and A4 follow-up — 2026-10-24
+
+## Scope and baseline
+
+- Independent checkout: `codex/test-paper-stability`, based on Draft #163 head `9cf3ef50e8e0cf82ca541bd3f771cc06d040eac3`.
+- Main was `3c5e9b9aeccc3ee77ac755e0ab19ed84cca09416`. #163 remains unmerged; this follow-up targets its branch.
+- No user data, primary-checkout changes, dependency versions, public storage formats, or Rust sources are changed.
+- Temporary logs, synthetic import data, process traces and screenshots remain in ignored build directories. Final whole-suite and same-head CI results are recorded in the PR, rather than treating this interim evidence as a whole-suite pass.
+
+## Confirmed defects and repairs
+
+### Late exam close completion
+
+Reproduction: defer the save used by closing session A, then open session B or update A's answer before the save completes. Previously close returned success and cleared the newer session/revision. Both regression cases failed before the repair.
+
+`useExamSessionController.ts` now closes only the exact revision it flushed. Its externally exposed setter also updates the imperative session ref synchronously; previously a same-turn history/resume action left that ref pointing at the old session until an effect ran. The setter signature and storage representation are unchanged.
+
+Three hook regressions cover newer-session preservation, newer-answer preservation and immediate external replacement. These are deterministic deferred-operation checks, not claims that a storage failure was manually injected in the installed app.
+
+### A4 observer and measurement lifecycle
+
+Reproduction: pagination moves a React item under a different page/column and replaces its DOM node. The original ResizeObserver continued watching the detached node, so later size growth was missed. A regression proved that the current node was not observed before the repair.
+
+`ExamPaperCompositor.tsx` synchronizes observer targets after every commit and disconnects removed targets. Font loading and image success/failure schedule measurement; cleanup removes observers, listeners and scheduled frames. A DOM layout-readiness signal is published after the corresponding pagination commit.
+
+A second regression proved that an offscreen lazy measurement clone had neither width nor height even when the visible source image was decoded. Clones now reserve the loaded source's intrinsic dimensions, preserving explicit attributes and the original image's lazy loading. No extra eager decode or CSS ratio workaround was added. Pending lazy images remain progressive and remeasure on load/error.
+
+The exact sequence behind every historical intermittent A4 failure is not proven. One failure still occurred after the observer-only repair; a subsequent single-case diagnostic passed. This is why clone sizing is tested separately and bounds are captured on every surface, including failures.
+
+### Vitest configuration accuracy
+
+Installed Vitest 4.1.11 does not implement `singleFork`; the unsupported option was removed. Explicit `isolate: true` preserves the installed default, and misleading setup comments were corrected. Pool=forks, min/max workers=1, fileParallelism=false and existing 30-second test/hook timeouts are retained.
+
+This cleanup is **not a proven fix for the previous worker-start stall**. Resolved public configuration records Node 24.17.0, Vitest 4.1.11 and one isolated fork worker. A temporary preload records worker spawn/error/exit and memory samples without changing runner deadlines. No Windows resource-exhaustion event was found in the queried interval, which does not establish or exclude a memory cause. A long cold start alone is not classified as a crash.
+
+## Evidence already obtained
+
+- Independent `npm ci` completed. Existing audit output reported two moderate and one high finding; dependency remediation is outside this follow-up.
+- Final related units: **23/23** across controller and compositor files, including five added regressions. Before-fix logs show the intended failures.
+- Final focused A4 browser suite: **10/10**. Existing eight width/orientation cases retain their assertions and fixtures; two cases add delayed content growth and mixed normal/oversized page ratios at multiple scales.
+- A4 surfaces include study, practice and real exam at 1100, 1280, 1536 and 1920 widths. Bounds/image metadata are saved alongside screenshots. Whole E2E remains a separate required result.
+- Direct IAB use at isolated port 1504: import synthetic 30-question JSON, review, persist, view A4, resize to 680 and return to 1100. All 30 items remained with layout ready; document width/scrollWidth were both 680 in the narrow view.
+- Direct light-mode practice: select option 2 for question 1, enter `42` for question 2, close, refresh, select the saved sheet and resume. The option remained pressed and answer `42` was restored. Fractions were stacked in the visible paper. Temporary tab, viewport override and server were closed/reset afterward.
+- A dark-theme study screenshot showed low-contrast question text over white paper. This is a separate observed UI concern; the light-mode screenshot and checks must not be presented as validating dark-theme readability.
+
+## Limitations and completion rules
+
+- Synthetic material verifies layout and lifecycle, not OCR or mathematical equivalence of the user's PDF. No private source is committed.
+- Actual touch, installed native-window interaction and live AI-provider calls were not performed. No installed build was replaced.
+- No existing test was deleted/skipped, assertion relaxed, or timeout increased. A diagnostic run stopped after its first failure is not a full-suite pass.
+- Final PR must distinguish local whole-suite outcomes, unresolved worker-start causality, and the five checks on its final head. No automatic merge.
