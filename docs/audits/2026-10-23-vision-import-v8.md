@@ -34,11 +34,12 @@ AbortSignal also did not cancel this legacy provider HTTP request.
 
 ## Actual artifacts
 
-Synthetic job: `build/diagram-pipeline/v8/input/vision-job.zip`.
-Actual generated ZIP: `build/diagram-pipeline/v8/output/output-import-v2.zip`.
-SHA-256: `99df557c74bc32ac69c89160d84e35dc95d9b29dcdeae0b28b2883881d794976`.
+Synthetic job: `build/diagram-pipeline/v8-final/input/vision-job.zip`.
+Actual generated ZIP: `build/diagram-pipeline/v8-final/output/output-import-v2.zip`.
+SHA-256: `b6f0a9345ae3cdbdd21d35cac426af424d47de59ef58359f2dd29bc18ff62799`.
 Four packaged image assets, seven checked artifact references, source ROI checks pass.
-This is the provided synthetic observation attached to actual synthetic original bytes;
+The final synthetic source includes the observed numeric endpoint labels. This is a
+synthetic observation attached to actual synthetic original bytes;
 it is not OCR validation of a private exam. Public fixture: `e2e/fixtures/vision-pipeline-v8.zip`.
 
 ## Local verification (updated as work completes)
@@ -56,7 +57,17 @@ it is not OCR validation of a private exam. Public fixture: `e2e/fixtures/vision
 - npm run check: version, lint (0 errors/53 existing warnings), debug, MCP/Tauri,
   startup, release and CSS contracts passed; default fork unit stage stalled while
   workers repeatedly exited/restarted. Interrupted and recorded, not counted as pass.
-  Full threads execution, full E2E, Rust/Tauri and final same-head CI are pending.
+  A full threads run passed 214 files / 1346 tests but reported one worker-start timeout;
+  the missing generatedExamSourcePageRegression file passed separately (2 tests).
+  This is not a full local unit pass. Bundled Node 24.19 also reproduced the default
+  fork startup stall; system Node was 24.17. Cause remains unconfirmed. No timeouts
+  were increased and no tests were skipped.
+- Local Windows cargo check: pass (single build job). Remaining local full E2E,
+  clippy/test/Tauri compile and final-head CI results are recorded in the PR report.
+- First published head 5ada831f: GitHub Frontend (215 files / 1348 tests), E2E
+  (59 tests), Python (87 tests plus actual PNG/ZIP/runtime probe), Rust (92 tests),
+  and Tauri compile all passed in run 39916802053. Final-head results are tracked
+  separately and must not be inferred from this earlier head.
 
 ## UI evidence
 

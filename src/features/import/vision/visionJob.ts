@@ -65,6 +65,10 @@ export async function prepareOriginalVisionImport(analysis: VisionAnalysis, page
     }
     for (const f of analysis.figures.filter(f => f.entryKey === entry.entryKey)) {
       signal?.throwIfAborted();
+      const owner = entry.questions.find(q => q.questionKey === f.questionKey)!;
+      const questionRect = owner.source.questionRect;
+      const figureRect = f.source.rect;
+      if (questionRect && owner.source.sourceKey === f.source.sourceKey && owner.source.page === f.source.page && !(figureRect.x >= questionRect.x && figureRect.y >= questionRect.y && figureRect.x + figureRect.width <= questionRect.x + questionRect.width && figureRect.y + figureRect.height <= questionRect.y + questionRect.height)) throw new Error(`${owner.questionKey}: 그림이 문항 영역을 벗어납니다. 위치를 검토한 뒤 작업 묶음으로 다시 처리하세요.`);
       const filename = page(f.source); const id = ids.get(JSON.stringify([f.questionKey, f.figureKey]))!;
       const bitmap = await createImageBitmap(pages.find(p => p.name === filename)!, { imageOrientation: "from-image" });
       try {

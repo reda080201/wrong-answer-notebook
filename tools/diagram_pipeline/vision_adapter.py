@@ -22,7 +22,7 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
     manifest = load_json(inspection)
     vision = load_vision(analysis)
     mapping = load_json(source_map)
-    if not isinstance(mapping, dict) or set(mapping) != {s["sourceKey"] for s in vision["sources"]}:
+    if not isinstance(mapping, dict) or any(not isinstance(v, str) for v in mapping.values()) or set(mapping) != {s["sourceKey"] for s in vision["sources"]}:
         raise PipelineError("source-map must exactly match observed source keys")
     by_id = {s["id"]: s for s in manifest["sources"]}
     for source in vision["sources"]:
@@ -86,8 +86,7 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
                 target["template"]["answerKey"].append({"id": identity(entry["entryKey"], q["questionKey"], "answer"), "questionNumber": number, "answer": q.get("extractedAnswer", ""), "explanation": q.get("explanationDraft", ""), "importantPoints": [], "needsReview": True, "processingStatus": "needs_review"})
             for f in figures:
                 ref = reference(f["source"])
-                source = by_id[ref["sourceId"]]
-                method = "pdf_vector_render" if source["kind"] == "pdf" else "raster_cleanup"
+                method = "auto"
                 if f["strategyHint"] == "preserve_original":
                     method = "original"
                 candidate = {"id": ids[f["figureKey"]], "entryId": target["id"], "questionKey": item["key"], **ref, "crop": f["source"]["rect"], "method": method, "allowCandidateFallback": True, "analysisState": "uncertain" if f["uncertainties"] else "observed", "mathematicalEquivalence": "not_proven"}
