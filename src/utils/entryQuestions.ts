@@ -97,8 +97,10 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
     .filter((block): block is QuestionBlock => block.kind === "question")
     .map((block, index) => {
       const number = normalizeQuestionNumber(String(block.numberLabel ?? block.displayNumber ?? index + 1));
-      const segments = number && canonical.questionContentSegments?.[number]
-        ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments[number] })
+      const segmentKeys = Object.keys(canonical.questionContentSegments ?? {}).filter(key => normalizeQuestionNumber(key) === number);
+      const generatedUnresolved = Boolean(canonical.generatedFromExamSessionId && Object.keys(canonical.questionContentSegments ?? {}).length && generated.status !== "matched");
+      const segments = number && segmentKeys.length === 1 && !generatedUnresolved
+        ? normalizeQuestionPresentationSegments({ questionText: block.body, conditions: [], equations: [], contentSegments: canonical.questionContentSegments![segmentKeys[0]] })
         : undefined;
       const references = readFigureTokenReferences([
         block.body,
@@ -106,6 +108,7 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
         ...segments?.flatMap((segment) => segment.type === "text" || segment.type === "condition" ? [segment.text] : segment.type === "figure" ? [`[FIGURE:${segment.figureId}]`] : []) ?? [],
       ]);
       const tokenWarning = figureTokenWarning(unresolvedFigureTokens(references.map(({ raw }) => raw), canonical.figures ?? []));
+      const warning = [tokenWarning, segmentKeys.length > 1 || generatedUnresolved ? "문항 순서 연결이 중복되거나 불명확해 원문을 표시합니다. 연결을 검토해 주세요." : undefined].filter(Boolean).join(" ") || undefined;
       return {
         questionNumber: number || String(index + 1),
         position: index + 1,
@@ -114,8 +117,8 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
         questionText: block.body,
         choices: block.choices.map((choice) => stripLegacyChoiceSeparator(`${choice.marker} ${choice.text}`.trim())),
         contentSegments: segments,
-        needsReview: Boolean(tokenWarning),
-        warning: tokenWarning,
+        needsReview: Boolean(warning),
+        warning,
         figureIds: [...new Set(references.map(({ id }) => id).filter(Boolean))],
       };
     });
@@ -124,9 +127,14 @@ function resolveEntryQuestions(entry: Pick<WrongAnswerEntry, "question" | "struc
 export function getEntryQuestions(entry: Parameters<typeof resolveEntryQuestions>[0]): ResolvedEntryQuestion[] {
   const { stimuli, warnings } = resolveEntryQuestionStimulusProjection(entry);
   const questions = resolveEntryQuestions(entry);
+  const numberCounts = new Map<string, number>();
+  for (const question of questions) {
+    const number = normalizeQuestionNumber(question.questionNumber);
+    numberCounts.set(number, (numberCounts.get(number) ?? 0) + 1);
+  }
   return questions.map(question => {
     const number = normalizeQuestionNumber(question.questionNumber);
-    const passage = questions.filter(item => normalizeQuestionNumber(item.questionNumber) === number).length === 1 ? stimuli.get(number) : undefined;
+    const passage = numberCounts.get(number) === 1 ? stimuli.get(number) : undefined;
     const warning = [question.warning, warnings.get(number)].filter(Boolean).join(" ") || undefined;
     return { ...question, warning, needsReview: question.needsReview || Boolean(warnings.get(number)),
       ...(passage ? { passage, figureIds: [...new Set([...question.figureIds, ...readFigureTokenReferences([passage.text]).map(item => item.id).filter(Boolean)])] } : {}) };

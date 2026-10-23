@@ -675,6 +675,15 @@ export function useAppActions({
         const entryDigests = await Promise.all(forms.map(importEntryDigest));
         if (receipt.entryDigests && JSON.stringify(receipt.entryDigests) !== JSON.stringify(entryDigests)) throw new Error("확정 기록의 저장 내용이 손상되어 저장을 중단했습니다.");
         await saveImportWorkspaceDraft({ ...commitDraft, commitAttempt: { ...receipt, preparedEntries: forms, entryDigests, sourceToSaved } });
+        // Verify the storage round trip before committing any entry. Native JSON
+        // number conversion must not silently invalidate the durable receipt.
+        const durable = (await loadImportWorkspaceDraft())?.commitAttempt;
+        if (!durable || durable.attemptId !== receipt.attemptId || !durable.preparedEntries
+          || JSON.stringify(durable.entryIds) !== JSON.stringify(receipt.entryIds)
+          || JSON.stringify(durable.entryDigests) !== JSON.stringify(entryDigests)
+          || JSON.stringify(await Promise.all(durable.preparedEntries.map(importEntryDigest))) !== JSON.stringify(entryDigests)) {
+          throw new Error("확정 기록이 저장 과정에서 달라져 항목 저장 전에 중단했습니다. 이전 가져오기에서 저장 결과를 확인하거나 저장 전 취소를 선택해 주세요.");
+        }
       }
       const ids = assetSession?.mode === "tauri-staged"
         ? receipt ? await addEntriesWithImportAssetSession(assetSession.id, forms, plannedIds, receipt.state !== "completed", receipt.createdAt) : await addEntriesWithImportAssetSession(assetSession.id, forms)

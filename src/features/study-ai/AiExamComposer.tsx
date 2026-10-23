@@ -12,6 +12,7 @@ import { buildAiContext, DEFAULT_AI_SHARING, type AiMaterial, type AiSharing } f
 import { AI_EXAM_TEMPLATES, examMaterials, limitExamMaterials, proposalFromSelection, proposalInstruction, resolveProposalMaterial, validateExamSelection, type AiExamConfig } from "./examProposal";
 import { requestStudyAi } from "./api";
 import { assertStudyAiSourcesAllowed } from "./requestPolicy";
+import { useRealExamProtection } from "../exam/services/realExamProtection";
 export default function AiExamComposer({ entries, initialMaterials = [], initialProposal, onProposal, onSave, onStart, onClose, onBack, draftId = "composer" }: {
     entries: WrongAnswerEntry[];
     initialMaterials?: AiMaterial[];
@@ -24,7 +25,8 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
     draftId?: string;
 }) {
     const { confirm } = useAppDialog();
-    const available = useMemo(() => examMaterials(entries, {}), [entries]);
+    const protection = useRealExamProtection();
+    const available = useMemo(() => protection.unavailable ? [] : examMaterials(entries.filter(entry => !protection.sourceIds.has(entry.id)), {}).filter(material => !protection.sourceIds.has(material.source.sourceEntryId)), [entries, protection]);
     const [materials, setMaterials] = useState<AiMaterial[]>(() => structuredClone(initialMaterials));
     const [sharing, setSharing] = useState<AiSharing>({ ...DEFAULT_AI_SHARING, images: false });
     const [config, setConfig] = useState<AiExamConfig>({ title: initialProposal?.title ?? "AI 문제 모음", subject: "", count: initialProposal?.questions.length ?? 10, minutes: initialProposal?.timeLimitMinutes ?? 30, points: initialProposal?.totalPoints ?? 100, maxPerSource: 10, easy: 0, medium: 0, hard: 0, unitCounts: {}, prioritizeImportance: true, instruction: "" });
@@ -187,6 +189,7 @@ export default function AiExamComposer({ entries, initialMaterials = [], initial
         setExcluded(excluded.some(id => ids.includes(id)) ? excluded.filter(id => !ids.includes(id)) : [...new Set([...excluded, ...ids])]);
         if (proposal) updateProposal({ ...proposal });
     };
+    if (protection.unavailable || materials.some(material => protection.sourceIds.has(material.source.sourceEntryId))) return <Dialog open title="실전 시험 자료 보호" onClose={onClose}><p role="status">진행 중 실전 시험의 자료는 제출 후 구성할 수 있습니다. 기존 구성 초안은 보존됩니다.</p><button type="button" onClick={onClose}>기존 초안 보존하고 닫기</button></Dialog>;
     return <Dialog open onClose={() => void closeDraft()} className="ai-exam-composer" ariaLabel="AI 모의고사 구성" closeDisabled={busy || saving || scopeBusy} header={<><h2>AI 모의고사 구성</h2><button type="button" disabled={busy || saving || scopeBusy || draftLoading || !draftReady} onClick={() => void closeDraft()} aria-label="AI 구성 닫기">✕</button></>} footer={<div className="ai-inline-actions">{busy ? <button onClick={() => abort.current?.abort()}>응답 중지</button> : <button disabled={scopeBusy || saving || !draftReady || draftLoading} onClick={() => void propose()}>구성안 {proposal ? "다시 제안" : "요청"}</button>}<button disabled={!proposal || busy || saving || scopeBusy || !draftReady || draftLoading} onClick={() => void save(false)}>검토한 구성 저장</button><button disabled={!proposal || busy || saving || scopeBusy || !draftReady || draftLoading} onClick={() => void save(true)}>저장하고 풀기</button></div>}>
     {draftLoading && <p role="status">구성 초안 불러오는 중…</p>}
     {!draftLoading && !draftReady && <button onClick={onClose}>기존 초안 보존하고 닫기</button>}

@@ -1,3 +1,6 @@
 .math-prose { white-space: pre-wrap; }
 .math-fragment { white-space: normal; }
 .math-fragment > .katex { white-space: nowrap; }
+
+.math-fragment--invalid { white-space: pre-wrap; overflow-wrap: anywhere; }
+.math-fragment--invalid small { display: inline-block; margin-inline: 6px; color: var(--warning); font: var(--type-meta); }

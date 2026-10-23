@@ -1,3 +1,4 @@
+import StudyAiButton from "../../study-ai/StudyAiButton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 import type { ChatGptMcpPreferences, ExamPreferences, ExamSession } from "../../../types";
@@ -123,7 +124,7 @@ export default function ExamSessionView({ session, onChange, onUpdateSession, on
     : undefined;
   const visibleResultQuestions = score?.questionResults.filter((item) => resultFilter === "all" || (resultFilter === "wrong" && item.hasResponse && !item.correct) || (resultFilter === "unanswered" && !item.hasResponse) || (resultFilter === "marked" && item.markedForReview)) ?? [];
   return <section className="exam-session-view" aria-label="문제 풀기 응시">
-    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions">{!isSubmitted && examPreferences?.showMcpHelp !== false && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
+    <header className="exam-session-header"><div><p className="exam-eyebrow">연습 모드</p><h2>{session.title}</h2></div><div className="exam-header-actions"><StudyAiButton />{!isSubmitted && examPreferences?.showMcpHelp !== false && chatGptPreferences && onChatGptPreferencesChange && onSyncChatGptContext && (
       <ChatGptHelpLauncher
         key={`${session.id}:${question.id}`}
         mode="pre-submit"

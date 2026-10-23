@@ -8,15 +8,17 @@
 /* Shared dialog surface; feature classes are additive. */
 .modal-backdrop { position: fixed; inset: 0; z-index: var(--z-dialog); display: flex; align-items: center; justify-content: center; padding: var(--space-6); background: rgb(15 23 42 / 48%); }
 .app-dialog-backdrop { z-index: var(--z-confirm); }
-.modal-card { width: min(100%, 480px); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line-strong); border-radius: 18px; background: var(--surface-primary); color: var(--ink-primary); box-shadow: var(--shadow-dialog); }
+.modal-card { width: min(100%, 480px); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-dialog); background: var(--surface-primary); color: var(--ink-primary); box-shadow: var(--shadow-dialog); }
 .modal-card > .dialog-body { padding: var(--space-5); line-height: 1.6; }
 .modal-card > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: var(--space-5); border-bottom: 1px solid var(--line-subtle); }
 .modal-card > .dialog-header h2 { margin: 0; font-size: 19px; }
 .modal-card > .dialog-footer { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5); border-top: 1px solid var(--line-subtle); }
+.dialog-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; width: 100%; }
+.dialog-actions > button { flex: 0 1 auto; white-space: normal; }
 .review-resume-dialog-body > .review-resume-dialog-content { display: grid; gap: 12px; }
 .review-resume-dialog-content > p { margin: 0; line-height: 1.5; }
 .review-resume-dialog-content > .form-hint { margin-top: 0; }
-@media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: 14px; } }
+@media (max-width: 640px) { .modal-backdrop { padding: var(--space-3); } .modal-card { border-radius: var(--radius-dialog); } }
 
 .import-modal {
   display: grid;
@@ -71,6 +73,12 @@
 .import-modal-body > .import-grid {
   min-height: 100%;
 }
+.import-modal-body:has(> .import-commit-recovery) > .import-grid { min-height: 0; margin-top: 16px; }
+.import-commit-recovery { padding: 16px 18px; border: 1px solid var(--line-strong); border-radius: 12px; background: var(--surface-primary); color: var(--ink-primary); line-height: 1.6; }
+.import-commit-recovery h3 { margin: 0 0 8px; font-size: 17px; }
+.import-commit-recovery p { margin: 8px 0; }
+.import-recovery-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.import-modal .import-grid[inert] { opacity: .5; }
 
 .import-visual-paper {
   display: grid;
@@ -215,3 +223,28 @@
   .text-review-panel .text-review-editor textarea { min-height: 220px; }
   .text-review-panel .text-review-head-actions { flex-wrap: wrap; }
 }
+
+.settings-connection-guide { padding: 16px; border: 1px solid var(--line-subtle); border-radius: 10px; background: var(--surface-primary); line-height: 1.65; }
+.settings-connection-guide h3 { margin: 0 0 8px; font-size: 16px; }
+.settings-connection-guide ol { margin: 8px 0; padding-left: 22px; }
+.settings-connection-guide li + li { margin-top: 6px; }
+.settings-connection-guide p { margin: 8px 0 0; font-size: 13px; color: var(--text-muted); }
+
+.import-modal-body > .import-grid { flex: 0 0 auto; min-height: 0; }
+@media (max-width: 1399px) {
+  .import-modal .import-grid { display: flex; flex-direction: column; align-items: stretch; }
+  .import-modal .import-pane { flex: 0 0 auto; }
+}
+.settings-disclosure { border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin: 12px 0; }
+.settings-disclosure > summary { cursor: pointer; font-size: 14px; font-weight: 600; }
+.settings-disclosure[open] > summary { margin-bottom: 12px; }
+.settings-disclosure .settings-connection-guide { padding: 0; border: 0; }
+.settings-section-title { font-size: 18px; margin: 0 0 8px; }
+.settings-section-description { color: var(--text-muted); font-size: 14px; margin: 0 0 16px; }
+.import-save-more { position: relative; }
+.import-save-more > summary { cursor: pointer; list-style: none; padding: 10px 12px; border-radius: 8px; font-size: 14px; }
+.import-save-more[open] > div { position: absolute; right: 0; bottom: calc(100% + 8px); display: grid; gap: 6px; min-width: 180px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-dialog); }
+
+.import-inline-editor { border-top: 1px solid var(--border); padding-top: 12px; }
+.import-inline-editor > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.form-hint { line-height: 1.6; }

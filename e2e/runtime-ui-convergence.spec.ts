@@ -89,6 +89,9 @@ test.describe("runtime/UI convergence", () => {
     const settingsPanel = page.locator(".settings-modal-panel");
     await expect(settingsPanel).toBeVisible();
     await page.getByRole("button", { name: "AI & 연결", exact: true }).click();
+    await page.getByRole("button", { name: "외부 도구 연결", exact: true }).click();
+    await page.getByText("MCP 브릿지 · 포트 · 연결 관리", { exact: true }).click();
+    await page.getByText("ChatGPT 외부 연결 설정", { exact: true }).click();
 
     await expect.poll(async () => settingsPanel.evaluate((element) => element.scrollHeight - element.clientHeight))
       .toBeGreaterThan(0);
@@ -103,7 +106,7 @@ test.describe("runtime/UI convergence", () => {
     await expect(page.getByRole("dialog", { name: "설정" })).toBeHidden();
     await page.getByRole("button", { name: "시험지함", exact: true }).click();
 
-    const sidebarScrollRegion = page.locator(".app-sidebar-scroll-region");
+    const sidebarScrollRegion = page.locator(".subject-list-options");
     await expect.poll(async () => sidebarScrollRegion.evaluate((element) => element.scrollHeight - element.clientHeight))
       .toBeGreaterThan(0);
     await sidebarScrollRegion.evaluate((element) => { element.scrollTop = element.scrollHeight; });
@@ -133,6 +136,7 @@ test.describe("runtime/UI convergence", () => {
     await seedBrowserStorage(page, [learningEntry]);
     await page.goto("/", { waitUntil: "domcontentloaded" });
 
+    if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
     await page.getByRole("button", { name: "학습 허브", exact: true }).click();
     const learningHub = page.getByRole("region", { name: "학습 허브" });
     await expect(learningHub).toBeVisible();
@@ -142,6 +146,7 @@ test.describe("runtime/UI convergence", () => {
     await expect(learningHub.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
     await page.screenshot({ path: testInfo.outputPath("learning-hub-compact.png"), fullPage: true });
 
+    if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
     await page.getByRole("button", { name: "문제 은행", exact: true }).click();
     const questionBank = page.locator(".question-bank-view");
     await expect(questionBank).toBeVisible();
@@ -161,6 +166,7 @@ test.describe("runtime/UI convergence", () => {
     await expect(questionBank.locator(".katex").first()).toBeVisible();
     await expect(questionBank.evaluate((element) => getComputedStyle(element).fontFamily)).resolves.toMatch(/Pretendard/i);
     await page.screenshot({ path: testInfo.outputPath("question-bank-mathtext.png"), fullPage: true });
+    if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
     await page.getByRole("button", { name: "보관함", exact: true }).click();
     await expect(page.locator(".app-sidebar [aria-current='page']")).toHaveCount(1);
     await expect(page.getByRole("button", { name: /새 오답/ })).toHaveCount(0);

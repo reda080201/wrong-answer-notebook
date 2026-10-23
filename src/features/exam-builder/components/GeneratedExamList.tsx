@@ -5,19 +5,20 @@ import EmptyState from "../../../shared/ui/EmptyState";
 
 interface Props {
   exams: GeneratedExam[];
+  onCreate?: () => void;
   onOpen: (exam: GeneratedExam, options?: ExamOpenOptions) => void;
   onDelete: (id: string) => void | Promise<void>;
   onPrint?: (exam: GeneratedExam) => void;
   disabled?: boolean;
 }
-export default function GeneratedExamList({ exams, onOpen, onDelete, onPrint, disabled = false }: Props) {
+export default function GeneratedExamList({ exams, onCreate, onOpen, onDelete, onPrint, disabled = false }: Props) {
   return (
     <section className="generated-exam-list" aria-label="내 모의고사">
-      <header><div><p className="modal-eyebrow">내 모의고사</p><h2>저장한 문제 세트</h2></div><span>{exams.length}개</span></header>
+      <header><div><h2>내 모의고사</h2></div><span>{exams.length}개</span></header>
       {exams.length ? (
         <div>{[...exams].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).map((exam) => (
           <article key={exam.id}>
-            <div><strong>{exam.title}</strong><p>{exam.questions.length}문항 · {exam.preset} · {new Date(exam.createdAt).toLocaleDateString("ko-KR")}</p><small>평균 선택 점수 {exam.questions.length ? Math.round(exam.questions.reduce((sum, question) => sum + question.selectionScore, 0) / exam.questions.length) : 0}</small><div className="generated-exam-source-list">{exam.questions.slice(0, 3).map((question) => <small key={question.position}>{question.position}번 · {formatQuestionSourceLabel(question.source)}</small>)}</div></div>
+            <div><strong>{exam.title}</strong><p>{exam.questions.length}문항 · {exam.preset} · {new Date(exam.createdAt).toLocaleDateString("ko-KR")}</p><details><summary>선정 기준 보기</summary><p>후보 선정에 사용한 내부 점수이며 성적이나 문항 난이도가 아닙니다.</p><small>평균 선택 점수 {exam.questions.length ? Math.round(exam.questions.reduce((sum, question) => sum + question.selectionScore, 0) / exam.questions.length) : 0}</small></details><div className="generated-exam-source-list">{exam.questions.slice(0, 3).map((question) => <small key={question.position}>{question.position}번 · {formatQuestionSourceLabel(question.source)}</small>)}</div></div>
             <div>
               <button type="button" onClick={() => onOpen(exam)} disabled={disabled}>{exam.status === "ready" ? exam.preset === "real_exam" ? "실전 모드" : "문제 풀기" : "검토"}</button>
               {exam.status === "ready" && exam.preset === "real_exam" && <button type="button" className="btn-secondary" onClick={() => onOpen(exam, { mode: "practice" })} disabled={disabled}>문제 풀기</button>}
@@ -27,7 +28,7 @@ export default function GeneratedExamList({ exams, onOpen, onDelete, onPrint, di
             </div>
           </article>
         ))}</div>
-      ) : <EmptyState className="list-empty">아직 만든 모의고사가 없습니다.</EmptyState>}
+      ) : <EmptyState className="list-empty" action={onCreate && <button type="button" className="btn-primary" disabled={disabled} onClick={onCreate}>모의고사 만들기</button>}>아직 만든 모의고사가 없습니다.</EmptyState>}
     </section>
   );
 }

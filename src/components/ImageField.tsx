@@ -87,7 +87,7 @@ export default function ImageField({
       <label>{label}</label>
       <button
         type="button"
-        aria-label={`${label} 이미지 추가`}
+        aria-label={`${label.replace(/\s*이미지$/, "").trim()} 이미지 추가`.trim()}
         className={`image-upload-area ${dragging ? "dragging" : ""}`}
         onClick={handleAdd}
         onDragOver={(event) => {
@@ -97,7 +97,7 @@ export default function ImageField({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
       >
-        📷 {label} 이미지 추가 · 드래그 앤 드롭
+        📷 이미지 추가 · 드래그 앤 드롭
       </button>
       {uploadError && (
         <p className="image-field-error" role="alert">

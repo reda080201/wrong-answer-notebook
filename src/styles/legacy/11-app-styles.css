@@ -300,7 +300,7 @@
 .app-update-banner span { margin-right: auto; }
 .app-update-banner button { border: 1px solid currentColor; border-radius: 6px; background: transparent; color: inherit; padding: .25rem .55rem; cursor: pointer; }
 .figure-comparison { margin-top: 0.75rem; padding: 0.75rem; border: 1px solid var(--border-subtle); background: var(--surface-muted); }
-.figure-comparison-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.75rem; }
+.figure-comparison-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
 .figure-comparison-grid figure, .figure-comparison-grid > div { min-width: 0; margin: 0; }
 .figure-comparison-grid figcaption { font-weight: 700; margin-bottom: 0.35rem; }
 .figure-comparison-grid img { display: block; width: 100%; max-height: 240px; object-fit: contain; background: var(--surface); }
@@ -312,3 +312,64 @@
 @media (max-width: 900px) {
   .figure-comparison-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.import-workspace .modal-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 22px; border-bottom: 1px solid var(--border); }
+.import-workspace .modal-header h2 { margin: 0; font-size: 20px; font-weight: 650; }
+.import-workspace .modal-header p { margin: 5px 0 0; color: var(--text-muted); font-size: 13px; }
+.import-workspace .modal-header .modal-eyebrow { display: none; }
+.import-workspace-header-actions { flex-shrink: 0; }
+.import-workspace-header-actions .btn-secondary { min-height: 34px; padding: 5px 10px; font-size: 13px; }
+.import-workspace-grid { grid-template-columns: 180px minmax(200px, .8fr) minmax(320px, 1.3fr); }
+.import-workspace-list > header { align-items: flex-start; font-size: 14px; }
+.import-workspace-list > header > strong { display: none; }
+.import-workspace-list article p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 14px; line-height: 1.6; }
+.import-workspace-editor input, .import-workspace-editor textarea, .import-workspace-editor select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.import-workspace-editor textarea { min-height: 100px; }
+.workspace-question-preview { font-size: 16px; line-height: 1.8; padding-bottom: 18px; }
+.workspace-question-preview h3 { display: flex; justify-content: space-between; font-size: 19px; margin: 0 0 16px; }
+.workspace-question-preview h3 span { color: var(--text-muted); font-size: 13px; }
+.workspace-content-editor { border-top: 1px solid var(--border); padding-top: 12px; }
+.workspace-content-editor > summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 6px 0; }
+.workspace-content-editor > button, .import-workspace-move > button { min-height: 34px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+.import-workspace-footer { background: var(--surface); }
+.import-workspace-footer > span { font-size: 13px; color: var(--text-muted); }
+@media (max-width: 1024px) {
+  .import-workspace-grid { grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); }
+  .import-workspace-sidebar { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+  .import-workspace .modal-header { padding: 12px; flex-wrap: wrap; }
+  .import-workspace .modal-header h2 { font-size: 18px; }
+  .import-workspace-grid { grid-template-columns: 1fr; }
+  .import-workspace-list { max-height: 160px; }
+}
+
+.workspace-group-picker { display: none; }
+.workspace-question-preview .structured-question-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 14px 18px; padding: 0; margin: 20px 0; list-style: none; }
+.workspace-question-preview .structured-question-choices > li { display: flex; align-items: baseline; gap: 8px; }
+@media (max-width: 1024px) {
+  .import-workspace-editor { grid-column: auto; max-height: none; }
+}
+@media (max-width: 700px) {
+  .import-workspace-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 130px minmax(0, 1fr); }
+  .import-workspace-grid > .import-workspace-sidebar { padding: 8px 12px; max-height: none; }
+  .import-workspace-sidebar > h3, .import-workspace-sidebar > button { display: none; }
+  .workspace-group-picker { display: grid; gap: 4px; font-size: 12px; }
+  .workspace-group-picker select { min-width: 0; width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); font: inherit; }
+  .import-workspace-grid > .import-workspace-list { max-height: none; padding: 8px 12px; }
+  .import-workspace-grid > .import-workspace-editor { max-height: none; padding: 12px; }
+  .import-workspace-header-actions .btn-secondary { display: inline-flex; min-height: 30px; padding: 4px 8px; }
+}
+.figure-comparison-viewport { max-height: 360px; overflow: auto; background: var(--surface); }
+.figure-review-card { min-width: 0; padding: 12px; margin-block: 12px; border: 1px solid var(--border-subtle); border-radius: 8px; }
+.figure-comparison input[type="range"] { max-width: 100%; }
+.figure-comparison > small { display: block; margin-block: 6px; line-height: 1.5; }
+.figure-comparison-confirm { display: flex; align-items: center; gap: 8px; min-height: 36px; padding-block: 6px; }
+.modal-backdrop.figure-comparison-backdrop { z-index: 1100; }
+[role="dialog"].figure-comparison-dialog { width: min(1100px, calc(100vw - 32px)); max-width: calc(100vw - 32px); background: var(--surface); border: 1px solid var(--border-subtle); border-radius: 12px; }
+.figure-comparison-dialog > .dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-subtle); }
+.figure-comparison-dialog > .dialog-body { padding: 16px; }
+.figure-comparison-dialog .figure-review-card { border: 0; margin: 0; padding: 0; }
+.figure-comparison-dialog .figure-comparison-viewport { max-height: 50dvh; }
+.figure-comparison-dialog .figure-comparison-grid img { max-height: 360px; }
+@media (max-width: 700px) { .figure-comparison-grid { grid-template-columns: minmax(0, 1fr); } }

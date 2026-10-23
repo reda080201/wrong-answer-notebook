@@ -1,4 +1,5 @@
 import { AI_STUDY_STORAGE_KEY, AI_BACKUP_PREFERENCE_KEY, isAiStudyStore, type AiStudyStore } from "../../features/study-ai/model";
+import { pickBrowserFiles } from "./browserFilePicker";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, KnowledgeGraphStore, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
@@ -328,13 +329,7 @@ export async function selectBackupSource(): Promise<string | File | null> {
     const selected = await open({ multiple: false, filters: [{ name: "ZIP", extensions: ["zip"] }] });
     return typeof selected === "string" ? selected : null;
   }
-  return new Promise((resolve) => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "application/json,.json";
-    input.onchange = () => resolve(input.files?.[0] ?? null);
-    input.click();
-  });
+  return (await pickBrowserFiles("application/json,.json"))[0] ?? null;
 }
 
 export async function createBackupAtDestination(

@@ -8,6 +8,7 @@ import type {
   McpSharedContextStatus,
 } from "../../types";
 import { errorMessage } from "./shared";
+import { assertRealExamSessionAllowed, assertRealExamSourcesAllowed } from "../../features/exam/services/realExamProtection";
 
 export const MCP_BRIDGE_VERSION = "local-bridge-v2" as const;
 
@@ -64,6 +65,7 @@ export async function disconnectMcpBridgeClients(): Promise<McpBridgeStatus> {
 }
 
 export async function syncMcpBridgeActiveContext(context: McpActiveContext): Promise<void> {
+  if (context.entryId) assertRealExamSourcesAllowed([context.entryId]);
   if (!isTauri()) return;
   await invoke("sync_active_context", {
     entryId: context.entryId,
@@ -72,11 +74,13 @@ export async function syncMcpBridgeActiveContext(context: McpActiveContext): Pro
 }
 
 export async function syncMcpBridgeActiveExamContext(context: ActiveExamContext): Promise<void> {
+  assertRealExamSessionAllowed(context.sessionId);
   if (!isTauri()) return;
   await invoke("sync_active_exam_context", { context });
 }
 
 export async function syncMcpBridgeExportContext(context: McpExportContext): Promise<void> {
+  if (context.entryId) assertRealExamSourcesAllowed([context.entryId]);
   if (!isTauri()) return;
   await invoke("sync_active_export_context", { context });
 }

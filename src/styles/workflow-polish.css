@@ -63,9 +63,17 @@
 .notification-item { position: relative; display: flex; align-items: center; gap: 6px; }
 .notification-region { display: grid; gap: 8px; }
 .notification-region:empty { display: none; }
-.notification-stack .app-snackbar { position: relative; inset: auto; transform: none; flex: 1; min-width: 0; max-width: none; }
+.notification-stack .app-snackbar { position: relative; inset: auto; transform: none; flex: 1; min-width: 0; max-width: none; font: var(--type-body); }
+.notification-stack .app-snackbar > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.notification-stack .app-snackbar > button { flex: 0 0 auto; }
+.dialog-notification-host { display: none; }
+.dialog-notification-host:has(.app-snackbar) { display: block; flex: 0 0 auto; min-height: 0; padding: 8px 16px; border-top: 1px solid var(--border); background: var(--surface); }
+.dialog-notification-host > .notification-stack { position: static; inset: auto; z-index: auto; width: 100%; max-width: none; max-height: min(25dvh, 180px); }
+/* Reserve a real row instead of covering dialog controls, including custom viewers. */
+[role="dialog"]:has(> .dialog-notification-host .app-snackbar) { display: flex; flex-direction: column; }
+[role="dialog"]:has(> .dialog-notification-host .app-snackbar) > .dialog-body { flex: 1 1 auto; height: auto; min-height: 0; }
 .notification-action-error { display: block; margin-top: 4px; color: var(--danger, #d14343); }
-.notification-dismiss { width: 32px; height: 32px; border: 0; background: transparent; color: inherit; cursor: pointer; }
+.notification-dismiss { width: 32px; height: 32px; border: 0; border-radius: var(--radius-control); background: transparent; color: inherit; cursor: pointer; }
 .image-upload-area:is(button) { width: 100%; font: inherit; color: var(--text); }
 .image-upload-area:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .concept-checklist-item .concept-checklist-label { grid-column: span 2; display: flex; align-items: center; gap: 0.55rem; min-width: 0; }
@@ -73,3 +81,7 @@
 .command-shortcuts { display: grid; gap: 10px; }
 .command-shortcuts p { display: grid; grid-template-columns: 72px 1fr; align-items: center; gap: 12px; margin: 0; }
 .command-shortcuts kbd { border: 1px solid var(--border-subtle, #d0d5dd); border-radius: 4px; padding: 4px 6px; text-align: center; background: var(--surface-subtle, #f6f7f9); }
+
+/* Shared controls use one UI type scale; mathematical content keeps KaTeX metrics. */
+.btn-primary, .btn-secondary, .btn-danger, .ui-button, .ui-icon-button { font-family: var(--font-ui); font-size: 14px; line-height: 1.4; min-height: var(--control-height); border-radius: var(--radius-control); }
+.btn-primary.btn-sm, .btn-secondary.btn-sm, .btn-danger.btn-sm, .ui-button--compact { min-height: var(--control-height-compact); font-size: 13px; }

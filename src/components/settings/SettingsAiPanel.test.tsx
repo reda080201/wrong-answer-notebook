@@ -37,7 +37,7 @@ function renderPanel(onConfigChange = vi.fn().mockResolvedValue(true)) {
 describe("SettingsAiPanel", () => {
   it("keeps model edits local until blur", () => {
     const { onConfigChange } = renderPanel();
-    const model = screen.getByPlaceholderText("예: openai/gpt-5.1-mini");
+    const model = screen.getByRole("textbox", { name: "모델" });
     fireEvent.change(model, { target: { value: "openrouter/new-model" } });
     expect(onConfigChange).not.toHaveBeenCalled();
     fireEvent.blur(model);
@@ -46,7 +46,8 @@ describe("SettingsAiPanel", () => {
 
   it("commits the base URL once when Enter blurs the field", () => {
     const { onConfigChange } = renderPanel();
-    const baseUrl = screen.getByPlaceholderText("https://api.example.com");
+    fireEvent.click(screen.getByText("고급 연결 설정", { exact: true }));
+    const baseUrl = screen.getByRole("textbox", { name: /^기본 URL/ });
     baseUrl.focus();
     fireEvent.change(baseUrl, { target: { value: "https://example.test/v1" } });
     fireEvent.keyDown(baseUrl, { key: "Enter" });
@@ -56,7 +57,7 @@ describe("SettingsAiPanel", () => {
 
   it("does not commit a second time when Enter is followed by blur", () => {
     const { onConfigChange } = renderPanel();
-    const model = screen.getByPlaceholderText("예: openai/gpt-5.1-mini");
+    const model = screen.getByRole("textbox", { name: "모델" });
     model.focus();
     fireEvent.change(model, { target: { value: "openrouter/new-model" } });
     fireEvent.keyDown(model, { key: "Enter" });

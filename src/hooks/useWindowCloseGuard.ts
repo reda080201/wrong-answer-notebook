@@ -89,12 +89,12 @@ export function useWindowCloseGuard({
     }
   }, [examSaveTimerRef, flushAiProviderConfig, flushEntries, flushExamSession, flushGeneratedExams, flushGptSolutionDrafts, flushImportWorkspaceDraft, flushKnowledgeGraph, flushLibraryFolders, flushPendingDeletions, flushReviewSessions, flushSettings]);
 
-  const closeWithoutSaving = useCallback(async () => {
+  const closeWithoutSaving = useCallback(async (alreadyConfirmed = false) => {
     if (inFlightRef.current || !closeError || !isTauri()) return;
     inFlightRef.current = true;
     setSaving(true);
     try {
-      const confirmed = await confirmCloseWithoutSaving();
+      const confirmed = alreadyConfirmed || await confirmCloseWithoutSaving();
       if (!confirmed) return;
       allowCloseRef.current = true;
       await getCurrentWindow().destroy();

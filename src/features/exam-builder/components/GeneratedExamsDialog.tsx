@@ -15,7 +15,8 @@ interface GeneratedExamsDialogProps {
   retryableError?: string | null;
   hasRetryableChange: boolean;
   exams: GeneratedExam[];
-  onClose(): Promise<void>;
+  onClose(): Promise<void | boolean>;
+  onCreate?(): void;
   onReload(): Promise<void>;
   onRetry(): Promise<void>;
   onDiscardFailure(): void;
@@ -52,7 +53,7 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
       setActionBusy(false);
     }
   };
-  const requestClose = () => runAction(props.onClose, "모의고사 목록을 닫지 못했습니다.");
+  const requestClose = () => runAction(async () => { await props.onClose(); }, "모의고사 목록을 닫지 못했습니다.");
   const actionDisabled = props.loading || Boolean(props.loadError) || actionBusy;
 
   return (
@@ -101,6 +102,7 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
       {actionError && <div className="form-error" role="alert">{actionError}{failedAction && <button type="button" className="btn-secondary" onClick={() => void runAction(failedAction.action, failedAction.fallback)} disabled={actionBusy}>다시 시도</button>}</div>}
       <GeneratedExamList
         exams={props.exams}
+        onCreate={props.onCreate ? () => void runAction(async () => { const closed = await props.onClose(); if (closed !== false) props.onCreate?.(); }, "모의고사 만들기를 열지 못했습니다.") : undefined}
         onOpen={props.onOpen}
         onDelete={(id) => void runAction(() => props.onDelete(id), "모의고사를 삭제하지 못했습니다.")}
         onPrint={(exam) => void runAction(() => props.onPrint(exam), "모의고사를 출력하지 못했습니다.")}
