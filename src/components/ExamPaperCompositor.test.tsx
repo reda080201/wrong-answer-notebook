@@ -124,6 +124,40 @@ describe("ExamPaperCompositor", () => {
     } finally { width.mockRestore(); height.mockRestore(); complete.mockRestore(); }
   });
 
+  it("retains a loaded image height while its replacement URL is pending", async () => {
+    let stageHeight = 600;
+    let imageState: "loaded" | "pending" | "resolved" = "loaded";
+    const complete = vi.spyOn(HTMLImageElement.prototype, "complete", "get").mockImplementation(() => imageState !== "pending");
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      const height = this.closest(".exam-paper-measure") ? stageHeight : 600;
+      return { width: 339, height, top: 0, left: 0, right: 339, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const makeItems = (imageState: "loaded" | "pending" | "resolved"): ExamPaperItem[] => [{
+      id: "image",
+      node: <article>{imageState === "pending" ? <div data-image-loading="true">loading</div> : <img src={`/figure-${imageState}.png`} alt="figure" loading="lazy" />}</article>,
+    }];
+    try {
+      const { container, rerender } = render(<ExamPaperCompositor enabled items={makeItems("loaded")} measurementKey="image-lifecycle" />);
+      const reader = container.querySelector<HTMLElement>(".exam-paper-reader")!;
+      await waitFor(() => expect(reader).toHaveAttribute("data-paper-layout-state", "ready"));
+      expect(container.querySelector('[data-paper-item="image"]')).toHaveAttribute("data-paper-measured-height", "600");
+
+      imageState = "pending";
+      stageHeight = 400;
+      rerender(<ExamPaperCompositor enabled items={makeItems("pending")} measurementKey="image-lifecycle" />);
+      await waitFor(() => expect(reader).toHaveAttribute("data-paper-layout-state", "pending"));
+      expect(container.querySelector('[data-paper-item="image"]')).toHaveAttribute("data-paper-measured-height", "600");
+
+      imageState = "resolved";
+      stageHeight = 500;
+      rerender(<ExamPaperCompositor enabled items={makeItems("resolved")} measurementKey="image-lifecycle" />);
+      await waitFor(() => expect(reader).toHaveAttribute("data-paper-layout-state", "ready"));
+      expect(container.querySelector('[data-paper-item="image"]')).toHaveAttribute("data-paper-measured-height", "500");
+    } finally {
+      complete.mockRestore();
+    }
+  });
+
   it("observes replacement items after repagination and measures their later growth", async () => {
     const observed = new Map<Element, ResizeObserverCallback>();
     const previousObserver = globalThis.ResizeObserver;

@@ -45,6 +45,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     const measure = () => {
       if (cancelled) return;
       const next = { narrow: new Map<string, number>(), wide: new Map<string, number>() };
+      const previous = measurementSnapshot.current;
       const host = container.ownerDocument.createElement("div");
       host.className = "exam-paper-measure";
       host.inert = true;
@@ -61,6 +62,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
         // image has loaded. Reserve the source's intrinsic ratio without
         // changing the original, requesting more decodes, or overriding sizing CSS.
         const originalImages = item.querySelectorAll<HTMLImageElement>("img");
+        const mediaPending = Boolean(item.querySelector('[data-image-loading="true"]')) || [...originalImages].some(image => !image.complete);
         clone.querySelectorAll<HTMLImageElement>("img").forEach((image, index) => {
           const source = originalImages[index];
           if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return;
@@ -70,15 +72,20 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
         });
         host.replaceChildren(clone);
         host.style.width = `${layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH}px`;
-        next.narrow.set(id, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
+        const narrowHeight = clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height);
+        next.narrow.set(id, mediaPending ? Math.max(narrowHeight, previous.narrow.get(id) ?? 0) : narrowHeight);
         host.style.width = `${PAPER_WIDTH - 2 * PAPER_PADDING}px`;
-        next.wide.set(id, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
+        const wideHeight = clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height);
+        // Moving an item between pages remounts its asynchronous image resolver.
+        // Do not shrink to its temporary placeholder and move it back again.
+        // Once media resolves (including errors), smaller real content is valid.
+        next.wide.set(id, mediaPending ? Math.max(wideHeight, previous.wide.get(id) ?? 0) : wideHeight);
       }
       host.remove();
       // Unrequested offscreen lazy images remain progressive. Their load/error
       // events remeasure the current nodes rather than keeping the whole paper busy.
-      const ready = container.ownerDocument.fonts?.status !== "loading" && [...container.querySelectorAll<HTMLImageElement>("[data-paper-item] img")].every(image => image.complete || image.loading === "lazy");
-      const previous = measurementSnapshot.current;
+      const visiblePlaceholder = [...container.querySelectorAll('[data-paper-item] [data-image-loading="true"]')].some(element => !element.closest("[hidden]"));
+      const ready = !visiblePlaceholder && container.ownerDocument.fonts?.status !== "loading" && [...container.querySelectorAll<HTMLImageElement>("[data-paper-item] img")].every(image => image.complete || image.loading === "lazy");
       const unchanged = (["narrow", "wide"] as const).every(key => previous[key].size === next[key].size && [...next[key]].every(([id, height]) => previous[key].get(id) === height));
       measuredReady = ready;
       if (unchanged) markReady(ready);
@@ -110,6 +117,13 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     };
     synchronizeObservedItems.current = synchronize;
     synchronize();
+    // Resolution/error can replace a placeholder without changing its height.
+    // Ignore our detached measurement hosts to avoid observing our own clones.
+    const markerChanged = (node: Node) => node instanceof Element && !node.matches(".exam-paper-measure") && (node.matches('[data-image-loading="true"]') || Boolean(node.querySelector('[data-image-loading="true"]')));
+    const mediaObserver = typeof MutationObserver === "undefined" ? undefined : new MutationObserver(records => {
+      if (records.some(record => !(record.target instanceof Element && record.target.closest(".exam-paper-measure")) && [...record.addedNodes, ...record.removedNodes].some(markerChanged))) schedule();
+    });
+    mediaObserver?.observe(container, { subtree: true, childList: true });
     container.addEventListener("load", schedule, true);
     container.addEventListener("error", schedule, true);
     const fonts = container.ownerDocument.fonts;
@@ -118,7 +132,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
     fonts?.addEventListener("loadingerror", schedule);
     void fonts?.ready.then(schedule);
     return () => {
-      cancelled = true; cancelAnimationFrame(frame); observer?.disconnect();
+      cancelled = true; cancelAnimationFrame(frame); observer?.disconnect(); mediaObserver?.disconnect();
       if (synchronizeObservedItems.current === synchronize) synchronizeObservedItems.current = null;
       container.removeEventListener("load", schedule, true);
       container.removeEventListener("error", schedule, true);
