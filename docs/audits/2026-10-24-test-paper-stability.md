@@ -75,3 +75,13 @@ Head `5302d085562b5f0ad55032c20c1da0e8cf9b1104` passed local full E2E **61/61** 
 An image's intrinsic size can change before its queued load/ResizeObserver callback updates the readiness flag. The compositor now includes the actual visible unscaled `offsetHeight` when its unscaled width matches the clone measurement width, and checks the committed DOM measurement before publishing ready. Hidden pages' zero dimensions are excluded. A new regression demonstrates canonical 700px content versus a 600px offscreen clone, rather than trusting the clone alone.
 
 The E2E readiness snapshot additionally requires the committed measurement to cover the actual box, allowing the existing 1px rounding difference. This waits for the model to reflect decoded content within the existing timeout. Aspect ratio, containment and overflow remain separate unchanged one-shot assertions; they are not polled into passing. Final head outcomes are recorded in the PR, including the above failed intermediate runs.
+
+## Actual renderer producer coverage
+
+Head `9ce7a5bcd2cd311d941de5012ecbb1bd8e0fabf9` passed local A4 **10/10**, related units **30/30**, lint and build. Remote E2E still completed **60/61**, with vertical 1536×970 failing the freshness precondition. Its artifact showed pending layout and question 5 back at the 573px placeholder. The local pass is not substituted for the failed remote result.
+
+Tracing the actual canonical call chain exposed the remaining integration omission: `QuestionContentView.FigureContent` uses **ZoomableImageViewer**, not ImageGallery. Its asynchronous URL-loading paragraph had no loading marker. InlineQuestionText's figure slot and the annotated-image renderer also had independent unmarked URL-loading states. Thus the pending-height policy added earlier could not recognize these real placeholders.
+
+The same internal loading marker is now produced by all four renderers. Separate deferred-URL regressions first failed on ZoomableImageViewer and InlineQuestionText's missing markers, then require the marker to disappear when the image resolves. An unknown inline figure without a filename remains a review warning, not a pending file request. A resolved empty inline URL is also no longer marked pending. Annotated images treat an empty resolved URL as a load failure, retaining the saved image reference rather than waiting forever; its deferred-to-empty boundary is covered separately.
+
+The compositor's preservation, canonical-height check, original assertions and existing timeouts are retained. Final checks cover these actual producer interfaces as well as the consumer's synthetic loading transition. No success claim is made for an intermediate head with failed E2E.

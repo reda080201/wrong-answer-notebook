@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getImageUrl } from "../api";
 import type { SheetFigureItem } from "../types";
 import InlineQuestionText from "./InlineQuestionText";
@@ -7,9 +7,24 @@ import QuestionContentView from "./QuestionContentView";
 
 vi.mock("../api", () => ({ getImageUrl: vi.fn(async (filename: string) => `blob:${filename}`) }));
 
+beforeEach(() => vi.clearAllMocks());
+
 const figure = { id: "graph", title: "그래프", caption: "", image: "graph.png", source: "original" } as SheetFigureItem;
 
 describe("InlineQuestionText", () => {
+  it("marks an inline figure slot while its canonical image filename is unresolved", async () => {
+    let resolveImage!: (url: string) => void;
+    vi.mocked(getImageUrl).mockImplementationOnce(() => new Promise(resolve => { resolveImage = resolve; }));
+    const { container } = render(<p><InlineQuestionText text="앞 [FIGURE:graph] 뒤" figures={[figure]} /></p>);
+
+    await screen.findByText("[그림 연결 확인 필요: graph]");
+    expect(container.querySelector('[data-image-loading="true"]')).toBeInTheDocument();
+
+    resolveImage("blob:graph.png");
+    expect(await screen.findByRole("img", { name: "그래프" })).toBeInTheDocument();
+    expect(container.querySelector('[data-image-loading="true"]')).not.toBeInTheDocument();
+  });
+
   it("renders a resolved figure at every marker and hides the internal token", async () => {
     render(<p><InlineQuestionText text="앞 [FIGURE:graph] 중간 [FIGURE:graph] 뒤" figures={[figure]} /></p>);
     expect(await screen.findAllByRole("img", { name: "그래프" })).toHaveLength(2);

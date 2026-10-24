@@ -23,7 +23,7 @@ function InlineFigure({ figure, id }: { figure?: SheetFigureItem; id: string }) 
   if (url) return <img className="question-inline-figure" src={url} alt={figure?.title || "문항 그림"} />;
   if (figure && !filename) return <span className="question-inline-figure-warning" role="note">[그림 설명 확인: {figure.caption || figure.title || id}]</span>;
   if (filename && result?.filename === filename && result.failed) return <span className="question-inline-figure-warning" role="note">[그림을 불러오지 못했습니다: {id}]</span>;
-  return <span className="question-inline-figure-warning" role="note">[그림 연결 확인 필요: {id}]</span>;
+  return <span className="question-inline-figure-warning" data-image-loading={filename && result?.filename !== filename ? "true" : undefined} role="note">[그림 연결 확인 필요: {id}]</span>;
 }
 
 /** Renders imported figure markers in place without exposing the internal token. */
