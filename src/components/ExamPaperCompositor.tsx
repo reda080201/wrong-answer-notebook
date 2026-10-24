@@ -57,6 +57,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
       host.inert = true;
       host.setAttribute("aria-hidden", "true");
       container.append(host);
+      const samples: Array<{ id: string; item: HTMLElement; clone: HTMLElement; mediaPending: boolean }> = [];
       for (const item of container.querySelectorAll<HTMLElement>("[data-paper-item]")) {
         const id = item.dataset.paperItem!;
         const clone = item.cloneNode(true) as HTMLElement;
@@ -69,7 +70,6 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
         // changing the original, requesting more decodes, or overriding sizing CSS.
         const originalImages = item.querySelectorAll<HTMLImageElement>("img");
         const mediaPending = Boolean(item.querySelector('[data-image-loading="true"]')) || [...originalImages].some(image => !image.complete);
-        const canonicalHeight = (width: number, height: number) => !item.closest("[hidden]") && Math.abs(item.offsetWidth - width) <= 1 ? Math.max(height, item.offsetHeight) : height;
         clone.querySelectorAll<HTMLImageElement>("img").forEach((image, index) => {
           const source = originalImages[index];
           if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return;
@@ -77,16 +77,20 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
           if (!image.hasAttribute("width")) image.setAttribute("width", String(image.hasAttribute("height") ? Math.round(Number(image.getAttribute("height")) * ratio) : source.naturalWidth));
           if (!image.hasAttribute("height")) image.setAttribute("height", String(Math.round(Number(image.getAttribute("width")) / ratio)));
         });
-        host.replaceChildren(clone);
-        host.style.width = `${layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH}px`;
-        const narrowHeight = canonicalHeight(layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
-        next.narrow.set(id, mediaPending ? Math.max(narrowHeight, previous.narrow.get(id) ?? 0) : narrowHeight);
-        host.style.width = `${PAPER_WIDTH - 2 * PAPER_PADDING}px`;
-        const wideHeight = canonicalHeight(PAPER_WIDTH - 2 * PAPER_PADDING, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
-        // Moving an item between pages remounts its asynchronous image resolver.
-        // Do not shrink to its temporary placeholder and move it back again.
-        // Once media resolves (including errors), smaller real content is valid.
-        next.wide.set(id, mediaPending ? Math.max(wideHeight, previous.wide.get(id) ?? 0) : wideHeight);
+        samples.push({ id, item, clone, mediaPending });
+        host.append(clone);
+      }
+      // Batch writes before reads: two width/layout phases, rather than forcing
+      // two layouts per item. Each clone remains an independent item box.
+      for (const [kind, width] of [["narrow", layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH], ["wide", PAPER_WIDTH - 2 * PAPER_PADDING]] as const) {
+        host.style.width = `${width}px`;
+        for (const { id, item, clone, mediaPending } of samples) {
+          const cloneHeight = clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height);
+          const height = !item.closest("[hidden]") && Math.abs(item.offsetWidth - width) <= 1 ? Math.max(cloneHeight, item.offsetHeight) : cloneHeight;
+          // Remounted URL placeholders must not undo a decoded measurement.
+          // Resolved content, including error content, can shrink normally.
+          next[kind].set(id, mediaPending ? Math.max(height, previous[kind].get(id) ?? 0) : height);
+        }
       }
       host.remove();
       // Unrequested offscreen lazy images remain progressive. Their load/error

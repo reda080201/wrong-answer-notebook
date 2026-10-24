@@ -182,6 +182,25 @@ describe("ExamPaperCompositor", () => {
     }
   });
 
+  it("measures all item clones together without changing their individual heights", async () => {
+    const measurementReads: Array<{ cloneCount: number; text: string; height: number }> = [];
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      const host = this.closest<HTMLElement>(".exam-paper-measure");
+      if (!host) return { width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+      const height = this.textContent?.includes("first") ? 400 : 500;
+      measurementReads.push({ cloneCount: host.querySelectorAll(".exam-paper-page__item").length, text: this.textContent ?? "", height });
+      const width = Number.parseFloat(host.style.width);
+      return { width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    const { container } = render(<ExamPaperCompositor enabled items={[item("first"), item("second")]} measurementKey="batch-measurement" />);
+    const reader = container.querySelector<HTMLElement>(".exam-paper-reader")!;
+    await waitFor(() => expect(reader).toHaveAttribute("data-paper-layout-state", "ready"));
+    expect(measurementReads.length).toBeGreaterThan(0);
+    expect(measurementReads.every(read => read.cloneCount === 2)).toBe(true);
+    expect(container.querySelector('[data-paper-item="first"]')).toHaveAttribute("data-paper-measured-height", "400");
+    expect(container.querySelector('[data-paper-item="second"]')).toHaveAttribute("data-paper-measured-height", "500");
+  });
+
   it("observes replacement items after repagination and measures their later growth", async () => {
     const observed = new Map<Element, ResizeObserverCallback>();
     const previousObserver = globalThis.ResizeObserver;
