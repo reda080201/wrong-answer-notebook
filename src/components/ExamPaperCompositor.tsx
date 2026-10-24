@@ -25,6 +25,8 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const root = useRef<HTMLDivElement>(null);
   const touch = useRef<{ x: number; y: number } | null>(null);
   const [measurements, setMeasurements] = useState(() => ({ narrow: new Map<string, number>(), wide: new Map<string, number>() }));
+  const measurementSnapshot = useRef(measurements);
+  const synchronizeObservedItems = useRef<(() => void) | null>(null);
   const lastNavigation = useRef<string | null>(null);
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const number = currentQuestionNumber ?? selected ?? items[0]?.questionNumber ?? items[0]?.id;
@@ -34,16 +36,28 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   useLayoutEffect(() => {
     const container = root.current;
     if (!enabled || !container) return;
-    let cancelled = false, frame = 0;
+    let cancelled = false, frame = 0, measuredReady = false;
+    const markReady = (ready: boolean): void => {
+      // Image intrinsic size can change before its load/ResizeObserver callback.
+      // A committed model must cover the currently visible canonical boxes.
+      if (ready && [...container.querySelectorAll<HTMLElement>("[data-paper-item]")].some(item => !item.closest("[hidden]") && item.offsetHeight > Number(item.dataset.paperMeasuredHeight ?? 0) + 1)) {
+        schedule();
+        return;
+      }
+      container.dataset.paperLayoutState = ready ? "ready" : "pending";
+      container.setAttribute("aria-busy", String(!ready));
+    };
     // DOM clones do not mount another React editor, image subscription, or target ID.
     const measure = () => {
       if (cancelled) return;
       const next = { narrow: new Map<string, number>(), wide: new Map<string, number>() };
+      const previous = measurementSnapshot.current;
       const host = container.ownerDocument.createElement("div");
       host.className = "exam-paper-measure";
       host.inert = true;
       host.setAttribute("aria-hidden", "true");
       container.append(host);
+      const samples: Array<{ id: string; item: HTMLElement; clone: HTMLElement; mediaPending: boolean }> = [];
       for (const item of container.querySelectorAll<HTMLElement>("[data-paper-item]")) {
         const id = item.dataset.paperItem!;
         const clone = item.cloneNode(true) as HTMLElement;
@@ -51,23 +65,95 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
         for (const element of [clone, ...clone.querySelectorAll<HTMLElement>("*")]) {
           element.removeAttribute("id"); element.removeAttribute("autofocus"); element.removeAttribute("name"); element.removeAttribute("aria-current");
         }
-        host.replaceChildren(clone);
-        host.style.width = `${layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH}px`;
-        next.narrow.set(id, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
-        host.style.width = `${PAPER_WIDTH - 2 * PAPER_PADDING}px`;
-        next.wide.set(id, clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height));
+        // Offscreen lazy clones do not decode reliably, even when the visible
+        // image has loaded. Reserve the source's intrinsic ratio without
+        // changing the original, requesting more decodes, or overriding sizing CSS.
+        const originalImages = item.querySelectorAll<HTMLImageElement>("img");
+        const mediaPending = Boolean(item.querySelector('[data-image-loading="true"]')) || [...originalImages].some(image => !image.complete);
+        clone.querySelectorAll<HTMLImageElement>("img").forEach((image, index) => {
+          const source = originalImages[index];
+          if (!source?.complete || !source.naturalWidth || !source.naturalHeight) return;
+          const ratio = source.naturalWidth / source.naturalHeight;
+          if (!image.hasAttribute("width")) image.setAttribute("width", String(image.hasAttribute("height") ? Math.round(Number(image.getAttribute("height")) * ratio) : source.naturalWidth));
+          if (!image.hasAttribute("height")) image.setAttribute("height", String(Math.round(Number(image.getAttribute("width")) / ratio)));
+        });
+        samples.push({ id, item, clone, mediaPending });
+        host.append(clone);
+      }
+      // Batch writes before reads: two width/layout phases, rather than forcing
+      // two layouts per item. Each clone remains an independent item box.
+      for (const [kind, width] of [["narrow", layout === "single" ? PAPER_WIDTH - 2 * PAPER_PADDING : PAPER_COLUMN_WIDTH], ["wide", PAPER_WIDTH - 2 * PAPER_PADDING]] as const) {
+        host.style.width = `${width}px`;
+        for (const { id, item, clone, mediaPending } of samples) {
+          const cloneHeight = clone.offsetHeight || Math.ceil(clone.getBoundingClientRect().height);
+          const height = !item.closest("[hidden]") && Math.abs(item.offsetWidth - width) <= 1 ? Math.max(cloneHeight, item.offsetHeight) : cloneHeight;
+          // Remounted URL placeholders must not undo a decoded measurement.
+          // Resolved content, including error content, can shrink normally.
+          next[kind].set(id, mediaPending ? Math.max(height, previous[kind].get(id) ?? 0) : height);
+        }
       }
       host.remove();
-      setMeasurements(previous => (["narrow", "wide"] as const).every(key => previous[key].size === next[key].size && [...next[key]].every(([id, height]) => previous[key].get(id) === height)) ? previous : next);
+      // Unrequested offscreen lazy images remain progressive. Their load/error
+      // events remeasure the current nodes rather than keeping the whole paper busy.
+      const visiblePlaceholder = [...container.querySelectorAll('[data-paper-item] [data-image-loading="true"]')].some(element => !element.closest("[hidden]"));
+      const ready = !visiblePlaceholder && container.ownerDocument.fonts?.status !== "loading" && [...container.querySelectorAll<HTMLImageElement>("[data-paper-item] img")].every(image => image.complete || image.loading === "lazy");
+      const unchanged = (["narrow", "wide"] as const).every(key => previous[key].size === next[key].size && [...next[key]].every(([id, height]) => previous[key].get(id) === height));
+      measuredReady = ready;
+      if (unchanged) markReady(ready);
+      else {
+        // Publish readiness after React commits the pages for these measurements.
+        measurementSnapshot.current = next;
+        setMeasurements(next);
+      }
     };
-    const schedule = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(measure); };
+    const schedule = (): void => {
+      if (cancelled) return;
+      measuredReady = false;
+      markReady(false);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(measure);
+    };
     measure();
     const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(schedule);
-    container.querySelectorAll<HTMLElement>("[data-paper-item]").forEach(element => observer?.observe(element));
+    let observed = new Set<Element>();
+    const synchronize = () => {
+      const current = new Set(container.querySelectorAll<HTMLElement>("[data-paper-item]"));
+      if (current.size === observed.size && [...current].every(element => observed.has(element))) { markReady(measuredReady); return; }
+      // Pagination can move React items to a different page/column, replacing
+      // their DOM nodes. Watching the removed nodes misses later font/image growth.
+      observer?.disconnect();
+      observed = current;
+      current.forEach(element => observer?.observe(element));
+      schedule();
+    };
+    synchronizeObservedItems.current = synchronize;
+    synchronize();
+    // Resolution/error can replace a placeholder without changing its height.
+    // Ignore our detached measurement hosts to avoid observing our own clones.
+    const markerChanged = (node: Node) => node instanceof Element && !node.matches(".exam-paper-measure") && (node.matches('[data-image-loading="true"]') || Boolean(node.querySelector('[data-image-loading="true"]')));
+    const mediaObserver = typeof MutationObserver === "undefined" ? undefined : new MutationObserver(records => {
+      if (records.some(record => !(record.target instanceof Element && record.target.closest(".exam-paper-measure")) && [...record.addedNodes, ...record.removedNodes].some(markerChanged))) schedule();
+    });
+    mediaObserver?.observe(container, { subtree: true, childList: true });
     container.addEventListener("load", schedule, true);
-    void container.ownerDocument.fonts?.ready.then(() => { if (!cancelled) schedule(); });
-    return () => { cancelled = true; cancelAnimationFrame(frame); observer?.disconnect(); container.removeEventListener("load", schedule, true); };
+    container.addEventListener("error", schedule, true);
+    const fonts = container.ownerDocument.fonts;
+    fonts?.addEventListener("loading", schedule);
+    fonts?.addEventListener("loadingdone", schedule);
+    fonts?.addEventListener("loadingerror", schedule);
+    void fonts?.ready.then(schedule);
+    return () => {
+      cancelled = true; cancelAnimationFrame(frame); observer?.disconnect(); mediaObserver?.disconnect();
+      if (synchronizeObservedItems.current === synchronize) synchronizeObservedItems.current = null;
+      container.removeEventListener("load", schedule, true);
+      container.removeEventListener("error", schedule, true);
+      fonts?.removeEventListener("loading", schedule);
+      fonts?.removeEventListener("loadingdone", schedule);
+      fonts?.removeEventListener("loadingerror", schedule);
+    };
   }, [enabled, layout, structuralMeasurementKey]);
+  // Rebind after every React commit, including commits caused by new measurements.
+  useLayoutEffect(() => { synchronizeObservedItems.current?.(); });
   useLayoutEffect(() => {
     const container = root.current;
     if (!container || !enabled) return;
@@ -102,7 +188,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
   const controls = (position: string) => <nav className="exam-paper-pager__navigation" aria-label={`시험지 페이지 ${position} 이동`}><button type="button" onClick={() => go(pageIndex - 1)} disabled={pageIndex === 0}>이전 페이지</button><span aria-live="polite">{pageIndex + 1} / {pages.length}</span><button type="button" onClick={() => go(pageIndex + 1)} disabled={pageIndex === pages.length - 1}>다음 페이지</button></nav>;
   if (!enabled) return <>{items.map(item => <div key={item.id}>{item.node}</div>)}</>;
   const byId = new Map(items.map(item => [item.id, item]));
-  return <div ref={root} className={`exam-paper-reader exam-paper-reader--${navigation}`} data-layout={layout}
+  return <div ref={root} className={`exam-paper-reader exam-paper-reader--${navigation}`} data-layout={layout} data-paper-layout-state="pending"
     onKeyDown={event => {
       if (navigation !== "horizontal-pages" || event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || isInteractivePaperTarget(event.target)) return;
       if (event.key === "ArrowLeft" || event.key === "ArrowRight") { event.preventDefault(); event.stopPropagation(); go(pageIndex + (event.key === "ArrowLeft" ? -1 : 1)); }
@@ -114,7 +200,7 @@ export default function ExamPaperCompositor({ enabled, children, items: supplied
       {pages.map((page, index) => <section key={page.id} className={`exam-paper-page${page.oversized ? " exam-paper-page--oversized" : ""}${page.fullWidth ? " exam-paper-page--full" : ""}`} data-paper-page={index + 1} hidden={navigation === "horizontal-pages" && index !== pageIndex} aria-label={`시험지 ${index + 1}페이지`}>
         {showHeader && index === 0 && <header className="exam-paper-title"><p>{subject || "시험"} 영역 · {items.length}문항{minutes ? ` · ${minutes}분` : ""}</p><h2>{title}</h2><div>성명 __________ 수험번호 __________</div></header>}
         <div className="exam-paper-page__columns" style={{ gridTemplateColumns: page.columns.length === 2 ? "repeat(2, minmax(0, 1fr))" : "minmax(0, 1fr)" }}>
-          {page.columns.map((column, columnIndex) => <div key={columnIndex} className="exam-paper-page__column">{column?.items.map(item => <div key={item.id} tabIndex={-1} data-paper-item={item.id} data-paper-number={item.questionNumber ?? item.id} aria-current={(item.questionNumber ?? item.id) === number ? "step" : undefined} className="exam-paper-page__item" onFocus={() => { setSelected(item.questionNumber ?? item.id); onQuestionChange?.(item.questionNumber ?? item.id); }}>{byId.get(item.id)?.node}</div>)}</div>)}
+          {page.columns.map((column, columnIndex) => <div key={columnIndex} className="exam-paper-page__column">{column?.items.map(item => <div key={item.id} tabIndex={-1} data-paper-item={item.id} data-paper-number={item.questionNumber ?? item.id} aria-current={(item.questionNumber ?? item.id) === number ? "step" : undefined} className="exam-paper-page__item" data-paper-measured-height={(page.fullWidth ? measurements.wide : measurements.narrow).get(item.id)} onFocus={() => { setSelected(item.questionNumber ?? item.id); onQuestionChange?.(item.questionNumber ?? item.id); }}>{byId.get(item.id)?.node}</div>)}</div>)}
         </div>{showPageNumbers && <footer className="exam-paper-page__number">{index + 1} / {pages.length}</footer>}
       </section>)}
     </div>{navigation === "horizontal-pages" && controls("하단")}

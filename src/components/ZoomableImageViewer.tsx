@@ -48,7 +48,7 @@ function ImageViewer({ filenames }: { filenames: string[] }) {
   const handleWheel = (event: WheelEvent<HTMLDivElement>) => { event.preventDefault(); setScale(value => clampScale(value + (event.deltaY < 0 ? 0.1 : -0.1))); };
   if (!filenames.length) return null;
   return <>
-    {!sources.length && <p role="status">그림을 불러오는 중…</p>}
+    {!sources.length && <p role="status" data-image-loading="true">그림을 불러오는 중…</p>}
     <div className="zoom-viewer-launcher">{sources.map((source, sourceIndex) => error(source)
       ? <div key={source.filename} className="image-load-error" role="alert"><p>그림을 불러오지 못했습니다. 저장된 연결은 유지됩니다.</p><button type="button" className="btn-secondary" onClick={reload}>이미지 다시 불러오기</button></div>
       : <button key={`${source.filename}:${retry}`} type="button" onClick={() => { setIndex(sourceIndex); setScale(1); setOffset({ x: 0, y: 0 }); setOpen(true); }}><img src={source.url} alt={`첨부 이미지 ${sourceIndex + 1}`} onError={() => markFailed(source.filename)} /><span>확대 보기</span></button>)}</div>

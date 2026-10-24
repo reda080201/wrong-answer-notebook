@@ -112,6 +112,95 @@ describe("useExamSessionController safety guards", () => {
     expect(syncMcpBridgeActiveExamContext).not.toHaveBeenCalled();
   });
 
+  it("synchronizes the imperative session ref when callers replace the session", async () => {
+    const { result } = renderHook(() => useExamSessionController({ commitExamSubmission: successfulCommit }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    act(() => result.current.open(entry));
+    const replacement = { ...result.current.session!, id: "external-session" };
+    act(() => {
+      result.current.setSession(replacement);
+      expect(result.current.sessionRef.current).toBe(replacement);
+    });
+  });
+
+  it("keeps a newly opened exam when closing the previous exam save finishes", async () => {
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      commitExamSubmission: successfulCommit,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    vi.useFakeTimers();
+    try {
+      act(() => result.current.open(entry));
+      let resolveSave!: () => void;
+      saveExamSessions.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+
+      let closing!: Promise<boolean>;
+      act(() => { closing = result.current.close(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(saveExamSessions).toHaveBeenCalledTimes(1);
+
+      const nextEntry = { ...entry, id: "sheet-2", title: "다음 시험지" };
+      act(() => result.current.open(nextEntry));
+      const nextSession = result.current.session;
+      expect(nextSession?.entryId).toBe(nextEntry.id);
+
+      await act(async () => { resolveSave(); });
+      await expect(closing).resolves.toBe(false);
+      expect(result.current.session).toBe(nextSession);
+      expect(result.current.session?.entryId).toBe(nextEntry.id);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a newer answer when closing waits for the earlier answer save", async () => {
+    const { result } = renderHook(() => useExamSessionController({
+      chatGptPreferences: preferences,
+      commitExamSubmission: successfulCommit,
+    }));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    vi.useFakeTimers();
+    try {
+      act(() => result.current.open(entry));
+      act(() => result.current.updateSession((current) => updateExamResponse(current, {
+        questionNumber: "1",
+        response: "①",
+        scratchNote: "",
+        markedForReview: false,
+        updatedAt: "",
+      })));
+      let resolveSave!: () => void;
+      saveExamSessions.mockImplementationOnce(() => new Promise<void>((resolve) => { resolveSave = resolve; }));
+
+      let closing!: Promise<boolean>;
+      act(() => { closing = result.current.close(); });
+      await act(async () => { await Promise.resolve(); });
+      expect(saveExamSessions).toHaveBeenCalledTimes(1);
+      expect(saveExamSessions.mock.calls[0][0][0].responses).toMatchObject([
+        { questionNumber: "1", response: "①" },
+      ]);
+
+      act(() => result.current.updateSession((current) => updateExamResponse(current, {
+        questionNumber: "1",
+        response: "②",
+        scratchNote: "",
+        markedForReview: false,
+        updatedAt: "",
+      })));
+
+      await act(async () => { resolveSave(); });
+      await expect(closing).resolves.toBe(false);
+      expect(result.current.session?.responses).toMatchObject([
+        { questionNumber: "1", response: "②" },
+      ]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
   it("submits the latest answer when submit follows an update in the same event", async () => {
     const commitExamSubmission = vi.fn(successfulCommit);
     const { result } = renderHook(() => useExamSessionController({

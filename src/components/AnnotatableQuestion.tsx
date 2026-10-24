@@ -995,7 +995,10 @@ function AnnotatableImage({
     // Both callers key this image by filename, without remounting the question.
     getImageUrl(filename)
       .then((url) => {
-        if (!cancelled) setSrc(url);
+        if (!cancelled) {
+          setSrc(url);
+          if (!url) setImageError(true);
+        }
       })
       .catch(() => {
         if (!cancelled) setImageError(true);
@@ -1076,7 +1079,7 @@ function AnnotatableImage({
     return <div className="image-fill-error">이미지를 불러올 수 없습니다</div>;
   }
 
-  if (!src) return <div className="image-fill-loading" />;
+  if (!src) return <div className="image-fill-loading" data-image-loading="true" />;
 
   return (
     <div

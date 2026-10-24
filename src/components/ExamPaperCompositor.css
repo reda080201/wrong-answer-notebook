@@ -1,4 +1,52 @@
 .exam-paper-reader { min-width: 0; width: 100%; overflow-x: auto; --paper-scale: 1; touch-action: pan-y; }
+/* White paper is a local light surface, including offscreen measurement clones.
+   Override both legacy and current tokens here; child renderers explicitly use
+   them, so setting only the page's color does not isolate the dark app theme. */
+.exam-paper-page,
+.exam-paper-measure {
+  color-scheme: light;
+  --text: #171717;
+  --text-muted: #555;
+  --ink-primary: #171717;
+  --ink-secondary: #555;
+  --ink-subtle: #626975;
+  --bg: #fff;
+  --panel-bg: #fff;
+  --surface-canvas: #fff;
+  --surface: #fff;
+  --surface-soft: #f5f6f8;
+  --surface-hover: #eef2f6;
+  --surface-muted: #f5f6f8;
+  --surface-primary: #fff;
+  --surface-secondary: #f5f6f8;
+  --surface-selected: #e9f0ff;
+  --paper-bg: #fff;
+  --paper-border: #c8cdd4;
+  --paper-elevated: #fff;
+  --paper-label-bg: #e9f0ff;
+  --paper-label-text: #1d4ed8;
+  --paper-subtle-bg: #f5f6f8;
+  --control-bg: #fff;
+  --control-border: #666;
+  --border: #c8cdd4;
+  --border-color: #c8cdd4;
+  --line-subtle: #c8cdd4;
+  --line-strong: #666;
+  --accent: #1d4ed8;
+  --accent-soft: #e9f0ff;
+  --accent-hover: #1e40af;
+  --accent-primary: #1d4ed8;
+  --accent-primary-hover: #1e40af;
+  --accent-on-primary: #fff;
+  --danger: #b91c1c;
+  --warning: #854d0e;
+  --warning-text: #854d0e;
+  --warning-border: #a16207;
+  --success: #166534;
+  --state-review: #854d0e;
+  --state-unanswered: #555;
+  color: var(--text);
+}
 .exam-paper-compositor { display: grid; gap: 24px; justify-items: safe center; padding: 12px 0 24px; min-width: 0; }
 .exam-paper-page { position: relative; box-sizing: border-box; width: 794px; min-height: 1123px; padding: 44px; background: #fff; color: #171717; border: 0; outline: 1px solid #ddd; border-radius: 0; box-shadow: 0 2px 6px rgb(0 0 0 / 8%); zoom: calc(var(--paper-scale) * var(--study-zoom-scale, 1)); }
 .exam-paper-page[hidden] { display: none; }

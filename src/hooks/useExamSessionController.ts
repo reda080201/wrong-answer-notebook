@@ -82,6 +82,12 @@ export function useExamSessionController({
   const generatedEntryKeysRef = useRef(new Set<string>());
   const submissionInFlightRef = useRef(false);
 
+  const replaceSession = useCallback<typeof setSession>(value => {
+    const next = typeof value === "function" ? value(sessionRef.current) : value;
+    sessionRef.current = next;
+    setSession(next);
+  }, []);
+
   const updateSession = useCallback((recipe: ExamSessionRecipe) => {
     const current = sessionRef.current;
     if (!current) return;
@@ -195,6 +201,9 @@ export function useExamSessionController({
     }
     const current = sessionRef.current;
     if (current && !(await flush(current))) return false;
+    // Closing persisted this exact revision. A later open, answer, or restore
+    // owns the current screen and must survive the earlier save completion.
+    if (sessionRef.current !== current) return false;
     sessionRef.current = null;
     setSession(null);
     setActiveGeneratedExam(null);
@@ -397,7 +406,7 @@ export function useExamSessionController({
 
   return {
     session,
-    setSession,
+    setSession: replaceSession,
     updateSession,
     sessionRef,
     saveTimerRef,

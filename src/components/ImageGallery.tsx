@@ -33,7 +33,7 @@ function ImageThumb({ filename, variant, alt, resolveImageUrl, returnFocusFallba
     <p>이미지를 불러올 수 없습니다</p><p>저장된 연결은 유지됩니다.</p>
     <button type="button" className="btn-secondary btn-sm" onClick={retry}>이미지 다시 불러오기</button>
   </div>;
-  const loading = <div role="status" className={variant === "fill" ? "image-fill-loading" : "image-thumb image-thumb--loading"}>이미지를 불러오는 중…</div>;
+  const loading = <div role="status" data-image-loading="true" className={variant === "fill" ? "image-fill-loading" : "image-thumb image-thumb--loading"}>이미지를 불러오는 중…</div>;
   return <>
     {current?.error ? (!lightbox && errorContent) : current?.url ? <button type="button"
       className={variant === "fill" ? "image-fill-wrap" : `image-thumb ${variant === "inline" ? "image-thumb--inline" : ""}`}

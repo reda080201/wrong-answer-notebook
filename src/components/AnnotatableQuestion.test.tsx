@@ -9,6 +9,30 @@ vi.mock("../api", () => ({
 }));
 
 describe("AnnotatableQuestion", () => {
+  it("clears the image loading marker when the resolved URL is empty", async () => {
+    let resolveImage!: (url: string) => void;
+    vi.mocked(getImageUrl).mockImplementationOnce(() => new Promise(resolve => { resolveImage = resolve; }));
+    const { container } = render(
+      <AnnotatableQuestion
+        question="1. 이미지 자료를 확인하시오."
+        questionImages={["missing.png"]}
+        zoomableImages={false}
+        annotations={[]}
+        memoMode={false}
+        activeTool="highlight"
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+        sheetLayout="single"
+      />,
+    );
+
+    await waitFor(() => expect(container.querySelector('.image-fill-loading[data-image-loading="true"]')).toBeInTheDocument());
+    resolveImage("");
+    await waitFor(() => expect(container.querySelector(".image-fill-error")).toHaveTextContent("이미지를 불러올 수 없습니다"));
+    expect(container.querySelector('[data-image-loading="true"]')).not.toBeInTheDocument();
+  });
+
   it("renders figures referenced by a shared passage in focused question view", async () => {
     vi.mocked(getImageUrl).mockResolvedValue("mock://passage.png");
     const { container } = render(
