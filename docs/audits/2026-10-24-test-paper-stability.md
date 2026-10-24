@@ -86,6 +86,16 @@ The same internal loading marker is now produced by all four renderers. Separate
 
 The compositor's preservation, canonical-height check, original assertions and existing timeouts are retained. Final checks cover these actual producer interfaces as well as the consumer's synthetic loading transition. No success claim is made for an intermediate head with failed E2E.
 
+## White-paper theme boundary follow-up
+
+The previously observed dark-theme study contrast issue is now reproduced and repaired. A white `.exam-paper-page` only set its inherited `color`, while `.content-block-text` and other descendants explicitly resolved the app's dark `--text` token. The before-fix browser regression measured `#e8edf4` on white at **1.18:1**. A screenshot review additionally found the study header's secondary actions using dark `--bg` with the newly dark paper text: a second before-fix regression measured **1.03:1**. Body-only assertions would have missed those unreadable actions.
+
+The actual page and offscreen `.exam-paper-measure` now share a local light color scheme and paper text, secondary text, surface, control, border, accent and status tokens. Legacy `--bg`/`--panel-bg` and newer surface tokens are covered together. The reader and surrounding toolbar retain the app theme; no geometry, stored data, public API or test deadline changes are introduced. Print media inherits the same paper palette.
+
+The new independent four-question color fixture leaves the existing 30-question geometry fixtures unchanged. Four browser cases (light/dark at 1100/680 widths) pass across study, practice and real-exam surfaces, checking body/math/table/control contrast, paper header actions, print and measurement-clone consistency. Screenshots are synthetic automated-browser evidence, not native-window or real-PDF verification. Related six-file units pass **52/52**; local lint/build and final-head CI results are reported separately in the PR.
+
+The historical worker failure was a diagnostic invocation with `--pool=threads`, not the currently configured forks pool. Its 60-second `started` handshake timeout is established; the underlying runtime/resource cause is still unknown. Scripts and CI have no threads override. See [worker startup diagnosis](2026-10-24-vitest-startup-diagnosis.md) for failure evidence and the different instrumentation required for forks versus threads. This CSS repair does not claim to fix an unproven worker-memory cause.
+
 ## Bounded measurement work
 
 Head `d6769586267f37f7876069cce7b103952fa2b6b7` passed remote Frontend **215 files / 1,359 units** and full E2E **61/61**, with no retry/flaky results. The local related six-file suite passed **51/51**, lint and build passed. A duplicate local A4 diagnostic was interrupted after three cases: two passed; vertical 1280 timed out waiting for ready under the existing 5-second expectation. Its after-failure artifact already showed fonts loaded, state ready and question 5 at actual 742 / clone 741. This local failure is retained rather than overwritten by remote success.
