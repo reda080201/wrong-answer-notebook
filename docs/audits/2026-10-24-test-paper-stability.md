@@ -49,3 +49,11 @@ This cleanup is **not a proven fix for the previous worker-start stall**. Resolv
 - Actual touch, installed native-window interaction and live AI-provider calls were not performed. No installed build was replaced.
 - No existing test was deleted/skipped, assertion relaxed, or timeout increased. A diagnostic run stopped after its first failure is not a full-suite pass.
 - Final PR must distinguish local whole-suite outcomes, unresolved worker-start causality, and the five checks on its final head. No automatic merge.
+
+## Whole-run follow-up
+
+At head `e7710711359a64466580a102294c5e18d9be5da8`, local `npm run check` completed, including **215 files / 1,354 unit tests**, lint, contracts and production build. Worker traces recorded 215 forks, 215 spawns, 215 exits and zero child errors. The installed reporter's lack of intermediate per-file output was not a stall in this run. Installed Vitest stops isolated runners after tasks; SIGTERM cleanup alone is not evidence of a worker crash. The historical startup error remains causally unconfirmed.
+
+The whole local E2E run then completed **59 passed / 2 failed**: vertical A4 at 1280×720 and 1920×1080. Both failed geometry snapshots explicitly recorded `pending`, despite a preceding readiness assertion. For example, question 5 at 1280 had actual height 742 and an old model height 573 after image load; the later measurement clone height was 741. This establishes an observation race during remeasurement, rather than a reason to relax the aspect-ratio threshold. All five GitHub jobs passed on that same head, which does not erase these local failures.
+
+The follow-up E2E change reads readiness, image decode state and geometry atomically in one DOM snapshot, polling only readiness/decode state under the existing expectation timeout. Original one-shot ratio, containment and overflow assertions remain unchanged. No geometry result is polled until it happens to pass. Final focused/whole E2E and new-head CI results are recorded separately in the PR.

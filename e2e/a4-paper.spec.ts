@@ -82,7 +82,7 @@ for (const size of sizes) {
         await expect(reader.locator(".exam-paper-page").first()).toBeVisible();
         await expect.poll(() => reader.locator(".exam-paper-page--oversized").count()).toBeGreaterThan(0);
         await expect(reader).toHaveClass(new RegExp(navigation));
-        const bounds = await reader.evaluate(element => [...element.querySelectorAll<HTMLElement>(".exam-paper-page:not([hidden])")].map(page => {
+        const readBounds = () => reader.evaluate(element => [...element.querySelectorAll<HTMLElement>(".exam-paper-page:not([hidden])")].map(page => {
           const rect = page.getBoundingClientRect();
           return {
             ratio: rect.width / rect.height,
@@ -97,6 +97,14 @@ for (const size of sizes) {
             }),
           };
         }));
+        let bounds = await readBounds();
+        // Earlier awaits can be followed by a lazy-image load or React node
+        // replacement. Read readiness and geometry in the same DOM snapshot;
+        // retain the strict, one-shot geometry assertions below.
+        await expect.poll(async () => {
+          bounds = await readBounds();
+          return bounds.length > 0 && bounds.every(bound => bound.state === "ready" && bound.items.every(item => item.images.every(image => image.complete && image.width > 0)));
+        }).toBe(true);
         await writeFile(info.outputPath(`a4-bounds-${surface}.json`), JSON.stringify(bounds, null, 2));
         for (const bound of bounds) {
           expect(bound.overflow).toBeLessThanOrEqual(1);
