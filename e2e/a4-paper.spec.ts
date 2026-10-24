@@ -100,10 +100,12 @@ for (const size of sizes) {
         let bounds = await readBounds();
         // Earlier awaits can be followed by a lazy-image load or React node
         // replacement. Read readiness and geometry in the same DOM snapshot;
+        // intrinsic growth can precede load delivery, so also require the
+        // committed height model to cover the visible canonical box (1px rounding).
         // retain the strict, one-shot geometry assertions below.
         await expect.poll(async () => {
           bounds = await readBounds();
-          return bounds.length > 0 && bounds.every(bound => bound.state === "ready" && bound.items.every(item => item.images.every(image => image.complete && image.width > 0)));
+          return bounds.length > 0 && bounds.every(bound => bound.state === "ready" && bound.items.every(item => Number.isFinite(Number(item.measured)) && item.actual <= Number(item.measured) + 1 && item.images.every(image => image.complete && image.width > 0)));
         }).toBe(true);
         await writeFile(info.outputPath(`a4-bounds-${surface}.json`), JSON.stringify(bounds, null, 2));
         for (const bound of bounds) {

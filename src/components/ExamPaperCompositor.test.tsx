@@ -158,6 +158,30 @@ describe("ExamPaperCompositor", () => {
     }
   });
 
+  it("uses canonical visible height when it exceeds the offscreen clone measurement", async () => {
+    const offsetWidth = vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) {
+      return this.matches("[data-paper-item]") ? 339 : 0;
+    });
+    const offsetHeight = vi.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockImplementation(function (this: HTMLElement) {
+      return this.matches("[data-paper-item]") ? 700 : 0;
+    });
+    HTMLElement.prototype.getBoundingClientRect = vi.fn(function (this: HTMLElement) {
+      const isClone = Boolean(this.closest(".exam-paper-measure"));
+      const width = isClone ? Number.parseFloat((this.closest(".exam-paper-measure") as HTMLElement).style.width) : 339;
+      const height = isClone ? 600 : this.hasAttribute("data-paper-item") ? 700 : 0;
+      return { width, height, top: 0, left: 0, right: width, bottom: height, x: 0, y: 0, toJSON: () => ({}) } as DOMRect;
+    });
+    try {
+      const { container } = render(<ExamPaperCompositor enabled items={[{ id: "canonical", node: <article>canonical visible content</article> }]} measurementKey="canonical-height" />);
+      const reader = container.querySelector<HTMLElement>(".exam-paper-reader")!;
+      await waitFor(() => expect(reader).toHaveAttribute("data-paper-layout-state", "ready"));
+      expect(container.querySelector('[data-paper-item="canonical"]')).toHaveAttribute("data-paper-measured-height", "700");
+    } finally {
+      offsetWidth.mockRestore();
+      offsetHeight.mockRestore();
+    }
+  });
+
   it("observes replacement items after repagination and measures their later growth", async () => {
     const observed = new Map<Element, ResizeObserverCallback>();
     const previousObserver = globalThis.ResizeObserver;
