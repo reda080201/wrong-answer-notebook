@@ -722,7 +722,7 @@ describe("ImportFromGptModal", () => {
     });
 
     expect(screen.getByText("텍스트")).toBeInTheDocument();
-    expect(screen.getByText("1개")).toBeInTheDocument();
+    expect(screen.getByText("1문항")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("JSON이 아닌 텍스트로 감지되었습니다");
 
     fireEvent.click(screen.getByTestId("import-primary-action"));
