@@ -77,7 +77,6 @@ export default function SettingsAiPanel({ provider, status, statusLoading, opera
     <details className="settings-disclosure settings-connection-guide" aria-label="AI 연결 시작 안내"><summary>처음 연결할 때의 설정 방법</summary>
       <ol><li>사용할 제공자와 계정에서 이용 가능한 <strong>정확한 모델 ID</strong>를 입력하세요.</li><li>API 키 위치를 선택하세요. 직접 입력하려면 <strong>OS 보안 저장소 → 키 저장</strong>을 이용하세요.</li><li><strong>API 사용</strong>을 켜고 <strong>연결 테스트</strong>로 설정을 확인하세요.</li></ol>
       <p>연결하지 않아도 문제 풀이·가져오기와 수동 GPT 결과 붙여넣기를 사용할 수 있습니다. API 사용 요금과 한도는 선택한 제공자의 계정에 적용됩니다.</p>
-      {!isTauri() && <p role="note">지금은 브라우저 화면입니다. API 키 설정과 실제 호출은 Windows 설치 앱에서 가능합니다.</p>}
     </details>
     {!isTauri() && <p className="form-hint" role="note">API 키 설정과 실제 AI 호출은 Windows 설치 앱에서 사용할 수 있습니다.</p>}
     <div className="form-field"><label htmlFor="ai-provider-type">AI 제공자</label><select id="ai-provider-type" value={selectedProvider} disabled={controlsDisabled} onChange={(event) => onConfigChange({ provider: event.target.value as AiProviderType })}>{providers.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>

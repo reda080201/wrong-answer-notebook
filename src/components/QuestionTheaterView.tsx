@@ -239,7 +239,7 @@ export default function QuestionTheaterView({
           className={`question-theater-main ${solutionOpen && solutionPresentation === "split" ? "question-theater-main--split" : ""}`}
           style={solutionOpen && solutionPresentation === "split" ? { ["--question-split-ratio" as string]: `${splitRatio}%` } : undefined}
         >
-          <section ref={questionPaneRef} className="question-theater-question-pane">
+          <section ref={questionPaneRef} className="question-theater-question-pane" tabIndex={0} aria-label="현재 문제">
             {questionMeta?.important && (
             <div className="question-theater-bookmark-note">
               <strong>중요 표시된 문제</strong>

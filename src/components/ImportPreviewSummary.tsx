@@ -25,7 +25,7 @@ function ValidationIssues({ issues, label, limit = 6, className }: {
 }) {
   const renderIssue = (issue: ImportValidationReport["issues"][number]) => <p key={issue.id} className={`import-validation-issue ${className ?? `import-validation-issue--${issue.severity}`}`}>{issue.message}</p>;
   return <div aria-label={`${label} 목록`}>
-    <p className="form-hint">{label} 총 {issues.length}개</p>
+    <p className="form-hint">{label} · 안내 {issues.length}건</p>
     {issues.slice(0, limit).map(renderIssue)}
     {issues.length > limit && <details className="import-validation-more"><summary>나머지 {issues.length - limit}개 보기</summary>{issues.slice(limit).map(renderIssue)}</details>}
   </div>;
@@ -57,20 +57,20 @@ export default function ImportPreviewSummary({
           role="alert"
         >
           <strong>
-            AI 판독 감사
+            가져오기 확인 요약
             {expectedQuestionNumbers.length > 0 && <span className="import-user-expected-badge">사용자 기준</span>}
           </strong>
           <span>
-            예상 {validationReport.audit.expectedQuestionNumbers.length} · 감지 {validationReport.audit.detectedQuestionNumbers.length}
+            예상 {validationReport.audit.expectedQuestionNumbers.length}문항 · 감지 {validationReport.audit.detectedQuestionNumbers.length}문항
           </span>
           {importReviewSummary.questionReviewCount > 0 && <p>검토 필요 문항 {importReviewSummary.questionReviewCount}개</p>}
           {importReviewSummary.legacyReviewCount > 0 && <p>검토 필요 항목 {importReviewSummary.legacyReviewCount}개 (세부 구분 정보 없음)</p>}
           {importReviewSummary.rejectedItemCount > 0 && <p>제외된 가져오기 항목 {importReviewSummary.rejectedItemCount}개</p>}
           {validationReport.audit.missingQuestionNumbers.length > 0 && (
-            <p>누락 문제: {validationReport.audit.missingQuestionNumbers.join(", ")}</p>
+            <p>누락 문항: {validationReport.audit.missingQuestionNumbers.join(", ")}</p>
           )}
           {validationReport.audit.uncertainQuestionNumbers.length > 0 && (
-            <p>불확실 문제: {validationReport.audit.uncertainQuestionNumbers.join(", ")}</p>
+            <p>확인 필요 문항: {validationReport.audit.uncertainQuestionNumbers.join(", ")}</p>
           )}
           {validationReport.audit.handwritingExcluded === false && <p>손글씨 제외 여부가 확인되지 않았습니다.</p>}
           {rejectedNotes.length > 0 && (
@@ -92,12 +92,12 @@ export default function ImportPreviewSummary({
       <dl className="import-preview-meta">
         <div><dt>형식</dt><dd>{detectedFormat === "json" ? "JSON" : "텍스트"}</dd></div>
         <div><dt>제목</dt><dd>{title || "(제목 없음)"}</dd></div>
-        <div><dt>문제 수</dt><dd>{questionCount}개</dd></div>
+        <div><dt>문항</dt><dd>{questionCount}문항</dd></div>
         <div><dt>이미지</dt><dd>{imageCount}개</dd></div>
         <div><dt>도표/그림</dt><dd>{figureCount}개</dd></div>
         <div><dt>답안 연결</dt><dd>{answerCount}개</dd></div>
         <div><dt>메모</dt><dd>{hasMemo ? "있음" : "없음"}</dd></div>
-        <div><dt>검증</dt><dd>{validationReport?.issues.length ? `${validationReport.issues.length}개 확인` : "문제 없음"}</dd></div>
+        <div><dt>검사 안내</dt><dd>{validationReport?.issues.length ? `${validationReport.issues.length}건 · 아래 내용 확인` : "파일·구조 검사에서 발견된 문제 없음"}</dd></div>
       </dl>
 
       {validationReport && validationReport.issues.length > 0 && (

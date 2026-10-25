@@ -1,53 +1,5 @@
 /* Extracted from App.css: balanced chunk 8. Keep import order stable. */
 
-.question-theater {
-  position: fixed;
-  inset: 0;
-  z-index: 80;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  overflow: auto;
-  padding: 4rem 1rem 2rem;
-  background: rgba(15, 23, 42, 0.62);
-}
-
-.question-theater-shell {
-  width: min(960px, 100%);
-  border: 1px solid var(--paper-border);
-  border-radius: 14px;
-  background: var(--paper-bg);
-  color: var(--text);
-  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.32);
-}
-
-.question-theater-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.55rem;
-  padding: 0.75rem;
-  border-bottom: 1px solid var(--paper-border);
-  background: var(--surface);
-}
-
-.question-theater-toolbar button {
-  border: 1px solid var(--control-border);
-  border-radius: 8px;
-  background: var(--surface-soft);
-  color: var(--text);
-  padding: 0.45rem 0.7rem;
-  font-weight: 900;
-}
-
-.question-theater-toolbar strong {
-  min-width: 8rem;
-  text-align: center;
-}
-
 .difficulty-score-input,
 .question-score-editor,
 .question-theater-score-editor {
