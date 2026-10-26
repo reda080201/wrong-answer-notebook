@@ -6,6 +6,62 @@ const longQuestions = syntheticLifecycleEntry.structuredQuestions.map(q => q.que
 });
 const longEntry = { ...syntheticLifecycleEntry, structuredQuestions: longQuestions, questionContentSegments: Object.fromEntries(longQuestions.map(q => [q.questionNumber, q.contentSegments])) };
 
+test("hidden AI panel does not steal focus or Escape from question theater", async ({ page }) => {
+  await page.setViewportSize({ width: 1536, height: 970 });
+  await seedBrowserStorage(page); await page.goto("/"); await openSyntheticSheet(page);
+  await page.getByRole("button", { name: "문항별", exact: true }).click();
+  await page.getByRole("button", { name: "AI 학습 대화 열기" }).click();
+  const ai = page.getByRole("dialog", { name: "AI 학습 대화", exact: true });
+  await ai.getByRole("textbox", { name: "메시지", exact: true }).fill("전송하지 않은 질문");
+  const opener = page.getByRole("button", { name: "1번 크게 보기", exact: true });
+  // The desktop AI pane is nonmodal; keyboard interaction with the sheet is allowed.
+  await opener.press("Enter");
+  const theater = page.getByRole("dialog", { name: "문제 크게 보기", exact: true });
+  await expect(theater).toBeVisible(); await expect(ai).toBeHidden();
+  const close = theater.getByRole("button", { name: "문제 크게 보기 닫기" });
+  await close.press("Shift+Tab");
+  await expect(theater.getByRole("button", { name: "문제 크게 보기 추가 작업" })).toBeFocused();
+  await page.keyboard.press("Tab"); await expect(close).toBeFocused();
+  await close.press("Escape"); await expect(theater).toHaveCount(0);
+  await expect(opener).toBeFocused(); await expect(ai).toBeVisible();
+  await expect(ai.getByRole("textbox", { name: "메시지", exact: true })).toHaveValue("전송하지 않은 질문");
+});
+
+test("question theater divider changes pane widths and restores the saved ratio", async ({ page }) => {
+  await page.setViewportSize({ width: 1536, height: 970 });
+  await seedBrowserStorage(page); await page.goto("/"); await openSyntheticSheet(page);
+  await page.getByRole("button", { name: "문항별", exact: true }).click();
+  const opener = page.getByRole("button", { name: "1번 크게 보기", exact: true });
+  await opener.click(); await page.getByRole("button", { name: "해설 보기", exact: true }).click();
+  const theater = page.getByRole("dialog", { name: "문제 크게 보기", exact: true });
+  const question = theater.locator(".question-theater-question-pane");
+  const solution = theater.locator(".question-theater-solution-pane");
+  const divider = theater.locator(".question-theater-divider");
+  const before = (await question.boundingBox())!.width;
+  const handle = (await divider.boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 80);
+  await page.mouse.down(); await page.mouse.move(handle.x - 160, handle.y + 80, { steps: 8 }); await page.mouse.up();
+  await expect.poll(async () => (await question.boundingBox())!.width).toBeLessThan(before - 80);
+  expect((await divider.boundingBox())!.width).toBeGreaterThanOrEqual(16);
+  await expect(divider).toHaveAttribute("role", "separator");
+  const dragged = Number(await divider.getAttribute("aria-valuenow"));
+  await divider.press("ArrowRight"); await expect(divider).toHaveAttribute("aria-valuenow", String(dragged + 1));
+  await divider.press("Home"); await expect(divider).toHaveAttribute("aria-valuenow", "45");
+  await divider.press("End"); await expect(divider).toHaveAttribute("aria-valuenow", "72");
+  await expect(theater.getByText("1 / 30", { exact: true })).toBeVisible();
+  expect((await solution.boundingBox())!.width).toBeGreaterThanOrEqual(340);
+  const savedWidth = (await question.boundingBox())!.width;
+  await theater.getByRole("button", { name: "문제 크게 보기 닫기" }).click();
+  await opener.click(); await page.getByRole("button", { name: "해설 보기", exact: true }).click();
+  await expect(divider).toHaveAttribute("aria-valuenow", "72");
+  expect((await question.boundingBox())!.width).toBeCloseTo(savedWidth, 0);
+  await page.setViewportSize({ width: 1101, height: 750 });
+  expect((await solution.boundingBox())!.width).toBeGreaterThanOrEqual(340);
+  const main = await theater.locator(".question-theater-main").boundingBox();
+  const solutionBox = (await solution.boundingBox())!;
+  expect(solutionBox.x + solutionBox.width).toBeLessThanOrEqual(main!.x + main!.width + 1);
+});
+
 for (const [width, theme] of [[1100, "light"], [680, "dark"]] as const) {
   test(`focus panes and controls remain separate at ${width} ${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 750 });
