@@ -6,8 +6,7 @@ if (!Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = vi.fn();
 }
 
-// File isolation is deliberately disabled for the Windows single-worker suite.
-// A leaked fake clock would otherwise stall unrelated UI tests.
+// Reset fake timers after each test so leaked fake clocks do not stall later tests.
 afterEach(() => {
   vi.useRealTimers();
 });
