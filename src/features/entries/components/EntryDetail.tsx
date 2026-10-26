@@ -425,6 +425,10 @@ export default function EntryDetail({
   };
   const focusedCanonicalMatches = focusedQuestion ? originalStudyQuestions.filter(question => question.questionNumber === (questionIdentifier(focusedQuestion) ?? String(focusedQuestion.displayNumber))) : [];
   const focusedCanonicalQuestion = focusedCanonicalMatches.length === 1 ? focusedCanonicalMatches[0] : undefined;
+  const generatedContentReviewRequired = Boolean(entry.generatedFromExamSessionId && Object.keys(presentationEntry.questionContentSegments ?? {}).length && generatedWrongAnswerContent.status !== "matched");
+  const wrongAnswerCanonicalQuestion = isWrongAnswer && (presentationEntry.structuredQuestions?.length || !entry.generatedFromExamSessionId || generatedWrongAnswerContent.status === "matched")
+    ? focusedCanonicalQuestion ?? (originalStudyQuestions.length === 1 ? originalStudyQuestions[0] : undefined)
+    : undefined;
   const focusedPassage = (() => {
     if (focusedCanonicalQuestion?.passage) return { kind: "passage" as const, ...focusedCanonicalQuestion.passage };
     if (!focusedQuestion) return undefined;
@@ -1922,9 +1926,11 @@ export default function EntryDetail({
                   <AnnotatableQuestion
                     key={entry.id}
                     question={entry.question}
-                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, entry.generatedFromQuestionNumber)}
-              canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-                    canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous" || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
+                    canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, wrongAnswerCanonicalQuestion?.questionNumber ?? entry.generatedFromQuestionNumber, wrongAnswerCanonicalQuestion?.section)}
+                    canonicalSegments={wrongAnswerCanonicalQuestion?.contentSegments ?? (generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined)}
+                    canonicalChoices={wrongAnswerCanonicalQuestion?.choices}
+                    canonicalPassage={wrongAnswerCanonicalQuestion?.passage?.text}
+                    canonicalReviewRequired={generatedContentReviewRequired || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
                     canonicalReviewMessage={originalStudyQuestions.find(question => question.warning?.includes("공통 지문"))?.warning}
                     questionImages={activeStudyPanel === "images" ? entry.questionImages : []}
                     figures={presentationEntry.figures ?? []}
@@ -1993,9 +1999,11 @@ export default function EntryDetail({
             <AnnotatableQuestion
               key={entry.id}
               question={entry.question}
-              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, entry.generatedFromQuestionNumber)}
-              canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-              canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous" || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
+              canonicalAnnotationContext={getEntryCanonicalAnnotationContext(presentationEntry, wrongAnswerCanonicalQuestion?.questionNumber ?? entry.generatedFromQuestionNumber, wrongAnswerCanonicalQuestion?.section)}
+              canonicalSegments={wrongAnswerCanonicalQuestion?.contentSegments ?? (generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined)}
+              canonicalChoices={wrongAnswerCanonicalQuestion?.choices}
+              canonicalPassage={wrongAnswerCanonicalQuestion?.passage?.text}
+              canonicalReviewRequired={generatedContentReviewRequired || Boolean(originalStudyQuestions.some(question => question.warning?.includes("공통 지문")))}
               canonicalReviewMessage={originalStudyQuestions.find(question => question.warning?.includes("공통 지문"))?.warning}
               questionImages={entry.questionImages}
               figures={presentationEntry.figures ?? []}

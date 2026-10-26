@@ -12,6 +12,23 @@ function sheet(id: string, body: string, score: number, important = false): Wron
 }
 
 describe("generateExam", () => {
+  it("labels missing ratings separately from calculation defaults without changing selection scores", () => {
+    const source = sheet("unrated", "미평가 문항", 60);
+    source.questionMeta = [];
+    source.answerKey = [];
+    const before = structuredClone(source);
+    const input = { entries: [source], title: "미평가", preset: "real_exam" as const, blueprint: defaultBlueprintForPreset("real_exam", 1), seed: "unrated" };
+    const exam = generateExam(input);
+    expect(exam.questions[0].selectionReasons).toContain("난이도 미평가 (계산 기준 50)");
+    expect(exam.questions[0].selectionReasons).toContain("중요도 미평가 (계산 기준 45)");
+    expect(source).toEqual(before);
+    source.questionMeta = [{ questionNumber: "1", important: false, difficultyScore: 50, rating: { importanceScore: 45 }, updatedAt: "2026-10-21" }];
+    const rated = generateExam(input);
+    expect(rated.questions[0].selectionScore).toBe(exam.questions[0].selectionScore);
+    expect(rated.questions[0].selectionReasons).toContain("난이도 50");
+    expect(rated.questions[0].selectionReasons).toContain("중요도 45");
+  });
+
   it("records intentional absence of shared content so source deletion does not add a false recovery warning", () => {
     const source = sheet("standalone", "독립 문항", 60);
     const exam = generateExam({ entries: [source], title: "독립 문항", preset: "real_exam", blueprint: defaultBlueprintForPreset("real_exam", 1), seed: "standalone" });

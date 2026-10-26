@@ -4,6 +4,8 @@ import { normalizeImportImageKey } from "../../../utils/importImageReferences";
 import { validateImportImage } from "./validateImportImage";
 import { collectEntryImportImageReferences } from "../../../utils/importImageReferences";
 import { parseAllInOneImport } from "../../../utils/importStudyText";
+import { validateFigureSourceHashes } from "./validateFigureSourceHashes";
+import { isValidNormalizedCrop } from "../../../utils/normalizedCrop";
 
 export interface ZipImportProgress { phase: "inspect" | "extract"; completed: number; total: number; }
 export interface ZipImportAsset { sourcePath: string; file: File; }
@@ -66,6 +68,7 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   if (jsonBlob.size > IMPORT_LIMITS.MAX_JSON_BYTES) throw new Error(`JSON 파일이 ${IMPORT_LIMITS.MAX_JSON_BYTES / 1024 / 1024}MB를 초과합니다.`);
   const [jsonText, imageAssets] = await Promise.all([jsonBlob.text(), extractImages(images, jsonBlob.size, options.signal, options.onProgress)]);
   validateImportAssetReferences(jsonText, imageAssets.map(asset => asset.sourcePath));
+  await validateFigureSourceHashes(jsonText, imageAssets);
   return { jsonText, jsonName: basename(json.name), imageFiles: imageAssets.map((asset) => asset.file), imageAssets };
 }
 
@@ -78,7 +81,22 @@ export function validateImportAssetReferences(jsonText: string, filenames: strin
     } else if (Array.isArray(value)) value.forEach(item => checkDeclared(item, key));
     else if (value && typeof value === "object") Object.entries(value).forEach(([field, item]) => checkDeclared(item, field));
   };
-  checkDeclared(JSON.parse(jsonText));
+  const raw: unknown = JSON.parse(jsonText);
+  checkDeclared(raw);
+  const inspectStructure = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) { value.forEach(inspectStructure); return; }
+    const object = value as Record<string, unknown>;
+    if (Array.isArray(object.figures)) {
+      const ids = object.figures.map(figure => figure && typeof figure === "object" ? (figure as Record<string, unknown>).id : undefined).filter(id => typeof id === "string" && id);
+      if (new Set(ids).size !== ids.length) throw new Error("같은 자료에 중복된 figureId가 있습니다.");
+    }
+    for (const [key, child] of Object.entries(object)) {
+      if ((key === "cropRect" || key === "crop") && child != null && !isValidNormalizedCrop(child)) throw new Error("원본 crop 좌표가 페이지 범위를 벗어납니다.");
+      inspectStructure(child);
+    }
+  };
+  inspectStructure(raw);
   const document = parseAllInOneImport(jsonText, "import.json");
   for (const entry of document.entries) {
     for (const reference of collectEntryImportImageReferences(entry)) {
@@ -87,6 +105,12 @@ export function validateImportAssetReferences(jsonText: string, filenames: strin
     const ids = new Set((entry.figures ?? []).map(figure => figure.id));
     const referenced = [ ...(entry.structuredQuestions ?? []).flatMap(question => [...(question.figureIds ?? []), ...question.contentSegments.filter(segment => segment.type === "figure").map(segment => segment.figureId)]), ...Object.values(entry.questionContentSegments ?? {}).flatMap(segments => segments.filter(segment => segment.type === "figure").map(segment => segment.figureId)) ];
     if (referenced.some(id => !ids.has(id))) throw new Error("문항의 figureId가 실제 그림 목록에 없습니다.");
+    for (const question of entry.structuredQuestions ?? []) {
+      const tokens = [entry.question ?? "", question.questionText, ...(question.choices ?? []), ...(question.conditions ?? [])].flatMap(text => [...text.matchAll(/\[FIGURE:([^\]]+)\]/g)].map(match => match[1]));
+      if (tokens.some(id => !ids.has(id))) throw new Error("선택지·지문의 figureId가 실제 그림 목록에 없습니다.");
+      const page = question.source?.page;
+      if (page !== undefined && (!Number.isInteger(page) || page < 1 || page > (entry.sourcePageImages?.length ?? 0))) throw new Error("문항의 원본 페이지 연결이 범위를 벗어납니다.");
+    }
     for (const figure of entry.figures ?? []) {
       if (figure.cleaned && !figure.original?.image) throw new Error(`정리본 그림의 원본 이미지가 없습니다: ${figure.id}`);
       if (figure.source !== "described_only" && !figure.original?.image && !figure.image) throw new Error(`그림의 원본 이미지가 없습니다: ${figure.id}`);

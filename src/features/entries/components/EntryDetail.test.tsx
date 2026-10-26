@@ -918,6 +918,30 @@ describe("EntryDetail sheet layout", () => {
     expect(container.querySelector(".wrong-focus-question")).not.toHaveTextContent("그림 연결 확인 필요");
   });
 
+  it("uses the same structured body and choices in ordinary wrong-answer normal and focus views", async () => {
+    const entry: WrongAnswerEntry = {
+      ...sheetEntry, entryKind: "wrong_answer", question: "1. 수정한 본문\n① 수정 선택지",
+      structuredQuestions: [{ questionNumber: "1", questionText: "수정한 본문", choices: ["① 수정 선택지"], conditions: [], equations: [], figureIds: ["g"], contentSegments: [
+        { id: "body", type: "text", text: "수정한 본문" },
+        { id: "figure", type: "figure", figureId: "g" },
+        { id: "condition", type: "condition", text: "조건", label: "(가)" },
+      ] }],
+      figures: [{ id: "g", questionNumber: "1", title: "도형", caption: "", source: "original", image: "g.png" }],
+    };
+    const { container } = render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    const normal = container.querySelector(".question-content-view")!;
+    await waitFor(() => expect(normal.querySelector("img")).toHaveAttribute("src", "mock://g.png"));
+    const text = normal.textContent;
+    expect(text).toContain("수정한 본문");
+    expect(text).toContain("수정 선택지");
+    openSecondaryAction("집중 보기");
+    const focused = container.querySelector(".wrong-focus-question .question-content-view")!;
+    await waitFor(() => expect(focused.querySelector("img")).toHaveAttribute("src", "mock://g.png"));
+    expect(focused.textContent).toBe(text);
+    expect(text?.match(/\(가\)/g)).toHaveLength(1);
+    expect(focused.textContent?.match(/\(가\)/g)).toHaveLength(1);
+  });
+
   it("renders a generated wrong answer's canonical stream in normal and focused views", async () => {
     const entry: WrongAnswerEntry = {
       ...sheetEntry,
@@ -955,6 +979,20 @@ describe("EntryDetail sheet layout", () => {
     await waitFor(() => expect(container.querySelector(".wrong-focus-question .question-content-view img")).toHaveAttribute("src", "mock://source-graph.png"));
     expect(container.querySelector(".wrong-focus-question .question-content-view")?.children[0]).toHaveTextContent("앞 문장");
     expect(container.querySelector(".wrong-focus-question .question-content-view")?.children[2]).toHaveTextContent("뒤 문장");
+  });
+
+  it.each(["7", undefined])("keeps unresolved generated identity %s in the legacy view with a review notice in both modes", number => {
+    const entry: WrongAnswerEntry = { ...sheetEntry, entryKind: "wrong_answer", generatedFromExamSessionId: "session", generatedFromQuestionNumber: number, question: "1. 보존할 원문", questionContentSegments: {
+      "1": [{ id: "one", type: "text", text: "선택하면 안 되는 첫 본문" }],
+      "2": [{ id: "two", type: "text", text: "다른 본문" }],
+    } };
+    const { container } = render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    expect(container.querySelector(".question-content-review-notice")).toHaveTextContent("연결을 확인");
+    expect(container.querySelector(".study-paper")).toHaveTextContent("보존할 원문");
+    expect(container.querySelector(".study-paper")).not.toHaveTextContent("선택하면 안 되는 첫 본문");
+    openSecondaryAction("집중 보기");
+    expect(container.querySelector(".wrong-focus-question")).toHaveTextContent("보존할 원문");
+    expect(container.querySelector(".wrong-focus-question .question-content-review-notice")).toBeInTheDocument();
   });
 
   it("shows the sticky study control bar and keeps normal mode switching in the top tabs", () => {

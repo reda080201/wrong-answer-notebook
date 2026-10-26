@@ -71,12 +71,15 @@ export default function StudyPaperView({
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
   const [expandedDiagramsEntryId, setExpandedDiagramsEntryId] = useState<string | null>(null);
-  const structuredQuestions = entry.structuredQuestions?.length || displayMode === "exam" ? getEntryQuestions(entry) : [];
-  const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
-  const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const generatedWrongAnswerContent = entry.entryKind === "wrong_answer" && entry.generatedFromExamSessionId
     ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
     : { status: "unavailable" as const };
+  const canResolveGenerated = !entry.generatedFromExamSessionId || generatedWrongAnswerContent.status === "matched";
+  const generatedContentReviewRequired = Boolean(entry.generatedFromExamSessionId && Object.keys(entry.questionContentSegments ?? {}).length && !canResolveGenerated);
+  const hasResolvableSegments = Object.keys(entry.questionContentSegments ?? {}).length > 0 && canResolveGenerated;
+  const structuredQuestions = entry.structuredQuestions?.length || (canResolveGenerated && (hasResolvableSegments || displayMode === "exam")) ? getEntryQuestions(entry) : [];
+  const blocks = structuredQuestions.length ? [] : parseQuestionText(entry.question);
+  const questionCount = structuredQuestions.length || blocks.filter((block) => block.kind === "question").length;
   const figureImages = generatedWrongAnswerContent.status === "matched"
     ? []
     : (entry.figures ?? []).flatMap((figure) => (figure.image ? [figure.image] : []));
@@ -159,7 +162,7 @@ export default function StudyPaperView({
           question={entry.question}
           canonicalAnnotationContext={getEntryCanonicalAnnotationContext(entry, entry.generatedFromQuestionNumber)}
           canonicalSegments={generatedWrongAnswerContent.status === "matched" ? generatedWrongAnswerContent.segments : undefined}
-          canonicalReviewRequired={generatedWrongAnswerContent.status === "ambiguous"}
+          canonicalReviewRequired={generatedContentReviewRequired}
           questionImages={entry.questionImages}
           figures={entry.figures ?? []}
           annotations={entry.annotations ?? []}
@@ -186,6 +189,20 @@ export default function StudyPaperView({
           onOpenQuestionSolution={onOpenQuestionSolution}
           zoomableImages
         />}
+
+        {structuredQuestions.length > 0 && entry.questionImages.length > 0 && <section aria-label="첨부 문제 이미지">
+          <AnnotatableQuestion
+            question=""
+            questionImages={entry.questionImages}
+            annotations={entry.annotations ?? []}
+            memoMode={memoMode}
+            activeTool={activeTool}
+            onAnnotationsChange={onAnnotationsChange}
+            onWikiLinkClick={onWikiLinkClick}
+            existingTargets={existingTargets}
+            zoomableImages
+          />
+        </section>}
 
         {displayMode === "questions" && diagramItems.length > 0 && (
           <details key={`diagrams-${entry.id}`} className="study-paper-diagrams" aria-label="학습 시각화" onToggle={event => setExpandedDiagramsEntryId(event.currentTarget.open ? entry.id : null)}>

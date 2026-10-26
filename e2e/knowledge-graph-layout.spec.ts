@@ -21,6 +21,7 @@ for (const viewport of [{ width: 1100, height: 750 }, { width: 1280, height: 720
     await page.setViewportSize(viewport);
     await seedBrowserStorage(page, [{ ...syntheticLifecycleEntry, subject: "수학" }], graph);
     await page.goto("/", { waitUntil: "domcontentloaded" });
+    if (await page.locator(".sidebar-secondary-navigation").getAttribute("open") === null) await page.locator(".sidebar-secondary-navigation > summary").click();
     await page.getByRole("button", { name: "학습 허브", exact: true }).click();
 
     const switcher = page.getByRole("group", { name: "학습 허브 보기" });

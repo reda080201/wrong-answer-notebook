@@ -1,0 +1,44 @@
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import type { ExamSession, WrongAnswerEntry } from "../../../types";
+import { setSavedRealExamProtection } from "../../exam/services/realExamProtection";
+import ExamBuilderWizard from "./ExamBuilderWizard";
+import { SourceNavigationContext } from "./sourceNavigationContext";
+const entry = { id: "source", title: "원본", subject: "수학", entryKind: "problem_sheet", question: "1. 원본 문제\n① 1\n② 2", questionImages: [], figures: [], tags: [], annotations: [], explanationParts: [], answerKey: [{ id: "a", questionNumber: "1", answer: "①", explanation: "원본 해설", importantPoints: [] }], createdAt: "2026-01-01", updatedAt: "2026-01-01" } as unknown as WrongAnswerEntry;
+const realSession = { id: "real", entryId: "source", mode: "real", status: "in_progress", questions: [] } as unknown as ExamSession;
+afterEach(() => { act(() => setSavedRealExamProtection([])); });
+it("previews a source without closing or losing the direct composition, lock and source toggle", async () => {
+  const close = vi.fn(), navigate = vi.fn(), save = vi.fn();
+  render(<SourceNavigationContext.Provider value={navigate}><ExamBuilderWizard entries={[entry]} onClose={close} onSave={save} onStart={vi.fn()} /></SourceNavigationContext.Provider>);
+  fireEvent.change(screen.getByRole("textbox", { name: "시험 제목" }), { target: { value: "보존할 구성" } });
+  fireEvent.click(screen.getByRole("button", { name: "자동 조립" }));
+  fireEvent.click(screen.getByRole("button", { name: "문항 고정" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "문제 위 출처 표시" }));
+  const source = screen.getByRole("button", { name: "원본 · 원문 1번" });
+  source.focus();
+  fireEvent.click(source);
+  expect(await screen.findByRole("dialog", { name: "원본 문항 확인" })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "구성으로 돌아가기" }));
+  expect(screen.getByRole("button", { name: "고정됨" })).toBeVisible();
+  expect(screen.getByRole("checkbox", { name: "문제 위 출처 표시" })).not.toBeChecked();
+  await waitFor(() => expect(source).toHaveFocus());
+  expect(close).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "저장" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith(expect.objectContaining({ title: "보존할 구성", questions: [expect.objectContaining({ locked: true })], showSourceReferences: false })));
+});
+it("excludes persisted real-exam material from direct composition candidates", () => {
+  setSavedRealExamProtection([realSession]);
+  render(<ExamBuilderWizard entries={[entry]} onClose={vi.fn()} onSave={vi.fn()} onStart={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "자동 조립" }));
+  expect(screen.queryByRole("button", { name: "원본 · 원문 1번" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "저장" })).toBeDisabled();
+});
+it("masks an existing composition if its source becomes protected", () => {
+  const save = vi.fn();
+  render(<ExamBuilderWizard entries={[entry]} onClose={vi.fn()} onSave={save} onStart={vi.fn()} />);
+  fireEvent.click(screen.getByRole("button", { name: "자동 조립" }));
+  act(() => setSavedRealExamProtection([realSession]));
+  expect(screen.getByRole("dialog", { name: "실전 시험 자료 보호" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "저장" })).not.toBeInTheDocument();
+  expect(save).not.toHaveBeenCalled();
+});

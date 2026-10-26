@@ -1,0 +1,128 @@
+[
+  {
+    "Name": "colorama",
+    "Version": "0.4.6",
+    "wheel": "colorama-0.4.6-py2.py3-none-any.whl",
+    "sha256": "4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6"
+  },
+  {
+    "Name": "contourpy",
+    "Version": "1.4.0",
+    "wheel": "contourpy-1.4.0-cp312-cp312-win_amd64.whl",
+    "sha256": "6e697d94e69f499ff6bebb899cae97a58d5d14f0e1fe9568b43a0248d2f9af8c"
+  },
+  {
+    "Name": "cycler",
+    "Version": "0.12.1",
+    "wheel": "cycler-0.12.1-py3-none-any.whl",
+    "sha256": "85cef7cff222d8644161529808465972e51340599459b8ac3ccbac5a854e0d30"
+  },
+  {
+    "Name": "fonttools",
+    "Version": "4.67.0",
+    "wheel": "fonttools-4.67.0-cp312-cp312-win_amd64.whl",
+    "sha256": "2bfab2f5d1d255dec82f4bd082a1c10e77df808e42210890f50a9c30bf91570e"
+  },
+  {
+    "Name": "iniconfig",
+    "Version": "2.3.1",
+    "wheel": "iniconfig-2.3.1-py3-none-any.whl",
+    "sha256": "9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7"
+  },
+  {
+    "Name": "kiwisolver",
+    "Version": "1.5.1",
+    "wheel": "kiwisolver-1.5.1-cp312-cp312-win_amd64.whl",
+    "sha256": "06a6917674de9e0fe3f66f5430787f59a9f2ddb64af9b714eaec547e29ef5c19"
+  },
+  {
+    "Name": "matplotlib",
+    "Version": "3.11.2",
+    "wheel": "matplotlib-3.11.2-cp312-cp312-win_amd64.whl",
+    "sha256": "c5c1c68ee401fc98271263410f0e5ce88285abacf7627132914e8adf3d70ff43"
+  },
+  {
+    "Name": "numpy",
+    "Version": "2.3.5",
+    "wheel": "numpy-2.3.5-cp312-cp312-win_amd64.whl",
+    "sha256": "86945f2ee6d10cdfd67bcb4069c1662dd711f7e2a4343db5cecec06b87cf31aa"
+  },
+  {
+    "Name": "opencv-python-headless",
+    "Version": "4.14.0.94",
+    "wheel": "opencv_python_headless-4.14.0.94-cp37-abi3-win_amd64.whl",
+    "sha256": "cbed65415b8f6a9541c705afe3e64795840524d0ff3bc58f507826284a1dc64b"
+  },
+  {
+    "Name": "packaging",
+    "Version": "26.3",
+    "wheel": "packaging-26.3-py3-none-any.whl",
+    "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
+  },
+  {
+    "Name": "pillow",
+    "Version": "13.0.0",
+    "wheel": "pillow-13.0.0-cp312-cp312-win_amd64.whl",
+    "sha256": "ff3fe9eb621fbb9db4c4be33ab946f6bac5f98ab50ca8d3260503653656c961b"
+  },
+  {
+    "Name": "pluggy",
+    "Version": "1.7.0",
+    "wheel": "pluggy-1.7.0-py3-none-any.whl",
+    "sha256": "7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec"
+  },
+  {
+    "Name": "Pygments",
+    "Version": "2.21.0",
+    "wheel": "pygments-2.21.0-py3-none-any.whl",
+    "sha256": "2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9"
+  },
+  {
+    "Name": "pyparsing",
+    "Version": "3.3.3",
+    "wheel": "pyparsing-3.3.3-py3-none-any.whl",
+    "sha256": "ece8c00a69cf01b45d0b1dedabb469c90d8caf996d4fda40f147627a122849a4"
+  },
+  {
+    "Name": "pypdfium2",
+    "Version": "5.14.0",
+    "wheel": "pypdfium2-5.14.0-py3-none-win_amd64.whl",
+    "sha256": "149fd5c6397b8df8bf7911a93506eff0be874f877afe7ac936cf5d37d21a6a06"
+  },
+  {
+    "Name": "pytest",
+    "Version": "9.0.3",
+    "wheel": "pytest-9.0.3-py3-none-any.whl",
+    "sha256": "2c5efc453d45394fdd706ade797c0a81091eccd1d6e4bccfcd476e2b8e0ab5d9"
+  },
+  {
+    "Name": "python-dateutil",
+    "Version": "3.0.0",
+    "wheel": "python_dateutil-3.0.0-py2.py3-none-any.whl",
+    "sha256": "3c79630202e4152c6add678446984236efe4f57e84d8e892aab0637bab82e9fd"
+  },
+  {
+    "Name": "ruff",
+    "Version": "0.14.14",
+    "wheel": "ruff-0.14.14-py3-none-win_amd64.whl",
+    "sha256": "3dde1435e6b6fe5b66506c1dff67a421d0b7f6488d466f651c07f4cab3bf20fd"
+  },
+  {
+    "Name": "six",
+    "Version": "1.17.0",
+    "wheel": "six-1.17.0-py2.py3-none-any.whl",
+    "sha256": "4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274"
+  },
+  {
+    "Name": "tzdata",
+    "Version": "2026.5",
+    "wheel": "tzdata-2026.5-py2.py3-none-any.whl",
+    "sha256": "b683bd1b6659ddcd810ff02ad09ba821d4bf1065072805063eb35c49617905ac"
+  },
+  {
+    "Name": "PyMuPDF",
+    "Version": "1.28.2",
+    "wheel": "pymupdf-1.28.2-cp310-abi3-win_amd64.whl",
+    "sha256": "ebd244918798502d7b4504c90410d1711a4d7675a32584ca30f1bab419ecbffe"
+  }
+]

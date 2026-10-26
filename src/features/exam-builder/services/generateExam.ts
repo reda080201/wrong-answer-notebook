@@ -42,7 +42,9 @@ export interface ExamCandidate {
   meta?: QuestionMeta;
   snapshot: ExamQuestionSnapshot;
   difficulty: number;
+  difficultyRated?: boolean;
   importance: number;
+  importanceRated?: boolean;
   quality: number;
   weakness: number;
   hash: string;
@@ -142,11 +144,12 @@ export function collectExamCandidates(entries: WrongAnswerEntry[], filters: Exam
       if (filters.requireAnswers && !answer?.answer.trim()) continue;
       if (filters.requireExplanations && !answer?.explanation.trim()) continue;
       if (cutoff && meta?.review?.lastReviewedAt && Date.parse(meta.review.lastReviewedAt) > cutoff) continue;
-      const difficulty = resolveQuestionDifficultyScore(entry.questionMeta, entry.answerKey, block) ?? 50;
+      const ratedDifficulty = resolveQuestionDifficultyScore(entry.questionMeta, entry.answerKey, block);
+      const difficulty = ratedDifficulty ?? 50;
       const importance = clamp(meta?.rating?.importanceScore ?? (meta?.important ? 85 : 45));
       const quality = questionQualityScore(entry, number, meta);
       const weakness = clamp((meta?.review?.lapseCount ?? 0) * 15 + (meta?.needsReview ? 25 : 0) + (entry.difficult ? 15 : 0));
-      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number, snapshots), difficulty, importance, quality, weakness, hash: stringHash(`${block.body}\n${block.choices.map((choice) => choice.text).join("|")}`) });
+      candidates.push({ entry, block, number, meta, snapshot: snapshot(entry, block, number, snapshots), difficulty, difficultyRated: ratedDifficulty !== undefined, importance, importanceRated: meta?.rating?.importanceScore !== undefined, quality, weakness, hash: stringHash(`${block.body}\n${block.choices.map((choice) => choice.text).join("|")}`) });
     }
   }
   return candidates;
@@ -191,7 +194,11 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
     if (!pool.length) { excludedCounts.insufficient = (excludedCounts.insufficient ?? 0) + 1; continue; }
     const ranked = pool.map((candidate) => ({ candidate, score: score(candidate, input.preset, { min: slot?.targetDifficultyMin, max: slot?.targetDifficultyMax }) + rng() * .01 })).sort((a, b) => b.score - a.score);
     const pick = ranked[0];
-    const reasons = [`품질 점수 ${pick.candidate.quality}`, `난이도 ${pick.candidate.difficulty}`, `중요도 ${pick.candidate.importance}`];
+    const reasons = [
+      `품질 점수 ${pick.candidate.quality}`,
+      pick.candidate.difficultyRated ? `난이도 ${pick.candidate.difficulty}` : `난이도 미평가 (계산 기준 ${pick.candidate.difficulty})`,
+      pick.candidate.importanceRated ? `중요도 ${pick.candidate.importance}` : `중요도 미평가 (계산 기준 ${pick.candidate.importance}${pick.candidate.meta?.important ? "; 중요 표시 반영" : ""})`,
+    ];
     if (pick.candidate.weakness >= 25) reasons.push("복습·오답 신호가 있어 우선했습니다.");
     selected.push({ position: position + 1, source: createQuestionSource(pick.candidate.entry, pick.candidate.number, pick.candidate.snapshot), snapshot: structuredClone(pick.candidate.snapshot), locked: false, selectionScore: Math.round(pick.score), selectionReasons: reasons });
     used.add(`${pick.candidate.entry.id}:${pick.candidate.number}`); hashes.add(pick.candidate.hash); sourceCounts.set(pick.candidate.entry.id, (sourceCounts.get(pick.candidate.entry.id) ?? 0) + 1);

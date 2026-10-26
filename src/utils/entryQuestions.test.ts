@@ -3,6 +3,16 @@ import type { StructuredQuestion } from "../types";
 import { getEntryQuestions } from "./entryQuestions";
 
 describe("getEntryQuestions semantic projection", () => {
+  it("does not choose the first normalized segment map when identities collide", () => {
+    const result = getEntryQuestions({ question: "1. 원문", questionContentSegments: {
+      "1": [{ id: "a", type: "text", text: "첫 본문" }],
+      "01번": [{ id: "b", type: "text", text: "둘째 본문" }],
+    } });
+    expect(result[0].contentSegments).toBeUndefined();
+    expect(result[0].questionText).toBe("원문");
+    expect(result[0].needsReview).toBe(true);
+    expect(result[0].warning).toContain("연결이 중복");
+  });
   it("treats canonical content segments as authoritative and preserves their order", () => {
     const question: StructuredQuestion = {
       questionNumber: "07",

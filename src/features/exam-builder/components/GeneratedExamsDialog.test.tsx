@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { GeneratedExam } from "../../../types";
@@ -64,4 +64,16 @@ describe("GeneratedExamsDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "다시 시도" }));
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+  it("does not enter composition when closing could not save, then permits a safe retry", async () => {
+    const onCreate = vi.fn();
+    const onClose = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    render(<GeneratedExamsDialog {...props({ exams: [], onClose, onCreate })} />);
+    fireEvent.click(screen.getByRole("button", { name: "모의고사 만들기" }));
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    expect(onCreate).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.getByRole("button", { name: "모의고사 만들기" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "모의고사 만들기" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledOnce());
+  });
+
 });

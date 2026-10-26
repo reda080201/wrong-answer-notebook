@@ -8,6 +8,11 @@ function normalizeLatex(value: string): string {
   return normalizeText(value).replace(/^\\\[/, "").replace(/\\\]$/, "").replace(/^\\\(/, "").replace(/\\\)$/, "");
 }
 
+function equationRepresentations(latex: string): string[] {
+  const value = normalizeLatex(latex);
+  return [value, `\\(${value}\\)`, `\\[${value}\\]`, `$${value}$`, `$$${value}$$`];
+}
+
 function conditionParts(label: string | undefined, text: string): { label: string; text: string } {
   const value = normalizeText(text);
   const leading = value.match(/^(\([가-힣]\)|[가-힣][.)])\s*/)?.[1] ?? "";
@@ -59,7 +64,7 @@ function representedFragmentsForSegment(segment: QuestionContentSegment): string
   }
   if (segment.type === "equation") {
     const latex = normalizeLatex(segment.latex);
-    return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+    return equationRepresentations(latex);
   }
   return segment.type === "text" ? normalizedLines(segment.text) : [];
 }
@@ -160,7 +165,7 @@ export function normalizeQuestionPresentationSegments(input: {
       const parts = conditionParts(segment.label, segment.text);
       return [parts.label ? `${parts.label} ${parts.text}` : parts.text];
     }
-    if (segment.type === "equation") return [normalizeLatex(segment.latex), `\\(${normalizeLatex(segment.latex)}\\)`, `\\[${normalizeLatex(segment.latex)}\\]`];
+    if (segment.type === "equation") return equationRepresentations(segment.latex);
     return [];
   }).map(normalizeText).filter(Boolean));
   // A labelled condition is one semantic unit. Its body must not be removed
@@ -173,17 +178,31 @@ export function normalizeQuestionPresentationSegments(input: {
     }
     if (segment.type === "equation") {
       const latex = normalizeLatex(segment.latex);
-      return [latex, `\\(${latex}\\)`, `\\[${latex}\\]`];
+      return equationRepresentations(latex);
     }
     return segment.type === "text" ? normalizedLines(segment.text) : [];
   }).filter(Boolean);
   const legacyText = normalizeText(input.questionText);
+  // A complete compatibility projection may contain a condition with several
+  // sentences. Recognize that unit before sentence splitting, without removing
+  // repeated segments inside the canonical stream or legacy-only sentences.
+  const completeProjection = source.length > 0 && !source.some(segment => segment.type === "table")
+    && Array.from({ length: 5 }, (_, wrapper) => normalizeText(source.map(segment => {
+      if (segment.type === "text") return segment.text;
+      if (segment.type === "condition") {
+        const parts = conditionParts(segment.label, segment.text);
+        return parts.label ? `${parts.label} ${parts.text}` : parts.text;
+      }
+      if (segment.type === "equation") return equationRepresentations(segment.latex)[wrapper];
+      if (segment.type === "figure") return `[FIGURE:${segment.figureId}]`;
+      return "";
+    }).join("\n"))).includes(legacyText);
   const fallback: QuestionContentSegment[] = [
     ...(input.questionText.trim() ? [{ id: "question-text", type: "text" as const, text: input.questionText }] : []),
     ...input.conditions.filter((value) => value.trim()).map((text, index) => ({ id: `condition-${index + 1}`, type: "condition" as const, text })),
     ...input.equations.filter((value) => value.trim()).map((latex, index) => ({ id: `equation-${index + 1}`, type: "equation" as const, latex, display: true })),
   ];
-  if (fallback[0]?.type === "text" && canonicalText && legacyText === canonicalText) {
+  if (fallback[0]?.type === "text" && (completeProjection || (canonicalText && legacyText === canonicalText))) {
     fallback.shift();
   }
   for (const segment of fallback) {

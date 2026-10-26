@@ -58,8 +58,8 @@ function FigureContent({ figure }: { figure: SheetFigureItem }) {
   if (representation.kind === "described_only" || !representation.image) {
     return <aside className="question-described-figure"><strong>도표 설명</strong><p>{figure.caption || figure.title || "이미지 없이 설명만 제공됩니다."}</p></aside>;
   }
-  const label = representation.kind === "original" ? "원본 그림" : "GPT 정리본";
-  return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption><ZoomableImageViewer filenames={[representation.image]} /></figure>;
+  const label = representation.kind === "original" ? "원본 그림" : "정리본";
+  return <figure className="question-source-figure"><figcaption>{label}{figure.title ? ` · ${figure.title}` : ""}{figure.representationSelectionSource === "user" ? " · 사용자 선택" : ""}{representation.needsReview ? " · 검토 필요" : ""}</figcaption><ZoomableImageViewer filenames={[representation.image]} /></figure>;
 }
 
 export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegment[], annotations: TextRangeAnnotation[], legacyQuestion?: string, context?: CanonicalAnnotationContext) {
@@ -118,7 +118,7 @@ export function resolveCanonicalAnnotationRanges(segments: QuestionContentSegmen
   return { ranges, unresolved };
 }
 
-export default function QuestionContentView({ text, segments, figures = [], appendUnreferencedFigures = true, referencedPassage, annotations = [], legacyQuestion, annotationContext, choices = [] }: QuestionContentViewProps) {
+export default function QuestionContentView({ text, segments, figures = [], appendUnreferencedFigures = false, referencedPassage, annotations = [], legacyQuestion, annotationContext, choices = [] }: QuestionContentViewProps) {
   const byId = new Map(figures.map((figure) => [figure.id, figure]));
   const rendered = segments?.length ? segments : [{ id: "fallback", type: "text" as const, text }];
   const { ranges } = resolveCanonicalAnnotationRanges(rendered, annotations, legacyQuestion, annotationContext);

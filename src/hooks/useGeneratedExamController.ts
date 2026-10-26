@@ -53,14 +53,16 @@ export function useGeneratedExamController({
   }, [examPrintPreferences]);
 
   const closeList = useCallback(async () => {
-    if (closing) return;
+    if (closing) return false;
     setClosing(true);
     setCloseError(null);
     try {
       await flush();
       setListOpen(false);
+      return true;
     } catch {
       setCloseError("모의고사 변경을 저장하지 못했습니다. 저장이 완료된 뒤 다시 닫아 주세요.");
+      return false;
     } finally {
       setClosing(false);
     }

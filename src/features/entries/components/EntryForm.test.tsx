@@ -9,6 +9,19 @@ vi.mock("../../../api", () => ({
 }));
 
 describe("EntryForm", () => {
+  it("preserves an unidentified generated segment map while allowing metadata-only saves", async () => {
+    const onSave = vi.fn().mockResolvedValue(undefined);
+    const segments = { "1": [{ id: "a", type: "text" as const, text: "첫 내용" }], "2": [{ id: "b", type: "text" as const, text: "다른 내용" }] };
+    render(<EntryForm onSave={onSave} onClose={vi.fn()} initialData={{ title: "구형 오답", question: "1. 보존 원문", generatedFromExamSessionId: "session", questionContentSegments: segments }} />);
+    expect(screen.getByRole("alert")).toHaveTextContent("본문 연결이 모호");
+    expect(screen.getByLabelText("문제 · 지문 (텍스트)")).toHaveAttribute("readonly");
+    expect(screen.queryByRole("textbox", { name: "1번 본문" })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("제목"), { target: { value: "제목 수정" } });
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
+    await waitFor(() => expect(onSave).toHaveBeenCalledOnce());
+    expect(onSave.mock.calls[0][0]).toMatchObject({ title: "제목 수정", question: "1. 보존 원문", questionContentSegments: segments });
+    expect(onSave.mock.calls[0][0].structuredQuestions).toBeUndefined();
+  });
   it("explains why an empty form cannot be saved", () => {
     const onSave = vi.fn();
     render(<EntryForm onSave={onSave} onClose={vi.fn()} defaultEntryKind="wrong_answer" />);

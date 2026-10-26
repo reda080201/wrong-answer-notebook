@@ -155,13 +155,16 @@ export function buildExamPrintModel(options: {
         needsReview: representation.needsReview,
       };
     });
-    const choices = block?.choices.map((choice) => choice.text) ?? [];
+    const canonicalMatches = getEntryQuestions(options.entry).filter(question => normalizeQuestionNumber(question.questionNumber) === normalizedQuestionNumber);
+    const canonical = canonicalMatches.length === 1 ? canonicalMatches[0] : undefined;
+    const choices = canonical?.choices ?? block?.choices.map((choice) => choice.text) ?? [];
     return {
       questionNumber,
       displayNumber: String(block?.displayNumber || block?.numberLabel || questionNumber),
       kind: choices.length > 0 ? "objective" : "subjective",
       choices,
-      segments: buildSegments(options.entry, questionNumber),
+      segments: canonical?.contentSegments?.length ? canonical.contentSegments : buildSegments(options.entry, questionNumber),
+      passage: canonical?.passage?.text,
       figures: visibleFigures,
       workspaceSize: preferences.workspaceSize,
     };
