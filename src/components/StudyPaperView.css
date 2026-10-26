@@ -24,3 +24,5 @@
 .detail-panel--zoom .focused-question-body .math-fragment--display { margin-block: 0.35em; }
 .structured-problem-sheet-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; padding: 0.75rem; background: var(--surface-soft); }
 @media (max-width: 760px) { .structured-problem-sheet-question { padding: 0.75rem; } .structured-problem-sheet-question > header { align-items: flex-start; flex-direction: column; } .structured-problem-sheet-actions { justify-content: flex-start; } }
+.progressive-question-placeholder { min-height: 340px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--text-muted); background: var(--surface-soft); }
+@media print { .progressive-question-placeholder { display: none; } }

@@ -1179,12 +1179,12 @@ export default function ImportFromGptModal({
                   <div className="import-source-launcher-heading">
                     <FileUp size={20} aria-hidden="true" />
                     <div>
-                      <h3 id="import-source-title">파일에서 시작</h3>
-                      <p>ZIP 하나 또는 JSON과 이미지 묶음을 선택하면 연결 상태까지 먼저 검사합니다.</p>
+                      <h3 id="import-source-title">파일에서 가져오기</h3>
+                      <p>ZIP 또는 JSON과 이미지 파일을 함께 가져오면 연결 상태를 검사합니다. 텍스트나 단일 JSON 파일은 아래에서 가져오세요.</p>
                     </div>
                   </div>
                   <div className="import-source-actions">
-                    <label className="ui-button ui-button--primary" htmlFor="gpt-all-in-one-file">ZIP·JSON·이미지 선택</label>
+                    <label className="ui-button ui-button--primary" htmlFor="gpt-all-in-one-file">ZIP·JSON·이미지 묶음 선택</label>
                     <input
                       id="gpt-all-in-one-file"
                       className="import-source-file-input"
@@ -1194,7 +1194,7 @@ export default function ImportFromGptModal({
                       accept=".zip,.json,.png,.jpg,.jpeg,.webp,application/zip,application/json,image/png,image/jpeg,image/webp"
                       onChange={(event) => handleAllInOneFiles(event.target.files)}
                     />
-                    <label className="ui-button ui-button--secondary" htmlFor="gpt-import-file">텍스트·JSON 파일</label>
+                    <label className="ui-button ui-button--secondary" htmlFor="gpt-import-file">텍스트·단일 JSON 파일</label>
                     <input
                       id="gpt-import-file"
                       className="import-source-file-input"

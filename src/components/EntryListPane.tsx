@@ -284,7 +284,7 @@ export default function EntryListPane({
       ) : filtered.length === 0 ? (
         <div className="list-empty">
           {entries.filter((entry) => entry.entryKind === activeSection).length === 0
-            ? `아직 등록된 ${entryKindWithParticle(activeSection, "subject")} 없습니다.\n하단의 버튼으로 추가해 보세요.`
+            ? `아직 등록된 ${entryKindWithParticle(activeSection, "subject")} 없습니다.`
             : "현재 검색 또는 필터 조건에 맞는 결과가 없습니다."}
         </div>
       ) : activeSection === "problem_sheet" ? (

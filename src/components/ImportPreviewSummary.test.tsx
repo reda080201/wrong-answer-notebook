@@ -14,7 +14,7 @@ describe("ImportPreviewSummary", () => {
     expect(within(list).getByText("저장 차단 사유 9")).toBeVisible();
     const remaining = issues.slice(6);
     rerender(<ImportPreviewSummary {...props} validationReport={{ ...props.validationReport, issues: remaining }} validationPolicy={{ blocking: remaining, confirmable: [], other: [] }} />);
-    expect(screen.getByText("적용 불가 총 3개")).toBeVisible();
+    expect(screen.getByText("적용 불가 · 안내 3건")).toBeVisible();
     expect(screen.queryByText(/나머지 .*개 보기/)).not.toBeInTheDocument();
     expect(screen.getByText("저장 차단 사유 9")).toBeVisible();
   });
@@ -53,9 +53,9 @@ describe("ImportPreviewSummary", () => {
       />,
     );
 
-    expect(screen.getByText("AI 판독 감사")).toBeInTheDocument();
+    expect(screen.getByText("가져오기 확인 요약")).toBeInTheDocument();
     expect(screen.getByText("수학 시험지")).toBeInTheDocument();
-    expect(screen.getByText("불확실 문제: 2")).toBeInTheDocument();
+    expect(screen.getByText("확인 필요 문항: 2")).toBeInTheDocument();
     expect(screen.getByText("검토 권장")).toBeInTheDocument();
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });

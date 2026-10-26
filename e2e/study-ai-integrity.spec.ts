@@ -20,31 +20,21 @@ test("AI launcher waits for a blocking settings dialog and retains the unsent in
     await expect(panel.getByLabel("메시지")).toHaveValue("전송하지 않은 입력");
 });
 for (const width of [1100, 680]) {
-    test(`AI failed-turn retry survives reload without duplicate user records at ${width}px`, async ({ page }, testInfo) => {
+    test(`browser mode blocks AI sends and does not create transcript records at ${width}px`, async ({ page }) => {
         await page.setViewportSize({ width, height: 750 });
         await page.goto("/", { waitUntil: "domcontentloaded" });
         await page.getByRole("button", { name: "AI 학습 대화 열기" }).click();
         const panel = page.getByRole("dialog", { name: "AI 학습 대화" });
         await panel.getByLabel("메시지").fill("수식 $f^{\\prime}(x)$를 설명해 줘");
-        await panel.getByRole("button", { name: "전송", exact: true }).click();
-        await expect(panel.getByRole("alert")).toContainText("설치 앱");
-        const userId = await page.evaluate(storageKey => JSON.parse(localStorage.getItem(storageKey)!).conversations[0].messages.find((m: {role:string}) => m.role === "user").id, key);
-        await panel.getByRole("button", { name: "마지막 질문 재시도" }).click();
-        await expect(panel.getByRole("button", { name: "마지막 질문 재시도" })).toBeEnabled();
-        await page.reload({ waitUntil: "domcontentloaded" });
-        await page.getByRole("button", { name: "AI 학습 대화 열기" }).click();
-        await panel.getByRole("button", { name: "마지막 질문 재시도" }).click();
-        await expect(panel.getByRole("button", { name: "마지막 질문 재시도" })).toBeEnabled();
-        const users = await page.evaluate(storageKey => JSON.parse(localStorage.getItem(storageKey)!).conversations[0].messages.filter((m:{role:string})=>m.role==="user").map((m:{id:string})=>m.id), key);
-        expect(users).toEqual([userId]);
-        await expect(panel.locator(".ai-message--user")).toHaveCount(1);
-        await expect(panel.locator(".katex")).toBeVisible();
-        const sendBox = await panel.getByRole("button", { name: "전송", exact:true }).boundingBox();
-        expect(sendBox).not.toBeNull();
-        expect(sendBox!.y + sendBox!.height).toBeLessThanOrEqual(750);
-        await panel.locator(".ai-message--user").scrollIntoViewIfNeeded();
-        await expect(panel.locator(".ai-message--user")).toBeInViewport();
-        await page.screenshot({ path: testInfo.outputPath(`ai-retry-${width}x750.png`) });
+        await expect(panel.getByRole("button", { name: "전송", exact: true })).toBeDisabled();
+        await expect(panel.getByRole("button", { name: "마지막 질문 재시도" })).toBeDisabled();
+        await expect(panel.getByLabel("메시지")).toHaveValue(/설명해 줘$/);
+        await expect(panel.locator(".ai-message--user")).toHaveCount(0);
+        const users = await page.evaluate(storageKey => {
+            const stored = localStorage.getItem(storageKey);
+            return stored ? JSON.parse(stored).conversations.flatMap((conversation: { messages: { role: string }[] }) => conversation.messages.filter(message => message.role === "user")) : [];
+        }, key);
+        expect(users).toEqual([]);
     });
 }
 

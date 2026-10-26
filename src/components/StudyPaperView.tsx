@@ -1,6 +1,8 @@
 import { createCanonicalAnnotationContext, getEntryCanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import type { Annotation, AnnotationTool, WrongAnswerEntry } from "../types";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
+import ProgressiveQuestionBody from "./ProgressiveQuestionBody";
 import { parseQuestionText } from "../utils/textLayout";
 import { resolveQuestionFigures } from "../utils/questionAssets";
 import { getEntryQuestions } from "../utils/entryQuestions";
@@ -71,6 +73,14 @@ export default function StudyPaperView({
   onCurrentQuestionChange,
 }: StudyPaperViewProps) {
   const [expandedDiagramsEntryId, setExpandedDiagramsEntryId] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    const before = () => flushSync(() => setPrinting(true));
+    const after = () => setPrinting(false);
+    window.addEventListener("beforeprint", before);
+    window.addEventListener("afterprint", after);
+    return () => { window.removeEventListener("beforeprint", before); window.removeEventListener("afterprint", after); };
+  }, []);
   const generatedWrongAnswerContent = entry.entryKind === "wrong_answer" && entry.generatedFromExamSessionId
     ? resolveGeneratedWrongAnswerContent({ generatedFromQuestionNumber: entry.generatedFromQuestionNumber, questionContentSegments: entry.questionContentSegments })
     : { status: "unavailable" as const };
@@ -114,6 +124,7 @@ export default function StudyPaperView({
     const meta = normalizeQuestionMeta(entry.questionMeta).find((item) => normalizeQuestionNumber(item.questionNumber) === number);
     const selected = selectedQuestionNumbers.some((item) => normalizeQuestionNumber(item) === number);
     const revealed = revealedAnswerNumbers?.has(number);
+    const questionBody = <AnnotatableQuestion question={entry.question} canonicalSegments={question.contentSegments ?? [{ id: "body", type: "text", text: question.questionText }]} canonicalChoices={question.choices} canonicalPassage={stimulus?.text} canonicalAnnotationContext={createCanonicalAnnotationContext(structuredQuestions, question)} figures={resolveQuestionFigures(entry, question)} questionImages={[]} annotations={entry.annotations ?? []} memoMode={memoMode} activeTool={activeTool} onAnnotationsChange={onAnnotationsChange} onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />;
     return {
       id: `${number || "question"}-${index}`,
       questionNumber: number,
@@ -126,7 +137,9 @@ export default function StudyPaperView({
           <div className="structured-problem-sheet-actions">{selectionMode && <input aria-label={`${question.questionNumber}번 선택`} type="checkbox" checked={selected} onChange={() => onToggleQuestionSelected?.(number)} />}{onOpenQuestionTheater && <button type="button" className="btn-icon" aria-label={`${question.questionNumber}번 크게 보기`} title="크게 보기" onClick={() => onOpenQuestionTheater(index)}><Maximize2 size={16} aria-hidden="true" /></button>}{onToggleQuestionImportant && <button type="button" className="btn-secondary btn-sm" aria-pressed={Boolean(meta?.important)} onClick={() => onToggleQuestionImportant(number)}>{meta?.important ? "중요 해제" : "중요"}</button>}{answer ? <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 ${revealed ? "숨기기" : "보기"}`} aria-expanded={revealed} onClick={() => onToggleAnswerReveal?.(number)}>답</button> : <button type="button" className="btn-secondary btn-sm" aria-label={`${question.questionNumber}번 정답 보기`} disabled title="연결된 정답이 없습니다.">답</button>}</div>
         </header>
         {stimulusIncluded && stimulus && !(displayMode === "exam" && paperPresentation === "two-question") && <section className="exam-passage"><QuestionContentView text={stimulus.text} figures={stimulusFigures} appendUnreferencedFigures={false} /></section>}
-        <AnnotatableQuestion question={entry.question} canonicalSegments={question.contentSegments ?? [{ id: "body", type: "text", text: question.questionText }]} canonicalChoices={question.choices} canonicalPassage={stimulus?.text} canonicalAnnotationContext={createCanonicalAnnotationContext(structuredQuestions, question)} figures={resolveQuestionFigures(entry, question)} questionImages={[]} annotations={entry.annotations ?? []} memoMode={memoMode} activeTool={activeTool} onAnnotationsChange={onAnnotationsChange} onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+        {displayMode === "questions" && structuredQuestions.length > 12 ? <ProgressiveQuestionBody key={`${entry.id}:${index}`} eager={index === 0 || number === normalizeQuestionNumber(currentQuestionNumber ?? "") || memoMode || Boolean(searchQuery?.trim()) || printing} label={`${question.questionNumber}번 문항`}>
+          {questionBody}
+        </ProgressiveQuestionBody> : questionBody}
         {revealed && answer && <div role="status" className="structured-problem-sheet-answer"><strong>정답</strong> {answer.answer} {onOpenQuestionSolution && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenQuestionSolution(number)}>해설 보기</button>}</div>}
         {question.warning && <p className="structured-problem-sheet-warning">{question.warning}</p>}
       </article>,

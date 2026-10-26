@@ -28,8 +28,14 @@
 .ui-button--quiet { border-color: transparent; background: transparent; color: var(--text); }
 .ui-button--danger { border-color: var(--danger); color: var(--danger); }
 .btn-danger { display: inline-flex; min-height: 38px; align-items: center; justify-content: center; padding: 8px 12px; border-radius: 8px; font: inherit; font-weight: 600; border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, var(--surface)); color: var(--danger); }
-.ui-button--primary { border-color: var(--accent); background: var(--accent); color: white; }
-.ui-button--primary:hover { background: var(--accent-hover); }
+.ui-button--primary { border-color: var(--action-bg); background: var(--action-bg); color: var(--action-text); }
+.ui-button--primary:hover { background: var(--action-hover); }
+.btn-primary, .btn-new, .subject-item.active {
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-text);
+}
+.btn-primary:hover, .btn-new:hover { background: var(--action-hover); }
 .ui-icon-button { display: inline-grid; width: 36px; height: 36px; min-width: 36px; place-items: center; border-radius: 8px; }
 .ui-icon-button--compact { width: 32px; height: 32px; min-width: 32px; }
 .ui-surface { min-width: 0; border: 1px solid var(--border); background: var(--surface); }
@@ -51,9 +57,9 @@
   gap: 8px;
   width: auto;
   padding: 8px 12px;
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
+  background: var(--action-bg);
+  border-color: var(--action-bg);
+  color: var(--action-text);
   font-weight: 650;
 }
 .review-today-count { font-size: .8rem; font-weight: 400; }

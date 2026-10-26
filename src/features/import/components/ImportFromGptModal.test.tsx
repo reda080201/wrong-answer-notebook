@@ -247,7 +247,7 @@ describe("ImportFromGptModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "이미지 AI 분석" }));
     await waitFor(() => expect(onGenerateWithAi).toHaveBeenCalled());
     expect(onGenerateWithAi.mock.calls[0][2]).toEqual(["q1.png"]);
-    expect(await screen.findByText("AI 판독 감사", {}, { timeout: 10000 })).toBeInTheDocument();
+    expect(await screen.findByText("가져오기 확인 요약", {}, { timeout: 10000 })).toBeInTheDocument();
   }, 30000);
 
   it("allows answer-only supplemental JSON without a question body", async () => {
@@ -722,7 +722,7 @@ describe("ImportFromGptModal", () => {
     });
 
     expect(screen.getByText("텍스트")).toBeInTheDocument();
-    expect(screen.getByText("1개")).toBeInTheDocument();
+    expect(screen.getByText("1문항")).toBeInTheDocument();
     expect(screen.getByRole("alert")).toHaveTextContent("JSON이 아닌 텍스트로 감지되었습니다");
 
     fireEvent.click(screen.getByTestId("import-primary-action"));

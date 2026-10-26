@@ -16,13 +16,14 @@ import "./studyAi.css";
 import { listenForStudyAiOpen } from "./StudyAiButton";
 import { useRealExamProtection } from "../exam/services/realExamProtection";
 function newConversation(): AiConversation { return { id: crypto.randomUUID(), title: "새 대화", updatedAt: new Date().toISOString(), messages: [], materials: [], sharing: { ...DEFAULT_AI_SHARING }, contextId: crypto.randomUUID() }; }
-export default function StudyAiChat({ entries, selectedEntryId, session, onSaveExam, onStartExam, onSettings }: {
+export default function StudyAiChat({ entries, selectedEntryId, session, onSaveExam, onStartExam, onSettings, connection }: {
     entries: WrongAnswerEntry[];
     selectedEntryId?: string | null;
     session: ExamSession | null;
     onSaveExam(exam: GeneratedExam): Promise<void> | void;
     onStartExam(exam: GeneratedExam): Promise<void> | void;
     onSettings(): void;
+    connection?: { available: boolean; pending?: boolean; reason?: string };
 }) {
     const { confirm, prompt } = useAppDialog();
     const [includeBackup, setIncludeBackup] = useState(() => localStorage.getItem(AI_BACKUP_PREFERENCE_KEY) === "true");
@@ -38,6 +39,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const [loading, setLoading] = useState(true);
     const [loaded, setLoaded] = useState(false);
     const [error, setError] = useState("");
+    const [errorKind, setErrorKind] = useState<"record" | "request" | "action">("action");
     const [saveError, setSaveError] = useState("");
     const [composer, setComposer] = useState(false);
     const [scopeNotice, setScopeNotice] = useState("");
@@ -46,6 +48,8 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const reloadLock = useRef(false);
     const generation = useRef(0);
     const controller = useRef<AbortController | null>(null);
+    const connectionRef = useRef(connection);
+    useLayoutEffect(() => { connectionRef.current = connection; }, [connection]);
     const launcher = useRef<HTMLButtonElement>(null);
     const returnFocus = useRef<HTMLButtonElement>(null);
     useEffect(() => listenForStudyAiOpen(opener => { returnFocus.current = opener; setOpen(true); }), []);
@@ -112,6 +116,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         catch (e) {
             if (epoch === generation.current) {
                 setLoaded(false);
+                setErrorKind("record");
                 setError(e instanceof Error ? e.message : "대화 불러오기 실패");
             }
         }
@@ -173,7 +178,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         catch (e) { setSaveError(e instanceof Error ? e.message : "대화 저장 실패"); }
         finally { lock.current = false; }
     };
-    const run = (task: Promise<unknown>) => { void task.catch(e => setError(e instanceof Error ? e.message : String(e))); };
+    const run = (task: Promise<unknown>) => { void task.catch(e => { setErrorKind("action"); setError(e instanceof Error ? e.message : String(e)); }); };
     const startNew = async () => {
         if (lock.current || reloadLock.current || !loaded || loading || maintenance)
             return;
@@ -209,6 +214,8 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         }
     };
     const send = async (text = input, retry?: { conversationId: string; contextId: string; messageId: string }) => {
+        // Check before creating or persisting a turn; the input remains editable.
+        if (!connectionRef.current?.available || connectionRef.current.pending) return;
         if (lock.current || reloadLock.current || !loaded || loading || maintenance || !text.trim())
             return;
         lock.current = true;
@@ -244,6 +251,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 return;
             assertStudyAiSourcesAllowed(c.materials.map(m => m.source.sourceEntryId));
             if (abort.signal.aborted) throw new DOMException("취소했습니다.", "AbortError");
+            if (!connectionRef.current?.available || connectionRef.current.pending) throw new Error(connectionRef.current?.reason || "AI 연결 설정을 확인하세요.");
             setInput("");
             pendingSend.current = null;
             const response = await requestStudyAi({ context: context.text, images: context.images, messages, sourceEntryIds: c.materials.map(m => m.source.sourceEntryId) }, abort.signal, delta => {
@@ -269,8 +277,10 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 }
                 catch { /* The persistent save error remains visible with retry. */ }
             }
-            if (!abort.signal.aborted)
+            if (!abort.signal.aborted) {
+                setErrorKind("request");
                 setError(e instanceof Error ? e.message : "AI 요청 실패");
+            }
         }
         finally {
             if (controller.current === abort) {
@@ -333,13 +343,14 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
-    <div className="ai-chat-errors">{error && <div role="alert" className="form-error">{error}<button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button></div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
+    {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
+    <div className="ai-chat-errors">{error && <div role="alert" className="form-error">{error}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
     <form onSubmit={e => { e.preventDefault(); void send(); }}><label>메시지<textarea ref={inputRef} value={input} disabled={maintenance} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
                     void send();
                 }
-            }}/></label><div className="ai-inline-actions">{busy ? <button type="button" onClick={() => controller.current?.abort()}>응답 중지</button> : <button type="submit" disabled={scopeBusy || !loaded || maintenance || !input.trim()}>전송</button>}<button type="button" disabled={busy || scopeBusy || maintenance || !active || !retryableUserMessage(active)} onClick={() => {
+            }}/></label><div className="ai-inline-actions">{busy ? <button type="button" onClick={() => controller.current?.abort()}>응답 중지</button> : <button type="submit" disabled={!connection?.available || connection.pending || scopeBusy || !loaded || maintenance || !input.trim()}>전송</button>}<button type="button" disabled={!connection?.available || connection.pending || busy || scopeBusy || maintenance || !active || !retryableUserMessage(active)} onClick={() => {
                 const last = active && retryableUserMessage(active);
                 if (last)
                     void send(last.text, { conversationId: active!.id, contextId: active!.contextId, messageId: last.id });

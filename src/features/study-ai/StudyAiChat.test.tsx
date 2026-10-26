@@ -12,12 +12,24 @@ vi.mock("./api", () => ({ requestStudyAi: vi.fn(async () => "AI 답변") }));
 const dialogs=vi.hoisted(()=>({confirm:vi.fn(async()=>true),prompt:vi.fn(async()=>"바뀐 이름")}));
 vi.mock("../../shared/ui/AppDialogProvider", () => ({ useAppDialog: () => dialogs }));
 const entry = { id: "entry", title: "원본 시험지", subject: "수학", entryKind: "problem_sheet", question: "1. 문제 본문\n① A\n② B", tags: [], questionImages: [], memo: "PRIVATE_MEMO", answerKey: [{ id: "a", questionNumber: "1", answer: "ANSWER_SECRET", explanation: "EXPLANATION_SECRET", importantPoints: [] }], questionMeta: [], createdAt: "2026-01-01", updatedAt: "2026-01-01", explanationParts: [], annotations: [], difficulty: "medium", difficult: false, mastered: false, myAnswer: "", correctAnswer: "" } as WrongAnswerEntry;
-const props = { entries: [entry], selectedEntryId: entry.id, session: null, onSaveExam: vi.fn(), onStartExam: vi.fn(), onSettings: vi.fn() };
+const props = { entries: [entry], selectedEntryId: entry.id, session: null, onSaveExam: vi.fn(), onStartExam: vi.fn(), onSettings: vi.fn(), connection: { available: true } };
 beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() }); });
 afterEach(async () => { await flushAiStudyWrites().catch(() => undefined); discardPendingAiStudyWrites(); vi.restoreAllMocks(); localStorage.clear(); });
 async function open() { fireEvent.click(screen.getByRole("button", { name: "AI 학습 대화 열기" })); await waitFor(() => expect(screen.queryByText("대화 불러오는 중…")).not.toBeInTheDocument()); }
 async function send(text: string) { fireEvent.change(screen.getByLabelText("메시지"), { target: { value: text } }); fireEvent.click(screen.getByRole("button", { name: "전송" })); await waitFor(() => expect(screen.getAllByText("AI 답변").length).toBeGreaterThan(0)); }
 describe("study AI chat integration", () => {
+    it("keeps input and creates no turn when the environment or connection is unavailable", async () => {
+        const view = render(<StudyAiChat {...props} connection={{ available: false, reason: "설치 앱에서 사용하세요." }} />); await open();
+        fireEvent.change(screen.getByLabelText("메시지"), { target: { value: "보존할 질문" } });
+        expect(screen.getByRole("button", { name: "전송" })).toBeDisabled();
+        fireEvent.keyDown(screen.getByLabelText("메시지"), { key: "Enter" });
+        expect(requestStudyAi).not.toHaveBeenCalled(); expect(localStorage.getItem(AI_STUDY_STORAGE_KEY)).toBeNull();
+        expect(screen.getByLabelText("메시지")).toHaveValue("보존할 질문");
+        expect(screen.queryByRole("button", { name: "기록 다시 불러오기" })).not.toBeInTheDocument();
+        view.rerender(<StudyAiChat {...props} />);
+        fireEvent.click(screen.getByRole("button", { name: "전송" })); await screen.findByText("AI 답변");
+        expect(vi.mocked(requestStudyAi).mock.calls[0][0].messages).toEqual([{ role: "user", text: "보존할 질문" }]);
+    });
     it("invalidates a pending sharing confirmation on real-exam entry and releases the scope controls",async()=>{
         const view=render(<StudyAiChat {...props}/>);await open();
         fireEvent.click(screen.getByRole("button",{name:"현재 문항 추가"}));await waitFor(()=>expect(screen.getByText(/AI가 볼 자료: 1문항 · 본문/)).toBeInTheDocument());

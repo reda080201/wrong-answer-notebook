@@ -22,7 +22,7 @@ import { useEntries } from "./hooks/useEntries";
 import { useSubjectOrder } from "./hooks/useSubjectOrder";
 import type { ChatGptMcpPreferences, EntryKind, LearningBlock, McpExportContext } from "./types";
 import type { SettingsTab } from "./components/SettingsModal";
-import { entryKindIcon, entryKindName, entryKindWithParticle } from "./utils/appUi";
+import { entryKindIcon, entryKindWithParticle } from "./utils/appUi";
 import { collectAllImageReferences } from "./utils/entry";
 import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedExamsDialog";
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
@@ -657,7 +657,7 @@ function AppContent() {
   return (
     <SourceNavigationContext.Provider value={async source => { const entry = entries.find(e => e.id === source.sourceEntryId); if (!entry) { await confirm({ title: "원본 이동 불가", message: "원본 항목이 삭제되었거나 찾을 수 없습니다. 생성 당시 출처는 보존되어 있습니다." }); return; } if (entryAiMaterials(entry).filter(m=>normalizeQuestionNumber(m.source.sourceQuestionNumber)===normalizeQuestionNumber(source.sourceQuestionNumber)).length !== 1) { await confirm({title:"원문 문항 확인 필요",message:"원문 문항이 없거나 번호가 중복되어 안전하게 이동할 수 없습니다."});return; } if (examSession && !(await closeExamSession())) return; await appNavigationController.requestNavigation({ section: entry.entryKind ?? "wrong_answer", entryId: entry.id, question: { entryId: entry.id, questionNumber: source.sourceQuestionNumber } }); }}>
     <ConceptLinkProvider entries={accessibleStudyEntries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
-    <StudyAiChat entries={entries} selectedEntryId={selectedId} session={examSession ? hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams) : null} onSaveExam={generatedExamController.persist} onStartExam={exam => { const result = generatedExamController.openExam(exam); if (!result.ok) throw new Error(result.message); }} onSettings={() => openSettings("ai")} />
+    <StudyAiChat entries={entries} selectedEntryId={selectedId} session={examSession ? hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams) : null} onSaveExam={generatedExamController.persist} onStartExam={exam => { const result = generatedExamController.openExam(exam); if (!result.ok) throw new Error(result.message); }} onSettings={() => openSettings("ai")} connection={{ available: isTauri() && Boolean(aiProviderStatus?.available) && !aiProvider.statusLoading && !aiProvider.operationPending, pending: isTauri() && (aiProvider.statusLoading || aiProvider.operationPending), reason: !isTauri() ? "AI 대화는 Windows 설치 앱에서 사용할 수 있습니다. 작성한 내용은 전송되지 않습니다." : aiProvider.statusLoading || aiProvider.operationPending ? "AI 연결 설정을 확인하는 중입니다…" : aiProvider.statusError || aiProviderStatus?.message || "제공자·모델·API 키를 설정한 뒤 대화할 수 있습니다." }} />
     <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
@@ -795,7 +795,7 @@ function AppContent() {
                 })}
             />
           ) : <>
-          <EntryListPane
+          {(loading || hasActiveSectionEntries || activeSection === "concept") && <EntryListPane
             activeSection={activeSection}
             loading={loading}
             entries={entries}
@@ -818,7 +818,7 @@ function AppContent() {
             onWidthChange={shell.setEntryPaneWidth}
             libraryPreferences={settings.libraryPreferences}
             onUpdateEntry={(entryId, patch) => patchEntry(entryId, patch)}
-          />
+          />}
 
           {examSession ? (
             <ExamSessionOverlay
@@ -1013,10 +1013,11 @@ function AppContent() {
               <p>
                 {selected
                   ? "선택한 항목이 현재 검색 또는 필터에 포함되지 않습니다. 검색어나 필터를 조정하면 다시 표시됩니다."
-                  : `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하거나`}
-                {!selected && <><br />새 {entryKindName(activeSection)}{activeSection === "wrong_answer" || activeSection === "concept" ? "을" : "를"} 추가하세요.</>}
+                  : hasActiveSectionEntries ? `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하세요.` : `아직 등록된 ${entryKindWithParticle(activeSection, "subject")} 없습니다.`}
+                {!selected && !hasActiveSectionEntries && <><br />{activeSection === "problem_sheet" ? "파일·ZIP을 가져오거나 직접 입력해 시작하세요." : "첫 자료를 추가해 학습을 시작하세요."}</>}
               </p>
-              {!selected && (activeSection === "problem_sheet" ? (
+              {hasActiveSectionEntries && filtered.length === 0 && <button type="button" className="btn-primary" onClick={() => { setSearch(""); setSubjectFilter("all"); setListFilter("all"); setDifficultyScoreFilter("all"); }}>검색·필터 초기화</button>}
+              {!selected && !(hasActiveSectionEntries && filtered.length === 0) && (activeSection === "problem_sheet" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openImport()}>{hasActiveSectionEntries ? "새 시험지 가져오기" : "첫 시험지 가져오기"}</button>
               ) : activeSection === "lecture" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.setShowLearningImportModal(true)}>{hasActiveSectionEntries ? "새 특강 가져오기" : "첫 특강 가져오기"}</button>
