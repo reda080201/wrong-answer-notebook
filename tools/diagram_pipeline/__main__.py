@@ -19,11 +19,27 @@ def main():
             cmd.add_argument("--out-dir", type=Path, required=True)
         if name == "package":
             cmd.add_argument("--output", type=Path, required=True)
+    vision = subs.add_parser("import-vision", help="Bind validated observations to inspected evidence")
+    vision.add_argument("--inspection", type=Path, required=True)
+    vision.add_argument("--analysis", type=Path, required=True)
+    vision.add_argument("--source-map", type=Path, required=True)
+    vision.add_argument("--out-dir", type=Path, required=True)
+    vision.add_argument("--exclude", action="append", default=[])
+    run = subs.add_parser("run-vision", help="Create PNG/Import ZIP from an exported analysis job")
+    run.add_argument("--job", type=Path, required=True)
+    run.add_argument("--out-dir", type=Path, required=True)
+    run.add_argument("--exclude", action="append", default=[])
     args = parser.parse_args()
     try:
         from .pipeline import inspect_input, package, render, verify, versions
         versions()
-        if args.command == "inspect":
+        if args.command == "run-vision":
+            from .vision_adapter import run_vision
+            result = run_vision(args.job, args.out_dir, args.exclude)
+        elif args.command == "import-vision":
+            from .vision_adapter import import_vision
+            result = import_vision(args.inspection, args.analysis, args.source_map, args.out_dir, args.exclude)
+        elif args.command == "inspect":
             result = inspect_input(args.input, args.out_dir)
         elif args.command == "render":
             result = render(args.manifest, args.out_dir)

@@ -153,6 +153,24 @@ describe("ImportFromGptModal", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
+  it("opens every native multi-source entry in one review workspace without saving", async () => {
+    const onOpenWorkspace = vi.fn().mockResolvedValue(undefined);
+    const onApplyEntries = vi.fn(); const onClose = vi.fn();
+    const session = { id: "multiple-source-session", mode: "tauri-staged", sourceToStaged: { "first.png": "first-staged.png", "second.png": "second-staged.png" }, assets: [] } satisfies ImportAssetSessionManifest;
+    const originals = [new File(["a"], "one.pdf"), new File(["b"], "two.pdf")];
+    const onAnalyze = vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: ["first", "second"].map(name => ({ entryKind: "problem_sheet", title: name, subject: "수학", questions: [{ questionNumber: "1", questionText: "문제", contentSegments: [{ id: "text", type: "text", text: "문제" }], choices: [] }], sourcePageImages: [`${name}.png`] })) }), sourcePageImages: ["first-staged.png", "second-staged.png"], assetSession: session, originalFiles: originals });
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
+    fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: originals } });
+    await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledOnce());
+    expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.title)).toEqual(["first", "second"]);
+    expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.sourcePageImages)).toEqual([["first-staged.png"], ["second-staged.png"]]);
+    expect(onOpenWorkspace.mock.calls[0][2]).toBe(session);
+    expect(onOpenWorkspace.mock.calls[0][4]).toBe(originals);
+    expect(onApplyEntries).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("keeps failed staged cleanup recoverable after the user discards a visual import", async () => {
     const onClose = vi.fn();
     const session = { id: "cleanup-session", mode: "tauri-staged", manifestVersion: 1, sourceToStaged: {}, assets: [] } satisfies ImportAssetSessionManifest;

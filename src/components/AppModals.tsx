@@ -1,3 +1,4 @@
+import type { VisionJobDraft } from "../features/import/vision/visionJob";
 import { readFigureTokenReferences } from "../utils/figureTokens";
 import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
 import { getImportAssetPreviewUrl } from "../services/api/importAssets";
@@ -102,6 +103,7 @@ export default function AppModals({
   const openSettings = onOpenSettings ?? modalController?.settings.open;
   const [workspace, setWorkspace] = useState<ImportWorkspace | null>(null);
   const [workspaceAssetFiles, setWorkspaceAssetFiles] = useState<File[]>([]);
+  const [workspaceVisionFiles, setWorkspaceVisionFiles] = useState<File[]>([]);
   const [pendingSupplemental, setPendingSupplemental] = useState<PendingSupplementalImport | null>(null);
   const [supplementalCleanupError, setSupplementalCleanupError] = useState<string | null>(null);
   const [supplementalCleanupBusy, setSupplementalCleanupBusy] = useState(false);
@@ -252,12 +254,13 @@ export default function AppModals({
     if (session?.mode === "tauri-staged") return getImportAssetPreviewUrl(session, filename);
     return getImageUrl(filename);
   }, [workspaceAssetFiles]);
-  const handleWorkspaceEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest) => {
+  const handleWorkspaceEntries = async (items: Partial<EntryFormData>[], assetFiles?: File[], assetSession?: ImportAssetSessionManifest, visionJob?: VisionJobDraft, originalFiles?: File[]) => {
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
     if (problemSheets.length > 0 && problemSheets.length === items.length) {
       const staged = assetSession ? undefined : await stageImportAssetFiles(assetFiles ?? []);
-      setWorkspace(buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession));
+      setWorkspace({ ...buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession), ...(visionJob ? { visionJob } : {}) });
       setWorkspaceAssetFiles(assetFiles ?? []);
+      setWorkspaceVisionFiles(originalFiles ?? []);
       return;
     }
     await handleImportedEntriesApply(items, assetFiles, assetSession);
@@ -410,13 +413,21 @@ export default function AppModals({
   };
 
   const analyzeProblemVisualFile = async (
-    file: File,
+    file: File | File[],
     signal: AbortSignal,
     onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void,
   ): Promise<VisualPaperImportResult> => {
     const throwIfAborted = () => { if (signal.aborted) throw new DOMException("시험지 분석을 취소했습니다.", "AbortError"); };
     throwIfAborted();
-    const pageFiles = await rasterizeVisualImportFile(file, { signal, onProgress });
+    const originals = Array.isArray(file) ? file : [file];
+    if (!originals.length || originals.length > 100 || originals.reduce((n, original) => n + original.size, 0) > 100 * 1024 * 1024) throw new Error("원본 합계 100MiB 이하, 1~100개 파일을 선택하세요.");
+    const sourcePages = [];
+    for (let index = 0; index < originals.length; index++) {
+      const pages = await rasterizeVisualImportFile(originals[index], { signal, onProgress });
+      sourcePages.push({ sourceKey: `upload-${index + 1}`, pages: pages.map((page, ordinal) => new File([page], `source-${index + 1}-page-${ordinal + 1}.${page.name.split(".").at(-1)}`, { type: page.type })) });
+    }
+    const pageFiles = sourcePages.flatMap(source => source.pages);
+    if (pageFiles.length > 12) throw new Error("앱 분석은 한 번에 12페이지까지입니다. 범위를 나누거나 외부 관측 JSON과 CLI 작업 묶음을 사용하세요.");
     throwIfAborted();
     onProgress({ phase: "stage", current: 0, indeterminate: true });
     const staged = await stageImportAssetFiles(pageFiles);
@@ -430,34 +441,45 @@ export default function AppModals({
       assets: staged.assets,
     };
     const sourcePageImages = [...new Set(Object.values(staged.sourceToStaged))];
+    let retainedAnalysis: string | undefined;
     try {
       throwIfAborted();
       onProgress({ phase: "analyze", current: 0, indeterminate: true });
-      const prompt = [
-        "시험지 원본 페이지에서 문항을 추출해 앱 호환 JSON 객체로만 응답하세요.",
-        "entryKind는 problem_sheet로 하고 structuredQuestions에는 번호, 본문, 선택지, 유형, 조건, 수식, 배점을 포함하세요.",
-        "정답과 해설은 읽을 수 있는 경우만 포함하고 불확실하면 needs_review로 표시하세요.",
-        "원본 이미지를 수정하거나 새 자산 경로를 만들지 마세요. user_verified 또는 기계 검증을 주장하지 마세요.",
-        `페이지 원본은 ${sourcePageImages.length}개이며 앱이 저장 시 연결합니다.`,
-      ].join("\n");
-      const responseText = await generateImportWithAi(prompt, `파일: ${file.name}\n문항 데이터를 추출하세요.`, sourcePageImages, signal);
+      const [{ default: visionPromptV8 }, { parseVisionAnalysis }, { prepareOriginalVisionImport, createVisionJobDraft }] = await Promise.all([
+        import("../features/import/vision/vision-prompt-v8.txt?raw"),
+        import("../features/import/vision/visionSchema"),
+        import("../features/import/vision/visionJob"),
+      ]);
+      throwIfAborted();
+      const prompt = `${visionPromptV8}\n앱이 발급한 sources: ${JSON.stringify(sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })))}. 첨부 이미지는 source 순서, 각 physical page 1부터 순서대로입니다. extractedAnswer와 explanationDraft는 선택적 문자열만 허용하며 근거가 없으면 생략합니다. 여러 페이지 문항은 sourceRefs 배열에 source와 같은 구조로 명시합니다.`;
+      const visionAnalysisText = await generateImportWithAi(prompt, `파일: ${originals.map(original => original.name).join(", ")}\n문항 데이터를 추출하세요.`, sourcePageImages, signal, staged.sessionId);
+      retainedAnalysis = visionAnalysisText;
+      const analysis = parseVisionAnalysis(visionAnalysisText);
+      const originalImport = await prepareOriginalVisionImport(analysis, pageFiles, sourcePages, signal);
+      const responseText = JSON.stringify(originalImport.document);
+      const visionJob = await createVisionJobDraft(visionAnalysisText, originals);
       throwIfAborted();
       onProgress({ phase: "analyze", current: 1, total: 1 });
-      return { responseText, sourcePageImages, assetSession };
+      const prepared = await stageImportAssetFiles(originalImport.files.slice(pageFiles.length), staged.sessionId);
+      throwIfAborted();
+      const sourceToStaged = { ...staged.sourceToStaged, ...prepared?.sourceToStaged };
+      return { responseText, visionAnalysisText, visionJob, originalFiles: originals, sourcePageImages: pageFiles.map(page => sourceToStaged[page.name]), assetSession: { ...assetSession, sourceToStaged, assets: [...staged.assets, ...(prepared?.assets ?? [])] } };
     } catch (error) {
       try {
         await discardImportAssetSession(staged.sessionId);
       } catch (cleanupError) {
         const detail = cleanupError instanceof Error ? cleanupError.message : "다시 시도해 주세요.";
-        throw new VisualPaperImportError(`분석 실패 후 임시 원본 정리도 실패했습니다. ${detail}`, assetSession);
+        throw new VisualPaperImportError(`분석 실패 후 임시 원본 정리도 실패했습니다. ${detail}`, assetSession, retainedAnalysis, originals);
       }
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      if (retainedAnalysis) throw new VisualPaperImportError(error instanceof Error ? error.message : "관측 결과를 검토하세요.", undefined, retainedAnalysis, originals);
       throw error;
     }
   };
 
   return (
     <>
-      {workspace && <ImportWorkspaceView resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); }} />}
+      {workspace && <ImportWorkspaceView visionOriginalFiles={workspaceVisionFiles} resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); setWorkspaceVisionFiles([]); }} />}
       {showForm && (
         <ProtectedExamContent sourceId={editingEntry?.id} onClose={closeForm}>
         <EntryForm
@@ -489,6 +511,7 @@ export default function AppModals({
             generateImportWithAi(prompt, inputText, imageFilenames)
           }
           onAnalyzeVisualFile={analyzeProblemVisualFile}
+          onAnalyzeVisualFiles={analyzeProblemVisualFile}
           onDiscardAssetSession={(session) => session.mode === "tauri-staged" ? discardImportAssetSession(session.id) : undefined}
           selectedPromptTemplateId={
             settings.importPreferences.lastPromptTemplateId

@@ -34,6 +34,13 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.diagram_pipeline package --manifest build/diagram-pipeline/ci/rendered/manifest.json --output build/diagram-pipeline/ci/import-v2.zip
           exit $LASTEXITCODE
+      - name: Generate vision job without a hand-written manifest
+        shell: pwsh
+        run: |
+          python -m tools.diagram_pipeline.examples.create_vision_demo --out-dir build/vision-demo/input
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.diagram_pipeline run-vision --job build/vision-demo/input/vision-job.zip --out-dir build/vision-demo/output
+          exit $LASTEXITCODE
       - name: Validate isolated Windows runtime without GTK or system Python
         shell: pwsh
         run: |
@@ -47,6 +54,9 @@ jobs:
         with:
           name: synthetic-diagram-pipeline
           path: |
+            build/vision-demo/output/output-import-v2.zip
+            build/vision-demo/output/prepared/adapter-report.json
+            build/vision-demo/output/rendered/assets/
             build/diagram-pipeline/ci/import-v2.zip
             build/diagram-pipeline/ci/rendered/manifest.json
             build/diagram-pipeline/ci/rendered/assets/

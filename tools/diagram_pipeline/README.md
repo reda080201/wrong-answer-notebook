@@ -244,3 +244,70 @@ Workers use an absolute isolated bootstrap, independent of cwd/PYTHONPATH. Pass 
 stdout JSON and stderr diagnostics separate. Cancellation owns the entire
 worker tree; the installed app must not install packages on first launch.
 No runtime is committed or uploaded as a redistributable installer in this change.
+
+
+## Vision v8 bridge (no manual reviewed.json)
+
+The app's PDF/image analysis requests `wrong-answer-notebook-vision-v1` observations.
+Upload keys and physical page order are issued by the app. The app can retain original
+crops immediately; PNG candidates require the explicit offline bridge below.
+
+1. In **PDF / 이미지 분석**, export **작업 묶음**. In browser mode, paste observations
+   from an external model and select original files in the displayed sources order.
+   Native provider analysis accepts multiple files, up to 12 pages/request; larger
+   documents need separate batches or external observations. No pages are silently dropped.
+2. Activate the existing Windows x64 Python 3.12 locked environment. From the repo root:
+
+```powershell
+python -m tools.diagram_pipeline run-vision --job vision-job.zip --out-dir build/diagram-pipeline/vision-run-001
+```
+
+3. Import `output-import-v2.zip` through **파일 / ZIP / JSON**. Compare the original
+   and candidate. The original remains selected until the user explicitly chooses.
+4. A new output directory is required for each retry. `prepared/adapter-report.json`
+   lists blocked questions and reasons. Correct the analysis or explicitly exclude
+   a question using `--exclude entry-key/question-key` (URL-encode each key component).
+   Exclusion never fabricates a number or deletes the original job evidence.
+
+Advanced existing inspect flows can run the adapter separately:
+
+```powershell
+python -m tools.diagram_pipeline import-vision --inspection inspection/manifest.json --analysis analysis.json --source-map source-map.json --out-dir prepared
+```
+
+`run-vision` generates this mapping itself from actual inspected files; neither the
+model nor the user needs to author a reviewed manifest. To reproduce public fixtures:
+
+```powershell
+python -m tools.diagram_pipeline.examples.create_vision_demo --out-dir build/diagram-pipeline/vision-input
+python -m tools.diagram_pipeline run-vision --job build/diagram-pipeline/vision-input/vision-job.zip --out-dir build/diagram-pipeline/vision-output
+```
+
+Add `--multi` to the demo for two source files including a two-page PDF and duplicate
+printed question numbers in separate entries. These are synthetic observations,
+not a claim about exam OCR accuracy.
+
+### Contract and trust
+
+- `vision-v1.schema.json` is shared by the bounded TS/Python validators. Duplicate
+  JSON keys, nonfinite numbers, unknown fields, unsafe trust/execution fields,
+  invalid rectangles, missing/foreign/unplaced figure references are rejected.
+- `sourceRefs` optionally lists additional physical pages for one question. Internal
+  IDs are scoped; export remaps physical pages to entry `sourcePageImages` indexes.
+- Confirmed redraw remains a distinct API. `computational_preview` accepts only an
+  unconfirmed proposal and runs the existing bounded renderer. It does not set
+  `confirmed`, user approval, or mathematical verification.
+- Candidate failure can fall back to retained originals; missing/corrupt source
+  artifacts still fail integrity checks. Failed generation reasons remain in the
+  manifest/report and exported figure caption. `mathematicalEquivalence` remains
+  `not_proven`; external archives cannot confer app approval.
+- Analysis jobs contain original bytes, analysis JSON, and locally computed source
+  hashes. Do not publish private jobs. Drafts retain analysis/hash metadata; after
+  browser restart reselect the same original files. Raw PDF files are not image-store
+  assets and are not represented by raster page previews.
+- Job export is capped at 100MiB in the app; CLI input/extraction retains the existing
+  500MiB limit and bounded workers. Cancelling a job preserves prior data.
+
+This bridge does not launch system Python from the browser or bundle a runtime into
+an installed app. Python 3.15 is not the supported pipeline environment. No CairoSVG,
+GTK, or scikit-image is required. Existing PyMuPDF/license release gate stays closed.
