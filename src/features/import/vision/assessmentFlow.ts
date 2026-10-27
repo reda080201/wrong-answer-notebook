@@ -28,7 +28,8 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
   checkpoint?(analysis: VisionAnalysis, evidence: AssessmentRunEvidence, cache: AssessmentStageCache): Promise<void>;
 }): Promise<{ analysis: VisionAnalysis; evidence: AssessmentRunEvidence }> {
   const result = structuredClone(analysis);
-  const evidence: AssessmentRunEvidence = { independent: options.independent, stages: [] };
+  const observedAnswer = analysis.entries.some(entry => entry.questions.some(question => Boolean(question.extractedAnswer?.trim() || question.explanationDraft?.trim())));
+  const evidence: AssessmentRunEvidence = { independent: options.independent && !observedAnswer, stages: [] };
   const cache: AssessmentStageCache = { ...options.cache };
   let currentQuestion = 0;
   const totalQuestions = result.entries.reduce((sum, entry) => sum + entry.questions.length, 0);

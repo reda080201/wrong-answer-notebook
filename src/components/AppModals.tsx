@@ -479,11 +479,11 @@ export default function AppModals({
       });
       writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: observed, evidence: initialEvidence, cache: checkpoint?.cache ?? {}, observationComplete: true });
       const answerRefs = sourcePages.filter(source => roleBySource.get(source.sourceKey) !== "problem").flatMap(source => source.pages.map((_,index) => ({ sourceKey: source.sourceKey, page: index + 1 })));
-      const stageLabels = { vision_observed: "원본 읽기 완료", solution_attempted: "GPT 독립 풀이 중", scores_assessed: "난이도·중요도 평가 중", answer_compared: "정답지 대조 중", prepackage_validated: "파일 생성 가능" };
+      const stageLabels = { vision_observed: "원본 읽기 완료", solution_attempted: "GPT 풀이 중", scores_assessed: "난이도·중요도 평가 중", answer_compared: "정답지 대조 중", prepackage_validated: "파일 생성 가능" };
       const assessed = await runPrepackageAssessment(observed, (stagePrompt,input,refs,stage) => { if (stage !== "answer_compared" && refs.some(ref => roleBySource.get(ref.sourceKey) === "answer")) throw new Error("풀이에 답안 페이지를 전달할 수 없습니다. 문항 출처를 검토하세요."); return requestVisionAssessment(stagePrompt,input,names(refs),staged.sessionId,signal); }, {
         cache: checkpoint?.cache,
         checkpoint: async (analysis,evidence,cache) => { writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis, evidence, cache, observationComplete: true }); },
-        answerRefs, independent: [...roleBySource.values()].every(role => role !== "mixed"), signal,
+        answerRefs, independent: initialEvidence.independent, signal,
         progress: (stage,current,total) => onProgress({ phase: "analyze", current: current ?? 0, total, stageLabel: `${stageLabels[stage]}${total ? ` · ${current}/${total}문항` : ""}` }),
       });
       visionAnalysisText = JSON.stringify(assessed.analysis);

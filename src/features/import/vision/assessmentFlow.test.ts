@@ -14,9 +14,11 @@ describe("pre-package assessment order", () => {
     const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
     delete value.entries[0].questions[0].studyAssessment; value.schemaVersion = "wrong-answer-notebook-vision-v1";
     const request = vi.fn().mockResolvedValueOnce(receipt({ assessmentStatus: a.assessmentStatus, solution: a.solution, warnings: [] })).mockResolvedValueOnce(receipt({ scores: a.scores, classification: a.classification, learning: a.learning })).mockResolvedValueOnce(receipt({ sourceAnswer: a.sourceAnswer }));
+    value.entries[0].questions[0].extractedAnswer = "노출된 답";
     const progress = vi.fn();
     const result = await runPrepackageAssessment(value, request, { answerRefs: [{ sourceKey: "upload-1", page: 1 }], independent: true, signal: new AbortController().signal, progress });
     expect(request).toHaveBeenCalledTimes(3);
+    expect(result.evidence.independent).toBe(false);
     expect(JSON.parse(request.mock.calls[0][1])).not.toHaveProperty("sourceAnswer");
     expect(request.mock.calls[2][0]).toContain("이제 첨부 답안지");
     expect(result.analysis.entries[0].questions[0].studyAssessment?.sourceAnswer.status).toBe("conflict");
