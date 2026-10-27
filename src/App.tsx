@@ -45,6 +45,8 @@ import { useGptSolutionRoundtripDrafts } from "./hooks/useGptSolutionRoundtripDr
 import { useAppWriteRegistrations } from "./hooks/useAppWriteRegistrations";
 import { SettingsProvider, useSettingsContext } from "./contexts/SettingsContext";
 import { normalizeQuestionNumber } from "./utils/questionMeta";
+import { confirmAssessmentAnswer } from "./utils/studyAssessment";
+import type { GeneratedExam } from "./types";
 import { getEntryQuestions, renderStructuredQuestionsCompatibilityText } from "./utils/entryQuestions";
 import { presentSessionSharedPassages, presentWrongAnswerSharedPassage } from "./utils/sharedPassageRecovery";
 import { useUiShellPreferences } from "./hooks/useUiShellPreferences";
@@ -854,7 +856,6 @@ function AppContent() {
             />
           ) : selected && selectedIsVisible ? (
             <>
-              {examStartError?.entryId === selected.id && <p className="form-error" role="alert">{examStartError.message}</p>}
               {examHistoryOpen && <Dialog open size="md" ariaLabel="모의고사 결과 이력" onClose={() => setExamHistoryOpen(false)}><header className="modal-head"><h2>모의고사 결과 이력</h2></header><div className="exam-session-history-list">{selectedExamHistory.map((item) => <button type="button" key={item.id} onClick={() => { setExamHistoryOpen(false); setExamSession(item); }}><span>{new Date(item.submittedAt ?? item.updatedAt).toLocaleDateString("ko-KR")}</span><strong>{item.score?.percentCorrect ?? 0}%</strong><small>{item.score?.correctCount ?? 0} / {item.score?.totalQuestions ?? item.questions.length}</small></button>)}</div></Dialog>}
               {realProtection.unavailable || realProtection.sourceIds.has(selected.id) ? <section className="empty-state" role="status">
                 <h2>{selected.title}</h2>
@@ -866,6 +867,7 @@ function AppContent() {
                 {realProtection.sessions.filter(item => realProtection.unavailable || item.entryId === selected.id || item.questions.some(question => question.sourceEntryId === selected.id || question.sourceReference?.sourceEntryId === selected.id)).map(item => <button key={item.id} type="button" onClick={() => { const latest = savedExamSessions.find(saved => saved.id === item.id); if (latest) setExamSession(latest); }}>실전 이어서 · {item.title}</button>)}
               </section> : <EntryDetail
               entry={selected}
+              examStartError={examStartError?.entryId === selected.id ? examStartError.message : undefined}
               presentationEntry={studySelected}
               onStartExam={selected.entryKind === "problem_sheet" ? () => {
                 openExamSession(selected, { mode: "practice", resumable: selectedPracticeSession });
@@ -1106,6 +1108,25 @@ function AppContent() {
         onRetry={generatedExamController.retry}
         onDiscardFailure={generatedExamController.discardFailedChange}
         onOpen={generatedExamController.openExam}
+        protectedExamIds={realProtection.sourceIds}
+        protectionUnavailable={realProtection.unavailable}
+        onConfirmAnswer={async (exam, position) => {
+          assertRealExamSourcesAllowed([`generated:${exam.id}`, ...exam.questions.map(question => question.source.sourceEntryId)]);
+          const matches = exam.questions.filter(question => question.position === position);
+          if (matches.length !== 1) throw new Error("확인할 문항을 고유하게 찾지 못했습니다.");
+          const target = matches[0];
+          const answer = target.snapshot.solutionAnswer;
+          if (!answer || !["gpt_estimate", "conflict"].includes(answer.answerProvenance?.kind ?? "")) throw new Error("이 문항은 정답 확인이 필요하지 않거나 저장된 답을 찾을 수 없습니다.");
+          const confirmed = confirmAssessmentAnswer(answer);
+          const updated: GeneratedExam = {
+            ...exam,
+            updatedAt: new Date().toISOString(),
+            questions: exam.questions.map(question => question.position === position
+              ? { ...question, snapshot: { ...question.snapshot, solutionAnswer: confirmed, correctAnswer: confirmed.answer } }
+              : question),
+          };
+          await generatedExamController.persist(updated);
+        }}
         onDelete={async (id) => {
           const exam = generatedExamController.exams.find((item) => item.id === id);
           if (!exam) return;

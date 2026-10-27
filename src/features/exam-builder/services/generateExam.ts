@@ -1,3 +1,5 @@
+import { snapshotQuestionMeta } from "../../exam/services/examSession";
+import { isAnswerReadyForGrading } from "../../../utils/studyAssessment";
 import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { createExamQuestionSnapshots } from "../../exam/services/examSession";
@@ -101,6 +103,7 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string,
     }))];
   return {
     questionSolutionHotspots: hotspots.map(hotspot => ({ ...hotspot, questionKey: `${entry.id}-${number}` })),
+    questionMeta: snapshotQuestionMeta(entry, number),
     solutionAnswer: answer ? structuredClone(answer) : undefined,
     solutionFigures: solutionFigures(answer, entry.figures ?? []),
     id: `${entry.id}-${number}`,
@@ -111,7 +114,7 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string,
     figures: (entry.figures ?? []).filter((figure) => normalizeQuestionNumber(figure.questionNumber) === number),
     contentSegments: Object.entries(entry.questionContentSegments ?? {}).find(([key]) => normalizeQuestionNumber(key) === number)?.[1],
     source: structuredSource ? structuredClone(structuredSource) : undefined,
-    correctAnswer: answer?.answer,
+    correctAnswer: isAnswerReadyForGrading(answer) ? answer?.answer : undefined,
     explanation: answer?.explanation,
     ...structuredClone(canonical ?? {}),
     // source.page is an index in the complete original asset list.

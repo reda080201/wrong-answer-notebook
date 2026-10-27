@@ -1,3 +1,5 @@
+import { clearAssessmentCheckpoint } from "../vision/assessmentCheckpoint";
+import type { SourceRole } from "../vision/assessmentFlow";
 import { VisionImportBridge } from "../vision/VisionImportBridge";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -88,8 +90,8 @@ interface ImportFromGptModalProps {
   aiProvider?: AiProviderSettings;
   aiProviderStatus?: AiProviderStatus | null;
   onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
-  onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void) => Promise<VisualPaperImportResult>;
-  onAnalyzeVisualFiles?: (file: File[], signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void) => Promise<VisualPaperImportResult>;
+  onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean) => Promise<VisualPaperImportResult>;
+  onAnalyzeVisualFiles?: (file: File[], signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean) => Promise<VisualPaperImportResult>;
   onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
@@ -348,6 +350,10 @@ export default function ImportFromGptModal({
   const [watchClipboard, setWatchClipboard] = useState(false);
   const [applyMode, setApplyMode] = useState<GptSolutionApplyMode>("fill");
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [discardAssessmentOpen, setDiscardAssessmentOpen] = useState(false);
+  const [pendingVisualFiles, setPendingVisualFiles] = useState<File[]>([]);
+  const [visualAssessmentEnabled, setVisualAssessmentEnabled] = useState(true);
+  const [visualSourceRoles, setVisualSourceRoles] = useState<SourceRole[]>([]);
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
@@ -362,7 +368,7 @@ export default function ImportFromGptModal({
   const [reviewWorkspaceOpen, setReviewWorkspaceOpen] = useState(false);
   const [activeReviewQuestionIndex, setActiveReviewQuestionIndex] = useState(0);
   const [zipProgress, setZipProgress] = useState<{ phase: string; completed: number; total: number } | null>(null);
-  const [visualProgress, setVisualProgress] = useState<{ phase: "rasterize" | "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean } | null>(null);
+  const [visualProgress, setVisualProgress] = useState<{ phase: "rasterize" | "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string } | null>(null);
   const [visualResult, setVisualResult] = useState<VisualPaperImportResult | null>(null);
   const [visualCleanupSession, setVisualCleanupSession] = useState<ImportAssetSessionManifest | null>(null);
   const [failedVision, setFailedVision] = useState<{ text: string; files: File[] } | null>(null);
@@ -669,7 +675,7 @@ export default function ImportFromGptModal({
       const reportProgress: Parameters<NonNullable<typeof onAnalyzeVisualFile>>[2] = progress => {
         if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setVisualProgress(progress);
       };
-      const result = await (Array.isArray(file) && onAnalyzeVisualFiles ? onAnalyzeVisualFiles(file, controller.signal, reportProgress) : onAnalyzeVisualFile(Array.isArray(file) ? file[0] : file, controller.signal, reportProgress));
+      const result = await (Array.isArray(file) && onAnalyzeVisualFiles ? onAnalyzeVisualFiles(file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled) : onAnalyzeVisualFile(Array.isArray(file) ? file[0] : file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled));
       if (requestId !== visualRequestIdRef.current || controller.signal.aborted) {
         await discardVisualSession(result.assetSession);
         return;
@@ -679,6 +685,13 @@ export default function ImportFromGptModal({
       setFailedVision(null);
       visualResultRef.current = result;
       const imported = parseAllInOneImport(result.responseText, "visual-paper-import.json", fallbackSubject);
+      const hostEvidence = result.visionJob?.assessmentEvidence;
+      if (hostEvidence?.stages.length && hostEvidence.stages.every(stage => stage.receipt.provider === "openai" && stage.receipt.model.startsWith("gpt-") && stage.receipt.providerRequestId)) {
+        for (const entry of imported.entries) {
+          entry.questionMeta = entry.questionMeta?.map(meta => meta.studyAssessment ? { ...meta, assessmentEvidence: { provider: "openai", model: hostEvidence.stages.at(-1)!.receipt.model, requestIds: hostEvidence.stages.map(stage => stage.receipt.providerRequestId), responseHashes: hostEvidence.stages.map(stage => stage.receipt.responseHash), sourceHashes: result.visionJob!.sourceFiles.map(source => source.sha256), completedAt: new Date(hostEvidence.stages.at(-1)!.receipt.completedAtMs).toISOString(), independent: hostEvidence.independent }, rating: { ...meta.rating, evaluationSource: "gpt" }, classification: { ...meta.classification, difficultySource: "gpt" } } : meta);
+          entry.answerKey = entry.answerKey?.map(answer => answer.answerProvenance ? { ...answer, answerProvenance: { ...answer.answerProvenance, independent: hostEvidence.independent } } : answer);
+        }
+      }
       if (imported.entries.length > 1) {
         if (!onOpenWorkspace) throw new Error("여러 자료의 관측 결과는 작업실에서 함께 검토해야 합니다. 작업 묶음 내보내기를 사용할 수 있습니다.");
         const mapping = result.assetSession.sourceToStaged ?? {};
@@ -695,7 +708,7 @@ export default function ImportFromGptModal({
       }
       setRawText(result.responseText);
       setFilename("visual-paper-import.json");
-      setDraftOverride(null);
+      setDraftOverride(hostEvidence?.stages.length ? imported.entries[0] : null);
       setBatchImport(null);
       setEntryKindResolution(null);
       setImportWarnings([]);
@@ -1162,9 +1175,10 @@ export default function ImportFromGptModal({
                     <div><h3>PDF / 이미지 시험지 가져오기</h3><p>원본 페이지를 보존하고, 분석 결과를 검토한 뒤 시험지로 저장합니다. 최대 12페이지까지 분석합니다.</p></div>
                   </div>
                   <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
-                  <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); void analyzeVisualPaper(onAnalyzeVisualFiles ? files : files[0]).finally(() => { input.value = ""; }); }} />
+                  <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); setPendingVisualFiles(files); setVisualSourceRoles(files.map(() => "problem")); input.value = ""; }} />
+                  {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
-                    <span>{visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…"}</span>
+                    <span>{visualProgress?.stageLabel ?? (visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…")}</span>
                     {visualProgress?.total ? <progress max={visualProgress.total} value={visualProgress.current} /> : <progress />}
                     <button type="button" className="btn-secondary btn-sm" onClick={() => visualControllerRef.current?.abort()}>분석 취소</button>
                   </div>}

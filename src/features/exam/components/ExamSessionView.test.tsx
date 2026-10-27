@@ -143,6 +143,25 @@ describe("ExamSessionView", () => {
     expect(within(screen.getByRole("navigation", { name: "문항 이동" })).getByText("1 / 2")).toBeInTheDocument();
   });
 
+  it("shows question response states in the navigator and closes it explicitly", () => {
+    const questions = [1, 2, 3].map((number) => ({
+      ...createSession().questions[0], id: `q${number}`, questionNumber: String(number),
+    }));
+    const session = createSession({
+      questions,
+      responses: [{ questionNumber: "2", response: "②", scratchNote: "", markedForReview: true, updatedAt: "2026-01-01T00:00:00.000Z" }],
+    });
+    render(<ExamSessionView session={session} onChange={vi.fn()} onSubmit={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "1 / 3" }));
+    const dialog = screen.getByRole("dialog", { name: "문항 이동" });
+    expect(within(dialog).getByRole("button", { name: "1번, 현재 문항" })).toHaveAttribute("aria-current", "page");
+    expect(within(dialog).getByRole("button", { name: "2번, 응답, 검토 표시" })).toBeInTheDocument();
+    expect(within(dialog).getByRole("button", { name: "3번, 미응답" })).toBeInTheDocument();
+    expect(within(dialog).getByText("검토 표시")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: "닫기" }));
+    expect(screen.queryByRole("dialog", { name: "문항 이동" })).not.toBeInTheDocument();
+  });
+
   it("shows submit confirmation modal and can cancel or confirm submission", async () => {
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     const session = createSession({
@@ -228,7 +247,7 @@ describe("ExamSessionView", () => {
     render(<ExamSessionView session={createSession({ questions })} onChange={onChange} onSubmit={vi.fn()} />);
 
     fireEvent.click(screen.getByRole("button", { name: "1 / 30" }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "문항 이동" })).getByRole("button", { name: "22" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "문항 이동" })).getByRole("button", { name: "22번, 미응답" }));
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ currentQuestionIndex: 21 }));
   });
 

@@ -151,6 +151,18 @@ const mockCtx = {
 } as unknown as SettingsContextValue;
 
 describe("SettingsModal", () => {
+  it("uses a compact data layout and explains maintenance effects", () => {
+    const runIntegrity = vi.fn().mockResolvedValue(undefined);
+    render(<SettingsModal initialTab="data" dataActions={{ integrityReport: null, backup: vi.fn(), restore: vi.fn(), runIntegrity, cleanupOrphans: vi.fn() }} updateActions={{ state: { status: "idle" }, check: vi.fn(), install: vi.fn(), restart: vi.fn(), openReleasePage: vi.fn() }} onClose={vi.fn()} />);
+    expect(screen.getByRole("dialog", { name: "설정" })).toHaveClass("settings-modal--compact");
+    expect(screen.getByText(/복원은 확인 후 현재 데이터를 백업 내용으로 바꾸고 다시 불러옵니다/)).toBeInTheDocument();
+    expect(screen.getByText(/무결성 검사는 저장 자료와 이미지 연결을 점검해 결과를 표시하며 자동 수정하지 않습니다/)).toBeInTheDocument();
+    expect(screen.getByText(/미사용 이미지 정리는 확인 후 자료에서 참조하지 않는 이미지 파일을 삭제합니다/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "무결성 검사" }));
+    expect(runIntegrity).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent("무결성 검사 중");
+  });
+
   it("opens the requested initial tab and updates view preferences", async () => {
     render(
       <SettingsModal

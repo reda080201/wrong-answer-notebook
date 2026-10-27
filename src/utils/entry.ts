@@ -1,3 +1,4 @@
+import { normalizeAnswerProvenance } from "./studyAssessment";
 import { validSolutionHotspot } from "../features/solutions/hotspotValidation";
 import { v4 as uuidv4 } from "uuid";
 import type {
@@ -433,6 +434,7 @@ export function normalizeAnswerKey(raw: unknown): SheetAnswerItem[] {
       diagramSpec: normalizeDiagramSpec(item.diagramSpec),
       needsReview: Boolean(item.needsReview),
       processingStatus: item.processingStatus === "ready" || item.processingStatus === "needs_review" || item.processingStatus === "rejected" ? item.processingStatus : undefined,
+      answerProvenance: normalizeAnswerProvenance(item.answerProvenance, true),
       sourceNote: `${item.sourceNote ?? ""}`.trim(),
     }))
     .filter(

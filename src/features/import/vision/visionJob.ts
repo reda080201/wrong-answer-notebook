@@ -1,10 +1,11 @@
+import { mapVisionAssessment } from "./assessmentMapping";
 import JSZip from "jszip";
 import { parseVisionAnalysis, type VisionAnalysis } from "./visionSchema";
 
 export async function sha256(bytes: ArrayBuffer): Promise<string> {
   return [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))].map(v => v.toString(16).padStart(2, "0")).join("");
 }
-export interface VisionJobDraft { version: 1; id: string; analysisText: string; draftAnalysisText?: string; sourceFiles: Array<{ sourceKey: string; name: string; sha256: string }>; }
+export interface VisionJobDraft { version: 1; id: string; analysisText: string; draftAnalysisText?: string; sourceFiles: Array<{ sourceKey: string; name: string; sha256: string }>; assessmentEvidence?: import("./assessmentFlow").AssessmentRunEvidence; }
 export async function createVisionJobDraft(analysisText: string, files: File[]): Promise<VisionJobDraft> {
   const analysis = parseVisionAnalysis(analysisText);
   if (analysis.sources.length !== files.length) throw new Error("분석 출처와 원본 파일 수가 다릅니다.");
@@ -51,13 +52,14 @@ export async function prepareOriginalVisionImport(analysis: VisionAnalysis, page
   for (let ei = 0; ei < analysis.entries.length; ei++) {
     signal?.throwIfAborted();
     const entry = analysis.entries[ei]; const figures = []; const questions = []; const questionSourceCrops = [];
-    const linkedNames = new Set([...entry.questions.flatMap(q => [q.source, ...(q.sourceRefs ?? [])]), ...analysis.figures.filter(f => f.entryKey === entry.entryKey).map(f => f.source)].map(page));
+    const linkedNames = new Set([...entry.questions.flatMap(q => [q.source, ...(q.sourceRefs ?? []), ...(q.studyAssessment?.sourceAnswer.sourceKey && q.studyAssessment.sourceAnswer.page ? [{ sourceKey: q.studyAssessment.sourceAnswer.sourceKey, page: q.studyAssessment.sourceAnswer.page }] : [])]), ...analysis.figures.filter(f => f.entryKey === entry.entryKey).map(f => f.source)].map(page));
     const entryPages = pages.filter(file => linkedNames.has(file.name));
     const ids = new Map(analysis.figures.filter(f => f.entryKey === entry.entryKey).map((f, i) => [JSON.stringify([f.questionKey, f.figureKey]), `v8_${ei}_${i}`]));
+    const answerPage = (q: import("./visionSchema").VisionQuestion) => { const ref = q.studyAssessment?.sourceAnswer; return ref?.sourceKey && ref.page ? entryPages.findIndex(file => file.name === page({ sourceKey: ref.sourceKey!, page: ref.page! })) + 1 : undefined; };
     const normalized = (number: string | null) => (number ?? "").replace(/\s|번$/g, "").replace(/^0+(?=\d)/, "");
     for (const q of entry.questions) {
       if (!q.questionNumber?.trim() || entry.questions.filter(other => normalized(other.questionNumber) === normalized(q.questionNumber)).length !== 1) throw new Error(`${q.questionKey}: 번호 미확인·중복 번호를 검토한 뒤 다시 분석하거나 CLI에서 제외해 주세요.`);
-      questions.push({ questionNumber: q.questionNumber, questionText: q.questionText, contentSegments: q.contentSegments.map(segment => { if (segment.type !== "figure") return segment; const { figureKey, ...rest } = segment; return { ...rest, figureId: ids.get(JSON.stringify([q.questionKey, figureKey])) }; }), choices: q.choices.map(choice => choice.replace(/\[FIGURE:([^\]]+)\]/g, (_, key: string) => `[FIGURE:${ids.get(JSON.stringify([q.questionKey, key]))}]`)), source: { page: entryPages.findIndex(p => p.name === page(q.source)) + 1 }, needsReview: true });
+      questions.push({ questionNumber: q.questionNumber, questionText: q.questionText, contentSegments: q.contentSegments.map(segment => { if (segment.type !== "figure") return segment; const { figureKey, ...rest } = segment; return { ...rest, figureId: ids.get(JSON.stringify([q.questionKey, figureKey])) }; }), choices: q.choices.map(choice => choice.replace(/\[FIGURE:([^\]]+)\]/g, (_, key: string) => `[FIGURE:${ids.get(JSON.stringify([q.questionKey, key]))}]`)), source: { page: entryPages.findIndex(p => p.name === page(q.source)) + 1 }, needsReview: q.studyAssessment ? mapVisionAssessment(q, q.questionKey, new Date().toISOString()).meta?.needsReview : true });
       for (const [ordinal, reference] of [q.source, ...(q.sourceRefs ?? [])].entries()) {
         const filename = page(reference);
         questionSourceCrops.push({ id: `v8_question_${ei}_${questions.length}_${ordinal}`, questionNumber: q.questionNumber, image: filename, sourcePageImage: filename, page: entryPages.findIndex(p => p.name === filename) + 1, cropRect: { x: 0, y: 0, width: 1, height: 1 } });
@@ -86,7 +88,7 @@ export async function prepareOriginalVisionImport(analysis: VisionAnalysis, page
         figures.push({ id, questionNumber: entry.questions.find(q => q.questionKey === f.questionKey)!.questionNumber, original: { image: cropName, sourcePageImage: filename, crop: rect }, image: cropName, source: "original", preferredRepresentation: "original", needsReview: true, processingStatus: "needs_review" });
       } finally { bitmap.close(); }
     }
-    entries.push({ entryKind: "problem_sheet", title: entry.title, subject: entry.subject, questions, figures, questionSourceCrops, answerKey: entry.questions.filter(q => q.extractedAnswer || q.explanationDraft).map((q, index) => ({ id: `v8_answer_${ei}_${index}`, questionNumber: q.questionNumber, answer: q.extractedAnswer ?? "", explanation: q.explanationDraft ?? "", importantPoints: [], needsReview: true, processingStatus: "needs_review" })), sourcePageImages: entryPages.map(p => p.name) });
+    entries.push({ entryKind: "problem_sheet", title: entry.title, subject: entry.subject, questions, figures, questionSourceCrops, answerKey: entry.questions.filter(q => q.studyAssessment || q.extractedAnswer || q.explanationDraft).map((q, index) => (mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString(), answerPage(q)).answer ?? { id: `v8_answer_${ei}_${index}`, questionNumber: q.questionNumber, answer: q.extractedAnswer ?? "", explanation: q.explanationDraft ?? "", importantPoints: [], needsReview: true, processingStatus: "needs_review" })), questionMeta: entry.questions.map((q, index) => mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString()).meta).filter(Boolean), sourcePageImages: entryPages.map(p => p.name) });
   }
   return { document: { schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries }, files };
 }

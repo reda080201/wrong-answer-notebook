@@ -1,9 +1,10 @@
+import { isAnswerReadyForGrading } from "../../../utils/studyAssessment";
 import { confirmedQuestionHotspots, solutionFigures } from "../../solutions/solutionModel";
 import { v4 as uuidv4 } from "uuid";
 import type { ExamMode, ExamQuestionSnapshot, ExamResponse, ExamSession, QuestionContentSegment, WrongAnswerEntry } from "../../../types";
 import { parseQuestionText, type QuestionBlock } from "../../../utils/textLayout";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
-import { normalizeQuestionNumber } from "../../../utils/questionMeta";
+import { normalizeQuestionNumber, normalizeQuestionMeta } from "../../../utils/questionMeta";
 import { resolveQuestionAssets, resolveQuestionFigures } from "../../../utils/questionAssets";
 import { figureTokenWarning, readFigureTokenReferences, unresolvedFigureTokens } from "../../../utils/figureTokens";
 import { resolveFigureRepresentation } from "../../figures/services/figureRepresentation";
@@ -21,6 +22,13 @@ export type { EntryQuestionStimulus } from "../../../utils/questionStimuli";
 import { resolveEntryQuestionStimuli } from "../../../utils/questionStimuli";
 
 /** Shared immutable content projection for ordinary and generated exams. */
+export function snapshotQuestionMeta(entry: WrongAnswerEntry, number: string): ExamQuestionSnapshot["questionMeta"] {
+  const matches = normalizeQuestionMeta(entry.questionMeta).filter(meta => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(number));
+  if (matches.length !== 1) return undefined;
+  const { questionNumber, important, difficultyScore, rating, classification, updatedAt } = matches[0];
+  return structuredClone({ questionNumber, important, difficultyScore, rating, classification, updatedAt });
+}
+
 export function createExamQuestionSnapshots(entry: WrongAnswerEntry): ExamQuestionSnapshot[] {
   const blocks = parseQuestionText(entry.question);
   const questions = getEntryQuestions(entry);
@@ -61,6 +69,7 @@ export function createExamQuestionSnapshots(entry: WrongAnswerEntry): ExamQuesti
       questionImages: structuredClone([...assets.sourceCrops.map((crop) => crop.image), ...assets.figureAssets]),
       sourcePageImages: structuredClone([...new Set([...assets.sourcePages, ...confirmedQuestionHotspots(entry, block).map(hotspot => hotspot.sourcePageImage)])]),
       questionSolutionHotspots: confirmedQuestionHotspots(entry, block).map(hotspot => ({ ...hotspot, questionKey: `${entry.id}-${number}` })),
+      questionMeta: snapshotQuestionMeta(entry, number),
       solutionAnswer: answer ? structuredClone(answer) : undefined,
       solutionFigures: solutionFigures(answer, entry.figures ?? []),
       figures: structuredClone(figures),
@@ -68,7 +77,7 @@ export function createExamQuestionSnapshots(entry: WrongAnswerEntry): ExamQuesti
         ? structuredClone(block.contentSegments)
         : (legacyBlock ? resolveContentSegments(entry, normalizedNumber, legacyBlock, figures) : undefined),
       needsReview: Boolean(block.needsReview || tokenWarning),
-      correctAnswer: answer?.answer,
+      correctAnswer: isAnswerReadyForGrading(answer) ? answer?.answer : undefined,
       explanation: answer?.explanation,
       points: block.points,
       warning,
@@ -158,7 +167,7 @@ export function publicExamQuestion(session: ExamSession, index = session.current
     status: session.status,
     questionIndex: index,
     totalQuestions: session.questions.length,
-    question: { ...question, correctAnswer: undefined, explanation: undefined, solutionAnswer: undefined, solutionFigures: undefined, questionSolutionHotspots: undefined },
+    question: { ...question, questionMeta: undefined, correctAnswer: undefined, explanation: undefined, solutionAnswer: undefined, solutionFigures: undefined, questionSolutionHotspots: undefined },
     response: response?.response ?? "",
     scratchNote: response?.scratchNote ?? "",
     markedForReview: response?.markedForReview ?? false,

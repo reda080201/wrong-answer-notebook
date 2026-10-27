@@ -1,3 +1,7 @@
+import { observeVisionInBatches } from "../features/import/vision/observationBatches";
+import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } from "../features/import/vision/assessmentCheckpoint";
+import { requestVisionAssessment } from "../services/api/ai";
+import { runPrepackageAssessment, type SourceRole } from "../features/import/vision/assessmentFlow";
 import type { VisionJobDraft } from "../features/import/vision/visionJob";
 import { readFigureTokenReferences } from "../utils/figureTokens";
 import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
@@ -415,19 +419,21 @@ export default function AppModals({
   const analyzeProblemVisualFile = async (
     file: File | File[],
     signal: AbortSignal,
-    onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean }) => void,
+    onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void,
+    roles?: SourceRole[],
+    assessmentEnabled = true,
   ): Promise<VisualPaperImportResult> => {
     const throwIfAborted = () => { if (signal.aborted) throw new DOMException("시험지 분석을 취소했습니다.", "AbortError"); };
     throwIfAborted();
     const originals = Array.isArray(file) ? file : [file];
     if (!originals.length || originals.length > 100 || originals.reduce((n, original) => n + original.size, 0) > 100 * 1024 * 1024) throw new Error("원본 합계 100MiB 이하, 1~100개 파일을 선택하세요.");
-    const sourcePages = [];
+    const sourcePages: Array<{ sourceKey: string; pages: File[] }> = [];
     for (let index = 0; index < originals.length; index++) {
       const pages = await rasterizeVisualImportFile(originals[index], { signal, onProgress });
       sourcePages.push({ sourceKey: `upload-${index + 1}`, pages: pages.map((page, ordinal) => new File([page], `source-${index + 1}-page-${ordinal + 1}.${page.name.split(".").at(-1)}`, { type: page.type })) });
     }
     const pageFiles = sourcePages.flatMap(source => source.pages);
-    if (pageFiles.length > 12) throw new Error("앱 분석은 한 번에 12페이지까지입니다. 범위를 나누거나 외부 관측 JSON과 CLI 작업 묶음을 사용하세요.");
+    if (!assessmentEnabled && pageFiles.length > 12) throw new Error("기존 원본 관측은 한 번에 12페이지까지입니다. GPT 사전 평가 또는 외부 JSON 경로를 사용하세요.");
     throwIfAborted();
     onProgress({ phase: "stage", current: 0, indeterminate: true });
     const staged = await stageImportAssetFiles(pageFiles);
@@ -440,7 +446,7 @@ export default function AppModals({
       sourceToStaged: staged.sourceToStaged,
       assets: staged.assets,
     };
-    const sourcePageImages = [...new Set(Object.values(staged.sourceToStaged))];
+
     let retainedAnalysis: string | undefined;
     try {
       throwIfAborted();
@@ -452,12 +458,44 @@ export default function AppModals({
       ]);
       throwIfAborted();
       const prompt = `${visionPromptV8}\n앱이 발급한 sources: ${JSON.stringify(sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })))}. 첨부 이미지는 source 순서, 각 physical page 1부터 순서대로입니다. extractedAnswer와 explanationDraft는 선택적 문자열만 허용하며 근거가 없으면 생략합니다. 여러 페이지 문항은 sourceRefs 배열에 source와 같은 구조로 명시합니다.`;
-      const visionAnalysisText = await generateImportWithAi(prompt, `파일: ${originals.map(original => original.name).join(", ")}\n문항 데이터를 추출하세요.`, sourcePageImages, signal, staged.sessionId);
+      let visionAnalysisText: string;
+      let assessmentEvidence: import("../features/import/vision/assessmentFlow").AssessmentRunEvidence | undefined;
+      if (assessmentEnabled) {
+      const roleBySource = new Map(sourcePages.map((source,index) => [source.sourceKey, roles?.[index] ?? "problem"]));
+      const names = (refs: Array<{ sourceKey: string; page: number }>) => [...new Set(refs.map(ref => {
+        const file = sourcePages.find(source => source.sourceKey === ref.sourceKey)?.pages[ref.page - 1];
+        if (!file) throw new Error("분석 페이지 연결을 확인하지 못했습니다.");
+        return staged.sourceToStaged[file.name];
+      }))];
+      const problemRefs = sourcePages.filter(source => roleBySource.get(source.sourceKey) !== "answer").flatMap(source => source.pages.map((_,index) => ({ sourceKey: source.sourceKey, page: index + 1 })));
+      if (!problemRefs.length) throw new Error("문제 자료를 한 개 이상 선택하세요.");
+      const hashes = [...await sourceHashes(originals), ...(roles ?? originals.map(() => "problem"))];
+      const checkpoint = readAssessmentCheckpoint(hashes);
+      const initialEvidence = checkpoint?.evidence ?? { independent: [...roleBySource.values()].every(role => role !== "mixed"), stages: [] };
+      const observed = checkpoint && checkpoint.observationComplete !== false ? checkpoint.analysis : await observeVisionInBatches({
+        sources: sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })), refs: problemRefs, previous: checkpoint?.observationParts, signal,
+        request: async (refs,batchPrompt) => (await requestVisionAssessment(prompt + "\n" + batchPrompt, "문항을 관측하세요. 정답 추출과 풀이는 아직 하지 마세요.", names(refs), staged.sessionId, signal)).text,
+        checkpoint: async (parts,partial,completed) => { retainedAnalysis = JSON.stringify(partial); writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: partial, evidence: initialEvidence, cache: {}, observationParts: parts, observationComplete: completed }); onProgress({ phase: "analyze", current: Math.min(parts.length * 3, problemRefs.length), total: problemRefs.length, stageLabel: "원본 읽는 중" }); },
+      });
+      writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: observed, evidence: initialEvidence, cache: checkpoint?.cache ?? {}, observationComplete: true });
+      const answerRefs = sourcePages.filter(source => roleBySource.get(source.sourceKey) !== "problem").flatMap(source => source.pages.map((_,index) => ({ sourceKey: source.sourceKey, page: index + 1 })));
+      const stageLabels = { vision_observed: "원본 읽기 완료", solution_attempted: "GPT 독립 풀이 중", scores_assessed: "난이도·중요도 평가 중", answer_compared: "정답지 대조 중", prepackage_validated: "파일 생성 가능" };
+      const assessed = await runPrepackageAssessment(observed, (stagePrompt,input,refs,stage) => { if (stage !== "answer_compared" && refs.some(ref => roleBySource.get(ref.sourceKey) === "answer")) throw new Error("풀이에 답안 페이지를 전달할 수 없습니다. 문항 출처를 검토하세요."); return requestVisionAssessment(stagePrompt,input,names(refs),staged.sessionId,signal); }, {
+        cache: checkpoint?.cache,
+        checkpoint: async (analysis,evidence,cache) => { writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis, evidence, cache, observationComplete: true }); },
+        answerRefs, independent: [...roleBySource.values()].every(role => role !== "mixed"), signal,
+        progress: (stage,current,total) => onProgress({ phase: "analyze", current: current ?? 0, total, stageLabel: `${stageLabels[stage]}${total ? ` · ${current}/${total}문항` : ""}` }),
+      });
+      visionAnalysisText = JSON.stringify(assessed.analysis);
+      assessmentEvidence = assessed.evidence;
+      } else {
+        visionAnalysisText = await generateImportWithAi(prompt, "원본 관측 JSON을 반환하세요. 풀이·평가를 완료했다고 주장하지 마세요.", Object.values(staged.sourceToStaged), signal, staged.sessionId);
+      }
       retainedAnalysis = visionAnalysisText;
       const analysis = parseVisionAnalysis(visionAnalysisText);
       const originalImport = await prepareOriginalVisionImport(analysis, pageFiles, sourcePages, signal);
       const responseText = JSON.stringify(originalImport.document);
-      const visionJob = await createVisionJobDraft(visionAnalysisText, originals);
+      const visionJob = { ...await createVisionJobDraft(visionAnalysisText, originals), assessmentEvidence };
       throwIfAborted();
       onProgress({ phase: "analyze", current: 1, total: 1 });
       const prepared = await stageImportAssetFiles(originalImport.files.slice(pageFiles.length), staged.sessionId);

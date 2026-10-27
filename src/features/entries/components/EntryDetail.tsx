@@ -1,3 +1,4 @@
+import AssessmentCard from "../../import/vision/AssessmentCard";
 import { publishStudySelection } from "../../study-ai/activeSelection";
 import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
 import { solutionQuestionKey } from "../../solutions/solutionModel";
@@ -9,6 +10,7 @@ import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreference
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
 import { hasExplanationContent } from "../../../utils/entry";
+import { confirmAssessmentAnswer } from "../../../utils/studyAssessment";
 import { getRelatedEntries } from "../../../utils/concepts";
 import { buildConceptAnalytics } from "../../../utils/conceptAnalytics";
 import { buildLearningBlocksFromEntry } from "../../../utils/learningContent";
@@ -93,6 +95,7 @@ interface EntryDetailProps {
   onQuickGptSolution?: () => void;
   onExportMarkdown?: () => void;
   onOpenPrint?: () => void;
+  examStartError?: string;
   onStartExam?: () => void;
   onStartRealExam?: () => void;
   onStartReview?: (entry: WrongAnswerEntry) => void;
@@ -228,6 +231,7 @@ export default function EntryDetail({
   onQuickGptSolution,
   onOpenPrint,
   onStartExam,
+  examStartError,
   onStartRealExam,
   onStartReview,
   startExamLabel = "문제 풀기",
@@ -316,6 +320,8 @@ export default function EntryDetail({
   const [titleEditing, setTitleEditing] = useState(false);
   const [titleDraft, setTitleDraft] = useState(entry.title);
   const [reviewSaving, setReviewSaving] = useState<ReviewResult | null>(null);
+  const [answerConfirmationSaving, setAnswerConfirmationSaving] = useState(false);
+  const [answerConfirmationError, setAnswerConfirmationError] = useState<{ answerId: string; message: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
@@ -375,6 +381,7 @@ export default function EntryDetail({
   const isFocusable = !isConcept && !isLecture;
   const isFocusExpanded = isFocusable && focusMode === "expanded";
   const isFocusMini = isFocusable && focusMode === "mini";
+  const compactWrongAnswerView = isWrongAnswer && detailViewMode === "paper" && !isFocusExpanded;
   const sheetAnswerKey = (entry.answerKey ?? []).filter(
     (item) =>
       item.questionNumber.trim() ||
@@ -1212,6 +1219,38 @@ export default function EntryDetail({
     reviewSaving,
   ]);
 
+  const renderAssessmentAnswerConfirmation = (item: SheetAnswerItem) => {
+    const provenance = item.answerProvenance;
+    if (hideAnswers) return null;
+    const assessmentMetas = (entry.questionMeta ?? []).filter(meta => normalizeQuestionNumber(meta.questionNumber) === normalizeQuestionNumber(item.questionNumber));
+    const assessment = assessmentMetas.length === 1 && assessmentMetas[0].studyAssessment ? <AssessmentCard key={`assessment-${item.id}`} meta={assessmentMetas[0]} answer={item} /> : null;
+    if (provenance?.kind !== "gpt_estimate" && provenance?.kind !== "conflict") return assessment;
+    const normalized = normalizeQuestionNumber(item.questionNumber);
+    const matchingAnswers = (entry.answerKey ?? []).filter(answer => normalizeQuestionNumber(answer.questionNumber) === normalized);
+    if (!normalized || matchingAnswers.length !== 1 || matchingAnswers[0].id !== item.id || !onApplyGptSolutionRoundtrip) return assessment;
+    const error = answerConfirmationError?.answerId === item.id ? answerConfirmationError.message : null;
+    return <>{assessment}<div className="assessment-answer-confirmation">
+      <p>AI 예상 답: <MathText text={provenance.proposedAnswer?.trim() || "제안 없음"} /></p>
+      <p>현재 정답: <MathText text={item.answer || "정답 없음"} /></p>
+      <button type="button" className="btn-secondary btn-sm" disabled={answerConfirmationSaving} onClick={() => {
+        setAnswerConfirmationSaving(true);
+        setAnswerConfirmationError(null);
+        void (async () => {
+          try {
+            const answerKey = (entry.answerKey ?? []).map(answer => answer.id === item.id ? confirmAssessmentAnswer(answer) : answer);
+            await onApplyGptSolutionRoundtrip(entry, { answerKey, learningBlocks: entry.learningBlocks });
+            pushToast("이 정답을 확인했습니다.", "success");
+          } catch (reason) {
+            setAnswerConfirmationError({ answerId: item.id, message: reason instanceof Error ? reason.message : "정답 확인을 저장하지 못했습니다." });
+          } finally {
+            setAnswerConfirmationSaving(false);
+          }
+        })();
+      }}>이 정답 확인</button>
+      {error && <p role="alert" className="form-error">{error}</p>}
+    </div></>;
+  };
+
   const renderAnswerKey = () =>
     answerView === "table" ? (
       <div className="sheet-answer-table">
@@ -1236,9 +1275,9 @@ export default function EntryDetail({
               >
                 {item.questionNumber || "검토"}번
               </button>
-              <strong className={hideAnswers ? "answer-hidden" : ""}>
+              <div className="sheet-answer-table-answer"><strong className={hideAnswers ? "answer-hidden" : ""}>
                 {hideAnswers ? "•••" : <MathText text={item.answer || "정답 없음"} />}
-              </strong>
+              </strong>{renderAssessmentAnswerConfirmation(item)}</div>
               <span>{item.difficulty === "high" ? "상" : item.difficulty === "medium" ? "중" : item.difficulty === "low" ? "하" : "-"}</span>
               <span>{item.concepts?.join(", ") || "-"}</span>
               <span className={hideAnswers ? "answer-hidden" : ""}>{hideAnswers ? "가려짐" : item.explanation || "-"}</span>
@@ -1284,6 +1323,7 @@ export default function EntryDetail({
               ) : null}
               {!hideAnswers && item.notes?.trim() && <p className="sheet-answer-source">문제별 메모: {item.notes}</p>}
               {item.sourceNote?.trim() && <p className="sheet-answer-source">{item.sourceNote}</p>}
+              {renderAssessmentAnswerConfirmation(item)}
               {item.explanation.trim() && (
                 <div className={`sheet-answer-explanation ${hideAnswers ? "answer-hidden" : ""}`}>
                   {hideAnswers ? (
@@ -1356,6 +1396,7 @@ export default function EntryDetail({
     >
       {!isFocusExpanded && (
       <ProblemSheetHeader>
+      {examStartError && <p className="form-error" role="alert">{examStartError}</p>}
       <div className={`detail-toolbar ${isSheet && detailViewMode === "paper" ? "detail-toolbar--problem-sheet" : ""}`}>
         {isSheet && detailViewMode === "paper" ? (
           <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
@@ -1705,7 +1746,7 @@ export default function EntryDetail({
               onStartReview={() => onStartReview?.(entry)}
             />
           )}
-          {!originalReading && <h3 className="section-heading">
+          {!originalReading && !compactWrongAnswerView && <h3 className="section-heading">
             {isFocusExpanded
               ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
               : isConcept
@@ -1810,6 +1851,7 @@ export default function EntryDetail({
                   }} /> : <StudyZoomViewport storageKey={getQuestionZoomStorageKey(entry.id, "paper")}>
                   <StudyPaperView
                     entry={presentationEntry}
+                    compact={compactWrongAnswerView}
                     memoMode={memoMode}
                     activeTool={activeTool}
                     onAnnotationsChange={onAnnotationsChange}

@@ -62,7 +62,7 @@ export interface ProblemSourceInfo {
   sourceLabel?: string;
 }
 
-export type QuestionDifficultySource = "manual" | "imported" | "heuristic" | "gemini";
+export type QuestionDifficultySource = "manual" | "imported" | "heuristic" | "gemini" | "gpt";
 
 export type QuestionAnswerType = "multiple_choice" | "short_answer" | "essay" | "unknown";
 
@@ -93,6 +93,7 @@ export interface ExplanationPart {
 }
 
 export interface SheetAnswerItem {
+  answerProvenance?: import("./studyAssessment").AnswerProvenance;
   id: string;
   questionNumber: string;
   answer: string;
@@ -340,6 +341,8 @@ export interface StructuredQuestion {
 }
 
 export interface QuestionMeta {
+  assessmentEvidence?: import("./studyAssessment").AssessmentEvidence;
+  studyAssessment?: import("./studyAssessment").StudyAssessment;
   questionNumber: string;
   important: boolean;
   needsReview?: boolean;
@@ -387,7 +390,7 @@ export interface QuestionRating {
   aiQualityScore?: number;
   aiQualityConfidence?: number;
   lastEvaluatedAt?: string;
-  evaluationSource?: "manual" | "heuristic" | "gemini";
+  evaluationSource?: "manual" | "heuristic" | "gemini" | "gpt" | "imported";
 }
 
 export interface QuestionSolutionHotspot {

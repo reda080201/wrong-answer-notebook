@@ -143,6 +143,8 @@ def validate_manifest(manifest):
                 if reference is None:
                     continue
                 _validate_reference(reference, source_map)
+            if question.get("answerSourceRef") is not None:
+                _validate_reference(question["answerSourceRef"], source_map)
             reference = question.get("source")
             if reference is not None:
                 if not isinstance(reference, dict) or reference.get("sourceId") not in source_map:
@@ -222,6 +224,14 @@ def render(path: Path, out: Path):
                 question["sourceResults"].append({"reference": reference, "result": result})
             if question["sourceResults"]:
                 question["sourceResult"] = question["sourceResults"][0]["result"]
+            answer_reference = question.get("answerSourceRef")
+            if answer_reference:
+                source = source_map[answer_reference["sourceId"]]
+                figure = {"page": answer_reference["page"], "crop": {"x": 0, "y": 0, "width": 1, "height": 1}, "method": "original"}
+                key = "answer-source-" + digest(json_bytes([entry["id"], question["key"], answer_reference]))[:24]
+                result = run_worker({"action": "render", "input": str(relative_path(out, source["path"])), "source": source, "figure": figure, "out": str(out)}, out, key)
+                result["generationInputHash"] = generation_input_hash(source, figure)
+                question["answerSourceResult"] = {"reference": answer_reference, "result": result}
     for index, figure in enumerate(manifest["figures"]):
         print(f"render {index + 1}/{len(manifest['figures'])}: {figure['id']}", file=sys.stderr)
         source = source_map[figure["sourceId"]]
@@ -257,6 +267,11 @@ def verify(path: Path):
                 if reference.get("crop"):
                     figure["questionCrop"] = reference["crop"]
                 jobs.append((sources[reference["sourceId"]], figure, source_result["result"]))
+            answer_source = question.get("answerSourceResult")
+            if answer_source:
+                reference = answer_source["reference"]
+                figure = {"page": reference["page"], "crop": {"x": 0, "y": 0, "width": 1, "height": 1}, "method": "original"}
+                jobs.append((sources[reference["sourceId"]], figure, answer_source["result"]))
     verified_pages = set()
     for index, (source, figure, result) in enumerate(jobs):
         if not result or result.get("status") == "failed":
@@ -317,7 +332,7 @@ def package(path: Path, output: Path):
                     return result
                 return value
 
-            q = replace({k: v for k, v in question.items() if k not in ("key", "number", "source", "sourceRefs", "sourceResult", "sourceResults")})
+            q = replace({k: v for k, v in question.items() if k not in ("key", "number", "source", "sourceRefs", "sourceResult", "sourceResults", "answerSourceRef", "answerSourceResult")})
             q["questionNumber"] = str(question["number"])
             q["figureIds"] = list(mapping.values())
             pages = []
@@ -357,6 +372,19 @@ def package(path: Path, output: Path):
                     data["questionSourceCrops"].append({"id": mapping[figure["id"]] + "-question", "questionNumber": str(question["number"]), "image": crop["path"], "sourcePageImage": page_asset, "page": page_index, "cropRect": figure["questionCrop"]})
             if pages:
                 q["source"] = {"page": pages[0]}
+            answer_source = question.get("answerSourceResult")
+            if answer_source and answer_source["result"]:
+                artifacts = answer_source["result"]["artifacts"]
+                add_artifacts({k: v for k, v in artifacts.items() if k != "original"})
+                page_asset = artifacts["sourcePage"]["path"]
+                if page_asset not in data["sourcePageImages"]:
+                    data["sourcePageImages"].append(page_asset)
+                page_index = data["sourcePageImages"].index(page_asset) + 1
+                answer = next((item for item in data.get("answerKey", []) if str(item.get("questionNumber", "")) == str(question["number"])), None)
+                if answer is not None:
+                    note = answer.get("sourceNote", "").strip()
+                    page_note = f"원본 자료 {page_index}페이지"
+                    answer["sourceNote"] = f"{note} · {page_note}" if note else page_note
             data["questions"].append(q)
         entries.append(data)
     document = {"schemaVersion": "wrong-answer-notebook-import-v2", "importType": "problem_sheet", "entries": entries}

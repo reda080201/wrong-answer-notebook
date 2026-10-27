@@ -11,6 +11,7 @@ from tools.diagram_pipeline.examples.create_vision_demo import job
 
 EXAMPLES = Path(__file__).parents[1] / "examples"
 CASES = json.loads((EXAMPLES / "vision-parity.json").read_text("utf-8"))
+V2_CASES = json.loads((Path(__file__).parent / "fixtures" / "vision-v2-cases.json").read_text("utf-8"))
 
 @pytest.mark.parametrize("case", CASES, ids=lambda c: c["name"])
 def test_shared_contract(case):
@@ -19,6 +20,74 @@ def test_shared_contract(case):
     else:
         with pytest.raises(PipelineError):
             parse_vision(case["text"])
+
+
+@pytest.mark.parametrize("case", V2_CASES, ids=lambda c: c["name"])
+def test_shared_v2_contract(case):
+    if case["valid"]:
+        assert parse_vision(case["text"])["schemaVersion"] == "wrong-answer-notebook-vision-v2"
+    else:
+        with pytest.raises(PipelineError):
+            parse_vision(case["text"])
+
+
+def synthetic_v2():
+    value = json.loads((EXAMPLES / "vision-v1.json").read_text("utf-8"))
+    value["schemaVersion"] = "wrong-answer-notebook-vision-v2"
+    value["entries"][0]["questions"][0]["studyAssessment"] = {
+        "stage": "pre_package", "evaluator": "gpt", "assessmentStatus": "solved",
+        "solution": {"proposedAnswer": "②", "summary": "합성 풀이", "steps": ["합성 단계"], "strategy": "대입", "selfCheck": "확인", "confidence": 88},
+        "scores": {"difficulty": {"value": 72, "confidence": 80, "reasons": ["개념 적용"]}, "importance": {"value": 85, "confidence": 90, "reasons": ["핵심 개념"]}},
+        "classification": {"subject": "수학", "curriculum": "공통", "unit": "함수", "subunit": "부등식", "concepts": ["범위"], "answerType": "multiple_choice"},
+        "learning": {"importantPoints": ["끝점 확인"], "commonTraps": ["부등호 방향"], "reviewPoint": "끝점 재검토"},
+        "sourceAnswer": {"status": "conflict", "value": "①", "explanation": "합성 답지 설명", "sourceKey": "upload-1", "page": 1}, "warnings": []
+    }
+    return value
+
+
+def test_v2_semantics_reject_unreadable_answer_and_invalid_source_answer():
+    value = synthetic_v2()
+    q = value["entries"][0]["questions"][0]
+    q["studyAssessment"]["assessmentStatus"] = "unreadable"
+    q["studyAssessment"]["warnings"] = ["문항 판독 불가"]
+    with pytest.raises(PipelineError, match="unreadable"):
+        parse_vision(json.dumps(value))
+    value = synthetic_v2()
+    q = value["entries"][0]["questions"][0]
+    q["studyAssessment"]["sourceAnswer"].update(status="source_only", sourceKey="missing")
+    with pytest.raises(PipelineError, match="unknown source"):
+        parse_vision(json.dumps(value))
+    value = synthetic_v2()
+    value["entries"][0]["questions"][0]["studyAssessment"]["scores"]["difficulty"].update(value=None, reasons=[""])
+    with pytest.raises(PipelineError, match="assessment reason required"):
+        parse_vision(json.dumps(value))
+
+
+def test_v2_mapping_preserves_assessment_and_prefers_source_answer(tmp_path):
+    value = synthetic_v2()
+    value["entries"][0]["questions"][0]["studyAssessment"]["sourceAnswer"].update(sourceKey="upload-2", page=2)
+    result = run_vision(job(tmp_path, value, multi=True), tmp_path / "run")
+    with zipfile.ZipFile(tmp_path / "run/output-import-v2.zip") as archive:
+        entry = json.loads(archive.read("import.json"))["entries"][0]
+    q = entry["questions"][0]
+    answer = entry["answerKey"][0]
+    meta = entry["questionMeta"][0]
+    assert answer["answerProvenance"] == {"kind": "conflict", "proposedAnswer": "②", "independent": False}
+    assert answer["answer"] == "①"
+    assert answer["needsReview"] is True
+    assert "studyAssessment" not in answer
+    assert meta["studyAssessment"]["solution"]["proposedAnswer"] == "②"
+    assert q.get("studyAssessment") is None
+    assert answer["sourceNote"] == "원문 답안과 AI 예상 답이 다릅니다. 정답을 확인하세요. · 원본 자료 2페이지"
+    assert meta["difficultyScore"] == 72
+    assert meta["rating"]["importanceScore"] == 85
+    assert meta["rating"]["evaluationSource"] == "imported"
+    assert meta["rating"]["lastEvaluatedAt"] == meta["updatedAt"]
+    assert meta["important"] is True
+    assert len(entry["sourcePageImages"]) == 2
+    assert q["source"]["page"] == 1
+    assert "answerSourceRef" not in q
+    assert result["verification"]["mathematicalEquivalence"] == "not_proven"
 
 
 

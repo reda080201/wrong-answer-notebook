@@ -373,3 +373,11 @@
 .figure-comparison-dialog .figure-comparison-viewport { max-height: 50dvh; }
 .figure-comparison-dialog .figure-comparison-grid img { max-height: 360px; }
 @media (max-width: 700px) { .figure-comparison-grid { grid-template-columns: minmax(0, 1fr); } }
+
+.import-workspace-list { display: flex; flex-direction: column; overflow: hidden; }
+.import-workspace-list > header { flex: 0 0 auto; position: static; margin: 0; padding-bottom: .75rem; }
+.workspace-question-list-scroll { overflow: auto; min-height: 0; flex: 1; }
+.workspace-review-reasons, .assessment-card { padding: 12px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.assessment-card header { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.assessment-card details { margin-block: 8px; }
+.assessment-card label { display: grid; gap: 4px; margin-block: 8px; }

@@ -23,9 +23,13 @@ interface GeneratedExamsDialogProps {
   onOpen(exam: GeneratedExam, options?: ExamOpenOptions): void;
   onDelete(id: string): Promise<void>;
   onPrint(exam: GeneratedExam): Promise<void>;
+  onConfirmAnswer?(exam: GeneratedExam, position: number): Promise<void>;
+  protectedExamIds?: ReadonlySet<string>;
+  protectionUnavailable?: boolean;
 }
 
 export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
+  const [displayExams, setDisplayExams] = useState(props.exams);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState(false);
   const [failedAction, setFailedAction] = useState<{ action: () => Promise<void>; fallback: string } | null>(null);
@@ -37,6 +41,9 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
     setFailedAction(null);
     actionBusyRef.current = false;
   }, [props.open]);
+  useEffect(() => {
+    if (!actionBusy) setDisplayExams(props.exams);
+  }, [props.exams, actionBusy]);
   const runAction = async (action: () => Promise<void>, fallback: string) => {
     if (actionBusyRef.current) return;
     actionBusyRef.current = true;
@@ -101,11 +108,14 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
       )}
       {actionError && <div className="form-error" role="alert">{actionError}{failedAction && <button type="button" className="btn-secondary" onClick={() => void runAction(failedAction.action, failedAction.fallback)} disabled={actionBusy}>다시 시도</button>}</div>}
       <GeneratedExamList
-        exams={props.exams}
+        exams={displayExams}
         onCreate={props.onCreate ? () => void runAction(async () => { const closed = await props.onClose(); if (closed !== false) props.onCreate?.(); }, "모의고사 만들기를 열지 못했습니다.") : undefined}
         onOpen={props.onOpen}
         onDelete={(id) => void runAction(() => props.onDelete(id), "모의고사를 삭제하지 못했습니다.")}
         onPrint={(exam) => void runAction(() => props.onPrint(exam), "모의고사를 출력하지 못했습니다.")}
+        onConfirmAnswer={props.onConfirmAnswer ? (exam, position) => void runAction(() => props.onConfirmAnswer!(exam, position), "정답을 확인해 저장하지 못했습니다.") : undefined}
+        protectedExamIds={props.protectedExamIds}
+        protectionUnavailable={props.protectionUnavailable}
         disabled={actionDisabled}
       />
     </Dialog>
