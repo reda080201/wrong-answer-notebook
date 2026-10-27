@@ -131,7 +131,7 @@ describe("ImportFromGptModal", () => {
         onClose={onClose}
         onApply={vi.fn()}
         onApplyEntries={onApplyEntries}
-        onAnalyzeVisualFile={onAnalyzeVisualFile}
+        aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyzeVisualFile}
         onDiscardAssetSession={vi.fn().mockResolvedValue(undefined)}
       />,
     );
@@ -164,7 +164,7 @@ describe("ImportFromGptModal", () => {
     const originals = [new File(["a"], "one.pdf"), new File(["b"], "two.pdf")];
     // Mocked recognition output remains tied to the original multi-source files.
     const onAnalyze = vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: ["first", "second"].map(name => ({ entryKind: "problem_sheet", title: name, subject: "수학", questions: [{ questionNumber: "1", questionText: "문제", contentSegments: [{ id: "text", type: "text", text: "문제" }], choices: [] }], sourcePageImages: [`${name}.png`] })) }), sourcePageImages: ["first-staged.png", "second-staged.png"], assetSession: session, originalFiles: originals });
-    render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
     fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
     fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: originals } });
     expect(onAnalyze).not.toHaveBeenCalled();
@@ -192,7 +192,7 @@ describe("ImportFromGptModal", () => {
         fallbackSubject="수학"
         onClose={onClose}
         onApply={vi.fn()}
-        onAnalyzeVisualFile={onAnalyzeVisualFile}
+        aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyzeVisualFile}
         onDiscardAssetSession={onDiscardAssetSession}
       />,
     );
