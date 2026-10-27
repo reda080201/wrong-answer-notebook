@@ -24,7 +24,7 @@ const nextQuestionBlock: QuestionBlock = {
   end: 9,
 };
 
-function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation: "dialog" | "split" = "split") {
+function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation: "dialog" | "split" = "split", onClose = vi.fn()) {
   return render(
     <QuestionTheaterView
       questionBlock={questionBlock}
@@ -58,13 +58,47 @@ function renderTheater(steps = ["조건 정리", "계산"], solutionPresentation
       onToggleAnswers={vi.fn()}
       onToggleImportant={vi.fn()}
       onReview={vi.fn()}
-      onClose={vi.fn()}
+      onClose={onClose}
       solutionPresentation={solutionPresentation}
     />,
   );
 }
 
 describe("QuestionTheaterView", () => {
+  it.each(["visibility", "display", "inert"])("ignores a later %s-hidden dialog for Escape and focus wrapping", async (hiddenBy) => {
+    const onClose = vi.fn();
+    renderTheater(undefined, "split", onClose);
+    const hiddenDialog = document.createElement("div");
+    hiddenDialog.setAttribute("role", "dialog");
+    if (hiddenBy === "inert") hiddenDialog.setAttribute("inert", "");
+    else if (hiddenBy === "visibility") hiddenDialog.style.visibility = "hidden";
+    else hiddenDialog.style.display = "none";
+    document.body.append(hiddenDialog);
+    try {
+      const close = screen.getByRole("button", { name: "문제 크게 보기 닫기" });
+      await waitFor(() => expect(close).toHaveFocus());
+      fireEvent.keyDown(close, { key: "Tab", shiftKey: true });
+      expect(screen.getByRole("button", { name: "문제 크게 보기 추가 작업" })).toHaveFocus();
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(onClose).toHaveBeenCalledOnce();
+    } finally {
+      hiddenDialog.remove();
+    }
+  });
+
+  it("gives the visible nested solution dialog Escape priority", async () => {
+    const onClose = vi.fn();
+    renderTheater(undefined, "dialog", onClose);
+    fireEvent.click(screen.getByRole("button", { name: "해설 보기" }));
+    const nested = screen.getByRole("dialog", { name: "문제 7 해설" });
+    await waitFor(() => expect(nested.contains(document.activeElement)).toBe(true));
+    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    expect(screen.queryByRole("dialog", { name: "문제 7 해설" })).not.toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+
   it("resets a newly selected question and solution pane after the next render", async () => {
     const view = renderTheater();
     const questionPane = view.container.querySelector<HTMLElement>(".question-theater-question-pane")!;

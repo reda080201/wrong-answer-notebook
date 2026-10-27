@@ -50,10 +50,23 @@ interface QuestionTheaterViewProps {
 }
 
 const SPLIT_RATIO_KEY = "wrong-answer-question-theater-split-ratio";
+const MIN_SPLIT_RATIO = 45;
+const MAX_SPLIT_RATIO = 72;
+
+function isAvailableForInteraction(element: HTMLElement) {
+  if (!element.isConnected || element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
+  const closedDetails = element.closest("details:not([open])");
+  if (closedDetails && !closedDetails.querySelector(":scope > summary")?.contains(element)) return false;
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    const style = window.getComputedStyle(node);
+    if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
+  }
+  return true;
+}
 
 function loadSplitRatio() {
   const saved = Number(localStorage.getItem(SPLIT_RATIO_KEY));
-  return Number.isFinite(saved) && saved >= 45 && saved <= 72 ? saved : 58;
+  return Number.isFinite(saved) && saved >= MIN_SPLIT_RATIO && saved <= MAX_SPLIT_RATIO ? saved : 58;
 }
 
 export default function QuestionTheaterView({
@@ -108,21 +121,26 @@ export default function QuestionTheaterView({
     return () => window.cancelAnimationFrame(frame);
   }, [questionBlock.numberLabel, questionBlock.displayNumber, questionIndex]);
 
-  const updateSplitRatio = (clientX: number, container: HTMLElement) => {
-    const rect = container.getBoundingClientRect();
-    const ratio = ((clientX - rect.left) / rect.width) * 100;
-    const next = Math.max(45, Math.min(72, Math.round(ratio)));
+  const saveSplitRatio = (ratio: number) => {
+    const next = Math.max(MIN_SPLIT_RATIO, Math.min(MAX_SPLIT_RATIO, Math.round(ratio)));
     setSplitRatio(next);
     writeUiStorageValue(SPLIT_RATIO_KEY, String(next));
   };
 
   const startDividerDrag = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0) return;
     const container = event.currentTarget.closest(".question-theater-main");
     if (!(container instanceof HTMLElement)) return;
+    event.preventDefault();
     const divider = event.currentTarget;
-    divider.setPointerCapture(event.pointerId);
-    const handleMove = (moveEvent: PointerEvent) => updateSplitRatio(moveEvent.clientX, container);
+    divider.focus();
     dragCleanupRef.current?.();
+    divider.setPointerCapture(event.pointerId);
+    const handleMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== event.pointerId) return;
+      const rect = container.getBoundingClientRect();
+      if (rect.width > 0) saveSplitRatio(((moveEvent.clientX - rect.left) / rect.width) * 100);
+    };
     const handleUp = () => {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
@@ -142,12 +160,15 @@ export default function QuestionTheaterView({
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusable = () => Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(
-        'button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+        'summary, button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ) ?? [],
-    );
+    ).filter(isAvailableForInteraction);
     const frame = window.requestAnimationFrame(() => focusable()[0]?.focus());
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]'));
+      if (event.defaultPrevented) return;
+      // A hidden nonmodal AI panel remains mounted after this dialog in the DOM.
+      // Only visible, interactive dialogs can take keyboard priority.
+      const dialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter(isAvailableForInteraction);
       if (dialogs.at(-1) !== dialogRef.current) return;
       if (event.key === "Escape") {
         event.preventDefault();
@@ -156,13 +177,18 @@ export default function QuestionTheaterView({
       }
       if (event.key !== "Tab") return;
       const items = focusable();
-      if (!items.length) return;
+      if (!items.length) {
+        event.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
       const first = items[0];
       const last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
+      const outside = !dialogRef.current?.contains(document.activeElement);
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current || outside)) {
         event.preventDefault();
         last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
+      } else if (!event.shiftKey && (document.activeElement === last || outside)) {
         event.preventDefault();
         first.focus();
       }
@@ -172,7 +198,7 @@ export default function QuestionTheaterView({
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       dragCleanupRef.current?.();
-      previousFocus?.focus();
+      if (previousFocus && isAvailableForInteraction(previousFocus)) previousFocus.focus();
     };
   }, [onClose]);
 
@@ -270,8 +296,24 @@ export default function QuestionTheaterView({
               <button
                 type="button"
                 className="question-theater-divider"
+                role="separator"
+                aria-orientation="vertical"
                 aria-label="문제와 해설 영역 크기 조절"
+                aria-valuemin={MIN_SPLIT_RATIO}
+                aria-valuemax={MAX_SPLIT_RATIO}
+                aria-valuenow={splitRatio}
+                aria-valuetext={`문제 영역 ${splitRatio}%`}
                 onPointerDown={startDividerDrag}
+                onKeyDown={(event) => {
+                  const next = event.key === "ArrowLeft" ? splitRatio - 1
+                    : event.key === "ArrowRight" ? splitRatio + 1
+                      : event.key === "Home" ? MIN_SPLIT_RATIO
+                        : event.key === "End" ? MAX_SPLIT_RATIO : undefined;
+                  if (next === undefined) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  saveSplitRatio(next);
+                }}
               />
               <aside ref={solutionPaneRef} className="question-theater-solution-pane" aria-label="현재 문제 해설">
                 <div className="question-theater-solution-actions">
