@@ -1,3 +1,4 @@
+import { normalizeAnswerProvenance } from "./studyAssessment";
 import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, ImportRejectedItem, LectureSourceType, QuestionContentSegment, QuestionSourceCrop, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../types";
 import { SUBJECTS } from "../types";
 import { normalizeAnswerKey, normalizeDiagramSpec, normalizeFigures, normalizeLearningBlocks, normalizeLearningDiagramType, normalizeQuestionContentSegments, normalizeStructuredQuestions } from "./entry";
@@ -670,6 +671,7 @@ function normalizeImportedAnswer(item: SheetAnswerItem): SheetAnswerItem {
     reviewPoint: normalizeImportedText(item.reviewPoint),
     notes: normalizeImportedText(item.notes),
     importantPoints: item.importantPoints.map(normalizeImportedMathCommands),
+    answerProvenance: normalizeAnswerProvenance(item.answerProvenance),
     sourceNote: normalizeImportedText(item.sourceNote),
   };
 }
@@ -1209,7 +1211,7 @@ function mergeQuestionMetaWithAnswerAnalysis(
   raw: unknown,
   answerKey: SheetAnswerItem[],
 ): NonNullable<EntryFormData["questionMeta"]> {
-  const metas = normalizeQuestionMeta(raw);
+  const metas: NonNullable<EntryFormData["questionMeta"]> = normalizeQuestionMeta(raw).map(meta => ({ ...meta, assessmentEvidence: undefined, rating: meta.rating?.evaluationSource === "gpt" ? { ...meta.rating, evaluationSource: "imported" as const } : meta.rating, classification: meta.classification?.difficultySource === "gpt" ? { ...meta.classification, difficultySource: "imported" as const } : meta.classification }));
   const next = [...metas];
   for (const answer of answerKey) {
     if (!answer.mistakeAnalysis?.causes.length) continue;

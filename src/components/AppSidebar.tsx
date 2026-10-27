@@ -93,6 +93,9 @@ export default function AppSidebar({
     onCollapsedChange?.(true);
     collapseButton.current?.focus();
   }, [onCollapsedChange]);
+  const navigateAndClose = (request: () => Promise<boolean>) => {
+    void request().then(succeeded => { if (succeeded && overlay) closeOverlay(); }).catch(() => undefined);
+  };
   useEffect(() => {
     if (!overlay) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -142,7 +145,7 @@ export default function AppSidebar({
               ["어려움", stats.difficult],
           ], [activeSection, isQuestionBank, isLearningHub, questionBank, learningHub, sectionEntries, stats]);
   const handleSectionSelect = (section: EntryKind) => {
-    void navigationController.requestNavigation({ section, entryId: null });
+    navigateAndClose(() => navigationController.requestNavigation({ section, entryId: null }));
   };
   return (
     <>
@@ -190,7 +193,7 @@ export default function AppSidebar({
             aria-current={destination.type === "learning_hub" ? "page" : undefined}
             aria-label="학습 허브"
             title={collapsed ? "학습 허브" : undefined}
-            onClick={() => void navigationController.openLearningHub()}
+          onClick={() => navigateAndClose(() => navigationController.openLearningHub())}
           >
             <Library size={18} aria-hidden="true" />
             {!collapsed && <span>학습 허브</span>}
@@ -203,7 +206,7 @@ export default function AppSidebar({
             aria-current={destination.type === "question_bank" ? "page" : undefined}
             aria-label="문제 은행"
             title={collapsed ? "문제 은행" : undefined}
-            onClick={() => void navigationController.openQuestionBank()}
+          onClick={() => navigateAndClose(() => navigationController.openQuestionBank())}
           >
             <BookOpen size={18} aria-hidden="true" />
             {!collapsed && <span>문제 은행</span>}
@@ -216,7 +219,7 @@ export default function AppSidebar({
             aria-current={destination.type === "library" ? "page" : undefined}
             aria-label="보관함"
             title={collapsed ? "보관함" : undefined}
-            onClick={() => void navigationController.openLibrary()}
+          onClick={() => navigateAndClose(() => navigationController.openLibrary())}
           >
             <Archive size={18} aria-hidden="true" />
             {!collapsed && <span>보관함</span>}

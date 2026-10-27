@@ -12,6 +12,7 @@
   color: var(--text);
   box-shadow: var(--shadow-dialog);
 }
+.settings-modal--compact { width: min(820px, calc(100vw - var(--space-6))); height: min(720px, calc(100dvh - var(--space-6))); }
 
 .settings-modal > .dialog-body {
   display: flex;

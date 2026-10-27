@@ -1,3 +1,4 @@
+import { isAnswerReadyForGrading } from "../utils/studyAssessment";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   loadExamSessions,
@@ -116,7 +117,7 @@ export function useExamSessionController({
       if (!error || error.entryId !== previous.id) return error;
       if (!current || !error.message.startsWith("정답이 연결되지 않은 문항")) return null;
       const missing = createExamSession(current).questions.filter(question => !question.correctAnswer?.trim()).map(question => question.questionNumber);
-      return missing.length ? { entryId: current.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missing.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.` } : null;
+      return missing.length ? { entryId: current.id, message: `정답이 연결되지 않은 문항이 있습니다: ${missing.join(", ")}. 답안지를 연결하거나 AI 예상 답을 확인한 뒤 시작해 주세요.` } : null;
     });
   }, [existingEntries]);
 
@@ -250,7 +251,7 @@ export function useExamSessionController({
       .filter((question) => !question.correctAnswer?.trim())
       .map((question) => question.questionNumber);
     if (missingAnswers.length) {
-      const message = `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결한 뒤 시작해 주세요.`;
+      const message = `정답이 연결되지 않은 문항이 있습니다: ${missingAnswers.join(", ")}. 답안지를 연결하거나 AI 예상 답을 확인한 뒤 시작해 주세요.`;
       setStartError({ entryId: entry.id, message });
       return { ok: false, code: "missing_answers", message };
     }
@@ -269,6 +270,12 @@ export function useExamSessionController({
       const message = "문항이 없는 모의고사는 시작할 수 없습니다.";
       setStartError({ entryId: exam.id, message });
       return { ok: false, code: "no_questions", message };
+    }
+    const unconfirmed = exam.questions.filter(question => question.snapshot.solutionAnswer?.answerProvenance && !isAnswerReadyForGrading(question.snapshot.solutionAnswer));
+    if (unconfirmed.length) {
+      const message = `정답 확인이 필요한 문항: ${unconfirmed.map(question => question.position).join(", ")}. 정답을 확인하거나 해당 문항을 제외한 뒤 시작하세요.`;
+      setStartError({ entryId: exam.id, message });
+      return { ok: false, code: "missing_answers", message };
     }
     const mode = options.mode ?? (exam.preset === "real_exam" ? "real" : "practice");
     const resumable = options.resumable ?? savedSessionsRef.current
@@ -296,6 +303,7 @@ export function useExamSessionController({
       ? latest
       : current;
     if (sessionToSubmit.status === "submitted") return;
+    if (sessionToSubmit.questions.some(question => question.solutionAnswer?.answerProvenance && !isAnswerReadyForGrading(question.solutionAnswer))) throw new Error("확인하지 않은 AI 예상 답이 있어 채점할 수 없습니다. 정답을 확인한 뒤 다시 시도하세요.");
     submissionInFlightRef.current = true;
     try {
     const score = scoreExamSession(sessionToSubmit);

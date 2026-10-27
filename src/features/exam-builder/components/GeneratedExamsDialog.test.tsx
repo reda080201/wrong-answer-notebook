@@ -11,6 +11,20 @@ function props(overrides: Partial<ComponentProps<typeof GeneratedExamsDialog>> =
 }
 
 describe("GeneratedExamsDialog", () => {
+  it("reports a failed snapshot answer confirmation without changing the visible snapshot", async () => {
+    const pendingExam = {
+      ...exam,
+      questions: [{ position: 1, source: { sourceEntryId: "entry-1", sourceEntryTitle: "원본", sourceQuestionNumber: "1" }, snapshot: { questionNumber: "1", solutionAnswer: { answer: "현재 답", answerProvenance: { kind: "gpt_estimate", proposedAnswer: "예상 답" } } } }],
+    } as unknown as GeneratedExam;
+    const onConfirmAnswer = vi.fn().mockRejectedValue(new Error("저장 실패"));
+    render(<GeneratedExamsDialog {...props({ exams: [pendingExam], onConfirmAnswer })} />);
+    fireEvent.click(screen.getByText(/확인이 필요한 정답 .*개 검토/));
+    fireEvent.click(screen.getByRole("button", { name: "이 정답 확인" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("저장 실패");
+    expect(screen.getByText(/AI 예상 답:/)).toHaveTextContent("예상 답");
+    expect(onConfirmAnswer).toHaveBeenCalledWith(pendingExam, 1);
+  });
+
   it("keeps the dialog open after a failed delete and retries that delete", async () => {
     const onDelete = vi.fn().mockRejectedValueOnce(new Error("삭제 실패")).mockResolvedValueOnce(undefined);
     render(<GeneratedExamsDialog {...props({ onDelete })} />);

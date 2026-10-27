@@ -50,3 +50,11 @@ body:has(.question-theater[aria-modal="true"]) > .study-ai-panel {
 
 /* A session owns its bottom navigation; AI lives in its header instead. */
 body:has(.exam-session-view, .real-exam-session) > .study-ai-launcher { display: none; }
+
+.ai-material-search{display:flex;align-items:center;gap:8px}.ai-material-list>details{margin-block:6px}.ai-material-list>details>summary{padding:6px 4px}.ai-material-list label{display:flex;align-items:flex-start;gap:8px;min-height:36px;margin:6px 0;padding:6px 8px;font-size:13px;line-height:1.4}.ai-material-list label input{flex:0 0 auto;margin-top:3px}
+
+.ai-material-picker > fieldset { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 8px 0; padding: 0; border: 0; }
+.ai-material-picker > fieldset > label { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 8px; font-size: 14px; line-height: 1.4; cursor: pointer; }
+.ai-material-picker > fieldset input { margin: 0; flex: 0 0 auto; }
+.ai-material-picker > p { font-size: 13px; line-height: 1.5; }
+.ai-material-search input { flex: 1; min-width: 0; min-height: 36px; font-size: 14px; }

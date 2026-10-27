@@ -5,7 +5,10 @@ import re
 from pathlib import Path
 from .security import PipelineError, MAX_JSON, read_bytes
 
-SCHEMA = json.loads(Path(__file__).with_name("vision-v1.schema.json").read_text(encoding="utf-8"))
+SCHEMAS = {
+    "wrong-answer-notebook-vision-v1": json.loads(Path(__file__).with_name("vision-v1.schema.json").read_text(encoding="utf-8")),
+    "wrong-answer-notebook-vision-v2": json.loads(Path(__file__).with_name("vision-v2.schema.json").read_text(encoding="utf-8")),
+}
 FORBIDDEN = {"confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"}
 
 def pairs(items):
@@ -75,7 +78,10 @@ def check(value, schema, path="$", depth=0):
                 raise PipelineError(f"{path}: rectangle must fit displayed page")
 
 def validate_vision(value):
-    check(value, SCHEMA)
+    if not isinstance(value, dict) or value.get("schemaVersion") not in SCHEMAS:
+        raise PipelineError("Unsupported vision schema version")
+    version = value["schemaVersion"]
+    check(value, SCHEMAS[version])
     def unique(values, path):
         if len(set(values)) != len(values):
             raise PipelineError(f"{path}: duplicate identity")
@@ -104,6 +110,33 @@ def validate_vision(value):
             validate_source(reference, sources)
     for f in value["figures"]:
         validate_source(f["source"], sources)
+    if version == "wrong-answer-notebook-vision-v2":
+        for identity, q in questions.items():
+            assessment = q["studyAssessment"]
+            solution = assessment["solution"]
+            scores = assessment["scores"]
+            source_answer = assessment["sourceAnswer"]
+            for name, score in scores.items():
+                if not any(reason.strip() for reason in score["reasons"]):
+                    raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.scores.{name}: assessment reason required")
+            if assessment["assessmentStatus"] == "unreadable":
+                if solution["proposedAnswer"] is not None or any(score["value"] is not None for score in scores.values()):
+                    raise PipelineError(f"$.questions[{identity[1]}].studyAssessment: unreadable assessment cannot propose an answer or score")
+            status = source_answer["status"]
+            if assessment["assessmentStatus"] != "solved" and not any(warning.strip() for warning in assessment["warnings"]):
+                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.warnings: incomplete solution reason required")
+            if ("sourceKey" in source_answer) != ("page" in source_answer):
+                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: sourceKey and page must be paired")
+            if status in ("matched", "conflict", "source_only"):
+                if not isinstance(source_answer.get("value"), str) or not source_answer["value"].strip():
+                    raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: source answer value required")
+                if "sourceKey" not in source_answer or "page" not in source_answer:
+                    raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: source reference required")
+                validate_source({"sourceKey": source_answer["sourceKey"], "page": source_answer["page"]}, sources)
+            elif status == "not_provided" and source_answer["value"] is not None:
+                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: not_provided cannot have a value")
+            if "sourceKey" in source_answer:
+                validate_source({"sourceKey": source_answer["sourceKey"], "page": source_answer["page"]}, sources)
     return value
 
 def validate_source(reference, sources):

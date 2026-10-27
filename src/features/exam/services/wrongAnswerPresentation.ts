@@ -4,7 +4,7 @@ import { solutionQuestionKey, validSolutionHotspot } from "../../solutions/solut
 
 /** Copy only this snapshot's confirmed links; source.page indexes the new local page list. */
 export function wrongAnswerPresentation(session: ExamSession, question: ExamQuestionSnapshot): Pick<EntryFormData,
-  "sourcePageImages" | "structuredQuestions" | "questionContentSegments" | "questionSolutionHotspots" | "answerKey" | "figures" | "supplementalResources"> {
+  "questionMeta" | "sourcePageImages" | "structuredQuestions" | "questionContentSegments" | "questionSolutionHotspots" | "answerKey" | "figures" | "supplementalResources"> {
   const number = question.questionNumber;
   const uniqueQuestion = session.questions.filter(item => normalizeQuestionNumber(item.questionNumber) === normalizeQuestionNumber(number)).length === 1;
   const hotspots = uniqueQuestion ? (question.questionSolutionHotspots ?? []).filter(hotspot =>
@@ -58,6 +58,7 @@ export function wrongAnswerPresentation(session: ExamSession, question: ExamQues
     }],
     questionContentSegments: { [number]: segments },
     questionSolutionHotspots: hotspots.map(hotspot => ({ ...hotspot, questionKey: solutionQuestionKey({ questionNumber: number, section: question.section }) })),
+    questionMeta: uniqueQuestion && question.questionMeta ? [{ ...structuredClone(question.questionMeta), questionNumber: number }] : [],
     answerKey: answer ? [{ ...structuredClone(answer), questionNumber: number }] : [],
     figures: structuredClone(figures),
     supplementalResources: uniqueQuestion && explicitPages.length ? [{

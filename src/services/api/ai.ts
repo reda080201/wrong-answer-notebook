@@ -82,6 +82,23 @@ export async function generateImportWithAi(
   return response;
 }
 
+export interface VisionProviderReceipt { text: string; provider: "openai"; model: string; providerRequestId: string; responseHash: string; completedAtMs: number; requestId: string; }
+/** Only the native transport can issue this envelope; model-authored JSON is not a receipt. */
+export async function requestVisionAssessment(prompt: string, input: string, images: string[], sessionId: string, signal: AbortSignal): Promise<VisionProviderReceipt> {
+  if (!isTauri()) throw new Error("GPT 사전 평가는 Windows 설치 앱에서 연결 설정 후 사용할 수 있습니다.");
+  signal.throwIfAborted();
+  const requestId = crypto.randomUUID();
+  const cancel = () => { void invoke("cancel_study_ai", { requestId }).catch(() => undefined); };
+  signal.addEventListener("abort", cancel, { once: true });
+  try {
+    const response = await invoke<string>("request_study_ai", { requestId, request: { messages: [{ role: "user", text: input }], context: prompt, images, imageSessionId: sessionId, json: true, assessmentReceipt: true }, onDelta: new Channel<string>() });
+    signal.throwIfAborted();
+    const value = JSON.parse(response) as Omit<VisionProviderReceipt, "requestId">;
+    if (value.provider !== "openai" || !value.model?.startsWith("gpt-") || !value.providerRequestId || !/^[a-f0-9]{64}$/.test(value.responseHash) || !Number.isFinite(value.completedAtMs) || typeof value.text !== "string") throw new Error("GPT 실행 증거를 확인하지 못했습니다.");
+    return { ...value, requestId };
+  } finally { signal.removeEventListener("abort", cancel); }
+}
+
 export async function rankSimilarQuestionsWithAi(request: SimilarQuestionRankingRequest): Promise<SimilarQuestionRankingResponse> {
   if (!isTauri()) throw new Error("유사 문제 재정렬은 설치된 데스크톱 앱에서만 사용할 수 있습니다.");
   return invoke<SimilarQuestionRankingResponse>("rank_similar_questions_with_ai", { request });

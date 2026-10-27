@@ -30,6 +30,8 @@ describe("EntryForm", () => {
 
     expect(screen.getByRole("alert")).toHaveTextContent("제목, 문제, 이미지 또는 학습 내용");
     expect(onSave).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("제목"), { target: { value: "입력한 제목" } });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("recognizes a lecture with learning blocks as editable content", async () => {
@@ -69,6 +71,8 @@ describe("EntryForm", () => {
     await waitFor(() => {
       expect(screen.getByRole("alert")).toHaveTextContent("disk full");
     });
+    fireEvent.change(screen.getByLabelText("제목"), { target: { value: "저장 실패 테스트 수정" } });
+    expect(screen.getByRole("alert")).toHaveTextContent("disk full");
     expect(onClose).not.toHaveBeenCalled();
   });
 

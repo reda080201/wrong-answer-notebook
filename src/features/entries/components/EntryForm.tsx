@@ -102,12 +102,20 @@ export default function EntryForm({
   const [removedImages, setRemovedImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveErrorType, setSaveErrorType] = useState<"validation" | "save" | null>(null);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const initialSignatureRef = useRef("");
   const questionEditBaseRef = useRef<EntryFormData>(emptyForm);
   const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(false);
   const hasCanonicalQuestions = Boolean(form.structuredQuestions?.length || Object.keys(form.questionContentSegments ?? {}).length);
   const questionEditingBlocked = hasAmbiguousEntryQuestionData(form);
+
+  useEffect(() => {
+    if (saveErrorType === "validation" && hasEntryContent(form)) {
+      setSaveError(null);
+      setSaveErrorType(null);
+    }
+  }, [form, saveErrorType]);
 
   useEffect(() => {
     let nextForm: EntryFormData;
@@ -117,6 +125,7 @@ export default function EntryForm({
       setDifficultyScoreTouched(entry.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
+      setSaveErrorType(null);
     } else {
       nextForm = mergeEntryDraft({
         ...initialData,
@@ -130,6 +139,7 @@ export default function EntryForm({
       setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
       setRemovedImages([]);
       setSaveError(null);
+      setSaveErrorType(null);
     }
     questionEditBaseRef.current = structuredClone(nextForm);
     const questions = editableEntryQuestions(nextForm);
@@ -366,10 +376,12 @@ export default function EntryForm({
     if (saving) return;
     if (!hasEntryContent(form)) {
       setSaveError("제목, 문제, 이미지 또는 학습 내용 중 하나를 입력해 주세요.");
+      setSaveErrorType("validation");
       return;
     }
     setSaving(true);
     setSaveError(null);
+    setSaveErrorType(null);
     try {
       await onSave(saveEntryQuestionEdits(questionEditBaseRef.current, form), removedImages);
       onClose();
@@ -379,6 +391,7 @@ export default function EntryForm({
           ? error.message
           : "저장 중 문제가 발생했습니다.",
       );
+      setSaveErrorType("save");
     } finally {
       setSaving(false);
     }
@@ -596,7 +609,6 @@ export default function EntryForm({
                 disabled={saving || questionEditingBlocked}
                 onChange={questions => {
                   setForm(current => ({ ...current, structuredQuestions: questions }));
-                  setSaveError(null);
                 }}
               />
             </div>}

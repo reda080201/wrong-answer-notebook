@@ -68,6 +68,25 @@ describe("EntryDetail sheet layout", () => {
     Element.prototype.scrollIntoView = vi.fn();
   });
 
+  it("persists explicit confirmation of an estimated answer for its unique question only", async () => {
+    const entry = { ...sheetEntry, answerKey: [{ id: "estimate-1", questionNumber: "1", answer: "현재 정답", explanation: "설명", importantPoints: [], sourceNote: "AI 검토", answerProvenance: { kind: "gpt_estimate" as const, proposedAnswer: "AI 예상 답", independent: false } }] };
+    const onApplyGptSolutionRoundtrip = vi.fn().mockResolvedValue(undefined);
+    render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onApplyGptSolutionRoundtrip={onApplyGptSolutionRoundtrip} />);
+    fireEvent.click(screen.getByRole("button", { name: /답안지1개/ }));
+    expect(screen.getByText(/AI 예상 답:/)).toBeInTheDocument();
+    expect(screen.getByText(/현재 정답:/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "이 정답 확인" }));
+    await waitFor(() => expect(onApplyGptSolutionRoundtrip).toHaveBeenCalledOnce());
+    expect(onApplyGptSolutionRoundtrip.mock.calls[0][1].answerKey).toEqual([expect.objectContaining({ id: "estimate-1", answerProvenance: expect.objectContaining({ kind: "user_confirmed" }) })]);
+  });
+
+  it("shows a single wrong-answer body without the duplicate paper title and statistics", () => {
+    const { container } = render(<EntryDetail entry={{ ...sheetEntry, entryKind: "wrong_answer", title: "단일 오답", question: "1. 본문을 읽습니다." }} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "문제지" })).not.toBeInTheDocument();
+    expect(container.querySelector(".study-paper-sheet")).toHaveTextContent("본문을 읽습니다.");
+  });
+
   it("preserves native button keys and records numeric shortcuts only during explicit study", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
     render(<EntryDetail entry={{ ...sheetEntry, entryKind: "wrong_answer", question: "1. 확인 문항", correctAnswer: "답" }} onReview={onReview}

@@ -23,6 +23,7 @@ import "./StudyPaperView.css";
 
 interface StudyPaperViewProps {
   entry: WrongAnswerEntry;
+  compact?: boolean;
   memoMode: boolean;
   activeTool: AnnotationTool | "erase";
   onAnnotationsChange: (annotations: Annotation[]) => void;
@@ -49,6 +50,7 @@ interface StudyPaperViewProps {
 
 export default function StudyPaperView({
   entry,
+  compact = false,
   memoMode,
   activeTool,
   onAnnotationsChange,
@@ -147,9 +149,9 @@ export default function StudyPaperView({
   });
 
   return (
-    <div className={`study-paper study-paper--${displayMode}`}>
+    <div className={`study-paper study-paper--${displayMode}${compact ? " study-paper--compact" : ""}`}>
       <div className="study-paper-sheet">
-        {displayMode !== "exam" && <header className="study-paper-cover">
+        {displayMode !== "exam" && !compact && <header className="study-paper-cover">
           <div>
             <span className="study-paper-label">문제지</span>
             <h3>{entry.title.trim() || "문제"}</h3>

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import AppSidebar from "./AppSidebar";
 
@@ -58,6 +58,23 @@ describe("AppSidebar", () => {
     fireEvent.click(screen.getByRole("button", { name: "앱 사이드바 펼치기" }));
     expect(onCollapsedChange).toHaveBeenCalledWith(false);
     expect(baseProps.navigationController.requestNavigation).not.toHaveBeenCalled();
+  });
+
+  it("keeps the overlay open when a navigation request is cancelled", async () => {
+    const onCollapsedChange = vi.fn();
+    const navigationController = { ...baseProps.navigationController, requestNavigation: vi.fn(async () => false) };
+    render(<AppSidebar {...baseProps} navigationController={navigationController} shell={{ collapsed: false, overlay: true, onCollapsedChange }} />);
+    fireEvent.click(screen.getByRole("button", { name: "개념노트" }));
+    await waitFor(() => expect(navigationController.requestNavigation).toHaveBeenCalled());
+    expect(onCollapsedChange).not.toHaveBeenCalled();
+  });
+
+  it("closes the overlay after navigation succeeds", async () => {
+    const onCollapsedChange = vi.fn();
+    const navigationController = { ...baseProps.navigationController, requestNavigation: vi.fn(async () => true) };
+    render(<AppSidebar {...baseProps} navigationController={navigationController} shell={{ collapsed: false, overlay: true, onCollapsedChange }} />);
+    fireEvent.click(screen.getByRole("button", { name: "개념노트" }));
+    await waitFor(() => expect(onCollapsedChange).toHaveBeenCalledWith(true));
   });
 
   it.each([

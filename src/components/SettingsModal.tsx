@@ -148,6 +148,7 @@ export default function SettingsModal({
   const bridgeControlsDisabled = isMcpBridgeBrowserBlocked;
   const [connectionSection, setConnectionSection] = useState<"api" | "external" | "import">(() => initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(categoryForTab(initialTab ?? "theme"));
+  const [dataOperation, setDataOperation] = useState<string | null>(null);
   const [studySubtab, setStudySubtab] = useState<"library" | "exam" | "templates">(
     initialTab === "exam" || initialTab === "templates" ? initialTab : "library",
   );
@@ -172,6 +173,13 @@ export default function SettingsModal({
   };
   const patchChatGpt = async (patch: Partial<ChatGptMcpPreferences>) => {
     await ctx.chatGptMcpPreferences.patch(patch);
+  };
+  const runDataOperation = (label: string, operation: () => Promise<void>) => {
+    if (dataOperation) return;
+    setDataOperation(label);
+    void operation().catch((error) => {
+      setSettingsMessage(error instanceof Error ? error.message : `${label} 작업을 완료하지 못했습니다.`);
+    }).finally(() => setDataOperation(null));
   };
 
   const renderMcpBridgePanel = () => (
@@ -204,7 +212,7 @@ export default function SettingsModal({
   };
 
   return (
-    <Dialog open onClose={onClose} className="settings-modal" ariaLabel="설정" size="xl" scrollMode="custom">
+    <Dialog open onClose={onClose} className={`settings-modal${activeCategory === "general" || activeCategory === "data" ? " settings-modal--compact" : ""}`} ariaLabel="설정" size="xl" scrollMode="custom">
         <header className="modal-head">
           <div>
             <h2>설정</h2>
@@ -298,7 +306,7 @@ export default function SettingsModal({
             )}
 
             {activeCategory === "data" && (
-              <SettingsDataPanel settings={settings} report={integrityReport} onBackup={() => void handleBackup()} onRestore={() => void handleRestore()} onIntegrity={() => void runIntegrity()} onCleanup={() => void handleCleanupOrphans()} onAutoBackupChange={(enabled) => void patchSettings({ autoBackup: { ...settings.autoBackup, enabled } })} />
+              <SettingsDataPanel settings={settings} report={integrityReport} operationStatus={dataOperation} onBackup={() => runDataOperation("백업 작업 중…", handleBackup)} onRestore={() => runDataOperation("복원 작업 중…", handleRestore)} onIntegrity={() => runDataOperation("무결성 검사 중…", runIntegrity)} onCleanup={() => runDataOperation("미사용 이미지 정리 중…", handleCleanupOrphans)} onAutoBackupChange={(enabled) => void patchSettings({ autoBackup: { ...settings.autoBackup, enabled } })} />
             )}
 
             {activeCategory === "advanced" && (

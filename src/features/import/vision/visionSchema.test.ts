@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import cases from "../../../../tools/diagram_pipeline/examples/vision-parity.json";
+import v2Cases from "../../../../tools/diagram_pipeline/tests/fixtures/vision-v2-cases.json";
 import example from "../../../../tools/diagram_pipeline/examples/vision-v1.json";
 import { parseVisionAnalysis } from "./visionSchema";
 import { createVisionJob, createVisionJobDraft, prepareOriginalVisionImport } from "./visionJob";
 import JSZip from "jszip";
 describe("shared vision contract", () => {
   for (const item of cases) it(item.name, () => { if (item.valid) expect(parseVisionAnalysis(item.text).schemaVersion).toBe("wrong-answer-notebook-vision-v1"); else expect(() => parseVisionAnalysis(item.text)).toThrow(); });
+  for (const item of v2Cases) it(`v2 ${item.name}`, () => { if (item.valid) expect(parseVisionAnalysis(item.text).schemaVersion).toBe("wrong-answer-notebook-vision-v2"); else expect(() => parseVisionAnalysis(item.text)).toThrow(); });
   it("does not reject a null number before review, or conflate same figures across entries", () => {
     const value = structuredClone(example); value.entries[0].questions[0].questionNumber = null as unknown as string;
     const entry = structuredClone(value.entries[0]); entry.entryKey = "exam-b"; value.entries.push(entry);

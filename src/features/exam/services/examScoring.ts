@@ -1,3 +1,4 @@
+import { isAnswerReadyForGrading } from "../../../utils/studyAssessment";
 import type { ExamQuestionSnapshot, ExamResponse, ExamSession, ExamSessionScore } from "../../../types";
 
 const CIRCLED_NUMBERS: Record<string, string> = {
@@ -27,7 +28,7 @@ export function scoreExamSession(session: ExamSession, scoredAt = new Date()): E
   const questionResults = session.questions.map((question) => {
     const response = responses.get(question.questionNumber);
     const value = normalizeExamAnswer(response?.response);
-    const answer = normalizeExamAnswer(question.correctAnswer);
+    const answer = normalizeExamAnswer(question.solutionAnswer?.answerProvenance && !isAnswerReadyForGrading(question.solutionAnswer) ? undefined : question.correctAnswer);
     const correct = Boolean(value && answer && value === answer);
     return { questionNumber: question.questionNumber, correct, hasResponse: Boolean(value), markedForReview: Boolean(response?.markedForReview) };
   });

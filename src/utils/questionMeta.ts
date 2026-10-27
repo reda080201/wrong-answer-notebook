@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from "uuid";
+import { normalizeStoredAssessment, normalizeAssessmentEvidence } from "./studyAssessment";
 import type { QuestionBlock } from "./textLayout";
 import { getEntryQuestions } from "./entryQuestions";
 import type { MistakeCauseType, QuestionMeta, ReviewEvent, ReviewResult, ReviewState, WrongAnswerEntry } from "../types";
@@ -32,6 +33,8 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
         ?? normalizeDifficultyScore(rawClassification?.qualityScore);
       return {
       questionNumber: normalizeQuestionNumber(item.questionNumber),
+      studyAssessment: normalizeStoredAssessment(item.studyAssessment),
+      assessmentEvidence: normalizeAssessmentEvidence(item.assessmentEvidence),
       important: Boolean(item.important) || (item.important === undefined && (importanceScore ?? 0) >= 80),
       needsReview: Boolean(item.needsReview),
       difficultyScore: normalizeDifficultyScore(item.difficultyScore)
@@ -50,7 +53,7 @@ export function normalizeQuestionMeta(raw: unknown): QuestionMeta[] {
             aiQualityScore: normalizeDifficultyScore(rawRating?.aiQualityScore),
             aiQualityConfidence: normalizeDifficultyScore(rawRating?.aiQualityConfidence),
             lastEvaluatedAt: isValidIsoDate(rawRating?.lastEvaluatedAt) ? rawRating.lastEvaluatedAt : undefined,
-            evaluationSource: rawRating?.evaluationSource === "manual" || rawRating?.evaluationSource === "heuristic" || rawRating?.evaluationSource === "gemini" ? rawRating.evaluationSource : undefined,
+            evaluationSource: rawRating?.evaluationSource === "manual" || rawRating?.evaluationSource === "heuristic" || rawRating?.evaluationSource === "gemini" || rawRating?.evaluationSource === "gpt" || rawRating?.evaluationSource === "imported" ? rawRating.evaluationSource : undefined,
           }
         : undefined,
       classification: normalizeQuestionClassification(item.classification),

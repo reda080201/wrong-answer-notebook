@@ -11,7 +11,7 @@ import { normalizeProblemSourceType, resolveProblemSource } from "./problemSourc
 const ANSWER_TYPES = new Set<QuestionAnswerType>([
   "multiple_choice", "short_answer", "essay", "unknown",
 ]);
-const DIFFICULTY_SOURCES = new Set(["manual", "imported", "heuristic", "gemini"]);
+const DIFFICULTY_SOURCES = new Set(["manual", "imported", "heuristic", "gemini", "gpt"]);
 
 function normalizedText(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;

@@ -32,6 +32,7 @@ export default function QuestionBankView({ entries, onOpenImport, onOpenQuestion
   const [sort, setSort] = useState<QuestionBankSort>(preferences?.lastSort ?? "updated");
   const [viewMode, setViewMode] = useState<QuestionBankViewMode>(preferences?.lastViewMode ?? "unit");
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [visibleLimit, setVisibleLimit] = useState(30);
   const [pickedIds, setPickedIds] = useState<string[]>([]);
   const [presetName, setPresetName] = useState("");
   const [preferencesError, setPreferencesError] = useState<string | null>(null);
@@ -60,13 +61,18 @@ export default function QuestionBankView({ entries, onOpenImport, onOpenQuestion
   }, []);
   const items = useMemo(() => buildQuestionBankItems(entries), [entries]);
   const filtered = useMemo(() => sortQuestionBankItems(filterQuestionBankItems(items, filters).filter((item) => !subjectFilter || item.subject === subjectFilter), sort), [items, filters, sort, subjectFilter]);
+  const visibleItems = useMemo(() => filtered.slice(0, visibleLimit), [filtered, visibleLimit]);
   const picked = useMemo(() => pickedIds.map((id) => items.find((item) => item.id === id)).filter((item): item is QuestionBankItem => Boolean(item)), [items, pickedIds]);
   useEffect(() => {
     if (narrowViewport) return;
     setSelectedItemId((current) => current && filtered.some((item) => item.id === current) ? current : (filtered[0]?.id ?? null));
   }, [filtered, narrowViewport]);
   const detailItem = useMemo(() => filtered.find((item) => item.id === selectedItemId) ?? null, [filtered, selectedItemId]);
-  const groupedItems = useMemo(() => groupQuestionBankItems(filtered, viewMode), [filtered, viewMode]);
+  const groupedItems = useMemo(() => {
+    const visibleIds = new Set(visibleItems.map(item => item.id));
+    return groupQuestionBankItems(filtered, viewMode).map(group => ({ ...group, items: group.items.filter(item => visibleIds.has(item.id)) })).filter(group => group.items.length > 0);
+  }, [filtered, viewMode, visibleItems]);
+  useEffect(() => { setVisibleLimit(30); }, [filters, sort, viewMode, subjectFilter]);
   useEffect(() => {
     const nextFilters = filtersFromPreferences(preferences?.recentFilters);
     const nextSort = preferences?.lastSort ?? "updated";
@@ -177,9 +183,9 @@ export default function QuestionBankView({ entries, onOpenImport, onOpenQuestion
   return <section className="question-bank-view" aria-label="문제 은행">
     <header className="question-bank-view__header"><div><h2>문제 은행</h2><p>문제지의 문항과 단일 오답을 한곳에서 찾습니다.</p></div><strong>{filtered.length} / {items.length}</strong></header>
     <div className="question-bank-actions">
-      <label className="question-bank-search">검색 <SearchField value={filters.search} onChange={(search) => patchFilters({ search })} placeholder="문제 본문·자료명 검색" ariaLabel="문제 은행 빠른 검색" /></label>
-      <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => applySelection(filters, event.target.value as QuestionBankSort)}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label>보기 기준 <select value={viewMode} disabled={maintenanceBlocked} onChange={(event) => { const next = event.target.value as QuestionBankViewMode; setViewMode(next); savePreferences({ lastViewMode: next }); }}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option><option value="review">검토 필요</option></select></label>
+      <label className="question-bank-search">검색 <SearchField value={filters.search} onChange={(search) => { setVisibleLimit(30); patchFilters({ search }); }} placeholder="문제 본문·자료명 검색" ariaLabel="문제 은행 빠른 검색" /></label>
+      <label>정렬 <select value={sort} disabled={maintenanceBlocked} onChange={(event) => { setVisibleLimit(30); applySelection(filters, event.target.value as QuestionBankSort); }}>{Object.entries(QUESTION_BANK_SORT_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      <label>보기 기준 <select value={viewMode} disabled={maintenanceBlocked} onChange={(event) => { const next = event.target.value as QuestionBankViewMode; setVisibleLimit(30); setViewMode(next); savePreferences({ lastViewMode: next }); }}><option value="unit">단원별</option><option value="source">자료별</option><option value="recent">최근 학습</option><option value="important">중요 문제</option><option value="review">검토 필요</option></select></label>
       <button type="button" className="btn-secondary" onClick={() => setFiltersOpen(true)}>필터</button>
       <button type="button" className="btn-primary" disabled={!filtered.length} onClick={() => { const selected = selectQuestionBankItems(filtered, 1, `${Date.now()}`); if (selected[0]) onOpenQuestion(selected[0]); }}>한 문제 풀기</button>
     </div>
@@ -196,6 +202,7 @@ export default function QuestionBankView({ entries, onOpenImport, onOpenQuestion
     {filtersOpen && <Dialog open size="lg" ariaLabel="문제 은행 필터" onClose={() => setFiltersOpen(false)}><header className="modal-head"><h2>문제 필터</h2></header><QuestionBankFilterBar items={items} filters={filters} onChange={patchFilters} onReset={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)} disabled={maintenanceBlocked} /><details className="question-bank-presets"><summary>프리셋과 일괄 추출</summary><label>프리셋 이름 <input value={presetName} disabled={maintenanceBlocked} onChange={(event) => setPresetName(event.target.value)} placeholder="필터 이름" /></label><button type="button" className="btn-secondary" disabled={maintenanceBlocked || !presetName.trim()} onClick={savePreset}>현재 필터 저장</button>{(preferences?.savedPresets ?? []).map((preset) => <button type="button" key={preset.id} className="btn-secondary" disabled={maintenanceBlocked} onClick={() => applySelection(filtersFromPreferences(preset.filters), preset.sort)}>{preset.name}</button>)}</details></Dialog>}
     {picked.length > 0 && <div className="question-bank-picked"><p role="status">추출된 문항 {picked.map((item) => `${item.entryTitle} ${item.questionNumber}번`).join(" · ")}</p><div role="group" aria-label="추출 문항 작업"><button type="button" className="btn-primary btn-sm" onClick={() => onStartReview?.(picked)}>이 {picked.length}개 복습 시작</button><button type="button" className="btn-secondary btn-sm" onClick={() => setPickedIds(selectQuestionBankItems(filtered, Math.min(10, filtered.length), `${Date.now()}-${Math.random()}`).map((item) => item.id))}>다시 추출</button><button type="button" className="btn-secondary btn-sm" onClick={() => setPickedIds([])}>선택 지우기</button></div></div>}
     {filtered.length ? <div className={`question-bank-workspace${detailItem || narrowViewport ? "" : " question-bank-workspace--list-only"}`}><div className="question-bank-list" ref={(element) => onRegisterScrollContainer?.("question-bank-list", element)}>{groupedItems.map((group) => <section key={group.key} className="question-bank-group" aria-label={group.label}><h3>{group.label}<span>{group.items.length}</span></h3>{group.items.map((item) => <QuestionBankCard key={item.id} item={item} selected={item.id === selectedItemId} onOpen={onOpenQuestion} onInspect={(next) => setSelectedItemId(next.id)} />)}</section>)}</div>{!narrowViewport && detailItem && <QuestionBankDetail inline item={detailItem} onClose={() => setSelectedItemId(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />}</div> : <div className="detail-panel empty-state"><p>{items.length ? "조건에 맞는 문항이 없습니다." : "아직 등록된 문항이 없습니다."}</p>{!items.length && onOpenImport && <button type="button" className="btn-primary" onClick={onOpenImport}>시험지 가져오기</button>}{items.length > 0 && filters.search && <button type="button" className="btn-secondary" onClick={() => patchFilters({ search: "" })}>검색어 지우기</button>}{items.length > 0 && <button type="button" className="btn-secondary" onClick={() => applySelection(DEFAULT_QUESTION_BANK_FILTERS, sort)}>필터 초기화</button>}</div>}
+    {filtered.length > 0 && visibleLimit < filtered.length && <button type="button" className="btn-secondary question-bank-load-more" onClick={() => setVisibleLimit(limit => limit + 30)}>더 보기 ({visibleItems.length} / {filtered.length})</button>}
     {narrowViewport && <QuestionBankDetail item={detailItem} onClose={() => setSelectedItemId(null)} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchQuestionClassification} />}
   </section>;
 }

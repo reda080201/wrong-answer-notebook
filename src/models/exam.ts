@@ -6,6 +6,7 @@ export type ExamSessionStatus = "in_progress" | "submitted";
 export type ExamMode = "practice" | "real";
 
 export interface ExamQuestionSnapshot {
+  questionMeta?: Pick<import("./entry").QuestionMeta, "questionNumber" | "important" | "difficultyScore" | "rating" | "classification" | "updatedAt">;
   sourceReference?: QuestionSourceReference;
   questionSolutionHotspots?: QuestionSolutionHotspot[];
   solutionAnswer?: SheetAnswerItem;

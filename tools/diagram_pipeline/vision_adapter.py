@@ -1,5 +1,6 @@
 """Bind model observations to inspected immutable evidence; no model trust is promoted."""
 import copy
+from datetime import datetime, timezone
 import re
 import stat
 import zipfile
@@ -11,6 +12,16 @@ from .vision_schema import load_vision
 
 def question_identity(entry_key, question_key):
     return "/".join(quote(part, safe="") for part in (entry_key, question_key))
+
+
+def normalize_answer(value):
+    compact = str(value or "").strip()
+    for index, token in enumerate("①②③④⑤⑥⑦⑧⑨⑩", 1):
+        compact = compact.replace(token, str(index))
+    compact = re.sub(r"[\s()]|번", "", compact).removesuffix(".")
+    if not re.fullmatch(r"[0-9,]+", compact):
+        return compact
+    return ",".join(str(number) for number in sorted(int(token) for token in compact.split(",") if token))
 
 
 def identity(*parts):
@@ -38,13 +49,15 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
         return result
     blocked = []
     prepared = copy.deepcopy(manifest)
-    prepared.update(entries=[], figures=[], visionJob={"analysisState": "observed", "generationState": "not_started", "integrityState": "unchecked", "mathematicalEquivalence": "not_proven"})
+    prepared.update(entries=[], figures=[], visionJob={"analysisState": "observed", "generationState": "not_started", "integrityState": "unchecked", "mathematicalEquivalence": "not_proven", **({"stage": "prepackage_validated"} if vision["schemaVersion"] == "wrong-answer-notebook-vision-v2" else {})})
     excluded = set(excluded)
     known = {question_identity(e["entryKey"], q["questionKey"]) for e in vision["entries"] for q in e["questions"]}
     if not excluded <= known:
         raise PipelineError("Unknown excluded question identity")
     for entry in vision["entries"]:
         target = {"id": identity(entry["entryKey"]), "title": entry["title"], "subject": entry["subject"], "questions": [], "template": {"answerKey": []}}
+        if vision["schemaVersion"] == "wrong-answer-notebook-vision-v2":
+            target["template"]["questionMeta"] = []
         for q in entry["questions"]:
             key = question_identity(entry["entryKey"], q["questionKey"])
             number = q["questionNumber"]
@@ -81,8 +94,33 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
                 if not any(r["sourceId"] == converted["sourceId"] and r["page"] == converted["page"] for r in refs):
                     refs.append(converted)
             item = {"key": identity(entry["entryKey"], q["questionKey"]), "number": number, "questionText": q["questionText"], "contentSegments": segments, "choices": [re.sub(r"\[FIGURE:([^\]]+)\]", lambda m: f"[FIGURE:{ids[m[1]]}]", c) for c in q["choices"]], "source": refs[0], "sourceRefs": refs, "needsReview": True}
+            if vision["schemaVersion"] == "wrong-answer-notebook-vision-v2":
+                assessment = copy.deepcopy(q["studyAssessment"])
+                source_answer = assessment["sourceAnswer"]
+                proposed = assessment["solution"]["proposedAnswer"]
+                has_source = source_answer["status"] in ("matched", "conflict", "source_only")
+                conflict = source_answer["status"] == "conflict" or bool(has_source and proposed and normalize_answer(source_answer["value"]) != normalize_answer(proposed))
+                if source_answer.get("sourceKey") is not None:
+                    item["answerSourceRef"] = {"sourceId": mapping[source_answer["sourceKey"]], "page": source_answer["page"]}
+                answer_value = source_answer["value"] or "" if has_source else proposed or ""
+                needs_review = conflict or not has_source or assessment["assessmentStatus"] != "solved" or bool(assessment["warnings"])
+                provenance = {"kind": "conflict" if conflict else "source" if has_source else "gpt_estimate", "proposedAnswer": proposed, "independent": False}
+                if answer_value or q.get("explanationDraft") or assessment:
+                    source_note = "원문 답안과 AI 예상 답이 다릅니다. 정답을 확인하세요." if conflict else "연결된 원문 답안" if has_source else "AI 예상 답 · 확인 전 자동 채점 제외"
+                    answer_item = {"id": identity(entry["entryKey"], q["questionKey"], "answer"), "questionNumber": number, "answer": answer_value, "explanation": source_answer.get("explanation") or assessment["solution"]["summary"], "strategy": assessment["solution"]["strategy"], "steps": assessment["solution"]["steps"], "importantPoints": assessment["learning"]["importantPoints"], "wrongPoint": "\n".join(assessment["learning"]["commonTraps"]), "reviewPoint": assessment["learning"]["reviewPoint"], "concepts": assessment["classification"]["concepts"], "needsReview": needs_review, "processingStatus": "needs_review" if needs_review else "ready", "sourceNote": source_note, "answerProvenance": provenance}
+                    target["template"]["answerKey"].append(answer_item)
+                difficulty = assessment["scores"]["difficulty"]["value"]
+                importance = assessment["scores"]["importance"]["value"]
+                classification = copy.deepcopy(assessment["classification"])
+                classification["difficultySource"] = "imported"
+                now = datetime.now(timezone.utc).isoformat()
+                meta = {"questionNumber": number, "important": (importance or 0) >= 80, "needsReview": needs_review, "updatedAt": now, "studyAssessment": assessment, "classification": classification}
+                if difficulty is not None:
+                    meta["difficultyScore"] = difficulty
+                meta["rating"] = {"importanceScore": importance, "evaluationSource": "imported", "lastEvaluatedAt": now}
+                target["template"]["questionMeta"].append(meta)
             target["questions"].append(item)
-            if q.get("extractedAnswer") or q.get("explanationDraft"):
+            if vision["schemaVersion"] == "wrong-answer-notebook-vision-v1" and (q.get("extractedAnswer") or q.get("explanationDraft")):
                 target["template"]["answerKey"].append({"id": identity(entry["entryKey"], q["questionKey"], "answer"), "questionNumber": number, "answer": q.get("extractedAnswer", ""), "explanation": q.get("explanationDraft", ""), "importantPoints": [], "needsReview": True, "processingStatus": "needs_review"})
             for f in figures:
                 ref = reference(f["source"])
@@ -171,6 +209,8 @@ def run_vision(job_path, out, excluded=()):
     map_path = out / "source-map.json"
     write_new(map_path, json_bytes(mapping))
     result = import_vision(inspection, out / "job/analysis.json", map_path, out / "prepared", excluded)
+    # V2 study assessments were schema- and semantics-validated by load_vision
+    # before this point; record that boundary before any figure rendering starts.
     rendered = render(Path(result["manifest"]), out / "rendered")
     final = Path(rendered["manifest"])
     return {**package(final, out / "output-import-v2.zip"), "verification": verify(final), "adapterReport": str(out / "prepared/adapter-report.json")}

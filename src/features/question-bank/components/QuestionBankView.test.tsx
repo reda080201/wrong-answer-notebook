@@ -24,6 +24,28 @@ describe("QuestionBankView", () => {
     expect(onOpenQuestion).toHaveBeenCalledWith(expect.objectContaining({ entryId: "sheet", questionNumber: "1" }));
   });
 
+  it("renders 30 questions at a time, appends another 30, and resets after search", () => {
+    const manyQuestions: WrongAnswerEntry = {
+      ...entry,
+      id: "large-sheet",
+      title: "대량 문제지",
+      question: Array.from({ length: 65 }, (_, index) => `${index + 1}. 항목내용 ${index + 1}`).join("\n"),
+      answerKey: Array.from({ length: 65 }, (_, index) => ({ id: `a${index + 1}`, questionNumber: String(index + 1), answer: "1", explanation: "", importantPoints: [] })),
+      questionMeta: [],
+    };
+    const { container } = render(<QuestionBankView entries={[manyQuestions]} onOpenQuestion={vi.fn()} />);
+
+    expect(screen.getAllByRole("button", { name: /문항 미리보기/ })).toHaveLength(30);
+    fireEvent.click(screen.getByRole("button", { name: "대량 문제지 1번 문항 미리보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "더 보기 (30 / 65)" }));
+    expect(screen.getAllByRole("button", { name: /문항 미리보기/ })).toHaveLength(60);
+    expect(container.querySelector('.question-bank-card[aria-current="true"]')).toHaveTextContent("1번");
+
+    fireEvent.change(screen.getByLabelText("문제 은행 빠른 검색"), { target: { value: "항목내용 65" } });
+    expect(screen.getAllByRole("button", { name: /문항 미리보기/ })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /더 보기/ })).not.toBeInTheDocument();
+  });
+
   it("다시 추출 button rerolls picked items and 선택 지우기 clears them", async () => {
     const multiEntry: WrongAnswerEntry = {
       ...entry,

@@ -97,6 +97,7 @@ describe("ImportFromGptModal", () => {
 
   it("keeps PDF source pages staged through review and passes them to the save transaction", async () => {
     const onApplyEntries = vi.fn().mockResolvedValue(undefined);
+    // Mocked recognition output for the selected PDF; analysis begins only after explicit role selection and start.
     const onAnalyzeVisualFile = vi.fn().mockResolvedValue({
       responseText: JSON.stringify({
         schemaVersion: "wrong-answer-notebook-import-v2",
@@ -130,7 +131,7 @@ describe("ImportFromGptModal", () => {
         onClose={onClose}
         onApply={vi.fn()}
         onApplyEntries={onApplyEntries}
-        onAnalyzeVisualFile={onAnalyzeVisualFile}
+        aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyzeVisualFile}
         onDiscardAssetSession={vi.fn().mockResolvedValue(undefined)}
       />,
     );
@@ -138,7 +139,10 @@ describe("ImportFromGptModal", () => {
     fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
     const file = new File(["pdf fixture"], "mock-paper.pdf", { type: "application/pdf" });
     fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [file] } });
-    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function)));
+    expect(onAnalyzeVisualFile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(`${file.name} 자료 역할`), { target: { value: "problem" } });
+    fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
+    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true));
     expect(await screen.findByText(/원본 1페이지를 보존했습니다/)).toBeInTheDocument();
     const save = await screen.findByTestId("import-primary-action");
     await waitFor(() => expect(save).toBeEnabled());
@@ -158,10 +162,17 @@ describe("ImportFromGptModal", () => {
     const onApplyEntries = vi.fn(); const onClose = vi.fn();
     const session = { id: "multiple-source-session", mode: "tauri-staged", sourceToStaged: { "first.png": "first-staged.png", "second.png": "second-staged.png" }, assets: [] } satisfies ImportAssetSessionManifest;
     const originals = [new File(["a"], "one.pdf"), new File(["b"], "two.pdf")];
+    // Mocked recognition output remains tied to the original multi-source files.
     const onAnalyze = vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: ["first", "second"].map(name => ({ entryKind: "problem_sheet", title: name, subject: "수학", questions: [{ questionNumber: "1", questionText: "문제", contentSegments: [{ id: "text", type: "text", text: "문제" }], choices: [] }], sourcePageImages: [`${name}.png`] })) }), sourcePageImages: ["first-staged.png", "second-staged.png"], assetSession: session, originalFiles: originals });
-    render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
     fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
     fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: originals } });
+    expect(onAnalyze).not.toHaveBeenCalled();
+    expect(onOpenWorkspace).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText("one.pdf 자료 역할"), { target: { value: "problem" } });
+    fireEvent.change(screen.getByLabelText("two.pdf 자료 역할"), { target: { value: "answer" } });
+    fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
+    await waitFor(() => expect(onAnalyze).toHaveBeenCalledWith(originals, expect.any(AbortSignal), expect.any(Function), ["problem", "answer"], true));
     await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledOnce());
     expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.title)).toEqual(["first", "second"]);
     expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.sourcePageImages)).toEqual([["first-staged.png"], ["second-staged.png"]]);
@@ -175,17 +186,23 @@ describe("ImportFromGptModal", () => {
     const onClose = vi.fn();
     const session = { id: "cleanup-session", mode: "tauri-staged", manifestVersion: 1, sourceToStaged: {}, assets: [] } satisfies ImportAssetSessionManifest;
     const onDiscardAssetSession = vi.fn().mockRejectedValueOnce(new Error("저장소 일시 오류")).mockResolvedValueOnce(undefined);
+    const onAnalyzeVisualFile = vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: [{ entryKind: "problem_sheet", subject: "수학", title: "정리 테스트", question: "1. 문제", questions: [{ questionNumber: "1", questionText: "문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] }], answerKey: [], audit: { expectedQuestionNumbers: [], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 } }] }), sourcePageImages: [], assetSession: session });
     render(
       <ImportFromGptModal
         fallbackSubject="수학"
         onClose={onClose}
         onApply={vi.fn()}
-        onAnalyzeVisualFile={vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: [{ entryKind: "problem_sheet", subject: "수학", title: "정리 테스트", question: "1. 문제", questions: [{ questionNumber: "1", questionText: "문제", choices: [], conditions: [], equations: [], contentSegments: [], figureIds: [] }], answerKey: [], audit: { expectedQuestionNumbers: [], detectedQuestionNumbers: ["1"], missingQuestionNumbers: [], uncertainQuestionNumbers: [], handwritingExcluded: true, needsReviewCount: 0 } }] }), sourcePageImages: [], assetSession: session })}
+        aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyzeVisualFile}
         onDiscardAssetSession={onDiscardAssetSession}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
-    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [new File(["image"], "paper.png", { type: "image/png" })] } });
+    const file = new File(["image"], "paper.png", { type: "image/png" });
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [file] } });
+    expect(onAnalyzeVisualFile).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText(`${file.name} 자료 역할`), { target: { value: "problem" } });
+    fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
+    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true));
     await screen.findByText(/원본 .*페이지를 보존했습니다/);
     fireEvent.click(screen.getByRole("button", { name: "취소" }));
     fireEvent.click(screen.getByRole("button", { name: "변경사항 버리고 닫기" }));
