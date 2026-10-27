@@ -1,3 +1,4 @@
+import { applyAssessmentScores } from "./assessmentUpdates";
 import { useState } from "react";
 import type { QuestionMeta, SheetAnswerItem } from "../../../types";
 import MathText from "../../../components/MathText";
@@ -10,6 +11,8 @@ export default function AssessmentCard({ meta, answer, disabled, onMetaChange, o
   const a = meta.studyAssessment;
   const [difficulty, setDifficulty] = useState(String(meta.difficultyScore ?? ""));
   const [importance, setImportance] = useState(String(meta.rating?.importanceScore ?? ""));
+  const [applyDifficulty, setApplyDifficulty] = useState(false);
+  const [applyImportance, setApplyImportance] = useState(false);
   const [error, setError] = useState("");
   const [answerDraft, setAnswerDraft] = useState(answer?.answer ?? "");
   if (!a) return null;
@@ -20,6 +23,7 @@ export default function AssessmentCard({ meta, answer, disabled, onMetaChange, o
     <p>AI 예상 답: <MathText text={a.solution.proposedAnswer ?? "없음"} />{a.sourceAnswer.value && <> · 원문 답: <MathText text={a.sourceAnswer.value} /></>}</p>
     {answer && !isAnswerReadyForGrading(answer) && <div role="note"><p>{answer.sourceNote ?? "정답 확인 전 자동 채점에서 제외됩니다."}</p>{onAnswerChange && <><label>확인할 정답<input aria-label="확인할 정답" value={answerDraft} disabled={disabled} onChange={event => setAnswerDraft(event.target.value)} /></label><button type="button" className="btn-secondary" disabled={disabled || !answerDraft.trim()} onClick={() => onAnswerChange(confirmAssessmentAnswer({ ...answer, answer: answerDraft }))}>이 정답 확인</button></>}</div>}
     <details><summary>풀이·평가 근거 보기</summary><MathText text={a.solution.summary} /><p>{a.solution.strategy}</p><ol>{a.solution.steps.map((step,index) => <li key={index}><MathText text={step} /></li>)}</ol><p>검산 요약: {a.solution.selfCheck}</p><p>난이도 신뢰도 {a.scores.difficulty.confidence}/100 · {a.scores.difficulty.reasons.join(" · ")}</p><p>중요도 신뢰도 {a.scores.importance.confidence}/100 · {a.scores.importance.reasons.join(" · ")}</p><p>개념: {a.classification.concepts.join(" · ") || "미분류"}</p>{a.warnings.length > 0 && <ul>{a.warnings.map((warning,index) => <li key={index}>{warning}</li>)}</ul>}</details>
+    {onMetaChange && (meta.difficultyScore !== (a.scores.difficulty.value ?? undefined) || meta.rating?.importanceScore !== (a.scores.importance.value ?? undefined)) && <details><summary>보존된 AI 평가 적용</summary><p>AI 점수는 선택한 항목에만 적용됩니다. 중요 표시·품질·복습 기록은 유지됩니다.</p><label><input type="checkbox" checked={applyDifficulty} onChange={event => setApplyDifficulty(event.target.checked)} disabled={disabled}/>난이도 {a.scores.difficulty.value ?? "미평가"}</label><label><input type="checkbox" checked={applyImportance} onChange={event => setApplyImportance(event.target.checked)} disabled={disabled}/>중요도 {a.scores.importance.value ?? "미평가"}</label><button type="button" className="btn-secondary" disabled={disabled || !applyDifficulty && !applyImportance} onClick={() => onMetaChange(applyAssessmentScores(meta, {difficulty:applyDifficulty,importance:applyImportance}))}>선택한 점수 적용</button></details>}
     {onMetaChange && <details><summary>점수 직접 수정</summary><label>난이도 (1~100, 빈칸은 미평가)<input type="number" min={1} max={100} step={1} value={difficulty} disabled={disabled} onChange={event => setDifficulty(event.target.value)} /></label><label>중요도 (1~100, 빈칸은 미평가)<input type="number" min={1} max={100} step={1} value={importance} disabled={disabled} onChange={event => setImportance(event.target.value)} /></label><button type="button" className="btn-secondary" disabled={disabled} onClick={() => {
       const valid = (value: string) => value === "" || Number.isInteger(Number(value)) && Number(value) >= 1 && Number(value) <= 100;
       if (!valid(difficulty) || !valid(importance)) { setError("점수는 1~100 정수 또는 빈칸으로 입력하세요."); return; }

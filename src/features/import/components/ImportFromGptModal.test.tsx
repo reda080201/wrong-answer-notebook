@@ -64,6 +64,22 @@ function structuredFixtureFile(questions: unknown[]): File {
 }
 
 describe("ImportFromGptModal", () => {
+  it("retains the previous staged analysis when a replacement fails", async () => {
+    const responseText = await quickSaveFixtureFile().text();
+    const session = { id: "retained-visual", mode: "tauri-staged", manifestVersion: 1, sourceToStaged: {}, assets: [] } satisfies ImportAssetSessionManifest;
+    const onDiscardAssetSession = vi.fn().mockResolvedValue(undefined);
+    const onAnalyzeVisualFile = vi.fn().mockResolvedValueOnce({ responseText, sourcePageImages: [], assetSession: session }).mockRejectedValueOnce(new Error("replacement failed"));
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={vi.fn()} onDiscardAssetSession={onDiscardAssetSession} onAnalyzeVisualFile={onAnalyzeVisualFile} aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} />);
+    fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
+    const file = new File(["fixture"], "retain.pdf", { type: "application/pdf" });
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
+    await screen.findByText(/관측 결과와 원본을 불러왔습니다/);
+    fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
+    await screen.findByText("replacement failed");
+    expect(onDiscardAssetSession).not.toHaveBeenCalled();
+    expect(screen.getByText("빠른 저장 시험지", { exact: true })).toBeInTheDocument();
+  });
   it("previews the linked ZIP original before storage without reading a stored namesake", async () => {
     const document = JSON.parse(await quickSaveFixtureFile().text());
     document.entries[0].sourcePageImages = ["page1.png", "page2.png"];
@@ -142,7 +158,7 @@ describe("ImportFromGptModal", () => {
     expect(onAnalyzeVisualFile).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(`${file.name} 자료 역할`), { target: { value: "problem" } });
     fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
-    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true));
+    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true, expect.any(Function)));
     expect(await screen.findByText(/원본 1페이지를 보존했습니다/)).toBeInTheDocument();
     const save = await screen.findByTestId("import-primary-action");
     await waitFor(() => expect(save).toBeEnabled());
@@ -172,7 +188,7 @@ describe("ImportFromGptModal", () => {
     fireEvent.change(screen.getByLabelText("one.pdf 자료 역할"), { target: { value: "problem" } });
     fireEvent.change(screen.getByLabelText("two.pdf 자료 역할"), { target: { value: "answer" } });
     fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
-    await waitFor(() => expect(onAnalyze).toHaveBeenCalledWith(originals, expect.any(AbortSignal), expect.any(Function), ["problem", "answer"], true));
+    await waitFor(() => expect(onAnalyze).toHaveBeenCalledWith(originals, expect.any(AbortSignal), expect.any(Function), ["problem", "answer"], true, expect.any(Function)));
     await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledOnce());
     expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.title)).toEqual(["first", "second"]);
     expect(onOpenWorkspace.mock.calls[0][0].map((entry: Partial<WrongAnswerEntry>) => entry.sourcePageImages)).toEqual([["first-staged.png"], ["second-staged.png"]]);
@@ -202,7 +218,7 @@ describe("ImportFromGptModal", () => {
     expect(onAnalyzeVisualFile).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText(`${file.name} 자료 역할`), { target: { value: "problem" } });
     fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
-    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true));
+    await waitFor(() => expect(onAnalyzeVisualFile).toHaveBeenCalledWith(file, expect.any(AbortSignal), expect.any(Function), ["problem"], true, expect.any(Function)));
     await screen.findByText(/원본 .*페이지를 보존했습니다/);
     fireEvent.click(screen.getByRole("button", { name: "취소" }));
     fireEvent.click(screen.getByRole("button", { name: "변경사항 버리고 닫기" }));

@@ -1,0 +1,21 @@
+.mixed-page-dialog .dialog-body { padding: 16px 20px; }
+        .modal-card.mixed-page-dialog { display: flex; flex-direction: column; width: min(1100px, calc(100vw - 32px)); height: min(680px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); }
+        .mixed-page-dialog > .dialog-body { flex: 1 1 auto; overflow: auto; overscroll-behavior: contain; }
+        .mixed-page-dialog__intro { font-size: 13px; line-height: 1.5; margin: 0 0 14px; }
+        .mixed-page-dialog__batch { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-panel); margin-bottom: 14px; }
+        .mixed-page-dialog__field { display: grid; gap: 4px; font-size: 13px; }
+        .mixed-page-dialog__field input, .mixed-page-dialog__field select, .mixed-page-dialog__card select { font-size: 14px; min-height: 36px; padding: 5px 8px; }
+        .mixed-page-dialog__range-input { width: 82px; }
+        .mixed-page-dialog__grid { display: grid; grid-template-columns: repeat(3, minmax(160px, 1fr)); gap: 12px; }
+        .mixed-page-dialog__card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-panel); padding: 10px; }
+        .mixed-page-dialog__title { font-size: 14px; font-weight: 600; margin: 0 0 8px; overflow-wrap: anywhere; }
+        .mixed-page-dialog__thumb { aspect-ratio: 4 / 3; background: var(--surface-soft); display: grid; place-items: center; overflow: hidden; border-radius: var(--radius-control); margin-bottom: 8px; }
+        .mixed-page-dialog__thumb img { width: 100%; height: 100%; object-fit: contain; }
+        .mixed-page-dialog__error { font-size: 13px; padding: 8px; color: var(--danger); }
+        .mixed-page-dialog__counts { display: flex; flex-wrap: wrap; gap: 8px 16px; font-size: 13px; margin: 12px 0 0; }
+        .mixed-page-dialog__message { font-size: 13px; min-height: 1.4em; margin: 6px 0 0; }
+        .mixed-page-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; }
+        @media (max-width: 720px) { .mixed-page-dialog__grid { grid-template-columns: repeat(2, minmax(160px, 1fr)); } }
+        @media (max-width: 420px) { .mixed-page-dialog__grid { grid-template-columns: minmax(160px, 1fr); } }
+      
+.modal-card.mixed-page-dialog .dialog-header { flex-direction: column; align-items: flex-start; gap: 4px; }

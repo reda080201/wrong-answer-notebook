@@ -5,6 +5,7 @@ import type { StudyAssessment } from "../../../models/studyAssessment";
 export interface VisionRect { x: number; y: number; width: number; height: number; }
 export interface VisionSourceRef { sourceKey: string; page: number; questionRect?: VisionRect; }
 export interface VisionQuestion {
+  rejectedNotes?: string[];
   studyAssessment?: StudyAssessment;
   questionKey: string; questionNumber: string | null; source: VisionSourceRef; sourceRefs?: VisionSourceRef[];
   questionText: string; contentSegments: Array<Record<string, unknown> & { id: string; type: string; figureKey?: string }>;
@@ -20,7 +21,7 @@ export interface VisionAnalysis {
   schemaVersion: "wrong-answer-notebook-vision-v1" | "wrong-answer-notebook-vision-v2";
   document: { title: string; subject: string; materialKind: string; pageCount?: number };
   sources: Array<{ sourceKey: string; pageCount?: number }>;
-  entries: Array<{ entryKey: string; title: string; subject: string; questions: VisionQuestion[] }>;
+  entries: Array<{ entryKey: string; title: string; subject: string; questions: VisionQuestion[]; rejectedNotes?: string[]; importantNotes?: string[] }>;
   figures: VisionFigure[];
   audit: { detectedQuestionNumbers: string[]; missingQuestionNumbers: string[]; uncertainQuestionNumbers: string[]; warnings: string[] };
 }
@@ -144,6 +145,11 @@ export function validateStudyAssessment(raw: unknown): asserts raw is StudyAsses
   if (a.assessmentStatus === "unreadable" && (a.solution.proposedAnswer !== null || a.scores.difficulty.value !== null || a.scores.importance.value !== null)) fail("$.studyAssessment", "unreadable assessment cannot assert answer or scores");
   if (a.assessmentStatus !== "solved" && !a.warnings.some(reason => reason.trim())) fail("$.studyAssessment.warnings", "incomplete solution reason required");
   const answer = a.sourceAnswer;
+  validateSourceAnswer(answer);
+}
+
+function validateSourceAnswer(answer: StudyAssessment["sourceAnswer"]): void {
+  if ((answer.intent?.trim() || answer.notes?.trim() || answer.choiceJudgements?.length) && !["matched", "conflict", "source_only"].includes(answer.status)) fail("$.studyAssessment.sourceAnswer", "printed metadata requires a sourced answer");
   if (["matched", "conflict", "source_only"].includes(answer.status) && (!answer.value?.trim() || !answer.sourceKey || !Number.isInteger(answer.page))) fail("$.studyAssessment.sourceAnswer", "source answer requires value and source reference");
   if (answer.status === "not_provided" && answer.value !== null) fail("$.studyAssessment.sourceAnswer", "unprovided source answer must be null");
   if ((answer.sourceKey === undefined) !== (answer.page === undefined)) fail("$.studyAssessment.sourceAnswer", "sourceKey and page must be paired");
@@ -153,6 +159,7 @@ export function validateAssessmentStage(stage: string, raw: Record<string, unkno
   const all = schemaV2.properties.entries.items.properties.questions.items.properties.studyAssessment.properties;
   const names = stage === "solution_attempted" ? ["assessmentStatus", "solution", "warnings"] : stage === "scores_assessed" ? ["scores", "classification", "learning"] : ["sourceAnswer"];
   check(raw, { type: "object", required: names, additionalProperties: false, properties: Object.fromEntries(names.map(name => [name, (all as Record<string, unknown>)[name]])) as Record<string, Rule> });
+  if (stage === "answer_compared") validateSourceAnswer(raw.sourceAnswer as StudyAssessment["sourceAnswer"]);
   if (stage === "solution_attempted") {
     const solution = raw.solution as StudyAssessment["solution"];
     if (raw.assessmentStatus === "unreadable" && solution.proposedAnswer !== null) fail("$.solution.proposedAnswer", "unreadable solution cannot assert an answer");

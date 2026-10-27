@@ -21,6 +21,9 @@ export function mapVisionAssessment(question: VisionQuestion, id: string, now: s
     answer: {
       id, questionNumber: question.questionNumber ?? "", answer,
       explanation: source.explanation?.trim() ? source.explanation : a.solution.summary, strategy: a.solution.strategy, steps: a.solution.steps,
+      ...(source.intent ? { intent: source.intent } : {}),
+      ...(source.notes ? { notes: source.notes } : {}),
+      ...(source.choiceJudgements ? { choiceJudgements: structuredClone(source.choiceJudgements) } : {}),
       importantPoints: a.learning.importantPoints, wrongPoint: a.learning.commonTraps.join("\n"), reviewPoint: a.learning.reviewPoint,
       concepts: a.classification.concepts, needsReview, processingStatus: needsReview ? "needs_review" : "ready",
       sourceNote: (conflict ? "원문 답안과 AI 예상 답이 다릅니다. 정답을 확인하세요." : hasSource ? "연결된 원문 답안" : "AI 예상 답 · 확인 전 자동 채점 제외") + (sourcePage ? ` · 원본 자료 ${sourcePage}페이지` : ""),

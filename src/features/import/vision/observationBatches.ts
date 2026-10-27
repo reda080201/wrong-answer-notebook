@@ -12,6 +12,8 @@ export function mergeVisionObservations(parts: VisionAnalysis[], sources: Vision
     for (const entry of part.entries) {
       const target = merged.entries.find(item => item.entryKey === entry.entryKey);
       if (!target) { merged.entries.push(structuredClone(entry)); continue; }
+      target.rejectedNotes = [...new Set([...(target.rejectedNotes ?? []), ...(entry.rejectedNotes ?? [])])];
+      target.importantNotes = [...new Set([...(target.importantNotes ?? []), ...(entry.importantNotes ?? [])])];
       for (const q of entry.questions) {
         const previous = target.questions.find(item => item.questionKey === q.questionKey);
         if (!previous) target.questions.push(structuredClone(q));

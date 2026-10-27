@@ -61,7 +61,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     const solved = await call("solution_attempted", `정답지를 보지 않고 첨부 문제를 직접 풀어 보세요. 반환 필드: assessmentStatus(solved|partially_solved|unsolved|unreadable), solution, warnings. solution 스키마: ${JSON.stringify(rule.properties.solution)}. 읽을 수 없으면 proposedAnswer:null, 미해결 이유를 warnings에 적으세요. 학생에게 보여줄 핵심 풀이·전략·검산 요약만 작성하세요.`, question, refs);
     keys(solved, ["assessmentStatus", "solution", "warnings"]);
     options.progress("solution_attempted");
-    const scored = await call("scores_assessed", `문항과 보존된 풀이를 바탕으로 난이도와 중요도를 독립 평가하세요. 정답을 새로 바꾸지 마세요. 반환 필드: scores, classification, learning. 스키마: ${JSON.stringify({ scores: rule.properties.scores, classification: rule.properties.classification, learning: rule.properties.learning })}. 난이도: 추론30+개념결합25+계산20+아이디어15+조건해석10. 중요도: 핵심개념30+전이25+학습활용20+오개념교정15+복습효율10. 정수1~100, 각 이유2~5개·신뢰도0~100. 판단 불가하면 null과 실제 이유, 임의50점 금지. unreadable은 두 점수 null.`, { question, ...solved }, refs);
+    const scored = await call("scores_assessed", `문항과 보존된 풀이를 바탕으로 난이도와 중요도를 독립 평가하세요. 정답을 새로 바꾸지 마세요. 반환 필드: scores, classification, learning. 스키마: ${JSON.stringify({ scores: rule.properties.scores, classification: rule.properties.classification, learning: rule.properties.learning })}. 난이도: 추론30+개념결합25+계산20+아이디어15+조건해석10. 중요도: 핵심개념30+전이25+학습활용20+오개념교정15+복습효율10. 정수1~100, 각 이유2~5개·신뢰도0~100. 판단 불가하면 null과 실제 이유, 임의50점 금지. unreadable은 두 점수 null. learning.candidates에는 실제 풀이에 근거한 개념·공식·풀이법·일반 함정·복습 카드만 최대3개 작성하고 반복 설명은 생략하세요. 불확실하면 빈 배열. 학생 개인의 실제 실수 원인은 추정하지 마세요.`, { question, ...solved }, refs);
     keys(scored, ["scores", "classification", "learning"]);
     options.progress("scores_assessed");
     const sourceAnswer: StudyAssessment["sourceAnswer"] = { status: "not_provided", value: null, explanation: null };
@@ -80,7 +80,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     a.sourceAnswer = { status: "unreadable", value: null, explanation: null };
     for (let offset = 0; offset < options.answerRefs.length; offset += 3) {
       const refs = options.answerRefs.slice(offset, offset + 3);
-      const compared = await call("answer_compared", `이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 번호만 같은 다른 자료와 연결하지 마세요. 명확한 sourceKey/page가 없으면 status:unreadable,value:null.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
+      const compared = await call("answer_compared", `이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 번호만 같은 다른 자료와 연결하지 마세요. 명확한 sourceKey/page가 없으면 status:unreadable,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
       keys(compared, ["sourceAnswer"]);
       const answer = compared.sourceAnswer as StudyAssessment["sourceAnswer"];
       if (answer.sourceKey && !refs.some(ref => ref.sourceKey === answer.sourceKey && ref.page === answer.page)) throw new Error("정답 출처가 허용한 답안 페이지 밖입니다.");

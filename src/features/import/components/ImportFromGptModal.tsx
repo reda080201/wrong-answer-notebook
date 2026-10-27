@@ -1,3 +1,6 @@
+import { preserveAssessmentEdits } from "../vision/preserveAssessmentEdits";
+import MixedPageRoleDialog, { type PageRoleSource, type PageRoleSelection } from "../vision/MixedPageRoleDialog";
+import type { PageRoleReviewer } from "../vision/pageRoles";
 import { clearAssessmentCheckpoint } from "../vision/assessmentCheckpoint";
 import type { SourceRole } from "../vision/assessmentFlow";
 import { VisionImportBridge } from "../vision/VisionImportBridge";
@@ -90,8 +93,8 @@ interface ImportFromGptModalProps {
   aiProvider?: AiProviderSettings;
   aiProviderStatus?: AiProviderStatus | null;
   onGenerateWithAi?: (prompt: string, inputText: string, imageFilenames: string[]) => Promise<string>;
-  onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean) => Promise<VisualPaperImportResult>;
-  onAnalyzeVisualFiles?: (file: File[], signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean) => Promise<VisualPaperImportResult>;
+  onAnalyzeVisualFile?: (file: File, signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean, reviewPages?: PageRoleReviewer) => Promise<VisualPaperImportResult>;
+  onAnalyzeVisualFiles?: (file: File[], signal: AbortSignal, onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void, roles?: SourceRole[], assessmentEnabled?: boolean, reviewPages?: PageRoleReviewer) => Promise<VisualPaperImportResult>;
   onDiscardAssetSession?: (session: ImportAssetSessionManifest) => Promise<void> | void;
   selectedPromptTemplateId?: string;
   onPromptTemplateSelect?: (templateId: string) => void;
@@ -352,6 +355,7 @@ export default function ImportFromGptModal({
   const [aiGenerating, setAiGenerating] = useState(false);
   const [discardAssessmentOpen, setDiscardAssessmentOpen] = useState(false);
   const [pendingVisualFiles, setPendingVisualFiles] = useState<File[]>([]);
+  const [pageReview, setPageReview] = useState<{ sources: PageRoleSource[]; finish(roles: PageRoleSelection[] | null): void } | null>(null);
   const [visualAssessmentEnabled, setVisualAssessmentEnabled] = useState(true);
   const [visualSourceRoles, setVisualSourceRoles] = useState<SourceRole[]>([]);
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
@@ -663,32 +667,41 @@ export default function ImportFromGptModal({
     }
     const requestId = ++visualRequestIdRef.current;
     visualControllerRef.current?.abort();
+    const previousVisionJob = visualResultRef.current?.visionJob;
+    const previousAssessmentDraft = draft;
     const previousSession = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
-    if (!(await discardVisualSession(previousSession))) return;
+    // Failed cleanup must finish before another session is created. A usable
+    // prior analysis, however, remains intact until its replacement is ready.
+    if (visualCleanupSessionRef.current && !(await retryVisualCleanup())) return;
     if (requestId !== visualRequestIdRef.current) return;
     const controller = new AbortController();
     visualControllerRef.current = controller;
     setAiGenerating(true);
     setError(null);
     setVisualProgress({ phase: "rasterize", current: 0, indeterminate: true });
+    let replacementSession: ImportAssetSessionManifest | null = null;
     try {
       const reportProgress: Parameters<NonNullable<typeof onAnalyzeVisualFile>>[2] = progress => {
         if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setVisualProgress(progress);
       };
-      const result = await (Array.isArray(file) && onAnalyzeVisualFiles ? onAnalyzeVisualFiles(file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled) : onAnalyzeVisualFile(Array.isArray(file) ? file[0] : file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled));
+      const reviewPages: PageRoleReviewer = (sources, signal) => new Promise((resolve, reject) => {
+        const abort = () => { setPageReview(null); reject(new DOMException("페이지 검토 취소", "AbortError")); };
+        if (signal.aborted) { abort(); return; }
+        signal.addEventListener("abort", abort, { once: true });
+        setPageReview({ sources, finish: roles => { signal.removeEventListener("abort", abort); setPageReview(null); if (!roles) { controller.abort(); reject(new DOMException("페이지 검토 취소", "AbortError")); } else resolve(roles); } });
+      });
+      const result = await (Array.isArray(file) && onAnalyzeVisualFiles ? onAnalyzeVisualFiles(file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled, reviewPages) : onAnalyzeVisualFile(Array.isArray(file) ? file[0] : file, controller.signal, reportProgress, visualSourceRoles, visualAssessmentEnabled, reviewPages));
+      replacementSession = result.assetSession;
       if (requestId !== visualRequestIdRef.current || controller.signal.aborted) {
         await discardVisualSession(result.assetSession);
         return;
       }
-      setHasUnsavedInput(true);
-      setVisualResult(result);
-      setFailedVision(null);
-      visualResultRef.current = result;
       const imported = parseAllInOneImport(result.responseText, "visual-paper-import.json", fallbackSubject);
+      if (imported.entries.length === 1) imported.entries[0] = { ...imported.entries[0], ...preserveAssessmentEdits(previousAssessmentDraft, imported.entries[0], previousVisionJob, result.visionJob) };
       const hostEvidence = result.visionJob?.assessmentEvidence;
       if (hostEvidence?.stages.length && hostEvidence.stages.every(stage => stage.receipt.provider === "openai" && stage.receipt.model.startsWith("gpt-") && stage.receipt.providerRequestId)) {
         for (const entry of imported.entries) {
-          entry.questionMeta = entry.questionMeta?.map(meta => meta.studyAssessment ? { ...meta, assessmentEvidence: { provider: "openai", model: hostEvidence.stages.at(-1)!.receipt.model, requestIds: hostEvidence.stages.map(stage => stage.receipt.providerRequestId), responseHashes: hostEvidence.stages.map(stage => stage.receipt.responseHash), sourceHashes: result.visionJob!.sourceFiles.map(source => source.sha256), completedAt: new Date(hostEvidence.stages.at(-1)!.receipt.completedAtMs).toISOString(), independent: hostEvidence.independent }, rating: { ...meta.rating, evaluationSource: "gpt" }, classification: { ...meta.classification, difficultySource: "gpt" } } : meta);
+          entry.questionMeta = entry.questionMeta?.map(meta => meta.studyAssessment ? { ...meta, assessmentEvidence: { provider: "openai", model: hostEvidence.stages.at(-1)!.receipt.model, requestIds: hostEvidence.stages.map(stage => stage.receipt.providerRequestId), responseHashes: hostEvidence.stages.map(stage => stage.receipt.responseHash), sourceHashes: result.visionJob!.sourceFiles.map(source => source.sha256), completedAt: new Date(hostEvidence.stages.at(-1)!.receipt.completedAtMs).toISOString(), independent: hostEvidence.independent }, rating: { ...meta.rating, evaluationSource: meta.rating?.evaluationSource === "manual" ? "manual" : "gpt" }, classification: { ...meta.classification, difficultySource: meta.classification?.difficultySource === "manual" ? "manual" : "gpt" } } : meta);
           entry.answerKey = entry.answerKey?.map(answer => answer.answerProvenance ? { ...answer, answerProvenance: { ...answer.answerProvenance, independent: hostEvidence.independent } } : answer);
         }
       }
@@ -702,19 +715,28 @@ export default function ImportFromGptModal({
         };
         const entries = imported.entries.map(entry => ({ ...entry, ...mapEntryImportImageReferences(entry, map) }));
         await onOpenWorkspace(entries, [], result.assetSession, result.visionJob, result.originalFiles);
+        replacementSession = null;
+        if (previousSession?.id !== result.assetSession.id) await discardVisualSession(previousSession);
         preserveVisualSessionRef.current = true;
         onClose();
         return;
       }
+      setHasUnsavedInput(true);
+      setVisualResult(result);
+      setFailedVision(null);
+      visualResultRef.current = result;
+      replacementSession = null;
+      if (previousSession?.id !== result.assetSession.id) await discardVisualSession(previousSession);
       setRawText(result.responseText);
       setFilename("visual-paper-import.json");
-      setDraftOverride(hostEvidence?.stages.length ? imported.entries[0] : null);
+      setDraftOverride(imported.entries[0]);
       setBatchImport(null);
       setEntryKindResolution(null);
       setImportWarnings([]);
       setImages([]);
       setCopyMessage("관측 결과와 원본을 불러왔습니다. PNG 후보 생성은 별도이며 원본을 검토해 저장할 수 있습니다.");
     } catch (analysisError) {
+      if (replacementSession) await discardVisualSession(replacementSession);
       if (analysisError instanceof VisualPaperImportError && analysisError.analysisText) { setFailedVision({ text: analysisError.analysisText, files: analysisError.originalFiles ?? [] }); setHasUnsavedInput(true); }
       if (analysisError instanceof VisualPaperImportError && analysisError.assetSession) {
         setVisualCleanupSession(analysisError.assetSession);
@@ -1124,6 +1146,7 @@ export default function ImportFromGptModal({
 
   return (
     <>
+      {pageReview && <MixedPageRoleDialog sources={pageReview.sources} onConfirm={roles => pageReview.finish(roles)} onCancel={() => pageReview.finish(null)} />}
       <Dialog
         open
         onClose={handleClose}
@@ -1575,7 +1598,7 @@ export default function ImportFromGptModal({
                       <Maximize2 size={16} aria-hidden="true" /> 전체 화면 검수
                     </button>
                   </div>
-              {error && !commitLocked && (
+              {error && !commitLocked && importInputMode !== "visual" && (
                 <p className="form-save-error" role="alert">
                   {error}
                 </p>

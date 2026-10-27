@@ -985,7 +985,7 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
   const structuredQuestions = scrubbedStructuredQuestions?.map((item) => invalidCropNumbers.has(item.questionNumber)
     ? { ...item, needsReview: true, warning: [item.warning, "원본 crop 좌표를 확인해야 합니다."].filter(Boolean).join(" ") }
     : item);
-  const learningBlocks = normalizeLearningBlocks(rest.learningBlocks);
+  const learningBlocks = normalizeLearningBlocks(rest.learningBlocks).map(block => block.id.startsWith("vision_") && !block.sourceReferences?.length ? { ...block, sourceReferences: [{ entryId: raw.id, entryTitle: raw.title, questionNumber: block.sourceQuestionNumber, sourceType: "solution" as const }] } : block);
   const canonical = canonicalizeQuestionMistakeAnalysis(
     answerKey,
     normalizeQuestionMeta(rest.questionMeta),

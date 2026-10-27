@@ -5,7 +5,7 @@ import pytest
 from PIL import Image
 from tools.diagram_pipeline.security import PipelineError
 from tools.diagram_pipeline.vision_schema import parse_vision
-from tools.diagram_pipeline.vision_adapter import run_vision, unpack_job
+from tools.diagram_pipeline.vision_adapter import learning_candidate_id, run_vision, unpack_job
 from tools.diagram_pipeline.drawing import redraw, preview_redraw
 from tools.diagram_pipeline.examples.create_vision_demo import job
 
@@ -65,7 +65,18 @@ def test_v2_semantics_reject_unreadable_answer_and_invalid_source_answer():
 
 def test_v2_mapping_preserves_assessment_and_prefers_source_answer(tmp_path):
     value = synthetic_v2()
-    value["entries"][0]["questions"][0]["studyAssessment"]["sourceAnswer"].update(sourceKey="upload-2", page=2)
+    observed_entry = value["entries"][0]
+    observed_entry["rejectedNotes"] = ["entry 학생 필기"]
+    observed_entry["importantNotes"] = ["중요 참고"]
+    question = observed_entry["questions"][0]
+    question["rejectedNotes"] = ["question 학생 필기"]
+    assessment = question["studyAssessment"]
+    assessment["sourceAnswer"].update(sourceKey="upload-2", page=2, intent="정답이 원문과 다른지 확인", notes="인쇄된 문항 메모", choiceJudgements=[{"marker": "①", "text": "끝점 포함 오류"}])
+    assessment["learning"]["candidates"] = [
+        {"type": "concept", "title": "끝점 확인", "content": "  끝점   포함 여부를 확인한다. ", "keywords": ["끝점"], "relatedConcepts": ["부등식"]},
+        {"type": "concept", "title": "끝점 확인 중복", "content": "끝점 포함 여부를 확인한다."},
+        {"type": "routine", "title": "대입", "content": "후보 값을 대입해 확인한다."},
+    ]
     result = run_vision(job(tmp_path, value, multi=True), tmp_path / "run")
     with zipfile.ZipFile(tmp_path / "run/output-import-v2.zip") as archive:
         entry = json.loads(archive.read("import.json"))["entries"][0]
@@ -79,6 +90,19 @@ def test_v2_mapping_preserves_assessment_and_prefers_source_answer(tmp_path):
     assert meta["studyAssessment"]["solution"]["proposedAnswer"] == "②"
     assert q.get("studyAssessment") is None
     assert answer["sourceNote"] == "원문 답안과 AI 예상 답이 다릅니다. 정답을 확인하세요. · 원본 자료 2페이지"
+    assert answer["intent"] == "정답이 원문과 다른지 확인"
+    assert answer["notes"] == "인쇄된 문항 메모"
+    assert answer["choiceJudgements"] == [{"marker": "①", "text": "끝점 포함 오류"}]
+    assert entry["rejectedNotes"] == ["entry 학생 필기", "question 학생 필기"]
+    assert entry["importantNotes"] == ["중요 참고"]
+    assert len(entry["learningBlocks"]) == 2
+    candidate = entry["learningBlocks"][0]
+    assert candidate == {
+        "id": learning_candidate_id("synthetic-exam", "q-page1-ordinal1", "concept", "  끝점   포함 여부를 확인한다. "),
+        "type": "concept", "title": "끝점 확인", "content": "끝점   포함 여부를 확인한다.",
+        "sourceQuestionNumber": "1", "reviewStatus": "draft", "keywords": ["끝점"], "relatedConcepts": ["부등식"],
+    }
+    assert not any("entryId" in block or "sourceReferences" in block for block in entry["learningBlocks"])
     assert meta["difficultyScore"] == 72
     assert meta["rating"]["importanceScore"] == 85
     assert meta["rating"]["evaluationSource"] == "imported"
@@ -88,6 +112,19 @@ def test_v2_mapping_preserves_assessment_and_prefers_source_answer(tmp_path):
     assert q["source"]["page"] == 1
     assert "answerSourceRef" not in q
     assert result["verification"]["mathematicalEquivalence"] == "not_proven"
+
+
+def test_source_answer_metadata_requires_a_referenced_answer():
+    value = synthetic_v2()
+    value["entries"][0]["questions"][0]["studyAssessment"]["sourceAnswer"].update(status="not_provided", value=None, intent="추측 금지")
+    with pytest.raises(PipelineError, match="metadata requires a referenced source answer"):
+        parse_vision(json.dumps(value))
+
+
+def test_learning_candidate_identity_normalizes_nfkc_and_whitespace():
+    a = learning_candidate_id("entry", "question", "concept", "  ㍿   함수  ")
+    b = learning_candidate_id("entry", "question", "concept", "株式会社 함수")
+    assert a == b
 
 
 

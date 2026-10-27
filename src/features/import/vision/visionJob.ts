@@ -1,3 +1,4 @@
+import { mapAssessmentLearning } from "./assessmentLearning";
 import { mapVisionAssessment } from "./assessmentMapping";
 import JSZip from "jszip";
 import { parseVisionAnalysis, type VisionAnalysis } from "./visionSchema";
@@ -88,7 +89,7 @@ export async function prepareOriginalVisionImport(analysis: VisionAnalysis, page
         figures.push({ id, questionNumber: entry.questions.find(q => q.questionKey === f.questionKey)!.questionNumber, original: { image: cropName, sourcePageImage: filename, crop: rect }, image: cropName, source: "original", preferredRepresentation: "original", needsReview: true, processingStatus: "needs_review" });
       } finally { bitmap.close(); }
     }
-    entries.push({ entryKind: "problem_sheet", title: entry.title, subject: entry.subject, questions, figures, questionSourceCrops, answerKey: entry.questions.filter(q => q.studyAssessment || q.extractedAnswer || q.explanationDraft).map((q, index) => (mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString(), answerPage(q)).answer ?? { id: `v8_answer_${ei}_${index}`, questionNumber: q.questionNumber, answer: q.extractedAnswer ?? "", explanation: q.explanationDraft ?? "", importantPoints: [], needsReview: true, processingStatus: "needs_review" })), questionMeta: entry.questions.map((q, index) => mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString()).meta).filter(Boolean), sourcePageImages: entryPages.map(p => p.name) });
+    entries.push({ learningBlocks: mapAssessmentLearning(entry), importantNotes: entry.importantNotes ?? [], rejectedNotes: [...new Set([...(entry.rejectedNotes ?? []), ...entry.questions.flatMap(q => q.rejectedNotes ?? [])])], entryKind: "problem_sheet", title: entry.title, subject: entry.subject, questions, figures, questionSourceCrops, answerKey: entry.questions.filter(q => q.studyAssessment || q.extractedAnswer || q.explanationDraft).map((q, index) => (mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString(), answerPage(q)).answer ?? { id: `v8_answer_${ei}_${index}`, questionNumber: q.questionNumber, answer: q.extractedAnswer ?? "", explanation: q.explanationDraft ?? "", importantPoints: [], needsReview: true, processingStatus: "needs_review" })), questionMeta: entry.questions.map((q, index) => mapVisionAssessment(q, `v81_answer_${ei}_${index}`, new Date().toISOString()).meta).filter(Boolean), sourcePageImages: entryPages.map(p => p.name) });
   }
   return { document: { schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries }, files };
 }

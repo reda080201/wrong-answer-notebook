@@ -10,6 +10,17 @@ const fixture = () => parseVisionAnalysis(cases.find(item => item.valid)!.text);
 const receipt = (value: unknown): VisionProviderReceipt => ({ text: JSON.stringify(value), provider: "openai", model: "gpt-fixture", providerRequestId: "fixture-response", requestId: "fixture-request", responseHash: "a".repeat(64), completedAtMs: Date.parse("2026-10-27T00:00:00Z") });
 
 describe("pre-package assessment order", () => {
+  it("rejects unsupported printed metadata at the answer stage instead of silently dropping it", async () => {
+    const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
+    delete value.entries[0].questions[0].studyAssessment;
+    value.schemaVersion = "wrong-answer-notebook-vision-v1";
+    const request = vi.fn().mockResolvedValueOnce(receipt({ assessmentStatus: a.assessmentStatus, solution: a.solution, warnings: [] }))
+      .mockResolvedValueOnce(receipt({ scores: a.scores, classification: a.classification, learning: a.learning }))
+      .mockResolvedValueOnce(receipt({ sourceAnswer: { status: "unreadable", value: null, explanation: null, intent: "근거 없는 의도" } }));
+    const progress = vi.fn();
+    await expect(runPrepackageAssessment(value, request, { answerRefs: [{ sourceKey: "upload-1", page: 1 }], independent: true, signal: new AbortController().signal, progress })).rejects.toThrow("printed metadata");
+    expect(progress).not.toHaveBeenCalledWith("prepackage_validated");
+  });
   it("seals solution and scores before allowing answer-bearing input", async () => {
     const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
     delete value.entries[0].questions[0].studyAssessment; value.schemaVersion = "wrong-answer-notebook-vision-v1";
