@@ -1,6 +1,5 @@
 """Bind model observations to inspected immutable evidence; no model trust is promoted."""
 import copy
-import re
 from datetime import datetime, timezone
 import re
 import stat
