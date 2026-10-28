@@ -112,19 +112,27 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
   await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
 
   const assertSavedCounts = async () => {
-    const result = await page.evaluate(() => {
+    const result = await page.evaluate(async () => {
+      const { getImageUrl } = await import("/src/api.ts");
       const storage = JSON.parse(localStorage.getItem("wrong-answer-entries") ?? "{}");
       const entry = storage.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
-      const firstFigureImage = entry?.figures?.[0]?.original?.image;
+      const storedImages = entry ? await Promise.all(entry.figures.map(async (figure: { original?: { image?: string } }) => {
+        if (!figure.original?.image) return false;
+        const url = await getImageUrl(figure.original.image);
+        if (!url) return false;
+        const response = await fetch(url);
+        const image = await createImageBitmap(await response.blob());
+        try { return image.width > 0 && image.height > 0; } finally { image.close(); }
+      })) : [];
       return entry && {
         questionCount: entry.structuredQuestions?.length,
         figureCount: entry.figures?.length,
         sourceCount: entry.sourcePageImages?.length,
-        firstFigureImageStored: typeof firstFigureImage === "string" && Boolean(localStorage.getItem(`img_${firstFigureImage}`)),
+        allFigureImagesStored: storedImages.length === 8 && storedImages.every(Boolean),
         figureSegments: entry.structuredQuestions.filter((question: { contentSegments?: Array<{ type: string }> }) => question.contentSegments?.some(segment => segment.type === "figure")).length,
       };
     });
-    expect(result).toEqual({ questionCount: 30, figureCount: 8, sourceCount: 1, firstFigureImageStored: true, figureSegments: 8 });
+    expect(result).toEqual({ questionCount: 30, figureCount: 8, sourceCount: 1, allFigureImagesStored: true, figureSegments: 8 });
   };
   await assertSavedCounts();
   await page.reload({ waitUntil: "domcontentloaded" });
@@ -140,7 +148,12 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
   expect(backupPayload.entries[0].structuredQuestions).toHaveLength(30);
   expect(backupPayload.entries[0].figures).toHaveLength(8);
 
-  await page.evaluate(() => localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] })));
+  await page.evaluate(async () => {
+    const { replaceBrowserImages, listBrowserImageKeys } = await import("/src/services/api/browserImageStore.ts");
+    await replaceBrowserImages({});
+    if ((await listBrowserImageKeys()).length !== 0) throw new Error("isolated image store was not cleared");
+    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+  });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.getByText("합성 30문항·8그림 원본-only 확인", { exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: /설정/ }).first().click();
