@@ -18,7 +18,7 @@ export function preserveAssessmentEdits(previous: Partial<EntryFormData> | null,
     return retainUserValues(oldMeta[0],meta);
   })};
 }
-function retainUserValues(old: QuestionMeta, next: QuestionMeta): QuestionMeta {
+export function retainUserValues(old: QuestionMeta, next: QuestionMeta): QuestionMeta {
   return {...next, important:old.important, note:old.note, review:old.review, mistakeAnalysis:old.mistakeAnalysis,
     ...(old.classification?.difficultySource === "manual" ? {difficultyScore:old.difficultyScore,classification:{...next.classification,difficultySource:"manual"}} : {}),
     rating: {...next.rating,...(old.rating?.evaluationSource === "manual" ? old.rating : {}),qualityScore:old.rating?.qualityScore,aiQualityScore:old.rating?.aiQualityScore,userQualityScore:old.rating?.userQualityScore,aiQualityConfidence:old.rating?.aiQualityConfidence},

@@ -4,6 +4,7 @@ import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } fro
 import { requestVisionAssessment } from "../services/api/ai";
 import { runPrepackageAssessment, type SourceRole } from "../features/import/vision/assessmentFlow";
 import type { VisionJobDraft } from "../features/import/vision/visionJob";
+import { bindWorkspaceVision } from "../features/import/vision/updateWorkspaceAssessment";
 import { readFigureTokenReferences } from "../utils/figureTokens";
 import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
 import { getImportAssetPreviewUrl } from "../services/api/importAssets";
@@ -263,7 +264,7 @@ export default function AppModals({
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
     if (problemSheets.length > 0 && problemSheets.length === items.length) {
       const staged = assetSession ? undefined : await stageImportAssetFiles(assetFiles ?? []);
-      setWorkspace({ ...buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession), ...(visionJob ? { visionJob } : {}) });
+      setWorkspace(bindWorkspaceVision({ ...buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession), ...(visionJob ? { visionJob } : {}) }));
       setWorkspaceAssetFiles(assetFiles ?? []);
       setWorkspaceVisionFiles(originalFiles ?? []);
       return;
