@@ -33,3 +33,9 @@
 
 - 로컬 환경 실패 이후 테스트나 서버를 재실행하지 않았다. 합성 fixture 생성기와 Python 검사, 브라우저 원본-only/CLI 픽셀 parity, Import 저장·재진입·브라우저 백업·복원 통합 흐름을 CI workflow에 연결했다.
 - CI가 성공하기 전까지 위 신규 검증은 **미실행**이며 parity 및 왕복 결과는 판정하지 않는다.
+
+## 30/8 CI 실행 보완
+
+- 05fa273 CI: Frontend 1439건, Python 119건, Rust 93건 및 Windows Tauri compile 통과. E2E는 기존 70건 통과, 신규 1건 실패. 신규 검사가 legacy localStorage img_*만 읽어 IndexedDB 이미지가 없다고 판단한 것이 원인이다.
+- 이미지 기대값은 유지하고 앱 API로 8개 모두 실제 디코딩하도록 수정했다. 복원 전 격리 IndexedDB 이미지도 비워 백업이 자산을 복구하는지 검사한다.
+- 원본-only는 비교만 하지 않고 해당 준비 결과를 ZIP으로 포장해 CLI ZIP과 각각 동일한 Import→저장→재진입→백업→빈 저장소 복원 흐름을 실행한다. 이 보완의 최종 결과는 PR #168 최신 CI를 따른다.

@@ -74,6 +74,8 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
       answers: answers.map(answer => ({ questionNumber: answer.questionNumber, answer: answer.answer, intent: answer.intent, notes: answer.notes, choiceJudgements: answer.choiceJudgements, sourceNote: answer.sourceNote, answerProvenance: answer.answerProvenance })),
       assessments: questionMeta.map(meta => ({ questionNumber: meta.questionNumber, difficulty: meta.difficultyScore, importance: meta.rating?.importanceScore, sourceAnswerStatus: meta.studyAssessment?.sourceAnswer.status })),
       learning: learningBlocks.map(block => ({ sourceQuestionNumber: block.sourceQuestionNumber, content: block.content, reviewStatus: block.reviewStatus })),
+      document: prepared.document,
+      assets: await Promise.all(prepared.files.map(async file => ({ name: file.name, base64: await toBase64(file) }))),
       native, cli,
     };
   }, {
@@ -103,19 +105,11 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
   expect(originalOnly.answers.map(({ questionNumber, answer, intent, notes, choiceJudgements, sourceNote, answerProvenance }) => ({ questionNumber, answer, intent, notes, choiceJudgements, sourceNote, answerProvenance }))).toEqual(cliEntry.answerKey.map(({ questionNumber, answer, intent, notes, choiceJudgements, sourceNote, answerProvenance }: { questionNumber: string; answer: string; intent: string; notes: string; choiceJudgements: unknown; sourceNote: string; answerProvenance: unknown }) => ({ questionNumber, answer, intent, notes, choiceJudgements, sourceNote, answerProvenance })));
   expect(originalOnly.learning.map(item => [item.sourceQuestionNumber, item.content, item.reviewStatus])).toEqual(cliEntry.learningBlocks.map((item: { sourceQuestionNumber: string; content: string; reviewStatus: string }) => [item.sourceQuestionNumber, item.content, item.reviewStatus]));
 
-  await page.getByRole("button", { name: "시험지함", exact: true }).click();
-  await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
-  await page.getByLabel("올인원 가져오기").setInputFiles(cliZipPath);
-  await expect(page.getByText("올인원 가져오기 완료: 1개 항목")).toBeVisible();
-  await page.getByText("다른 저장 방법", { exact: true }).click();
-  await page.getByRole("button", { name: "바로 저장", exact: true }).click();
-  await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
-
-  const assertSavedCounts = async () => {
-    const result = await page.evaluate(async () => {
+  const assertSavedCounts = async (title: string) => {
+    const result = await page.evaluate(async targetTitle => {
       const { getImageUrl } = await import("/src/api.ts");
       const storage = JSON.parse(localStorage.getItem("wrong-answer-entries") ?? "{}");
-      const entry = storage.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
+      const entry = storage.entries.find((item: { title: string }) => item.title === targetTitle);
       const storedImages = entry ? await Promise.all(entry.figures.map(async (figure: { original?: { image?: string } }) => {
         if (!figure.original?.image) return false;
         const url = await getImageUrl(figure.original.image);
@@ -126,45 +120,69 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
       })) : [];
       return entry && {
         questionCount: entry.structuredQuestions?.length,
+        title: entry.title,
         figureCount: entry.figures?.length,
         sourceCount: entry.sourcePageImages?.length,
         allFigureImagesStored: storedImages.length === 8 && storedImages.every(Boolean),
         figureSegments: entry.structuredQuestions.filter((question: { contentSegments?: Array<{ type: string }> }) => question.contentSegments?.some(segment => segment.type === "figure")).length,
       };
-    });
-    expect(result).toEqual({ questionCount: 30, figureCount: 8, sourceCount: 1, allFigureImagesStored: true, figureSegments: 8 });
+    }, title);
+    expect(result).toEqual({ questionCount: 30, title, figureCount: 8, sourceCount: 1, allFigureImagesStored: true, figureSegments: 8 });
   };
-  await assertSavedCounts();
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await assertSavedCounts();
+  const roundtrip = async (name: string, buffer: Buffer, title: string) => {
+    await page.evaluate(async () => {
+      const { replaceBrowserImages } = await import("/src/services/api/browserImageStore.ts");
+      await replaceBrowserImages({});
+      localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.getByRole("button", { name: "시험지함", exact: true }).click();
+    await page.getByRole("button", { name: "+ 시험지 가져오기", exact: true }).click();
+    await page.getByLabel("올인원 가져오기").setInputFiles({ name, mimeType: "application/zip", buffer });
+    await expect(page.getByText("올인원 가져오기 완료: 1개 항목")).toBeVisible();
+    await page.getByText("다른 저장 방법", { exact: true }).click();
+    await page.getByRole("button", { name: "바로 저장", exact: true }).click();
+    await expect(page.getByRole("dialog", { name: "시험지 가져오기" })).toBeHidden();
+    await assertSavedCounts(title);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await assertSavedCounts(title);
 
-  await page.getByRole("button", { name: /설정/ }).first().click();
-  await page.getByRole("button", { name: "데이터", exact: true }).click();
-  const backupDownload = page.waitForEvent("download");
-  await page.getByRole("button", { name: "백업 만들기", exact: true }).click();
-  const backupPath = (await backupDownload).path();
-  expect(backupPath).toBeTruthy();
-  const backupPayload = JSON.parse(await readFile(backupPath!, "utf8"));
-  expect(backupPayload.entries[0].structuredQuestions).toHaveLength(30);
-  expect(backupPayload.entries[0].figures).toHaveLength(8);
+    await page.getByRole("button", { name: /설정/ }).first().click();
+    await page.getByRole("button", { name: "데이터", exact: true }).click();
+    const backupDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "백업 만들기", exact: true }).click();
+    const backupPath = (await backupDownload).path();
+    expect(backupPath).toBeTruthy();
+    const backupPayload = JSON.parse(await readFile(backupPath!, "utf8"));
+    const backupEntry = backupPayload.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
+    expect(backupEntry.structuredQuestions).toHaveLength(30);
+    expect(backupEntry.figures).toHaveLength(8);
 
-  await page.evaluate(async () => {
-    const { replaceBrowserImages, listBrowserImageKeys } = await import("/src/services/api/browserImageStore.ts");
-    await replaceBrowserImages({});
-    if ((await listBrowserImageKeys()).length !== 0) throw new Error("isolated image store was not cleared");
-    localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
-  });
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await expect(page.getByText("합성 30문항·8그림 원본-only 확인", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: /설정/ }).first().click();
-  await page.getByRole("button", { name: "데이터", exact: true }).click();
-  const chooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "백업 복원", exact: true }).click();
-  await page.getByRole("dialog", { name: "백업 복원" }).getByRole("button", { name: "확인", exact: true }).click();
-  const chooser = await chooserPromise;
-  await chooser.setFiles(backupPath!);
-  await expect(page.getByText("백업 복원을 완료했습니다.", { exact: true })).toBeVisible();
-  await assertSavedCounts();
-  await page.reload({ waitUntil: "domcontentloaded" });
-  await assertSavedCounts();
+    await page.evaluate(async () => {
+      const { replaceBrowserImages, listBrowserImageKeys } = await import("/src/services/api/browserImageStore.ts");
+      await replaceBrowserImages({});
+      if ((await listBrowserImageKeys()).length !== 0) throw new Error("isolated image store was not cleared");
+      localStorage.setItem("wrong-answer-entries", JSON.stringify({ schemaVersion: 2, entries: [] }));
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await expect(page.getByText(title, { exact: true })).toHaveCount(0);
+    await page.getByRole("button", { name: /설정/ }).first().click();
+    await page.getByRole("button", { name: "데이터", exact: true }).click();
+    const chooserPromise = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "백업 복원", exact: true }).click();
+    await page.getByRole("dialog", { name: "백업 복원" }).getByRole("button", { name: "확인", exact: true }).click();
+    const chooser = await chooserPromise;
+    await chooser.setFiles(backupPath!);
+    await expect(page.getByText("백업 복원을 완료했습니다.", { exact: true })).toBeVisible();
+    await assertSavedCounts(title);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await assertSavedCounts(title);
+  };
+
+  const originalOnlyZip = new JSZip();
+  originalOnlyZip.file("import.json", JSON.stringify(originalOnly.document));
+  for (const asset of originalOnly.assets) originalOnlyZip.file(asset.name, Buffer.from(asset.base64, "base64"));
+  const originalOnlyZipBuffer = await originalOnlyZip.generateAsync({ type: "nodebuffer", compression: "STORE" });
+  await roundtrip("synthetic-30x8-cli.zip", cliZipBytes, cliEntry.title);
+  await roundtrip("synthetic-30x8-original-only.zip", originalOnlyZipBuffer, "합성 30문항·8그림 원본-only 확인");
 });
