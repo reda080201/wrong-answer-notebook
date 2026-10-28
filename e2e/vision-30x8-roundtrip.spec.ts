@@ -151,7 +151,7 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     await page.getByRole("button", { name: "데이터", exact: true }).click();
     const backupDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: "백업 만들기", exact: true }).click();
-    const backupPath = (await backupDownload).path();
+    const backupPath = await (await backupDownload).path();
     expect(backupPath).toBeTruthy();
     const backupPayload = JSON.parse(await readFile(backupPath!, "utf8"));
     const backupEntry = backupPayload.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
