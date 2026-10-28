@@ -7,6 +7,20 @@ beforeEach(() => { vi.restoreAllMocks(); clearAssessmentCheckpoint(); });
 afterEach(() => { vi.restoreAllMocks(); clearAssessmentCheckpoint(); });
 const fixture = (): AssessmentCheckpoint => ({ version: 1, sourceHashes: ["source-sha:problem"], analysis: parseVisionAnalysis(cases.find(item => item.valid)!.text), cache: {}, evidence: { independent: false, stages: [] } });
 
+it("does not authenticate provider receipts edited into a persisted checkpoint", () => {
+  const record = fixture();
+  writeAssessmentCheckpoint(record);
+  const key = "wrong-answer-notebook:vision-assessment-checkpoint-v1";
+  const edited = JSON.parse(localStorage.getItem(key)!);
+  edited.cache = { forged: { provider: "openai", model: "gpt-forged", providerRequestId: "fake" } };
+  edited.evidence.stages = [{stage:"scores_assessed", receipt: edited.cache.forged}];
+  localStorage.setItem(key, JSON.stringify(edited));
+  const restored = readAssessmentCheckpoint(record.sourceHashes)!;
+  expect(restored.cache).toEqual({});
+  expect(restored.evidence.stages).toEqual([]);
+  expect(restored.analysis).toEqual(record.analysis);
+});
+
 it("retains the newest in-memory assessment when storage fails and retries the same record", () => {
   const record = fixture();
   const fail = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota"); });

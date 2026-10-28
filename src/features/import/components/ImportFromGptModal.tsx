@@ -1,4 +1,4 @@
-import { preserveAssessmentEdits } from "../vision/preserveAssessmentEdits";
+import { applyNewStudyAssessments, canPreserveAssessmentDraft, sameVisionSourceHashes } from "../vision/preserveAssessmentEdits";
 import MixedPageRoleDialog, { type PageRoleSource, type PageRoleSelection } from "../vision/MixedPageRoleDialog";
 import type { PageRoleReviewer } from "../vision/pageRoles";
 import { clearAssessmentCheckpoint } from "../vision/assessmentCheckpoint";
@@ -667,7 +667,8 @@ export default function ImportFromGptModal({
     }
     const requestId = ++visualRequestIdRef.current;
     visualControllerRef.current?.abort();
-    const previousVisionJob = visualResultRef.current?.visionJob;
+    const previousVisualResult = visualResultRef.current;
+    const previousVisionJob = previousVisualResult?.visionJob;
     const previousAssessmentDraft = draft;
     const previousSession = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
     // Failed cleanup must finish before another session is created. A usable
@@ -697,7 +698,9 @@ export default function ImportFromGptModal({
         return;
       }
       const imported = parseAllInOneImport(result.responseText, "visual-paper-import.json", fallbackSubject);
-      if (imported.entries.length === 1) imported.entries[0] = { ...imported.entries[0], ...preserveAssessmentEdits(previousAssessmentDraft, imported.entries[0], previousVisionJob, result.visionJob) };
+      const sameOriginal = sameVisionSourceHashes(previousVisionJob, result.visionJob);
+      const preservePriorDraft = imported.entries.length === 1 && canPreserveAssessmentDraft(previousAssessmentDraft, previousVisionJob, result.visionJob);
+      if (sameOriginal && previousVisionJob && !preservePriorDraft) throw new Error("같은 원본의 문항 키 또는 출처 연결이 바뀌었습니다. 기존 초안을 보존하고 새 결과를 폐기했습니다.");
       const hostEvidence = result.visionJob?.assessmentEvidence;
       if (hostEvidence?.stages.length && hostEvidence.stages.every(stage => stage.receipt.provider === "openai" && stage.receipt.model.startsWith("gpt-") && stage.receipt.providerRequestId)) {
         for (const entry of imported.entries) {
@@ -719,6 +722,33 @@ export default function ImportFromGptModal({
         if (previousSession?.id !== result.assetSession.id) await discardVisualSession(previousSession);
         preserveVisualSessionRef.current = true;
         onClose();
+        return;
+      }
+      if (preservePriorDraft && previousVisualResult) {
+        const preservedDraft = applyNewStudyAssessments(previousAssessmentDraft!, imported.entries[0]);
+        // The old draft still points at the old staged assets, so keep that session
+        // alive and discard the newly-created session after extracting its assessment.
+        // A reused id means the analyzer returned the existing session itself.
+        // Discarding it would invalidate the references in the preserved draft.
+        if (result.assetSession.id !== previousVisualResult.assetSession.id) await discardVisualSession(result.assetSession);
+        replacementSession = null;
+        const preservedResult: VisualPaperImportResult = {
+          ...previousVisualResult,
+          visionAnalysisText: result.visionAnalysisText,
+          visionJob: result.visionJob,
+        };
+        setHasUnsavedInput(true);
+        setVisualResult(preservedResult);
+        visualResultRef.current = preservedResult;
+        setFailedVision(null);
+        setRawText(previousVisualResult.responseText);
+        setFilename("visual-paper-import.json");
+        setDraftOverride(preservedDraft);
+        setBatchImport(null);
+        setEntryKindResolution(null);
+        setImportWarnings([]);
+        setImages([]);
+        setCopyMessage("기존 본문·답·카드와 원본을 유지하고 새 GPT 평가만 반영했습니다.");
         return;
       }
       setHasUnsavedInput(true);
@@ -1199,7 +1229,7 @@ export default function ImportFromGptModal({
                   </div>
                   <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
                   <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); setPendingVisualFiles(files); setVisualSourceRoles(files.map(() => "problem")); input.value = ""; }} />
-                  {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
+                  {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
                     <span>{visualProgress?.stageLabel ?? (visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…")}</span>
                     {visualProgress?.total ? <progress max={visualProgress.total} value={visualProgress.current} /> : <progress />}

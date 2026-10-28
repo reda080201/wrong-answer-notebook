@@ -91,13 +91,15 @@ describe("workspace vision assessment refresh", () => {
       expect(group.questions[0].figures[0].image).toBe("figure.png");
       expect(group.questions[0].explanationParts[0].text).toBe("수정한 답안 풀이");
     }
-    const byKey = Object.fromEntries(updated.groups.map(group => [group.visionEntryKey, group]));
-    expect(byKey["exam-a"].entryMetadata!.learningBlocks).toHaveLength(2); // existing plus one normalized/deduped candidate
-    expect(byKey["exam-a"].entryMetadata!.questionMeta![0].questionNumber).toBe("7");
-    expect(byKey["exam-a"].entryMetadata!.learningBlocks!.at(-1)!.sourceQuestionNumber).toBe("7");
-    expect(byKey["exam-a"].excludedLearningBlockIds).toEqual(["existing-block"]);
+    const byKey = new Map<string, ImportDraftGroup>(updated.groups.map(group => [group.visionEntryKey ?? "", group]));
+    const examA = byKey.get("exam-a");
+    if (!examA) throw new Error("exam-a missing after update");
+    expect(examA.entryMetadata!.learningBlocks).toHaveLength(2); // existing plus one normalized/deduped candidate
+    expect(examA.entryMetadata!.questionMeta![0].questionNumber).toBe("7");
+    expect(examA.entryMetadata!.learningBlocks!.at(-1)!.sourceQuestionNumber).toBe("7");
+    expect(examA.excludedLearningBlockIds).toEqual(["existing-block"]);
     expect(updateWorkspaceAssessment(updated, JSON.stringify(next)).groups[1].entryMetadata!.learningBlocks).toHaveLength(2);
-    expect(byKey["exam-a"].entryMetadata!.learningBlocks!.filter(block => block.content === "공통  개념" || block.content === "공통 개념")).toHaveLength(1);
+    expect(examA.entryMetadata!.learningBlocks!.filter(block => block.content === "공통  개념" || block.content === "공통 개념")).toHaveLength(1);
     expect(updated.visionJob!.assessmentEvidence).toBeUndefined();
     expect(updated.visionJob!.analysisText).toBe(JSON.stringify(next));
   });

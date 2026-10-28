@@ -5,6 +5,8 @@ import type { AssessmentRunEvidence, AssessmentStageCache } from "./assessmentFl
 const KEY = "wrong-answer-notebook:vision-assessment-checkpoint-v1";
 const historyKey = (hashes: string[]) => KEY + ":" + uuidv5(JSON.stringify(hashes), uuidv5.URL);
 let pendingCheckpoint: AssessmentCheckpoint | undefined;
+// Disk JSON is recovery data, not proof that this host issued a paid request.
+let issuedCheckpointText: string | undefined;
 export interface AssessmentCheckpoint { version: 1; sourceHashes: string[]; analysis: VisionAnalysis; evidence: AssessmentRunEvidence; cache: AssessmentStageCache; observationParts?: VisionAnalysis[]; observationComplete?: boolean; }
 export async function sourceHashes(files: File[]): Promise<string[]> {
   return Promise.all(files.map(async file => [...new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer()))].map(byte => byte.toString(16).padStart(2, "0")).join("")));
@@ -31,6 +33,10 @@ export function readAssessmentCheckpoint(hashes: string[], roleChangeSourceCount
   }
   parseVisionAnalysis(JSON.stringify(base));
   if (!value.cache || typeof value.cache !== "object" || Object.keys(value.cache).length > 1000 || !value.evidence || !Array.isArray(value.evidence.stages)) throw new Error("평가 재개 기록을 검증하지 못했습니다.");
+  if (issuedCheckpointText !== text) {
+    value.cache = {};
+    value.evidence = { independent: value.evidence.independent, stages: [] };
+  }
   return value;
 }
 export function writeAssessmentCheckpoint(value: AssessmentCheckpoint): void {
@@ -38,8 +44,9 @@ export function writeAssessmentCheckpoint(value: AssessmentCheckpoint): void {
   if (new TextEncoder().encode(text).length > 20 * 1024 * 1024) throw new Error("평가 초안 저장 한도를 넘었습니다. 현재 결과를 보존한 뒤 범위를 나누세요.");
   // Storage failure must stop the flow before the next paid request.
   pendingCheckpoint = structuredClone(value);
+  issuedCheckpointText = text;
   try { const previous = localStorage.getItem(KEY); if (previous) { const old = JSON.parse(previous) as AssessmentCheckpoint; if (JSON.stringify(old.sourceHashes) !== JSON.stringify(value.sourceHashes)) localStorage.setItem(historyKey(old.sourceHashes), previous); } localStorage.setItem(KEY, text); }
   catch (error) { throw new Error("평가 초안을 저장하지 못했습니다. 결과는 현재 창에 유지됩니다. 앱을 종료하지 말고 저장 공간을 확인한 뒤 다시 시도하세요.", { cause: error }); }
   pendingCheckpoint = undefined;
 }
-export function clearAssessmentCheckpoint(): void { for (const key of Object.keys(localStorage)) if (key === KEY || key.startsWith(KEY + ":")) localStorage.removeItem(key); pendingCheckpoint = undefined; }
+export function clearAssessmentCheckpoint(): void { for (const key of Object.keys(localStorage)) if (key === KEY || key.startsWith(KEY + ":")) localStorage.removeItem(key); pendingCheckpoint = undefined; issuedCheckpointText = undefined; }
