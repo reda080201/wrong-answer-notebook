@@ -35,7 +35,7 @@ export function readAssessmentCheckpoint(hashes: string[], roleChangeSourceCount
   if (!value.cache || typeof value.cache !== "object" || Object.keys(value.cache).length > 1000 || !value.evidence || !Array.isArray(value.evidence.stages)) throw new Error("평가 재개 기록을 검증하지 못했습니다.");
   if (issuedCheckpointText !== text) {
     value.cache = {};
-    value.evidence = { independent: value.evidence.independent, stages: [] };
+    value.evidence = { independent: false, stages: [] };
   }
   return value;
 }

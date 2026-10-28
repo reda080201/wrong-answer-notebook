@@ -480,7 +480,10 @@ export default function AppModals({
       if (!problemRefs.length) throw new Error("문제 자료를 한 개 이상 선택하세요.");
       const hashes = [...await sourceHashes(originals), JSON.stringify(pageRoles)];
       const checkpoint = readAssessmentCheckpoint(hashes, originals.length);
-      const initialEvidence = checkpoint?.evidence ?? { independent: pageRoles.every(row => row.role !== "mixed"), stages: [] };
+      const initialEvidence = {
+        independent: pageRoles.every(row => row.role !== "mixed") && (checkpoint?.evidence.independent ?? true),
+        stages: [],
+      };
       const observed = checkpoint && checkpoint.observationComplete !== false ? checkpoint.analysis : await observeVisionInBatches({
         sources: sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })), refs: problemRefs, previous: checkpoint?.observationParts, signal,
         request: async (refs,batchPrompt) => (await requestVisionAssessment(prompt + "\n" + batchPrompt, "문항을 관측하세요. 정답 추출과 풀이는 아직 하지 마세요. 인쇄 원문만 questionText에 넣고 학생 필기는 question.rejectedNotes에 분리하세요. entry.importantNotes에는 인쇄된 전체 공통 주의사항만 기록하세요.", names(refs), staged.sessionId, signal)).text,

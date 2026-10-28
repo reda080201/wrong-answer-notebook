@@ -4,7 +4,7 @@ import type { PageRoleReviewer } from "../vision/pageRoles";
 import { clearAssessmentCheckpoint } from "../vision/assessmentCheckpoint";
 import type { SourceRole } from "../vision/assessmentFlow";
 import { VisionImportBridge } from "../vision/VisionImportBridge";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { deleteImage, saveImageFiles } from "../../../api";
 import type {
@@ -360,6 +360,8 @@ export default function ImportFromGptModal({
   const [visualSourceRoles, setVisualSourceRoles] = useState<SourceRole[]>([]);
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
+  const draftRef = useRef(draft);
+  useLayoutEffect(() => { draftRef.current = draft; }, [draft]);
   const [draftOverride, setDraftOverride] = useState<Partial<EntryFormData> | null>(null);
   const [assetFiles, setAssetFiles] = useState<File[]>([]);
   const [entryKindResolution, setEntryKindResolution] = useState<EntryKindResolution | null>(null);
@@ -670,6 +672,11 @@ export default function ImportFromGptModal({
     const previousVisualResult = visualResultRef.current;
     const previousVisionJob = previousVisualResult?.visionJob;
     const previousAssessmentDraft = draft;
+    const draftBindings = (value: Partial<EntryFormData> | null) => JSON.stringify([
+      value?.structuredQuestions?.map(question => [question.questionNumber, question.source, question.figureIds]),
+      value?.questionMeta?.map(meta => meta.questionNumber),
+    ]);
+    const previousBindings = draftBindings(previousAssessmentDraft);
     const previousSession = visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current;
     // Failed cleanup must finish before another session is created. A usable
     // prior analysis, however, remains intact until its replacement is ready.
@@ -725,13 +732,16 @@ export default function ImportFromGptModal({
         return;
       }
       if (preservePriorDraft && previousVisualResult) {
-        const preservedDraft = applyNewStudyAssessments(previousAssessmentDraft!, imported.entries[0]);
+        if (draftBindings(draftRef.current) !== previousBindings) throw new Error("분석 중 문항 연결이 바뀌었습니다. 현재 편집을 유지하고 평가 반영을 중단했습니다.");
         // The old draft still points at the old staged assets, so keep that session
         // alive and discard the newly-created session after extracting its assessment.
         // A reused id means the analyzer returned the existing session itself.
         // Discarding it would invalidate the references in the preserved draft.
         if (result.assetSession.id !== previousVisualResult.assetSession.id) await discardVisualSession(result.assetSession);
         replacementSession = null;
+        if (requestId !== visualRequestIdRef.current || controller.signal.aborted) return;
+        if (draftBindings(draftRef.current) !== previousBindings) throw new Error("분석 중 문항 연결이 바뀌었습니다. 현재 편집을 유지하고 평가 반영을 중단했습니다.");
+        const preservedDraft = applyNewStudyAssessments(draftRef.current!, imported.entries[0]);
         const preservedResult: VisualPaperImportResult = {
           ...previousVisualResult,
           visionAnalysisText: result.visionAnalysisText,
@@ -767,13 +777,14 @@ export default function ImportFromGptModal({
       setCopyMessage("관측 결과와 원본을 불러왔습니다. PNG 후보 생성은 별도이며 원본을 검토해 저장할 수 있습니다.");
     } catch (analysisError) {
       if (replacementSession) await discardVisualSession(replacementSession);
+      if (requestId !== visualRequestIdRef.current || controller.signal.aborted) return;
       if (analysisError instanceof VisualPaperImportError && analysisError.analysisText) { setFailedVision({ text: analysisError.analysisText, files: analysisError.originalFiles ?? [] }); setHasUnsavedInput(true); }
       if (analysisError instanceof VisualPaperImportError && analysisError.assetSession) {
         setVisualCleanupSession(analysisError.assetSession);
         visualCleanupSessionRef.current = analysisError.assetSession;
       }
       if (!(analysisError instanceof DOMException && analysisError.name === "AbortError")) {
-        setError(analysisError instanceof Error ? analysisError.message : "PDF/이미지 분석에 실패했습니다.");
+        if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setError(analysisError instanceof Error ? analysisError.message : "PDF/이미지 분석에 실패했습니다.");
       }
     } finally {
       if (requestId === visualRequestIdRef.current) {

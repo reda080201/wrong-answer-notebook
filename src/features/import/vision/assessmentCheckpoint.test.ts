@@ -14,10 +14,12 @@ it("does not authenticate provider receipts edited into a persisted checkpoint",
   const edited = JSON.parse(localStorage.getItem(key)!);
   edited.cache = { forged: { provider: "openai", model: "gpt-forged", providerRequestId: "fake" } };
   edited.evidence.stages = [{stage:"scores_assessed", receipt: edited.cache.forged}];
+  edited.evidence.independent = true;
   localStorage.setItem(key, JSON.stringify(edited));
   const restored = readAssessmentCheckpoint(record.sourceHashes)!;
   expect(restored.cache).toEqual({});
   expect(restored.evidence.stages).toEqual([]);
+  expect(restored.evidence.independent).toBe(false);
   expect(restored.analysis).toEqual(record.analysis);
 });
 

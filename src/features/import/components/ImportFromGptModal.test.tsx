@@ -1,5 +1,5 @@
 import { validPngBytes } from "../../../test/fixtures/validPng";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 import { deleteImage, getImageUrl, pickImages, saveImageFiles } from "../../../api";
@@ -8,6 +8,10 @@ import type { ImportAssetSessionManifest } from "../../import-workspace/model/im
 import v2WrapperFixture from "../../../test/fixtures/nswer_nje_s2_v2_wrapper_single.json";
 import { IMPORT_LIMITS } from "../services/importLimits";
 import ImportFromGptModal, { entryKindAutoLabel } from "./ImportFromGptModal";
+import type { VisualPaperImportResult } from "./ImportFromGptModal";
+import assessmentCases from "../../../../tools/diagram_pipeline/tests/fixtures/vision-v2-cases.json";
+import { parseVisionAnalysis } from "../vision/visionSchema";
+import { mapVisionAssessment } from "../vision/assessmentMapping";
 
 vi.mock("../services/validateImportImage", () => ({ validateImportImage: vi.fn().mockResolvedValue(undefined) }));
 
@@ -64,6 +68,33 @@ function structuredFixtureFile(questions: unknown[]): File {
 }
 
 describe("ImportFromGptModal", () => {
+  it("merges a delayed reassessment into the latest edited draft and retains its original assets", async () => {
+    const analysis = parseVisionAnalysis(assessmentCases.find(row => row.valid)!.text);
+    const document = JSON.parse(await quickSaveFixtureFile().text());
+    document.entries[0].questionMeta = [mapVisionAssessment(analysis.entries[0].questions[0], "meta", "2026-10-28T00:00:00Z").meta];
+    const job = { version:1 as const, id:"job", analysisText:JSON.stringify(analysis), sourceFiles:analysis.sources.map(source => ({sourceKey:source.sourceKey,name:"retain.pdf",sha256:"a".repeat(64)})) };
+    const oldResult: VisualPaperImportResult = {responseText:JSON.stringify(document),sourcePageImages:[],visionJob:job,assetSession:{id:"old",mode:"tauri-staged",manifestVersion:1,assets:[],sourceToStaged:{}}};
+    const newResult = {...oldResult,assetSession:{...oldResult.assetSession,id:"new"}};
+    let complete!: (value:VisualPaperImportResult)=>void;
+    const analyze = vi.fn().mockResolvedValueOnce(oldResult).mockImplementationOnce(()=>new Promise<VisualPaperImportResult>(resolve=>{complete=resolve;}));
+    const discard = vi.fn().mockResolvedValue(undefined);
+    render(<ImportFromGptModal fallbackSubject="수학" onClose={vi.fn()} onApply={vi.fn()} onApplyEntries={vi.fn()} onDiscardAssetSession={discard} onAnalyzeVisualFile={analyze} aiProviderStatus={{type:"openai",enabled:true,keySource:"env",hasStoredKey:false,hasEnvKey:true,available:true}} />);
+    fireEvent.click(screen.getByRole("button",{name:"PDF / 이미지 분석"}));
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"),{target:{files:[new File(["fixture"],"retain.pdf",{type:"application/pdf"})]}});
+    fireEvent.click(screen.getByRole("button",{name:"GPT 풀이·평가 시작"}));
+    await screen.findByText(/관측 결과와 원본을 불러왔습니다/);
+    await screen.findByLabelText("제목",{exact:true});
+    await waitFor(()=>expect(screen.getByLabelText("제목",{exact:true})).toHaveValue(document.entries[0].title));
+    fireEvent.click(screen.getByRole("button",{name:"GPT 풀이·평가 시작"}));
+    await waitFor(()=>expect(analyze).toHaveBeenCalledTimes(2));
+    fireEvent.change(screen.getByLabelText("제목",{exact:true}),{target:{value:"응답 대기 중 수정한 제목"}});
+    await act(async()=>complete(newResult));
+    expect(screen.queryAllByRole("alert").map(element=>element.textContent)).toEqual([]);
+    await screen.findByText(/기존 본문·답·카드와 원본을 유지/);
+    expect(screen.getByLabelText("제목",{exact:true})).toHaveValue("응답 대기 중 수정한 제목");
+    expect(discard).toHaveBeenCalledWith(newResult.assetSession);
+    expect(discard).not.toHaveBeenCalledWith(oldResult.assetSession);
+  });
   it("retains the previous staged analysis when a replacement fails", async () => {
     const responseText = await quickSaveFixtureFile().text();
     const session = { id: "retained-visual", mode: "tauri-staged", manifestVersion: 1, sourceToStaged: {}, assets: [] } satisfies ImportAssetSessionManifest;

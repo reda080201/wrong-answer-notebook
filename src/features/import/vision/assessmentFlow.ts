@@ -83,7 +83,12 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
       const compared = await call("answer_compared", `이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 번호만 같은 다른 자료와 연결하지 마세요. 명확한 sourceKey/page가 없으면 status:unreadable,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
       keys(compared, ["sourceAnswer"]);
       const answer = compared.sourceAnswer as StudyAssessment["sourceAnswer"];
-      if (answer.sourceKey && !refs.some(ref => ref.sourceKey === answer.sourceKey && ref.page === answer.page)) throw new Error("정답 출처가 허용한 답안 페이지 밖입니다.");
+      if (answer.sourceKey && !refs.some(ref => ref.sourceKey === answer.sourceKey && ref.page === answer.page)) {
+        const key = stageKeys.get("answer_compared");
+        if (key) delete cache[key];
+        await options.checkpoint?.(result, evidence, cache);
+        throw new Error("정답 출처가 허용한 답안 페이지 밖입니다.");
+      }
       if (answer.value && answer.sourceKey) {
         answer.status = a.solution.proposedAnswer ? normalizeExamAnswer(answer.value) === normalizeExamAnswer(a.solution.proposedAnswer) ? "matched" : "conflict" : "source_only";
         a.sourceAnswer = answer;
