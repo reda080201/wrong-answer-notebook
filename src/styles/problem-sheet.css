@@ -17,6 +17,35 @@
   height: var(--control-height-compact);
 }
 
+.sheet-toc--inline {
+  margin-bottom: var(--space-3);
+}
+
+.problem-sheet-primary-controls > button,
+.problem-sheet-primary-controls > .problem-sheet-display-mode {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .detail-toolbar.detail-toolbar--problem-sheet {
+    max-height: none;
+    overflow: visible;
+  }
+  .detail-toolbar--problem-sheet .problem-sheet-primary-controls {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+@media screen {
+  .detail-title-block.detail-title-block--sheet-reading {
+    padding-bottom: 0;
+    margin-bottom: var(--space-2);
+    border: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .sheet-search--inline { width: min(100%, 360px); grid-column: 1 / -1; }
   .problem-sheet-primary-toolbar {

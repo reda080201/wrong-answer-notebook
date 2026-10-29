@@ -25,4 +25,29 @@
 .structured-problem-sheet-answer { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.875rem; padding: 0.75rem; background: var(--surface-soft); }
 @media (max-width: 760px) { .structured-problem-sheet-question { padding: 0.75rem; } .structured-problem-sheet-question > header { align-items: flex-start; flex-direction: column; } .structured-problem-sheet-actions { justify-content: flex-start; } }
 .progressive-question-placeholder { min-height: 340px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px; color: var(--text-muted); background: var(--surface-soft); }
+@media screen {
+  .detail-panel .study-paper--embedded,
+  .detail-panel .study-paper--embedded > .study-paper-sheet {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+  .study-paper--embedded .structured-problem-sheet-question {
+    border: 0;
+    border-bottom: 1px solid var(--line-subtle);
+    border-radius: 0;
+    background: transparent;
+    padding: var(--space-3) 0 var(--space-4);
+  }
+  .study-paper--embedded .structured-problem-sheet-question > header {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .study-paper--embedded .structured-problem-sheet-actions { margin-left: auto; }
+}
 @media print { .progressive-question-placeholder { display: none; } }

@@ -63,6 +63,20 @@ function openViewSettings() {
 }
 
 describe("EntryDetail sheet layout", () => {
+  it("keeps the sheet title once and moves the canonical table of contents into the toolbar", () => {
+    const entry: WrongAnswerEntry = { ...sheetEntry, structuredQuestions: [1, 2].map(number => ({ questionNumber: String(number), questionText: `목차 본문 ${number}`, choices: [], conditions: [], equations: [], contentSegments: [{ id: `text-${number}`, type: "text", text: `목차 본문 ${number}` }], figureIds: [] })) };
+    const { container } = render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    expect(screen.getAllByText(entry.title)).toHaveLength(1);
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "교재형 문제지" })).not.toBeInTheDocument();
+    const toolbar = screen.getByLabelText("문제지 도구 모음");
+    fireEvent.click(within(toolbar).getByRole("button", { name: "문항 목록" }));
+    const target = container.querySelector("#sheet-question-canonical-2")!;
+    const scroll = vi.spyOn(target, "scrollIntoView");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "문제 번호 목차" })).getByRole("button", { name: "2" }));
+    expect(scroll).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
+    scroll.mockRestore();
+  });
   beforeEach(() => {
     localStorage.clear();
     Element.prototype.scrollIntoView = vi.fn();
@@ -415,7 +429,8 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "문항별" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("GPT 학습용 시각화 1개"));
     expect(await screen.findByText("접선 시각화")).toBeVisible();
@@ -1052,7 +1067,8 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getAllByText("특강 노트").length).toBeGreaterThan(0);
 
     openSecondaryAction("문제로 돌아가기");
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
 
     openSecondaryAction("집중 보기");
     expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
@@ -1273,7 +1289,8 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByText("학습 분석")).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "p" });
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("ignores keyboard shortcuts while typing in quick memo", () => {

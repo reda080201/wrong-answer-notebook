@@ -382,6 +382,7 @@ export default function EntryDetail({
   const isFocusExpanded = isFocusable && focusMode === "expanded";
   const isFocusMini = isFocusable && focusMode === "mini";
   const compactWrongAnswerView = isWrongAnswer && detailViewMode === "paper" && !isFocusExpanded;
+  const embeddedSheetReading = isSheet && detailViewMode === "paper" && !isFocusExpanded && !showOriginalStudy && problemSheetDisplayMode === "questions";
   const sheetAnswerKey = (entry.answerKey ?? []).filter(
     (item) =>
       item.questionNumber.trim() ||
@@ -567,11 +568,15 @@ export default function EntryDetail({
   const scrollToQuestion = useCallback((start: number) => {
     const index = questionAnchors.findIndex(question => question.start === start);
     if (index >= 0) setFocusedQuestionIndex(index);
-    document.getElementById(`sheet-question-${start}`)?.scrollIntoView({
+    const questionNumber = questionIdentifier(questionAnchors[index] as QuestionBlock | undefined);
+    const target = entry.structuredQuestions?.length
+      ? document.getElementById(`sheet-question-canonical-${questionNumber}`)
+      : document.getElementById(`sheet-question-${start}`);
+    target?.scrollIntoView({
       block: "start",
       behavior: "smooth",
     });
-  }, [questionAnchors]);
+  }, [entry.structuredQuestions?.length, questionAnchors, questionIdentifier]);
 
   const moveSearch = (delta: number) => {
     if (sheetMatches.length === 0) return;
@@ -1408,6 +1413,7 @@ export default function EntryDetail({
                 <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""} aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"} onClick={() => changeProblemSheetDisplayMode("questions")}>문항별</button>
                 <button type="button" data-testid="problem-sheet-display-exam" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
               </div>
+              {embeddedSheetReading && questionAnchors.length > 0 && <button type="button" className="btn-secondary btn-sm" aria-expanded={sheetTocOpen} aria-controls="sheet-question-toc" onClick={() => setSheetTocOpen(value => !value)}>문항 목록</button>}
               <button type="button" className={`btn-icon ${selectionMode ? "active" : ""}`} aria-pressed={selectionMode} onClick={() => setSelectionMode((value) => {
                 const next = !value;
                 if (!next) {
@@ -1663,7 +1669,7 @@ export default function EntryDetail({
       )}
 
       <div className="detail-scroll" ref={detailScrollRef}>
-        {(!originalReading || titleEditing) && <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""}`}>
+        {(!originalReading || titleEditing) && <header className={`detail-title-block ${isSheet && detailViewMode === "paper" && !titleEditing ? "detail-title-block--sheet-compact" : ""} ${embeddedSheetReading && !titleEditing ? "detail-title-block--sheet-reading" : ""}`}>
           {titleEditing ? (
             <div className="detail-title-edit">
               <input
@@ -1693,14 +1699,14 @@ export default function EntryDetail({
                 취소
               </button>
             </div>
-          ) : (
+          ) : !embeddedSheetReading ? (
             <div className="detail-title-row">
               <h2 className="detail-title">{entry.title.trim() || "(제목 없음)"}</h2>
               {isSheet && onTitleChange && (
                 <span className="sheet-group-title-hint">{entry.sheetGroup ? `${entry.sheetGroup.groupTitle} · ${entry.sheetGroup.partTitle}` : ""}</span>
               )}
             </div>
-          )}
+          ) : null}
           <div className="detail-meta-row">
             <span className="subject-badge">{entry.subject}</span>
             {isSheet ? (
@@ -1746,7 +1752,7 @@ export default function EntryDetail({
               onStartReview={() => onStartReview?.(entry)}
             />
           )}
-          {!originalReading && !compactWrongAnswerView && <h3 className="section-heading">
+          {!originalReading && !compactWrongAnswerView && !embeddedSheetReading && <h3 className="section-heading">
             {isFocusExpanded
               ? isSheet ? "문제 집중 보기" : "오답 집중 보기"
               : isConcept
@@ -1761,7 +1767,10 @@ export default function EntryDetail({
                     ? "학습 분석"
                     : isSheet ? "교재형 문제지" : "문제지"}
           </h3>}
-          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && (
+          {embeddedSheetReading && sheetTocOpen && <nav id="sheet-question-toc" className="sheet-toc sheet-toc--inline" aria-label="문제 번호 목차">
+            {questionAnchors.map((block, index) => <button key={block.start} type="button" onClick={() => { setFocusedQuestionIndex(index); scrollToQuestion(block.start); }}>{questionIdentifier(block) ?? block.displayNumber}</button>)}
+          </nav>}
+          {isSheet && !isFocusExpanded && detailViewMode === "paper" && !originalReading && !embeddedSheetReading && (
             <div className="sheet-reading-tools">
               <div className="sheet-selection-tools">
                 {selectionMode && (
@@ -1852,6 +1861,7 @@ export default function EntryDetail({
                   <StudyPaperView
                     entry={presentationEntry}
                     compact={compactWrongAnswerView}
+                    showCover={!embeddedSheetReading}
                     memoMode={memoMode}
                     activeTool={activeTool}
                     onAnnotationsChange={onAnnotationsChange}
