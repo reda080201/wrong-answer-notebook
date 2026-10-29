@@ -88,7 +88,7 @@ export default function StudyControlBar({
 
   const renderPrimaryRow = () => (
     <div className={`study-control-row study-control-row--primary ${compact ? "study-control-row--compact" : ""}`}>
-        {!isConcept && (
+        {canMove && (
           <button
             type="button"
             className="study-control-nav-button"
@@ -102,7 +102,7 @@ export default function StudyControlBar({
 
         {!isConcept && <span className="study-control-counter">{isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}</span>}
 
-        {!isConcept && (
+        {canMove && (
           <button
             type="button"
             className="study-control-nav-button"
@@ -117,7 +117,7 @@ export default function StudyControlBar({
         {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}{questionLabel && ` · ${questionLabel}번`}</button>}
         {onOpenGptExport && !isConcept && <button type="button" data-testid="question-chatgpt-help" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문{questionLabel && ` · ${questionLabel}번`}</button>}
 
-        <button type="button" className="study-control-nav-button" aria-label="AI 학습 대화 열기" onClick={event => window.dispatchEvent(new CustomEvent("study-ai:open", { detail: event.currentTarget }))}>AI</button>
+        <button type="button" className="study-control-nav-button" aria-label="AI 학습 대화 열기" onClick={event => window.dispatchEvent(new CustomEvent("study-ai:open", { detail: event.currentTarget }))}>AI 대화</button>
         <button
           type="button"
           className={`study-control-tools-button ${toolsOpen ? "active" : ""}`}
@@ -237,7 +237,7 @@ export default function StudyControlBar({
   );
 
   return (
-    <div className={`study-control-bar ${compact ? "study-control-bar--compact" : ""}`} aria-label="학습 빠른 조작">
+    <div className={`study-control-bar ${compact ? "study-control-bar--compact" : ""} ${toolsOpen || quickMemoOpen ? "study-control-bar--open" : ""}`} aria-label="학습 빠른 조작">
       {renderQuickMemo()}
       {renderPrimaryRow()}
       {toolsOpen && renderSecondaryRow(compact)}

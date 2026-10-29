@@ -72,13 +72,19 @@
   .detail-toolbar--problem-sheet { max-height: 88px; overflow: hidden; }
   .detail-toolbar--problem-sheet .problem-sheet-secondary-controls { display: none; }
   .detail-content--problem-sheet, .problem-sheet-content { min-height: 60dvh; }
-  .study-control-bar { max-height: 52px; }
-  .study-control-row--secondary { display: none; }
 }
 /* The closed study dock deliberately reserves only one compact command row. */
 .study-control-bar { padding: 2px var(--space-3); box-shadow: none; }
 .study-control-row--primary { min-height: 48px; }
 .study-control-bar:not(:has(.study-control-row--secondary)) { max-height: 52px; overflow: visible; }
+.study-control-bar.study-control-bar--open { max-height: min(50dvh, 360px); overflow-y: auto; }
+.study-control-bar .study-control-row--secondary { display: flex; flex-wrap: wrap; overflow: visible; }
+.study-control-bar button { min-height: 36px; font-size: 14px; }
+.study-control-bar .study-control-row--primary { position: sticky; top: 0; z-index: 1; background: var(--surface); flex-shrink: 0; }
+@media (max-width: 720px) {
+  .study-control-bar button { min-height: 40px; }
+  .study-control-bar:not(.study-control-bar--open) { max-height: none; }
+}
 
 /* Keep the primary workspace quiet: secondary choices live behind one filter action. */
 .toolbar { position: relative; flex-wrap: wrap; min-width: 0; background: var(--surface); }

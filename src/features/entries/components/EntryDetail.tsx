@@ -277,6 +277,7 @@ export default function EntryDetail({
   const [gptQuestionOpen, setGptQuestionOpen] = useState(false);
   const gptQuestionReturnFocusRef = useRef<HTMLElement | null>(null);
   const [memoMode, setMemoMode] = useState(false);
+  const [showStudyFlow, setShowStudyFlow] = useState(false);
   const [sheetLayout, setSheetLayout] = useState<SheetLayout>(viewPreferences?.sheetLayout ?? loadSheetLayout);
   const [sheetSearch, setSheetSearch] = useState("");
   const [sheetSearchOpen, setSheetSearchOpen] = useState(false);
@@ -1549,6 +1550,7 @@ export default function EntryDetail({
             />
           </div>
           <Menu label="더보기" triggerAriaLabel="도구" className="detail-more-menu">
+              {!isConcept && <button type="button" onClick={() => setShowStudyFlow(value => !value)} aria-pressed={showStudyFlow}>학습 흐름 {showStudyFlow ? "접기" : "보기"}</button>}
               {!isConcept && !isLecture && (
                 <>
                   <button type="button" className="btn-icon" onClick={() => handleStudyModeChange("paper")}>문제로 돌아가기</button>
@@ -1743,14 +1745,14 @@ export default function EntryDetail({
                 #{t}
               </span>
             ))}
+            <span className="detail-date">{formatDate(entry.updatedAt)}</span>
           </div>
-          <span className="detail-date">{formatDate(entry.updatedAt)}</span>
         </header>}
 
         <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
-          {!isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
-            <details className="detail-study-flow"><summary>학습 흐름</summary><StudyFlowStrip
+          {showStudyFlow && !isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
+            <details className="detail-study-flow" open><summary>학습 흐름</summary><StudyFlowStrip
               entry={entry}
               focusAvailable={isFocusable}
               onModeChange={handleStudyModeChange}
