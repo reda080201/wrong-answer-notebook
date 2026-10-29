@@ -105,3 +105,14 @@
     animation-duration: 1ms !important;
   }
 }
+
+.detail-study-flow { margin-bottom: var(--space-2); }
+.detail-study-flow > summary { cursor: pointer; font: var(--type-body); color: var(--ink-secondary); }
+.detail-panel--review .detail-title-block:not(:has(.detail-title-edit)) { margin-bottom: var(--space-2); padding-bottom: var(--space-2); }
+.entry-list-return-label { font-size: 12px; }
+@media (max-width: 720px) { .entry-pane-restore .ui-icon-button { height: auto; min-height: 48px; display: flex; flex-direction: column; } .detail-meta-row { font-size: 13px; } .study-control-row--primary { flex-wrap: wrap; } }
+
+.detail-panel--review .detail-title { font: var(--type-section); margin-bottom: var(--space-1); }
+.detail-panel--review .detail-date { font-size: 13px; }
+
+@media screen { .detail-panel--review .study-paper--compact { padding: 0; border: 0; background: transparent; } .detail-panel--review .study-paper--compact > .study-paper-sheet { padding: var(--space-2); border: 0; box-shadow: none; } }

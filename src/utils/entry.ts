@@ -1059,9 +1059,12 @@ export function normalizeEntry(raw: WrongAnswerEntry): WrongAnswerEntry {
 
 export function getEntryTitle(entry: WrongAnswerEntry): string {
   const t = entry.title.trim();
-  if (t) return t;
+  if (t && t !== entry.question.trim() && t !== entry.question.trim().slice(0, 40)) return t;
   if (entry.questionImages.length > 0) return "(이미지 문제)";
-  if (entry.question.trim()) return entry.question.trim().slice(0, 40);
+  if (entry.question.trim()) {
+    const plain = entry.question.replace(/\$\$[\s\S]*?\$\$|\$[^$]*?\$|\\\([\s\S]*?\\\)|\\\[[\s\S]*?\\\]/g, " ").replace(/\s+/g, " ").trim();
+    return plain ? plain.slice(0, 40) : "수식이 포함된 오답";
+  }
   return "(제목 없음)";
 }
 

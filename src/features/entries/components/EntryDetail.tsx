@@ -1,3 +1,4 @@
+import { getEntryTitle } from "../../../utils/entry";
 import AssessmentCard from "../../import/vision/AssessmentCard";
 import { publishStudySelection } from "../../study-ai/activeSelection";
 import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
@@ -213,6 +214,8 @@ function shouldIgnoreStudyShortcut(event: KeyboardEvent): boolean {
   );
 }
 
+const readingPositions = new WeakMap<WrongAnswerEntry, { original: boolean; index: number }>();
+
 export default function EntryDetail({
   entry,
   presentationEntry = entry,
@@ -284,13 +287,15 @@ export default function EntryDetail({
   const [problemSheetDisplayMode, setProblemSheetDisplayMode] = useState<ProblemSheetDisplayMode>(
     viewPreferences?.problemSheetDisplayMode ?? "questions",
   );
-  const [originalStudyChoice, setOriginalStudyChoice] = useState<{ entryId: string; original: boolean } | null>(null);
+  const [originalStudyChoice, setOriginalStudyChoice] = useState<{ entryId: string; original: boolean } | null>(() => { const saved = readingPositions.get(entry); return saved ? { entryId: entry.id, original: saved.original } : null; });
   const [originalImmersiveEntryId, setOriginalImmersiveEntryId] = useState<string | null>(null);
   const originalImmersive = originalImmersiveEntryId === entry.id;
   const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
-  const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(0);
+  const initialReadingPosition = useRef({ entryId: entry.id, index: readingPositions.get(entry)?.index ?? 0 });
+  const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(() => readingPositions.get(entry)?.index ?? 0);
+  const rememberReading = () => readingPositions.set(entry, { original: showOriginalStudy, index: focusedQuestionIndex });
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const [newChecklistText, setNewChecklistText] = useState("");
   const [quickMemoOpen, setQuickMemoOpen] = useState(false);
@@ -545,7 +550,8 @@ export default function EntryDetail({
   useEffect(() => {
     // Reset the consumed target together with the display state, including effect replay.
     consumedInitialTargetRef.current = null;
-    setFocusedQuestionIndex(0);
+    setFocusedQuestionIndex(initialReadingPosition.current.entryId === entry.id ? initialReadingPosition.current.index : 0);
+    readingPositions.delete(entry);
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
@@ -1405,10 +1411,10 @@ export default function EntryDetail({
       <div className={`detail-toolbar ${isSheet && detailViewMode === "paper" ? "detail-toolbar--problem-sheet" : ""}`}>
         {isSheet && detailViewMode === "paper" ? (
           <div className="problem-sheet-primary-toolbar" aria-label="문제지 도구 모음">
-            <span className="problem-sheet-primary-title">{entry.title.trim() || "제목 없음"}</span>
+            <span className="problem-sheet-primary-title">{getEntryTitle(entry)}</span>
             <div className="problem-sheet-primary-controls">
-              {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={onStartExam}>{startExamLabel}</button>}
-              {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={onStartRealExam}>{startRealExamLabel}</button>}
+              {onStartExam && <button type="button" className="ui-button ui-button--primary" onClick={() => { rememberReading(); onStartExam?.(); }}>{startExamLabel}</button>}
+              {onStartRealExam && <button type="button" className="ui-button ui-button--secondary" onClick={() => { rememberReading(); onStartRealExam?.(); }}>{startRealExamLabel}</button>}
               <div className="problem-sheet-display-mode" role="group" aria-label="문제지 표시 방식">
                 <button type="button" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "questions" ? "active" : ""} aria-pressed={!showOriginalStudy && problemSheetDisplayMode === "questions"} onClick={() => changeProblemSheetDisplayMode("questions")}>문항별</button>
                 <button type="button" data-testid="problem-sheet-display-exam" className={(showOriginalStudy ? "exam" : problemSheetDisplayMode) === "exam" ? "active" : ""} aria-pressed={showOriginalStudy || problemSheetDisplayMode === "exam"} onClick={() => changeProblemSheetDisplayMode("exam")}>{entry.sourcePageImages?.length ? "원본 시험지" : "텍스트 시험지"}</button>
@@ -1701,7 +1707,7 @@ export default function EntryDetail({
             </div>
           ) : !embeddedSheetReading ? (
             <div className="detail-title-row">
-              <h2 className="detail-title">{entry.title.trim() || "(제목 없음)"}</h2>
+              <h2 className="detail-title">{getEntryTitle(entry)}</h2>
               {isSheet && onTitleChange && (
                 <span className="sheet-group-title-hint">{entry.sheetGroup ? `${entry.sheetGroup.groupTitle} · ${entry.sheetGroup.partTitle}` : ""}</span>
               )}
@@ -1744,13 +1750,13 @@ export default function EntryDetail({
         <QuestionWorkspace>
         <section id="detail-study-panel" className="detail-question-section" role="tabpanel" aria-label={`${detailViewMode} 학습 패널`}>
           {!isConcept && !isFocusExpanded && (!isSheet || detailViewMode !== "paper") && (
-            <StudyFlowStrip
+            <details className="detail-study-flow"><summary>학습 흐름</summary><StudyFlowStrip
               entry={entry}
               focusAvailable={isFocusable}
               onModeChange={handleStudyModeChange}
               onStartFocus={openFocusMode}
               onStartReview={() => onStartReview?.(entry)}
-            />
+            /></details>
           )}
           {!originalReading && !compactWrongAnswerView && !embeddedSheetReading && <h3 className="section-heading">
             {isFocusExpanded

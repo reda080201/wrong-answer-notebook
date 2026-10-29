@@ -310,7 +310,7 @@ function AppContent() {
   const selectedEntryPaneOverride = selectedId ? shell.entryPaneOverrides[selectedId] : undefined;
 
   useEffect(() => {
-    const updateCompactMode = () => setAutoCompactEntryPane(window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet");
+    const updateCompactMode = () => setAutoCompactEntryPane(Boolean(selectedId) && (window.innerWidth <= 720 || window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet"));
     updateCompactMode();
     window.addEventListener("resize", updateCompactMode);
     return () => window.removeEventListener("resize", updateCompactMode);
@@ -318,11 +318,11 @@ function AppContent() {
 
   const entryPaneCollapsed = selected?.entryKind === "problem_sheet"
     ? selectedEntryPaneOverride ?? autoCompactEntryPane
-    : shell.entryPaneCollapsed;
+    : autoCompactEntryPane || shell.entryPaneCollapsed;
 
   const handleEntryPaneCollapsedChange = useCallback((collapsed: boolean) => {
     if (selected?.entryKind === "problem_sheet" && selectedId) setEntryPaneOverride(selectedId, collapsed);
-    else setEntryPaneCollapsed(collapsed);
+    else { setAutoCompactEntryPane(false); setEntryPaneCollapsed(collapsed); }
   }, [selected?.entryKind, selectedId, setEntryPaneCollapsed, setEntryPaneOverride]);
 
   const { removeEntryLinks } = knowledgeGraph;

@@ -63,6 +63,20 @@ function openViewSettings() {
 }
 
 describe("EntryDetail sheet layout", () => {
+  it("restores the explicit text view after an exam unmount without changing the original default", () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
+    const entry = { ...sheetEntry, id: "exam-return-reading", sourcePageImages: ["page.png"] };
+    const props = { entry, onStartExam: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onToggleMastered: vi.fn(), onToggleDifficult: vi.fn(), onAnnotationsChange: vi.fn(), onWikiLinkClick: vi.fn(), existingTargets: new Set<string>() };
+    const first = render(<EntryDetail {...props} />);
+    expect(screen.getByRole("button", { name: "원본 시험지" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "문항별" }));
+    fireEvent.click(screen.getByRole("button", { name: "문제 풀기" }));
+    expect(props.onStartExam).toHaveBeenCalledOnce();
+    first.unmount();
+    render(<StrictMode><EntryDetail {...props} /></StrictMode>);
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
+  });
   it("keeps the sheet title once and moves the canonical table of contents into the toolbar", () => {
     const entry: WrongAnswerEntry = { ...sheetEntry, structuredQuestions: [1, 2].map(number => ({ questionNumber: String(number), questionText: `목차 본문 ${number}`, choices: [], conditions: [], equations: [], contentSegments: [{ id: `text-${number}`, type: "text", text: `목차 본문 ${number}` }], figureIds: [] })) };
     const { container } = render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);

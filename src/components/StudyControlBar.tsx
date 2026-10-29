@@ -117,6 +117,7 @@ export default function StudyControlBar({
         {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}{questionLabel && ` · ${questionLabel}번`}</button>}
         {onOpenGptExport && !isConcept && <button type="button" data-testid="question-chatgpt-help" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문{questionLabel && ` · ${questionLabel}번`}</button>}
 
+        <button type="button" className="study-control-nav-button" aria-label="AI 학습 대화 열기" onClick={event => window.dispatchEvent(new CustomEvent("study-ai:open", { detail: event.currentTarget }))}>AI</button>
         <button
           type="button"
           className={`study-control-tools-button ${toolsOpen ? "active" : ""}`}

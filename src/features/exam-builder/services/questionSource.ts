@@ -1,3 +1,4 @@
+import { getEntryTitle } from "../../../utils/entry";
 import type { GeneratedExamQuestion, QuestionSourceReference, QuestionSourceStatus, WrongAnswerEntry } from "../../../types";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
@@ -55,7 +56,7 @@ export function questionSnapshotHash(question: { question: string; choices: stri
 export function createQuestionSource(entry: WrongAnswerEntry, questionNumber: string, snapshot: { question: string; choices: string[] }): QuestionSourceReference {
   return {
     sourceEntryId: entry.id,
-    sourceEntryTitle: entry.title || "출처 미확인",
+    sourceEntryTitle: getEntryTitle(entry),
     sourceQuestionNumber: questionNumber,
     sourceSubject: entry.subject || undefined,
     sourceExamName: entry.sheetGroup?.groupTitle,
