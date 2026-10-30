@@ -1648,6 +1648,14 @@ export default function EntryDetail({
 
       {isFocusExpanded && isSheet && (
         <div className="focused-sheet-nav" aria-label="문제 집중 보기 이동">
+          {focusedQuestion && chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (
+            <button type="button" className="btn-secondary focused-sheet-gpt-button" data-testid="question-chatgpt-help" onClick={() => {
+              gptQuestionReturnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+              setGptQuestionOpen(true);
+            }}>
+              GPT 질문 · {normalizeQuestionNumber(String(focusedQuestion.numberLabel ?? focusedQuestion.displayNumber))}번
+            </button>
+          )}
           <button
             type="button"
             className="btn-secondary"

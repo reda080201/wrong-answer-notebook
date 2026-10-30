@@ -126,3 +126,16 @@
   .app-shell .toolbar { grid-template-columns: auto minmax(0, 1fr) auto auto; }
   .app-shell .toolbar .search-input { grid-column: 1 / -1; }
 }
+.detail-panel--focus-expanded .focused-sheet-nav:has(.focused-sheet-gpt-button) {
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+}
+
+@media (max-width: 768px) {
+  .detail-panel--focus-expanded .focused-sheet-nav:has(.focused-sheet-gpt-button) {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .focused-sheet-nav .focused-sheet-gpt-button {
+    grid-column: 1 / -1;
+  }
+}
