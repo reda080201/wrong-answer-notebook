@@ -4,20 +4,30 @@ const key = "wrong-answer-ai-study-v1";
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => localStorage.setItem("wrong-answer-theme", "light"));
 });
-test("AI launcher waits for a blocking settings dialog and retains the unsent input", async ({ page }) => {
+test("AI browser guidance retains input across panel and general settings", async ({ page }) => {
     await page.setViewportSize({ width: 1100, height: 750 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     const launcher = page.getByRole("button", { name: "AI 학습 대화 열기" });
     await launcher.click();
     const panel = page.getByRole("dialog", { name: "AI 학습 대화" });
-    await panel.getByLabel("메시지").fill("전송하지 않은 입력");
-    await panel.getByRole("button", { name: "API 설정", exact: true }).click();
-    await expect(page.getByRole("dialog", { name: /설정/ })).toBeVisible();
+    const message = panel.getByLabel("메시지");
+    await expect(panel.getByRole("status")).toContainText("Windows 설치 앱");
+    await expect(panel.getByRole("button", { name: "AI 연결 설정", exact: true })).toHaveCount(0);
+    await message.fill("전송하지 않은 입력");
+    await expect(panel.getByRole("button", { name: "전송", exact: true })).toBeDisabled();
+    await panel.getByRole("button", { name: "AI 대화 닫기" }).click();
+    await expect(panel).toBeHidden();
+
+    await page.getByRole("button", { name: "설정", exact: true }).click();
+    const settings = page.getByRole("dialog", { name: "설정", exact: true });
+    await expect(settings).toBeVisible();
     await expect(launcher).toBeHidden();
-    await page.keyboard.press("Escape");
+    await settings.getByRole("button", { name: "닫기", exact: true }).click();
+    await expect(settings).toBeHidden();
     await expect(launcher).toBeVisible();
     await launcher.click();
-    await expect(panel.getByLabel("메시지")).toHaveValue("전송하지 않은 입력");
+    await expect(panel).toBeVisible();
+    await expect(message).toHaveValue("전송하지 않은 입력");
 });
 for (const width of [1100, 680]) {
     test(`browser mode blocks AI sends and does not create transcript records at ${width}px`, async ({ page }) => {

@@ -1148,6 +1148,12 @@ export default function EntryDetail({
     const handleKeyDown = (event: KeyboardEvent) => {
       if (shouldIgnoreStudyShortcut(event)) return;
       const key = event.key.toLowerCase();
+      if (key === "escape" && focusMode !== "closed" && !event.defaultPrevented && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
+        event.preventDefault();
+        setFocusMode("closed");
+        window.requestAnimationFrame(() => document.querySelector<HTMLElement>('.detail-panel button[title="오답 집중 보기"]')?.focus());
+        return;
+      }
 
       if (["1", "2", "3"].includes(key) && focusMode === "closed" && theaterQuestionIndex === null) return;
 
@@ -1669,7 +1675,7 @@ export default function EntryDetail({
       )}
       {isFocusExpanded && isWrongAnswer && (
         <div className="focused-sheet-nav focused-sheet-nav--single" aria-label="오답 집중 보기">
-          <strong>{entry.title.trim() || "오답 집중 보기"}</strong>
+          <strong>{getEntryTitle(entry)}</strong>
           <button type="button" className="btn-secondary" onClick={() => setFocusMode("closed")}>
             나가기
           </button>
@@ -2352,7 +2358,7 @@ export default function EntryDetail({
           </button>
         </div>
       )}
-      {isFocusable && (
+      {isFocusable && !isFocusExpanded && (
         <EntryDetailStudyControls
           questionLabel={isSheet && detailViewMode === "paper" ? questionIdentifier(focusedQuestion) ?? undefined : undefined}
           isSheet={isSheet}
@@ -2556,7 +2562,7 @@ export default function EntryDetail({
       {isFocusMini && (isSheet ? focusedQuestion : isWrongAnswer) && (
         <aside className="focus-mini-player" aria-label="축소된 문제 집중 보기">
           <button type="button" className="focus-mini-main" onClick={() => setFocusMode("expanded")}>
-            <strong>{isSheet && focusedQuestion ? `문제 ${questionIdentifier(focusedQuestion) ?? focusedQuestion.displayNumber}` : entry.title || "오답 집중 보기"}</strong>
+            <strong>{isSheet && focusedQuestion ? `문제 ${questionIdentifier(focusedQuestion) ?? focusedQuestion.displayNumber}` : getEntryTitle(entry)}</strong>
             <span>{isSheet && focusedQuestion ? focusedQuestion.body.trim() || entry.title || "현재 문제" : entry.question.trim() || "현재 오답"}</span>
           </button>
           <div className="focus-mini-actions">

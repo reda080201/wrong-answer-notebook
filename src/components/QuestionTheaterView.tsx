@@ -158,6 +158,16 @@ export default function QuestionTheaterView({
 
   useEffect(() => {
     const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const background: { element: HTMLElement; inert: boolean; hidden: string | null }[] = [];
+    for (let branch: HTMLElement | null = dialogRef.current; branch?.parentElement; branch = branch.parentElement) {
+      for (const sibling of branch.parentElement.children) {
+        if (sibling === branch || !(sibling instanceof HTMLElement) || ["SCRIPT", "STYLE"].includes(sibling.tagName)) continue;
+        background.push({ element: sibling, inert: sibling.inert, hidden: sibling.getAttribute("aria-hidden") });
+        sibling.inert = true;
+        sibling.setAttribute("aria-hidden", "true");
+      }
+      if (branch.parentElement === document.body) break;
+    }
     const focusable = () => Array.from(
       dialogRef.current?.querySelectorAll<HTMLElement>(
         'summary, button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])',
@@ -198,6 +208,10 @@ export default function QuestionTheaterView({
       window.cancelAnimationFrame(frame);
       document.removeEventListener("keydown", handleKeyDown);
       dragCleanupRef.current?.();
+      for (const { element, inert, hidden } of background) {
+        element.inert = inert;
+        if (hidden === null) element.removeAttribute("aria-hidden"); else element.setAttribute("aria-hidden", hidden);
+      }
       if (previousFocus && isAvailableForInteraction(previousFocus)) previousFocus.focus();
     };
   }, [onClose]);

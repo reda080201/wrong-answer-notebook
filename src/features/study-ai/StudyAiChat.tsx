@@ -195,6 +195,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         if (lock.current || reloadLock.current || maintenance || !loaded)
             return;
         const epoch = generation.current;
+        const scopeOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         lock.current = true;setScopeBusy(true);
         try {
             if (sharing.images && !(storeRef.current.conversations.find(c => c.id === activeId)?.sharing.images) && !(await confirm({ title: "그림 입력 지원 확인", message: "연결한 모델이 그림 입력을 지원하는지 확인하세요. 그림을 API로 전송할까요?" })))
@@ -211,7 +212,13 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             setScopeNotice("전송 범위가 바뀌어 새 문맥으로 시작합니다. 이전 대화는 기록에 남고 다시 전송되지 않습니다. 이미 전송한 자료는 회수할 수 없습니다.");
         }
         finally {
-            if (epoch === generation.current) { lock.current = false;setScopeBusy(false); }
+            if (epoch === generation.current) {
+                lock.current = false;setScopeBusy(false);
+                window.requestAnimationFrame(() => {
+                    if (epoch !== generation.current || document.querySelector('[data-dialog-layer]') || !panelRef.current?.contains(scopeOpener)) return;
+                    if (document.activeElement === document.body) scopeOpener?.focus();
+                });
+            }
         }
     };
     const send = async (text = input, retry?: { conversationId: string; contextId: string; messageId: string }) => {

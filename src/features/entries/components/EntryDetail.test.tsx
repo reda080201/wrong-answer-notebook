@@ -1059,8 +1059,8 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     expect(bar).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 이전 문제" })).not.toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 다음 문제" })).not.toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 다시" })).not.toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     expect(within(bar).getByRole("button", { name: "하단 다시" })).toHaveTextContent("↺ 다시");
@@ -1088,6 +1088,37 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
     expect(within(bar).getByRole("button", { name: "하단 해설지 모드" })).toHaveTextContent("해설");
     expect(within(bar).getByRole("button", { name: "하단 특강 모드" })).toHaveTextContent("특강");
+  });
+
+  it("shows previous and next controls for a multi-question sheet", () => {
+    const entry: WrongAnswerEntry = {
+      ...sheetEntry,
+      structuredQuestions: [1, 2].map(number => ({
+        questionNumber: String(number),
+        questionText: `문항 ${number}`,
+        choices: [],
+        conditions: [],
+        equations: [],
+        contentSegments: [{ id: `text-${number}`, type: "text", text: `문항 ${number}` }],
+        figureIds: [],
+      })),
+    };
+    render(
+      <EntryDetail
+        entry={entry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const bar = screen.getByLabelText("학습 빠른 조작");
+    expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
   });
 
   it("uses compact study controls with a tools drawer and persists the preference", () => {

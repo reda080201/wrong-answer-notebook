@@ -142,6 +142,11 @@ function OpenDialog({
         else element.setAttribute("aria-hidden", ariaHidden);
       });
       (previousFocus?.isConnected && previousFocus !== document.body ? previousFocus : returnFocusFallbackRef.current?.())?.focus();
+      window.requestAnimationFrame(() => {
+        if (document.activeElement !== document.body || document.querySelector('[role="dialog"][data-dialog-layer]')) return;
+        const target = previousFocus?.isConnected ? previousFocus : returnFocusFallbackRef.current?.();
+        target?.focus();
+      });
     };
   }, [dialogLayer, initialFocusRef, open]);
 

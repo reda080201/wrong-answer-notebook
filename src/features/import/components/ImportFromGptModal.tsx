@@ -1677,6 +1677,7 @@ export default function ImportFromGptModal({
                     detectedFormat={detectedFormat}
                     questionCount={questionCount}
                     imageCount={images.length}
+                    sourcePageCount={draft.sourcePageImages?.length ?? 0}
                     figureCount={figures.length}
                     answerCount={answerKey.length}
                     hasMemo={hasMemo}

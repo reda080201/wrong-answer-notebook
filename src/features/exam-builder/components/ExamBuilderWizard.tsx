@@ -17,7 +17,7 @@ const PRESETS: Array<{ id: GeneratedExamPreset; title: string; description: stri
   { id: "quality", title: "좋은 문제만 모으기", description: "검수 상태와 정답·해설 연결을 기준으로 선별합니다." },
   { id: "weakness", title: "약점 집중 세트", description: "반복 실패·복습 필요 문항을 우선합니다." },
   { id: "wrong_retry", title: "오답 재시험", description: "선택 범위의 오답만 새 시험으로 구성합니다." },
-  { id: "random", title: "랜덤 복습", description: "seed 기반으로 재현 가능한 무작위 세트를 만듭니다." },
+  { id: "random", title: "랜덤 복습", description: "선택한 범위에서 문제를 무작위로 골라 구성합니다." },
   { id: "custom", title: "사용자 지정", description: "범위와 조건을 직접 고릅니다." },
 ];
 

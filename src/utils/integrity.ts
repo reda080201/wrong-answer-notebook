@@ -10,7 +10,7 @@ export async function readClientImageInventory(entries: WrongAnswerEntry[]): Pro
   if (getStorageBackendKind() !== "isolated-browser") {
     throw new Error("현재 저장 환경의 이미지 무결성 검사를 완료하지 못했습니다. 데스크톱 연결을 확인한 뒤 다시 검사하세요.");
   }
-  const referenced = getBrowserProtectedImageReferences(entries);
+  const referenced = getBrowserProtectedImageReferences(entries, { reporting: true });
   return { available: new Set(await listBrowserImageKeys()), referenced };
 }
 
