@@ -178,7 +178,7 @@ figure 예시:
     id: "builtin-important-notes",
     name: "중요 포인트 중심",
     builtIn: true,
-    content: "문제지와 답안지의 인쇄된 내용만 기준으로, 시험지 전체 핵심은 importantNotes에, 특정 문항 메모는 answerKey[].notes에, 문항별 풀이 포인트는 answerKey[].importantPoints에 정리해줘. 판단 가능한 오답 원인은 mistakeAnalysis.causes에 calculation/condition_misread/concept_gap/strategy_gap/time_pressure/choice_trap/careless/unknown 중에서 넣어줘. 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 모두 제외해줘. tags 필드와 최상위 difficulty 필드는 만들지 말고, 첫 글자가 {이고 마지막 글자가 }인 순수 JSON만 출력해줘.",
+    content: "문제지와 답안지의 인쇄된 내용만 기준으로, 시험지 전체 핵심은 importantNotes에, 특정 문항 메모는 answerKey[].notes에, 문항별 풀이 포인트는 answerKey[].importantPoints에 정리해줘. 일반적인 오답 함정은 wrongPoint에 기록하고, 실제 학생의 오답 원인을 알 수 없으면 mistakeAnalysis.causes를 비워 둬. 손글씨, 밑줄, 별표, 여백 메모, 학생 풀이 흔적은 모두 제외해줘. tags 필드와 최상위 difficulty 필드는 만들지 말고, 첫 글자가 {이고 마지막 글자가 }인 순수 JSON만 출력해줘.",
   },
   {
     id: "builtin-concept-links",

@@ -3,6 +3,20 @@ import { getBrowserProtectedImageReferences, loadBrowserEntriesForImageReference
 
 afterEach(() => localStorage.clear());
 describe("fail-closed image references", () => {
+  it("does not report a mapped page's original filename as missing, but still protects it from deletion", () => {
+    localStorage.setItem("wrong-answer-exam-sessions", JSON.stringify([{ questions: [{ sourcePageImages: ["stored.png"], source: { page: 1, reference: "photo.jpg" } }] }]));
+    expect([...getBrowserProtectedImageReferences([], { reporting: true })]).toEqual(["stored.png"]);
+    expect(getBrowserProtectedImageReferences([]).has("photo.jpg")).toBe(true);
+  });
+  it("keeps legacy source references and explicit missing assets in reports", () => {
+    localStorage.setItem("wrong-answer-exam-sessions", JSON.stringify([{ questions: [
+      { source: { reference: "legacy.jpg" } },
+      { sourcePageImages: ["stored.png"], source: { page: 1, reference: "photo.jpg" }, questionImages: ["photo.jpg"] },
+    ] }]));
+    const reported = getBrowserProtectedImageReferences([], { reporting: true });
+    expect(reported.has("legacy.jpg")).toBe(true);
+    expect(reported.has("photo.jpg")).toBe(true);
+  });
   it.each([
     ["wrong-answer-exam-sessions", { broken: "lost array" }],
     ["wrong-answer-exam-sessions", [{ questions: "lost questions" }]],

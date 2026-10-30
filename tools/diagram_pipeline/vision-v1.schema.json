@@ -413,6 +413,22 @@
               "additionalProperties": false
             },
             "maxItems": 300
+          },
+          "rejectedNotes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "maxItems": 1000
+          },
+          "importantNotes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "maxItems": 1000
           }
         },
         "required": [

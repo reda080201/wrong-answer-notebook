@@ -6,10 +6,11 @@ export interface StudyAssessment {
   solution: { proposedAnswer: string | null; summary: string; steps: string[]; strategy: string; selfCheck: string; confidence: number };
   scores: { difficulty: AssessmentScore; importance: AssessmentScore };
   classification: { subject?: string; curriculum?: string; unit?: string; subunit?: string; concepts: string[]; answerType: "multiple_choice" | "short_answer" | "essay" | "unknown" };
-  learning: { importantPoints: string[]; commonTraps: string[]; reviewPoint: string };
-  sourceAnswer: { status: "not_provided" | "matched" | "conflict" | "source_only" | "unreadable"; value: string | null; explanation: string | null; sourceKey?: string; page?: number };
+  learning: { importantPoints: string[]; commonTraps: string[]; reviewPoint: string; candidates?: AssessmentLearningCandidate[] };
+  sourceAnswer: { status: "not_provided" | "matched" | "conflict" | "source_only" | "unreadable"; value: string | null; explanation: string | null; sourceKey?: string; page?: number; intent?: string; notes?: string; choiceJudgements?: Array<{ marker: string; text: string }> };
   warnings: string[];
 }
+export interface AssessmentLearningCandidate { type: "concept" | "formula" | "routine" | "warning" | "review"; title: string; content: string; keywords?: string[]; relatedConcepts?: string[]; }
 export interface AssessmentScore { value: number | null; confidence: number; reasons: string[]; }
 export interface AssessmentEvidence {
   provider: "openai"; model: string; requestIds: string[]; responseHashes: string[];

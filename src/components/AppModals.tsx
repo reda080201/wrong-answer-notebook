@@ -1,8 +1,10 @@
+import { resolvePageRoles, type PageRoleReviewer } from "../features/import/vision/pageRoles";
 import { observeVisionInBatches } from "../features/import/vision/observationBatches";
 import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } from "../features/import/vision/assessmentCheckpoint";
 import { requestVisionAssessment } from "../services/api/ai";
 import { runPrepackageAssessment, type SourceRole } from "../features/import/vision/assessmentFlow";
 import type { VisionJobDraft } from "../features/import/vision/visionJob";
+import { bindWorkspaceVision } from "../features/import/vision/updateWorkspaceAssessment";
 import { readFigureTokenReferences } from "../utils/figureTokens";
 import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
 import { getImportAssetPreviewUrl } from "../services/api/importAssets";
@@ -262,7 +264,7 @@ export default function AppModals({
     const problemSheets = items.filter((item) => item.entryKind === "problem_sheet");
     if (problemSheets.length > 0 && problemSheets.length === items.length) {
       const staged = assetSession ? undefined : await stageImportAssetFiles(assetFiles ?? []);
-      setWorkspace({ ...buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession), ...(visionJob ? { visionJob } : {}) });
+      setWorkspace(bindWorkspaceVision({ ...buildWorkspace(problemSheets, assetFiles ?? [], staged ?? undefined, assetSession), ...(visionJob ? { visionJob } : {}) }));
       setWorkspaceAssetFiles(assetFiles ?? []);
       setWorkspaceVisionFiles(originalFiles ?? []);
       return;
@@ -422,15 +424,16 @@ export default function AppModals({
     onProgress: (progress: VisualImportProgress | { phase: "stage" | "analyze"; current: number; total?: number; indeterminate?: boolean; stageLabel?: string }) => void,
     roles?: SourceRole[],
     assessmentEnabled = true,
+    reviewPages?: PageRoleReviewer,
   ): Promise<VisualPaperImportResult> => {
     const throwIfAborted = () => { if (signal.aborted) throw new DOMException("시험지 분석을 취소했습니다.", "AbortError"); };
     throwIfAborted();
     const originals = Array.isArray(file) ? file : [file];
     if (!originals.length || originals.length > 100 || originals.reduce((n, original) => n + original.size, 0) > 100 * 1024 * 1024) throw new Error("원본 합계 100MiB 이하, 1~100개 파일을 선택하세요.");
-    const sourcePages: Array<{ sourceKey: string; pages: File[] }> = [];
+    const sourcePages: Array<{ sourceKey: string; name: string; pages: File[] }> = [];
     for (let index = 0; index < originals.length; index++) {
       const pages = await rasterizeVisualImportFile(originals[index], { signal, onProgress });
-      sourcePages.push({ sourceKey: `upload-${index + 1}`, pages: pages.map((page, ordinal) => new File([page], `source-${index + 1}-page-${ordinal + 1}.${page.name.split(".").at(-1)}`, { type: page.type })) });
+      sourcePages.push({ sourceKey: `upload-${index + 1}`, name: originals[index].name, pages: pages.map((page, ordinal) => new File([page], `source-${index + 1}-page-${ordinal + 1}.${page.name.split(".").at(-1)}`, { type: page.type })) });
     }
     const pageFiles = sourcePages.flatMap(source => source.pages);
     if (!assessmentEnabled && pageFiles.length > 12) throw new Error("기존 원본 관측은 한 번에 12페이지까지입니다. GPT 사전 평가 또는 외부 JSON 경로를 사용하세요.");
@@ -462,25 +465,34 @@ export default function AppModals({
       let assessmentEvidence: import("../features/import/vision/assessmentFlow").AssessmentRunEvidence | undefined;
       if (assessmentEnabled) {
       const roleBySource = new Map(sourcePages.map((source,index) => [source.sourceKey, roles?.[index] ?? "problem"]));
+      const mixedSources = sourcePages.filter(source => roleBySource.get(source.sourceKey) === "mixed");
+      if (mixedSources.length && !reviewPages) throw new Error("혼합 자료의 페이지 역할을 먼저 확인하세요.");
+      const selections = mixedSources.length ? await reviewPages!(mixedSources, signal) : [];
+      throwIfAborted();
+      const pageRoles = resolvePageRoles(sourcePages, sourcePages.map(source => roleBySource.get(source.sourceKey)!), selections);
+      const pageRole = (ref: {sourceKey:string;page:number}) => pageRoles.find(row => row.sourceKey === ref.sourceKey && row.page === ref.page)?.role;
       const names = (refs: Array<{ sourceKey: string; page: number }>) => [...new Set(refs.map(ref => {
         const file = sourcePages.find(source => source.sourceKey === ref.sourceKey)?.pages[ref.page - 1];
         if (!file) throw new Error("분석 페이지 연결을 확인하지 못했습니다.");
         return staged.sourceToStaged[file.name];
       }))];
-      const problemRefs = sourcePages.filter(source => roleBySource.get(source.sourceKey) !== "answer").flatMap(source => source.pages.map((_,index) => ({ sourceKey: source.sourceKey, page: index + 1 })));
+      const problemRefs = pageRoles.filter(row => row.role === "problem" || row.role === "mixed").map(({sourceKey,page}) => ({sourceKey,page}));
       if (!problemRefs.length) throw new Error("문제 자료를 한 개 이상 선택하세요.");
-      const hashes = [...await sourceHashes(originals), ...(roles ?? originals.map(() => "problem"))];
-      const checkpoint = readAssessmentCheckpoint(hashes);
-      const initialEvidence = checkpoint?.evidence ?? { independent: [...roleBySource.values()].every(role => role !== "mixed"), stages: [] };
+      const hashes = [...await sourceHashes(originals), JSON.stringify(pageRoles)];
+      const checkpoint = readAssessmentCheckpoint(hashes, originals.length);
+      const initialEvidence = {
+        independent: pageRoles.every(row => row.role !== "mixed") && (checkpoint?.evidence.independent ?? true),
+        stages: [],
+      };
       const observed = checkpoint && checkpoint.observationComplete !== false ? checkpoint.analysis : await observeVisionInBatches({
         sources: sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })), refs: problemRefs, previous: checkpoint?.observationParts, signal,
-        request: async (refs,batchPrompt) => (await requestVisionAssessment(prompt + "\n" + batchPrompt, "문항을 관측하세요. 정답 추출과 풀이는 아직 하지 마세요.", names(refs), staged.sessionId, signal)).text,
+        request: async (refs,batchPrompt) => (await requestVisionAssessment(prompt + "\n" + batchPrompt, "문항을 관측하세요. 정답 추출과 풀이는 아직 하지 마세요. 인쇄 원문만 questionText에 넣고 학생 필기는 question.rejectedNotes에 분리하세요. entry.importantNotes에는 인쇄된 전체 공통 주의사항만 기록하세요.", names(refs), staged.sessionId, signal)).text,
         checkpoint: async (parts,partial,completed) => { retainedAnalysis = JSON.stringify(partial); writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: partial, evidence: initialEvidence, cache: {}, observationParts: parts, observationComplete: completed }); onProgress({ phase: "analyze", current: Math.min(parts.length * 3, problemRefs.length), total: problemRefs.length, stageLabel: "원본 읽는 중" }); },
       });
       writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: observed, evidence: initialEvidence, cache: checkpoint?.cache ?? {}, observationComplete: true });
-      const answerRefs = sourcePages.filter(source => roleBySource.get(source.sourceKey) !== "problem").flatMap(source => source.pages.map((_,index) => ({ sourceKey: source.sourceKey, page: index + 1 })));
+      const answerRefs = pageRoles.filter(row => row.role === "answer" || row.role === "mixed").map(({sourceKey,page}) => ({sourceKey,page}));
       const stageLabels = { vision_observed: "원본 읽기 완료", solution_attempted: "GPT 풀이 중", scores_assessed: "난이도·중요도 평가 중", answer_compared: "정답지 대조 중", prepackage_validated: "파일 생성 가능" };
-      const assessed = await runPrepackageAssessment(observed, (stagePrompt,input,refs,stage) => { if (stage !== "answer_compared" && refs.some(ref => roleBySource.get(ref.sourceKey) === "answer")) throw new Error("풀이에 답안 페이지를 전달할 수 없습니다. 문항 출처를 검토하세요."); return requestVisionAssessment(stagePrompt,input,names(refs),staged.sessionId,signal); }, {
+      const assessed = await runPrepackageAssessment(observed, (stagePrompt,input,refs,stage) => { if (stage !== "answer_compared" && refs.some(ref => pageRole(ref) !== "problem" && pageRole(ref) !== "mixed")) throw new Error("풀이에 답안 페이지를 전달할 수 없습니다. 문항 출처를 검토하세요."); return requestVisionAssessment(stagePrompt,input,names(refs),staged.sessionId,signal); }, {
         cache: checkpoint?.cache,
         checkpoint: async (analysis,evidence,cache) => { writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis, evidence, cache, observationComplete: true }); },
         answerRefs, independent: initialEvidence.independent, signal,

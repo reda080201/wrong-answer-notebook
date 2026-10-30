@@ -17,19 +17,25 @@ const BROWSER_IMAGE_REFERENCE_KEYS = [
   "wrong-answer-pending-deletions",
 ] as const;
 
-function collectImageFilenames(value: unknown, referenced: Set<string>): void {
+function collectImageFilenames(value: unknown, referenced: Set<string>, reporting = false, pages: unknown[] = [], parentKey = ""): void {
   if (typeof value === "string") {
     if (/^[^/\\:]{1,255}\.(?:png|jpe?g|gif|webp)$/i.test(value) && !value.includes("..")) referenced.add(value);
   } else if (Array.isArray(value)) {
-    value.forEach((item) => collectImageFilenames(item, referenced));
+    value.forEach((item) => collectImageFilenames(item, referenced, reporting, pages, parentKey));
   } else if (value && typeof value === "object") {
-    Object.values(value as Record<string, unknown>).forEach((item) => collectImageFilenames(item, referenced));
+    const record = value as Record<string, unknown>;
+    const sourcePages = Array.isArray(record.sourcePageImages) ? record.sourcePageImages : pages;
+    for (const [key, item] of Object.entries(record)) {
+      // A mapped source page is the asset; reference retains its original printed filename.
+      if (reporting && parentKey === "source" && key === "reference" && Number.isInteger(record.page) && Number(record.page) > 0 && typeof sourcePages[Number(record.page) - 1] === "string") continue;
+      collectImageFilenames(item, referenced, reporting, sourcePages, key);
+    }
   }
 }
 
 export function getBrowserProtectedImageReferences(
   entries: WrongAnswerEntry[],
-  options: { excludePendingDeletionIds?: readonly string[]; includeStoredEntries?: boolean; onlyKeys?: readonly string[]; excludeAiStudy?: boolean } = {},
+  options: { excludePendingDeletionIds?: readonly string[]; includeStoredEntries?: boolean; onlyKeys?: readonly string[]; excludeAiStudy?: boolean; reporting?: boolean } = {},
 ): Set<string> {
   const referenced = new Set(entries.flatMap(getAllImageFilenames));
   const excluded = new Set(options.excludePendingDeletionIds ?? []);
@@ -55,7 +61,7 @@ export function getBrowserProtectedImageReferences(
     if (key === "wrong-answer-pending-deletions" && Array.isArray(value)) {
       value = value.filter((record) => !record || typeof record !== "object" || !excluded.has(String((record as { id?: unknown }).id ?? "")));
     }
-    collectImageFilenames(value, referenced);
+    collectImageFilenames(value, referenced, options.reporting);
   }
   return referenced;
 }

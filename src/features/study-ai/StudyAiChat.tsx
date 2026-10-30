@@ -23,11 +23,12 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     onSaveExam(exam: GeneratedExam): Promise<void> | void;
     onStartExam(exam: GeneratedExam): Promise<void> | void;
     onSettings(): void;
-    connection?: { available: boolean; pending?: boolean; reason?: string };
+    connection?: { available: boolean; pending?: boolean; reason?: string; unsupported?: boolean };
 }) {
     const { confirm, prompt } = useAppDialog();
     const [includeBackup, setIncludeBackup] = useState(() => localStorage.getItem(AI_BACKUP_PREFERENCE_KEY) === "true");
     const [open, setOpen] = useState(false);
+    const [materialsOpen, setMaterialsOpen] = useState(false);
     const [store, setStore] = useState<AiStudyStore>(emptyAiStudyStore);
     const storeRef = useRef(store);
     const persistedIds = useRef(new Set<string>());
@@ -194,6 +195,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         if (lock.current || reloadLock.current || maintenance || !loaded)
             return;
         const epoch = generation.current;
+        const scopeOpener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         lock.current = true;setScopeBusy(true);
         try {
             if (sharing.images && !(storeRef.current.conversations.find(c => c.id === activeId)?.sharing.images) && !(await confirm({ title: "그림 입력 지원 확인", message: "연결한 모델이 그림 입력을 지원하는지 확인하세요. 그림을 API로 전송할까요?" })))
@@ -210,7 +212,13 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             setScopeNotice("전송 범위가 바뀌어 새 문맥으로 시작합니다. 이전 대화는 기록에 남고 다시 전송되지 않습니다. 이미 전송한 자료는 회수할 수 없습니다.");
         }
         finally {
-            if (epoch === generation.current) { lock.current = false;setScopeBusy(false); }
+            if (epoch === generation.current) {
+                lock.current = false;setScopeBusy(false);
+                window.requestAnimationFrame(() => {
+                    if (epoch !== generation.current || document.querySelector('[data-dialog-layer]') || !panelRef.current?.contains(scopeOpener)) return;
+                    if (document.activeElement === document.body) scopeOpener?.focus();
+                });
+            }
         }
     };
     const send = async (text = input, retry?: { conversationId: string; contextId: string; messageId: string }) => {
@@ -291,15 +299,16 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         }
     };
     const close = () => { setOpen(false); (returnFocus.current?.isConnected ? returnFocus.current : launcher.current)?.focus(); };
-    const panel = open && <aside ref={panelRef} tabIndex={-1} role="dialog" aria-label="AI 학습 대화" aria-modal={compact} className="study-ai-panel" onKeyDown={e => {
+    const panel = open && <aside ref={panelRef} tabIndex={-1} role="dialog" aria-label="AI 학습 대화" aria-modal={compact} className={`study-ai-panel ${materialsOpen ? "study-ai-panel--materials" : ""}`} onKeyDown={e => {
             if (e.key === "Escape") {
                 e.stopPropagation();
-                close();
+                if (materialsOpen) { setMaterialsOpen(false); panelRef.current?.querySelector<HTMLElement>(".ai-material-picker > summary")?.focus(); }
+                else close();
             }
             else if (["ArrowLeft", "ArrowRight"].includes(e.key))
                 e.stopPropagation();
         }}>
-    <header><h2>AI 학습 대화</h2><button type="button" onClick={() => { close(); onSettings(); }}>API 설정</button><button aria-label="AI 대화 닫기" onClick={close}>✕</button></header>
+    <header><h2>{materialsOpen ? "AI가 볼 자료" : "AI 학습 대화"}</h2>{materialsOpen ? <button type="button" onClick={() => { setMaterialsOpen(false); panelRef.current?.querySelector<HTMLElement>(".ai-material-picker > summary")?.focus(); }}>선택 완료 · 대화로</button> : connection?.available && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정</button>}<button aria-label="AI 대화 닫기" onClick={close}>✕</button></header>
     <div className="ai-context-summary">AI가 볼 자료: {active?.materials.length ?? 0}문항 · {Object.entries(active?.sharing ?? DEFAULT_AI_SHARING).filter(([, value]) => value).map(([key]) => SHARING_LABELS[key as keyof AiSharing]).join(" / ")}{realActive && <p>진행 중 실전 시험의 자료는 첨부할 수 없습니다.</p>}</div>
     <div className="ai-chat-controls">
     <div className="ai-conversation-tools"><select aria-label="대화 기록" value={activeId} disabled={busy || loading || maintenance} onChange={e => { setActiveId(e.target.value); setError(""); setInput(""); setScopeNotice(""); }}><option value="">자료 없는 새 대화</option>{store.conversations.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select><button disabled={busy || loading || maintenance} onClick={() => run(startNew())}>새 대화</button>
@@ -333,17 +342,17 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                     setError("백업 포함 설정을 저장하지 못했습니다.");
                 }
             }}/>수동 백업에 대화·첨부 자료 포함</label></details></div>
-    <AiMaterialPicker available={available} selected={active?.materials ?? []} sharing={active?.sharing ?? DEFAULT_AI_SHARING} disabled={busy || scopeBusy || !loaded || maintenance} onChange={(m, s) => run(changeScope(m, s))}/>
+    <AiMaterialPicker open={materialsOpen} onOpenChange={setMaterialsOpen} available={available} selected={active?.materials ?? []} sharing={active?.sharing ?? DEFAULT_AI_SHARING} disabled={busy || scopeBusy || !loaded || maintenance} onChange={(m, s) => run(changeScope(m, s))}/>
     <div className="ai-inline-actions"><button disabled={busy || maintenance || !currentMaterials.length} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...currentMaterials].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>현재 문항 추가</button><button disabled={busy || maintenance || !selection?.selectedNumbers.length || selection.entryId !== selectedEntryId} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...available.filter(m => m.source.sourceEntryId === selection?.entryId && selection.selectedNumbers.map(normalizeQuestionNumber).includes(normalizeQuestionNumber(m.source.sourceQuestionNumber)))].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>선택 문항 추가</button></div>
     </div>
     <div className="ai-messages" ref={scroll} aria-live="polite">
     {loading && <p>대화 불러오는 중…</p>}
     {scopeNotice && <p className="ai-scope-notice" role="status">{scopeNotice}</p>}
-    {!loading && !active?.messages.length && <p>자유롭게 대화하세요. 문제를 함께 보려면 먼저 자료를 추가하세요.</p>}{active?.messages.map(m => <article key={m.id} className={`ai-message ai-message--${m.role}`}><strong>{m.role === "user" ? "나" : "AI"}</strong>{m.contextId !== active.contextId && <small>이전 문맥 · 재전송하지 않음</small>}<AiMessageContent text={(protection.unavailable || blockedIds.size > 0) && [...(active?.materials ?? []), ...(active?.contexts?.find(ctx => ctx.id === m.contextId)?.materials ?? [])].some(material => protection.unavailable || blockedIds.has(material.source.sourceEntryId)) ? "진행 중 실전 시험에 연결된 이전 대화는 제출 후 확인할 수 있습니다." : m.text}/>{busy && m.role === "assistant" && m.id === active?.messages.at(-1)?.id ? <small>응답 생성 중…</small> : m.status === "failed" || m.status === "stopped" ? <small>{m.status === "failed" ? "실패" : "중지"} · 다음 요청에 포함하지 않음</small> : null}</article>)}
+    {!loading && !active?.messages.length && <p>{active?.materials.length ? `${active.materials.length}문항이 첨부되어 있습니다.` : "자료를 추가하거나 자유롭게 질문하세요."}</p>}{active?.messages.map(m => <article key={m.id} className={`ai-message ai-message--${m.role}`}><strong>{m.role === "user" ? "나" : "AI"}</strong>{m.contextId !== active.contextId && <small>이전 문맥 · 재전송하지 않음</small>}<AiMessageContent text={(protection.unavailable || blockedIds.size > 0) && [...(active?.materials ?? []), ...(active?.contexts?.find(ctx => ctx.id === m.contextId)?.materials ?? [])].some(material => protection.unavailable || blockedIds.has(material.source.sourceEntryId)) ? "진행 중 실전 시험에 연결된 이전 대화는 제출 후 확인할 수 있습니다." : m.text}/>{busy && m.role === "assistant" && m.id === active?.messages.at(-1)?.id ? <small>응답 생성 중…</small> : m.status === "failed" || m.status === "stopped" ? <small>{m.status === "failed" ? "실패" : "중지"} · 다음 요청에 포함하지 않음</small> : null}</article>)}
     {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
-    {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
+    {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && !connection?.unsupported && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
     <div className="ai-chat-errors">{error && <div role="alert" className="form-error">{error}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
     <form onSubmit={e => { e.preventDefault(); void send(); }}><label>메시지<textarea ref={inputRef} value={input} disabled={maintenance} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {

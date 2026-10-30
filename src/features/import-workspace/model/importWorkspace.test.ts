@@ -7,6 +7,7 @@ import {
   updateDraftContentSegment,
 } from "./importWorkspace";
 import { validateImportWorkspace } from "../services/validateImportWorkspace";
+import { renameQuestionNumber } from "../services/renameQuestionNumber";
 
 function draft(overrides: Partial<ImportQuestionDraft> = {}): ImportQuestionDraft {
   return {
@@ -33,6 +34,64 @@ function group(question = draft()): ImportDraftGroup {
 }
 
 describe("import workspace image separation", () => {
+  it("filters excluded learning card candidates while preserving other source metadata", () => {
+    const metadata = {
+      tags: ["기출"],
+      memo: "원본 메모",
+      questionMeta: [{ questionNumber: "1", important: true, updatedAt: "2026-01-01T00:00:00.000Z" }],
+      learningBlocks: [
+        { id: "keep", type: "concept" as const, title: "유지 후보", content: "내용", sourceQuestionNumber: "1" },
+        { id: "exclude", type: "concept" as const, title: "제외 후보", content: "내용", sourceQuestionNumber: "1" },
+      ],
+    };
+    const input = { ...group(), entryMetadata: metadata, excludedLearningBlockIds: ["exclude"] };
+
+    const result = questionDraftToEntryData(input);
+
+    expect(result.learningBlocks).toEqual([metadata.learningBlocks[0]]);
+    expect(result.tags).toEqual(metadata.tags);
+    expect(result.memo).toBe(metadata.memo);
+    expect(result.questionMeta).toEqual(metadata.questionMeta);
+    expect(input.entryMetadata).toEqual(metadata);
+  });
+
+  it("renames question metadata, learning block links, and hotspot keys while preserving unrelated records", () => {
+    const original = group(draft({ displayQuestionNumber: "3", sourceQuestionNumber: "3", section: "대수" }));
+    original.entryMetadata = {
+      questionMeta: [
+        { questionNumber: "3", important: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+        { questionNumber: "8", important: false, updatedAt: "2026-01-01T00:00:00.000Z" },
+      ],
+      learningBlocks: [
+        { id: "linked", type: "concept", title: "연결", content: "내용", sourceQuestionNumber: "3" },
+        { id: "unlinked", type: "concept", title: "유지", content: "내용", sourceQuestionNumber: "8" },
+      ],
+      questionSolutionHotspots: [
+        { id: "linked-hotspot", sourcePageImage: "page.png", questionKey: JSON.stringify(["3", "대수"]), x: 0.2, y: 0.3 },
+        { id: "other-hotspot", sourcePageImage: "page.png", questionKey: JSON.stringify(["8", ""]), x: 0.4, y: 0.5 },
+      ],
+    };
+
+    const renamed = renameQuestionNumber(original, "question-1", "7");
+
+    expect(renamed.questions[0]).toEqual(expect.objectContaining({ displayQuestionNumber: "7", sourceQuestionNumber: "7" }));
+    expect(renamed.entryMetadata?.questionMeta).toEqual([
+      { questionNumber: "7", important: true, updatedAt: "2026-01-01T00:00:00.000Z" },
+      { questionNumber: "8", important: false, updatedAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+    expect(renamed.entryMetadata?.learningBlocks).toEqual([
+      { id: "linked", type: "concept", title: "연결", content: "내용", sourceQuestionNumber: "7" },
+      { id: "unlinked", type: "concept", title: "유지", content: "내용", sourceQuestionNumber: "8" },
+    ]);
+    expect(renamed.entryMetadata?.questionSolutionHotspots).toEqual([
+      { id: "linked-hotspot", sourcePageImage: "page.png", questionKey: JSON.stringify(["7", "대수"]), x: 0.2, y: 0.3 },
+      { id: "other-hotspot", sourcePageImage: "page.png", questionKey: JSON.stringify(["8", ""]), x: 0.4, y: 0.5 },
+    ]);
+    expect(original.entryMetadata?.questionMeta?.[0].questionNumber).toBe("3");
+    expect(original.entryMetadata?.learningBlocks?.[0].sourceQuestionNumber).toBe("3");
+    expect(original.entryMetadata?.questionSolutionHotspots?.[0].questionKey).toBe(JSON.stringify(["3", "대수"]));
+  });
+
   it("keeps question images separate from source page images", () => {
     const result = questionDraftToEntryData({
       id: "group-1",

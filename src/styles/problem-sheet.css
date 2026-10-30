@@ -17,6 +17,35 @@
   height: var(--control-height-compact);
 }
 
+.sheet-toc--inline {
+  margin-bottom: var(--space-3);
+}
+
+.problem-sheet-primary-controls > button,
+.problem-sheet-primary-controls > .problem-sheet-display-mode {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .detail-toolbar.detail-toolbar--problem-sheet {
+    max-height: none;
+    overflow: visible;
+  }
+  .detail-toolbar--problem-sheet .problem-sheet-primary-controls {
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+@media screen {
+  .detail-title-block.detail-title-block--sheet-reading {
+    padding-bottom: 0;
+    margin-bottom: var(--space-2);
+    border: 0;
+  }
+}
+
 @media (max-width: 1100px) {
   .sheet-search--inline { width: min(100%, 360px); grid-column: 1 / -1; }
   .problem-sheet-primary-toolbar {
@@ -76,3 +105,17 @@
     animation-duration: 1ms !important;
   }
 }
+
+.detail-study-flow { margin-bottom: var(--space-2); }
+.detail-study-flow > summary { cursor: pointer; font: var(--type-body); color: var(--ink-secondary); }
+.detail-panel--review .detail-title-block:not(:has(.detail-title-edit)) { margin-bottom: var(--space-2); padding-bottom: var(--space-2); }
+.entry-list-return-label { font-size: 12px; }
+@media (max-width: 720px) { .entry-pane-restore .ui-icon-button { height: auto; min-height: 48px; display: flex; flex-direction: column; } .detail-meta-row { font-size: 13px; } .study-control-row--primary { flex-wrap: wrap; } }
+
+.detail-panel--review .detail-title { font: var(--type-section); margin-bottom: var(--space-1); }
+.detail-panel--review .detail-date { font-size: 13px; }
+.detail-panel--review .detail-meta-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin-bottom: 0; }
+.detail-panel--review .detail-meta-row .detail-date { margin: 0; }
+.detail-panel--review .detail-title-block:not(:has(.detail-title-edit)) { padding-bottom: 0; margin-bottom: var(--space-2); border-bottom: 0; }
+
+@media screen { .detail-panel--review .study-paper--compact { padding: 0; border: 0; background: transparent; } .detail-panel--review .study-paper--compact > .study-paper-sheet { padding: var(--space-2); border: 0; box-shadow: none; } }

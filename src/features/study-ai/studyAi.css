@@ -58,3 +58,20 @@ body:has(.exam-session-view, .real-exam-session) > .study-ai-launcher { display:
 .ai-material-picker > fieldset input { margin: 0; flex: 0 0 auto; }
 .ai-material-picker > p { font-size: 13px; line-height: 1.5; }
 .ai-material-search input { flex: 1; min-width: 0; min-height: 36px; font-size: 14px; }
+.ai-material-add-menu:has([role="menu"]) { flex-basis: 100%; }
+.ai-material-add-menu > .detail-more-menu-popover { position: static; min-width: 0; margin-top: var(--space-2); box-shadow: none; border-radius: var(--radius-control); background: var(--surface-primary); }
+
+body:has(.study-control-bar) > .study-ai-launcher { display: none; }
+body:has(.question-theater[aria-modal="true"], [role="dialog"][data-dialog-layer]) .study-control-bar { visibility: hidden; pointer-events: none; }
+
+/* Material review owns the available panel space until the user returns to chat. */
+.study-ai-panel--materials .ai-messages,
+.study-ai-panel--materials .ai-chat-footer,
+.study-ai-panel--materials .ai-conversation-tools { display: none; }
+.study-ai-panel--materials .ai-chat-controls { flex: 1; max-height: none; overflow: hidden; }
+.study-ai-panel--materials .ai-material-picker { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.study-ai-panel--materials .ai-material-picker > :not(.ai-material-list) { flex-shrink: 0; }
+.study-ai-panel--materials .ai-material-list { flex: 1; min-height: 80px; overflow-y: auto; }
+.study-ai-panel--materials .ai-selected-materials { max-height: none; overflow: visible; }
+.study-ai-panel button { min-height: 36px; font-size: 14px; }
+@media (max-width: 700px) { .study-ai-panel button { min-height: 40px; } }

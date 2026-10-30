@@ -63,6 +63,34 @@ function openViewSettings() {
 }
 
 describe("EntryDetail sheet layout", () => {
+  it("restores the explicit text view after an exam unmount without changing the original default", () => {
+    vi.stubGlobal("ResizeObserver", class { observe() {} disconnect() {} unobserve() {} });
+    Object.defineProperty(HTMLElement.prototype, "scrollTo", { configurable: true, value: vi.fn() });
+    const entry = { ...sheetEntry, id: "exam-return-reading", sourcePageImages: ["page.png"] };
+    const props = { entry, onStartExam: vi.fn(), onEdit: vi.fn(), onDelete: vi.fn(), onToggleMastered: vi.fn(), onToggleDifficult: vi.fn(), onAnnotationsChange: vi.fn(), onWikiLinkClick: vi.fn(), existingTargets: new Set<string>() };
+    const first = render(<EntryDetail {...props} />);
+    expect(screen.getByRole("button", { name: "원본 시험지" })).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(screen.getByRole("button", { name: "문항별" }));
+    fireEvent.click(screen.getByRole("button", { name: "문제 풀기" }));
+    expect(props.onStartExam).toHaveBeenCalledOnce();
+    first.unmount();
+    render(<StrictMode><EntryDetail {...props} /></StrictMode>);
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
+  });
+  it("keeps the sheet title once and moves the canonical table of contents into the toolbar", () => {
+    const entry: WrongAnswerEntry = { ...sheetEntry, structuredQuestions: [1, 2].map(number => ({ questionNumber: String(number), questionText: `목차 본문 ${number}`, choices: [], conditions: [], equations: [], contentSegments: [{ id: `text-${number}`, type: "text", text: `목차 본문 ${number}` }], figureIds: [] })) };
+    const { container } = render(<EntryDetail entry={entry} onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()} onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} />);
+    expect(screen.getAllByText(entry.title)).toHaveLength(1);
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "교재형 문제지" })).not.toBeInTheDocument();
+    const toolbar = screen.getByLabelText("문제지 도구 모음");
+    fireEvent.click(within(toolbar).getByRole("button", { name: "문항 목록" }));
+    const target = container.querySelector("#sheet-question-canonical-2")!;
+    const scroll = vi.spyOn(target, "scrollIntoView");
+    fireEvent.click(within(screen.getByRole("navigation", { name: "문제 번호 목차" })).getByRole("button", { name: "2" }));
+    expect(scroll).toHaveBeenCalledWith({ block: "start", behavior: "smooth" });
+    scroll.mockRestore();
+  });
   beforeEach(() => {
     localStorage.clear();
     Element.prototype.scrollIntoView = vi.fn();
@@ -119,9 +147,9 @@ describe("EntryDetail sheet layout", () => {
       chatGptPreferences={DEFAULT_CHATGPT_MCP_PREFERENCES} onChatGptPreferencesChange={vi.fn()} onSyncExportContext={sync}
     />);
     openSecondaryAction("집중 보기");
-    fireEvent.click(screen.getByRole("button", { name: "하단 도구 열기" }));
     const shareButton = screen.getByTestId("question-chatgpt-help");
-    expect(shareButton).toHaveTextContent("GPT 질문 · 1번");
+    expect(shareButton).toHaveTextContent("GPT 질문 · 31번");
+    expect(screen.queryByLabelText("학습 빠른 조작")).not.toBeInTheDocument();
     fireEvent.click(shareButton);
     const dialog = screen.getByRole("dialog", { name: "ChatGPT에서 도움받기" });
     expect((within(dialog).getByRole("textbox", { name: "편집할 ChatGPT 프롬프트" }) as HTMLTextAreaElement).value).not.toContain("정답_31");
@@ -415,7 +443,8 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "문항별" })).toBeInTheDocument();
     fireEvent.click(screen.getByText("GPT 학습용 시각화 1개"));
     expect(await screen.findByText("접선 시각화")).toBeVisible();
@@ -1030,8 +1059,8 @@ describe("EntryDetail sheet layout", () => {
 
     const bar = screen.getByLabelText("학습 빠른 조작");
     expect(bar).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 이전 문제" })).not.toBeInTheDocument();
+    expect(within(bar).queryByRole("button", { name: "하단 다음 문제" })).not.toBeInTheDocument();
     expect(within(bar).queryByRole("button", { name: "하단 다시" })).not.toBeInTheDocument();
     fireEvent.click(within(bar).getByRole("button", { name: "하단 도구 열기" }));
     expect(within(bar).getByRole("button", { name: "하단 다시" })).toHaveTextContent("↺ 다시");
@@ -1052,12 +1081,49 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getAllByText("특강 노트").length).toBeGreaterThan(0);
 
     openSecondaryAction("문제로 돌아가기");
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
 
     openSecondaryAction("집중 보기");
-    expect(within(bar).getByRole("button", { name: "하단 문제지 모드" })).toHaveTextContent("문제");
-    expect(within(bar).getByRole("button", { name: "하단 해설지 모드" })).toHaveTextContent("해설");
-    expect(within(bar).getByRole("button", { name: "하단 특강 모드" })).toHaveTextContent("특강");
+    expect(screen.queryByLabelText("학습 빠른 조작")).not.toBeInTheDocument();
+    const panels = screen.getByLabelText("집중 보기 패널");
+    fireEvent.click(within(panels).getByRole("button", { name: /^문제$/ }));
+    expect(within(panels).getByRole("button", { name: /^답지$/ })).toBeDisabled();
+    expect(within(panels).getByRole("button", { name: /^필기$/ })).toBeDisabled();
+    expect(screen.getByLabelText("문제 집중 보기 이동")).toHaveTextContent("문제 1");
+    fireEvent.click(within(screen.getByLabelText("문제 집중 보기 이동")).getByRole("button", { name: "나가기" }));
+    expect(screen.getByLabelText("학습 빠른 조작")).toBeInTheDocument();
+  });
+
+  it("shows previous and next controls for a multi-question sheet", () => {
+    const entry: WrongAnswerEntry = {
+      ...sheetEntry,
+      structuredQuestions: [1, 2].map(number => ({
+        questionNumber: String(number),
+        questionText: `문항 ${number}`,
+        choices: [],
+        conditions: [],
+        equations: [],
+        contentSegments: [{ id: `text-${number}`, type: "text", text: `문항 ${number}` }],
+        figureIds: [],
+      })),
+    };
+    render(
+      <EntryDetail
+        entry={entry}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        onToggleMastered={vi.fn()}
+        onToggleDifficult={vi.fn()}
+        onAnnotationsChange={vi.fn()}
+        onWikiLinkClick={vi.fn()}
+        existingTargets={new Set()}
+      />,
+    );
+
+    const bar = screen.getByLabelText("학습 빠른 조작");
+    expect(within(bar).getByRole("button", { name: "하단 이전 문제" })).toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 다음 문제" })).toBeInTheDocument();
   });
 
   it("uses compact study controls with a tools drawer and persists the preference", () => {
@@ -1273,7 +1339,8 @@ describe("EntryDetail sheet layout", () => {
     expect(screen.getByText("학습 분석")).toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "p" });
-    expect(screen.getByText("교재형 문제지")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "paper 학습 패널" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "문항별" })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("ignores keyboard shortcuts while typing in quick memo", () => {
@@ -1521,6 +1588,11 @@ describe("source target navigation", () => {
       onEdit={vi.fn()} onDelete={vi.fn()} onToggleMastered={vi.fn()} onToggleDifficult={vi.fn()}
       onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()}
     /></StrictMode>);
+    const theater = await screen.findByRole("dialog", { name: "문제 크게 보기" });
+    expect(theater).toHaveTextContent("둘째 문항");
+    expect(theater).toHaveTextContent("문제 2");
+    expect(screen.queryByRole("combobox", { name: "학습할 현재 문항" })).not.toBeInTheDocument();
+    fireEvent.click(within(theater).getByRole("button", { name: "문제 크게 보기 닫기" }));
     await waitFor(() => expect(screen.getByRole("combobox", { name: "학습할 현재 문항" })).toHaveValue(JSON.stringify(["2", ""])));
   });
 });

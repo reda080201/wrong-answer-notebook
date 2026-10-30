@@ -145,10 +145,10 @@ export default function EntryListPane({
           type="button"
           className="ui-icon-button"
           aria-label="항목 목록 펼치기"
-          title="항목 목록 펼치기"
+          title="목록"
           onClick={() => onCollapsedChange?.(false)}
         >
-          <ChevronRight size={17} />
+          <ChevronRight size={17} /><span className="entry-list-return-label">목록</span>
         </button>
       </aside>
     );

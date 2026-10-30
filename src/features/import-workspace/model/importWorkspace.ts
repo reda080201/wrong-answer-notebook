@@ -36,7 +36,7 @@ export interface ImportWorkspaceWarning { id: string; severity: ImportWarningSev
 export interface ImportAnswerDraft extends Partial<SheetAnswerItem> { id: string; questionId?: string; confidence?: number; confirmed?: boolean; }
 export interface ImportFigureDraft extends SheetFigureItem { assetId?: string; confirmed?: boolean; }
 export interface ImportQuestionDraft {
-  originalStructuredQuestion?: StructuredQuestion;
+  visionQuestionKey?: string; originalStructuredQuestion?: StructuredQuestion;
   id: string; groupId: string; order: number; displayQuestionNumber: string; sourceQuestionNumber?: string; passage?: string;
   section?: string; questionType?: string; conditions?: string[]; equations?: string[]; points?: number;
   contentSegments: QuestionContentSegment[]; choices: Array<{ id: string; marker: string; content: string }>;
@@ -50,7 +50,7 @@ export type ImportEntryMetadata = Partial<Pick<EntryFormData,
   "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks" |
   "questionSourceCrops" | "questionSolutionHotspots" | "memo" | "myAnswer" | "correctAnswer" | "annotations" | "difficult" | "mastered"
 >> & { unknownFields?: Record<string, unknown> };
-export interface ImportDraftGroup { compatibilityText?: string; originalQuestions?: Array<{ id: string; question: StructuredQuestion }>; solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
+export interface ImportDraftGroup { visionEntryKey?: string; excludedLearningBlockIds?: string[]; compatibilityText?: string; originalQuestions?: Array<{ id: string; question: StructuredQuestion }>; solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }
 export interface ImportCommitAttempt { entryIds: string[]; groupIds: string[]; state: "pending" | "completed"; attemptId?: string; createdAt?: string; entryDigests?: string[]; preparedEntries?: EntryFormData[]; sourceToSaved?: Record<string, string>; }
 export interface ImportWorkspace { visionJob?: import("../../import/vision/visionJob").VisionJobDraft; commitAttempt?: ImportCommitAttempt; id: string; createdAt: string; updatedAt: string; status: ImportWorkspaceStatus; sourceFiles: ImportSourceFile[]; assets: ImportAsset[]; assetSession?: ImportAssetSessionManifest; groups: ImportDraftGroup[]; unassignedBlocks: ImportContentBlock[]; excludedBlocks: ImportContentBlock[]; warnings: ImportWorkspaceWarning[]; revision: number; }
@@ -215,6 +215,7 @@ export function questionDraftToEntryData(group: ImportDraftGroup, question?: Imp
   return {
     ...unknownFields,
     ...knownMetadata,
+    ...(metadata.learningBlocks ? { learningBlocks: metadata.learningBlocks.filter(block => !group.excludedLearningBlockIds?.includes(block.id)) } : {}),
     ...(questionSourceCrops ? { questionSourceCrops } : {}),
     entryKind: "problem_sheet",
     title: group.title,

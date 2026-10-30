@@ -12,6 +12,24 @@ vi.mock("../api", () => ({
 }));
 
 describe("StudyPaperView shared passage figures", () => {
+  it("hides only the embedded cover, restoring the document cover for printing", () => {
+    const entry = { ...createEmptyEntryDraft(), id: "embedded", createdAt: "", updatedAt: "", title: "출력 표지", question: "1. 읽을 본문" };
+    const props = { entry, memoMode: false, activeTool: "highlight" as const, onAnnotationsChange: vi.fn(), onWikiLinkClick: vi.fn(), existingTargets: new Set<string>(), sheetLayout: "single" as const };
+    const { container, rerender } = render(<StudyPaperView {...props} showCover={false} />);
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    expect(container.querySelector(".study-paper")).toHaveClass("study-paper--embedded");
+    expect(container.querySelector(".study-paper-sheet")).toHaveTextContent("읽을 본문");
+    fireEvent(window, new Event("beforeprint"));
+    expect(screen.getByRole("heading", { name: "출력 표지" })).toBeInTheDocument();
+    expect(container.querySelector(".study-paper")).not.toHaveClass("study-paper--embedded");
+    fireEvent(window, new Event("afterprint"));
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    rerender(<StudyPaperView {...props} />);
+    expect(screen.getByRole("heading", { name: "출력 표지" })).toBeInTheDocument();
+    rerender(<StudyPaperView {...props} displayMode="exam" />);
+    expect(container.querySelector(".study-paper-cover")).not.toBeInTheDocument();
+    expect(container.querySelector(".study-paper")).not.toHaveClass("study-paper--embedded");
+  });
   it("omits the redundant cover in compact single-entry view while keeping question content", () => {
     const entry = { ...createEmptyEntryDraft(), id: "compact-single", createdAt: "", updatedAt: "", title: "중복 제목", question: "1. 질문 본문" };
     const { container } = render(<StudyPaperView entry={entry} compact memoMode={false} activeTool="highlight" onAnnotationsChange={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} sheetLayout="single" />);

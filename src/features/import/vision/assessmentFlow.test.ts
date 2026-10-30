@@ -10,6 +10,50 @@ const fixture = () => parseVisionAnalysis(cases.find(item => item.valid)!.text);
 const receipt = (value: unknown): VisionProviderReceipt => ({ text: JSON.stringify(value), provider: "openai", model: "gpt-fixture", providerRequestId: "fixture-response", requestId: "fixture-request", responseHash: "a".repeat(64), completedAtMs: Date.parse("2026-10-27T00:00:00Z") });
 
 describe("pre-package assessment order", () => {
+  it("surfaces failure to persist answer eviction without proceeding to generation", async () => {
+    const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
+    value.sources[0].pageCount = 2;
+    delete value.entries[0].questions[0].studyAssessment;
+    value.schemaVersion = "wrong-answer-notebook-vision-v1";
+    const request = vi.fn().mockResolvedValueOnce(receipt({assessmentStatus:a.assessmentStatus,solution:a.solution,warnings:a.warnings}))
+      .mockResolvedValueOnce(receipt({scores:a.scores,classification:a.classification,learning:a.learning}))
+      .mockResolvedValueOnce(receipt({sourceAnswer:{...a.sourceAnswer,sourceKey:value.sources[0].sourceKey,page:1}}));
+    const progress = vi.fn();
+    await expect(runPrepackageAssessment(value,request,{answerRefs:[{sourceKey:value.sources[0].sourceKey,page:2}],independent:false,signal:new AbortController().signal,progress,
+      checkpoint:async (_a,_e,c) => { if (request.mock.calls.length === 3 && Object.keys(c).length === 2) throw new Error("checkpoint quota"); },
+    })).rejects.toThrow("checkpoint quota");
+    expect(request).toHaveBeenCalledTimes(3);
+    expect(progress).not.toHaveBeenCalledWith("prepackage_validated");
+  });
+  it("evicts an out-of-range answer and retries only comparison", async () => {
+    const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
+    value.sources[0].pageCount = 2;
+    delete value.entries[0].questions[0].studyAssessment;
+    value.schemaVersion = "wrong-answer-notebook-vision-v1";
+    let cache: AssessmentStageCache = {};
+    const options = { answerRefs: [{sourceKey:value.sources[0].sourceKey,page:2}], independent:false, signal:new AbortController().signal, progress:vi.fn(), checkpoint:async (_a:unknown,_e:unknown,c:AssessmentStageCache) => { cache = {...c}; } };
+    const request = vi.fn().mockResolvedValueOnce(receipt({assessmentStatus:a.assessmentStatus,solution:a.solution,warnings:a.warnings}))
+      .mockResolvedValueOnce(receipt({scores:a.scores,classification:a.classification,learning:a.learning}))
+      .mockResolvedValueOnce(receipt({sourceAnswer:{...a.sourceAnswer,sourceKey:value.sources[0].sourceKey,page:1}}));
+    await expect(runPrepackageAssessment(value,request,options)).rejects.toThrow("허용한 답안 페이지 밖");
+    expect(Object.keys(cache)).toHaveLength(2);
+    const retry = vi.fn().mockResolvedValue(receipt({sourceAnswer:{...a.sourceAnswer,sourceKey:value.sources[0].sourceKey,page:2}}));
+    const result = await runPrepackageAssessment(value,retry,{...options,cache});
+    expect(retry).toHaveBeenCalledTimes(1);
+    expect(retry.mock.calls[0][3]).toBe("answer_compared");
+    expect(result.analysis.entries[0].questions[0].studyAssessment?.sourceAnswer.page).toBe(2);
+  });
+  it("rejects unsupported printed metadata at the answer stage instead of silently dropping it", async () => {
+    const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
+    delete value.entries[0].questions[0].studyAssessment;
+    value.schemaVersion = "wrong-answer-notebook-vision-v1";
+    const request = vi.fn().mockResolvedValueOnce(receipt({ assessmentStatus: a.assessmentStatus, solution: a.solution, warnings: [] }))
+      .mockResolvedValueOnce(receipt({ scores: a.scores, classification: a.classification, learning: a.learning }))
+      .mockResolvedValueOnce(receipt({ sourceAnswer: { status: "unreadable", value: null, explanation: null, intent: "근거 없는 의도" } }));
+    const progress = vi.fn();
+    await expect(runPrepackageAssessment(value, request, { answerRefs: [{ sourceKey: "upload-1", page: 1 }], independent: true, signal: new AbortController().signal, progress })).rejects.toThrow("printed metadata");
+    expect(progress).not.toHaveBeenCalledWith("prepackage_validated");
+  });
   it("seals solution and scores before allowing answer-bearing input", async () => {
     const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
     delete value.entries[0].questions[0].studyAssessment; value.schemaVersion = "wrong-answer-notebook-vision-v1";

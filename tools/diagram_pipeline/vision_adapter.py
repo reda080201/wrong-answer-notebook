@@ -1,8 +1,11 @@
 """Bind model observations to inspected immutable evidence; no model trust is promoted."""
 import copy
 from datetime import datetime, timezone
+import json
 import re
 import stat
+import unicodedata
+import uuid
 import zipfile
 from pathlib import Path
 from urllib.parse import quote
@@ -26,6 +29,12 @@ def normalize_answer(value):
 
 def identity(*parts):
     return "v_" + digest(json_bytes(parts))[:28]
+
+
+def learning_candidate_id(entry_key, question_key, candidate_type, content):
+    normalized = " ".join(unicodedata.normalize("NFKC", content).split())
+    name = json.dumps([entry_key, question_key, candidate_type, normalized], ensure_ascii=False, separators=(",", ":"))
+    return "vision_" + str(uuid.uuid5(uuid.NAMESPACE_URL, name))
 
 
 def import_vision(inspection, analysis, source_map, out, excluded=()):
@@ -56,6 +65,12 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
         raise PipelineError("Unknown excluded question identity")
     for entry in vision["entries"]:
         target = {"id": identity(entry["entryKey"]), "title": entry["title"], "subject": entry["subject"], "questions": [], "template": {"answerKey": []}}
+        rejected_notes = list(dict.fromkeys(entry.get("rejectedNotes", [])))
+        for question in entry["questions"]:
+            rejected_notes.extend(note for note in question.get("rejectedNotes", []) if note not in rejected_notes)
+        target["template"]["rejectedNotes"] = rejected_notes
+        target["template"]["importantNotes"] = copy.deepcopy(entry.get("importantNotes", []))
+        target["template"]["learningBlocks"] = []
         if vision["schemaVersion"] == "wrong-answer-notebook-vision-v2":
             target["template"]["questionMeta"] = []
         for q in entry["questions"]:
@@ -108,7 +123,33 @@ def import_vision(inspection, analysis, source_map, out, excluded=()):
                 if answer_value or q.get("explanationDraft") or assessment:
                     source_note = "원문 답안과 AI 예상 답이 다릅니다. 정답을 확인하세요." if conflict else "연결된 원문 답안" if has_source else "AI 예상 답 · 확인 전 자동 채점 제외"
                     answer_item = {"id": identity(entry["entryKey"], q["questionKey"], "answer"), "questionNumber": number, "answer": answer_value, "explanation": source_answer.get("explanation") or assessment["solution"]["summary"], "strategy": assessment["solution"]["strategy"], "steps": assessment["solution"]["steps"], "importantPoints": assessment["learning"]["importantPoints"], "wrongPoint": "\n".join(assessment["learning"]["commonTraps"]), "reviewPoint": assessment["learning"]["reviewPoint"], "concepts": assessment["classification"]["concepts"], "needsReview": needs_review, "processingStatus": "needs_review" if needs_review else "ready", "sourceNote": source_note, "answerProvenance": provenance}
+                    for field in ("intent", "notes", "choiceJudgements"):
+                        if field in source_answer and (field == "choiceJudgements" or source_answer[field]):
+                            answer_item[field] = copy.deepcopy(source_answer[field])
                     target["template"]["answerKey"].append(answer_item)
+                seen_candidates = set()
+                for candidate in assessment["learning"].get("candidates", []):
+                    title = candidate["title"].strip()
+                    content = candidate["content"].strip()
+                    normalized_content = " ".join(unicodedata.normalize("NFKC", content).split())
+                    if not title or not normalized_content:
+                        continue
+                    candidate_key = (candidate["type"], normalized_content)
+                    if candidate_key in seen_candidates or len(seen_candidates) >= 3:
+                        continue
+                    seen_candidates.add(candidate_key)
+                    learning_block = {
+                        "id": learning_candidate_id(entry["entryKey"], q["questionKey"], candidate["type"], candidate["content"]),
+                        "type": candidate["type"],
+                        "title": title,
+                        "content": content,
+                        "sourceQuestionNumber": number,
+                        "reviewStatus": "draft",
+                    }
+                    for field in ("keywords", "relatedConcepts"):
+                        if field in candidate:
+                            learning_block[field] = copy.deepcopy(candidate[field])
+                    target["template"]["learningBlocks"].append(learning_block)
                 difficulty = assessment["scores"]["difficulty"]["value"]
                 importance = assessment["scores"]["importance"]["value"]
                 classification = copy.deepcopy(assessment["classification"])

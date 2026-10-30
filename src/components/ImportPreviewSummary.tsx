@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { ImportDetectedFormat } from "../utils/importStudyText";
 import { getEntryImportReviewSummary } from "../utils/importAudit";
 import type {
@@ -10,6 +11,7 @@ interface ImportPreviewSummaryProps {
   detectedFormat?: ImportDetectedFormat;
   questionCount: number;
   imageCount: number;
+  sourcePageCount?: number;
   figureCount: number;
   answerCount: number;
   hasMemo: boolean;
@@ -36,6 +38,7 @@ export default function ImportPreviewSummary({
   detectedFormat,
   questionCount,
   imageCount,
+  sourcePageCount = 0,
   figureCount,
   answerCount,
   hasMemo,
@@ -46,6 +49,7 @@ export default function ImportPreviewSummary({
   reviewExpanded,
 }: ImportPreviewSummaryProps) {
   const importReviewSummary = getEntryImportReviewSummary({ importAudit: validationReport?.audit, rejectedNotes });
+  const reviewRef = useRef<HTMLDetailsElement>(null);
   const hasBlockingIssues = validationPolicy.blocking.length > 0;
   const hasConfirmableIssues = validationPolicy.confirmable.length > 0;
 
@@ -93,15 +97,22 @@ export default function ImportPreviewSummary({
         <div><dt>형식</dt><dd>{detectedFormat === "json" ? "JSON" : "텍스트"}</dd></div>
         <div><dt>제목</dt><dd>{title || "(제목 없음)"}</dd></div>
         <div><dt>문항</dt><dd>{questionCount}문항</dd></div>
-        <div><dt>이미지</dt><dd>{imageCount}개</dd></div>
+        <div><dt>문항 첨부 이미지</dt><dd>{imageCount}개</dd></div>
+        <div><dt>원본 페이지</dt><dd>{sourcePageCount}개</dd></div>
         <div><dt>도표/그림</dt><dd>{figureCount}개</dd></div>
         <div><dt>답안 연결</dt><dd>{answerCount}개</dd></div>
         <div><dt>메모</dt><dd>{hasMemo ? "있음" : "없음"}</dd></div>
         <div><dt>검사 안내</dt><dd>{validationReport?.issues.length ? `${validationReport.issues.length}건 · 아래 내용 확인` : "파일·구조 검사에서 발견된 문제 없음"}</dd></div>
       </dl>
+      {!!validationReport?.issues.length && <button type="button" className="btn-secondary" onClick={() => {
+        if (!reviewRef.current) return;
+        reviewRef.current.open = true;
+        reviewRef.current.querySelector("summary")?.focus();
+        reviewRef.current.scrollIntoView({ block: "nearest" });
+      }}>검토 목록 보기</button>}
 
       {validationReport && validationReport.issues.length > 0 && (
-        <details className="import-validation-report" open={reviewExpanded}>
+        <details ref={reviewRef} className="import-validation-report" open={reviewExpanded}>
           <summary>검토 이슈</summary>
           {hasBlockingIssues && (
             <div className="import-validation-section import-validation-section--blocking">

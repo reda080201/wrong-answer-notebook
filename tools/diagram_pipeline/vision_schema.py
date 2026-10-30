@@ -123,6 +123,9 @@ def validate_vision(value):
                 if solution["proposedAnswer"] is not None or any(score["value"] is not None for score in scores.values()):
                     raise PipelineError(f"$.questions[{identity[1]}].studyAssessment: unreadable assessment cannot propose an answer or score")
             status = source_answer["status"]
+            source_metadata = {"intent", "notes", "choiceJudgements"}.intersection(source_answer)
+            if source_metadata and (status not in ("matched", "conflict", "source_only") or "sourceKey" not in source_answer or "page" not in source_answer):
+                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: metadata requires a referenced source answer")
             if assessment["assessmentStatus"] != "solved" and not any(warning.strip() for warning in assessment["warnings"]):
                 raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.warnings: incomplete solution reason required")
             if ("sourceKey" in source_answer) != ("page" in source_answer):

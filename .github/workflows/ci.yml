@@ -41,6 +41,13 @@ jobs:
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           python -m tools.diagram_pipeline run-vision --job build/vision-demo/input/vision-job.zip --out-dir build/vision-demo/output
           exit $LASTEXITCODE
+      - name: Generate and package synthetic 30-question 8-figure original-only job
+        shell: pwsh
+        run: |
+          python -m tools.diagram_pipeline.examples.create_vision_30x8_demo --out-dir build/vision-30x8/input
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python -m tools.diagram_pipeline run-vision --job build/vision-30x8/input/vision-job.zip --out-dir build/vision-30x8/output
+          exit $LASTEXITCODE
       - name: Validate isolated Windows runtime without GTK or system Python
         shell: pwsh
         run: |
@@ -56,6 +63,10 @@ jobs:
           path: |
             build/vision-demo/output/output-import-v2.zip
             build/vision-demo/output/prepared/adapter-report.json
+            build/vision-30x8/input/analysis.json
+            build/vision-30x8/input/source.png
+            build/vision-30x8/output/output-import-v2.zip
+            build/vision-30x8/output/prepared/adapter-report.json
             build/vision-demo/output/rendered/assets/
             build/diagram-pipeline/ci/import-v2.zip
             build/diagram-pipeline/ci/rendered/manifest.json
@@ -109,6 +120,7 @@ jobs:
 
   e2e:
     name: E2E smoke
+    needs: diagrams
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -122,6 +134,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download generated synthetic CLI package
+        uses: actions/download-artifact@v4
+        with:
+          name: synthetic-diagram-pipeline
+          path: build
 
       - name: Install Playwright Chromium
         run: npx playwright install --with-deps chromium

@@ -614,6 +614,56 @@
                         "reviewPoint": {
                           "type": "string",
                           "maxLength": 100000
+                        },
+                        "candidates": {
+                          "type": "array",
+                          "maxItems": 3,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "type",
+                              "title",
+                              "content"
+                            ],
+                            "properties": {
+                              "type": {
+                                "enum": [
+                                  "concept",
+                                  "formula",
+                                  "routine",
+                                  "warning",
+                                  "review"
+                                ]
+                              },
+                              "title": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 300
+                              },
+                              "content": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 10000
+                              },
+                              "keywords": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 10000
+                                },
+                                "maxItems": 30
+                              },
+                              "relatedConcepts": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string",
+                                  "maxLength": 10000
+                                },
+                                "maxItems": 30
+                              }
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -666,6 +716,37 @@
                           "type": "integer",
                           "minimum": 1,
                           "maximum": 10000
+                        },
+                        "intent": {
+                          "type": "string",
+                          "maxLength": 10000
+                        },
+                        "notes": {
+                          "type": "string",
+                          "maxLength": 10000
+                        },
+                        "choiceJudgements": {
+                          "type": "array",
+                          "maxItems": 30,
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "marker",
+                              "text"
+                            ],
+                            "properties": {
+                              "marker": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 20
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 10000
+                              }
+                            }
+                          }
                         }
                       },
                       "required": [
@@ -712,6 +793,22 @@
               "additionalProperties": false
             },
             "maxItems": 300
+          },
+          "rejectedNotes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "maxItems": 1000
+          },
+          "importantNotes": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 10000
+            },
+            "maxItems": 1000
           }
         },
         "required": [
