@@ -17,33 +17,8 @@ export default function ImageField({
   onRemove,
   onImagesAdded,
 }: ImageFieldProps) {
-  const [previews, setPreviews] = useState<Record<string, string>>({});
-  const [failed, setFailed] = useState<Set<string>>(new Set());
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      const map: Record<string, string> = {};
-      const failures = new Set<string>();
-      for (const f of images) {
-        try {
-          map[f] = await getImageUrl(f);
-        } catch {
-          failures.add(f);
-        }
-      }
-      if (!cancelled) {
-        setPreviews(map);
-        setFailed(failures);
-      }
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [images]);
 
   const handleAdd = async () => {
     setUploadError(null);
@@ -108,11 +83,7 @@ export default function ImageField({
         <div className="pending-images">
           {images.map((f) => (
             <div key={f} className="pending-thumb">
-              {previews[f] ? (
-                <img src={previews[f]} alt="" loading="lazy" />
-              ) : failed.has(f) ? (
-                <span className="image-load-error">불러오기 실패</span>
-              ) : null}
+              <ImagePreview key={f} filename={f} />
               <button
                 type="button"
                 aria-label={`${f} 이미지 삭제`}
@@ -129,4 +100,24 @@ export default function ImageField({
       )}
     </div>
   );
+}
+
+function ImagePreview({ filename }: { filename: string }) {
+  const [attempt, setAttempt] = useState(0);
+  const [preview, setPreview] = useState<{ url: string; state: "loading" | "ready" | "error" }>({ url: "", state: "loading" });
+  useEffect(() => {
+    let cancelled = false;
+    setPreview({ url: "", state: "loading" });
+    void getImageUrl(filename).then(url => {
+      if (!cancelled) setPreview({ url, state: url ? "loading" : "error" });
+    }, () => { if (!cancelled) setPreview({ url: "", state: "error" }); });
+    return () => { cancelled = true; };
+  }, [filename, attempt]);
+  return <div className="image-field-preview" aria-busy={preview.state === "loading"}>
+    {preview.state === "loading" && <span role="status">이미지 불러오는 중…</span>}
+    {preview.url && preview.state !== "error" && <img key={attempt} src={preview.url} alt="" loading="lazy"
+      onLoad={() => setPreview(value => ({ ...value, state: "ready" }))}
+      onError={() => setPreview(value => ({ ...value, state: "error" }))} />}
+    {preview.state === "error" && <div role="status"><span>이미지를 불러오지 못했습니다.</span><button type="button" className="btn-secondary" aria-label={`${filename} 이미지 다시 불러오기`} onClick={() => setAttempt(value => value + 1)}>다시 불러오기</button></div>}
+  </div>;
 }

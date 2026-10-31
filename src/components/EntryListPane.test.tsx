@@ -67,7 +67,7 @@ describe("EntryListPane", () => {
     expect(screen.getAllByText("오답").length).toBeGreaterThan(0);
   });
 
-  it("selects an entry from click and keyboard", () => {
+  it("selects an entry from click; native keyboard activation is checked in browser", () => {
     const setSelectedId = vi.fn();
     render(
       <EntryListPane
@@ -84,11 +84,9 @@ describe("EntryListPane", () => {
 
     const card = screen.getByRole("button", { name: /오답/ });
     fireEvent.click(card);
-    fireEvent.keyDown(card, { key: "Enter" });
-    fireEvent.keyDown(card, { key: " " });
 
     expect(setSelectedId).toHaveBeenCalledWith("wrong");
-    expect(setSelectedId).toHaveBeenCalledTimes(3);
+    expect(setSelectedId).toHaveBeenCalledTimes(1);
   });
 
   it("shows only important sheet questions and opens the selected question", () => {
@@ -297,4 +295,32 @@ describe("EntryListPane", () => {
     expect(removeListener).toHaveBeenCalledWith("pointermove", expect.any(Function));
     expect(removeListener).toHaveBeenCalledWith("pointercancel", expect.any(Function));
   });
+});
+
+it("renders thirty entries, preserves the limit on edits and resets it on filter changes", () => {
+  const entries = Array.from({ length: 300 }, (_, i) => entry(String(i), "wrong_answer", `합성 ${i}`));
+  const props = { activeSection: "wrong_answer" as const, loading: false, entries, filtered: entries, selectedId: null, setSelectedId: vi.fn(), quickConceptSubject: "수학" as const, onQuickConceptCreate: vi.fn(), viewKey: "all" };
+  const { container, rerender } = render(<EntryListPane {...props} />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(30);
+  fireEvent.click(screen.getByRole("button", { name: "30개 더 보기" }));
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(60);
+  rerender(<EntryListPane {...props} entries={entries.map(e => ({ ...e, memo: "edited" }))} />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(60);
+  rerender(<EntryListPane {...props} viewKey="search" />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(30);
+  rerender(<EntryListPane {...props} />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(30);
+  rerender(<EntryListPane {...props} viewKey="search" selectedId="299" />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(300);
+});
+
+it("bounds group chips and sends part navigation through the guarded callback", () => {
+  const entries = Array.from({ length: 40 }, (_, i) => entry(String(i), "problem_sheet", `파트 ${i}`, { sheetGroup: { groupId: "group", groupTitle: "합성 묶음", partTitle: `파트 ${i}`, partOrder: i } }));
+  const guarded = vi.fn(); const direct = vi.fn();
+  const { container } = render(<EntryListPane activeSection="problem_sheet" loading={false} entries={entries} filtered={entries} selectedId={null} setSelectedId={direct} onSelectEntry={guarded} quickConceptSubject="수학" onQuickConceptCreate={vi.fn()} />);
+  expect(container.querySelectorAll(".sheet-group-part-chips button")).toHaveLength(30);
+  fireEvent.click(screen.getByRole("button", { name: /^파트 0$/ }));
+  expect(guarded).toHaveBeenCalledExactlyOnceWith("0");
+  expect(direct).not.toHaveBeenCalled();
+  expect(screen.getByText(/40개 파트/)).toBeInTheDocument();
 });
