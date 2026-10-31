@@ -108,9 +108,14 @@ function ImagePreview({ filename }: { filename: string }) {
   useEffect(() => {
     let cancelled = false;
     setPreview({ url: "", state: "loading" });
-    void getImageUrl(filename).then(url => {
-      if (!cancelled) setPreview({ url, state: url ? "loading" : "error" });
-    }, () => { if (!cancelled) setPreview({ url: "", state: "error" }); });
+    void (async () => {
+      try {
+        const url = await getImageUrl(filename);
+        if (!cancelled) setPreview({ url, state: url ? "loading" : "error" });
+      } catch {
+        if (!cancelled) setPreview({ url: "", state: "error" });
+      }
+    })();
     return () => { cancelled = true; };
   }, [filename, attempt]);
   return <div className="image-field-preview" aria-busy={preview.state === "loading"}>
