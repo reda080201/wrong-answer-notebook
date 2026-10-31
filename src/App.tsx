@@ -802,6 +802,7 @@ function AppContent() {
             loading={loading}
             entries={entries}
             filtered={filtered}
+            viewKey={JSON.stringify([search, subjectFilter, listFilter, sortKey, difficultyScoreFilter])}
             selectedId={selectedId}
             setSelectedId={setSelectedId}
             onSelectEntry={(entryId) => void requestNavigation({ entryId })}
