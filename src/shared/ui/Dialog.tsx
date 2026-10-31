@@ -159,7 +159,7 @@ function OpenDialog({
     <div
       className={backdropClassName}
       role="presentation"
-      style={{ zIndex: 2000 + dialogLayer }}
+      style={{ zIndex: `calc(var(--z-dialog-stack) + ${dialogLayer})` }}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget && closeOnBackdrop && !closeDisabled) onClose();
       }}
