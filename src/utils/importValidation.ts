@@ -215,9 +215,20 @@ export function validateImportedStudyData(data: Partial<EntryFormData>, context:
       ids.add(hotspot.id);
     }
   }
-  for (const [index, crop] of ((data as EntryFormData & { questionSourceCrops?: unknown }).questionSourceCrops ?? [] as unknown[]).entries()) {
-    if (!crop || typeof crop !== "object") continue;
+  const sourceCrops: unknown = data.questionSourceCrops;
+  if (sourceCrops !== undefined && !Array.isArray(sourceCrops)) {
+    issues.push({ id: "invalid-crop-container", severity: "error", message: "questionSourceCrops는 원본 crop 목록이어야 합니다." });
+  }
+  for (const [index, crop] of (Array.isArray(sourceCrops) ? sourceCrops : []).entries()) {
+    if (!crop || typeof crop !== "object" || Array.isArray(crop)) {
+      issues.push({ id: `invalid-crop-question-${index}`, severity: "error", message: `questionSourceCrops[${index}]의 원본 crop 항목 형식이 올바르지 않습니다.` });
+      continue;
+    }
     const value = crop as Record<string, unknown>;
+    if (typeof value.questionNumber !== "string" || !value.questionNumber.trim() || typeof value.image !== "string" || !value.image.trim()) {
+      issues.push({ id: `invalid-crop-question-${index}`, severity: "error", message: `questionSourceCrops[${index}]에 문항 번호와 이미지 파일명이 필요합니다.` });
+      continue;
+    }
     if (value.cropRect !== undefined && !isValidNormalizedCrop(value.cropRect)) {
       issues.push({ id: `invalid-crop-question-${index}`, severity: "error", message: cropValidationMessage(`${String(value.questionNumber ?? "문항")}번 원본 crop`) });
     }
