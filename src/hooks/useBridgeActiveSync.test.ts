@@ -2,6 +2,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { McpBridgeRuntimeStatus } from "./useMcpBridgeSettings";
 import { useBridgeActiveSync } from "./useBridgeActiveSync";
+import { syncMcpBridgeActiveContext } from "../api";
+vi.mock("../api", () => ({ syncMcpBridgeActiveContext: vi.fn() }));
 
 const liveStatus: McpBridgeRuntimeStatus = {
   status: "listening",
@@ -14,6 +16,20 @@ const liveStatus: McpBridgeRuntimeStatus = {
 };
 
 describe("useBridgeActiveSync", () => {
+  it("keeps the latest context error when an earlier sync succeeds late", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    vi.mocked(syncMcpBridgeActiveContext).mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })).mockRejectedValueOnce(new Error("latest failed"));
+    const view = renderHook(() => useBridgeActiveSync(true));
+    act(() => view.result.current.syncActiveContext({ entryId: "a", questionNumber: "1" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+    act(() => view.result.current.syncActiveContext({ entryId: "b", questionNumber: "1" }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+    expect(view.result.current.bridgeSyncState.lastSyncError).toBe("latest failed");
+    await act(async () => finish());
+    expect(view.result.current.bridgeSyncState.lastSyncError).toBe("latest failed");
+    view.unmount();
+  });
   afterEach(() => {
     vi.useRealTimers();
   });

@@ -6,7 +6,6 @@ const generated = {position:1,source:{sourceEntryId:"e",sourceQuestionNumber:"1"
 it("audit: runtime source metadata hydration must select the real source page for a legacy snapshot",()=>{
   const normalized=migrateQuestionSource(generated as never,[entry as never]);
   const session=createSessionFromGeneratedExam({id:"exam",questions:[normalized]} as never,new Date(),{mode:"real"});
-  console.log("AUDIT_LEGACY_PAGE",JSON.stringify({snapshot:normalized.snapshot,pages:session.sourcePageImages,selected:session.selectedSourcePageImages}));
   expect(session.selectedSourcePageImages).toContain("page2.png");
 });
 it("audit: live page reorder must not reinterpret indices against the old snapshot page list",()=>{
@@ -14,6 +13,5 @@ it("audit: live page reorder must not reinterpret indices against the old snapsh
   const reordered={...entry,sourcePageImages:["page2.png","page1.png"]};
   const normalized=migrateQuestionSource(stored as never,[reordered as never]);
   const session=createSessionFromGeneratedExam({id:"exam",questions:[normalized]} as never,new Date(),{mode:"real"});
-  console.log("AUDIT_REORDER_PAGE",JSON.stringify({snapshot:normalized.snapshot,selected:session.selectedSourcePageImages}));
   expect(session.selectedSourcePageImages).toEqual(["page1.png"]);
 });

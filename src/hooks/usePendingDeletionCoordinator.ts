@@ -109,6 +109,7 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
   const finalizePromiseRef = useRef<Promise<void> | null>(null);
   const operationQueueRef = useRef<Promise<void>>(Promise.resolve());
   const retryDelayRef = useRef(1_000);
+  const [retryAttempt, setRetryAttempt] = useState(0);
   useEffect(() => { entriesRef.current = entries; }, [entries]);
 
   const runExclusively = useCallback(<T,>(operation: () => Promise<T>) => {
@@ -213,9 +214,17 @@ export function usePendingDeletionCoordinator({ entries, restore, setSelectedId,
     if (!due.length && !hasCleanupRetry) return;
     const untilDue = due.length ? Math.max(0, Math.min(...due) - Date.now()) : retryDelayRef.current;
     const delay = error ? retryDelayRef.current : untilDue + 20;
-    const timer = window.setTimeout(() => void finalizeExpired(), delay);
-    return () => window.clearTimeout(timer);
-  }, [error, pending, finalizeExpired]);
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void finalizeExpired().catch((cause) => {
+        if (!active) return;
+        retryDelayRef.current = Math.min(retryDelayRef.current * 2, 30_000);
+        setError(cause instanceof Error ? cause.message : "삭제 대기 항목을 정리하지 못했습니다. 다시 시도해 주세요.");
+        setRetryAttempt(attempt => attempt + 1);
+      });
+    }, delay);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [error, pending, finalizeExpired, retryAttempt]);
 
   const record = useCallback((item: PendingDeletion) => {
     setPending((current) => current.some((record) => record.id === item.id) ? current : [...current, item]);
