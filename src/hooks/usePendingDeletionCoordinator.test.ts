@@ -35,6 +35,15 @@ const pending = (id: string, entryId: string, imageReferences: string[]): Pendin
 });
 
 describe("pending deletion asset protection", () => {
+  it("reports a scheduled cleanup read failure while retaining its ledger", async () => {
+    const record = { ...pending("scheduled", "entry-a", []), finalizeAfter: new Date(Date.now() + 150).toISOString() };
+    const load = vi.fn().mockResolvedValueOnce([record]).mockResolvedValueOnce([record]).mockRejectedValue(new Error("scheduled read failed"));
+    vi.mocked(getStorageBackend).mockReturnValue({ loadPendingDeletions: load, savePendingDeletions: vi.fn().mockResolvedValue(undefined) } as never);
+    const view = renderHook(() => usePendingDeletionCoordinator({ entries: [], restore: vi.fn(), setSelectedId: vi.fn() }));
+    await waitFor(() => expect(view.result.current.error).toBe("scheduled read failed"));
+    expect(view.result.current.pending).toEqual([record]);
+    view.unmount();
+  });
   beforeEach(() => vi.clearAllMocks());
 
   it("protects images referenced by another undoable snapshot", () => {

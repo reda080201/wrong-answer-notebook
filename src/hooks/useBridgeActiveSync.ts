@@ -11,6 +11,7 @@ export function useBridgeActiveSync(options: boolean | LegacyBridgeActiveSyncOpt
   const legacy = typeof options === "object" ? options : undefined;
   const enabled = legacy ? legacy.bridgeEnabled && (legacy.bridgeStatus?.status === "listening" || legacy.bridgeStatus?.status === "connected") : Boolean(options);
   const timer = useRef<number | null>(null);
+  const syncGeneration = useRef(0);
   const lastSuccessful = useRef<string>("");
   const pending = useRef<{ key: string; context: McpActiveContext } | null>(null);
   const legacySyncEntries = useRef(legacy?.syncEntries);
@@ -21,6 +22,7 @@ export function useBridgeActiveSync(options: boolean | LegacyBridgeActiveSyncOpt
   }, [legacy?.syncEntries]);
 
   const syncActiveContext = useCallback((context: McpActiveContext) => {
+    const generation = ++syncGeneration.current;
     const key = JSON.stringify(context);
     if (key === lastSuccessful.current) return;
     pending.current = { key, context };
@@ -29,13 +31,18 @@ export function useBridgeActiveSync(options: boolean | LegacyBridgeActiveSyncOpt
       timer.current = null;
       if (enabled) {
         void syncMcpBridgeActiveContext(context).then(() => {
+          if (generation !== syncGeneration.current) return;
           if (pending.current?.key === key) lastSuccessful.current = key;
-        }).catch(() => undefined);
+          setBridgeSyncState(state => ({ ...state, lastSyncError: null, lastSyncAt: new Date().toISOString() }));
+        }).catch((error) => {
+          if (generation !== syncGeneration.current) return;
+          setBridgeSyncState(state => ({ ...state, lastSyncError: error instanceof Error ? error.message : "화면 문맥을 동기화하지 못했습니다. 노트 저장에는 영향이 없습니다." }));
+        });
       }
     }, 150);
   }, [enabled]);
 
-  useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
+  useEffect(() => () => { ++syncGeneration.current; if (timer.current !== null) window.clearTimeout(timer.current); }, []);
   useEffect(() => {
     if (!enabled) {
       syncActiveContext({ entryId: null, questionNumber: null });

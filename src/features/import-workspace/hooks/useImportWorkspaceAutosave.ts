@@ -71,25 +71,28 @@ export function useImportWorkspaceAutosave(
 ): () => Promise<void> {
   const callbacksRef = useRef(callbacks);
   const timerRef = useRef<number | null>(null);
+  const revisionRef = useRef(0);
   useEffect(() => {
     callbacksRef.current = callbacks;
   }, [callbacks]);
 
   useEffect(() => {
+    const revision = ++revisionRef.current;
     if (!enabled) return;
     const timer = window.setTimeout(async () => {
       timerRef.current = null;
       callbacksRef.current?.onSaving?.();
       try {
         await saveImportWorkspaceDraft(workspace);
-        callbacksRef.current?.onSaved?.();
+        if (revisionRef.current === revision) callbacksRef.current?.onSaved?.();
       } catch (error) {
-        callbacksRef.current?.onError?.(error);
+        if (revisionRef.current === revision) callbacksRef.current?.onError?.(error);
       }
     }, 750);
     timerRef.current = timer;
     return () => {
       window.clearTimeout(timer);
+      if (revisionRef.current === revision) ++revisionRef.current;
       if (timerRef.current === timer) timerRef.current = null;
     };
   }, [workspace, enabled]);

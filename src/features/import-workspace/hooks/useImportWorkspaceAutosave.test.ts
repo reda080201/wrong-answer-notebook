@@ -12,6 +12,18 @@ const workspace = {
 } as unknown as ImportWorkspace;
 
 describe("useImportWorkspaceAutosave", () => {
+  it("does not label newer edits saved when an older write completes", async () => {
+    vi.useFakeTimers();
+    let finish!: () => void;
+    vi.spyOn(getStorageBackend(), "saveImportWorkspaceDraft").mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+    const onSaved = vi.fn();
+    const view = renderHook(({ value }) => useImportWorkspaceAutosave(value, true, { onSaved }), { initialProps: { value: workspace } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(750); });
+    view.rerender({ value: { ...workspace, id: "newer" } });
+    await act(async () => finish());
+    expect(onSaved).not.toHaveBeenCalled();
+    view.unmount();
+  });
   afterEach(() => {
     vi.useRealTimers();
     vi.restoreAllMocks();
