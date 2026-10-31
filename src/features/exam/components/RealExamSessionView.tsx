@@ -174,7 +174,7 @@ export default function RealExamSessionView({ session, onChange, onUpdateSession
           <strong aria-label="남은 시간">{session.deadlineAt ? (session.showTimer === false ? "타이머 숨김" : formatTime(remaining)) : "시간 제한 없음"}</strong>
           <span>응답 {session.responses.filter((item) => item.response.trim()).length}/{session.questions.length}</span>
           <button type="button" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>
-          <IconButton className="real-exam-close" label="시험 닫기" onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>
+          <IconButton className="real-exam-close" label="시험 닫기" title="진행 상태를 저장하고 나중에 이어서 풉니다." onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>
         </div>
       </header>
       {saveError && <div className="exam-session-save-error" role="alert"><span>진행 상태 저장 실패: {saveError}</span><button type="button" disabled={saving} onClick={onRetrySave}>다시 저장</button></div>}
@@ -194,7 +194,7 @@ export default function RealExamSessionView({ session, onChange, onUpdateSession
       </div>
       {session.status === "in_progress" && <nav className="real-exam-navigation" aria-label="실전 문항 이동"><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex - 1)} disabled={safeCurrentQuestionIndex <= 0}>이전</button><span>{safeCurrentQuestionIndex + 1} / {session.questions.length}</span><button type="button" onClick={() => navigateToQuestion(safeCurrentQuestionIndex + 1)} disabled={safeCurrentQuestionIndex >= session.questions.length - 1}>다음</button></nav>}
 
-      <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" className="btn-primary" onClick={() => void submit()} disabled={submitting}>제출하고 채점</button></div>}><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{unanswered.length > 0 && <p role="alert">미응답 {unanswered.length}문항이 있습니다: {unanswered.join(", ")}</p>}</Dialog>
+      <Dialog open={submitOpen} onClose={() => setSubmitOpen(false)} title="시험을 제출할까요?" closeDisabled={submitting} busy={submitting} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setSubmitOpen(false)} disabled={submitting}>계속 풀기</button><button type="button" className="btn-primary" onClick={() => void submit()} disabled={submitting}>제출하고 채점</button></div>}><p>제출하면 답안이 확정되어 이 시험의 응답을 수정할 수 없습니다. 나중에 이어서 풀려면 계속 풀기를 누른 뒤 시험 닫기를 사용하세요.</p><p>전체 {session.questions.length}문항 · 응답 {session.questions.length - unanswered.length}문항 · 미응답 {unanswered.length}문항 · 검토 표시 {marked.length}문항</p>{unanswered.length > 0 && <p role="alert">미응답 {unanswered.length}문항이 있습니다: {unanswered.join(", ")}</p>}</Dialog>
     </section>
   );
 }

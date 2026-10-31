@@ -1,4 +1,5 @@
 import { applyNewStudyAssessments, canPreserveAssessmentDraft, sameVisionSourceHashes } from "../vision/preserveAssessmentEdits";
+import OperationError from "../../../shared/ui/OperationError";
 import MixedPageRoleDialog, { type PageRoleSource, type PageRoleSelection } from "../vision/MixedPageRoleDialog";
 import type { PageRoleReviewer } from "../vision/pageRoles";
 import { clearAssessmentCheckpoint } from "../vision/assessmentCheckpoint";
@@ -1243,12 +1244,13 @@ export default function ImportFromGptModal({
                   {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
                     <span>{visualProgress?.stageLabel ?? (visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…")}</span>
-                    {visualProgress?.total ? <progress max={visualProgress.total} value={visualProgress.current} /> : <progress />}
+                    {visualProgress?.total && !visualProgress.indeterminate ? <progress aria-label="원본 분석 진행" max={visualProgress.total} value={visualProgress.current} /> : <progress aria-label="원본 분석 진행" />}
+                    <p className="form-hint">분석 결과는 검토 전까지 자료함에 저장되지 않습니다. 완료 시간은 제공자와 자료 크기에 따라 달라집니다.</p>
                     <button type="button" className="btn-secondary btn-sm" onClick={() => visualControllerRef.current?.abort()}>분석 취소</button>
                   </div>}
                   <VisionImportBridge key={visualResult?.assetSession.id ?? (failedVision ? "failed-vision" : "external-vision")} initialAnalysis={visualResult?.visionAnalysisText ?? failedVision?.text} initialFiles={visualResult?.originalFiles ?? failedVision?.files} expectedSources={visualResult?.visionJob?.sourceFiles} initialDraftText={visualResult?.visionJob?.draftAnalysisText} disabled={saving || aiGenerating} onDraftChange={text => { setHasUnsavedInput(true); setVisualResult(current => { if (!current?.visionJob) return current; const next = { ...current, visionJob: { ...current.visionJob, draftAnalysisText: text } }; visualResultRef.current = next; return next; }); }} />
                   {visualResult && <p className="form-hint" role="status">원본 {visualResult.sourcePageImages.length}페이지를 보존했습니다. {questionCount || "문항 수를 확인해 주세요"}문항을 검토한 뒤 저장할 수 있습니다.</p>}
-                  {error && <p className="form-error" role="alert">{error}</p>}
+                  {error && <OperationError message={error} />}
                   {!aiProviderStatus?.available && <div className="form-hint">AI 분석을 사용할 수 없습니다. {onOpenSettings && <button type="button" className="btn-secondary btn-sm" onClick={() => onOpenSettings("ai")}>AI 설정 열기</button>}</div>}
                 </section>
               )}
@@ -1640,9 +1642,7 @@ export default function ImportFromGptModal({
                     </button>
                   </div>
               {error && !commitLocked && importInputMode !== "visual" && (
-                <p className="form-save-error" role="alert">
-                  {error}
-                </p>
+                <OperationError message={error} />
               )}
               {!draft ? (
                 <div className="import-preview-empty">붙여넣기 또는 파일 업로드를 하면 미리보기가 표시됩니다.</div>
