@@ -71,7 +71,7 @@ export default class AppErrorBoundary extends Component<
                 padding: "0.75rem",
                 borderRadius: "8px",
                 background: "var(--surface-muted, #182131)",
-                fontFamily: "ui-monospace, monospace",
+                fontFamily: "var(--font-mono)",
                 fontSize: "0.875rem",
                 wordBreak: "break-word",
               }}

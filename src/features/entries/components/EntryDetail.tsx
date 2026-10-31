@@ -6,7 +6,7 @@ import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X, Highlighter, Underline, Eraser } from "lucide-react";
 import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
@@ -1623,21 +1623,21 @@ export default function EntryDetail({
             className={`memo-tool ${activeTool === "highlight" ? "active" : ""}`}
             onClick={() => setActiveTool("highlight")}
           >
-            🖍 형광펜
+            <Highlighter size={16} aria-hidden="true" /> 형광펜
           </button>
           <button
             type="button"
             className={`memo-tool ${activeTool === "underline" ? "active" : ""}`}
             onClick={() => setActiveTool("underline")}
           >
-            ＿ 밑줄
+            <Underline size={16} aria-hidden="true" /> 밑줄
           </button>
           <button
             type="button"
             className={`memo-tool ${activeTool === "erase" ? "active" : ""}`}
             onClick={() => setActiveTool("erase")}
           >
-            ⌫ 지우기
+            <Eraser size={16} aria-hidden="true" /> 지우기
           </button>
           <span className="memo-toolbar-hint">
             텍스트: 드래그 선택 · 이미지: 영역 드래그 · 지우기: 표시 클릭
