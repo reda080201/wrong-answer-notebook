@@ -128,8 +128,8 @@ function snapshot(entry: WrongAnswerEntry, block: QuestionBlock, number: string,
   };
 }
 
-export function collectExamCandidates(entries: WrongAnswerEntry[], filters: ExamBuilderFilters): ExamCandidate[] {
-  const cutoff = filters.excludeRecentDays ? Date.now() - filters.excludeRecentDays * 86_400_000 : 0;
+export function collectExamCandidates(entries: WrongAnswerEntry[], filters: ExamBuilderFilters, now = new Date()): ExamCandidate[] {
+  const cutoff = filters.excludeRecentDays ? now.getTime() - filters.excludeRecentDays * 86_400_000 : 0;
   const candidates: ExamCandidate[] = [];
   for (const entry of entries.filter((item) => item.entryKind === "problem_sheet").filter((item) => !filters.entryIds?.length || filters.entryIds.includes(item.id)).filter((item) => !filters.subject || item.subject === filters.subject)) {
     const snapshots = createExamQuestionSnapshots(entry);
@@ -172,7 +172,7 @@ export function generateExam(input: GenerateExamInput): GeneratedExam {
   const now = input.now ?? new Date();
   const filters = input.filters ?? {};
   const excludedCounts: Record<string, number> = {};
-  const candidates = collectExamCandidates(input.entries, filters);
+  const candidates = collectExamCandidates(input.entries, filters, now);
   const rng = seeded(input.seed);
   const maxPerSource = filters.maxPerSource ?? Math.max(1, Math.ceil(input.blueprint.totalQuestions * .3));
   const selected: GeneratedExamQuestion[] = [...(input.lockedQuestions ?? [])].slice(0, input.blueprint.totalQuestions).map((question, index) => {

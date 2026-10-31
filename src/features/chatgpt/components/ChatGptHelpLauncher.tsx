@@ -1,11 +1,13 @@
 import { useMemo, useState, type RefObject } from "react";
 import type { ChatGptMcpPreferences } from "../../../types";
 import Dialog from "../../../shared/ui/Dialog";
+import ExternalLinkAction from "../../../shared/ui/ExternalLinkAction";
 import type { ChatGptSharePayload } from "../../export/types";
 import { filterChatGptSharePayload } from "../../export/services/buildChatGptSharePayload";
 import { buildChatGptSharePrompt } from "../../export/services/buildChatGptSharePrompt";
 import {
   buildChatGptPrompt,
+  CHATGPT_URL,
   openChatGpt,
   recommendedChatGptQuestions,
   type ChatGptPromptOptions,
@@ -128,16 +130,6 @@ export default function ChatGptHelpLauncher({
     }
   };
 
-  const handleOpenChatGpt = async () => {
-    setStatus(null);
-    try {
-      await openChatGpt();
-    } catch (error) {
-      setStatus(error instanceof Error ? error.message : "ChatGPT를 열지 못했습니다.");
-      setFallbackPrompt(prompt);
-    }
-  };
-
   const handleSendToMcpTunnel = async () => {
     setStatus(null);
     try {
@@ -161,7 +153,7 @@ export default function ChatGptHelpLauncher({
       <Dialog open={dialogOpen} size="xl" ariaLabel="ChatGPT에서 도움받기" title="ChatGPT에서 도움받기" onClose={closeDialog} header={<button type="button" className="btn-icon" aria-label="ChatGPT 도움 닫기" onClick={closeDialog}>닫기</button>} footer={<div className="chatgpt-help-actions">
         <button type="button" className="btn-secondary" onClick={() => void copyPrompt()}>질문 복사</button>
         <button type="button" className="btn-secondary" onClick={() => void handleSendToMcpTunnel()}>MCP 동기화</button>
-        <button type="button" className="btn-secondary" onClick={() => void handleOpenChatGpt()}>ChatGPT 열기</button>
+        <ExternalLinkAction url={CHATGPT_URL} label="ChatGPT 열기" onOpen={openChatGpt} />
         {onOpenSettings && <button type="button" className="btn-secondary" onClick={onOpenSettings}>연결 설정</button>}
       </div>}>
         <section className="chatgpt-help-panel">
