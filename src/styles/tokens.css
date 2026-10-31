@@ -32,6 +32,9 @@
   --accent-primary-hover: #2859a8;
   --accent-on-primary: #ffffff;
   --state-review: #8a5a00;
+  --state-warning-bg: #fff5da;
+  --state-warning-border: #d4a443;
+  --state-warning-text: #704900;
   --state-unanswered: #6f747b;
   --type-page: 22px/1.3 var(--font-ui);
   --type-section: 17px/1.4 var(--font-ui);
@@ -60,5 +63,8 @@
   --accent-primary-hover: #aecbfa;
   --accent-on-primary: #10213e;
   --state-review: #f3bd63;
+  --state-warning-bg: #352b19;
+  --state-warning-border: #92713a;
+  --state-warning-text: #f3cf89;
   --state-unanswered: #aeb4bc;
 }

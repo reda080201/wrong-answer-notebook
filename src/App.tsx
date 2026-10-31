@@ -718,10 +718,10 @@ function AppContent() {
         />}
 
         {!showLearningHub && !showQuestionBank && !showLibraryExplorer && activeSection === "problem_sheet" && (
-          <nav className="problem-sheet-library-tabs" aria-label="시험지함 보기">
-            <button type="button" className="is-active" aria-current="page">시험지</button>
-            <button type="button" onClick={() => setShowGeneratedExams(true)}>생성한 모의고사</button>
-          </nav>
+          <div className="problem-sheet-library-actions">
+            <strong>시험지</strong>
+            <button type="button" className="ui-button" onClick={() => setShowGeneratedExams(true)}>생성한 모의고사 열기</button>
+          </div>
         )}
 
         <div className="content" ref={navigationHistory.scrollRef("main")}>
