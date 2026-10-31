@@ -18,6 +18,26 @@ afterEach(async () => { await flushAiStudyWrites().catch(() => undefined); disca
 async function open() { fireEvent.click(screen.getByRole("button", { name: "AI 학습 대화 열기" })); await waitFor(() => expect(screen.queryByText("대화 불러오는 중…")).not.toBeInTheDocument()); }
 async function send(text: string) { fireEvent.change(screen.getByLabelText("메시지"), { target: { value: text } }); fireEvent.click(screen.getByRole("button", { name: "전송" })); await waitFor(() => expect(screen.getAllByText("AI 답변").length).toBeGreaterThan(0)); }
 describe("study AI chat integration", () => {
+    it("shows actual waiting and streaming phases and clears feedback after persistence", async () => {
+        let finish!: (text: string) => void;
+        let stream!: (text: string) => void;
+        vi.mocked(requestStudyAi).mockImplementationOnce((_request, _signal, onDelta) => {
+            stream = onDelta!;
+            return new Promise<string>(resolve => { finish = resolve; });
+        });
+        render(<StudyAiChat {...props} />);
+        await open();
+        fireEvent.change(screen.getByLabelText("메시지"), { target: { value: "단계 확인" } });
+        fireEvent.click(screen.getByRole("button", { name: "전송" }));
+        await screen.findByText("응답 대기 중…");
+        expect(screen.getByRole("button", { name: "응답 중지" })).toBeEnabled();
+        act(() => stream("부분 응답"));
+        await screen.findByText("응답 수신 중…");
+        await act(async () => finish("완료 응답"));
+        await screen.findByText("완료 응답");
+        await waitFor(() => expect(screen.queryByText("응답 수신 중…")).not.toBeInTheDocument());
+        expect(JSON.parse(localStorage.getItem(AI_STUDY_STORAGE_KEY)!).conversations[0].messages.at(-1).text).toBe("완료 응답");
+    });
     it("keeps input and creates no turn when the environment or connection is unavailable", async () => {
         const view = render(<StudyAiChat {...props} connection={{ available: false, reason: "설치 앱에서 사용하세요." }} />); await open();
         fireEvent.change(screen.getByLabelText("메시지"), { target: { value: "보존할 질문" } });

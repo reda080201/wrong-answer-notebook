@@ -11,6 +11,7 @@ import { deleteAiConversation, discardPendingAiStudyWrites, flushAiStudyWrites, 
 import { assertStudyAiSourcesAllowed, setStudyAiSession } from "./requestPolicy";
 import { useStudySelection } from "./activeSelection";
 import { requestStudyAi } from "./api";
+import { useRequestFeedback, REQUEST_PHASE_LABELS } from "./useRequestFeedback";
 import { useChatPanelAccessibility } from "./useChatPanelAccessibility";
 import "./studyAi.css";
 import { listenForStudyAiOpen } from "./StudyAiButton";
@@ -36,6 +37,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const [activeId, setActiveId] = useState("");
     const [input, setInput] = useState("");
     const [busy, setBusy] = useState(false);
+    const feedback = useRequestFeedback();
     const [scopeBusy,setScopeBusy]=useState(false);
     const [loading, setLoading] = useState(true);
     const [loaded, setLoaded] = useState(false);
@@ -228,6 +230,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             return;
         lock.current = true;
         setBusy(true);
+        feedback.update("saving-question");
         setError("");
         const abort = new AbortController();
         controller.current = abort;
@@ -262,10 +265,12 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             if (!connectionRef.current?.available || connectionRef.current.pending) throw new Error(connectionRef.current?.reason || "AI 연결 설정을 확인하세요.");
             setInput("");
             pendingSend.current = null;
+            feedback.update("waiting");
             const response = await requestStudyAi({ context: context.text, images: context.images, messages, sourceEntryIds: c.materials.map(m => m.source.sourceEntryId) }, abort.signal, delta => {
                 if (epoch !== generation.current || abort.signal.aborted)
                     return;
                 accumulated += delta;
+                feedback.update("receiving");
                 const next = { ...c, messages: c.messages.map(m => m.id === assistantId ? { ...m, text: accumulated } : m) };
                 storeRef.current = { ...storeRef.current, conversations: [next, ...storeRef.current.conversations.filter(v => v.id !== next.id)] };
                 setStore(storeRef.current);
@@ -274,6 +279,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 return;
             if (abort.signal.aborted) throw new DOMException("취소했습니다.", "AbortError");
             assertStudyAiSourcesAllowed(c.materials.map(m => m.source.sourceEntryId));
+            feedback.update("saving-result");
             await updateConversation({ ...c, messages: c.messages.map(m => m.id === assistantId ? { ...m, text: response, status: "complete" } : m) });
         }
         catch (e) {
@@ -292,6 +298,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         }
         finally {
             if (controller.current === abort) {
+                feedback.update("idle");
                 setBusy(false);
                 lock.current = false;
                 controller.current = null;
@@ -352,6 +359,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
+    {busy && feedback.phase !== "idle" && <div role="status" className="ai-request-feedback">{REQUEST_PHASE_LABELS[feedback.phase]}…{feedback.phase === "waiting" && feedback.elapsed >= 10 && <span> {feedback.elapsed}초 경과 · 응답을 기다리고 있습니다. 아래에서 응답을 중지할 수 있습니다.</span>}</div>}
     {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && !connection?.unsupported && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
     <div className="ai-chat-errors">{error && <div role="alert" className="form-error">{error}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
     <form onSubmit={e => { e.preventDefault(); void send(); }}><label>메시지<textarea ref={inputRef} value={input} disabled={maintenance} onChange={e => setInput(e.target.value)} onKeyDown={e => {

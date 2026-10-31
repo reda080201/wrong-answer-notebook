@@ -310,10 +310,11 @@ function AppContent() {
   const selectedEntryPaneOverride = selectedId ? shell.entryPaneOverrides[selectedId] : undefined;
 
   useEffect(() => {
-    const updateCompactMode = () => setAutoCompactEntryPane(Boolean(selectedId) && (window.innerWidth <= 1100 || window.innerWidth <= 1200 && selected?.entryKind === "problem_sheet"));
+    const compact = window.matchMedia(selected?.entryKind === "problem_sheet" ? "(max-width: 1200px)" : "(max-width: 1100px)");
+    const updateCompactMode = () => setAutoCompactEntryPane(Boolean(selectedId) && compact.matches);
     updateCompactMode();
-    window.addEventListener("resize", updateCompactMode);
-    return () => window.removeEventListener("resize", updateCompactMode);
+    compact.addEventListener("change", updateCompactMode);
+    return () => compact.removeEventListener("change", updateCompactMode);
   }, [selected?.entryKind, selectedId]);
 
   const entryPaneCollapsed = selected?.entryKind === "problem_sheet"
