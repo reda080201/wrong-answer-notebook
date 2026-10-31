@@ -50,7 +50,7 @@
 .real-exam-answer-grid--vertical .real-exam-answer-item.is-current,
 .real-exam-answer-grid--vertical .real-exam-answer-item.is-marked { background: transparent; box-shadow: none; }
 .real-exam-navigation { position: sticky; bottom: 0; z-index: 3; display: flex; justify-content: center; align-items: center; gap: var(--space-4); height: 52px; flex-shrink: 0; box-sizing: border-box; padding: 4px var(--space-4); background: var(--surface); border-top: 1px solid var(--border); }
-.real-exam-answer-jump { display: grid; justify-items: start; gap: 2px; border: 0 !important; padding: 2px !important; text-align: start; }
+.real-exam-answer-sheet .real-exam-answer-jump { display: grid; justify-items: start; gap: 2px; border: 0; padding: 2px; text-align: start; }
 .real-exam-answer-jump em { font-style: normal; color: var(--state-review); font: var(--type-meta); }
 .real-exam-answer-sheet-choices { display: flex; flex-wrap: wrap; gap: 3px; }
 .real-exam-answer-sheet-choices button { min-width: 40px; min-height: 40px; padding: 4px 8px; }

@@ -660,6 +660,7 @@ function AppContent() {
     <SourceNavigationContext.Provider value={async source => { const entry = entries.find(e => e.id === source.sourceEntryId); if (!entry) { await confirm({ title: "원본 이동 불가", message: "원본 항목이 삭제되었거나 찾을 수 없습니다. 생성 당시 출처는 보존되어 있습니다." }); return; } if (entryAiMaterials(entry).filter(m=>normalizeQuestionNumber(m.source.sourceQuestionNumber)===normalizeQuestionNumber(source.sourceQuestionNumber)).length !== 1) { await confirm({title:"원문 문항 확인 필요",message:"원문 문항이 없거나 번호가 중복되어 안전하게 이동할 수 없습니다."});return; } if (examSession && !(await closeExamSession())) return; await appNavigationController.requestNavigation({ section: entry.entryKind ?? "wrong_answer", entryId: entry.id, question: { entryId: entry.id, questionNumber: source.sourceQuestionNumber } }); }}>
     <ConceptLinkProvider entries={accessibleStudyEntries} preferences={settings.viewPreferences} onOpenEntry={openEntryById} onOpenLearningBlock={openConceptLearningBlock}>
     <StudyAiChat entries={entries} selectedEntryId={selectedId} session={examSession ? hydrateSessionSourceReferences(studyExamSession ?? examSession, generatedExamController.exams) : null} onSaveExam={generatedExamController.persist} onStartExam={exam => { const result = generatedExamController.openExam(exam); if (!result.ok) throw new Error(result.message); }} onSettings={() => openSettings("ai")} connection={{ unsupported: !isTauri(), available: isTauri() && Boolean(aiProviderStatus?.available) && !aiProvider.statusLoading && !aiProvider.operationPending, pending: isTauri() && (aiProvider.statusLoading || aiProvider.operationPending), reason: !isTauri() ? "AI 대화는 Windows 설치 앱에서 사용할 수 있습니다. 작성한 내용은 전송되지 않습니다." : aiProvider.statusLoading || aiProvider.operationPending ? "AI 연결 설정을 확인하는 중입니다…" : aiProvider.statusError || aiProviderStatus?.message || "제공자·모델·API 키를 설정한 뒤 대화할 수 있습니다." }} />
+    <a className="skip-to-content" href="#app-content" onClick={(event) => { event.preventDefault(); document.getElementById("app-content")?.focus(); }}>본문으로 이동</a>
     <CommandPalette commands={appCommands} />
     <div className={`app app-shell${shell.appSidebarCollapsed ? " app-shell--sidebar-collapsed" : ""}${entryPaneCollapsed ? " app-shell--entry-collapsed" : ""}`}>
       <AppSidebar
@@ -724,7 +725,7 @@ function AppContent() {
           </div>
         )}
 
-        <div className="content" ref={navigationHistory.scrollRef("main")}>
+        <div id="app-content" tabIndex={-1} className="content" ref={navigationHistory.scrollRef("main")}>
           {showLibraryExplorer ? (
             <LibraryExplorer
               folders={library.folders}

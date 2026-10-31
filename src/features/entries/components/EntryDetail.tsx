@@ -329,6 +329,25 @@ export default function EntryDetail({
   const [answerConfirmationSaving, setAnswerConfirmationSaving] = useState(false);
   const [answerConfirmationError, setAnswerConfirmationError] = useState<{ answerId: string; message: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
+  const pendingDetailTimers = useRef(new Set<number>());
+  const detailGeneration = useRef(0);
+  useEffect(() => {
+    const generation = ++detailGeneration.current;
+    const timers = pendingDetailTimers.current;
+    return () => {
+      if (detailGeneration.current === generation) ++detailGeneration.current;
+      timers.forEach(id => window.clearTimeout(id));
+      timers.clear();
+    };
+  }, [entry.id]);
+  const scheduleDetailTask = useCallback((task: () => void, delay: number) => {
+    const generation = detailGeneration.current;
+    const id = window.setTimeout(() => {
+      pendingDetailTimers.current.delete(id);
+      if (generation === detailGeneration.current) task();
+    }, delay);
+    pendingDetailTimers.current.add(id);
+  }, []);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
@@ -604,10 +623,10 @@ export default function EntryDetail({
   const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     const id = uuidv4();
     setToasts((items) => [...items, { id, message, tone }].slice(-3));
-    window.setTimeout(() => {
+    scheduleDetailTask(() => {
       setToasts((items) => items.filter((item) => item.id !== id));
     }, 2400);
-  }, []);
+  }, [scheduleDetailTask]);
 
   const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode, selectionOnly = false) => {
     setExportHubView(view);
@@ -652,11 +671,11 @@ export default function EntryDetail({
       const next = Math.max(0, Math.min(questionAnchors.length - 1, index + delta));
       const target = questionAnchors[next] as QuestionBlock | undefined;
       if (focusMode === "closed" && target) {
-        window.setTimeout(() => scrollToQuestion(target.start), 0);
+        scheduleDetailTask(() => scrollToQuestion(target.start), 0);
       }
       return next;
     });
-  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, scheduleDetailTask, theaterQuestionIndex]);
 
   const handleReviewResult = useCallback(async (
     result: ReviewResult,
@@ -876,13 +895,13 @@ export default function EntryDetail({
   const openSolutionForQuestion = useCallback((questionNumber: string) => {
     const normalized = normalizeQuestionNumber(questionNumber);
     setDetailViewMode("solution");
-    window.setTimeout(() => {
+    scheduleDetailTask(() => {
       document.getElementById(`solution-question-${normalized}`)?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     }, 0);
-  }, []);
+  }, [scheduleDetailTask]);
 
   const markSelectedImportant = async () => {
     if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
@@ -976,9 +995,9 @@ export default function EntryDetail({
     setTheaterQuestionIndex(null);
     setSelectedReviewQueue(null);
     if (target?.kind === "question") {
-      window.setTimeout(() => scrollToQuestion(target.start), 0);
+      scheduleDetailTask(() => scrollToQuestion(target.start), 0);
     }
-  }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+  }, [questionAnchors, scrollToQuestion, scheduleDetailTask, theaterQuestionIndex]);
 
   const executeStudyAction = useCallback((id: NextStudyActionId) => {
     if (id === "review-text") {
