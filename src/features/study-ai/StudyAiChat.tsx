@@ -11,6 +11,7 @@ import { deleteAiConversation, discardPendingAiStudyWrites, flushAiStudyWrites, 
 import { assertStudyAiSourcesAllowed, setStudyAiSession } from "./requestPolicy";
 import { useStudySelection } from "./activeSelection";
 import { requestStudyAi } from "./api";
+import OperationError from "../../shared/ui/OperationError";
 import { useRequestFeedback, REQUEST_PHASE_LABELS } from "./useRequestFeedback";
 import { useChatPanelAccessibility } from "./useChatPanelAccessibility";
 import "./studyAi.css";
@@ -359,9 +360,10 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
+    {!busy && (maintenance || loading || scopeBusy || !loaded) && <p role="status">{maintenance ? "백업·복원 중에는 전송할 수 없습니다. 작업이 끝난 뒤 다시 시도하세요." : loading ? "대화 기록을 불러오는 중입니다. 완료 후 전송할 수 있습니다." : scopeBusy ? "AI가 볼 자료 범위를 변경하는 중입니다. 완료 후 전송할 수 있습니다." : "대화 기록을 불러오지 못해 전송을 막았습니다. 기록을 다시 불러오세요."}</p>}
     {busy && feedback.phase !== "idle" && <div role="status" className="ai-request-feedback">{REQUEST_PHASE_LABELS[feedback.phase]}…{feedback.phase === "waiting" && feedback.elapsed >= 10 && <span> {feedback.elapsed}초 경과 · 응답을 기다리고 있습니다. 아래에서 응답을 중지할 수 있습니다.</span>}</div>}
     {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && !connection?.unsupported && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
-    <div className="ai-chat-errors">{error && <div role="alert" className="form-error">{error}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
+    <div className="ai-chat-errors">{error && <div className="form-error">{errorKind === "request" ? <OperationError message={error} /> : <span role="alert">{error}</span>}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
     <form onSubmit={e => { e.preventDefault(); void send(); }}><label>메시지<textarea ref={inputRef} value={input} disabled={maintenance} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();
