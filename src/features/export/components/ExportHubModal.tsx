@@ -12,7 +12,7 @@ import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
 import Dialog from "../../../shared/ui/Dialog";
-import { buildQuestionRenderDescriptor, buildQuestionRenderFingerprint, DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, QUESTION_PNG_RENDERER_VERSION, type QuestionPngOptions, type QuestionPngPreviewSignature } from "../services/questionPng";
+import { buildQuestionRenderDescriptor, buildQuestionRenderFingerprint, DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, QUESTION_PNG_RENDERER_VERSION, type QuestionPngOptions, type QuestionPngPreviewSignature } from "../services/questionPngModel";
 import QuestionRenderComparisonPanel from "./QuestionRenderComparisonPanel";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
@@ -96,17 +96,13 @@ export default function ExportHubModal(props: ExportHubModalProps) {
   const currentSignature: QuestionPngPreviewSignature = useMemo(() => ({ questionNumber: resolvedQuestionNumber, scope: pngOptions.scope, rendererVersion: QUESTION_PNG_RENDERER_VERSION, fingerprint: currentRenderFingerprint }), [currentRenderFingerprint, pngOptions.scope, resolvedQuestionNumber]);
   const currentSignatureRef = useRef(currentSignature);
   useEffect(() => { currentSignatureRef.current = currentSignature; }, [currentSignature]);
-  useEffect(() => {
-    if (!pngPreviewSignature) return;
-    const same = Object.keys(currentSignature).every((key) => currentSignature[key as keyof QuestionPngPreviewSignature] === pngPreviewSignature[key as keyof QuestionPngPreviewSignature]);
-    if (!same) {
-      if (pngPreviewUrl) URL.revokeObjectURL(pngPreviewUrl);
+  const signatureMatches = pngPreviewSignature && Object.keys(currentSignature).every((key) => currentSignature[key as keyof QuestionPngPreviewSignature] === pngPreviewSignature[key as keyof QuestionPngPreviewSignature]);
+  if (pngPreviewSignature && !signatureMatches) {
       setPngPreviewUrl(null);
       setPngBlob(null);
       setPngFingerprint(null);
       setPngPreviewSignature(null);
-    }
-  }, [currentSignature, pngPreviewSignature, pngPreviewUrl]);
+  }
 
   const copyText = async (text: string, message: string) => {
     await navigator.clipboard.writeText(text);
@@ -153,7 +149,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
       setPngBlob(blob);
       setPngFingerprint(capturedSignature.fingerprint);
       setPngPreviewSignature(capturedSignature);
-      setPngPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(blob); });
+      setPngPreviewUrl(URL.createObjectURL(blob));
     } catch (error) { setPngError(error instanceof Error ? error.message : "문항 PNG를 만들지 못했습니다."); } finally { setPngBusy(false); }
   };
   if (protection.unavailable || protection.sourceIds.has(entry.id)) return <Dialog open title="실전 시험 자료 보호" onClose={onClose}><p role="status">진행 중 실전 시험의 자료는 제출 후 공유·내보내기할 수 있습니다.</p><button type="button" onClick={onClose}>닫기</button></Dialog>;

@@ -29,39 +29,60 @@ export function useGptSolutionRoundtripDrafts(): GptSolutionRoundtripDraftStore 
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const { enqueue, drain } = useSerialTaskQueue();
 
-  const reload = useCallback(async (): Promise<boolean> => {
-    if (reloadingRef.current) return false;
-    reloadingRef.current = true;
-    const request = ++loadRequestRef.current;
-    setLoading(true);
-    setLoadError(null);
+  const loadDraftSnapshot = useCallback(async (request: number) => {
+    let revision = mutationRevisionRef.current;
     try {
       await drain();
-      const revision = mutationRevisionRef.current;
-      loadedRef.current = false;
-      setReady(false);
+      revision = mutationRevisionRef.current;
       const drafts = await loadGptSolutionRoundtripDrafts();
-      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return false;
-      draftsRef.current = drafts;
-      loadedRef.current = true;
-      setReady(true);
-      return true;
+      return { request, revision, ok: true as const, drafts };
     } catch (error) {
-      if (request === loadRequestRef.current) {
-        loadedRef.current = false;
-        setReady(false);
-        setLoadError(errorMessage(error, "GPT 해설 초안을 불러오지 못했습니다."));
-      }
-      return false;
-    } finally {
-      if (request === loadRequestRef.current) {
-        reloadingRef.current = false;
-        setLoading(false);
-      }
+      return { request, revision, ok: false as const, error };
     }
   }, [drain]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  const applyDraftSnapshot = useCallback((result: Awaited<ReturnType<typeof loadDraftSnapshot>>) => {
+    if (result.request !== loadRequestRef.current) return false;
+    if (!result.ok) {
+      loadedRef.current = false;
+      setReady(false);
+      setLoadError(errorMessage(result.error, "GPT 해설 초안을 불러오지 못했습니다."));
+      reloadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    if (result.revision !== mutationRevisionRef.current) {
+      reloadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    draftsRef.current = result.drafts;
+    loadedRef.current = true;
+    setReady(true);
+    setLoadError(null);
+    reloadingRef.current = false;
+    setLoading(false);
+    return true;
+  }, []);
+
+  const reload = useCallback(async (): Promise<boolean> => {
+    if (reloadingRef.current) return false;
+    reloadingRef.current = true;
+    loadedRef.current = false;
+    const request = ++loadRequestRef.current;
+    setLoading(true);
+    setLoadError(null);
+    setReady(false);
+    return loadDraftSnapshot(request).then(applyDraftSnapshot);
+  }, [applyDraftSnapshot, loadDraftSnapshot]);
+
+  useEffect(() => {
+    if (reloadingRef.current) return;
+    reloadingRef.current = true;
+    loadedRef.current = false;
+    const request = ++loadRequestRef.current;
+    void loadDraftSnapshot(request).then(applyDraftSnapshot);
+  }, [applyDraftSnapshot, loadDraftSnapshot]);
 
   const mutate = useCallback((recipe: (current: GptSolutionRoundtripDraft[]) => GptSolutionRoundtripDraft[]) => {
     if (maintenanceBlockedRef.current) {

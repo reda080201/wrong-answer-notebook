@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight, ClipboardCheck } from "lucide-react";
 import FullscreenDialog from "../../../shared/ui/FullscreenDialog";
 import type { StructuredQuestion } from "../../../types";
@@ -72,6 +72,11 @@ export function ImportReviewWorkspace({
 }: ImportReviewWorkspaceProps) {
   const questionCount = structuredQuestions?.length ?? 0;
   const [uncontrolledIndex, setUncontrolledIndex] = useState(defaultActiveQuestionIndex);
+  const [previousDefaultIndex, setPreviousDefaultIndex] = useState(defaultActiveQuestionIndex);
+  if (activeQuestionIndex === undefined && previousDefaultIndex !== defaultActiveQuestionIndex) {
+    setPreviousDefaultIndex(defaultActiveQuestionIndex);
+    setUncontrolledIndex(defaultActiveQuestionIndex);
+  }
   const requestedIndex = activeQuestionIndex ?? uncontrolledIndex;
   const currentIndex = questionCount
     ? Math.min(Math.max(requestedIndex, 0), questionCount - 1)
@@ -80,12 +85,6 @@ export function ImportReviewWorkspace({
   const renderProps = currentQuestion
     ? { question: currentQuestion, index: currentIndex, questionCount }
     : undefined;
-
-  useEffect(() => {
-    if (questionCount && requestedIndex !== currentIndex && activeQuestionIndex === undefined) {
-      setUncontrolledIndex(currentIndex);
-    }
-  }, [activeQuestionIndex, currentIndex, questionCount, requestedIndex]);
 
   const changeQuestion = (nextIndex: number) => {
     if (!questionCount) return;

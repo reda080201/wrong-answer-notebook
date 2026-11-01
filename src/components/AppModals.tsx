@@ -3,7 +3,8 @@ import { observeVisionInBatches } from "../features/import/vision/observationBat
 import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } from "../features/import/vision/assessmentCheckpoint";
 import { requestVisionAssessment } from "../services/api/ai";
 import { runPrepackageAssessment, type SourceRole } from "../features/import/vision/assessmentFlow";
-import type { VisionJobDraft } from "../features/import/vision/visionJob";
+import { prepareOriginalVisionImport, createVisionJobDraft, type VisionJobDraft } from "../features/import/vision/visionJob";
+import { parseVisionAnalysis } from "../features/import/vision/visionSchema";
 import { bindWorkspaceVision } from "../features/import/vision/updateWorkspaceAssessment";
 import { readFigureTokenReferences } from "../utils/figureTokens";
 import { resolveEntryQuestionStimuli } from "../utils/questionStimuli";
@@ -454,11 +455,7 @@ export default function AppModals({
     try {
       throwIfAborted();
       onProgress({ phase: "analyze", current: 0, indeterminate: true });
-      const [{ default: visionPromptV8 }, { parseVisionAnalysis }, { prepareOriginalVisionImport, createVisionJobDraft }] = await Promise.all([
-        import("../features/import/vision/vision-prompt-v8.txt?raw"),
-        import("../features/import/vision/visionSchema"),
-        import("../features/import/vision/visionJob"),
-      ]);
+      const { default: visionPromptV8 } = await import("../features/import/vision/vision-prompt-v8.txt?raw");
       throwIfAborted();
       const prompt = `${visionPromptV8}\n앱이 발급한 sources: ${JSON.stringify(sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })))}. 첨부 이미지는 source 순서, 각 physical page 1부터 순서대로입니다. extractedAnswer와 explanationDraft는 선택적 문자열만 허용하며 근거가 없으면 생략합니다. 여러 페이지 문항은 sourceRefs 배열에 source와 같은 구조로 명시합니다.`;
       let visionAnalysisText: string;
@@ -529,7 +526,7 @@ export default function AppModals({
 
   return (
     <>
-      {workspace && <ImportWorkspaceView visionOriginalFiles={workspaceVisionFiles} resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); setWorkspaceVisionFiles([]); }} />}
+      {workspace && <ImportWorkspaceView key={workspace.id} visionOriginalFiles={workspaceVisionFiles} resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); setWorkspaceVisionFiles([]); }} />}
       {showForm && (
         <ProtectedExamContent sourceId={editingEntry?.id} onClose={closeForm}>
         <EntryForm

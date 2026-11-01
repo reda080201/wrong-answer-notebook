@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WrongAnswerEntry } from "../../../types";
 import { getImageUrl } from "../../../api";
-import type { QuestionPngScope } from "../services/questionPng";
+import type { QuestionPngScope } from "../services/questionPngModel";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { resolveQuestionAssets } from "../../../utils/questionAssets";
@@ -51,12 +51,35 @@ export default function QuestionRenderComparisonPanel({ entry, questionNumber, s
   const [allOriginalsReady, setAllOriginalsReady] = useState(crops.length <= 1);
   const allCropsViewed = crops.length === 0 || crops.every((item) => item.id && viewedCropIds.has(item.id));
   const reviewRequirementMet = allCropsViewed || allOriginalsConfirmed;
-
-  useEffect(() => {
+  const sourceAssetSignature = JSON.stringify({
+    entryId: entry.id,
+    questionNumber: normalizedQuestionNumber,
+    crops: crops.map((item) => ({ id: item.id, image: item.image, page: item.page, sourcePageImage: item.sourcePageImage })),
+    sourcePages: assets.sourcePages,
+    figureAssets: assets.figureAssets,
+  });
+  const [previousSourceAssetSignature, setPreviousSourceAssetSignature] = useState(sourceAssetSignature);
+  if (sourceAssetSignature !== previousSourceAssetSignature) {
+    setPreviousSourceAssetSignature(sourceAssetSignature);
+    setAllOriginalsReady(false);
+  }
+  const comparisonSignature = JSON.stringify({
+    sourceAssetSignature,
+    renderedImage: verification?.renderedImage,
+    entryId: entry.id,
+    questionNumber: normalizedQuestionNumber,
+    scope,
+    rendererVersion,
+    currentFingerprint,
+    crops: crops.map((item) => ({ id: item.id, image: item.image, page: item.page, sourcePageImage: item.sourcePageImage })),
+  });
+  const [previousComparisonSignature, setPreviousComparisonSignature] = useState(comparisonSignature);
+  if (comparisonSignature !== previousComparisonSignature) {
+    setPreviousComparisonSignature(comparisonSignature);
     setCropIndex(0);
     setViewedCropIds(new Set());
     setAllOriginalsConfirmed(false);
-  }, [normalizedQuestionNumber, scope, rendererVersion, currentFingerprint]);
+  }
   useEffect(() => {
     let active = true;
     void Promise.all([Promise.all(crops.map((item) => resolveAndDecode(item.image))), resolveAndDecode(originalFilename), resolveAndDecode(verification?.renderedImage)]).then(([allOriginals, nextOriginal, nextRendered]) => {
@@ -65,7 +88,7 @@ export default function QuestionRenderComparisonPanel({ entry, questionNumber, s
       setOriginal(nextOriginal); setRendered(nextRendered);
     });
     return () => { active = false; };
-  }, [crops, originalFilename, verification?.renderedImage]);
+  }, [crops, originalFilename, sourceAssetSignature, verification?.renderedImage]);
 
   const selectCrop = (nextIndex: number) => {
     const bounded = Math.max(0, Math.min(nextIndex, Math.max(0, crops.length - 1)));

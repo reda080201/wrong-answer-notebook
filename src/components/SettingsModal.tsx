@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
   type McpBridgeRuntimeStatus,
@@ -153,13 +153,15 @@ export default function SettingsModal({
   const [studySubtab, setStudySubtab] = useState<"library" | "exam" | "templates">(
     initialTab === "exam" || initialTab === "templates" ? initialTab : "library",
   );
-  useEffect(() => {
+  const [previousInitialTab, setPreviousInitialTab] = useState(initialTab);
+  if (initialTab !== previousInitialTab) {
+    setPreviousInitialTab(initialTab);
     if (initialTab) {
       setActiveCategory(categoryForTab(initialTab));
       if (initialTab === "ai" || initialTab === "gpt-mcp" || initialTab === "chatgpt") setConnectionSection(initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
       if (initialTab === "library" || initialTab === "exam" || initialTab === "templates") setStudySubtab(initialTab);
     }
-  }, [initialTab]);
+  }
   const patchView = async (patch: Partial<ViewPreferences>) => {
     await ctx.viewPreferences.patch(patch);
   };

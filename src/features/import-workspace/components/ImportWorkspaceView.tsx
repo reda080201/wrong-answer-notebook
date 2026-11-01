@@ -55,6 +55,9 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
   const [hotspotEditorOpen, setHotspotEditorOpen] = useState(false);
   const recoveryPendingRef = useRef(true);
   const actionBusyRef = useRef(false);
+  const mountedRef = useRef(true);
+  const recoveryGenerationRef = useRef(0);
+  const recoverDraftRef = useRef<() => Promise<void>>(() => Promise.resolve());
   const [recoveryChecking, setRecoveryChecking] = useState(true);
   const [commitUncertain, setCommitUncertain] = useState(Boolean(initialWorkspace.commitAttempt));
   const [busy, setBusy] = useState(false);
@@ -72,6 +75,13 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
   const [maintenanceBlocked, setMaintenanceBlocked] = useState(false);
   const workspaceRef = useRef(workspace);
   const maintenanceBlockedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      recoveryGenerationRef.current += 1;
+    };
+  }, []);
   const selectedGroup = workspace.groups.find((group) => group.id === selectedGroupId);
   const questions = selectedGroup?.questions ?? [];
   const selectedQuestion = questions.find((question) => question.id === selectedQuestionId);
@@ -165,30 +175,41 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
 
   const discardAndClose = async () => {
     if (rejectMaintenanceMutation()) return;
+    const generation = ++recoveryGenerationRef.current;
+    const isCurrent = () => mountedRef.current && recoveryGenerationRef.current === generation;
     actionBusyRef.current = true;
     setCloseBusy(true);
     setCloseError(null);
     try {
       await cancelAutosaveAndDrain();
+      if (!isCurrent()) return;
       await discardWorkspaceAssets?.(workspace);
+      if (!isCurrent()) return;
       await clearImportWorkspaceDraft();
+      if (!isCurrent()) return;
       setClosePromptOpen(false);
       onClose();
     } catch (error) {
+      if (!isCurrent()) return;
       setCloseError(error instanceof Error ? error.message : "임시 이미지 자산을 폐기하지 못했습니다.");
     } finally {
-      actionBusyRef.current = false;
-      setCloseBusy(false);
+      if (isCurrent()) {
+        actionBusyRef.current = false;
+        setCloseBusy(false);
+      }
     }
   };
 
   const recoverDraft = async () => {
     if (maintenanceBlockedRef.current || actionBusyRef.current) return;
+    const generation = ++recoveryGenerationRef.current;
+    const isCurrent = () => mountedRef.current && recoveryGenerationRef.current === generation;
     actionBusyRef.current = true;
     setRecoveryBusy(true);
     setRecoveryError(null);
     try {
       const recovered = await loadImportWorkspaceDraft();
+      if (!isCurrent()) return;
       if (!recovered) throw new Error("복구 초안을 읽지 못했습니다.");
       if (recovered.commitAttempt) {
         workspaceRef.current = recovered;
@@ -197,10 +218,11 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
         setSelectedQuestionId(recovered.groups[0]?.questions[0]?.id ?? "");
         recoveryPendingRef.current = false;
         setRecoveryAvailable(false);
-        await resolveCommit(recovered);
+        await resolveCommit(recovered, isCurrent);
         return;
       }
       const validation = await validateRecoveryAssets?.(recovered);
+      if (!isCurrent()) return;
       if (validation && !validation.valid) {
         setRecoveryError(validation.message ?? "복구 초안의 이미지 자산을 검증하지 못했습니다.");
         return;
@@ -210,6 +232,7 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
       const recoveredSession = recovered.assetSession;
       if (currentSession?.mode === "tauri-staged" && currentSession.id !== recoveredSession?.id) {
         await discardWorkspaceAssets?.(current);
+        if (!isCurrent()) return;
       }
       replaceWorkspace(recovered);
       setSelectedGroupId(recovered.groups[0]?.id ?? "");
@@ -217,35 +240,47 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
       recoveryPendingRef.current = false;
       setRecoveryAvailable(false);
     } catch (error) {
+      if (!isCurrent()) return;
       setRecoveryError(error instanceof Error ? error.message : "복구 초안을 적용하지 못했습니다.");
     } finally {
-      actionBusyRef.current = false;
-      setRecoveryBusy(false);
+      if (isCurrent()) {
+        actionBusyRef.current = false;
+        setRecoveryBusy(false);
+      }
     }
   };
 
   const discardRecoveryDraft = async () => {
     if (maintenanceBlockedRef.current || actionBusyRef.current) return;
+    const generation = ++recoveryGenerationRef.current;
+    const isCurrent = () => mountedRef.current && recoveryGenerationRef.current === generation;
     actionBusyRef.current = true;
     setRecoveryBusy(true);
     try {
       const recovered = await loadImportWorkspaceDraft();
+      if (!isCurrent()) return;
       if (recovered?.commitAttempt) {
         workspaceRef.current = recovered; replaceWorkspace(recovered); setSelectedGroupId(recovered.groups[0]?.id ?? ""); setSelectedQuestionId(recovered.groups[0]?.questions[0]?.id ?? ""); recoveryPendingRef.current = false; setRecoveryAvailable(false);
-        await resolveCommit(recovered);
+        await resolveCommit(recovered, isCurrent);
         return;
       }
       await cancelAutosaveAndDrain();
+      if (!isCurrent()) return;
       if (recovered) await discardWorkspaceAssets?.(recovered);
+      if (!isCurrent()) return;
       await clearImportWorkspaceDraft();
+      if (!isCurrent()) return;
       recoveryPendingRef.current = false;
       setRecoveryAvailable(false);
       setRecoveryError(null);
     } catch (error) {
+      if (!isCurrent()) return;
       setRecoveryError(error instanceof Error ? error.message : "복구 초안의 임시 자산을 폐기하지 못했습니다.");
     } finally {
-      actionBusyRef.current = false;
-      setRecoveryBusy(false);
+      if (isCurrent()) {
+        actionBusyRef.current = false;
+        setRecoveryBusy(false);
+      }
     }
   };
 
@@ -296,13 +331,15 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
     setSelectedGroupId(targetGroupId);
   };
 
-  const resolveCommit = async (snapshot: ImportWorkspace): Promise<boolean> => {
+  const resolveCommit = async (snapshot: ImportWorkspace, isCurrent: () => boolean = () => true): Promise<boolean> => {
     const latestDraft = await loadImportWorkspaceDraft();
+    if (!isCurrent()) return false;
     if (latestDraft?.id === snapshot.id) snapshot = latestDraft;
     const attempt = snapshot.commitAttempt;
     if (!attempt || !attempt.entryIds.length) throw new Error("확정 저장 기록이 올바르지 않습니다.");
     if (!attempt.attemptId) throw new Error("이전 확정 기록의 저장 내용을 입증할 수 없습니다. 항목 목록과 백업을 확인해 주세요.");
     const ids = await onSave(attempt.preparedEntries ?? commitImportWorkspace(snapshot).entries, snapshot.assetSession, attempt.entryIds);
+    if (!isCurrent()) return false;
     if (JSON.stringify(ids) === JSON.stringify(attempt.entryIds)) {
       committedAwaitingDraftCleanupRef.current = true;
       setCommittedAwaitingDraftCleanup(true);
@@ -313,15 +350,26 @@ export default function ImportWorkspaceView({ initialWorkspace, visionOriginalFi
     throw new Error("이전 가져오기 저장 결과를 모두 확인할 수 없습니다. 항목 목록과 백업을 확인하세요. 중복 생성을 막기 위해 재가져오기를 중단했습니다.");
   };
 
+  useLayoutEffect(() => { recoverDraftRef.current = recoverDraft; });
   useEffect(() => {
-    let active = true;
+    const generation = ++recoveryGenerationRef.current;
+    const isCurrent = () => mountedRef.current && recoveryGenerationRef.current === generation;
     void loadImportWorkspaceDraft().then((draft) => {
-      if (active) { recoveryPendingRef.current = Boolean(draft); setRecoveryAvailable(Boolean(draft)); if (draft?.id === initialWorkspace.id) void recoverDraft(); }
+      if (!isCurrent()) return;
+      recoveryPendingRef.current = Boolean(draft);
+      setRecoveryAvailable(Boolean(draft));
+      setRecoveryChecking(false);
+      if (draft?.id === initialWorkspace.id) void recoverDraftRef.current();
     }).catch((error) => {
-      if (active) { setRecoveryAvailable(true); setRecoveryError(error instanceof Error ? error.message : "복구 초안을 읽지 못했습니다."); }
-    }).finally(() => { if (active) setRecoveryChecking(false); });
-    return () => { active = false; };
-  }, []);
+      if (!isCurrent()) return;
+      setRecoveryAvailable(true);
+      setRecoveryError(error instanceof Error ? error.message : "복구 초안을 읽지 못했습니다.");
+      setRecoveryChecking(false);
+    });
+    return () => {
+      if (recoveryGenerationRef.current === generation) recoveryGenerationRef.current += 1;
+    };
+  }, [initialWorkspace.id]);
 
   const save = async () => {
     if (maintenanceBlockedRef.current || actionBusyRef.current || recoveryAvailable || recoveryChecking) return;

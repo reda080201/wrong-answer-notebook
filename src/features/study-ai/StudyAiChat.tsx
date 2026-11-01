@@ -48,6 +48,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const [composer, setComposer] = useState(false);
     const [scopeNotice, setScopeNotice] = useState("");
     const [maintenance, setMaintenance] = useState(false);
+    const maintenanceRef = useRef(false);
     const lock = useRef(false);
     const reloadLock = useRef(false);
     const generation = useRef(0);
@@ -95,7 +96,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
         return number ? choices.filter(m => normalizeQuestionNumber(m.source.sourceQuestionNumber) === normalizeQuestionNumber(number)) : choices.length === 1 ? choices : [];
     }, [session, selectedEntryId, available, selection, blockedIds, protection.unavailable]);
     const reload = async (allowDiscard = false) => {
-        if (lock.current || reloadLock.current || maintenance) return;
+        if (lock.current || reloadLock.current || maintenanceRef.current) return;
         reloadLock.current = true;
         const epoch = ++generation.current;
         try {
@@ -131,10 +132,14 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             }
         }
     };
+    const reloadRef = useRef(reload);
+    useLayoutEffect(() => { reloadRef.current = reload; });
     useEffect(() => {
-        void reload();
+        const generationRef = generation;
+        void reloadRef.current();
         const handle = (event: Event) => {
             const blocked = (event as CustomEvent<boolean>).detail;
+            maintenanceRef.current = blocked;
             setMaintenance(blocked);
             if (blocked) {
                 generation.current++;
@@ -145,10 +150,10 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 lock.current = false;
             }
             else if (!hasPendingAiStudyWrites())
-                void reload();
+                void reloadRef.current();
         };
         window.addEventListener("ai-study-maintenance", handle);
-        return () => { generation.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
+        return () => { generationRef.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
     }, []);
     useEffect(() => {
         if (open)

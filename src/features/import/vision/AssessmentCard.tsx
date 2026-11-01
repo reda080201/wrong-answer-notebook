@@ -1,5 +1,5 @@
 import { applyAssessmentScores } from "./assessmentUpdates";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { QuestionMeta, SheetAnswerItem } from "../../../types";
 import MathText from "../../../components/MathText";
 import { confirmAssessmentAnswer, isAnswerReadyForGrading } from "../../../utils/studyAssessment";
@@ -24,15 +24,16 @@ function AssessmentCardFields({ meta, answer, disabled, onMetaChange, onAnswerCh
   const [applyDifficulty, setApplyDifficulty] = useState(false);
   const [applyImportance, setApplyImportance] = useState(false);
   const [error, setError] = useState("");
-  useEffect(() => {
-    const incoming = { difficulty: String(meta.difficultyScore ?? ""), importance: String(meta.rating?.importanceScore ?? ""), answer: answer?.answer ?? "" };
+  const incoming = { difficulty: String(meta.difficultyScore ?? ""), importance: String(meta.rating?.importanceScore ?? ""), answer: answer?.answer ?? "" };
+  const [previousIncoming, setPreviousIncoming] = useState({ values: incoming, dirty });
+  if (previousIncoming.values.difficulty !== incoming.difficulty || previousIncoming.values.importance !== incoming.importance || previousIncoming.values.answer !== incoming.answer || previousIncoming.dirty.difficulty !== dirty.difficulty || previousIncoming.dirty.importance !== dirty.importance || previousIncoming.dirty.answer !== dirty.answer) {
+    setPreviousIncoming({ values: incoming, dirty });
     setDifficulty(current => dirty.difficulty ? current : incoming.difficulty);
     setImportance(current => dirty.importance ? current : incoming.importance);
     setAnswerDraft(current => dirty.answer ? current : incoming.answer);
     setBaseline(current => ({ difficulty: dirty.difficulty ? current.difficulty : incoming.difficulty, importance: dirty.importance ? current.importance : incoming.importance, answer: dirty.answer ? current.answer : incoming.answer }));
-  }, [meta.difficultyScore, meta.rating?.importanceScore, answer?.answer, dirty.difficulty, dirty.importance, dirty.answer]);
+  }
   if (!a) return null;
-  const incoming = { difficulty: String(meta.difficultyScore ?? ""), importance: String(meta.rating?.importanceScore ?? ""), answer: answer?.answer ?? "" };
   const conflicts = { difficulty: dirty.difficulty && incoming.difficulty !== baseline.difficulty, importance: dirty.importance && incoming.importance !== baseline.importance, answer: dirty.answer && incoming.answer !== baseline.answer };
   const resolve = (field: keyof typeof dirty, useIncoming: boolean) => {
     const value = incoming[field];
