@@ -16,13 +16,16 @@ export function useReviewSessions() {
   const maintenanceBlockedRef = useRef(false);
   const restoreReloadBlockedRef = useRef(false);
   const writeErrorRef = useRef<string | null>(null);
+  const loadGeneration = useRef(0);
 
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
 
   const refresh = useCallback(async () => {
+    const request = ++loadGeneration.current;
     const loader = getStorageBackend().loadReviewSessions;
     loadedRef.current = false;
     setLoadStatus("loading");
+    setReady(false);
     if (!loader) {
       const message = "현재 저장소는 복습 세션을 지원하지 않습니다.";
       setError(message);
@@ -32,7 +35,9 @@ export function useReviewSessions() {
     }
     try {
       await queueRef.current;
+      if (request !== loadGeneration.current) return false;
       const next = (await loader()).map(normalizeReviewSession);
+      if (request !== loadGeneration.current) return false;
       sessionsRef.current = next;
       setSessions(next);
       if (!writeErrorRef.current) setError(null);
@@ -41,6 +46,7 @@ export function useReviewSessions() {
       setReady(true);
       return true;
     } catch (cause) {
+      if (request !== loadGeneration.current) return false;
       setError(cause instanceof Error ? cause.message : "복습 세션을 불러오지 못했습니다.");
       loadedRef.current = false;
       setLoadStatus("error");
@@ -49,7 +55,7 @@ export function useReviewSessions() {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); return () => { ++loadGeneration.current; loadedRef.current = false; }; }, [refresh]);
 
   const save = useCallback(async (session: ReviewSession) => {
     if (restoreReloadBlockedRef.current) throw new Error("복원한 데이터를 다시 불러온 뒤 복습을 저장할 수 있습니다.");
@@ -112,6 +118,7 @@ export function useReviewSessions() {
   }, []);
   const setRestoreReloadBlocked = useCallback((blocked: boolean) => {
     restoreReloadBlockedRef.current = blocked;
+    if (blocked) { ++loadGeneration.current; loadedRef.current = false; setReady(false); }
   }, []);
   return { sessions, ready, loadStatus, error, refresh, save, remove, flush, setMaintenanceBlocked, setRestoreReloadBlocked };
 }
