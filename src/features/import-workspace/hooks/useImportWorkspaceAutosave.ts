@@ -1,3 +1,4 @@
+import { parseVisionAnalysis } from "../../import/vision/visionSchema";
 import { useCallback, useEffect, useRef } from "react";
 import type { ImportWorkspace } from "../model/importWorkspace";
 import { getStorageBackend } from "../../../services/storageBackend";
@@ -22,7 +23,6 @@ export async function loadImportWorkspaceDraft(): Promise<ImportWorkspace | null
       const job = draft.visionJob;
       if (!job || job.version !== 1 || typeof job.id !== "string" || !job.id || typeof job.analysisText !== "string" || !Array.isArray(job.sourceFiles)) throw new Error("분석 작업 초안 형식이 잘못되었습니다.");
       if (job.draftAnalysisText !== undefined && (typeof job.draftAnalysisText !== "string" || new TextEncoder().encode(job.draftAnalysisText).length > 20 * 1024 * 1024)) throw new Error("편집 중인 관측 초안의 크기 또는 형식이 잘못되었습니다.");
-      const { parseVisionAnalysis } = await import("../../import/vision/visionSchema");
       const analysis = parseVisionAnalysis(job.analysisText);
       if (job.sourceFiles.length !== analysis.sources.length || job.sourceFiles.some((source, index) => source.sourceKey !== analysis.sources[index].sourceKey || typeof source.name !== "string" || !/^[a-f0-9]{64}$/.test(source.sha256))) throw new Error("분석 작업의 원본 해시 대응을 확인할 수 없습니다.");
     }

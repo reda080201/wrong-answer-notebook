@@ -203,6 +203,42 @@ describe("EntryListPane", () => {
     expect(setSelectedId).toHaveBeenCalledWith("p1");
   });
 
+  it("does not rewrite expanded groups on metadata rerender and persists one user toggle", () => {
+    const storageKey = "wrong-answer-expanded-sheet-groups";
+    localStorage.removeItem(storageKey);
+    const part1 = entry("p1", "problem_sheet", "1~20", {
+      sheetGroup: { groupId: "alpha", groupTitle: "ALPHA 모의고사 6회", partTitle: "1~20", partOrder: 1 },
+    });
+    const part2 = entry("p2", "problem_sheet", "21~40", {
+      sheetGroup: { groupId: "alpha", groupTitle: "ALPHA 모의고사 6회", partTitle: "21~40", partOrder: 2 },
+    });
+    const renderList = (entries: WrongAnswerEntry[]) => (
+      <EntryListPane
+        activeSection="problem_sheet"
+        loading={false}
+        entries={entries}
+        filtered={entries}
+        selectedId={null}
+        setSelectedId={vi.fn()}
+        quickConceptSubject="수학"
+        onQuickConceptCreate={vi.fn()}
+      />
+    );
+    const setItem = vi.spyOn(Storage.prototype, "setItem");
+    const { rerender } = render(renderList([part1, part2]));
+
+    const updatedParts = [
+      { ...part1, memo: "새 메모", sheetGroup: { ...part1.sheetGroup!, groupTitle: "ALPHA 제목 수정" } },
+      { ...part2, memo: "새 메모", sheetGroup: { ...part2.sheetGroup!, groupTitle: "ALPHA 제목 수정" } },
+    ];
+    rerender(renderList(updatedParts));
+
+    expect(setItem.mock.calls.filter(([key]) => key === storageKey)).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: /ALPHA 제목 수정/ }));
+    expect(setItem.mock.calls.filter(([key]) => key === storageKey)).toHaveLength(1);
+    expect(JSON.parse(localStorage.getItem(storageKey) ?? "null")).toEqual(["alpha"]);
+  });
+
   it("shows supplemental menu only for problem sheets and keeps card selection isolated", () => {
     const setSelectedId = vi.fn();
     const onAddSupplemental = vi.fn();

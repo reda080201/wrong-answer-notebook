@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { WrongAnswerEntry } from "../../../types";
 import { getImageUrl } from "../../../api";
-import type { QuestionPngScope } from "../services/questionPng";
+import type { QuestionPngScope } from "../services/questionPngModel";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { resolveQuestionAssets } from "../../../utils/questionAssets";
