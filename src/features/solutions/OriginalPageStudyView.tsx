@@ -7,6 +7,8 @@ import Dialog from "../../shared/ui/Dialog";
 import { entrySolutionQuestions, validSolutionHotspot } from "./solutionModel";
 import "./OriginalPageStudyView.css";
 
+const NO_SOURCE_PAGES: string[] = [];
+
 interface Props {
   entry: WrongAnswerEntry;
   hidden: boolean;
@@ -19,7 +21,7 @@ interface Props {
 
 export default function OriginalPageStudyView({ entry, hidden, currentQuestionKey, onCurrentQuestionChange, onSaveHotspots, immersive = false, onToggleImmersive }: Props) {
   const returnFocusRegionRef = useRef<HTMLDivElement>(null);
-  const pages = entry.sourcePageImages ?? [];
+  const pages = entry.sourcePageImages ?? NO_SOURCE_PAGES;
   const questions = useMemo(() => entrySolutionQuestions(entry), [entry]);
   const [currentPage, setCurrentPage] = useState(pages[0]);
   const [selectedPages, setSelectedPages] = useState(pages);

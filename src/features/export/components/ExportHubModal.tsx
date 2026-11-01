@@ -12,7 +12,7 @@ import ExamPdfOptions from "./ExamPdfOptions";
 import ExamPrintPreview from "./ExamPrintPreview";
 import { buildQuestionExportPackage, buildQuestionExportZip, downloadBlob, entryToQuestionExport } from "../services/questionExport";
 import Dialog from "../../../shared/ui/Dialog";
-import { buildQuestionRenderDescriptor, buildQuestionRenderFingerprint, DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, QUESTION_PNG_RENDERER_VERSION, type QuestionPngOptions, type QuestionPngPreviewSignature } from "../services/questionPng";
+import { buildQuestionRenderDescriptor, buildQuestionRenderFingerprint, DEFAULT_QUESTION_PNG_OPTIONS, downloadQuestionPng, QUESTION_PNG_RENDERER_VERSION, type QuestionPngOptions, type QuestionPngPreviewSignature } from "../services/questionPngModel";
 import QuestionRenderComparisonPanel from "./QuestionRenderComparisonPanel";
 import { getEntryQuestions } from "../../../utils/entryQuestions";
 import { normalizeQuestionNumber } from "../../../utils/questionMeta";

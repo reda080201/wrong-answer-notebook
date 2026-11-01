@@ -19,10 +19,12 @@ function Comparison({ figure, onReady, onRetry, resolveImageUrl = getImageUrl }:
   const [overlay, setOverlay] = useState(false);
   const [opacity, setOpacity] = useState(0.5);
   const [zoom, setZoom] = useState({ original: 1, cleaned: 1 });
+  const originalImage = figure.original?.image;
+  const cleanedImage = figure.cleaned?.image;
   useEffect(() => {
     let cancelled = false;
     void Promise.allSettled((["original", "cleaned"] as const).map(async kind => {
-      const filename = figure[kind]?.image;
+      const filename = kind === "original" ? originalImage : cleanedImage;
       if (!filename) return undefined;
       const url = await resolveImageUrl(filename);
       if (!url) throw new Error("Empty image URL");
@@ -41,7 +43,7 @@ function Comparison({ figure, onReady, onRetry, resolveImageUrl = getImageUrl }:
       setConfirmed(false);
     });
     return () => { cancelled = true; };
-  }, [figure.original?.image, figure.cleaned?.image, resolveImageUrl]);
+  }, [originalImage, cleanedImage, resolveImageUrl]);
   const comparable = Boolean(loaded.resolver === resolveImageUrl && figure.original?.image && urls.original && loaded.original && !failed.length && (figure.cleaned?.image ? urls.cleaned && loaded.cleaned : figure.semanticSpec));
   const ready = comparable && confirmed;
   useEffect(() => { onReady?.(ready); }, [ready, onReady]);
