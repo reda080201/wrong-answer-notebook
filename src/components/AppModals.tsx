@@ -526,7 +526,7 @@ export default function AppModals({
 
   return (
     <>
-      {workspace && <ImportWorkspaceView visionOriginalFiles={workspaceVisionFiles} resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); setWorkspaceVisionFiles([]); }} />}
+      {workspace && <ImportWorkspaceView key={workspace.id} visionOriginalFiles={workspaceVisionFiles} resolvePageUrl={resolveWorkspacePageUrl} initialWorkspace={workspace} registerDraftFlush={registerWorkspaceDraftFlush} validateRecoveryAssets={validateWorkspaceAssets} discardWorkspaceAssets={discardWorkspaceAssets} onSave={(items, assetSession, plannedIds) => handleImportedEntriesApply(items, assetSession?.mode === "tauri-staged" ? [] : workspaceAssetFiles, assetSession?.mode === "tauri-staged" ? assetSession : undefined, plannedIds)} onClose={() => { setWorkspace(null); setWorkspaceAssetFiles([]); setWorkspaceVisionFiles([]); }} />}
       {showForm && (
         <ProtectedExamContent sourceId={editingEntry?.id} onClose={closeForm}>
         <EntryForm

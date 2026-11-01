@@ -103,14 +103,18 @@ export default function ReviewPanel({
     return counts;
   }, [reviewEvents]);
   const sessionInitializedRef = useRef(false);
-  useEffect(() => {
-    sessionIdRef.current = incomingSessionState.id ?? sessionIdRef.current;
-    sessionStartedAtRef.current = incomingSessionState.createdAt ?? sessionStartedAtRef.current;
-    sessionInitializedRef.current = false;
+  const [previousIncomingSession, setPreviousIncomingSession] = useState({ key: incomingSessionKey, state: incomingSessionState });
+  if (previousIncomingSession.key !== incomingSessionKey || previousIncomingSession.state !== incomingSessionState) {
+    setPreviousIncomingSession({ key: incomingSessionKey, state: incomingSessionState });
     setIndex(incomingSessionState.currentIndex);
     setRevealed(false);
     setReviewEvents(incomingSessionState.reviewEvents);
     setCompletedKeys(incomingSessionState.completedItemKeys);
+  }
+  useEffect(() => {
+    sessionIdRef.current = incomingSessionState.id ?? sessionIdRef.current;
+    sessionStartedAtRef.current = incomingSessionState.createdAt ?? sessionStartedAtRef.current;
+    sessionInitializedRef.current = false;
   }, [incomingSessionKey, incomingSessionState]);
 
   useEffect(() => {

@@ -294,7 +294,7 @@ export default function EntryDetail({
   const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
-  const initialReadingPosition = useRef({ entryId: entry.id, index: readingPositions.get(entry)?.index ?? 0 });
+  const [initialReadingPosition] = useState(() => ({ entryId: entry.id, index: readingPositions.get(entry)?.index ?? 0 }));
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(() => readingPositions.get(entry)?.index ?? 0);
   const rememberReading = () => readingPositions.set(entry, { original: showOriginalStudy, index: focusedQuestionIndex });
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
@@ -334,8 +334,9 @@ export default function EntryDetail({
   useEffect(() => {
     const generation = ++detailGeneration.current;
     const timers = pendingDetailTimers.current;
+    const generationRef = detailGeneration;
     return () => {
-      if (detailGeneration.current === generation) ++detailGeneration.current;
+      if (generationRef.current === generation) ++generationRef.current;
       timers.forEach(id => window.clearTimeout(id));
       timers.clear();
     };
@@ -374,14 +375,17 @@ export default function EntryDetail({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [originalImmersive]);
 
-  useEffect(() => {
-    if (!viewPreferences) return;
+  const [appliedViewPreferences, setAppliedViewPreferences] = useState(viewPreferences);
+  if (appliedViewPreferences !== viewPreferences) {
+    setAppliedViewPreferences(viewPreferences);
+    if (viewPreferences) {
     setSheetLayout(viewPreferences.sheetLayout);
     setFocusTextSize(viewPreferences.fontSize);
     setHideAnswers(viewPreferences.hideAnswers);
     setStudyControlCompact(viewPreferences.compactToolbar);
     setProblemSheetDisplayMode(viewPreferences.problemSheetDisplayMode);
-  }, [viewPreferences]);
+    }
+  }
 
   const filledParts = entry.explanationParts
     .map((p, i) => ({ part: p, index: i }))
@@ -535,9 +539,9 @@ export default function EntryDetail({
     writeUiStorageValue(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
   }, [onViewPreferencesChange, studyControlCompact]);
 
-  useEffect(() => {
-    setActiveSearchIndex(0);
-  }, [sheetSearch, entry.id]);
+  const searchKey = JSON.stringify([entry.id, sheetSearch]);
+  const [previousSearchKey, setPreviousSearchKey] = useState(searchKey);
+  if (previousSearchKey !== searchKey) { setPreviousSearchKey(searchKey); setActiveSearchIndex(0); }
 
   useEffect(() => {
     if (!sheetSearchOpen) return undefined;
@@ -567,11 +571,12 @@ export default function EntryDetail({
     return () => document.removeEventListener("keydown", openSearch);
   }, [detailViewMode, isSheet]);
 
-  useEffect(() => {
-    // Reset the consumed target together with the display state, including effect replay.
-    consumedInitialTargetRef.current = null;
-    setFocusedQuestionIndex(initialReadingPosition.current.entryId === entry.id ? initialReadingPosition.current.index : 0);
-    readingPositions.delete(entry);
+  useEffect(() => { consumedInitialTargetRef.current = null; }, [entry.id]);
+  useEffect(() => { readingPositions.delete(entry); }, [entry]);
+  const [previousEntryId, setPreviousEntryId] = useState(entry.id);
+  if (previousEntryId !== entry.id) {
+    setPreviousEntryId(entry.id);
+    setFocusedQuestionIndex(initialReadingPosition.entryId === entry.id ? initialReadingPosition.index : 0);
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
@@ -579,17 +584,15 @@ export default function EntryDetail({
     setSelectedQuestionNumbers([]);
     setRevealedAnswerNumbers(new Set());
     setTitleEditing(false);
-  }, [entry.id]);
+  }
 
-  useEffect(() => {
+  const [titleSource, setTitleSource] = useState({ title: entry.title, editing: titleEditing });
+  if (titleSource.title !== entry.title || titleSource.editing !== titleEditing) {
+    setTitleSource({ title: entry.title, editing: titleEditing });
     if (!titleEditing) setTitleDraft(entry.title);
-  }, [entry.title, titleEditing]);
+  }
 
-  useEffect(() => {
-    if (focusedQuestionIndex >= questionAnchors.length) {
-      setFocusedQuestionIndex(Math.max(0, questionAnchors.length - 1));
-    }
-  }, [focusedQuestionIndex, questionAnchors.length]);
+  if (focusedQuestionIndex > Math.max(0, questionAnchors.length - 1)) setFocusedQuestionIndex(Math.max(0, questionAnchors.length - 1));
 
   const scrollToQuestion = useCallback((start: number) => {
     const index = questionAnchors.findIndex(question => question.start === start);
@@ -973,6 +976,14 @@ export default function EntryDetail({
     pushToast("선택한 문제 복습 큐를 시작합니다.", "success");
   }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, questionIdentifier, selectedQuestionNumbers]);
 
+  const [renderedTarget, setRenderedTarget] = useState<string | null>(null);
+  const requestedTarget = initialQuestionTarget ? JSON.stringify([entry.id, initialQuestionTarget.requestId]) : null;
+  if (isSheet && initialQuestionTarget && questionAnchors.length && renderedTarget !== requestedTarget) {
+    setRenderedTarget(requestedTarget);
+    const index = questionAnchors.findIndex(block => questionIdentifier(block) === normalizeQuestionNumber(initialQuestionTarget.questionNumber));
+    if (index >= 0) openTheaterMode(index);
+  }
+
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
     if (consumedInitialTargetRef.current === initialQuestionTarget.requestId) return;
@@ -982,12 +993,11 @@ export default function EntryDetail({
     );
     consumedInitialTargetRef.current = initialQuestionTarget.requestId;
     if (index >= 0) {
-      openTheaterMode(index);
       onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "opened");
     } else {
       onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "not-found");
     }
-  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors, questionIdentifier]);
+  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, questionAnchors, questionIdentifier]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
@@ -1157,10 +1167,7 @@ export default function EntryDetail({
     })
     : undefined;
 
-  useEffect(() => {
-    if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
-    setActiveStudyPanel("question");
-  }, [canShowActiveStudyPanel, focusMode, isFocusable]);
+  if (isFocusable && focusMode !== "closed" && !canShowActiveStudyPanel) setActiveStudyPanel("question");
 
   useEffect(() => {
     if (!isFocusable) return;

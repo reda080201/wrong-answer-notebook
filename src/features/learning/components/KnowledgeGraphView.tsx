@@ -98,8 +98,9 @@ export default function KnowledgeGraphView({
   const [aliasBusy, setAliasBusy] = useState(false);
   const aliasBusyRef = useRef(false);
   const aliasEpoch = useRef(0);
+  if (writeBlocked && undoAlias !== null) setUndoAlias(null);
   useEffect(() => {
-    if (writeBlocked) { aliasEpoch.current += 1; setUndoAlias(null); }
+    if (writeBlocked) { aliasEpoch.current += 1; }
     return () => { aliasEpoch.current += 1; };
   }, [writeBlocked]);
   const runMutation = useCallback(async (operation: () => Promise<void>) => {

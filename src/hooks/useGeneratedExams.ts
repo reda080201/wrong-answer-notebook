@@ -36,41 +36,63 @@ export function useGeneratedExams() {
     setExams(visibleFromPersisted());
   }, [visibleFromPersisted]);
 
+  const loadGeneratedSnapshot = useCallback(async (requestId: number) => {
+    let mutationAtLoad = mutationRef.current;
+    try {
+      await drain();
+      mutationAtLoad = mutationRef.current;
+      const loaded = await loadGeneratedExams();
+      if (!Array.isArray(loaded)) throw new Error("생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
+      return { requestId, mutationAtLoad, ok: true as const, exams: loaded };
+    } catch (cause) {
+      return { requestId, mutationAtLoad, ok: false as const, error: cause };
+    }
+  }, [drain]);
+
+  const applyGeneratedSnapshot = useCallback((result: Awaited<ReturnType<typeof loadGeneratedSnapshot>>) => {
+    if (result.requestId !== loadRequestRef.current) return false;
+    if (!result.ok) {
+      const message = errorMessage(result.error, "생성 모의고사를 불러오지 못했습니다.");
+      loadSucceededRef.current = false;
+      setLoadError(message);
+      setError(message);
+      loadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    if (result.mutationAtLoad !== mutationRef.current) {
+      loadSucceededRef.current = false;
+      loadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    persistedRef.current = result.exams;
+    loadSucceededRef.current = true;
+    refreshVisible();
+    setError(null);
+    setLoadError(null);
+    loadingRef.current = false;
+    setLoading(false);
+    return true;
+  }, [refreshVisible]);
+
   const reload = useCallback(async (): Promise<boolean> => {
     if (loadingRef.current) return false;
     loadingRef.current = true;
+    loadSucceededRef.current = false;
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     setLoadError(null);
-    try {
-      await drain();
-      const mutationAtLoad = mutationRef.current;
-      loadSucceededRef.current = false;
-      const loaded = await loadGeneratedExams();
-      if (requestId !== loadRequestRef.current || mutationAtLoad !== mutationRef.current) return false;
-      if (!Array.isArray(loaded)) throw new Error("생성 모의고사 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
-      persistedRef.current = loaded;
-      loadSucceededRef.current = true;
-      refreshVisible();
-      setError(null);
-      return true;
-    } catch (cause) {
-      if (requestId === loadRequestRef.current) {
-        const message = errorMessage(cause, "생성 모의고사를 불러오지 못했습니다.");
-        loadSucceededRef.current = false;
-        setLoadError(message);
-        setError(message);
-      }
-      return false;
-    } finally {
-      if (requestId === loadRequestRef.current) {
-        loadingRef.current = false;
-        setLoading(false);
-      }
-    }
-  }, [drain, refreshVisible]);
+    return loadGeneratedSnapshot(requestId).then(applyGeneratedSnapshot);
+  }, [applyGeneratedSnapshot, loadGeneratedSnapshot]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    loadSucceededRef.current = false;
+    const requestId = ++loadRequestRef.current;
+    void loadGeneratedSnapshot(requestId).then(applyGeneratedSnapshot);
+  }, [applyGeneratedSnapshot, loadGeneratedSnapshot]);
 
   const enqueue = useCallback((recipe: ExamRecipe, retrying = false): Promise<void> => {
     if (maintenanceBlockedRef.current) {

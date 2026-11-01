@@ -105,12 +105,12 @@ export default function EntryListPane({
     setSelectedId(entryId);
   };
 
-  useEffect(() => {
-    if (activeSection !== "problem_sheet") return;
+  if (activeSection === "problem_sheet") {
     const existing = new Set(groupedSheets.filter((item) => item.kind === "group").map((item) => item.groupId));
-    if ([...expandedGroupIds].every(id => existing.has(id))) return;
-    setExpandedGroupIds(current => new Set([...current].filter(id => existing.has(id))));
-  }, [activeSection, groupedSheets, expandedGroupIds]);
+    if ([...expandedGroupIds].some(id => !existing.has(id))) {
+      setExpandedGroupIds(current => new Set([...current].filter(id => existing.has(id))));
+    }
+  }
 
   const expandedValue = JSON.stringify([...expandedGroupIds]);
   const persistedExpandedValue = useRef(expandedValue);

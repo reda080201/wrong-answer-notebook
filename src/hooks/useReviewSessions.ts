@@ -20,42 +20,54 @@ export function useReviewSessions() {
 
   useEffect(() => { sessionsRef.current = sessions; }, [sessions]);
 
-  const refresh = useCallback(async () => {
-    const request = ++loadGeneration.current;
-    const loader = getStorageBackend().loadReviewSessions;
-    loadedRef.current = false;
-    setLoadStatus("loading");
-    setReady(false);
-    if (!loader) {
-      const message = "현재 저장소는 복습 세션을 지원하지 않습니다.";
-      setError(message);
-      setLoadStatus("error");
-      setReady(false);
-      return false;
-    }
+  const loadReviewSnapshot = useCallback(async (request: number) => {
     try {
       await queueRef.current;
-      if (request !== loadGeneration.current) return false;
+      if (request !== loadGeneration.current) return { request, stale: true as const };
+      const loader = getStorageBackend().loadReviewSessions;
+      if (!loader) {
+        throw new Error("현재 저장소는 복습 세션을 지원하지 않습니다.");
+      }
       const next = (await loader()).map(normalizeReviewSession);
-      if (request !== loadGeneration.current) return false;
-      sessionsRef.current = next;
-      setSessions(next);
-      if (!writeErrorRef.current) setError(null);
-      loadedRef.current = true;
-      setLoadStatus("ready");
-      setReady(true);
-      return true;
+      return { request, stale: false as const, ok: true as const, sessions: next };
     } catch (cause) {
-      if (request !== loadGeneration.current) return false;
-      setError(cause instanceof Error ? cause.message : "복습 세션을 불러오지 못했습니다.");
+      return { request, stale: false as const, ok: false as const, error: cause };
+    }
+  }, []);
+
+  const applyReviewSnapshot = useCallback((result: Awaited<ReturnType<typeof loadReviewSnapshot>>) => {
+    if (result.stale || result.request !== loadGeneration.current) return false;
+    if (!result.ok) {
+      setError(result.error instanceof Error ? result.error.message : "복습 세션을 불러오지 못했습니다.");
       loadedRef.current = false;
       setLoadStatus("error");
       setReady(false);
       return false;
     }
+    sessionsRef.current = result.sessions;
+    setSessions(result.sessions);
+    if (!writeErrorRef.current) setError(null);
+    loadedRef.current = true;
+    setLoadStatus("ready");
+    setReady(true);
+    return true;
   }, []);
 
-  useEffect(() => { void refresh(); return () => { ++loadGeneration.current; loadedRef.current = false; }; }, [refresh]);
+  const refresh = useCallback(() => {
+    const request = ++loadGeneration.current;
+    loadedRef.current = false;
+    setLoadStatus("loading");
+    setReady(false);
+    return loadReviewSnapshot(request).then(applyReviewSnapshot);
+  }, [applyReviewSnapshot, loadReviewSnapshot]);
+
+  useEffect(() => {
+    const generationRef = loadGeneration;
+    const request = ++generationRef.current;
+    loadedRef.current = false;
+    void loadReviewSnapshot(request).then(applyReviewSnapshot);
+    return () => { ++generationRef.current; loadedRef.current = false; };
+  }, [applyReviewSnapshot, loadReviewSnapshot]);
 
   const save = useCallback(async (session: ReviewSession) => {
     if (restoreReloadBlockedRef.current) throw new Error("복원한 데이터를 다시 불러온 뒤 복습을 저장할 수 있습니다.");

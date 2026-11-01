@@ -135,6 +135,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const reloadRef = useRef(reload);
     useLayoutEffect(() => { reloadRef.current = reload; });
     useEffect(() => {
+        const generationRef = generation;
         void reloadRef.current();
         const handle = (event: Event) => {
             const blocked = (event as CustomEvent<boolean>).detail;
@@ -152,7 +153,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 void reloadRef.current();
         };
         window.addEventListener("ai-study-maintenance", handle);
-        return () => { generation.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
+        return () => { generationRef.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
     }, []);
     useEffect(() => {
         if (open)

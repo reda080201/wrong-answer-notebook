@@ -67,7 +67,7 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   );
   const [config, setConfig] = useState<McpBridgeSettings>(suppliedConfig);
   const [runtimeStatus, setRuntimeStatus] = useState<McpBridgeRuntimeStatus | null>(null);
-  const [portInput, setPortInput] = useState(String(config.port));
+  const [portInputDraft, setPortInputDraft] = useState({ value: String(config.port), dirty: false });
   const [connectionTesting, setConnectionTesting] = useState(false);
   const [pairingSession, setPairingSession] = useState<McpBridgePairingSession | null>(null);
   const [pairingPending, setPairingPending] = useState(false);
@@ -76,6 +76,10 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   const revisionRef = useRef(0);
   const runtimeGenerationRef = useRef(0);
   const mountedRef = useRef(false);
+  const portInput = portInputDraft.dirty ? portInputDraft.value : String(config.port);
+  const setPortInput = useCallback((value: string) => {
+    setPortInputDraft({ value, dirty: true });
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -121,7 +125,6 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     }
   }, []);
 
-  useEffect(() => { setPortInput(String(config.port)); }, [config.port]);
   useEffect(() => { void refreshMcpBridgeStatus().catch(() => undefined); }, [refreshMcpBridgeStatus]);
 
   const updateMcpBridgeConfig = useCallback(async (patch: Partial<McpBridgeSettings>) => {
@@ -155,7 +158,7 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
         persisted = true;
         if (revision !== revisionRef.current || !mountedRef.current) return;
         setConfig(next);
-        setPortInput(String(port));
+        setPortInputDraft({ value: String(port), dirty: false });
         if (runtimeStatus) {
           if (mountedRef.current && runtimeGenerationRef.current === generation) setRuntimeStatus(toRuntimeStatus(runtimeStatus));
         } else {
@@ -288,6 +291,7 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     pairingSession,
     pairingPending,
     connectionTesting,
+    setPortInput,
     refreshMcpBridgeStatus,
   ]);
 }

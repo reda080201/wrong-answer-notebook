@@ -77,22 +77,23 @@ export function useImportWorkspaceAutosave(
   }, [callbacks]);
 
   useEffect(() => {
-    const revision = ++revisionRef.current;
+    const autosaveRevisionRef = revisionRef;
+    const revision = ++autosaveRevisionRef.current;
     if (!enabled) return;
     const timer = window.setTimeout(async () => {
       timerRef.current = null;
       callbacksRef.current?.onSaving?.();
       try {
         await saveImportWorkspaceDraft(workspace);
-        if (revisionRef.current === revision) callbacksRef.current?.onSaved?.();
+        if (autosaveRevisionRef.current === revision) callbacksRef.current?.onSaved?.();
       } catch (error) {
-        if (revisionRef.current === revision) callbacksRef.current?.onError?.(error);
+        if (autosaveRevisionRef.current === revision) callbacksRef.current?.onError?.(error);
       }
     }, 750);
     timerRef.current = timer;
     return () => {
       window.clearTimeout(timer);
-      if (revisionRef.current === revision) ++revisionRef.current;
+      if (autosaveRevisionRef.current === revision) ++autosaveRevisionRef.current;
       if (timerRef.current === timer) timerRef.current = null;
     };
   }, [workspace, enabled]);

@@ -34,44 +34,46 @@ export function useSettings() {
     settingsRef.current = settings;
   }, [settings]);
 
-  const refreshSettings = useCallback(async (): Promise<boolean> => {
-    let refreshMutation = mutationRef.current;
+  const loadSettingsSnapshot = useCallback(async () => {
+    let revision = mutationRef.current;
     try {
-      setSettingsError(null);
       await drain();
-      refreshMutation = mutationRef.current;
-      loadedRef.current = false;
-      if (refreshMutation !== mutationRef.current) {
-        loadedRef.current = true;
-        return false;
-      }
+      revision = mutationRef.current;
       const loaded = await loadSettings();
-      if (refreshMutation === mutationRef.current) {
-        persistedSettingsRef.current = loaded;
-        pendingRecipesRef.current.clear();
-        settingsRef.current = loaded;
-        setSettings(loaded);
-        loadedRef.current = true;
-        return true;
-      } else {
-        loadedRef.current = true;
-        return false;
-      }
+      return { revision, ok: true as const, settings: loaded };
     } catch (error) {
-      if (refreshMutation === mutationRef.current) {
-        loadedRef.current = false;
-        setSettingsError(errorMessage(error, "설정을 불러오지 못했습니다."));
-        return false;
-      } else {
-        loadedRef.current = true;
-        return false;
-      }
+      return { revision, ok: false as const, error };
     }
   }, [drain]);
 
+  const applySettingsSnapshot = useCallback((result: Awaited<ReturnType<typeof loadSettingsSnapshot>>) => {
+    if (result.revision !== mutationRef.current) {
+      loadedRef.current = true;
+      return false;
+    }
+    if (!result.ok) {
+      loadedRef.current = false;
+      setSettingsError(errorMessage(result.error, "설정을 불러오지 못했습니다."));
+      return false;
+    }
+    persistedSettingsRef.current = result.settings;
+    pendingRecipesRef.current.clear();
+    settingsRef.current = result.settings;
+    setSettings(result.settings);
+    setSettingsError(null);
+    loadedRef.current = true;
+    return true;
+  }, []);
+
+  const refreshSettings = useCallback((): Promise<boolean> => {
+    loadedRef.current = false;
+    setSettingsError(null);
+    return loadSettingsSnapshot().then(applySettingsSnapshot);
+  }, [applySettingsSnapshot, loadSettingsSnapshot]);
+
   useEffect(() => {
-    refreshSettings();
-  }, [refreshSettings]);
+    void loadSettingsSnapshot().then(applySettingsSnapshot);
+  }, [applySettingsSnapshot, loadSettingsSnapshot]);
 
   const refreshVisibleSettings = useCallback(() => {
     let next = persistedSettingsRef.current;
