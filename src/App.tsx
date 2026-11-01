@@ -28,6 +28,7 @@ import GeneratedExamsDialog from "./features/exam-builder/components/GeneratedEx
 import { useAppUpdater } from "./features/updater/hooks/useAppUpdater";
 import { useAppDialog } from "./shared/ui/AppDialogProvider";
 import { GITHUB_RELEASES_URL } from "./features/updater/services/appUpdater";
+import { openExternalUrl } from "./services/externalLinks";
 import ErrorNotice from "./shared/ui/ErrorNotice";
 import Dialog from "./shared/ui/Dialog";
 import { useAppMaintenance } from "./hooks/useAppMaintenance";
@@ -1159,7 +1160,7 @@ function AppContent() {
             check: async () => { await updater.checkForUpdate({ ignoreSkipped: true }); },
             install: async () => { await updater.installUpdate(); },
             restart: async () => { await updater.restart(); },
-            openReleasePage: () => { window.open(GITHUB_RELEASES_URL, "_blank", "noopener,noreferrer"); },
+            openReleasePage: () => openExternalUrl(GITHUB_RELEASES_URL),
           }}
           onReplayOnboarding={() => setOnboardingOpen(true)}
           onClose={() => {

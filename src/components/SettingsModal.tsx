@@ -79,7 +79,7 @@ interface SettingsModalProps {
     check: () => Promise<void>;
     install: () => Promise<void>;
     restart: () => Promise<void>;
-    openReleasePage: () => void;
+    openReleasePage: () => void | Promise<void>;
   };
   onReplayOnboarding?: () => void;
 }

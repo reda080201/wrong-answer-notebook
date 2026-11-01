@@ -13,6 +13,13 @@
     "fs:allow-appdata-meta-recursive",
     "updater:default",
     "process:allow-restart",
-    "notebook-commands"
+    "notebook-commands",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        { "url": "https://chatgpt.com/" },
+        { "url": "https://github.com/reda080201/wrong-answer-notebook/releases" }
+      ]
+    }
   ]
 }
