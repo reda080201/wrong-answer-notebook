@@ -1,5 +1,6 @@
 import { AI_STUDY_STORAGE_KEY, AI_BACKUP_PREFERENCE_KEY, isAiStudyStore, type AiStudyStore } from "../../features/study-ai/model";
 import { pickBrowserFiles } from "./browserFilePicker";
+import { backupFilename } from "./backupFilename";
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { AppSettings, ExamSession, GeneratedExam, IntegrityReport, KnowledgeGraphStore, OrphanImagePreview, WrongAnswerEntry, ReviewSession } from "../../types";
@@ -315,7 +316,7 @@ export async function selectBackupDestination(): Promise<string | null> {
   if (!isTauri()) return null;
   const backupPath = await save({
     title: "백업 저장",
-    defaultPath: `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+    defaultPath: backupFilename("zip"),
     filters: [{ name: "ZIP", extensions: ["zip"] }],
   });
   return typeof backupPath === "string" ? backupPath : null;
@@ -354,7 +355,7 @@ export async function createBackupAtDestination(
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `wrong-answer-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = backupFilename("json");
   a.click();
   URL.revokeObjectURL(url);
   return "브라우저 백업 파일을 내려받았습니다.";
