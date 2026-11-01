@@ -25,6 +25,16 @@ function importedData(overrides: Partial<EntryFormData> = {}): Partial<EntryForm
 }
 
 describe("structured import validation", () => {
+  it.each([{}, "bad", null, 3])("blocks an invalid crop container without throwing: %s", value => {
+    const data = importedData({ questionSourceCrops: value as never });
+    const report = validateImportedStudyData(data);
+    expect(report.issues).toContainEqual(expect.objectContaining({ id: "invalid-crop-container", severity: "error" }));
+    expect(classifyImportValidationIssues(report).blocking.length).toBeGreaterThan(0);
+  });
+  it("reports invalid crop items by location", () => {
+    const report = validateImportedStudyData(importedData({ questionSourceCrops: [null, [], "bad", {}, { questionNumber: "1", image: "" }] as never }));
+    for (let index = 0; index < 5; index++) expect(report.issues).toContainEqual(expect.objectContaining({ id: `invalid-crop-question-${index}`, severity: "error", message: expect.stringContaining(`questionSourceCrops[${index}]`) }));
+  });
   it("blocks normalized duplicate structured question numbers", () => {
     const report = validateImportedStudyData(importedData({
       structuredQuestions: [
