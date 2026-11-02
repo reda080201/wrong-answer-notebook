@@ -382,7 +382,14 @@ export function parseImportedStudyText(
   input: string,
   filename?: string,
   fallbackSubject: Subject = "수학",
+  allowMalformedJsonAsText = false,
 ): ImportedStudyText {
+  const trimmed = stripBom(input).trim();
+  if (!allowMalformedJsonAsText && /^[{[]/.test(trimmed) && tryParseImportJson(input) === null) {
+    try { JSON.parse(trimmed); } catch (error) {
+      throw new ImportParseError(`JSON 구문을 수정해 주세요. ${error instanceof Error ? error.message : "올바르지 않은 JSON입니다."}`);
+    }
+  }
   const result = parseImportedStudyTextInternal(input, filename, fallbackSubject);
   return { ...result, data: sanitizeExternalImportTrust(normalizeImportedEntryMath(result.data)) as Partial<EntryFormData> };
 }

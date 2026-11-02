@@ -24,6 +24,7 @@ export default function SettingsThemePanel({
             key={value}
             type="button"
             className={`theme-btn ${theme === value ? "active" : ""}`}
+            aria-pressed={theme === value}
             onClick={() => onThemeChange(value)}
           >
             {label}

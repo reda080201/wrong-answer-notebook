@@ -30,6 +30,7 @@ export interface DialogProps {
   closeDisabled?: boolean;
   busy?: boolean;
   size?: DialogSize;
+  fitContent?: boolean;
   header?: ReactNode;
   footer?: ReactNode;
   bodyClassName?: string;
@@ -52,6 +53,7 @@ function OpenDialog({
   closeDisabled = false,
   busy = false,
   size,
+  fitContent = false,
   header,
   footer,
   bodyClassName,
@@ -161,7 +163,7 @@ function OpenDialog({
 
   if (!open) return null;
 
-  const resolvedClassName = ["modal-card", className, size && `dialog-size-${size}`, `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
+  const resolvedClassName = ["modal-card", className, size && `dialog-size-${size}`, fitContent && "dialog-fit-content", `dialog-scroll-${scrollMode}`].filter(Boolean).join(" ");
   const titleNode = title ? <h2 id={resolvedTitleId}>{title}</h2> : null;
 
   const dialogTree = (

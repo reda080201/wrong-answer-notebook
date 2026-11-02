@@ -546,3 +546,11 @@ describe("importStudyText", () => {
     });
   });
 });
+
+it("requires explicit text fallback for malformed JSON-shaped input", () => {
+  const input = '{"entries": [ broken }';
+  expect(() => parseImportedStudyText(input)).toThrow("JSON 구문");
+  const result = parseImportedStudyText(input, undefined, "수학", true);
+  expect(result.detectedFormat).toBe("text");
+  expect(result.data.question).toContain(input);
+});

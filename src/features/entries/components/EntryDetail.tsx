@@ -680,15 +680,26 @@ export default function EntryDetail({
     });
   }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, scheduleDetailTask, theaterQuestionIndex]);
 
+  const reviewActionLock = useRef(false);
+  const closeFocusView = useCallback(() => {
+    setFocusMode("closed");
+    window.requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>('.detail-panel button[title="오답 집중 보기"], .detail-panel button[title="문제 집중 보기"]')
+        ?? document.querySelector<HTMLElement>('#app-content');
+      target?.focus();
+    });
+  }, []);
+
   const handleReviewResult = useCallback(async (
     result: ReviewResult,
     explicitQuestion?: QuestionBlock,
   ) => {
-    if (reviewSaving) return;
+    if (reviewActionLock.current) return;
     if (isSheet && !explicitQuestion && theaterQuestionIndex === null && focusMode === "closed") {
       pushToast("문제를 크게 보거나 집중 보기에서 복습 결과를 기록하세요.", "info");
       return;
     }
+    reviewActionLock.current = true;
     setReviewSaving(result);
     try {
       const currentSheetQuestion =
@@ -742,9 +753,10 @@ export default function EntryDetail({
     } catch (error) {
       pushToast(error instanceof Error ? error.message : "복습 결과 저장에 실패했습니다.", "error");
     } finally {
+      reviewActionLock.current = false;
       setReviewSaving(null);
     }
-  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, questionIdentifier, reviewSaving, selectedReviewQueue, theaterQuestionIndex]);
+  }, [entry, focusMode, focusedQuestion, isSheet, onQuestionMetaChange, onReview, pushToast, questionAnchors, questionIdentifier, selectedReviewQueue, theaterQuestionIndex]);
 
   const handleQuickMemoSubmit = async () => {
     const text = quickMemoText.trim();
@@ -1176,8 +1188,7 @@ export default function EntryDetail({
       const key = event.key.toLowerCase();
       if (key === "escape" && focusMode !== "closed" && !event.defaultPrevented && !document.querySelector('[role="dialog"][aria-modal="true"]')) {
         event.preventDefault();
-        setFocusMode("closed");
-        window.requestAnimationFrame(() => document.querySelector<HTMLElement>('.detail-panel button[title="오답 집중 보기"]')?.focus());
+        closeFocusView();
         return;
       }
 
@@ -1258,6 +1269,7 @@ export default function EntryDetail({
     isFocusable,
     isSheet,
     moveFocusedQuestion,
+    closeFocusView,
     pushToast,
     questionAnchors.length,
     reviewSaving,
@@ -1702,7 +1714,7 @@ export default function EntryDetail({
           >
             다음
           </button>
-          <button type="button" className="btn-secondary" onClick={() => setFocusMode("closed")}>
+          <button type="button" className="btn-secondary" onClick={closeFocusView}>
             나가기
           </button>
         </div>
@@ -1710,7 +1722,7 @@ export default function EntryDetail({
       {isFocusExpanded && isWrongAnswer && (
         <div className="focused-sheet-nav focused-sheet-nav--single" aria-label="오답 집중 보기">
           <strong>{getEntryTitle(entry)}</strong>
-          <button type="button" className="btn-secondary" onClick={() => setFocusMode("closed")}>
+          <button type="button" className="btn-secondary" onClick={closeFocusView}>
             나가기
           </button>
         </div>
@@ -1978,6 +1990,8 @@ export default function EntryDetail({
                   <FocusedStudyHints
                     nextActionHint={nextActionHint}
                     hints={focusedStudyHints}
+                    onRecordCorrect={onReview || onQuestionMetaChange ? () => void handleReviewResult("good") : undefined}
+                    saving={reviewSaving !== null}
                   />
                 )}
                 <div className="focus-panel-tabs" aria-label="집중 보기 패널">
@@ -2051,6 +2065,8 @@ export default function EntryDetail({
                 <FocusedStudyHints
                   nextActionHint={nextActionHint}
                   hints={focusedStudyHints}
+                    onRecordCorrect={onReview || onQuestionMetaChange ? () => void handleReviewResult("good") : undefined}
+                    saving={reviewSaving !== null}
                 />
               )}
               <div className="focus-panel-tabs" aria-label="오답 집중 보기 패널">
@@ -2588,7 +2604,7 @@ export default function EntryDetail({
           >
             글자 +
           </button>
-          <button type="button" onClick={() => setFocusMode("closed")}>
+          <button type="button" onClick={closeFocusView}>
             나가기
           </button>
         </div>
@@ -2612,7 +2628,7 @@ export default function EntryDetail({
                 다음
               </button>
             )}
-            <button type="button" onClick={() => setFocusMode("closed")}>
+            <button type="button" onClick={closeFocusView}>
               닫기
             </button>
           </div>
