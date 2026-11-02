@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Settings } from "lucide-react";
 import type { ListFilter, SortKey, EntryKind } from "../types";
 import Menu from "../shared/ui/Menu";
 import Dialog from "../shared/ui/Dialog";
@@ -80,7 +81,7 @@ export default function AppToolbar({
       </Menu>}
       {onOpenExamHistory && examHistoryCount > 0 && <button type="button" className="exam-history-trigger btn-secondary" onClick={onOpenExamHistory}>이력 <span>{examHistoryCount}</span></button>}
       <button type="button" className="toolbar-settings-button btn-icon" aria-label="설정" title="설정" onClick={onOpenSettings}>
-        ⚙
+        <Settings size={18} aria-hidden="true" />
       </button>
       {activeChips.length > 0 && <div className="toolbar-active-chips" aria-label="적용된 필터">{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.clear} aria-label={`${chip.label} 제거`}>{chip.label} ×</button>)}</div>}
       {filterOpen && <Dialog open size="sm" ariaLabel="자료 필터" title="자료 필터" onClose={() => setFilterOpen(false)} footer={<div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => { setSortKey(sortOptions[0]?.value ?? sortKey); setDifficultyScoreFilter("all"); setListFilter("all"); }}>초기화</button><button type="button" className="btn-primary" onClick={() => setFilterOpen(false)}>적용</button></div>}>

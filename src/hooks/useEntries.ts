@@ -67,42 +67,62 @@ export function useEntries() {
     return task;
   }, [enqueue]);
 
+  const loadEntriesSnapshot = useCallback(async () => {
+    await drain();
+    const revision = mutationRevisionRef.current;
+    const data = await loadEntries();
+    return { data, revision };
+  }, [drain]);
+
+  const applyEntriesSnapshot = useCallback(({ data, revision }: Awaited<ReturnType<typeof loadEntriesSnapshot>>) => {
+    if (!initialLoadCompletedRef.current) {
+      initialLoadCompletedRef.current = true;
+      setInitialLoadStatus("ready");
+    }
+    if (revision !== mutationRevisionRef.current) {
+      loadedRef.current = true;
+      return false;
+    }
+    entriesRef.current = data;
+    setEntries(data);
+    loadedRef.current = true;
+    return true;
+  }, []);
+
+  const failEntriesLoad = useCallback((err: unknown) => {
+    loadedRef.current = false;
+    if (!initialLoadCompletedRef.current) setInitialLoadStatus("error");
+    setError(errorMessage(err, "노트를 불러오지 못했습니다."));
+  }, []);
+
   const refresh = useCallback(async (): Promise<boolean> => {
     if (reloadingRef.current) return false;
     reloadingRef.current = true;
+    loadedRef.current = false;
     setLoading(true);
     setError(null);
     try {
-      await drain();
-      const refreshRevision = mutationRevisionRef.current;
-      loadedRef.current = false;
-      const data = await loadEntries();
-      if (!initialLoadCompletedRef.current) {
-        initialLoadCompletedRef.current = true;
-        setInitialLoadStatus("ready");
-      }
-      if (refreshRevision !== mutationRevisionRef.current) {
-        loadedRef.current = true;
-        return false;
-      }
-      entriesRef.current = data;
-      setEntries(data);
-      loadedRef.current = true;
-      return true;
+      return applyEntriesSnapshot(await loadEntriesSnapshot());
     } catch (err) {
-      loadedRef.current = false;
-      if (!initialLoadCompletedRef.current) setInitialLoadStatus("error");
-      setError(errorMessage(err, "노트를 불러오지 못했습니다."));
+      failEntriesLoad(err);
       return false;
     } finally {
       reloadingRef.current = false;
       setLoading(false);
     }
-  }, [drain]);
+  }, [applyEntriesSnapshot, failEntriesLoad, loadEntriesSnapshot]);
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    if (reloadingRef.current) return;
+    reloadingRef.current = true;
+    void loadEntriesSnapshot()
+      .then(applyEntriesSnapshot)
+      .catch(failEntriesLoad)
+      .finally(() => {
+        reloadingRef.current = false;
+        setLoading(false);
+      });
+  }, [applyEntriesSnapshot, failEntriesLoad, loadEntriesSnapshot]);
 
   const flushEntries = useCallback(async () => {
     await lastOperationRef.current;

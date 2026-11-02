@@ -63,6 +63,34 @@ describe("generateExam", () => {
     expect(first.questions.map((item) => `${item.source.sourceEntryId}:${item.source.sourceQuestionNumber}`)).toEqual(second.questions.map((item) => `${item.source.sourceEntryId}:${item.source.sourceQuestionNumber}`));
     expect(new Set(first.questions.map((item) => item.source.sourceEntryId)).size).toBe(first.questions.length);
   });
+  it("excludes only reviews strictly newer than the fixed recent-days cutoff", () => {
+    const now = new Date("2026-01-08T00:00:00.000Z");
+    const cutoff = now.getTime() - 7 * 86_400_000;
+    const reviewedAt = (offset: number) => new Date(cutoff + offset).toISOString();
+    const candidates = [-1, 0, 1].map((offset) => {
+      const entry = sheet(`recent-${offset}`, `경계 ${offset}`, 60);
+      entry.questionMeta = [{
+        questionNumber: "1",
+        important: false,
+        difficultyScore: 60,
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        review: { lastReviewedAt: reviewedAt(offset), dueAt: null, intervalDays: 0, streak: 0, history: [] },
+      }];
+      return entry;
+    });
+
+    const exam = generateExam({
+      entries: candidates,
+      title: "최근 복습 경계",
+      preset: "real_exam",
+      blueprint: defaultBlueprintForPreset("real_exam", 3),
+      seed: "fixed-recent-cutoff",
+      now,
+      filters: { excludeRecentDays: 7 },
+    });
+
+    expect(exam.questions.map((question) => question.source.sourceEntryId).sort()).toEqual(["recent--1", "recent-0"]);
+  });
   it("keeps locked questions during reassembly and reports a candidate shortage", () => {
     const locked = generateExam({ entries, title: "세트", preset: "hard", blueprint: defaultBlueprintForPreset("hard", 1), seed: "one" }).questions.map((item) => ({ ...item, locked: true }));
     const next = generateExam({ entries, title: "세트", preset: "hard", blueprint: defaultBlueprintForPreset("hard", 5), seed: "two", lockedQuestions: locked });

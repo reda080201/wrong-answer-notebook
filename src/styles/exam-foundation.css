@@ -30,7 +30,7 @@
 .exam-question-navigator-grid .is-unanswered { color: var(--text-muted); }
 .exam-question-navigator-grid .is-marked { box-shadow: inset 0 -3px 0 var(--warning, #d97706); }
 .exam-navigator-legend { display: flex; flex-wrap: wrap; gap: 8px 14px; margin: 0 auto 0 0; font-size: .82rem; color: var(--text-muted); }
-.exam-result-grid__status { display: block; font-size: 10px; line-height: 1.1; }
+.exam-result-grid__status { display: block; font-size: .8125rem; line-height: 1.1; }
 .exam-result-actions button {
   min-height: 40px;
   padding: 8px 12px;

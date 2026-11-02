@@ -20,37 +20,57 @@ export function useLibraryFolders() {
   const lastOperationRef = useRef<Promise<unknown>>(Promise.resolve());
   const { enqueue, drain } = useSerialTaskQueue();
 
-  const refresh = useCallback(async (): Promise<boolean> => {
-    if (reloadingRef.current) return false;
-    reloadingRef.current = true;
-    const request = ++loadRequestRef.current;
-    setLoading(true);
-    setError(null);
+  const loadFolderSnapshot = useCallback(async (request: number) => {
+    let revision = mutationRevisionRef.current;
     try {
       await drain();
-      const revision = mutationRevisionRef.current;
-      loadedRef.current = false;
+      revision = mutationRevisionRef.current;
       const next = await loadLibraryFolders();
-      if (request !== loadRequestRef.current || revision !== mutationRevisionRef.current) return false;
-      foldersRef.current = next;
-      setFolders(next);
-      loadedRef.current = true;
-      setError(null);
-      return true;
+      return { request, revision, ok: true as const, folders: next };
     } catch (caught) {
-      if (request === loadRequestRef.current) {
-        setError(message(caught, "폴더 목록을 불러오지 못했습니다."));
-      }
-      return false;
-    } finally {
-      if (request === loadRequestRef.current) {
-        reloadingRef.current = false;
-        setLoading(false);
-      }
+      return { request, revision, ok: false as const, error: caught };
     }
   }, [drain]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  const applyFolderSnapshot = useCallback((result: Awaited<ReturnType<typeof loadFolderSnapshot>>) => {
+    if (result.request !== loadRequestRef.current) return false;
+    if (!result.ok) {
+      setError(message(result.error, "폴더 목록을 불러오지 못했습니다."));
+      loadedRef.current = false;
+      reloadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    if (result.revision !== mutationRevisionRef.current) {
+      reloadingRef.current = false;
+      setLoading(false);
+      return false;
+    }
+    foldersRef.current = result.folders;
+    setFolders(result.folders);
+    loadedRef.current = true;
+    setError(null);
+    reloadingRef.current = false;
+    setLoading(false);
+    return true;
+  }, []);
+
+  const refresh = useCallback(async (): Promise<boolean> => {
+    if (reloadingRef.current) return false;
+    reloadingRef.current = true;
+    loadedRef.current = false;
+    const request = ++loadRequestRef.current;
+    setLoading(true);
+    setError(null);
+    return loadFolderSnapshot(request).then(applyFolderSnapshot);
+  }, [applyFolderSnapshot, loadFolderSnapshot]);
+
+  useEffect(() => {
+    if (reloadingRef.current) return;
+    reloadingRef.current = true;
+    const request = ++loadRequestRef.current;
+    void loadFolderSnapshot(request).then(applyFolderSnapshot);
+  }, [applyFolderSnapshot, loadFolderSnapshot]);
 
   const mutate = useCallback(async (recipe: (current: LibraryFolder[]) => LibraryFolder[]) => {
     if (maintenanceBlockedRef.current) throw new Error("백업 또는 복원이 진행 중입니다. 완료된 뒤 다시 시도해 주세요.");

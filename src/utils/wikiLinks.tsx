@@ -1,8 +1,12 @@
-import { Fragment, cloneElement, isValidElement, type ReactNode } from "react";
+import { Fragment, cloneElement, isValidElement, type ReactNode, type KeyboardEvent } from "react";
 import MathText from "../components/MathText";
 import { useConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
 import type { ConceptLinkRuntime } from "../features/learning/components/ConceptLinkProvider";
 import type { ConceptLinkResolveContext } from "../features/learning/utils/conceptIndex";
+
+function stopWikiActivationBubble(event: KeyboardEvent<HTMLButtonElement>) {
+  if (event.key === "Enter" || event.key === " ") event.stopPropagation();
+}
 
 export interface ParsedWikiPart {
   isLink: boolean;
@@ -69,7 +73,7 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets, concept
       const start = index + prefix.length;
       if (start > last) nodes.push(<MathText key={`${key}-text-${last}`} text={raw.slice(last, start)} />);
       const item = conceptRuntime.resolve(target, conceptContext);
-      nodes.push(item ? <button key={`${key}-concept-${start}`} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(item)}>{target}</button> : <MathText key={`${key}-fallback-${start}`} text={target} />);
+      nodes.push(item ? <button key={`${key}-concept-${start}`} type="button" className="wiki-link wiki-link--exists" onClick={(event) => { event.stopPropagation(); conceptRuntime.open(item); }} onKeyDown={stopWikiActivationBubble}>{target}</button> : <MathText key={`${key}-fallback-${start}`} text={target} />);
       if (particle) nodes.push(<MathText key={`${key}-particle-${start}`} text={particle} />);
       last = index + match[0].length;
     }
@@ -86,10 +90,11 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets, concept
           const label = part.label ?? "";
           const concept = conceptRuntime?.resolve(target, conceptContext);
           if (conceptRuntime && !conceptRuntime.enabled) return <MathText key={`wl-${part.index}`} text={label} />;
-          if (conceptRuntime?.enabled && concept) return <button key={`wl-${part.index}`} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(concept)}>{label}</button>;
+          if (conceptRuntime?.enabled && concept) return <button key={`wl-${part.index}`} type="button" className="wiki-link wiki-link--exists" onClick={(event) => { event.stopPropagation(); conceptRuntime.open(concept); }} onKeyDown={stopWikiActivationBubble}>{label}</button>;
           const exists = existingTargets.has(target.toLowerCase());
           return (
-            <span
+            <button
+              type="button"
               key={`wl-${part.index}`}
               className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`}
               onClick={(e) => {
@@ -97,17 +102,14 @@ export function LinkifiedText({ text = "", onLinkClick, existingTargets, concept
                 onLinkClick(target);
               }}
               title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`}
-              role="button"
-              tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onLinkClick(target);
+                  e.stopPropagation();
                 }
               }}
             >
               {label}
-            </span>
+            </button>
           );
         }
         return renderPlain(part.raw, `math-${part.index}`);
@@ -131,10 +133,10 @@ export function renderWikiLinksInNodes(
     if (conceptRuntime && !conceptRuntime.enabled) return <span key={key}>{label}</span>;
     const concept = conceptRuntime?.resolve(target, conceptContext);
     if (conceptRuntime?.enabled && concept) {
-      return <button key={key} type="button" className="wiki-link wiki-link--exists" onClick={() => conceptRuntime.open(concept)}>{label}</button>;
+      return <button key={key} type="button" className="wiki-link wiki-link--exists" onClick={(event) => { event.stopPropagation(); conceptRuntime.open(concept); }} onKeyDown={stopWikiActivationBubble}>{label}</button>;
     }
     const exists = existingTargets.has(target.toLowerCase());
-    return <span key={key} className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`} onClick={(e) => { e.stopPropagation(); onLinkClick(target); }} title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`} role="button" tabIndex={0} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onLinkClick(target); } }}>{label}</span>;
+    return <button type="button" key={key} className={`wiki-link ${exists ? "wiki-link--exists" : "wiki-link--new"}`} onClick={(e) => { e.stopPropagation(); onLinkClick(target); }} title={exists ? `"${target}" 항목으로 이동` : `"${target}" 항목 새로 만들기`} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>{label}</button>;
   };
   return nodes.flatMap((node, idx) => {
     if (typeof node === "string") {
@@ -151,6 +153,10 @@ export function renderWikiLinksInNodes(
 
     // Check if it's a React element (like a <mark> annotation tag)
     if (isValidElement<{ children?: ReactNode }>(node)) {
+      // Do not create nested interactive controls inside an existing action.
+      if (typeof node.type === "string" && ["button", "a", "input", "textarea", "select", "option"].includes(node.type)) {
+        return cloneElement(node, { key: node.key ?? `wiki-control-${idx}` });
+      }
       if (typeof node.props.children === "string") {
         const text = node.props.children;
         const parsed = parseWikiLinks(text);

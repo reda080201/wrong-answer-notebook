@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { QuestionSolutionHotspot, WrongAnswerEntry } from "../../types";
 import OriginalPageExamReader from "../exam/components/OriginalPageExamReader";
 import QuestionSolutionSheet from "./QuestionSolutionSheet";
@@ -6,6 +6,8 @@ import HotspotLinkEditor from "./HotspotLinkEditor";
 import Dialog from "../../shared/ui/Dialog";
 import { entrySolutionQuestions, validSolutionHotspot } from "./solutionModel";
 import "./OriginalPageStudyView.css";
+
+const NO_SOURCE_PAGES: string[] = [];
 
 interface Props {
   entry: WrongAnswerEntry;
@@ -19,7 +21,7 @@ interface Props {
 
 export default function OriginalPageStudyView({ entry, hidden, currentQuestionKey, onCurrentQuestionChange, onSaveHotspots, immersive = false, onToggleImmersive }: Props) {
   const returnFocusRegionRef = useRef<HTMLDivElement>(null);
-  const pages = entry.sourcePageImages ?? [];
+  const pages = entry.sourcePageImages ?? NO_SOURCE_PAGES;
   const questions = useMemo(() => entrySolutionQuestions(entry), [entry]);
   const [currentPage, setCurrentPage] = useState(pages[0]);
   const [selectedPages, setSelectedPages] = useState(pages);
@@ -38,18 +40,18 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
   };
   // Only an explicit question selection moves the page. Page changes below
   // choose a confirmed linked question before updating the parent's context.
-  const previousKey = useRef<string | undefined>(undefined);
-  useEffect(() => {
-    if (previousKey.current === currentQuestionKey) return;
-    previousKey.current = currentQuestionKey;
-    if (!currentQuestionKey) return;
-    const question = questions.find(question => question.key === currentQuestionKey);
-    const sourcePage = question?.page && Number.isInteger(question.page) ? pages[question.page - 1] : undefined;
-    const linked = selectedPages.filter(page => page === sourcePage || question?.sourcePages?.includes(page) || hotspots.some(hotspot => hotspot.questionKey === currentQuestionKey && hotspot.sourcePageImage === page));
-    if (linked.includes(currentPage)) { setNotice(""); return; }
-    if (linked[0]) { setCurrentPage(linked[0]); setNotice(""); }
-    else setNotice("선택한 문항의 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다.");
-  }, [currentQuestionKey, currentPage, hotspots, pages, questions, selectedPages]);
+  const [previousKey, setPreviousKey] = useState<string | undefined>(undefined);
+  if (previousKey !== currentQuestionKey) {
+    setPreviousKey(currentQuestionKey);
+    if (currentQuestionKey) {
+      const question = questions.find(question => question.key === currentQuestionKey);
+      const sourcePage = question?.page && Number.isInteger(question.page) ? pages[question.page - 1] : undefined;
+      const linked = selectedPages.filter(page => page === sourcePage || question?.sourcePages?.includes(page) || hotspots.some(hotspot => hotspot.questionKey === currentQuestionKey && hotspot.sourcePageImage === page));
+      if (linked.includes(currentPage)) setNotice("");
+      else if (linked[0]) { setCurrentPage(linked[0]); setNotice(""); }
+      else setNotice("선택한 문항의 원본 페이지 연결이 없습니다. 현재 페이지를 유지합니다.");
+    }
+  }
   const changePage = (page: string) => {
     setCurrentPage(page);
     const linked = questions.filter(question => questions.filter(other => other.key === question.key).length === 1 && linkedPages(question.key).includes(page));

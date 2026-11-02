@@ -23,6 +23,18 @@ function effectiveProvider(config: AiProviderSettings): AiProviderType {
   return provider === "manual" ? "openai-compatible" : provider;
 }
 
+function providerStatusOwner(config: AiProviderSettings): string {
+  return JSON.stringify([
+    config.provider ?? null,
+    config.type,
+    config.model ?? null,
+    config.baseUrl ?? null,
+    config.enabled,
+    config.keySource,
+    config.hasStoredKey,
+  ]);
+}
+
 export function useAiProviderSettings({
   aiProvider,
   refreshSettings,
@@ -32,6 +44,7 @@ export function useAiProviderSettings({
     useState<AiProviderStatus | null>(null);
   const [aiProviderStatusLoading, setAiProviderStatusLoading] = useState(false);
   const [aiProviderStatusError, setAiProviderStatusError] = useState<string | null>(null);
+  const [aiProviderStatusOwner, setAiProviderStatusOwner] = useState<string | null>(null);
   const [aiProviderKeyInput, setAiProviderKeyInput] = useState("");
   const statusRequestRef = useRef(0);
   const configQueueRef = useRef<Promise<void>>(Promise.resolve());
@@ -63,33 +76,44 @@ export function useAiProviderSettings({
     if (pendingConfigWritesRef.current === 0) desiredConfigRef.current = aiProvider;
   }, [aiProvider]);
 
+  const loadAiProviderStatus = useCallback(async (requestId: number, requestedOwner: string) => {
+    try {
+      const status = await getAiProviderStatus();
+      if (statusRequestRef.current === requestId) {
+        setAiProviderStatusOwner(requestedOwner);
+        setAiProviderStatus(status);
+        setAiProviderStatusError(null);
+      }
+    } catch (statusError: unknown) {
+      if (statusRequestRef.current === requestId) {
+        setAiProviderStatusOwner(requestedOwner);
+        const message = statusError instanceof Error ? statusError.message : "AI Provider 상태를 불러오지 못했습니다.";
+        setAiProviderStatus(null);
+        setAiProviderStatusError(message);
+        setSettingsMessage(message);
+      }
+    } finally {
+      if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false);
+    }
+  }, [setSettingsMessage]);
+
   const refreshAiProviderStatus = useCallback(() => {
     const requestId = ++statusRequestRef.current;
+    const owner = providerStatusOwner(aiProvider);
+    setAiProviderStatusOwner(owner);
     setAiProviderStatus(null);
     setAiProviderStatusLoading(true);
     setAiProviderStatusError(null);
-    return getAiProviderStatus()
-      .then((status) => {
-        if (statusRequestRef.current === requestId) {
-          setAiProviderStatus(status);
-          setAiProviderStatusError(null);
-        }
-      })
-      .catch((statusError: unknown) => {
-        if (statusRequestRef.current === requestId) {
-          const message = statusError instanceof Error ? statusError.message : "AI Provider 상태를 불러오지 못했습니다.";
-          setAiProviderStatus(null);
-          setAiProviderStatusError(message);
-          setSettingsMessage(message);
-        }
-      }).finally(() => {
-        if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false);
-      });
-  }, [setSettingsMessage]);
+    return loadAiProviderStatus(requestId, owner);
+  }, [aiProvider, loadAiProviderStatus]);
 
   useEffect(() => {
-    void refreshAiProviderStatus();
-  }, [aiProvider, refreshAiProviderStatus]);
+    const requestId = ++statusRequestRef.current;
+    void loadAiProviderStatus(requestId, providerStatusOwner(aiProvider));
+  }, [aiProvider, loadAiProviderStatus]);
+
+  const currentProviderStatusOwner = providerStatusOwner(aiProvider);
+  const ownsAiProviderStatus = aiProviderStatusOwner === currentProviderStatusOwner;
 
   const updateAiProviderConfig = useCallback((patch: Partial<AiProviderSettings>) => {
     const next: AiProviderSettings = { ...desiredConfigRef.current, ...patch };
@@ -98,8 +122,10 @@ export function useAiProviderSettings({
     pendingConfigWritesRef.current += 1;
     const generation = ++requestedConfigGenerationRef.current;
     const requestId = ++statusRequestRef.current;
+    const nextOwner = providerStatusOwner(next);
     beginOperation();
     const write = async () => {
+      if (statusRequestRef.current === requestId) setAiProviderStatusOwner(nextOwner);
       setAiProviderStatus(null);
       setAiProviderStatusLoading(true);
       setAiProviderStatusError(null);
@@ -108,6 +134,7 @@ export function useAiProviderSettings({
         savedConfigGenerationRef.current = Math.max(savedConfigGenerationRef.current, generation);
         latestConfigErrorRef.current = null;
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(nextOwner);
           setAiProviderStatus(status);
           setAiProviderStatusError(null);
         }
@@ -119,6 +146,7 @@ export function useAiProviderSettings({
           ? configError
           : new Error("AI Provider 설정 저장에 실패했습니다.");
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(currentProviderStatusOwner);
           const message = configError instanceof Error ? configError.message : "AI Provider 설정 저장에 실패했습니다.";
           setAiProviderStatus(null);
           setAiProviderStatusError(message);
@@ -132,7 +160,7 @@ export function useAiProviderSettings({
       }
     };
     return enqueueOperation(write);
-  }, [beginOperation, enqueueOperation, finishOperation, refreshSettings, setSettingsMessage]);
+  }, [beginOperation, currentProviderStatusOwner, enqueueOperation, finishOperation, refreshSettings, setSettingsMessage]);
 
   const flushAiProviderConfig = useCallback(async () => {
     for (;;) {
@@ -155,11 +183,14 @@ export function useAiProviderSettings({
       return;
     }
     const apiKey = aiProviderKeyInput.trim();
-    const expectedProvider = effectiveProvider(desiredConfigRef.current);
+    const expectedConfig = desiredConfigRef.current;
+    const expectedProvider = effectiveProvider(expectedConfig);
+    const expectedOwner = providerStatusOwner(expectedConfig);
     const requiredGeneration = requestedConfigGenerationRef.current;
     beginOperation();
     await enqueueOperation(async () => {
       const requestId = ++statusRequestRef.current;
+      setAiProviderStatusOwner(expectedOwner);
       setAiProviderStatus(null);
       setAiProviderStatusLoading(true);
       setAiProviderStatusError(null);
@@ -170,6 +201,7 @@ export function useAiProviderSettings({
         const status = await saveAiProviderKey(apiKey, expectedProvider);
         setAiProviderKeyInput("");
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(expectedOwner);
           setAiProviderStatus(status);
           setAiProviderStatusError(null);
         }
@@ -177,6 +209,7 @@ export function useAiProviderSettings({
         setSettingsMessage("AI Provider key를 저장했습니다.");
       } catch (keyError) {
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(expectedOwner);
           setAiProviderStatus(null);
           setAiProviderStatusError(keyError instanceof Error ? keyError.message : "API key 저장에 실패했습니다.");
         }
@@ -189,11 +222,14 @@ export function useAiProviderSettings({
   }, [aiProviderKeyInput, beginOperation, enqueueOperation, finishOperation, refreshSettings, setSettingsMessage]);
 
   const removeAiProviderKey = useCallback(async () => {
-    const expectedProvider = effectiveProvider(desiredConfigRef.current);
+    const expectedConfig = desiredConfigRef.current;
+    const expectedProvider = effectiveProvider(expectedConfig);
+    const expectedOwner = providerStatusOwner(expectedConfig);
     const requiredGeneration = requestedConfigGenerationRef.current;
     beginOperation();
     await enqueueOperation(async () => {
       const requestId = ++statusRequestRef.current;
+      setAiProviderStatusOwner(expectedOwner);
       setAiProviderStatus(null);
       setAiProviderStatusLoading(true);
       setAiProviderStatusError(null);
@@ -203,6 +239,7 @@ export function useAiProviderSettings({
         }
         const status = await clearAiProviderKey(expectedProvider);
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(expectedOwner);
           setAiProviderStatus(status);
           setAiProviderStatusError(null);
         }
@@ -210,6 +247,7 @@ export function useAiProviderSettings({
         setSettingsMessage("저장된 AI Provider key를 삭제했습니다.");
       } catch (keyError) {
         if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(expectedOwner);
           setAiProviderStatus(null);
           setAiProviderStatusError(keyError instanceof Error ? keyError.message : "API key 삭제에 실패했습니다.");
         }
@@ -225,6 +263,10 @@ export function useAiProviderSettings({
     const requiredGeneration = requestedConfigGenerationRef.current;
     beginOperation();
     await enqueueOperation(async () => {
+      const requestId = ++statusRequestRef.current;
+      const owner = providerStatusOwner(desiredConfigRef.current);
+      setAiProviderStatusOwner(owner);
+      setAiProviderStatus(null);
       setAiProviderStatusLoading(true);
       setAiProviderStatusError(null);
       try {
@@ -232,23 +274,29 @@ export function useAiProviderSettings({
           throw latestConfigErrorRef.current ?? new Error("AI Provider 설정을 먼저 저장하지 못했습니다.");
         }
         const status = await testAiProviderConnection();
-        setAiProviderStatus(status);
-        setSettingsMessage(status.available ? "AI provider 연결 테스트에 성공했습니다." : status.message ?? "AI provider를 사용할 수 없습니다.");
+        if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(owner);
+          setAiProviderStatus(status);
+          setSettingsMessage(status.available ? "AI provider 연결 테스트에 성공했습니다." : status.message ?? "AI provider를 사용할 수 없습니다.");
+        }
       } catch (error) {
         const message = error instanceof Error ? error.message : "AI provider 연결 테스트에 실패했습니다.";
-        setAiProviderStatusError(message);
-        setSettingsMessage(message);
+        if (statusRequestRef.current === requestId) {
+          setAiProviderStatusOwner(owner);
+          setAiProviderStatusError(message);
+          setSettingsMessage(message);
+        }
       } finally {
         finishOperation();
-        setAiProviderStatusLoading(false);
+        if (statusRequestRef.current === requestId) setAiProviderStatusLoading(false);
       }
     });
   }, [beginOperation, enqueueOperation, finishOperation, setSettingsMessage]);
 
   return useMemo(() => ({
-    aiProviderStatus,
-    aiProviderStatusLoading,
-    aiProviderStatusError,
+    aiProviderStatus: ownsAiProviderStatus ? aiProviderStatus : null,
+    aiProviderStatusLoading: ownsAiProviderStatus ? aiProviderStatusLoading : true,
+    aiProviderStatusError: ownsAiProviderStatus ? aiProviderStatusError : null,
     refreshAiProviderStatus,
     aiProviderKeyInput,
     setAiProviderKeyInput,
@@ -263,6 +311,7 @@ export function useAiProviderSettings({
     aiProviderStatus,
     aiProviderStatusLoading,
     aiProviderStatusError,
+    ownsAiProviderStatus,
     refreshAiProviderStatus,
     aiProviderKeyInput,
     operationPending,

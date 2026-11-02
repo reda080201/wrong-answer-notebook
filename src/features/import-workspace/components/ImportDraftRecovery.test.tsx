@@ -1,10 +1,19 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
 import { afterEach, expect, it, vi } from "vitest";
 import { loadImportWorkspaceDraft } from "../hooks/useImportWorkspaceAutosave";
 import type { ImportWorkspace } from "../model/importWorkspace";
 import ImportDraftRecovery from "./ImportDraftRecovery";
 vi.mock("../hooks/useImportWorkspaceAutosave", () => ({ loadImportWorkspaceDraft: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
+it("ignores an earlier StrictMode read completing after the current read", async () => {
+  let oldRead!: (value: ImportWorkspace | null) => void;
+  vi.mocked(loadImportWorkspaceDraft).mockImplementationOnce(() => new Promise(resolve => { oldRead = resolve; })).mockResolvedValueOnce({ id: "new", groups: [] } as unknown as ImportWorkspace);
+  render(<StrictMode><ImportDraftRecovery onResume={vi.fn()} /></StrictMode>);
+  await screen.findByRole("button", { name: "이전 가져오기 이어서" });
+  await act(async () => oldRead(null));
+  expect(screen.getByRole("button", { name: "이전 가져오기 이어서" })).toBeEnabled();
+});
 const draft = { id: "existing-draft", groups: [], commitAttempt: { state: "completed" } } as unknown as ImportWorkspace;
 it("opens a saved draft without new files and preserves its commit receipt", async () => {
   vi.mocked(loadImportWorkspaceDraft).mockResolvedValue(draft);

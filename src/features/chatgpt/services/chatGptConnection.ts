@@ -1,4 +1,5 @@
 import type { ChatGptMcpPreferences } from "../../../types";
+import { openExternalUrl } from "../../../services/externalLinks";
 
 export const CHATGPT_URL = "https://chatgpt.com/";
 export const CHATGPT_CONNECTION_RECENT_MS = 10 * 60 * 1000;
@@ -107,8 +108,5 @@ export function buildChatGptPrompt(
 }
 
 export async function openChatGpt(): Promise<void> {
-  // Do not pass "noopener" in features — Chromium then returns null and open always fails.
-  const opened = window.open(CHATGPT_URL, "_blank");
-  if (opened) opened.opener = null;
-  if (!opened) throw new Error("ChatGPT 창을 열지 못했습니다. 주소를 직접 복사해 열어 주세요.");
+  await openExternalUrl(CHATGPT_URL);
 }

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState, type SetStateAction } from "react";
 import type {
   EntryKind,
   ListFilter,
@@ -29,8 +29,9 @@ export function useAppNavigationState({
   entries,
   subjectOrder,
 }: UseAppNavigationStateOptions) {
-  const [activeSection, setActiveSection] =
+  const [activeSection, setActiveSectionState] =
     useState<EntryKind>("wrong_answer");
+  const activeSectionRef = useRef(activeSection);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [subjectFilter, setSubjectFilter] = useState<string | null>(null);
@@ -41,16 +42,17 @@ export function useAppNavigationState({
   const [difficultyScoreFilter, setDifficultyScoreFilter] =
     useState<DifficultyScoreFilter>("all");
 
-  useEffect(() => {
-    if (!isSortKeyAllowedForSection(activeSection, sortKey)) setSortKey("date-desc");
-    if (!isListFilterAllowedForSection(activeSection, listFilter)) setListFilter("all");
-    if (!isDifficultyFilterVisibleForSection(activeSection) && difficultyFilter !== "all") {
-      setDifficultyFilter("all");
-    }
-    if (!isDifficultyScoreFilterVisibleForSection(activeSection) && difficultyScoreFilter !== "all") {
-      setDifficultyScoreFilter("all");
-    }
-  }, [activeSection, difficultyFilter, difficultyScoreFilter, listFilter, sortKey]);
+  const setActiveSection = useCallback((nextSection: SetStateAction<EntryKind>) => {
+    const previous = activeSectionRef.current;
+    const next = typeof nextSection === "function" ? nextSection(previous) : nextSection;
+    if (next === previous) return;
+    activeSectionRef.current = next;
+    setSortKey((current) => isSortKeyAllowedForSection(next, current) ? current : "date-desc");
+    setListFilter((current) => isListFilterAllowedForSection(next, current) ? current : "all");
+    setDifficultyFilter((current) => !isDifficultyFilterVisibleForSection(next) ? "all" : current);
+    setDifficultyScoreFilter((current) => !isDifficultyScoreFilterVisibleForSection(next) ? "all" : current);
+    setActiveSectionState(next);
+  }, []);
 
   const filtered = useMemo(() => {
     const list = entries.filter((entry) => {

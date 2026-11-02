@@ -6,7 +6,7 @@ import { solutionQuestionKey } from "../../solutions/solutionModel";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
-import { ChevronDown, ChevronUp, Search, X } from "lucide-react";
+import { ChevronDown, ChevronUp, Search, X, Highlighter, Underline, Eraser } from "lucide-react";
 import type { AiProviderStatus, Annotation, AnnotationTool, ChatGptMcpPreferences, ChecklistItem, ExamPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, ProblemSheetDisplayMode, QuestionMeta, ReviewResult, SheetAnswerItem, ViewPreferences, WrongAnswerEntry } from "../../../types";
 import type { ExportHubView } from "../../../features/export/types";
 import type { SettingsTab } from "../../../components/SettingsModal";
@@ -294,7 +294,7 @@ export default function EntryDetail({
   const showOriginalStudy = originalStudyChoice?.entryId === entry.id ? originalStudyChoice.original : Boolean(entry.sourcePageImages?.length);
   const [hideAnswers, setHideAnswers] = useState(viewPreferences?.hideAnswers ?? loadAnswerHidden);
   const [revealedAnswerNumbers, setRevealedAnswerNumbers] = useState<Set<string>>(() => new Set());
-  const initialReadingPosition = useRef({ entryId: entry.id, index: readingPositions.get(entry)?.index ?? 0 });
+  const [initialReadingPosition] = useState(() => ({ entryId: entry.id, index: readingPositions.get(entry)?.index ?? 0 }));
   const [focusedQuestionIndex, setFocusedQuestionIndex] = useState(() => readingPositions.get(entry)?.index ?? 0);
   const rememberReading = () => readingPositions.set(entry, { original: showOriginalStudy, index: focusedQuestionIndex });
   const [activeSearchIndex, setActiveSearchIndex] = useState(0);
@@ -329,6 +329,26 @@ export default function EntryDetail({
   const [answerConfirmationSaving, setAnswerConfirmationSaving] = useState(false);
   const [answerConfirmationError, setAnswerConfirmationError] = useState<{ answerId: string; message: string } | null>(null);
   const [toasts, setToasts] = useState<Array<{ id: string; message: string; tone: "success" | "error" | "info" }>>([]);
+  const pendingDetailTimers = useRef(new Set<number>());
+  const detailGeneration = useRef(0);
+  useEffect(() => {
+    const generation = ++detailGeneration.current;
+    const timers = pendingDetailTimers.current;
+    const generationRef = detailGeneration;
+    return () => {
+      if (generationRef.current === generation) ++generationRef.current;
+      timers.forEach(id => window.clearTimeout(id));
+      timers.clear();
+    };
+  }, [entry.id]);
+  const scheduleDetailTask = useCallback((task: () => void, delay: number) => {
+    const generation = detailGeneration.current;
+    const id = window.setTimeout(() => {
+      pendingDetailTimers.current.delete(id);
+      if (generation === detailGeneration.current) task();
+    }, delay);
+    pendingDetailTimers.current.add(id);
+  }, []);
   const [activeTool, setActiveTool] = useState<AnnotationTool | "erase">(
     "highlight",
   );
@@ -355,14 +375,17 @@ export default function EntryDetail({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [originalImmersive]);
 
-  useEffect(() => {
-    if (!viewPreferences) return;
+  const [appliedViewPreferences, setAppliedViewPreferences] = useState(viewPreferences);
+  if (appliedViewPreferences !== viewPreferences) {
+    setAppliedViewPreferences(viewPreferences);
+    if (viewPreferences) {
     setSheetLayout(viewPreferences.sheetLayout);
     setFocusTextSize(viewPreferences.fontSize);
     setHideAnswers(viewPreferences.hideAnswers);
     setStudyControlCompact(viewPreferences.compactToolbar);
     setProblemSheetDisplayMode(viewPreferences.problemSheetDisplayMode);
-  }, [viewPreferences]);
+    }
+  }
 
   const filledParts = entry.explanationParts
     .map((p, i) => ({ part: p, index: i }))
@@ -516,9 +539,9 @@ export default function EntryDetail({
     writeUiStorageValue(STUDY_CONTROL_COMPACT_KEY, studyControlCompact ? "true" : "false");
   }, [onViewPreferencesChange, studyControlCompact]);
 
-  useEffect(() => {
-    setActiveSearchIndex(0);
-  }, [sheetSearch, entry.id]);
+  const searchKey = JSON.stringify([entry.id, sheetSearch]);
+  const [previousSearchKey, setPreviousSearchKey] = useState(searchKey);
+  if (previousSearchKey !== searchKey) { setPreviousSearchKey(searchKey); setActiveSearchIndex(0); }
 
   useEffect(() => {
     if (!sheetSearchOpen) return undefined;
@@ -548,11 +571,12 @@ export default function EntryDetail({
     return () => document.removeEventListener("keydown", openSearch);
   }, [detailViewMode, isSheet]);
 
-  useEffect(() => {
-    // Reset the consumed target together with the display state, including effect replay.
-    consumedInitialTargetRef.current = null;
-    setFocusedQuestionIndex(initialReadingPosition.current.entryId === entry.id ? initialReadingPosition.current.index : 0);
-    readingPositions.delete(entry);
+  useEffect(() => { consumedInitialTargetRef.current = null; }, [entry.id]);
+  useEffect(() => { readingPositions.delete(entry); }, [entry]);
+  const [previousEntryId, setPreviousEntryId] = useState(entry.id);
+  if (previousEntryId !== entry.id) {
+    setPreviousEntryId(entry.id);
+    setFocusedQuestionIndex(initialReadingPosition.entryId === entry.id ? initialReadingPosition.index : 0);
     setFocusMode("closed");
     setTheaterQuestionIndex(null);
     setShowTextReview(false);
@@ -560,17 +584,15 @@ export default function EntryDetail({
     setSelectedQuestionNumbers([]);
     setRevealedAnswerNumbers(new Set());
     setTitleEditing(false);
-  }, [entry.id]);
+  }
 
-  useEffect(() => {
+  const [titleSource, setTitleSource] = useState({ title: entry.title, editing: titleEditing });
+  if (titleSource.title !== entry.title || titleSource.editing !== titleEditing) {
+    setTitleSource({ title: entry.title, editing: titleEditing });
     if (!titleEditing) setTitleDraft(entry.title);
-  }, [entry.title, titleEditing]);
+  }
 
-  useEffect(() => {
-    if (focusedQuestionIndex >= questionAnchors.length) {
-      setFocusedQuestionIndex(Math.max(0, questionAnchors.length - 1));
-    }
-  }, [focusedQuestionIndex, questionAnchors.length]);
+  if (focusedQuestionIndex > Math.max(0, questionAnchors.length - 1)) setFocusedQuestionIndex(Math.max(0, questionAnchors.length - 1));
 
   const scrollToQuestion = useCallback((start: number) => {
     const index = questionAnchors.findIndex(question => question.start === start);
@@ -604,10 +626,10 @@ export default function EntryDetail({
   const pushToast = useCallback((message: string, tone: "success" | "error" | "info" = "info") => {
     const id = uuidv4();
     setToasts((items) => [...items, { id, message, tone }].slice(-3));
-    window.setTimeout(() => {
+    scheduleDetailTask(() => {
       setToasts((items) => items.filter((item) => item.id !== id));
     }, 2400);
-  }, []);
+  }, [scheduleDetailTask]);
 
   const openExportHub = useCallback((view: ExportHubView = "home", scope?: ExportScopeMode, selectionOnly = false) => {
     setExportHubView(view);
@@ -652,11 +674,11 @@ export default function EntryDetail({
       const next = Math.max(0, Math.min(questionAnchors.length - 1, index + delta));
       const target = questionAnchors[next] as QuestionBlock | undefined;
       if (focusMode === "closed" && target) {
-        window.setTimeout(() => scrollToQuestion(target.start), 0);
+        scheduleDetailTask(() => scrollToQuestion(target.start), 0);
       }
       return next;
     });
-  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+  }, [focusMode, isSheet, moveTheaterQuestion, questionAnchors, scrollToQuestion, scheduleDetailTask, theaterQuestionIndex]);
 
   const handleReviewResult = useCallback(async (
     result: ReviewResult,
@@ -876,13 +898,13 @@ export default function EntryDetail({
   const openSolutionForQuestion = useCallback((questionNumber: string) => {
     const normalized = normalizeQuestionNumber(questionNumber);
     setDetailViewMode("solution");
-    window.setTimeout(() => {
+    scheduleDetailTask(() => {
       document.getElementById(`solution-question-${normalized}`)?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     }, 0);
-  }, []);
+  }, [scheduleDetailTask]);
 
   const markSelectedImportant = async () => {
     if (!onQuestionMetaChange || selectedQuestionNumbers.length === 0) return;
@@ -954,6 +976,14 @@ export default function EntryDetail({
     pushToast("선택한 문제 복습 큐를 시작합니다.", "success");
   }, [entry.id, isSheet, openTheaterMode, pushToast, questionAnchors, questionIdentifier, selectedQuestionNumbers]);
 
+  const [renderedTarget, setRenderedTarget] = useState<string | null>(null);
+  const requestedTarget = initialQuestionTarget ? JSON.stringify([entry.id, initialQuestionTarget.requestId]) : null;
+  if (isSheet && initialQuestionTarget && questionAnchors.length && renderedTarget !== requestedTarget) {
+    setRenderedTarget(requestedTarget);
+    const index = questionAnchors.findIndex(block => questionIdentifier(block) === normalizeQuestionNumber(initialQuestionTarget.questionNumber));
+    if (index >= 0) openTheaterMode(index);
+  }
+
   useEffect(() => {
     if (!initialQuestionTarget || !isSheet || questionAnchors.length === 0) return;
     if (consumedInitialTargetRef.current === initialQuestionTarget.requestId) return;
@@ -963,12 +993,11 @@ export default function EntryDetail({
     );
     consumedInitialTargetRef.current = initialQuestionTarget.requestId;
     if (index >= 0) {
-      openTheaterMode(index);
       onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "opened");
     } else {
       onInitialQuestionTargetConsumed?.(initialQuestionTarget.requestId, "not-found");
     }
-  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, openTheaterMode, questionAnchors, questionIdentifier]);
+  }, [initialQuestionTarget, isSheet, onInitialQuestionTargetConsumed, questionAnchors, questionIdentifier]);
 
   const closeTheaterMode = useCallback(() => {
     const target = theaterQuestionIndex !== null ? questionAnchors[theaterQuestionIndex] : undefined;
@@ -976,9 +1005,9 @@ export default function EntryDetail({
     setTheaterQuestionIndex(null);
     setSelectedReviewQueue(null);
     if (target?.kind === "question") {
-      window.setTimeout(() => scrollToQuestion(target.start), 0);
+      scheduleDetailTask(() => scrollToQuestion(target.start), 0);
     }
-  }, [questionAnchors, scrollToQuestion, theaterQuestionIndex]);
+  }, [questionAnchors, scrollToQuestion, scheduleDetailTask, theaterQuestionIndex]);
 
   const executeStudyAction = useCallback((id: NextStudyActionId) => {
     if (id === "review-text") {
@@ -1138,10 +1167,7 @@ export default function EntryDetail({
     })
     : undefined;
 
-  useEffect(() => {
-    if (!isFocusable || focusMode === "closed" || canShowActiveStudyPanel) return;
-    setActiveStudyPanel("question");
-  }, [canShowActiveStudyPanel, focusMode, isFocusable]);
+  if (isFocusable && focusMode !== "closed" && !canShowActiveStudyPanel) setActiveStudyPanel("question");
 
   useEffect(() => {
     if (!isFocusable) return;
@@ -1623,21 +1649,21 @@ export default function EntryDetail({
             className={`memo-tool ${activeTool === "highlight" ? "active" : ""}`}
             onClick={() => setActiveTool("highlight")}
           >
-            🖍 형광펜
+            <Highlighter size={16} aria-hidden="true" /> 형광펜
           </button>
           <button
             type="button"
             className={`memo-tool ${activeTool === "underline" ? "active" : ""}`}
             onClick={() => setActiveTool("underline")}
           >
-            ＿ 밑줄
+            <Underline size={16} aria-hidden="true" /> 밑줄
           </button>
           <button
             type="button"
             className={`memo-tool ${activeTool === "erase" ? "active" : ""}`}
             onClick={() => setActiveTool("erase")}
           >
-            ⌫ 지우기
+            <Eraser size={16} aria-hidden="true" /> 지우기
           </button>
           <span className="memo-toolbar-hint">
             텍스트: 드래그 선택 · 이미지: 영역 드래그 · 지우기: 표시 클릭

@@ -24,6 +24,8 @@ const answerTypeLabel: Record<QuestionAnswerType, string> = {
   unknown: "미분류",
 };
 
+const fieldLabels: Record<string, string> = { unit: "단원", subunit: "소단원", concepts: "개념", tags: "태그", difficulty: "난이도", importance: "중요도", quality: "품질", answerType: "답 유형", sourceType: "출처 유형" };
+
 const list = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
 const score = (value: string): number | null => {
   if (!value.trim()) return null;
@@ -32,6 +34,10 @@ const score = (value: string): number | null => {
 };
 
 export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPatchClassification, inline = false }: QuestionBankDetailProps) {
+  return <QuestionBankDetailFields key={item?.id ?? "empty"} item={item} onClose={onClose} onOpenQuestion={onOpenQuestion} onPatchClassification={onPatchClassification} inline={inline} />;
+}
+
+function QuestionBankDetailFields({ item, onClose, onOpenQuestion, onPatchClassification, inline = false }: QuestionBankDetailProps) {
   const [unit, setUnit] = useState("");
   const [subunit, setSubunit] = useState("");
   const [concepts, setConcepts] = useState("");
@@ -46,22 +52,27 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
   const [hasFailedPatch, setHasFailedPatch] = useState(false);
   const [classificationOpen, setClassificationOpen] = useState(false);
   const failedPatchRef = useRef<QuestionMetaPatch | null>(null);
+  const baseline = useRef<Record<string, string>>({});
+  const [conflicts, setConflicts] = useState<string[]>([]);
 
   useEffect(() => {
-    setUnit(item?.classification.unit ?? "");
-    setSubunit(item?.classification.subunit ?? "");
-    setConcepts((item?.classification.concepts ?? []).join(", "));
-    setTags((item?.classification.tags ?? []).join(", "));
-    setDifficulty(item?.classification.difficultyScore?.toString() ?? "");
-    setImportance(item?.classification.importanceScore?.toString() ?? "");
-    setQuality(item?.classification.qualityScore?.toString() ?? "");
-    setAnswerType(item?.classification.answerType ?? "unknown");
-    setSourceType(item?.classification.sourceType ?? item?.source.type ?? "unknown");
-    failedPatchRef.current = null;
-    setHasFailedPatch(false);
-    setSaveError(null);
-    setClassificationOpen(false);
-  }, [item]);
+    const incoming = { unit: item?.classification.unit ?? "", subunit: item?.classification.subunit ?? "", concepts: (item?.classification.concepts ?? []).join(", "), tags: (item?.classification.tags ?? []).join(", "), difficulty: item?.classification.difficultyScore?.toString() ?? "", importance: item?.classification.importanceScore?.toString() ?? "", quality: item?.classification.qualityScore?.toString() ?? "", answerType: item?.classification.answerType ?? "unknown", sourceType: item?.classification.sourceType ?? item?.source.type ?? "unknown" };
+    const current = { unit, subunit, concepts, tags, difficulty, importance, quality, answerType, sourceType };
+    const changed: string[] = [];
+    const sync = <T extends string,>(key: keyof typeof incoming, value: T, setter: (value: T) => void) => {
+      const previous = baseline.current[key];
+      if (previous === undefined || current[key] === previous) {
+        setter(value);
+        baseline.current[key] = value;
+      } else if (value !== previous && value !== current[key]) changed.push(key);
+    };
+    sync("unit", incoming.unit, setUnit); sync("subunit", incoming.subunit, setSubunit);
+    sync("concepts", incoming.concepts, setConcepts); sync("tags", incoming.tags, setTags);
+    sync("difficulty", incoming.difficulty, setDifficulty); sync("importance", incoming.importance, setImportance);
+    sync("quality", incoming.quality, setQuality); sync("answerType", incoming.answerType, setAnswerType);
+    sync("sourceType", incoming.sourceType, setSourceType);
+    setConflicts(previous => previous.length === changed.length && previous.every((key, index) => key === changed[index]) ? previous : changed);
+  }, [item, unit, subunit, concepts, tags, difficulty, importance, quality, answerType, sourceType]);
 
   const makePatch = (): QuestionMetaPatch => ({
     difficultyScore: score(difficulty),
@@ -84,6 +95,8 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
     setSaveError(null);
     try {
       await onPatchClassification(item.entryId, item.questionNumber, patch);
+      baseline.current = { unit: patch.classification?.unit ?? "", subunit: patch.classification?.subunit ?? "", concepts: (patch.classification?.concepts ?? []).join(", "), tags: (patch.classification?.tags ?? []).join(", "), difficulty: patch.difficultyScore?.toString() ?? "", importance: patch.importanceScore?.toString() ?? "", quality: patch.qualityScore?.toString() ?? "", answerType: patch.classification?.answerType ?? "unknown", sourceType: patch.classification?.sourceType ?? "unknown" };
+      setConflicts([]);
       failedPatchRef.current = null;
       setHasFailedPatch(false);
     } catch (error) {
@@ -118,8 +131,9 @@ export default function QuestionBankDetail({ item, onClose, onOpenQuestion, onPa
         <label>답 유형<select value={answerType} onChange={(event) => setAnswerType(event.target.value as QuestionAnswerType)}>{Object.entries(answerTypeLabel).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>출처 유형<select value={sourceType} onChange={(event) => setSourceType(event.target.value as ProblemSourceType)}>{Object.entries(PROBLEM_SOURCE_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
         <label>단원<input value={unit} onChange={(event) => setUnit(event.target.value)} /></label><label>소단원<input value={subunit} onChange={(event) => setSubunit(event.target.value)} /></label><label>개념 (쉼표)<input value={concepts} onChange={(event) => setConcepts(event.target.value)} /></label><label>태그 (쉼표)<input value={tags} onChange={(event) => setTags(event.target.value)} /></label>
+        {conflicts.length > 0 && <p role="alert">원본도 변경된 항목: {conflicts.map(key => fieldLabels[key] ?? key).join(", ")}. 입력은 유지했습니다. 저장하면 현재 편집값을 적용합니다.</p>}
         {saveError && <p className="form-error" role="alert">{saveError}<button type="button" className="btn-secondary" onClick={() => { const failed = failedPatchRef.current; if (failed) void saveClassification(failed); }} disabled={saving || !hasFailedPatch}>다시 저장</button></p>}
-        <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : "분류 저장"}</button>
+        <button type="button" className="btn-secondary" onClick={() => void saveClassification()} disabled={saving}>{saving ? "저장 중..." : conflicts.length ? "내 편집값으로 저장" : "분류 저장"}</button>
         </div>}
       </section>}
       <footer className="dialog-actions"><button type="button" className="btn-secondary" onClick={onClose} disabled={saving}>닫기</button><button type="button" onClick={() => { onOpenQuestion(item); onClose(); }} disabled={saving}>문제 열기</button></footer>

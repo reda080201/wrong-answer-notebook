@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { LectureBlockDefaultState, LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
 import SemanticFigureView from "../features/figures/components/SemanticFigureView";
@@ -63,15 +63,16 @@ function LectureReaderContent({
 }: LectureReaderContentProps) {
   const blocks = useMemo(() => entry.learningBlocks ?? [], [entry.learningBlocks]);
   const [openBlockIds, setOpenBlockIds] = useState<Set<string>>(() => defaultOpenBlockIds(blocks, blockDefaultState));
+  const [previousOpenBlockProps, setPreviousOpenBlockProps] = useState({ entryId: entry.id, blocks, blockDefaultState });
+  if (previousOpenBlockProps.entryId !== entry.id || previousOpenBlockProps.blocks !== blocks || previousOpenBlockProps.blockDefaultState !== blockDefaultState) {
+    setPreviousOpenBlockProps({ entryId: entry.id, blocks, blockDefaultState });
+    setOpenBlockIds(defaultOpenBlockIds(blocks, blockDefaultState));
+  }
   const figures = entry.figures ?? [];
   const connectedFigureIds = new Set(blocks.flatMap((block) => block.figureIds ?? []));
   const unlinkedFigures = figures.filter((figure) => !connectedFigureIds.has(figure.id));
   const overview = entry.question.trim();
   const memo = entry.memo.trim();
-
-  useEffect(() => {
-    setOpenBlockIds(defaultOpenBlockIds(blocks, blockDefaultState));
-  }, [blockDefaultState, blocks, entry.id]);
 
   return (
     <article className={`lecture-reader lecture-reader--${layout}`}>

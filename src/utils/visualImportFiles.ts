@@ -1,4 +1,15 @@
+import { IMPORT_LIMITS } from "../features/import/services/importLimits";
 const MAX_VISUAL_IMPORT_PAGES = 12;
+
+export function validatePdfViewport(width: number, height: number, pageNumber: number) {
+  const w = Math.ceil(width), h = Math.ceil(height);
+  if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0
+    || w > IMPORT_LIMITS.MAX_IMAGE_DIMENSION || h > IMPORT_LIMITS.MAX_IMAGE_DIMENSION
+    || w * h > IMPORT_LIMITS.MAX_IMAGE_PIXELS || w * h * 4 > IMPORT_LIMITS.MAX_IMAGE_DECODED_BYTES) {
+    throw new Error(`PDF ${pageNumber}페이지의 크기가 안전한 렌더 범위를 벗어났습니다. 페이지 크기를 줄여 다시 선택하세요.`);
+  }
+  return { width: w, height: h };
+}
 
 export interface VisualImportProgress {
   phase: "rasterize";
@@ -44,22 +55,23 @@ export async function rasterizeVisualImportFile(
   } finally {
     options.signal?.removeEventListener("abort", cancelLoading);
   }
-  throwIfAborted();
-  if (pdf.numPages > MAX_VISUAL_IMPORT_PAGES) {
-    await pdf.destroy();
-    throw new Error(`PDF는 한 번에 ${MAX_VISUAL_IMPORT_PAGES}페이지 이하만 분석할 수 있습니다.`);
-  }
   const baseName = file.name.replace(/\.pdf$/i, "");
   const pages: File[] = [];
   try {
+    throwIfAborted();
+    if (pdf.numPages > MAX_VISUAL_IMPORT_PAGES) throw new Error(`PDF는 한 번에 ${MAX_VISUAL_IMPORT_PAGES}페이지 이하만 분석할 수 있습니다.`);
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       throwIfAborted();
       options.onProgress?.({ phase: "rasterize", current: pageNumber - 1, total: pdf.numPages });
       const page = await pdf.getPage(pageNumber);
+      let canvas: HTMLCanvasElement | undefined;
+      try {
       const viewport = page.getViewport({ scale: 1.5 });
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.ceil(viewport.width);
-      canvas.height = Math.ceil(viewport.height);
+      const size = validatePdfViewport(viewport.width, viewport.height, pageNumber);
+      throwIfAborted();
+      canvas = document.createElement("canvas");
+      canvas.width = size.width;
+      canvas.height = size.height;
       const context = canvas.getContext("2d");
       if (!context) throw new Error("PDF 페이지 캔버스를 준비하지 못했습니다.");
       const renderTask = page.render({ canvas, canvasContext: context, viewport });
@@ -72,7 +84,12 @@ export async function rasterizeVisualImportFile(
       }
       throwIfAborted();
       pages.push(await canvasToFile(canvas, `${baseName}-page-${String(pageNumber).padStart(3, "0")}.png`));
+      throwIfAborted();
       options.onProgress?.({ phase: "rasterize", current: pageNumber, total: pdf.numPages });
+      } finally {
+        if (canvas) { canvas.width = 0; canvas.height = 0; }
+        page.cleanup();
+      }
     }
     return pages;
   } finally {

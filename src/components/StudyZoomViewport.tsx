@@ -31,14 +31,13 @@ export function getQuestionZoomStorageKey(entryId: string, mode: "paper" | "focu
 }
 
 export default function StudyZoomViewport({ storageKey, children }: StudyZoomViewportProps) {
+  return <KeyedStudyZoomViewport key={storageKey} storageKey={storageKey}>{children}</KeyedStudyZoomViewport>;
+}
+
+function KeyedStudyZoomViewport({ storageKey, children }: StudyZoomViewportProps) {
   const [zoom, setZoom] = useState(() => loadZoom(storageKey));
   const [hidden, setHidden] = useState(() => loadHidden(storageKey));
   const [controlsOpen, setControlsOpen] = useState(false);
-
-  useEffect(() => {
-    setZoom(loadZoom(storageKey));
-    setHidden(loadHidden(storageKey));
-  }, [storageKey]);
 
   useEffect(() => {
     writeUiStorageValue(storageKey, String(zoom));

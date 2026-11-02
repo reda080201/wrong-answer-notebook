@@ -1,6 +1,7 @@
 import "./mixedPageRoles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Dialog from "../../../shared/ui/Dialog";
+import { useObjectUrlResources } from "../hooks/useObjectUrlResources";
 
 export type PageRoleSelection = {
   sourceKey: string;
@@ -13,8 +14,6 @@ export type PageRoleSource = {
   name?: string;
   pages: File[];
 };
-
-type Preview = { url?: string; error?: string };
 
 const ROLE_LABELS: Record<PageRoleSelection["role"], string> = {
   problem: "문제",
@@ -39,7 +38,7 @@ export default function MixedPageRoleDialog({ sources, onConfirm, onCancel }: Mi
   const [rangeEnd, setRangeEnd] = useState(String(sources[0]?.pages.length ?? 1));
   const [rangeRole, setRangeRole] = useState<PageRoleSelection["role"]>("problem");
   const [rangeMessage, setRangeMessage] = useState("");
-  const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  const [previewFailures, setPreviewFailures] = useState<Record<string, string>>({});
 
   const allPages = useMemo(() => sources.flatMap(source => source.pages.map((file, index) => ({
     sourceKey: source.sourceKey,
@@ -48,33 +47,14 @@ export default function MixedPageRoleDialog({ sources, onConfirm, onCancel }: Mi
     key: pageKey(source.sourceKey, index + 1),
   }))), [sources]);
 
-  useEffect(() => {
-    let active = true;
-    const next: Record<string, Preview> = {};
-    const created: string[] = [];
-    for (const item of allPages) {
-      try {
-        const url = URL.createObjectURL(item.file);
-        created.push(url);
-        next[item.key] = { url };
-      } catch {
-        next[item.key] = { error: "이 페이지의 미리보기를 불러오지 못했습니다." };
-      }
-    }
-    if (active) setPreviews(next);
-    return () => {
-      active = false;
-      created.forEach(url => URL.revokeObjectURL(url));
-    };
-  }, [allPages]);
-
-  useEffect(() => {
-    if (sources.some(source => source.sourceKey === rangeSource)) return;
+  const previews = useObjectUrlResources(allPages);
+  if (!sources.some(source => source.sourceKey === rangeSource)) {
     const first = sources[0];
     setRangeSource(first?.sourceKey ?? "");
     setRangeStart("1");
     setRangeEnd(String(first?.pages.length ?? 1));
-  }, [rangeSource, sources]);
+    setRangeMessage("");
+  }
 
   const counts = allPages.reduce((acc, item) => {
     const role = roles[item.key] ?? "mixed";
@@ -145,11 +125,12 @@ export default function MixedPageRoleDialog({ sources, onConfirm, onCancel }: Mi
         <div className="mixed-page-dialog__grid">
           {allPages.map(({ sourceKey, page, key }) => {
             const preview = previews[key];
+            const previewError = previewFailures[key] ?? preview?.error;
             const label = `${sources.find(source => source.sourceKey === sourceKey)?.name ?? sourceKey} 물리 페이지 ${page}`;
             return <article className="mixed-page-dialog__card" key={key}>
               <h3 className="mixed-page-dialog__title">{label}</h3>
               <div className="mixed-page-dialog__thumb">
-                {preview?.url ? <img src={preview.url} alt={`${label} 미리보기`} onError={() => setPreviews(current => ({ ...current, [key]: { error: "이 페이지의 미리보기를 표시할 수 없습니다." } }))} /> : <span className="mixed-page-dialog__error" role={preview?.error ? "status" : undefined}>{preview?.error ?? "미리보기 준비 중"}</span>}
+                {preview?.url && !previewError ? <img src={preview.url} alt={`${label} 미리보기`} onError={() => setPreviewFailures(current => ({ ...current, [key]: "이 페이지의 미리보기를 표시할 수 없습니다." }))} /> : <span className="mixed-page-dialog__error" role={previewError ? "status" : undefined}>{previewError ?? "미리보기 준비 중"}</span>}
               </div>
               <label className="mixed-page-dialog__field">
                 페이지 역할

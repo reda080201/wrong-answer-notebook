@@ -1,0 +1,52 @@
+[
+  {
+    "entries": 30,
+    "writes": 3,
+    "requests": 3,
+    "samples": [
+      {
+        "stringifyMs": 4.199999988079071,
+        "setItemMs": 5.900000035762787,
+        "loopbackRequestMs": 65.19999998807907,
+        "bytes": 283141
+      },
+      {
+        "stringifyMs": 1.2999999523162842,
+        "setItemMs": 2.200000047683716,
+        "loopbackRequestMs": 40.89999997615814,
+        "bytes": 283141
+      },
+      {
+        "stringifyMs": 1.0999999642372131,
+        "setItemMs": 2,
+        "loopbackRequestMs": 42.90000003576279,
+        "bytes": 283141
+      }
+    ]
+  },
+  {
+    "entries": 300,
+    "writes": 3,
+    "requests": 3,
+    "samples": [
+      {
+        "stringifyMs": 29.200000047683716,
+        "setItemMs": 21.69999998807907,
+        "loopbackRequestMs": 290.39999997615814,
+        "bytes": 2832001
+      },
+      {
+        "stringifyMs": 22.900000035762787,
+        "setItemMs": 21.799999952316284,
+        "loopbackRequestMs": 343.4000000357628,
+        "bytes": 2832001
+      },
+      {
+        "stringifyMs": 25.80000001192093,
+        "setItemMs": 26.19999998807907,
+        "loopbackRequestMs": 355.89999997615814,
+        "bytes": 2832001
+      }
+    ]
+  }
+]

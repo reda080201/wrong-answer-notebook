@@ -81,13 +81,15 @@ export default function SimilarQuestionLinksPanel({ sourceEntry, block, links, i
     }
   }, [linkSignature, links]);
 
-  useEffect(() => {
-    requestIdRef.current += 1;
+  useEffect(() => { requestIdRef.current += 1; }, [context, suggestions]);
+  const [suggestionSource, setSuggestionSource] = useState({ context, suggestions });
+  if (suggestionSource.context !== context || suggestionSource.suggestions !== suggestions) {
+    setSuggestionSource({ context, suggestions });
     setGeminiSuggestions(null);
     setGeminiRankedIds(new Set());
     setGeminiProvenance(null);
     setPayloadTruncated(false);
-  }, [context, suggestions]);
+  }
 
   useEffect(() => {
     if (failedBaseRef.current && failedBaseRef.current !== linkSignature) {

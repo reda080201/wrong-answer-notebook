@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useRef, useState } from "react";
 import {
   MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE,
   type McpBridgeRuntimeStatus,
@@ -79,7 +79,7 @@ interface SettingsModalProps {
     check: () => Promise<void>;
     install: () => Promise<void>;
     restart: () => Promise<void>;
-    openReleasePage: () => void;
+    openReleasePage: () => void | Promise<void>;
   };
   onReplayOnboarding?: () => void;
 }
@@ -149,16 +149,19 @@ export default function SettingsModal({
   const [connectionSection, setConnectionSection] = useState<"api" | "external" | "import">(() => initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
   const [activeCategory, setActiveCategory] = useState<SettingsCategory>(categoryForTab(initialTab ?? "theme"));
   const [dataOperation, setDataOperation] = useState<string | null>(null);
+  const dataOperationLock = useRef(false);
   const [studySubtab, setStudySubtab] = useState<"library" | "exam" | "templates">(
     initialTab === "exam" || initialTab === "templates" ? initialTab : "library",
   );
-  useEffect(() => {
+  const [previousInitialTab, setPreviousInitialTab] = useState(initialTab);
+  if (initialTab !== previousInitialTab) {
+    setPreviousInitialTab(initialTab);
     if (initialTab) {
       setActiveCategory(categoryForTab(initialTab));
       if (initialTab === "ai" || initialTab === "gpt-mcp" || initialTab === "chatgpt") setConnectionSection(initialTab === "chatgpt" ? "external" : initialTab === "gpt-mcp" ? "import" : "api");
       if (initialTab === "library" || initialTab === "exam" || initialTab === "templates") setStudySubtab(initialTab);
     }
-  }, [initialTab]);
+  }
   const patchView = async (patch: Partial<ViewPreferences>) => {
     await ctx.viewPreferences.patch(patch);
   };
@@ -175,11 +178,13 @@ export default function SettingsModal({
     await ctx.chatGptMcpPreferences.patch(patch);
   };
   const runDataOperation = (label: string, operation: () => Promise<void>) => {
-    if (dataOperation) return;
+    if (dataOperationLock.current) return;
+    dataOperationLock.current = true;
+    setSettingsMessage("");
     setDataOperation(label);
-    void operation().catch((error) => {
+    void (async () => { await operation(); })().catch((error) => {
       setSettingsMessage(error instanceof Error ? error.message : `${label} 작업을 완료하지 못했습니다.`);
-    }).finally(() => setDataOperation(null));
+    }).finally(() => { dataOperationLock.current = false; setDataOperation(null); });
   };
 
   const renderMcpBridgePanel = () => (
@@ -390,8 +395,11 @@ function McpBridgeSettingsPanel({
         : "아직 실행하지 않음";
 
   return (
+    <details className="settings-disclosure" open={settings.enabled || Boolean(status?.error)}>
+    <summary>고급 연결 · MCP · {mcpBridgeStatusLabel(status?.status ?? "disabled")}</summary>
     <div className="ai-provider-settings mcp-bridge-settings">
       <p className="settings-label">MCP 브릿지</p>
+      <p className="provider-hint">앱 안에서 AI와 대화할 때는 위의 API 설정을 사용하세요. 이 영역은 외부 MCP 클라이언트를 연결할 때만 필요합니다.</p>
       <p className="provider-hint">
         외부 AI 도구가 오답노트 데이터에 접근할 수 있도록 로컬 브릿지를 켭니다. 기본값은 꺼짐이며, 브라우저 모드에서는 사용할 수 없습니다.
       </p>
@@ -505,5 +513,6 @@ function McpBridgeSettingsPanel({
         )}
       </div>
     </div>
+    </details>
   );
 }

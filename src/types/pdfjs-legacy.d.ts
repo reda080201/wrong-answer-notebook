@@ -5,6 +5,7 @@ declare module "pdfjs-dist/legacy/build/pdf.mjs" {
   }
 
   interface PDFPageProxy {
+    cleanup(): boolean;
     getViewport(options: { scale: number }): PDFPageViewport;
     render(options: {
       canvas: HTMLCanvasElement;

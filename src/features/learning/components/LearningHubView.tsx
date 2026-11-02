@@ -154,17 +154,18 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
   const [filters, setFilters] = useState<LearningHubFilters>(DEFAULT_LEARNING_HUB_FILTERS);
   const items = useMemo(() => projectLearningBlocks(entries), [entries]);
   const filtered = useMemo(() => filterLearningBlocks(items, filters), [items, filters]);
-  const [selectedBlockKey, setSelectedBlockKey] = useState<string | null>(null);
+  const [requestedBlockKey, setRequestedBlockKey] = useState<string | null>(() => highlightedBlock ? `${highlightedBlock.entryId}:${highlightedBlock.blockId}` : null);
+  const [previousHighlightedBlock, setPreviousHighlightedBlock] = useState(highlightedBlock);
+  const highlightedChanged = highlightedBlock !== previousHighlightedBlock;
+  const highlightedKey = highlightedBlock ? `${highlightedBlock.entryId}:${highlightedBlock.blockId}` : null;
+  if (highlightedChanged) setPreviousHighlightedBlock(highlightedBlock);
+  const requestedKeyForRender = highlightedChanged && highlightedKey ? highlightedKey : requestedBlockKey;
+  const selectedBlockKey = filtered.some((item) => `${item.sourceEntryId}:${item.block.id}` === requestedKeyForRender)
+    ? requestedKeyForRender
+    : filtered[0] ? `${filtered[0].sourceEntryId}:${filtered[0].block.id}` : null;
+  if (requestedBlockKey !== selectedBlockKey) setRequestedBlockKey(selectedBlockKey);
   const units = useMemo(() => learningHubUnits(items), [items]);
   const thinkers = useMemo(() => learningHubThinkers(items), [items]);
-  useEffect(() => {
-    const highlightedKey = highlightedBlock ? `${highlightedBlock.entryId}:${highlightedBlock.blockId}` : null;
-    setSelectedBlockKey((current) => {
-      if (highlightedKey && filtered.some((item) => `${item.sourceEntryId}:${item.block.id}` === highlightedKey)) return highlightedKey;
-      if (current && filtered.some((item) => `${item.sourceEntryId}:${item.block.id}` === current)) return current;
-      return filtered[0] ? `${filtered[0].sourceEntryId}:${filtered[0].block.id}` : null;
-    });
-  }, [filtered, highlightedBlock]);
   useEffect(() => {
     if (!selectedBlockKey) return;
     const [entryId, blockId] = selectedBlockKey.split(":");
@@ -263,7 +264,7 @@ export default function LearningHubView({ entries, onOpenSource, onUpdateBlock, 
     </Dialog>}
     <div className="learning-hub-active-filters">{activeFilterChips.map((chip) => <button key={chip.key} type="button" className="learning-hub-chip" onClick={chip.clear} aria-label={`${chip.label} 필터 제거`}>{chip.label} ×</button>)}</div>
     {filtered.length ? <div className="learning-hub-workspace">
-      <aside className="learning-hub-outline" aria-label="학습 항목 목록" ref={(element) => onRegisterScrollContainer?.("learning-hub-outline", element)}>{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setSelectedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || TYPE_LABELS[item.block.type]}</small></button>; })}</aside>
+      <aside className="learning-hub-outline" aria-label="학습 항목 목록" ref={(element) => onRegisterScrollContainer?.("learning-hub-outline", element)}>{filtered.map((item) => { const key = `${item.sourceEntryId}:${item.block.id}`; return <button type="button" key={key} className={selectedBlockKey === key ? "active" : ""} onClick={() => setRequestedBlockKey(key)}><strong>{item.block.title || "제목 없는 학습 항목"}</strong><small>{item.block.unit || TYPE_LABELS[item.block.type]}</small></button>; })}</aside>
       <main className="learning-hub-selected">{(() => { const item = filtered.find((candidate) => `${candidate.sourceEntryId}:${candidate.block.id}` === selectedBlockKey) ?? filtered[0]; return <LearningBlockCard item={item} highlighted={highlightedBlock?.entryId === item.sourceEntryId && highlightedBlock.blockId === item.block.id} onOpenSource={onOpenSource} onUpdateBlock={onUpdateBlock} onDuplicateBlock={onDuplicateBlock} onDeleteBlock={onDeleteBlock} questionBankItems={questionBankItems} aiProviderStatus={aiProviderStatus} onOpenAiSettings={onOpenAiSettings} />; })()}</main>
     </div> : <div className="detail-panel empty-state"><p>{items.length === 0 ? "아직 학습 카드가 없습니다." : "조건에 맞는 학습 카드가 없습니다."}</p>{items.length === 0 ? <div className="learning-hub-empty-actions">{entries.some(entry => entry.entryKind === "problem_sheet") && <button type="button" className={candidateEntries.length ? "btn-primary" : "btn-secondary"} onClick={() => setCandidatePickerOpen(true)}>학습 후보 만들기</button>}{onOpenImport && <button type="button" className={candidateEntries.length ? "btn-secondary" : "btn-primary"} onClick={() => { setCandidatePickerOpen(false); onOpenImport(); }}>시험지 가져오기</button>}</div> : <>{filters.search && <button type="button" className="btn-secondary" onClick={() => set("search", "")}>검색어 지우기</button>}<button type="button" className="btn-secondary" onClick={() => setFilters(DEFAULT_LEARNING_HUB_FILTERS)}>필터 초기화</button></>}</div>}
   </section>;

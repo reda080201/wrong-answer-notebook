@@ -42,6 +42,18 @@ function toRuntimeStatus(status: McpBridgeStatus): McpBridgeRuntimeStatus {
   };
 }
 
+function runtimeStatusError(error: unknown, port: number): McpBridgeRuntimeStatus {
+  return {
+    status: "error",
+    port,
+    readOnly: true,
+    error: error instanceof Error && error.message ? error.message : "MCP 브리지 상태를 불러오지 못했습니다.",
+    lastTestAt: null,
+    lastTestOk: null,
+    lastClientConnectedAt: null,
+  };
+}
+
 export interface UseMcpBridgeSettingsOptions {
   mcpBridge?: McpBridgeSettings;
   persistMcpBridge?: (next: McpBridgeSettings) => Promise<void>;
@@ -55,17 +67,41 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   );
   const [config, setConfig] = useState<McpBridgeSettings>(suppliedConfig);
   const [runtimeStatus, setRuntimeStatus] = useState<McpBridgeRuntimeStatus | null>(null);
-  const [portInput, setPortInput] = useState(String(config.port));
+  const [portInputDraft, setPortInputDraft] = useState({ value: String(config.port), dirty: false });
   const [connectionTesting, setConnectionTesting] = useState(false);
   const [pairingSession, setPairingSession] = useState<McpBridgePairingSession | null>(null);
   const [pairingPending, setPairingPending] = useState(false);
   const configRef = useRef(config);
   const operationRef = useRef(Promise.resolve());
   const revisionRef = useRef(0);
+  const runtimeGenerationRef = useRef(0);
+  const mountedRef = useRef(false);
+  const portInput = portInputDraft.dirty ? portInputDraft.value : String(config.port);
+  const setPortInput = useCallback((value: string) => {
+    setPortInputDraft({ value, dirty: true });
+  }, []);
 
-  useEffect(() => { configRef.current = suppliedConfig; setConfig(suppliedConfig); }, [suppliedConfig]);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      runtimeGenerationRef.current += 1;
+      revisionRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    const current = configRef.current;
+    if (current.enabled === suppliedConfig.enabled && current.port === suppliedConfig.port) return;
+    configRef.current = suppliedConfig;
+    setConfig(suppliedConfig);
+    revisionRef.current += 1;
+    runtimeGenerationRef.current += 1;
+  }, [suppliedConfig]);
 
   const refreshMcpBridgeStatus = useCallback(async () => {
+    const generation = ++runtimeGenerationRef.current;
+    const current = () => mountedRef.current && runtimeGenerationRef.current === generation;
     if (!isTauri()) {
       const status: McpBridgeRuntimeStatus = {
         status: "disabled",
@@ -76,40 +112,76 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
         lastTestOk: null,
         lastClientConnectedAt: null,
       };
-      setRuntimeStatus(status);
+      if (current()) setRuntimeStatus(status);
       return status;
     }
-    const status = toRuntimeStatus(await getMcpBridgeStatus());
-    setRuntimeStatus(status);
-    return status;
+    try {
+      const status = toRuntimeStatus(await getMcpBridgeStatus());
+      if (current()) setRuntimeStatus(status);
+      return status;
+    } catch (error) {
+      if (current()) setRuntimeStatus(runtimeStatusError(error, configRef.current.port));
+      throw error;
+    }
   }, []);
 
-  useEffect(() => { setPortInput(String(config.port)); }, [config.port]);
-  useEffect(() => { void refreshMcpBridgeStatus(); }, [refreshMcpBridgeStatus]);
+  useEffect(() => { void refreshMcpBridgeStatus().catch(() => undefined); }, [refreshMcpBridgeStatus]);
 
   const updateMcpBridgeConfig = useCallback(async (patch: Partial<McpBridgeSettings>) => {
     const operation = async () => {
-      if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+      if (!isTauri()) {
+        if (mountedRef.current) setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE);
+        return;
+      }
       const previous = configRef.current;
       const port = patch.port === undefined ? previous.port : Math.min(65535, Math.max(1024, Math.round(patch.port)));
       const next = { ...previous, ...patch, port };
       const revision = ++revisionRef.current;
+      const generation = ++runtimeGenerationRef.current;
       const shouldApplyRuntime = patch.enabled !== undefined || (patch.port !== undefined && previous.enabled);
+      let runtimeStatus: McpBridgeStatus | null = null;
+      let runtimeChanged = false;
+      let persisted = false;
       try {
-        const status = shouldApplyRuntime ? await setMcpBridgeEnabled(Boolean(next.enabled), port) : null;
-        await persistMcpBridge?.(next);
-        if (revision !== revisionRef.current) return;
-        configRef.current = next;
-        setConfig(next);
-        setPortInput(String(port));
-        setRuntimeStatus(status ? toRuntimeStatus(status) : await refreshMcpBridgeStatus());
-        setSettingsMessage("로컬 MCP 브리지 설정을 저장했습니다.");
-      } catch (error) {
         if (shouldApplyRuntime) {
-          try { await setMcpBridgeEnabled(Boolean(previous.enabled), previous.port); } catch { /* runtime rollback is best effort */ }
-          await refreshMcpBridgeStatus();
+          runtimeStatus = await setMcpBridgeEnabled(Boolean(next.enabled), port);
+          runtimeChanged = true;
         }
-        if (revision === revisionRef.current) setSettingsMessage(error instanceof Error ? error.message : "MCP 브리지 설정을 저장하지 못했습니다.");
+        if (revision !== revisionRef.current) {
+          if (runtimeChanged) await setMcpBridgeEnabled(Boolean(configRef.current.enabled), configRef.current.port).catch(() => undefined);
+          return;
+        }
+        // The parent's update echoes this value through suppliedConfig. Record it
+        // before awaiting so that echo does not invalidate this committed action.
+        configRef.current = next;
+        await persistMcpBridge?.(next);
+        persisted = true;
+        if (revision !== revisionRef.current || !mountedRef.current) return;
+        setConfig(next);
+        setPortInputDraft({ value: String(port), dirty: false });
+        if (runtimeStatus) {
+          if (mountedRef.current && runtimeGenerationRef.current === generation) setRuntimeStatus(toRuntimeStatus(runtimeStatus));
+        } else {
+          try {
+            await refreshMcpBridgeStatus();
+          } catch (statusError) {
+            if (mountedRef.current && revision === revisionRef.current) {
+              const detail = statusError instanceof Error && statusError.message ? statusError.message : "상태를 불러오지 못했습니다.";
+              setSettingsMessage(`설정은 저장했지만 MCP 브리지 상태를 새로 불러오지 못했습니다: ${detail}`);
+            }
+            return;
+          }
+        }
+        if (mountedRef.current && revision === revisionRef.current) setSettingsMessage("로컬 MCP 브리지 설정을 저장했습니다.");
+      } catch (error) {
+        if (!persisted) {
+          configRef.current = previous;
+          if (shouldApplyRuntime) {
+            try { await setMcpBridgeEnabled(Boolean(previous.enabled), previous.port); } catch { /* runtime rollback is best effort */ }
+            if (mountedRef.current) await refreshMcpBridgeStatus().catch(() => undefined);
+          }
+        }
+        if (mountedRef.current && revision === revisionRef.current) setSettingsMessage(error instanceof Error ? error.message : "MCP 브리지 설정을 저장하지 못했습니다.");
         throw error;
       }
     };
@@ -125,57 +197,67 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
   }, [portInput, setSettingsMessage, updateMcpBridgeConfig]);
 
   const testMcpBridgeConnection = useCallback(async () => {
+    const generation = ++runtimeGenerationRef.current;
     setConnectionTesting(true);
     try {
       const status = await testMcpBridgeConnectionApi();
       const runtimeStatus = toRuntimeStatus(status);
-      setRuntimeStatus(runtimeStatus);
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setRuntimeStatus(runtimeStatus);
       if (runtimeStatus.status !== "listening" && runtimeStatus.status !== "connected") {
         throw new Error(status.lastError || "로컬 MCP 브리지가 연결 대기 상태가 아닙니다.");
       }
-      setSettingsMessage(`연결 테스트 성공 (포트 ${status.port}).`);
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setSettingsMessage(`연결 테스트 성공 (포트 ${status.port}).`);
       return runtimeStatus;
     }
     catch (error) {
-      setSettingsMessage(error instanceof Error ? error.message : "연결 테스트에 실패했습니다.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setSettingsMessage(error instanceof Error ? error.message : "연결 테스트에 실패했습니다.");
       throw error;
     }
-    finally { setConnectionTesting(false); }
+    finally { if (mountedRef.current) setConnectionTesting(false); }
   }, [setSettingsMessage]);
 
   const createPairing = useCallback(async () => {
     if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    const generation = ++runtimeGenerationRef.current;
     setPairingPending(true);
     try {
       const session = await createMcpBridgePairing();
-      setPairingSession(session);
-      setSettingsMessage("일회성 연결 코드를 만들었습니다. 만료 전 tunnel-client에만 입력하세요.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) {
+        setPairingSession(session);
+        setSettingsMessage("일회성 연결 코드를 만들었습니다. 만료 전 tunnel-client에만 입력하세요.");
+      }
     } catch (error) {
-      setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 코드를 만들지 못했습니다.");
-    } finally { setPairingPending(false); }
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 코드를 만들지 못했습니다.");
+    } finally { if (mountedRef.current) setPairingPending(false); }
   }, [setSettingsMessage]);
 
   const rotateCredential = useCallback(async () => {
     if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    const generation = ++runtimeGenerationRef.current;
     try {
       const status = await rotateMcpBridgeCredential();
-      setPairingSession(null);
-      setRuntimeStatus(toRuntimeStatus(status));
-      setSettingsMessage("MCP 연결 자격 증명을 회전했습니다. 기존 클라이언트는 다시 연결해야 합니다.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) {
+        setPairingSession(null);
+        setRuntimeStatus(toRuntimeStatus(status));
+        setSettingsMessage("MCP 연결 자격 증명을 회전했습니다. 기존 클라이언트는 다시 연결해야 합니다.");
+      }
     } catch (error) {
-      setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 자격 증명을 회전하지 못했습니다.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setSettingsMessage(error instanceof Error ? error.message : "MCP 연결 자격 증명을 회전하지 못했습니다.");
     }
   }, [setSettingsMessage]);
 
   const disconnectClients = useCallback(async () => {
     if (!isTauri()) { setSettingsMessage(MCP_BRIDGE_BROWSER_BLOCKED_MESSAGE); return; }
+    const generation = ++runtimeGenerationRef.current;
     try {
       const status = await disconnectMcpBridgeClients();
-      setPairingSession(null);
-      setRuntimeStatus(toRuntimeStatus(status));
-      setSettingsMessage("연결된 MCP 클라이언트를 해제했습니다.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) {
+        setPairingSession(null);
+        setRuntimeStatus(toRuntimeStatus(status));
+        setSettingsMessage("연결된 MCP 클라이언트를 해제했습니다.");
+      }
     } catch (error) {
-      setSettingsMessage(error instanceof Error ? error.message : "MCP 클라이언트를 해제하지 못했습니다.");
+      if (mountedRef.current && runtimeGenerationRef.current === generation) setSettingsMessage(error instanceof Error ? error.message : "MCP 클라이언트를 해제하지 못했습니다.");
     }
   }, [setSettingsMessage]);
 
@@ -209,6 +291,7 @@ export function useMcpBridgeSettings({ mcpBridge, persistMcpBridge, setSettingsM
     pairingSession,
     pairingPending,
     connectionTesting,
+    setPortInput,
     refreshMcpBridgeStatus,
   ]);
 }

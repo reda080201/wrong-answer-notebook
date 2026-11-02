@@ -123,8 +123,8 @@ export function normalizeQuestionPresentationSegments(input: {
   equations: string[];
   contentSegments?: QuestionContentSegment[];
 }): QuestionContentSegment[] {
-  const hasCanonicalStream = Boolean(input.contentSegments?.length);
-  const source = hasCanonicalStream ? input.contentSegments!.map(cloneSegment) : [];
+  const canonicalSegments = input.contentSegments;
+  const source = canonicalSegments?.length ? canonicalSegments.map(cloneSegment) : [];
   let previousConditionLabel: string | undefined;
   for (const segment of source) {
     if (segment.type === "condition") {

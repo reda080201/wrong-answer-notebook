@@ -19,10 +19,16 @@ describe("UI integrity follow-up", () => {
     view.rerender(<><Dialog open onClose={vi.fn()} title="미리 준비한 창"><button>확대 작업</button></Dialog><Dialog open onClose={vi.fn()} title="해설"><button>해설 작업</button></Dialog></>);
     const zoom = screen.getByRole("dialog", { name: "미리 준비한 창" });
     const solution = document.querySelector('[role="dialog"][aria-labelledby] [id]')?.closest('[role="dialog"]');
-    expect(Number(zoom.parentElement!.style.zIndex)).toBeGreaterThan(2000);
+    const paintedLayer = (dialog: HTMLElement) => {
+      const layer = Number(dialog.dataset.dialogLayer);
+      expect(dialog.parentElement!.style.zIndex).toBe(`calc(var(--z-dialog-stack) + ${layer})`);
+      expect(layer).toBeGreaterThan(0);
+      return layer;
+    };
+    paintedLayer(zoom);
     const hidden = document.querySelector('[role="dialog"][aria-hidden="true"]') as HTMLElement;
     expect(hidden).toHaveProperty("inert", true);
-    expect(Number(zoom.parentElement!.style.zIndex)).toBeGreaterThan(Number(hidden.parentElement!.style.zIndex));
+    expect(paintedLayer(zoom)).toBeGreaterThan(paintedLayer(hidden));
     expect(solution).not.toBeNull();
   });
 

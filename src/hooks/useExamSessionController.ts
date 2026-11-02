@@ -121,40 +121,49 @@ export function useExamSessionController({
     });
   }, [existingEntries]);
 
-  const reload = useCallback(async (): Promise<boolean> => {
-    if (loadInFlightRef.current) return false;
+  const hydrateSessions = useCallback(async () => {
+    if (loadInFlightRef.current) return null;
     loadInFlightRef.current = true;
     const request = ++loadRequestRef.current;
-    setLoading(true);
-    setLoadError(null);
     try {
       const items = await loadExamSessions();
-      if (request !== loadRequestRef.current) return false;
       if (!Array.isArray(items)) throw new Error("모의고사 세션 저장 형식이 올바르지 않습니다. 배열이어야 합니다.");
-      const normalized = items;
-      savedSessionsRef.current = normalized;
-      persistedSessionsRef.current = normalized;
-      setSavedSessions(normalized);
-      loadedRef.current = true;
-      return true;
+      return { request, ok: true as const, sessions: items };
     } catch (error) {
-      if (request !== loadRequestRef.current) return false;
-      loadedRef.current = false;
-      setLoadError(error instanceof Error && error.message
-        ? error.message
-        : "시험 기록을 불러오지 못했습니다.");
-      return false;
+      return { request, ok: false as const, error };
     } finally {
-      if (request === loadRequestRef.current) {
-        loadInFlightRef.current = false;
-        setLoading(false);
-      }
+      if (request === loadRequestRef.current) loadInFlightRef.current = false;
     }
   }, []);
 
+  const applyHydratedSessions = useCallback((result: Awaited<ReturnType<typeof hydrateSessions>>) => {
+    if (!result || result.request !== loadRequestRef.current) return false;
+    if (!result.ok) {
+      loadedRef.current = false;
+      setLoadError(result.error instanceof Error && result.error.message ? result.error.message : "시험 기록을 불러오지 못했습니다.");
+      setLoading(false);
+      return false;
+    }
+    const normalized = result.sessions;
+    savedSessionsRef.current = normalized;
+    persistedSessionsRef.current = normalized;
+    setSavedSessions(normalized);
+    setLoadError(null);
+    loadedRef.current = true;
+    setLoading(false);
+    return true;
+  }, []);
+
+  const reload = useCallback(async (): Promise<boolean> => {
+    if (loadInFlightRef.current) return false;
+    setLoading(true);
+    setLoadError(null);
+    return hydrateSessions().then(applyHydratedSessions);
+  }, [applyHydratedSessions, hydrateSessions]);
+
   useEffect(() => {
-    void reload();
-  }, [reload]);
+    void hydrateSessions().then(applyHydratedSessions);
+  }, [applyHydratedSessions, hydrateSessions]);
 
   const flush = useCallback(async (next: ExamSession, updateUi = true): Promise<boolean> => {
     if (!loadedRef.current) {

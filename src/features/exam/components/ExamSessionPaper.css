@@ -14,7 +14,7 @@
 .exam-source-layout > .original-page-reader { min-height: 0; }
 .exam-source-answer-panel { min-width: 0; overflow: auto; padding: 16px; border-inline-start: 1px solid var(--border); background: var(--surface); }
 .exam-source-answer-panel h3 { margin: 16px 0 10px; }
-.exam-source-mapping-note { padding: 10px; border-radius: var(--radius-small); background: var(--surface-soft); color: var(--text-muted); font-size: var(--font-size-meta); }
+.exam-source-mapping-note { padding: 10px; border-radius: var(--radius-control); background: var(--surface-soft); color: var(--text-muted); font: var(--type-meta); }
 .exam-source-question-select { display: grid; gap: 6px; color: var(--text-muted); }
 .exam-source-question-select select { width: 100%; min-height: 42px; }
 .exam-source-answer-panel .real-exam-choices { grid-template-columns: repeat(auto-fit, minmax(48px, 1fr)); }
