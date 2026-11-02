@@ -240,13 +240,17 @@ function StructuredTextSegment({
 }) {
   const conceptRuntime = useConceptLinkRuntime();
   // Split warning ranges without cutting a formula or changing annotation coordinates.
-  let cursor = 0;
-  const mathRanges = splitMathText(text).flatMap(segment => {
-    const length = segment.type === "text" ? segment.value.length : segment.raw.length;
-    const range = { start: cursor, end: cursor + length };
-    cursor += length;
-    return segment.type === "text" ? [] : [range];
-  });
+  const mathRanges = splitMathText(text).reduce<{ ranges: Array<{ start: number; end: number }>; cursor: number }>(
+    (state, segment) => {
+      const length = segment.type === "text" ? segment.value.length : segment.raw.length;
+      const range = { start: state.cursor, end: state.cursor + length };
+      return {
+        cursor: range.end,
+        ranges: segment.type === "text" ? state.ranges : [...state.ranges, range],
+      };
+    },
+    { ranges: [], cursor: 0 },
+  ).ranges;
   const boundaries = [...new Set([0, text.length, ...suspiciousSegments.flatMap(segment =>
     [segment.start - start, segment.end - start].filter(offset => offset > 0 && offset < text.length
       && !mathRanges.some(range => offset > range.start && offset < range.end)),
