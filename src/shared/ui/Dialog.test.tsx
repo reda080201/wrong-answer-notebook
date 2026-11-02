@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import type { ReactNode } from "react";
 import Dialog from "./Dialog";
 
 describe("Dialog", () => {
@@ -55,6 +56,90 @@ describe("Dialog", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(childClose).toHaveBeenCalledOnce();
     expect(parentClose).not.toHaveBeenCalled();
+  });
+
+  it.each(["hidden", "disabled", "detached", "outside", "disabled fieldset"] as const)(
+    "falls back to a valid button when initialFocusRef targets a %s element",
+    async (kind) => {
+      const initialFocusRef = { current: null as HTMLElement | null };
+      const captureInvalid = (element: HTMLButtonElement | null) => { initialFocusRef.current = element; };
+      let invalidTarget: ReactNode = null;
+      let outsideTarget: HTMLButtonElement | undefined;
+
+      if (kind === "hidden") invalidTarget = <button ref={captureInvalid} hidden>숨김 대상</button>;
+      if (kind === "disabled") invalidTarget = <button ref={captureInvalid} disabled>비활성 대상</button>;
+      if (kind === "disabled fieldset") invalidTarget = <fieldset disabled><button ref={captureInvalid}>필드셋 대상</button></fieldset>;
+      if (kind === "detached") initialFocusRef.current = document.createElement("button");
+      if (kind === "outside") {
+        outsideTarget = document.createElement("button");
+        document.body.append(outsideTarget);
+        initialFocusRef.current = outsideTarget;
+      }
+
+      render(
+        <Dialog open onClose={vi.fn()} ariaLabel="초기 포커스" initialFocusRef={initialFocusRef}>
+          {invalidTarget}
+          <button type="button">유효한 확인</button>
+        </Dialog>,
+      );
+
+      try {
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        expect(screen.getByRole("button", { name: "유효한 확인" })).toHaveFocus();
+      } finally {
+        outsideTarget?.remove();
+      }
+    },
+  );
+
+  it("supports a heading with tabIndex -1 as an explicit initial focus target", async () => {
+    const initialFocusRef = { current: null as HTMLElement | null };
+    const captureHeading = (element: HTMLHeadingElement | null) => { initialFocusRef.current = element; };
+
+    render(
+      <Dialog open onClose={vi.fn()} ariaLabel="설명 dialog" initialFocusRef={initialFocusRef}>
+        <h2 ref={captureHeading} tabIndex={-1}>설명 제목</h2>
+        <button type="button">계속</button>
+      </Dialog>,
+    );
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    expect(screen.getByRole("heading", { name: "설명 제목" })).toHaveFocus();
+  });
+
+  it("tries the next focus candidate when the first candidate focus call is a no-op", async () => {
+    render(
+      <Dialog open onClose={vi.fn()} ariaLabel="포커스 후보">
+        <button type="button">포커스 불가</button>
+        <button type="button">다음 후보</button>
+      </Dialog>,
+    );
+    const first = screen.getByRole("button", { name: "포커스 불가" });
+    const noOpFocus = vi.spyOn(first, "focus").mockImplementation(() => undefined);
+
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+
+    expect(noOpFocus).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "다음 후보" })).toHaveFocus();
+  });
+
+  it("focuses only the topmost nested dialog after both animation frames", async () => {
+    render(
+      <Dialog open onClose={vi.fn()} ariaLabel="포커스 부모">
+        <button type="button">부모 버튼</button>
+        <Dialog open onClose={vi.fn()} ariaLabel="포커스 자식">
+          <button type="button">자식 버튼</button>
+        </Dialog>
+      </Dialog>,
+    );
+    const parentFocus = vi.spyOn(screen.getByRole("button", { name: "부모 버튼", hidden: true }), "focus");
+    const childFocus = vi.spyOn(screen.getByRole("button", { name: "자식 버튼" }), "focus");
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    expect(parentFocus).not.toHaveBeenCalled();
+    expect(childFocus).toHaveBeenCalledOnce();
+    expect(screen.getByRole("button", { name: "자식 버튼" })).toHaveFocus();
   });
 
   it("makes the parent dialog inert while a nested confirmation is open", () => {
