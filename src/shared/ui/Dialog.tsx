@@ -87,19 +87,28 @@ function OpenDialog({
       element.inert = true;
       element.setAttribute("aria-hidden", "true");
     });
-    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []).filter(element => {
-      if (element.closest("[hidden], [inert]")) return false;
+    const available = (element: HTMLElement) => {
+      if (!element.isConnected || !dialog?.contains(element) || element.matches(":disabled")) return false;
+      if (element.closest('[hidden], [inert], [aria-hidden="true"]')) return false;
       const closed = element.closest("details:not([open])");
       if (closed && !closed.querySelector(":scope > summary")?.contains(element)) return false;
       for (let node: HTMLElement | null = element; node && node !== dialog; node = node.parentElement) {
         const style = window.getComputedStyle(node);
-        if (style.display === "none" || style.visibility === "hidden") return false;
+        if (style.display === "none" || style.visibility === "hidden" || style.visibility === "collapse") return false;
       }
       return true;
-    });
+    };
+    const focusable = () => Array.from(dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []).filter(available);
+    const isTopmost = () => !Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-dialog-layer]'))
+      .some(candidate => Number(candidate.dataset.dialogLayer) > dialogLayer);
     const frame = window.requestAnimationFrame(() => {
-      const autoFocusTarget = initialFocusRef?.current ?? dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]");
-      (autoFocusTarget ?? focusable()[0] ?? dialog)?.focus();
+      if (!isTopmost()) return;
+      const candidates = [initialFocusRef?.current, dialog?.querySelector<HTMLElement>("[data-dialog-initial-focus]"), ...focusable(), dialog];
+      for (const target of new Set(candidates)) {
+        if (!target || !available(target)) continue;
+        target.focus();
+        if (document.activeElement === target) break;
+      }
     });
     const handleKeyDown = (event: KeyboardEvent) => {
       const openDialogs = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"][data-dialog-layer]'));
