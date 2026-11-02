@@ -30,3 +30,8 @@ describe("detectSuspiciousTextSegments", () => {
     expect(segments.some((segment) => segment.reason === "기호 비율 과다")).toBe(false);
   });
 });
+
+it("accepts display sums followed by a subscript", () => {
+  expect(detectSuspiciousTextSegments(String.raw`$$\sum_{k=1}^{3} a_k$$`)).toEqual([]);
+  expect(detectSuspiciousTextSegments("@@@ ### ???").some(segment => segment.reason === "기호 비율 과다")).toBe(true);
+});

@@ -264,3 +264,6 @@
 .import-inline-editor { border-top: 1px solid var(--border); padding-top: 12px; }
 .import-inline-editor > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .form-hint { line-height: 1.6; }
+
+/* Short panels retain their maximum viewport bound without a fixed empty body. */
+.modal-card.dialog-fit-content { height: auto; }

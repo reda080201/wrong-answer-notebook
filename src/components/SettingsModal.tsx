@@ -217,7 +217,7 @@ export default function SettingsModal({
   };
 
   return (
-    <Dialog open onClose={onClose} className={`settings-modal${activeCategory === "general" || activeCategory === "data" ? " settings-modal--compact" : ""}`} ariaLabel="설정" size="xl" scrollMode="custom">
+    <Dialog open onClose={onClose} className={`settings-modal${activeCategory === "general" || activeCategory === "data" ? " settings-modal--compact" : ""}`} ariaLabel="설정" fitContent={activeCategory === "general"} size="xl" scrollMode="custom">
         <header className="modal-head">
           <div>
             <h2>설정</h2>

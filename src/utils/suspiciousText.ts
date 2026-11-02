@@ -32,7 +32,7 @@ function hasOddNonAsciiCharacter(line: string): boolean {
 
 function isMathOrEquationLine(line: string): boolean {
   const trimmed = line.trim();
-  return /\\(?:frac|sqrt|sum|int|left|right|begin|end)\b/.test(trimmed)
+  return /\\(?:frac|sqrt|sum|int|left|right|begin|end)(?![A-Za-z])/.test(trimmed)
     || /^[\p{Script=Greek}\d\s+\-*/=()[\]{}.,:;<>≤≥±×÷√π∞∑∏∫^_\\a-zA-Z′’″‴⁰¹²³⁴⁵⁶⁷⁸⁹ⁿⁱ⁺⁻₀₁₂₃₄₅₆₇₈₉ₙᵢₖ₊₋]+$/u.test(trimmed);
 }
 

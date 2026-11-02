@@ -336,6 +336,7 @@ export default function ImportFromGptModal({
     ? availablePromptTemplates[0]?.id ?? ""
     : selectedPromptTemplateId ?? availablePromptTemplates[0]?.id ?? "";
   const [rawText, setRawText] = useState("");
+  const [textFallbackInput, setTextFallbackInput] = useState<string | null>(null);
   const [inlineReviewOpen, setInlineReviewOpen] = useState(false);
   const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct" | "visual">(isSolutionMode || isSupplementalMode ? "gpt" : "file");
   const [filename, setFilename] = useState<string | undefined>();
@@ -423,14 +424,14 @@ export default function ImportFromGptModal({
     if (conceptImportValue || batchImport || draftOverride || zipProgress) return { parsed: null, error: null };
     if (!rawText.trim()) return { parsed: null, error: null };
     try {
-      return { parsed: parseImportedStudyText(rawText, filename, fallbackSubject), error: null };
+      return { parsed: parseImportedStudyText(rawText, filename, fallbackSubject, textFallbackInput === rawText), error: null };
     } catch (parseError) {
       return {
         parsed: null,
         error: parseError instanceof Error ? parseError.message : "가져오기 데이터를 검증하지 못했습니다.",
       };
     }
-  }, [batchImport, conceptImportValue, draftOverride, fallbackSubject, filename, rawText, zipProgress]);
+  }, [batchImport, conceptImportValue, draftOverride, fallbackSubject, filename, rawText, textFallbackInput, zipProgress]);
   const parsed = parsedResult?.parsed ?? null;
   const error = parsedResult?.error ?? operationError;
   const expectedQuestionParse = useMemo(
@@ -1631,7 +1632,9 @@ export default function ImportFromGptModal({
                     </button>
                   </div>
               {error && !commitLocked && importInputMode !== "visual" && (
-                <OperationError message={error} />
+                <div><OperationError message={error} />
+                  {parsedResult.error?.startsWith("JSON 구문") && <button type="button" className="btn-secondary" onClick={() => setTextFallbackInput(rawText)}>JSON 대신 일반 텍스트로 검토</button>}
+                </div>
               )}
               {!draft ? (
                 <div className="import-preview-empty">붙여넣기 또는 파일 업로드를 하면 미리보기가 표시됩니다.</div>

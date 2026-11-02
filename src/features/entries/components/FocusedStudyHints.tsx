@@ -8,17 +8,22 @@ interface FocusedStudyHint {
 interface FocusedStudyHintsProps {
   nextActionHint: string;
   hints: FocusedStudyHint[];
+  onRecordCorrect?: () => void;
+  saving?: boolean;
 }
 
 export default function FocusedStudyHints({
   nextActionHint,
   hints,
+  onRecordCorrect,
+  saving,
 }: FocusedStudyHintsProps) {
   return (
     <aside className="focus-study-hints" aria-label="집중 보기 학습 힌트">
       <header>
         <span>다음 행동</span>
         <strong>{nextActionHint}</strong>
+        {onRecordCorrect && <button type="button" className="btn-primary" disabled={saving} onClick={onRecordCorrect}>{saving ? "기록 중…" : "맞음 기록"}</button>}
       </header>
       {hints.length > 0 ? (
         <div className="focus-study-hint-list">

@@ -31,7 +31,7 @@ import {
 } from "../utils/difficulty";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
-import MathText, { renderMathInNodes } from "./MathText";
+import MathText, { renderMathInNodes, splitMathText } from "./MathText";
 import ZoomableImageViewer from "./ZoomableImageViewer";
 import InlineQuestionText from "./InlineQuestionText";
 import { resolveCanonicalQuestionPresentation } from "../utils/canonicalQuestionPresentation";
@@ -239,6 +239,25 @@ function StructuredTextSegment({
   conceptContext?: ConceptLinkResolveContext;
 }) {
   const conceptRuntime = useConceptLinkRuntime();
+  // Split warning ranges without cutting a formula or changing annotation coordinates.
+  let cursor = 0;
+  const mathRanges = splitMathText(text).flatMap(segment => {
+    const length = segment.type === "text" ? segment.value.length : segment.raw.length;
+    const range = { start: cursor, end: cursor + length };
+    cursor += length;
+    return segment.type === "text" ? [] : [range];
+  });
+  const boundaries = [...new Set([0, text.length, ...suspiciousSegments.flatMap(segment =>
+    [segment.start - start, segment.end - start].filter(offset => offset > 0 && offset < text.length
+      && !mathRanges.some(range => offset > range.start && offset < range.end)),
+  )])].sort((a, b) => a - b);
+  if (boundaries.length > 2) return <span className={className}>{boundaries.slice(0, -1).map((offset, index) => {
+    const end = boundaries[index + 1];
+    return <StructuredTextSegment key={offset} text={text.slice(offset, end)} start={start + offset}
+      annotations={clipTextAnnotations(annotations, offset, end)} figures={figures}
+      onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} searchQuery={searchQuery}
+      suspiciousSegments={suspiciousSegments} conceptContext={conceptContext} />;
+  })}</span>;
   const suspicious = suspiciousSegments.find((segment) => segment.end > start && segment.start < start + text.length);
   const mergedClassName = [className, suspicious ? "suspicious-text-segment" : ""].filter(Boolean).join(" ");
   const renderChunk = (chunk: string, offset: number) => {
