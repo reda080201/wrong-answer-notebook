@@ -24,7 +24,7 @@ import {
 } from "./shared";
 import { normalizeSettings } from "./settings";
 import { getStorageBackendKind } from "../storageBackend";
-import { listBrowserImages, replaceBrowserImages } from "./browserImageStore";
+import { listBrowserImages, replaceBrowserImages, deleteBrowserImage } from "./browserImageStore";
 import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../../features/review/storage/reviewSessionStorage";
 import { EMPTY_KNOWLEDGE_GRAPH, isKnowledgeGraphStore, normalizeKnowledgeGraph } from "../../models/knowledgeGraph";
 
@@ -452,7 +452,6 @@ export async function cleanupOrphanImages(): Promise<number> {
   const browserImages = await listBrowserImages();
   for (const key of Object.keys(browserImages)) {
     if (!referenced.has(key)) {
-      const { deleteBrowserImage } = await import("./browserImageStore");
       await deleteBrowserImage(key);
       clearImageUrlCache(key);
       removed += 1;

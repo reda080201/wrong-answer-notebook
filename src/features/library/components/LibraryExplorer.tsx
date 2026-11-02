@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type MouseEvent } from "react";
+import { createContext, useCallback, useContext, useMemo, useState, type MouseEvent } from "react";
 import { FileText, FolderInput, MoreHorizontal, Star } from "lucide-react";
 import type { LibraryFolder, LibraryNavigationGroup, LibraryNavigationPreference, LibraryPreferences, LearningResourceClassification, WrongAnswerEntry } from "../../../types";
 import { compareLibraryClassifications, getLibraryResourceGroup, normalizeLibraryPreferences, projectLibraryResource, resourceTypeLabel } from "../../../utils/libraryClassification";
@@ -85,6 +85,18 @@ export default function LibraryExplorer({ folders, entries, preferences, navigat
   const [classificationDraft, setClassificationDraft] = useState<LearningResourceClassification>({});
   const [clearFields, setClearFields] = useState<Set<keyof LearningResourceClassification>>(new Set());
   const [showFolders, setShowFolders] = useState(libraryPreferences.showUserFolders); const [currentFolderId, setCurrentFolderId] = useState<string | undefined>(); const [folderExpanded, setFolderExpanded] = useState<Set<string>>(new Set());
+  const [previousShowUserFolders, setPreviousShowUserFolders] = useState(libraryPreferences.showUserFolders);
+  if (libraryPreferences.showUserFolders !== previousShowUserFolders) {
+    setPreviousShowUserFolders(libraryPreferences.showUserFolders);
+    setShowFolders(libraryPreferences.showUserFolders);
+  }
+  const [previousNavigation, setPreviousNavigation] = useState(navigation);
+  if (navigation !== previousNavigation) {
+    setPreviousNavigation(navigation);
+    if (navigation) {
+      setSubject(navigation.subject ?? null); setCourse(navigation.course ?? null); setUnit(navigation.unit ?? null); setResourceGroup(groupForNavigation(navigation)); setUnitHomeOpen(Boolean(navigation.unit && groupForNavigation(navigation) === "all"));
+    }
+  }
   const updateNavigation = useCallback((next: { subject?: string | null; course?: string | null; unit?: string | null; group?: ResourceGroup }) => {
     const nextSubject = next.subject === undefined ? subject : next.subject;
     const nextCourse = next.course === undefined ? course : next.course;
@@ -94,13 +106,6 @@ export default function LibraryExplorer({ folders, entries, preferences, navigat
     setSubject(nextSubject); setCourse(nextCourse); setUnit(nextUnit); setResourceGroup(nextGroup);
     onNavigationChange?.({ subject: nextSubject ?? undefined, course: nextCourse ?? undefined, unit: nextUnit ?? undefined, group: nextGroup });
   }, [course, onNavigationChange, resourceGroup, subject, unit]);
-  useEffect(() => {
-    setShowFolders(libraryPreferences.showUserFolders);
-  }, [libraryPreferences.showUserFolders]);
-  useEffect(() => {
-    if (!navigation) return;
-    setSubject(navigation.subject ?? null); setCourse(navigation.course ?? null); setUnit(navigation.unit ?? null); setResourceGroup(groupForNavigation(navigation)); setUnitHomeOpen(Boolean(navigation.unit && groupForNavigation(navigation) === "all"));
-  }, [navigation, navigation?.course, navigation?.group, navigation?.section, navigation?.subject, navigation?.unit]);
   const projections = useMemo(() => entries.map((entry) => projectLibraryResource(entry, libraryPreferences)), [entries, libraryPreferences]);
   const subjects = useMemo(() => [...new Set(projections.map((item) => item.classification.subject))].sort((a, b) => a.localeCompare(b, "ko")), [projections]);
   const courses = useMemo(() => {

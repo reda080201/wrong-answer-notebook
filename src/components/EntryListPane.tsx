@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { writeUiStorageJson } from "../services/uiStorage";
 import QuickConceptPanel from "./QuickConceptPanel";
 import type { EntryFormData, EntryKind, LibraryPreferences, Subject, WrongAnswerEntry } from "../types";
@@ -105,20 +105,24 @@ export default function EntryListPane({
     setSelectedId(entryId);
   };
 
-  useEffect(() => {
-    if (activeSection !== "problem_sheet") return;
+  if (activeSection === "problem_sheet") {
     const existing = new Set(groupedSheets.filter((item) => item.kind === "group").map((item) => item.groupId));
-    setExpandedGroupIds((current) => {
-      const next = new Set([...current].filter((id) => existing.has(id)));
-      writeUiStorageJson(EXPANDED_GROUPS_KEY, [...next]);
-      return next;
-    });
-  }, [activeSection, groupedSheets]);
+    if ([...expandedGroupIds].some(id => !existing.has(id))) {
+      setExpandedGroupIds(current => new Set([...current].filter(id => existing.has(id))));
+    }
+  }
+
+  const expandedValue = JSON.stringify([...expandedGroupIds]);
+  const persistedExpandedValue = useRef(expandedValue);
+  useEffect(() => {
+    if (persistedExpandedValue.current === expandedValue) return;
+    writeUiStorageJson(EXPANDED_GROUPS_KEY, JSON.parse(expandedValue));
+    persistedExpandedValue.current = expandedValue;
+  }, [expandedValue]);
 
   const updateExpandedGroups = (updater: (current: Set<string>) => Set<string>) => {
     setExpandedGroupIds((current) => {
       const next = updater(current);
-      writeUiStorageJson(EXPANDED_GROUPS_KEY, [...next]);
       return next;
     });
   };

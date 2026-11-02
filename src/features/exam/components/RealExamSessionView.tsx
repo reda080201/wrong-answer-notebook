@@ -51,7 +51,7 @@ export default function RealExamSessionView({ session, onChange, onUpdateSession
     if (sessionRef.current.id !== session.id || session.status === "submitted") {
       sessionRef.current = session;
     }
-  }, [session.id, session.status]);
+  }, [session]);
   const [submitOpen, setSubmitOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);

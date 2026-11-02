@@ -34,16 +34,23 @@ export default function GeneratedExamsDialog(props: GeneratedExamsDialogProps) {
   const [actionBusy, setActionBusy] = useState(false);
   const [failedAction, setFailedAction] = useState<{ action: () => Promise<void>; fallback: string } | null>(null);
   const actionBusyRef = useRef(false);
-  useEffect(() => {
-    if (!props.open) return;
+  const [previousOpen, setPreviousOpen] = useState(props.open);
+  if (props.open !== previousOpen) {
+    setPreviousOpen(props.open);
+  }
+  if (props.open && !previousOpen) {
     setActionError(null);
     setActionBusy(false);
     setFailedAction(null);
-    actionBusyRef.current = false;
-  }, [props.open]);
+  }
   useEffect(() => {
+    if (props.open && !previousOpen) actionBusyRef.current = false;
+  }, [props.open, previousOpen]);
+  const [previousExamSnapshot, setPreviousExamSnapshot] = useState({ exams: props.exams, actionBusy });
+  if (previousExamSnapshot.exams !== props.exams || previousExamSnapshot.actionBusy !== actionBusy) {
+    setPreviousExamSnapshot({ exams: props.exams, actionBusy });
     if (!actionBusy) setDisplayExams(props.exams);
-  }, [props.exams, actionBusy]);
+  }
   const runAction = async (action: () => Promise<void>, fallback: string) => {
     if (actionBusyRef.current) return;
     actionBusyRef.current = true;

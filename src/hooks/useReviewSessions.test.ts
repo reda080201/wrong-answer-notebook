@@ -72,6 +72,9 @@ describe("useReviewSessions load safety", () => {
     expect(saveReviewSessions).not.toHaveBeenCalled();
 
     act(() => result.current.setRestoreReloadBlocked(false));
+    await expect(result.current.save(session)).rejects.toThrow("불러오는 중");
+    expect(saveReviewSessions).not.toHaveBeenCalled();
+    await act(async () => { await result.current.refresh(); });
     await act(async () => { await result.current.save(session); });
     expect(saveReviewSessions).toHaveBeenCalledTimes(1);
   });

@@ -47,6 +47,7 @@ import ConceptImportPreviewModal from "../../../components/ConceptImportPreviewM
 import ImportEntriesPreviewModal from "../../../components/ImportEntriesPreviewModal";
 import { cloneEntryDraft, mergeEntryDraft } from "../../../features/entries/model/entryDraft";
 import { IMPORT_LIMITS } from "../../../features/import/services/importLimits";
+import { useObjectUrlResources } from "../hooks/useObjectUrlResources";
 import { readZipImport, type ZipImportAsset } from "../../../features/import/services/zipImport";
 import { collectEntryImportImageReferences, mapEntryImportImageReferences } from "../../../utils/importImageReferences";
 import Dialog from "../../../shared/ui/Dialog";
@@ -189,21 +190,12 @@ function assertImportImages(files: File[]) {
 
 function ImagePreprocessor({ onAddImage }: { onAddImage: (filename: string) => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState("");
+  const previewItems = useMemo(() => file ? [{ key: "preview", file }] : [], [file]);
+  const preview = useObjectUrlResources(previewItems).preview?.url ?? "";
   const [rotation, setRotation] = useState(0);
   const [grayscale, setGrayscale] = useState(false);
   const [contrast, setContrast] = useState(110);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!file) {
-      setPreview("");
-      return;
-    }
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
 
   const process = async () => {
     if (!file) return;
@@ -348,7 +340,7 @@ export default function ImportFromGptModal({
   const [importInputMode, setImportInputMode] = useState<"gpt" | "file" | "direct" | "visual">(isSolutionMode || isSupplementalMode ? "gpt" : "file");
   const [filename, setFilename] = useState<string | undefined>();
   const [images, setImages] = useState<string[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const [operationError, setOperationError] = useState<string | null>(null);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const [promptViewerOpen, setPromptViewerOpen] = useState(false);
   const [watchClipboard, setWatchClipboard] = useState(false);
@@ -391,15 +383,21 @@ export default function ImportFromGptModal({
   const resolveFigureUrl = useImportFigureUrls(assetFiles, visualResult?.assetSession);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const zipAbortRef = useRef<AbortController | null>(null);
-  const parseErrorRef = useRef<string | null>(null);
-  const sourceDraftIdentityRef = useRef<{ initialized: boolean; value: Partial<EntryFormData> | null }>({ initialized: false, value: null });
+  const [previousSourceDraft, setPreviousSourceDraft] = useState<Partial<EntryFormData> | null | undefined>(undefined);
+  const [previousExpectedNumbersKey, setPreviousExpectedNumbersKey] = useState<string | undefined>(undefined);
+  const [previousPromptDefault, setPreviousPromptDefault] = useState(defaultPromptId);
+  const [previousEntryKindInputs, setPreviousEntryKindInputs] = useState<{
+    parsed: ImportedStudyText | null;
+    draftOverride: Partial<EntryFormData> | null;
+    batchImport: ImportedStudyDocument | null;
+  } | undefined>(undefined);
   const [hasUnsavedInput, setHasUnsavedInput] = useState(false);
   const preserveSupplementalImagesRef = useRef(false);
   // Supplemental drafts can be cancelled after an image was removed from the UI.
   // Keep the complete set created by this modal so those final-store files are not orphaned.
   const createdSupplementalImagesRef = useRef(new Set<string>());
   const importSaveCoordinator = useImportSaveCoordinator({
-    onError: (message) => setError(message),
+    onError: (message) => setOperationError(message),
   });
   const saving = importSaveCoordinator.busy;
   const rememberSupplementalImages = (filenames: string[]) => {
@@ -434,17 +432,7 @@ export default function ImportFromGptModal({
     }
   }, [batchImport, conceptImportValue, draftOverride, fallbackSubject, filename, rawText, zipProgress]);
   const parsed = parsedResult?.parsed ?? null;
-
-  useEffect(() => {
-    if (parsedResult?.error) {
-      parseErrorRef.current = parsedResult.error;
-      setError(parsedResult.error);
-    } else if (parseErrorRef.current) {
-      const previous = parseErrorRef.current;
-      parseErrorRef.current = null;
-      setError((current) => current === previous ? null : current);
-    }
-  }, [parsedResult?.error]);
+  const error = parsedResult?.error ?? operationError;
   const expectedQuestionParse = useMemo(
     () => parseExpectedQuestionNumbers(expectedQuestionInput),
     [expectedQuestionInput],
@@ -454,9 +442,10 @@ export default function ImportFromGptModal({
     [expectedQuestionParse],
   );
 
-  useEffect(() => {
+  if (previousPromptDefault !== defaultPromptId) {
+    setPreviousPromptDefault(defaultPromptId);
     setActivePromptId(defaultPromptId);
-  }, [defaultPromptId]);
+  }
 
   const sourceDraft = useMemo(
     () => draftOverride ? cloneDraft(draftOverride) : parsed ? cloneDraft(parsed.data) : null,
@@ -467,28 +456,28 @@ export default function ImportFromGptModal({
     [expectedQuestionNumbers, sourceDraft],
   );
 
-  useEffect(() => {
-    if (sourceDraftIdentityRef.current.initialized && sourceDraftIdentityRef.current.value === sourceDraft) return;
-    sourceDraftIdentityRef.current = { initialized: true, value: sourceDraft };
+  if (previousSourceDraft !== sourceDraft) {
+    setPreviousSourceDraft(sourceDraft);
     setDraft(sourceDraftWithExpectedNumbers);
     setActiveReviewQuestionIndex(0);
     setStructuredReviewError(null);
-  }, [sourceDraft, sourceDraftWithExpectedNumbers]);
+  }
 
-  useEffect(() => {
-    setDraft((current) => {
+  const expectedNumbersKey = JSON.stringify(expectedQuestionNumbers);
+  if (previousExpectedNumbersKey !== expectedNumbersKey) {
+    setPreviousExpectedNumbersKey(expectedNumbersKey);
+    if (previousSourceDraft === sourceDraft) setDraft((current) => {
       if (!current) return current;
       if (expectedQuestionNumbers.length) return withExpectedQuestionNumbers(current, expectedQuestionNumbers);
       const baselineAudit = sourceDraft?.importAudit;
       return baselineAudit ? { ...current, importAudit: baselineAudit } : current;
     });
-  }, [expectedQuestionNumbers, sourceDraft]);
+  }
 
-  useEffect(() => {
-    if (!draftOverride && !batchImport) {
-      setEntryKindResolution(parsed?.entryKindResolution ?? null);
-    }
-  }, [batchImport, draftOverride, parsed]);
+  if (previousEntryKindInputs?.parsed !== parsed || previousEntryKindInputs.draftOverride !== draftOverride || previousEntryKindInputs.batchImport !== batchImport) {
+    setPreviousEntryKindInputs({ parsed, draftOverride, batchImport });
+    if (!draftOverride && !batchImport) setEntryKindResolution(parsed?.entryKindResolution ?? null);
+  }
 
   useEffect(() => {
     if (!watchClipboard) return;
@@ -506,12 +495,12 @@ export default function ImportFromGptModal({
         setBatchImport(null);
         setEntryKindResolution(null);
         setImportWarnings([]);
-        setError(null);
+        setOperationError(null);
         setCopyMessage("클립보드에서 GPT 답변을 가져왔습니다.");
       } catch {
         if (!cancelled) {
           setWatchClipboard(false);
-          setError("클립보드 읽기 권한이 없어 자동 대기를 중지했습니다. 직접 붙여넣어 주세요.");
+          setOperationError("클립보드 읽기 권한이 없어 자동 대기를 중지했습니다. 직접 붙여넣어 주세요.");
         }
       }
     };
@@ -593,7 +582,7 @@ export default function ImportFromGptModal({
   const handleFile = async (file: File | undefined) => {
     if (!file) return;
     if (!(await discardVisualSession(visualResultRef.current?.assetSession ?? visualCleanupSessionRef.current))) return;
-    setError(null);
+    setOperationError(null);
     try {
       setHasUnsavedInput(true);
       setRawText(await readImportFile(file));
@@ -603,7 +592,7 @@ export default function ImportFromGptModal({
       setEntryKindResolution(null);
       setImportWarnings([]);
     } catch (fileError) {
-      setError(
+      setOperationError(
         fileError instanceof Error && fileError.message
           ? fileError.message
           : "파일을 읽지 못했습니다.",
@@ -665,7 +654,7 @@ export default function ImportFromGptModal({
   const analyzeVisualPaper = async (file?: File | File[]) => {
     if (!file || Array.isArray(file) && !file.length) return;
     if (!onAnalyzeVisualFile) {
-      setError("PDF/이미지 분석은 데스크톱 앱과 사용 가능한 AI provider가 필요합니다.");
+      setOperationError("PDF/이미지 분석은 데스크톱 앱과 사용 가능한 AI provider가 필요합니다.");
       return;
     }
     const requestId = ++visualRequestIdRef.current;
@@ -686,7 +675,7 @@ export default function ImportFromGptModal({
     const controller = new AbortController();
     visualControllerRef.current = controller;
     setAiGenerating(true);
-    setError(null);
+    setOperationError(null);
     setVisualProgress({ phase: "rasterize", current: 0, indeterminate: true });
     let replacementSession: ImportAssetSessionManifest | null = null;
     try {
@@ -785,7 +774,7 @@ export default function ImportFromGptModal({
         visualCleanupSessionRef.current = analysisError.assetSession;
       }
       if (!(analysisError instanceof DOMException && analysisError.name === "AbortError")) {
-        if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setError(analysisError instanceof Error ? analysisError.message : "PDF/이미지 분석에 실패했습니다.");
+        if (requestId === visualRequestIdRef.current && !controller.signal.aborted) setOperationError(analysisError instanceof Error ? analysisError.message : "PDF/이미지 분석에 실패했습니다.");
       }
     } finally {
       if (requestId === visualRequestIdRef.current) {
@@ -817,7 +806,7 @@ export default function ImportFromGptModal({
     try {
       const text = await navigator.clipboard.readText();
       if (!text.trim()) {
-        setError("클립보드에 가져올 텍스트가 없습니다.");
+        setOperationError("클립보드에 가져올 텍스트가 없습니다.");
         return;
       }
       setHasUnsavedInput(true);
@@ -827,17 +816,17 @@ export default function ImportFromGptModal({
       setBatchImport(null);
       setEntryKindResolution(null);
       setImportWarnings([]);
-      setError(null);
+      setOperationError(null);
       setCopyMessage("클립보드에서 가져왔습니다.");
     } catch {
-      setError("클립보드에서 읽지 못했습니다. GPT 답변을 직접 붙여넣어 주세요.");
+      setOperationError("클립보드에서 읽지 못했습니다. GPT 답변을 직접 붙여넣어 주세요.");
     }
   };
 
   const generateWithAiProvider = async (mode: "text" | "vision") => {
     if (!activePrompt || !onGenerateWithAi) return;
     setAiGenerating(true);
-    setError(null);
+    setOperationError(null);
     try {
       const inputText = isSolutionMode && sourceEntry
         ? [
@@ -879,7 +868,7 @@ export default function ImportFromGptModal({
       setImportWarnings([]);
       setCopyMessage("AI provider 결과를 가져왔습니다.");
     } catch (aiError) {
-      setError(
+      setOperationError(
         `${
           aiError instanceof Error && aiError.message
             ? aiError.message
@@ -966,7 +955,7 @@ export default function ImportFromGptModal({
   const handleAllInOneFiles = async (fileList: FileList | null) => {
     const files = Array.from(fileList ?? []);
     if (!files.length) return;
-    setError(null);
+    setOperationError(null);
     setZipProgress({ phase: "inspect", completed: 0, total: 0 });
     try {
         setHasUnsavedInput(true);
@@ -993,7 +982,7 @@ export default function ImportFromGptModal({
       );
       setCopyMessage(`올인원 가져오기 완료: ${linkedDocument.entries.length}개 항목 · 도표/그림 ${figureCount}개 감지`);
     } catch (allInOneError) {
-      setError(allInOneError instanceof DOMException && allInOneError.name === "AbortError" ? "가져오기를 취소했습니다." : allInOneError instanceof Error ? allInOneError.message : "올인원 파일을 가져오지 못했습니다.");
+      setOperationError(allInOneError instanceof DOMException && allInOneError.name === "AbortError" ? "가져오기를 취소했습니다." : allInOneError instanceof Error ? allInOneError.message : "올인원 파일을 가져오지 못했습니다.");
     } finally {
       zipAbortRef.current = null;
       setZipProgress(null);
@@ -1047,13 +1036,13 @@ export default function ImportFromGptModal({
 
   const apply = async () => {
     if (!draft || !canApply) {
-      setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
+      setOperationError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
       return;
     }
     const normalizedDraft = canonicalizeImportDraftForSave(draft);
     const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft, validationContext));
     if (finalPolicy.blocking.length > 0) {
-      setError("누락 문제가 있어 적용할 수 없습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.");
+      setOperationError("누락 문제가 있어 적용할 수 없습니다. 본문/JSON을 수정하거나 다시 가져와 주세요.");
       return;
     }
     const supplementalImages = isSupplementalMode
@@ -1110,13 +1099,13 @@ export default function ImportFromGptModal({
   const quickSave = async () => {
     if (!draft || !onApplyEntries || isSolutionMode || isSupplementalMode) return;
     if (!canApply) {
-      setError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
+      setOperationError(applyBlockReason ?? "가져오기 항목을 확인해 주세요.");
       return;
     }
     const normalizedDraft = canonicalizeImportDraftForSave(draft);
     const finalPolicy = classifyImportValidationIssues(validateImportedStudyData(normalizedDraft, validationContext));
     if (finalPolicy.blocking.length) {
-      setError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
+      setOperationError("차단 항목을 해결한 뒤 저장할 수 있습니다.");
       return;
     }
     const saved = await importSaveCoordinator.run(async () => {
@@ -1241,7 +1230,7 @@ export default function ImportFromGptModal({
                   </div>
                   <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
                   <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); setPendingVisualFiles(files); setVisualSourceRoles(files.map(() => "problem")); input.value = ""; }} />
-                  {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
+                  {!!pendingVisualFiles.length && <section aria-label="분석할 원본과 역할"><details><summary>분석 방식</summary><label><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">공식 OpenAI GPT 연결이 필요합니다. 해제하면 기존 제공자로 원본 관측만 수행하며 GPT 평가 완료로 표시하지 않습니다.</p></details><p>문제와 답안 자료를 구분한 뒤 분석하세요. GPT API 요금이 발생하며 단계별 요청으로 풀이·평가합니다.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setOperationError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><button type="button" className="btn-primary" disabled={aiGenerating || saving || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button></section>}
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
                     <span>{visualProgress?.stageLabel ?? (visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…")}</span>
                     {visualProgress?.total && !visualProgress.indeterminate ? <progress aria-label="원본 분석 진행" max={visualProgress.total} value={visualProgress.current} /> : <progress aria-label="원본 분석 진행" />}
@@ -1428,7 +1417,7 @@ export default function ImportFromGptModal({
                     setBatchImport(null);
                     setEntryKindResolution(null);
                     setImportWarnings([]);
-                    setError(null);
+                    setOperationError(null);
                   }}
                   placeholder={importInputMode === "direct" ? "JSON 또는 시험지 텍스트를 직접 입력하세요." : isSolutionMode ? "ChatGPT가 만든 해설 JSON을 붙여넣으세요." : "GPT가 사진에서 변환한 시험지 텍스트나 JSON을 붙여넣으세요."}
                 />

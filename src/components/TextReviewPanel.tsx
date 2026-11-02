@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { StructuredQuestion, WrongAnswerEntry } from "../types";
 import type { SuspiciousTextSegment } from "../utils/suspiciousText";
 import ImageGallery from "./ImageGallery";
@@ -67,33 +67,86 @@ export default function TextReviewPanel({
   const [selectedStructuredSegmentId, setSelectedStructuredSegmentId] = useState<string | null>(requestedSegmentId ?? null);
   const [editedStructuredQuestions, setEditedStructuredQuestions] = useState<StructuredQuestion[]>(() => structuredClone(entry.structuredQuestions ?? []));
   const [ignoredSegmentIds, setIgnoredSegmentIds] = useState<Set<string>>(() => new Set());
+  const [entrySnapshot, setEntrySnapshot] = useState(() => ({
+    id: entry.id,
+    question: entry.question,
+    structuredKey: JSON.stringify(entry.structuredQuestions ?? []),
+    questionContentKey: JSON.stringify(entry.questionContentSegments ?? {}),
+    segmentsKey: JSON.stringify(segments),
+  }));
+  const [externalConflict, setExternalConflict] = useState(false);
+  const [previousQuestionSelectionInputs, setPreviousQuestionSelectionInputs] = useState({
+    requestedQuestionNumber,
+    questionNumbersKey: JSON.stringify(questionNumbers),
+  });
+  const [previousRequestedSegmentId, setPreviousRequestedSegmentId] = useState(requestedSegmentId);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  useEffect(() => {
+  const incomingStructuredKey = JSON.stringify(entry.structuredQuestions ?? []);
+  const incomingQuestionContentKey = JSON.stringify(entry.questionContentSegments ?? {});
+  const incomingSegmentsKey = JSON.stringify(segments);
+  if (entrySnapshot.id !== entry.id) {
+    setEntrySnapshot({ id: entry.id, question: entry.question, structuredKey: incomingStructuredKey, questionContentKey: incomingQuestionContentKey, segmentsKey: incomingSegmentsKey });
     setText(entry.question);
     setError(null);
     setSelectedSegmentId(null);
     setIgnoredSegmentIds(new Set());
     setEditedStructuredQuestions(structuredClone(entry.structuredQuestions ?? []));
-  }, [entry.id, entry.question, entry.structuredQuestions]);
+    setSelectedQuestionNumber(requestedQuestionNumber ?? questionNumbers[0] ?? null);
+    setSelectedStructuredSegmentId(requestedSegmentId ?? null);
+    setExternalConflict(false);
+  } else if (entrySnapshot.question !== entry.question || entrySnapshot.structuredKey !== incomingStructuredKey || entrySnapshot.questionContentKey !== incomingQuestionContentKey || entrySnapshot.segmentsKey !== incomingSegmentsKey) {
+    const hasLocalEdits = text !== entrySnapshot.question ||
+      JSON.stringify(editedStructuredQuestions) !== entrySnapshot.structuredKey ||
+      ignoredSegmentIds.size > 0;
+    setEntrySnapshot({ id: entry.id, question: entry.question, structuredKey: incomingStructuredKey, questionContentKey: incomingQuestionContentKey, segmentsKey: incomingSegmentsKey });
+    if (hasLocalEdits) {
+      setExternalConflict(true);
+    } else {
+      setText(entry.question);
+      setEditedStructuredQuestions(structuredClone(entry.structuredQuestions ?? []));
+      setIgnoredSegmentIds(new Set());
+      setSelectedSegmentId(null);
+      setError(null);
+      setExternalConflict(false);
+    }
+  }
 
-  useEffect(() => {
+  const questionNumbersKey = JSON.stringify(questionNumbers);
+  if (previousQuestionSelectionInputs.requestedQuestionNumber !== requestedQuestionNumber || previousQuestionSelectionInputs.questionNumbersKey !== questionNumbersKey) {
+    setPreviousQuestionSelectionInputs({ requestedQuestionNumber, questionNumbersKey });
     if (requestedQuestionNumber && questionNumbers.includes(requestedQuestionNumber)) {
       setSelectedQuestionNumber(requestedQuestionNumber);
     }
-  }, [questionNumbers, requestedQuestionNumber]);
+  }
 
-  useEffect(() => {
+  if (previousRequestedSegmentId !== requestedSegmentId) {
+    setPreviousRequestedSegmentId(requestedSegmentId);
     if (requestedSegmentId) setSelectedStructuredSegmentId(requestedSegmentId);
-  }, [requestedSegmentId]);
+  }
+
+  const activeQuestionNumber = selectedQuestionNumber && questionNumbers.includes(selectedQuestionNumber)
+      ? selectedQuestionNumber
+      : requestedQuestionNumber && questionNumbers.includes(requestedQuestionNumber)
+        ? requestedQuestionNumber
+        : questionNumbers[0] ?? null;
+
+  const adoptCurrentEntry = () => {
+    setText(entry.question);
+    setEditedStructuredQuestions(structuredClone(entry.structuredQuestions ?? []));
+    setIgnoredSegmentIds(new Set());
+    setSelectedSegmentId(null);
+    setError(null);
+    setExternalConflict(false);
+  };
 
   const visibleSegments = useMemo(
     () => segments.filter((segment) => !ignoredSegmentIds.has(segment.id)),
     [ignoredSegmentIds, segments],
   );
   const activeStructuredQuestion = useMemo(
-    () => editedStructuredQuestions.find((question) => question.questionNumber === selectedQuestionNumber),
-    [editedStructuredQuestions, selectedQuestionNumber],
+    () => editedStructuredQuestions.find((question) => question.questionNumber === activeQuestionNumber),
+    [activeQuestionNumber, editedStructuredQuestions],
   );
   const structuredSourceImages = useMemo(() => {
     if (!activeStructuredQuestion) return [];
@@ -166,17 +219,17 @@ export default function TextReviewPanel({
   const selectStructuredSegment = (segmentId: string) => {
     setSelectedStructuredSegmentId(segmentId);
     onActiveSegmentChange?.(segmentId);
-    if (!selectedQuestionNumber) return;
+    if (!activeQuestionNumber) return;
     const targetIds = [
-      structuredTargetId(selectedQuestionNumber, segmentId),
-      legacyStructuredTargetId(selectedQuestionNumber, segmentId),
+      structuredTargetId(activeQuestionNumber, segmentId),
+      legacyStructuredTargetId(activeQuestionNumber, segmentId),
     ];
     const target = targetIds.map((targetId) => document.getElementById(targetId)).find(Boolean);
     if (target instanceof HTMLElement) {
       target.focus();
       target.scrollIntoView?.({ block: "center", behavior: "smooth" });
     } else {
-      document.getElementById(`text-review-segment-trigger-${selectedQuestionNumber}-${segmentId}`)?.focus();
+      document.getElementById(`text-review-segment-trigger-${activeQuestionNumber}-${segmentId}`)?.focus();
     }
   };
 
@@ -223,6 +276,11 @@ export default function TextReviewPanel({
           자동으로 고치지 않습니다. 원본 이미지를 기준으로 의심 문장을 직접 확인한 뒤 저장하세요.
         </div>
 
+        {externalConflict && <div className="text-review-warning" role="alert">
+          <span>현재 항목이 외부에서 변경되었습니다. 이 검수창의 수정 내용은 유지되고 있으며 최신 내용과 다를 수 있습니다.</span>
+          <button type="button" className="btn-secondary" onClick={adoptCurrentEntry}>최신 내용 반영</button>
+        </div>}
+
         {isStructured ? (
           <div className={`text-review-structured-layout${structuredSourceImages.length ? " has-source" : ""}`}>
             <nav className="text-review-question-nav" aria-label="문항 선택">
@@ -233,8 +291,8 @@ export default function TextReviewPanel({
                     <button
                       id={`text-review-question-${stableIdPart(questionNumber)}`}
                       type="button"
-                      className={selectedQuestionNumber === questionNumber ? "is-active" : ""}
-                      aria-current={selectedQuestionNumber === questionNumber ? "true" : undefined}
+                      className={activeQuestionNumber === questionNumber ? "is-active" : ""}
+                      aria-current={activeQuestionNumber === questionNumber ? "true" : undefined}
                       onClick={() => selectQuestion(questionNumber)}
                     >
                       {questionNumber}번
@@ -245,7 +303,7 @@ export default function TextReviewPanel({
             </nav>
             <section className="text-review-structured-editor" aria-label="구조화된 문제 편집 영역">
               <div className="text-review-structured-heading">
-                <div><span className="modal-eyebrow">Structured Review</span><h3>{selectedQuestionNumber ? `${selectedQuestionNumber}번 문항` : "문항 선택"}</h3></div>
+                <div><span className="modal-eyebrow">Structured Review</span><h3>{activeQuestionNumber ? `${activeQuestionNumber}번 문항` : "문항 선택"}</h3></div>
                 <span className="text-review-structured-status">문항별 segment를 직접 검수합니다.</span>
               </div>
               {activeStructuredQuestion?.warning && (
@@ -253,9 +311,9 @@ export default function TextReviewPanel({
                   {activeStructuredQuestion.warning}
                 </p>
               )}
-              {selectedQuestionNumber ? <StructuredQuestionReviewEditor
+              {activeQuestionNumber ? <StructuredQuestionReviewEditor
                 id="text-review-structured-editor"
-                questions={editedStructuredQuestions.filter((question) => question.questionNumber === selectedQuestionNumber)}
+                questions={editedStructuredQuestions.filter((question) => question.questionNumber === activeQuestionNumber)}
                 disabled={saving}
                 onChange={(questions) => {
                   const updated = questions[0];
@@ -267,18 +325,18 @@ export default function TextReviewPanel({
                 <strong>문항 구성</strong>
                 <ul>
                   {(
-                    (editedStructuredQuestions.find((question) => question.questionNumber === selectedQuestionNumber)?.contentSegments
-                      ?? entry.questionContentSegments?.[selectedQuestionNumber ?? ""]
+                    (editedStructuredQuestions.find((question) => question.questionNumber === activeQuestionNumber)?.contentSegments
+                      ?? entry.questionContentSegments?.[activeQuestionNumber ?? ""]
                       ?? [])
                   ).map((segment) => {
                     const isEditableSegment = segment.type === "text" || segment.type === "condition" || segment.type === "equation";
                     const targetId = isEditableSegment
-                      ? structuredTargetId(selectedQuestionNumber ?? "", segment.id)
+                      ? structuredTargetId(activeQuestionNumber ?? "", segment.id)
                       : "text-review-structured-editor";
                     return (
                     <li key={segment.id}>
                       <button
-                        id={`text-review-segment-trigger-${selectedQuestionNumber}-${segment.id}`}
+                        id={`text-review-segment-trigger-${activeQuestionNumber}-${segment.id}`}
                         type="button"
                         className={selectedStructuredSegmentId === segment.id ? "is-active" : ""}
                         aria-current={selectedStructuredSegmentId === segment.id ? "true" : undefined}
@@ -365,23 +423,23 @@ export default function TextReviewPanel({
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={questionNumbers.indexOf(selectedQuestionNumber ?? "") <= 0 || saving}
+                disabled={questionNumbers.indexOf(activeQuestionNumber ?? "") <= 0 || saving}
                 onClick={() => {
-                  const index = questionNumbers.indexOf(selectedQuestionNumber ?? "");
+                  const index = questionNumbers.indexOf(activeQuestionNumber ?? "");
                   if (index > 0) selectQuestion(questionNumbers[index - 1]);
                 }}
               >
                 이전
               </button>
               <span aria-live="polite">
-                {Math.max(questionNumbers.indexOf(selectedQuestionNumber ?? "") + 1, 1)} / {questionNumbers.length}
+                {Math.max(questionNumbers.indexOf(activeQuestionNumber ?? "") + 1, 1)} / {questionNumbers.length}
               </span>
               <button
                 type="button"
                 className="btn-secondary"
-                disabled={questionNumbers.indexOf(selectedQuestionNumber ?? "") >= questionNumbers.length - 1 || saving}
+                disabled={questionNumbers.indexOf(activeQuestionNumber ?? "") >= questionNumbers.length - 1 || saving}
                 onClick={() => {
-                  const index = questionNumbers.indexOf(selectedQuestionNumber ?? "");
+                  const index = questionNumbers.indexOf(activeQuestionNumber ?? "");
                   if (index >= 0 && index < questionNumbers.length - 1) selectQuestion(questionNumbers[index + 1]);
                 }}
               >

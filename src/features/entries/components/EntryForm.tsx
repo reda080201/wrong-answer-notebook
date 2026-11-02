@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { EntryFormData, EntryKind, EntryTemplate, MemoTemplate, MistakeCauseType, ReviewStrategy, WrongAnswerEntry } from "../../../types";
 import { hasEntryContent } from "../../../utils/entry";
@@ -85,6 +85,37 @@ function suggestedDifficultyScore(difficulty: EntryFormData["difficulty"]): numb
   return undefined;
 }
 
+function prepareInitialForm(
+  entry: WrongAnswerEntry | undefined,
+  initialData: Partial<EntryFormData> | undefined,
+  defaultEntryKind: EntryKind | undefined,
+  prefilledTitle: string | undefined,
+) {
+  if (entry) {
+    const form = createEntryDraftFromEntry(entry);
+    const questions = editableEntryQuestions(form);
+    return {
+      form: questions.length ? { ...form, structuredQuestions: questions } : form,
+      questionEditBase: form,
+      difficultyScoreTouched: entry.difficultyScore !== undefined,
+    };
+  }
+  const nextForm = mergeEntryDraft({
+    ...initialData,
+    entryKind: initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer",
+    title: initialData?.title ?? prefilledTitle ?? "",
+    difficulty: initialData?.difficulty ?? "none",
+    difficultyScore: initialData?.difficultyScore,
+    explanationParts: initialData?.explanationParts ?? [emptyPart()],
+  }, createEmptyEntryDraft(initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer"));
+  const questions = editableEntryQuestions(nextForm);
+  return {
+    form: questions.length ? { ...nextForm, structuredQuestions: questions } : nextForm,
+    questionEditBase: nextForm,
+    difficultyScoreTouched: initialData?.difficultyScore !== undefined,
+  };
+}
+
 export default function EntryForm({
   entry,
   onSave,
@@ -97,59 +128,49 @@ export default function EntryForm({
   onSaveTemplate,
 }: EntryFormProps) {
   const { prompt } = useAppDialog();
-  const [form, setForm] = useState<EntryFormData>(emptyForm);
+  const [initialInputs, setInitialInputs] = useState(() => ({ entry, initialData, defaultEntryKind, prefilledTitle }));
+  const [initialForm, setInitialForm] = useState(() => prepareInitialForm(entry, initialData, defaultEntryKind, prefilledTitle));
+  const [form, setForm] = useState<EntryFormData>(initialForm.form);
   const [tagInput, setTagInput] = useState("");
   const [removedImages, setRemovedImages] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveErrorType, setSaveErrorType] = useState<"validation" | "save" | null>(null);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
-  const initialSignatureRef = useRef("");
+  const initialSignatureRef = useRef(JSON.stringify(initialForm.form));
   const questionEditBaseRef = useRef<EntryFormData>(emptyForm);
-  const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(false);
+  const [difficultyScoreTouched, setDifficultyScoreTouched] = useState(initialForm.difficultyScoreTouched);
   const hasCanonicalQuestions = Boolean(form.structuredQuestions?.length || Object.keys(form.questionContentSegments ?? {}).length);
   const questionEditingBlocked = hasAmbiguousEntryQuestionData(form);
 
-  useEffect(() => {
-    if (saveErrorType === "validation" && hasEntryContent(form)) {
-      setSaveError(null);
-      setSaveErrorType(null);
-    }
-  }, [form, saveErrorType]);
-
-  useEffect(() => {
-    let nextForm: EntryFormData;
-    if (entry) {
-      nextForm = createEntryDraftFromEntry(entry);
-      setForm(nextForm);
-      setDifficultyScoreTouched(entry.difficultyScore !== undefined);
-      setRemovedImages([]);
-      setSaveError(null);
-      setSaveErrorType(null);
-    } else {
-      nextForm = mergeEntryDraft({
-        ...initialData,
-        entryKind: initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer",
-        title: initialData?.title ?? prefilledTitle ?? "",
-        difficulty: initialData?.difficulty ?? "none",
-        difficultyScore: initialData?.difficultyScore,
-        explanationParts: initialData?.explanationParts ?? [emptyPart()],
-      }, createEmptyEntryDraft(initialData?.entryKind ?? defaultEntryKind ?? "wrong_answer"));
-      setForm(nextForm);
-      setDifficultyScoreTouched(initialData?.difficultyScore !== undefined);
-      setRemovedImages([]);
-      setSaveError(null);
-      setSaveErrorType(null);
-    }
-    questionEditBaseRef.current = structuredClone(nextForm);
-    const questions = editableEntryQuestions(nextForm);
-    if (questions.length) {
-      nextForm = { ...nextForm, structuredQuestions: questions };
-      setForm(nextForm);
-    }
-    initialSignatureRef.current = JSON.stringify(nextForm);
+  const shouldResetForm = initialInputs.entry?.id !== entry?.id ||
+    (initialInputs.entry === undefined && entry === undefined && (
+      initialInputs.initialData !== initialData ||
+      initialInputs.defaultEntryKind !== defaultEntryKind ||
+      initialInputs.prefilledTitle !== prefilledTitle
+    ));
+  if (shouldResetForm) {
+    const nextInitialForm = prepareInitialForm(entry, initialData, defaultEntryKind, prefilledTitle);
+    setInitialInputs({ entry, initialData, defaultEntryKind, prefilledTitle });
+    setInitialForm(nextInitialForm);
+    setForm(nextInitialForm.form);
+    setDifficultyScoreTouched(nextInitialForm.difficultyScoreTouched);
+    setRemovedImages([]);
+    setSaveError(null);
+    setSaveErrorType(null);
     setDiscardConfirmOpen(false);
-  }, [entry, defaultEntryKind, prefilledTitle, initialData]);
+  }
+  if (saveErrorType === "validation" && hasEntryContent(form)) {
+    setSaveError(null);
+    setSaveErrorType(null);
+  }
+
+  // Keep refs out of render: these baselines drive dirty checks and structured save reconciliation.
+  useLayoutEffect(() => {
+    questionEditBaseRef.current = structuredClone(initialForm.questionEditBase);
+    initialSignatureRef.current = JSON.stringify(initialForm.form);
+  }, [initialForm]);
+  const visibleSaveError = saveError;
 
   const trackRemove = (filename: string, wasPersisted: boolean) => {
     if (wasPersisted) setRemovedImages((prev) => [...prev, filename]);
@@ -435,7 +456,7 @@ export default function EntryForm({
         closeDisabled={saving}
         busy={saving}
         footer={<div className="form-footer">
-          {saveError && <p className="form-save-error" role="alert">{saveError}</p>}
+          {visibleSaveError && <p className="form-save-error" role="alert">{visibleSaveError}</p>}
           <button type="button" className="btn-secondary" onClick={handleClose} disabled={saving}>취소</button>
           <button type="submit" form="entry-edit-form" className="btn-primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
         </div>}

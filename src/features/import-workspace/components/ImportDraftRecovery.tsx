@@ -13,7 +13,30 @@ export default function ImportDraftRecovery({ onResume, onVerify, onCancel }: { 
   const alive = useRef(true);
   const generation = useRef(0);
   const current = (request: number) => alive.current && generation.current === request;
-  useEffect(() => { alive.current = true; const request = ++generation.current; void loadImportWorkspaceDraft().then(draft => { if (current(request)) { setState(draft ? "available" : "empty"); setReceipt(draft?.commitAttempt); } }).catch(e => { if (current(request)) { setState("error"); setError(e instanceof Error ? e.message : "이전 가져오기 초안을 읽지 못했습니다."); } }); return () => { alive.current = false; ++generation.current; lock.current = false; }; }, []);
+  useEffect(() => {
+    const aliveRef = alive;
+    const generationRef = generation;
+    aliveRef.current = true;
+    const request = ++generationRef.current;
+    void loadImportWorkspaceDraft()
+      .then(draft => {
+        if (current(request)) {
+          setState(draft ? "available" : "empty");
+          setReceipt(draft?.commitAttempt);
+        }
+      })
+      .catch(error => {
+        if (current(request)) {
+          setState("error");
+          setError(error instanceof Error ? error.message : "이전 가져오기 초안을 읽지 못했습니다.");
+        }
+      });
+    return () => {
+      aliveRef.current = false;
+      ++generationRef.current;
+      lock.current = false;
+    };
+  }, []);
   const resume = async () => {
     if (lock.current) return;
     const request = ++generation.current; lock.current = true; setBusy(true); setError("");
