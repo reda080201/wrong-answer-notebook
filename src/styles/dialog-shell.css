@@ -44,10 +44,10 @@
   border: 0;
 }
 
-.dialog-size-sm { width: min(100%, 360px); }
-.dialog-size-md { width: min(100%, 520px); }
-.dialog-size-lg { width: min(100%, 720px); }
-.dialog-size-xl { width: min(100%, 960px); }
+[role="dialog"].dialog-size-sm { width: min(100%, 360px); }
+[role="dialog"].dialog-size-md { width: min(100%, 520px); }
+[role="dialog"].dialog-size-lg { width: min(100%, 720px); }
+[role="dialog"].dialog-size-xl { width: min(100%, 960px); }
 
 .fullscreen-dialog-backdrop {
   position: fixed;
