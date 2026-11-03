@@ -17,6 +17,35 @@ describe("useWindowCloseGuard", () => {
     getCurrentWindow.mockReset();
   });
 
+  it("immediately removes a subscription that resolves after unmount", async () => {
+    let resolveRegistration!: (cleanup: () => void) => void;
+    const cleanup = vi.fn();
+    getCurrentWindow.mockReturnValue({ onCloseRequested: () => new Promise<() => void>(resolve => { resolveRegistration = resolve; }) });
+    const { unmount } = renderHook(() => useWindowCloseGuard({
+      activeExam: null, examSaveTimerRef: { current: null },
+      flushExamSession: async () => true, flushEntries: async () => undefined,
+      flushGeneratedExams: async () => undefined, flushSettings: async () => undefined,
+      flushImportWorkspaceDraft: async () => undefined, flushLibraryFolders: async () => undefined,
+      confirmCloseWithoutSaving: async () => false,
+    }));
+    unmount();
+    await act(async () => { resolveRegistration(cleanup); });
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("reports failed close subscription registration", async () => {
+    getCurrentWindow.mockReturnValue({ onCloseRequested: async () => { throw new Error("subscription denied"); } });
+    const { result } = renderHook(() => useWindowCloseGuard({
+      activeExam: null, examSaveTimerRef: { current: null },
+      flushExamSession: async () => true, flushEntries: async () => undefined,
+      flushGeneratedExams: async () => undefined, flushSettings: async () => undefined,
+      flushImportWorkspaceDraft: async () => undefined, flushLibraryFolders: async () => undefined,
+      confirmCloseWithoutSaving: async () => false,
+    }));
+    await act(async () => { await Promise.resolve(); });
+    expect(result.current.closeError).toBe("subscription denied");
+  });
+
   it("waits for every persistence path before closing", async () => {
     let closeRequested: ((event: { preventDefault(): void }) => Promise<void>) | undefined;
     const close = vi.fn(async () => undefined);

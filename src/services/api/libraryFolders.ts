@@ -3,7 +3,8 @@ import { readStorageJson, writeStorageJson } from "../storageJson";
 import { getStorageBackend } from "../storageBackend";
 import { errorMessage } from "./shared";
 
-export const LIBRARY_FOLDERS_STORAGE_KEY = "wrong-answer-library-folders";
+import { LIBRARY_FOLDERS_STORAGE_KEY } from "../storageKeys";
+export { LIBRARY_FOLDERS_STORAGE_KEY } from "../storageKeys";
 
 export function loadLibraryFoldersFromStorage(
   storage: Storage = localStorage,

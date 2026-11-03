@@ -22,7 +22,7 @@ import {
 } from "./api/shared";
 import { EXAM_SESSIONS_STORAGE_KEY } from "../features/exam/storage/examSessionStorage";
 import { GENERATED_EXAMS_STORAGE_KEY } from "../features/exam-builder/storage/generatedExamStorage";
-import { LIBRARY_FOLDERS_STORAGE_KEY } from "./api/libraryFolders";
+import { LIBRARY_FOLDERS_STORAGE_KEY } from "./storageKeys";
 import { GPT_SOLUTION_ROUNDTRIP_DRAFTS_STORAGE_KEY } from "../features/gpt-solution-roundtrip/storage/gptSolutionRoundtripStorage";
 import { REVIEW_SESSIONS_STORAGE_KEY, normalizeReviewSession } from "../features/review/storage/reviewSessionStorage";
 import { EMPTY_KNOWLEDGE_GRAPH, isKnowledgeGraphStore, normalizeKnowledgeGraph } from "../models/knowledgeGraph";

@@ -3,6 +3,30 @@ import { describe, expect, it, vi } from "vitest";
 import { useMaintenanceCoordinator } from "./useMaintenanceCoordinator";
 
 describe("useMaintenanceCoordinator", () => {
+  it("keeps maintenance locked until every started flush settles after a synchronous failure", async () => {
+    let release!: () => void;
+    const blocked = vi.fn();
+    const task = vi.fn(async () => undefined);
+    const { result } = renderHook(() => useMaintenanceCoordinator({
+      flushEntries: () => { throw new Error("disk"); },
+      flushSettings: () => new Promise<void>(resolve => { release = resolve; }),
+      flushGeneratedExams: async () => undefined,
+      setEntriesMaintenanceBlocked: blocked,
+      setSettingsMaintenanceBlocked: vi.fn(),
+      setGeneratedExamsMaintenanceBlocked: vi.fn(),
+    }));
+    const first = result.current(task);
+    const failure = expect(first).rejects.toThrow("disk");
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(blocked).toHaveBeenLastCalledWith(true);
+    await expect(result.current(task)).rejects.toThrow("이미 진행 중");
+    release();
+    await failure;
+    expect(task).not.toHaveBeenCalled();
+    expect(blocked).toHaveBeenLastCalledWith(false);
+  });
+
   it("flushes the AI provider config before maintenance work", async () => {
     const events: string[] = [];
     const { result } = renderHook(() => useMaintenanceCoordinator({
