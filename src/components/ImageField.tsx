@@ -107,7 +107,6 @@ function ImagePreview({ filename }: { filename: string }) {
   const [preview, setPreview] = useState<{ url: string; state: "loading" | "ready" | "error" }>({ url: "", state: "loading" });
   useEffect(() => {
     let cancelled = false;
-    setPreview({ url: "", state: "loading" });
     void (async () => {
       try {
         const url = await getImageUrl(filename);
@@ -123,6 +122,6 @@ function ImagePreview({ filename }: { filename: string }) {
     {preview.url && preview.state !== "error" && <img key={attempt} src={preview.url} alt="" loading="lazy"
       onLoad={() => setPreview(value => ({ ...value, state: "ready" }))}
       onError={() => setPreview(value => ({ ...value, state: "error" }))} />}
-    {preview.state === "error" && <div role="status"><span>이미지를 불러오지 못했습니다.</span><button type="button" className="btn-secondary" aria-label={`${filename} 이미지 다시 불러오기`} onClick={() => setAttempt(value => value + 1)}>다시 불러오기</button></div>}
+    {preview.state === "error" && <div role="status"><span>이미지를 불러오지 못했습니다.</span><button type="button" className="btn-secondary" aria-label={`${filename} 이미지 다시 불러오기`} onClick={() => { setPreview({ url: "", state: "loading" }); setAttempt(value => value + 1); }}>다시 불러오기</button></div>}
   </div>;
 }
