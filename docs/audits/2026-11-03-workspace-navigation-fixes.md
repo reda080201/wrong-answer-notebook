@@ -14,3 +14,8 @@ Direct isolated-browser verification used the same synthetic Import-v2 JSON with
 Local validation: type check passed; lint 0 errors / 2 pre-existing warnings. Related AppModals/workspace/presentation tests 24 passed. Focused guidance tests and final Vite build/CSS contracts are being completed; final results recorded in PR. Full CI assigned to final head, not repeated locally.
 
 Remaining acceptance: complete light/dark 1100x750 and 1536x970 matrix, invalid-body edit/resolution UI, final focus guidance screen, real API, real PDF/images, native app, A4/print and 200% zoom not verified in this pass. Merge readiness pending CI and acceptance. Draft, no merge.
+
+## Review-message follow-up — 2026-11-04
+Removed the unsupported claim that an unqualified needs_review state originated in an imported file. Unblocked questions without a specific warning now receive neutral compare-and-confirm guidance; blocking errors/answer/figure states keep their specific instructions instead. Explicit warning text remains visible. No data format or save policy change.
+
+WorkspaceReviewNotice tests: 7 passed, including generic review, explicit reason, reference error, unconfirmed answers and maintenance/figure blocking. Direct isolated-browser verification: recover synthetic draft -> blank body (specific error, save disabled) -> restore body (neutral guidance) -> compare confirmation -> preserve/close/reopen (additional confirmation not needed). Screenshot: C:/Users/reda0/.codex/visualizations/2026-11-04-audit/review-origin-fixed.png. Changed-file lint/type/diff validation results are recorded in PR.
