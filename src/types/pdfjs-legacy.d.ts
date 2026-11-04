@@ -25,5 +25,6 @@ declare module "pdfjs-dist/legacy/build/pdf.mjs" {
     destroy(): Promise<void>;
   }
 
-  export function getDocument(options: { data: Uint8Array }): PDFLoadingTask;
+  export const GlobalWorkerOptions: { workerSrc: string };
+  export function getDocument(options: { data: Uint8Array; isEvalSupported?: boolean }): PDFLoadingTask;
 }

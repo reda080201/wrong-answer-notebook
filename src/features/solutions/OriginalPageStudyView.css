@@ -21,3 +21,4 @@
   .detail-panel--original-reading .original-page-study__tools select { min-height: 30px; padding: 3px 6px; }
   .detail-panel--original-immersive > .detail-scroll { padding: 4px 6px 8px; }
 }
+.original-document-preview { overflow: auto; max-height: 60vh; }

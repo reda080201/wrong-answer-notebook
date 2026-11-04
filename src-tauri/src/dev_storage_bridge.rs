@@ -294,6 +294,30 @@ fn safe_image_name(value: &str) -> bool {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct OriginalUpload {
+    bytes_base64: String,
+}
+
+async fn put_original(
+    State(state): State<BridgeState>,
+    AxumPath(id): AxumPath<String>,
+    Json(body): Json<OriginalUpload>,
+) -> BridgeResult<StatusCode> {
+    let bytes = crate::original_documents::decode(&body.bytes_base64).map_err(invalid)?;
+    crate::original_documents::put(&state.data_dir, &id, &bytes).map_err(invalid)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn get_original(
+    State(state): State<BridgeState>,
+    AxumPath(id): AxumPath<String>,
+) -> BridgeResult<Json<Value>> {
+    let bytes = crate::original_documents::read(&state.data_dir, &id).map_err(invalid)?;
+    Ok(Json(json!({ "bytesBase64": STANDARD.encode(bytes) })))
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ImageUpload {
     filename: String,
     bytes_base64: String,
@@ -723,6 +747,14 @@ pub fn run_dev_storage_bridge() -> Result<(), String> {
             get(load_store).put(save_store).delete(clear_store),
         )
         .route("/v1/exam-submissions", post(submit_exam))
+        .route(
+            "/v1/original-documents/{id}",
+            get(get_original)
+                .put(put_original)
+                .layer(axum::extract::DefaultBodyLimit::max(
+                    crate::original_documents::MAX_ENCODED_BYTES + 1024,
+                )),
+        )
         .route("/v1/images", post(save_image))
         .route(
             "/v1/images/{filename}",

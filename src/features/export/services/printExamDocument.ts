@@ -62,7 +62,7 @@ export async function printExamDocument(model: ExamPrintModel): Promise<PrintDoc
   const html = "<!doctype html>"+"<html lang=ko>"+"<head><meta charset=utf-8 /><title></title></head>"+"<body><div id=root></div></body></html>";
   doc.write(html);
   doc.close();
-  doc.title = model.filenameBase;
+  doc.title = `${model.filenameBase}-derived`;
   const style = doc.createElement("style");
   const paperSize = model.resolvedPaperSize ?? "a4";
   const orientation = model.resolvedOrientation ?? "portrait";

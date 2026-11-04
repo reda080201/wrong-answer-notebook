@@ -3,6 +3,7 @@ import AssessmentCard from "../../import/vision/AssessmentCard";
 import { publishStudySelection } from "../../study-ai/activeSelection";
 import { getEntryCanonicalAnnotationContext } from "../../../utils/canonicalAnnotations";
 import { solutionQuestionKey } from "../../solutions/solutionModel";
+import OriginalDocumentControls from "../../solutions/OriginalDocumentControls";
 import OriginalPageStudyView from "../../solutions/OriginalPageStudyView";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
@@ -1564,6 +1565,7 @@ export default function EntryDetail({
         </div>
         <div className="detail-actions">
           <div className="detail-actions-primary">
+            {!showOriginalStudy && Boolean(entry.originalDocuments?.length) && <OriginalDocumentControls documents={entry.originalDocuments ?? []} />}
             {isFocusable && (
               <button
                 type="button"

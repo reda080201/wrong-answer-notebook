@@ -1,3 +1,4 @@
+import { collectOriginalDocuments, decodeOriginal, encodeOriginal, readOriginal, storeOriginal, verifyOriginal } from "../originalDocuments";
 import { AI_STUDY_STORAGE_KEY, AI_BACKUP_PREFERENCE_KEY, isAiStudyStore, type AiStudyStore } from "../../features/study-ai/model";
 import { pickBrowserFiles } from "./browserFilePicker";
 import { backupFilename } from "./backupFilename";
@@ -56,6 +57,7 @@ export interface BrowserBackupPayloadV2 extends BrowserBackupPayloadBase {
   reviewSessions?: ReviewSession[];
   knowledgeGraph?: KnowledgeGraphStore;
   aiStudy?: AiStudyStore;
+  originalAssetsV1?: Record<string, string>;
 }
 
 export type BackupPayload = BrowserBackupPayloadV1 | BrowserBackupPayloadV2;
@@ -233,6 +235,25 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
   if (!isBrowserBackupPayload(payload)) throw new Error("브라우저 백업 형식이 올바르지 않습니다.");
 
   const v2Payload = payload.meta.version === 2 ? payload as BrowserBackupPayloadV2 : null;
+  const documents = collectOriginalDocuments({ entries: payload.entries, draft: v2Payload?.importWorkspaceDraft });
+  const originals = v2Payload?.originalAssetsV1;
+  if (documents.length && (!originals || typeof originals !== "object" || Array.isArray(originals))) {
+    throw new Error("백업에 원본 문서 자산이 없습니다.");
+  }
+  const decoded = new Map<string, Uint8Array<ArrayBuffer>>();
+  for (const doc of documents) {
+    let bytes = decoded.get(doc.originalAssetId);
+    if (!bytes) {
+      const encoded = originals?.[doc.originalAssetId];
+      if (typeof encoded !== "string") throw new Error(`백업에 원본 문서가 없습니다: ${doc.filename}`);
+      bytes = decodeOriginal(encoded);
+      decoded.set(doc.originalAssetId, bytes);
+    }
+    await verifyOriginal(doc, bytes);
+  }
+  for (const [id, bytes] of decoded) {
+    await storeOriginal(documents.find(doc => doc.originalAssetId === id)!, bytes);
+  }
   if (v2Payload?.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) {
     throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
   }
@@ -347,9 +368,16 @@ export async function createBackupAtDestination(
     return `백업을 저장했습니다: ${backupPath}`;
   }
   const snapshot = await readBrowserBackupSnapshot(entries, settings);
+  const documents = collectOriginalDocuments({ entries: snapshot.entries, draft: snapshot.importWorkspaceDraft });
+  const assets = new Map<string, string>();
+  for (const doc of documents) {
+    const bytes = await readOriginal(doc);
+    if (!assets.has(doc.originalAssetId)) assets.set(doc.originalAssetId, encodeOriginal(bytes));
+  }
   const payload: BackupPayload = {
     meta: { version: 2, createdAt: new Date().toISOString(), source: "browser" },
     ...snapshot,
+    ...(assets.size ? { originalAssetsV1: Object.fromEntries(assets) } : {}),
   };
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -357,7 +385,7 @@ export async function createBackupAtDestination(
   a.href = url;
   a.download = backupFilename("json");
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000);
   return "브라우저 백업 파일을 내려받았습니다.";
 }
 

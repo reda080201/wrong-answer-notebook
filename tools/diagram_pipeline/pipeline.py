@@ -195,7 +195,11 @@ def render(path: Path, out: Path):
         data = read_bytes(relative_path(path.parent, source["path"]))
         if digest(data) != source["sha256"]:
             raise PipelineError("Input source hash mismatch")
-        write_new(relative_path(out, source["path"]), data)
+        target_source = relative_path(out, source["path"])
+        if not target_source.exists():
+            write_new(target_source, data)
+        elif read_bytes(target_source) != data:
+            raise PipelineError("Conflicting original source bytes")
     for figure in manifest["figures"]:
         candidate = figure.get("svg")
         if candidate:
@@ -293,6 +297,9 @@ def package(path: Path, output: Path):
     assets = {}
     entries = []
     used_basenames = set()
+    original_assets = {}
+    sources = {source["id"]: source for source in manifest["sources"]}
+    original_mimes = {".pdf": "application/pdf", ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 
     def add_artifacts(artifacts):
         for artifact in artifacts.values():
@@ -310,6 +317,27 @@ def package(path: Path, output: Path):
             raise PipelineError("Entry template must be an object")
         # Template image references cannot silently refer to absent assets.
         data.update(entryKind="problem_sheet", title=entry.get("title", "문제지"), subject=entry.get("subject", "수학"), questions=[], figures=[], questionSourceCrops=[], sourcePageImages=[])
+        originals = {}
+
+        def link_original(reference, page_asset):
+            source = sources[reference["sourceId"]]
+            file = relative_path(path.parent, source["path"])
+            mime = original_mimes.get(file.suffix.lower())
+            if mime is None:
+                return
+            sha = source["sha256"]
+            doc = originals.setdefault(source["id"], {
+                "version": 1, "originalAssetId": sha, "sha256": sha,
+                "filename": source.get("originalName", file.name),
+                "mime": mime, "byteLength": file.stat().st_size,
+                "sourceKey": source.get("sourceKey", source["id"]),
+                "pageCount": len(source["pages"]), "pages": [],
+            })
+            link = {"physicalPage": reference["page"], "sourcePageImage": page_asset}
+            if not any(page["physicalPage"] == link["physicalPage"] for page in doc["pages"]):
+                doc["pages"].append(link)
+            original_assets[f"original-documents-v1/{sha}"] = {"file": file, "sha256": sha, "size": doc["byteLength"]}
+
         for question in entry["questions"]:
             figures = [figure for figure in manifest["figures"] if figure["entryId"] == entry["id"] and figure["questionKey"] == question["key"]]
             mapping = {figure["id"]: "f_" + digest(json_bytes([entry["id"], question["key"], figure["id"]]))[:24] for figure in figures}
@@ -347,6 +375,7 @@ def package(path: Path, output: Path):
                     data["sourcePageImages"].append(page_asset)
                 page_index = data["sourcePageImages"].index(page_asset) + 1
                 pages.append(page_index)
+                link_original(source_result["reference"], page_asset)
                 if "questionCrop" in artifacts:
                     data["questionSourceCrops"].append({"id": "crop-" + digest(json_bytes([entry["id"], question["key"], source_ordinal]))[:24], "questionNumber": str(question["number"]), "image": artifacts["questionCrop"]["path"], "sourcePageImage": page_asset, "page": page_index, "cropRect": source_result["reference"]["crop"]})
             visible_flow = json_bytes({k: v for k, v in q.items() if k != "figureIds"}).decode("utf-8")
@@ -360,6 +389,7 @@ def package(path: Path, output: Path):
                     data["sourcePageImages"].append(page_asset)
                 page_index = data["sourcePageImages"].index(page_asset) + 1
                 pages.append(page_index)
+                link_original(figure, page_asset)
                 original = artifacts["original"]
                 exported = {"id": mapping[figure["id"]], "questionNumber": str(question["number"]), "title": figure.get("title", "그림"), "caption": figure.get("caption", ""), "original": {"image": original["path"], "sourcePageImage": page_asset, "crop": figure["crop"]}, "image": original["path"], "source": "original", "preferredRepresentation": "original", "processingStatus": "needs_review", "needsReview": True}
                 if figure["result"].get("failure"):
@@ -380,16 +410,22 @@ def package(path: Path, output: Path):
                 if page_asset not in data["sourcePageImages"]:
                     data["sourcePageImages"].append(page_asset)
                 page_index = data["sourcePageImages"].index(page_asset) + 1
+                link_original(answer_source["reference"], page_asset)
                 answer = next((item for item in data.get("answerKey", []) if str(item.get("questionNumber", "")) == str(question["number"])), None)
                 if answer is not None:
                     note = answer.get("sourceNote", "").strip()
                     page_note = f"원본 자료 {page_index}페이지"
                     answer["sourceNote"] = f"{note} · {page_note}" if note else page_note
             data["questions"].append(q)
+        if originals:
+            data["originalDocuments"] = list(originals.values())
         entries.append(data)
     document = {"schemaVersion": "wrong-answer-notebook-import-v2", "importType": "problem_sheet", "entries": entries}
     json_data = json_bytes(document)
-    if len(json_data) > MAX_JSON or len(assets) > 300 or sum(asset["size"] for asset in assets.values()) + len(json_data) > 1024**3:
+    original_size = sum(asset["size"] for asset in original_assets.values())
+    if len(original_assets) > 100 or original_size > 100 * 1024**2:
+        raise PipelineError("Original documents exceed the app import policy")
+    if len(json_data) > MAX_JSON or len(assets) > 300 or sum(asset["size"] for asset in assets.values()) + len(json_data) + original_size > 1024**3:
         raise PipelineError("Package exceeds the app import policy")
     # Inspect all declared image references before creating the archive.
     def refs(value, key=""):
@@ -409,9 +445,9 @@ def package(path: Path, output: Path):
     temp = Path(temporary)
     try:
         with zipfile.ZipFile(temp, "w", zipfile.ZIP_DEFLATED) as archive:
-            contents = [("import.json", None), *sorted(assets.items())]
+            contents = [("import.json", None), *sorted(assets.items()), *sorted(original_assets.items())]
             for name, asset in contents:
-                content = json_data if asset is None else read_bytes(asset["file"], MAX_IMAGE)
+                content = json_data if asset is None else read_bytes(asset["file"], 100 * 1024**2 if name in original_assets else MAX_IMAGE)
                 if asset is not None and digest(content) != asset["sha256"]:
                     raise PipelineError("Artifact changed during packaging")
                 info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
@@ -419,7 +455,7 @@ def package(path: Path, output: Path):
         if temp.stat().st_size > 500 * 1024**2:
             raise PipelineError("ZIP exceeds 500MiB")
         with zipfile.ZipFile(temp) as archive:
-            if archive.testzip() or archive.read("import.json") != json_data or any(digest(archive.read(name)) != asset["sha256"] for name, asset in assets.items()):
+            if archive.testzip() or archive.read("import.json") != json_data or any(digest(archive.read(name)) != asset["sha256"] for name, asset in (assets | original_assets).items()):
                 raise PipelineError("ZIP re-open verification failed")
         try:
             os.link(temp, output)  # Atomic publish, never replace an existing file.

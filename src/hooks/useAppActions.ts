@@ -1,3 +1,4 @@
+import { readOriginal } from "../services/originalDocuments";
 import { useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { isTauri } from "@tauri-apps/api/core";
@@ -295,6 +296,7 @@ export function useAppActions({
       finalData = rewriteImportAssetReferences(preparedData, importedAssets.sourceToSaved);
     }
     try {
+      for (const doc of finalData.originalDocuments ?? []) await readOriginal(doc);
       if (editingEntry) {
         await updateEntry(editingEntry.id, finalData, removedImages);
         setActiveSection(finalData.entryKind);
@@ -539,7 +541,7 @@ export function useAppActions({
 
   const createLectureEntry = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
+    meta: { title: string; sourceType: LectureSourceType; originalDocuments?: EntryFormData["originalDocuments"]; sourcePageImages?: string[]; figures?: SheetFigureItem[] },
     linkedEntryIds: string[] = [],
   ) => {
     const subject: Subject =
@@ -553,6 +555,7 @@ export function useAppActions({
       title: meta.title.trim() || "특강자료",
       question: "",
       questionImages: [],
+      originalDocuments: meta.originalDocuments,
       sourcePageImages: meta.sourcePageImages ?? [],
       entryKind: "lecture",
       difficult: false,
@@ -632,6 +635,7 @@ export function useAppActions({
         question: imported.question ?? "",
         questionImages: imported.questionImages ?? [],
         sourcePageImages: imported.sourcePageImages ?? [],
+        originalDocuments: imported.originalDocuments,
         questionSourceCrops: imported.questionSourceCrops,
         questionSolutionHotspots: imported.questionSolutionHotspots,
         entryKind,
@@ -663,6 +667,7 @@ export function useAppActions({
       };
       });
       validatePlannedIds(forms, plannedIds);
+      for (const form of forms) for (const doc of form.originalDocuments ?? []) await readOriginal(doc);
       if (receipt && !receipt.preparedEntries) {
         forms = forms.map((form, index) => {
           const normalized = normalizeEntry({ ...form, id: plannedIds![index], createdAt: receipt.createdAt!, updatedAt: receipt.createdAt! } as WrongAnswerEntry);
@@ -705,7 +710,7 @@ export function useAppActions({
 
   const handleLearningImportApply = async (
     blocks: LearningBlock[],
-    meta: { title: string; sourceType: LectureSourceType; sourcePageImages?: string[]; figures?: SheetFigureItem[]; assetSession?: ImportAssetSessionManifest },
+    meta: { title: string; sourceType: LectureSourceType; originalDocuments?: EntryFormData["originalDocuments"]; sourcePageImages?: string[]; figures?: SheetFigureItem[]; assetSession?: ImportAssetSessionManifest },
   ) => {
     if (activeSection === "lecture" || !selected) {
       if (meta.assetSession?.mode === "tauri-staged") {
@@ -715,6 +720,7 @@ export function useAppActions({
           title: meta.title,
           question: "",
           questionImages: [],
+          originalDocuments: meta.originalDocuments,
           sourcePageImages: meta.sourcePageImages ?? [],
           figures: meta.figures ?? [],
           learningBlocks: blocks,
@@ -728,6 +734,7 @@ export function useAppActions({
       await patchEntryWithImportAssetSession(selected.id, selected.updatedAt, meta.assetSession.id, (current) => ({
         ...current,
         learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+        originalDocuments: [...(current.originalDocuments ?? []), ...(meta.originalDocuments ?? [])],
         sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
         figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
       }));
@@ -735,6 +742,7 @@ export function useAppActions({
     }
     await patchEntry(selected.id, (current) => ({
       learningBlocks: [...(current.learningBlocks ?? []), ...blocks],
+      originalDocuments: [...(current.originalDocuments ?? []), ...(meta.originalDocuments ?? [])],
       sourcePageImages: [...new Set([...(current.sourcePageImages ?? []), ...(meta.sourcePageImages ?? [])])],
       figures: [...(current.figures ?? []), ...(meta.figures ?? [])],
     }));

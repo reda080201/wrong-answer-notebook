@@ -1,3 +1,4 @@
+import { collectOriginalDocuments, MAX_ORIGINAL_BYTES, storeOriginal, verifyOriginal } from "../../../services/originalDocuments";
 import JSZip from "jszip";
 import { IMPORT_LIMITS } from "./importLimits";
 import { normalizeImportImageKey } from "../../../utils/importImageReferences";
@@ -51,8 +52,12 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   const zip = await JSZip.loadAsync(zipFile);
   const entries = Object.values(zip.files).filter((entry) => !entry.dir);
   if (entries.some((entry) => !safeImportAssetPath(entry.name) || !safeImportAssetPath((entry as JSZip.JSZipObject & { unsafeOriginalName?: string }).unsafeOriginalName ?? entry.name))) throw new Error("ZIP에 안전하지 않은 경로가 포함되어 있습니다.");
+  const originalEntries = entries.filter(entry => entry.name.startsWith("original-documents-v1/"));
+  if (originalEntries.length > 100 || originalEntries.reduce((sum, entry) => sum + uncompressedSize(entry), 0) > MAX_ORIGINAL_BYTES) {
+    throw new Error("ZIP의 원본 문서 합계 또는 파일 수가 제한을 초과합니다.");
+  }
   const allowed = entries.filter((entry) => entry.name.toLowerCase().endsWith(".json") || isImage(entry.name));
-  if (allowed.reduce((sum, entry) => sum + uncompressedSize(entry), 0) > IMPORT_LIMITS.MAX_UNCOMPRESSED_BYTES) throw new Error("ZIP의 압축 해제 예상 크기가 1GB를 초과합니다.");
+  if ([...allowed, ...originalEntries].reduce((sum, entry) => sum + uncompressedSize(entry), 0) > IMPORT_LIMITS.MAX_UNCOMPRESSED_BYTES) throw new Error("ZIP의 압축 해제 예상 크기가 1GB를 초과합니다.");
   const jsonEntries = allowed.filter((entry) => entry.name.toLowerCase().endsWith(".json"));
   const json = jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "import.json") ?? jsonEntries.find((entry) => basename(entry.name).toLowerCase() === "questions.json") ?? (jsonEntries.length === 1 ? jsonEntries[0] : undefined);
   if (!json) throw new Error("ZIP 안에는 import.json 또는 JSON 파일 1개가 필요합니다.");
@@ -69,7 +74,58 @@ export async function readZipImport(zipFile: File, options: { signal?: AbortSign
   const [jsonText, imageAssets] = await Promise.all([jsonBlob.text(), extractImages(images, jsonBlob.size, options.signal, options.onProgress)]);
   validateImportAssetReferences(jsonText, imageAssets.map(asset => asset.sourcePath));
   await validateFigureSourceHashes(jsonText, imageAssets);
+  await importOriginalAssets(jsonText, originalEntries, options.signal);
   return { jsonText, jsonName: basename(json.name), imageFiles: imageAssets.map((asset) => asset.file), imageAssets };
+}
+
+// JSZip exposes this streaming API but omits it from its bundled typings.
+interface ZipByteStream {
+  on(event: "data", callback: (chunk: Uint8Array) => void): ZipByteStream;
+  on(event: "error", callback: (error: Error) => void): ZipByteStream;
+  on(event: "end", callback: () => void): ZipByteStream;
+  pause(): void;
+  resume(): void;
+}
+
+async function importOriginalAssets(jsonText: string, entries: JSZip.JSZipObject[], signal?: AbortSignal) {
+  const docs = collectOriginalDocuments(JSON.parse(jsonText));
+  const loaded = new Map<string, Uint8Array<ArrayBuffer>>();
+  let total = 0;
+  for (const doc of docs) {
+    signal?.throwIfAborted();
+    const id = doc.originalAssetId;
+    let bytes = loaded.get(id);
+    if (!bytes) {
+      const member = entries.find(entry => entry.name === `original-documents-v1/${id}`);
+      if (!member || uncompressedSize(member) !== doc.byteLength) throw new Error(`ZIP에서 원본 문서를 확인할 수 없습니다: ${doc.filename}`);
+      total += doc.byteLength;
+      if (total > MAX_ORIGINAL_BYTES) throw new Error("ZIP의 원본 문서 합계가 제한을 초과합니다.");
+      bytes = await new Promise<Uint8Array<ArrayBuffer>>((resolve, reject) => {
+        const output = new Uint8Array(doc.byteLength);
+        let offset = 0;
+        const stream = (member as JSZip.JSZipObject & { internalStream(type: "uint8array"): ZipByteStream }).internalStream("uint8array");
+        stream.on("data", chunk => {
+          if (signal?.aborted || offset + chunk.length > output.length) {
+            stream.pause();
+            reject(signal?.aborted ? signal.reason : new Error("ZIP의 실제 원본 문서 크기가 선언과 다릅니다."));
+            return;
+          }
+          output.set(chunk, offset);
+          offset += chunk.length;
+        }).on("error", reject).on("end", () => {
+          if (offset !== output.length) reject(new Error("ZIP의 원본 문서 크기가 선언과 다릅니다."));
+          else resolve(output);
+        }).resume();
+      });
+      loaded.set(id, bytes);
+    }
+    await verifyOriginal(doc, bytes);
+  }
+  if (loaded.size !== entries.length) throw new Error("ZIP에 연결되지 않은 원본 문서가 있습니다.");
+  for (const [id, bytes] of loaded) {
+    signal?.throwIfAborted();
+    await storeOriginal(docs.find(doc => doc.originalAssetId === id)!, bytes);
+  }
 }
 
 export function validateImportAssetReferences(jsonText: string, filenames: string[]): void {

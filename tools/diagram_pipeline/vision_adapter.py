@@ -218,7 +218,7 @@ def unpack_job(path, out):
     expected = {"job.json", "analysis.json"}
     keys = set()
     for source in job["sources"]:
-        if not isinstance(source, dict) or set(source) != {"sourceKey", "filename", "sha256"} or not isinstance(source["sourceKey"], str) or source["sourceKey"] in keys:
+        if not isinstance(source, dict) or set(source) not in ({"sourceKey", "filename", "sha256"}, {"sourceKey", "filename", "sha256", "originalName"}) or not isinstance(source["sourceKey"], str) or source["sourceKey"] in keys:
             raise PipelineError("Invalid job source identity")
         keys.add(source["sourceKey"])
         file = relative_path(out, source["filename"])
@@ -240,9 +240,18 @@ def run_vision(job_path, out, excluded=()):
         result = inspect_input(relative_path(out / "job", source["filename"]), out / f"inspect-{i}")
         manifest = load_json(Path(result["manifest"]))
         bound = manifest["sources"][0]
+        bound["sourceKey"] = source["sourceKey"]
+        original_name = source.get("originalName", Path(source["filename"]).name)
+        if not isinstance(original_name, str) or not original_name.strip() or len(original_name) > 255 or any(char in "/\\" or ord(char) < 32 for char in original_name):
+            raise PipelineError("Invalid original filename")
+        bound["originalName"] = original_name
+        if bound["id"] in mapping.values():
+            bound["id"] = f"{bound['id']}-{i}"
         mapping[source["sourceKey"]] = bound["id"]
         manifests.append(manifest)
-        write_new(relative_path(out / "inspection", bound["path"]), read_bytes(relative_path(Path(result["manifest"]).parent, bound["path"])))
+        destination = relative_path(out / "inspection", bound["path"])
+        if not destination.exists():
+            write_new(destination, read_bytes(relative_path(Path(result["manifest"]).parent, bound["path"])))
     combined = copy.deepcopy(manifests[0])
     combined["sources"] = list({s["id"]: s for m in manifests for s in m["sources"]}.values())
     inspection = out / "inspection/manifest.json"

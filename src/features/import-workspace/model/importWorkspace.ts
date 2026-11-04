@@ -48,7 +48,7 @@ export interface ImportQuestionDraft {
 export type ImportEntryMetadata = Partial<Pick<EntryFormData,
   "problemSource" | "importAudit" | "questionMeta" | "sheetGroup" | "tags" |
   "difficulty" | "difficultyScore" | "concepts" | "checklist" | "learningBlocks" |
-  "questionSourceCrops" | "questionSolutionHotspots" | "memo" | "myAnswer" | "correctAnswer" | "annotations" | "difficult" | "mastered"
+  "originalDocuments" | "questionSourceCrops" | "questionSolutionHotspots" | "memo" | "myAnswer" | "correctAnswer" | "annotations" | "difficult" | "mastered"
 >> & { unknownFields?: Record<string, unknown> };
 export interface ImportDraftGroup { visionEntryKey?: string; excludedLearningBlockIds?: string[]; compatibilityText?: string; originalQuestions?: Array<{ id: string; question: StructuredQuestion }>; solutionHotspotCandidates?: import("../../solutions/HotspotLinkEditor").HotspotCandidate[]; id: string; title: string; subject?: Subject; roundLabel?: string; detectedTitle?: string; confidence?: number; entryMetadata?: ImportEntryMetadata; explanationParts?: ExplanationPart[]; questions: ImportQuestionDraft[]; answerItems: ImportAnswerDraft[]; sourceFileIds: string[]; userConfirmed: boolean; }
 export interface ImportContentBlock { id: string; kind: "title" | "passage" | "question" | "choice" | "answer" | "explanation" | "page-number" | "other"; text?: string; assetId?: string; sourceFileId?: string; excluded?: boolean; }

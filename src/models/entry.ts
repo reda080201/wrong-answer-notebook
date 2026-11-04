@@ -401,7 +401,20 @@ export interface QuestionSolutionHotspot {
   y: number;
 }
 
+export interface OriginalDocument {
+  version: 1;
+  originalAssetId: string;
+  sha256: string;
+  filename: string;
+  mime: "application/pdf" | "image/png" | "image/jpeg" | "image/webp";
+  byteLength: number;
+  sourceKey: string;
+  pageCount: number;
+  pages: Array<{ physicalPage: number; sourcePageImage: string }>;
+}
+
 export interface WrongAnswerEntry {
+  originalDocuments?: OriginalDocument[];
   questionSolutionHotspots?: QuestionSolutionHotspot[];
   id: string;
   /** 사용자가 정리한 보관 위치. sheetGroup과 독립적입니다. */

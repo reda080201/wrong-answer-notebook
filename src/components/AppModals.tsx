@@ -1,3 +1,4 @@
+import { archiveOriginalFile } from "../services/originalDocuments";
 import { resolvePageRoles, type PageRoleReviewer } from "../features/import/vision/pageRoles";
 import { mergeVisionObservations, observeVisionInBatches, parseVisionObservation } from "../features/import/vision/observationBatches";
 import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } from "../features/import/vision/assessmentCheckpoint";
@@ -84,6 +85,7 @@ interface AppModalsProps {
     apply(blocks: LearningBlock[], meta: {
       title: string;
       sourceType: LectureSourceType;
+      originalDocuments?: import("../models/entry").OriginalDocument[];
       sourcePageImages?: string[];
       figures?: import("../types").SheetFigureItem[];
       issues?: import("./LearningImportModal").LearningImportIssue[];
@@ -195,7 +197,7 @@ export default function AppModals({
       const blocks = structuredQuestions.length ? [] : parseQuestionText(item.question ?? "").filter((block) => block.kind === "question");
       const questionImageAssets = item.questionImages ?? [];
       const sourcePageAssets = item.sourcePageImages ?? [];
-      const knownEntryKeys = new Set(["entryKind", "subject", "title", "question", "questionImages", "sourcePageImages", "questionSourceCrops", "questionSolutionHotspots", "problemSource", "importAudit", "questionMeta", "sheetGroup", "tags", "difficulty", "difficultyScore", "concepts", "checklist", "learningBlocks", "answerKey", "figures", "structuredQuestions", "questionContentSegments", "explanationParts", "memo", "annotations", "myAnswer", "correctAnswer", "difficult", "mastered"]);
+      const knownEntryKeys = new Set(["entryKind", "subject", "title", "question", "questionImages", "sourcePageImages", "originalDocuments", "questionSourceCrops", "questionSolutionHotspots", "problemSource", "importAudit", "questionMeta", "sheetGroup", "tags", "difficulty", "difficultyScore", "concepts", "checklist", "learningBlocks", "answerKey", "figures", "structuredQuestions", "questionContentSegments", "explanationParts", "memo", "annotations", "myAnswer", "correctAnswer", "difficult", "mastered"]);
       const findQuestionNumber = (value: string | number | undefined) => normalizeQuestionNumber(String(value ?? ""));
       const questions: ImportQuestionDraft[] = blocks.length
         ? blocks.map((block, index) => {
@@ -235,7 +237,7 @@ export default function AppModals({
         const figures = [...new Map([...question.figures, ...(item.figures ?? []).filter(figure => sharedIds.has(figure.id))].map(figure => [figure.id, figure])).values()];
         return { ...question, figures, passage, originalStructuredQuestion: questionDraftToEntryData({ id: groupId, title: "", questions: [question], answerItems: [], sourceFileIds: [], userConfirmed: false }).structuredQuestions![0] };
       });
-      return { compatibilityText: item.question, originalQuestions: preservedQuestions.map(question => ({ id: question.id, question: question.originalStructuredQuestion })), id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { memo: item.memo, annotations: item.annotations, myAnswer: item.myAnswer, correctAnswer: item.correctAnswer, difficult: item.difficult, mastered: item.mastered, problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, questionSourceCrops: item.questionSourceCrops, questionSolutionHotspots: item.questionSolutionHotspots, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions: preservedQuestions, answerItems: [], sourceFileIds: [], userConfirmed: false };
+      return { compatibilityText: item.question, originalQuestions: preservedQuestions.map(question => ({ id: question.id, question: question.originalStructuredQuestion })), id: groupId, title: item.title ?? `가져온 회차 ${groupIndex + 1}`, subject: SUBJECTS.includes(item.subject as Subject) ? item.subject as Subject : undefined, confidence: .7, entryMetadata: { originalDocuments: item.originalDocuments, memo: item.memo, annotations: item.annotations, myAnswer: item.myAnswer, correctAnswer: item.correctAnswer, difficult: item.difficult, mastered: item.mastered, problemSource: item.problemSource, importAudit: item.importAudit, questionMeta: item.questionMeta, sheetGroup: item.sheetGroup, tags: item.tags, difficulty: item.difficulty, difficultyScore: item.difficultyScore, concepts: item.concepts, checklist: item.checklist, learningBlocks: item.learningBlocks, questionSourceCrops: item.questionSourceCrops, questionSolutionHotspots: item.questionSolutionHotspots, unknownFields: Object.fromEntries(Object.entries(item).filter(([key]) => !knownEntryKeys.has(key))) }, explanationParts: item.explanationParts ?? [], questions: preservedQuestions, answerItems: [], sourceFileIds: [], userConfirmed: false };
     });
     return { id: `workspace-${uuidv4()}`, createdAt: now, updatedAt: now, status: "review_required", sourceFiles: [], assets: [], assetSession: existingSession ?? (assetFiles.length ? { id: staged?.sessionId ?? `memory-${uuidv4()}`, mode: staged ? "tauri-staged" : "memory-only", manifestVersion: staged ? 1 : undefined, createdAt: staged ? now : undefined, sourceToStaged: staged?.sourceToStaged, assets: staged?.assets ?? assetFiles.map((file) => ({ sourceName: file.name, size: file.size, lastModified: file.lastModified })) } : undefined), groups, unassignedBlocks: [], excludedBlocks: [], warnings: [], revision: 0 };
   };
@@ -370,7 +372,7 @@ export default function AppModals({
       if (signal.aborted) throw new DOMException("분석을 취소했습니다.", "AbortError");
     };
     throwIfAborted();
-    const visualFiles = await rasterizeVisualImportFile(file);
+    const visualFiles = await rasterizeVisualImportFile(file, { signal });
     throwIfAborted();
     if (!visualFiles.every((candidate) => candidate.type.startsWith("image/"))) {
       throw new Error("이미지 또는 PDF 파일만 분석할 수 있습니다.");
@@ -387,7 +389,7 @@ export default function AppModals({
         "learningBlocks 배열만 만들고, 확실하지 않은 제목/내용은 reviewStatus를 needs_review로 표시하세요.",
         "원본 이미지의 내용은 추측하지 말고, 사용자 검증 또는 verified 상태를 생성하지 마세요.",
       ].join("\n");
-      const response = await generateImportWithAi(prompt, "이미지/PDF 기반 특강 자료를 분석하세요.", sourcePageImages);
+      const response = await generateImportWithAi(prompt, "이미지/PDF 기반 특강 자료를 분석하세요.", sourcePageImages, signal, staged.sessionId);
       throwIfAborted();
       const parsed = parseLectureImportText(response, file.name);
       const genericTitle = /^(instruction|in'?sight|insight|concept|summary)$/i.test(parsed.title.trim());
@@ -397,6 +399,7 @@ export default function AppModals({
       }));
       return {
         title: parsed.title,
+        originalDocuments: [await archiveOriginalFile(file, staged.sessionId, sourcePageImages, signal)],
         blocks,
         sourcePageImages,
         figures: [],
@@ -510,7 +513,7 @@ export default function AppModals({
       }
       retainedAnalysis = visionAnalysisText;
       const analysis = parseVisionAnalysis(visionAnalysisText);
-      const originalImport = await prepareOriginalVisionImport(analysis, pageFiles, sourcePages, signal);
+      const originalImport = await prepareOriginalVisionImport(analysis, pageFiles, sourcePages, signal, originals);
       const responseText = JSON.stringify(originalImport.document);
       const visionJob = { ...await createVisionJobDraft(visionAnalysisText, originals), assessmentEvidence };
       throwIfAborted();

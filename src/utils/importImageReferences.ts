@@ -77,6 +77,12 @@ export function mapEntryImportImageReferences(
     }) } : {}),
     questionImages: (entry.questionImages ?? []).map(map).filter((image): image is string => Boolean(image)),
     sourcePageImages: (entry.sourcePageImages ?? []).map(map).filter((image): image is string => Boolean(image)),
+    ...(entry.originalDocuments ? { originalDocuments: entry.originalDocuments.map(doc => ({
+      ...doc, pages: doc.pages.flatMap(page => {
+        const sourcePageImage = map(page.sourcePageImage);
+        return sourcePageImage ? [{ ...page, sourcePageImage }] : [];
+      }),
+    })) } : {}),
     questionSolutionHotspots: entry.questionSolutionHotspots?.flatMap(hotspot => {
       const sourcePageImage = map(hotspot.sourcePageImage);
       return sourcePageImage ? [{ ...hotspot, sourcePageImage }] : [];
