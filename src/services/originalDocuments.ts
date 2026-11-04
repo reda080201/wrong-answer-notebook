@@ -13,7 +13,7 @@ export function validateOriginalDocument(value: unknown): asserts value is Origi
   const doc = value as Partial<OriginalDocument> | null;
   if (!doc || doc.version !== 1 || typeof doc.originalAssetId !== "string" || !originalId(doc.originalAssetId)
     || doc.originalAssetId !== doc.sha256 || typeof doc.filename !== "string" || !doc.filename.trim()
-    || doc.filename.length > 255 || /[\\/\u0000-\u001f]/.test(doc.filename)
+    || doc.filename.length > 255 || /[\\/]/.test(doc.filename) || Array.from(doc.filename).some(char => char < " ")
     || typeof doc.sourceKey !== "string" || !doc.sourceKey.trim()
     || !["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(doc.mime ?? "")
     || !Number.isSafeInteger(doc.byteLength) || doc.byteLength! < 1 || doc.byteLength! > MAX_ORIGINAL_BYTES
