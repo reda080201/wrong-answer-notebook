@@ -1022,7 +1022,7 @@ function AppContent() {
                   : hasActiveSectionEntries ? `왼쪽 목록에서 ${entryKindWithParticle(activeSection, "object")} 선택하세요.` : `아직 등록된 ${entryKindWithParticle(activeSection, "subject")} 없습니다.`}
                 {!selected && !hasActiveSectionEntries && <><br />{activeSection === "problem_sheet" ? "파일·ZIP을 가져오거나 직접 입력해 시작하세요." : "첫 자료를 추가해 학습을 시작하세요."}</>}
               </p>
-              {hasActiveSectionEntries && filtered.length === 0 && <button type="button" className="btn-primary" onClick={() => { setSearch(""); setSubjectFilter("all"); setListFilter("all"); setDifficultyScoreFilter("all"); }}>검색·필터 초기화</button>}
+              {hasActiveSectionEntries && filtered.length === 0 && <button type="button" className="btn-primary" onClick={() => { setSearch(""); setSubjectFilter(null); setListFilter("all"); setDifficultyScoreFilter("all"); }}>검색·필터 초기화</button>}
               {!selected && !(hasActiveSectionEntries && filtered.length === 0) && (activeSection === "problem_sheet" ? (
                 <button type="button" className="btn-primary" onClick={() => actions.openImport()}>{hasActiveSectionEntries ? "새 시험지 가져오기" : "첫 시험지 가져오기"}</button>
               ) : activeSection === "lecture" ? (

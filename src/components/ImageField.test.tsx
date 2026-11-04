@@ -10,6 +10,7 @@ it("shows empty URL failures and retries only the failed image without revoking 
   await screen.findByRole("button", { name: "bad.png 이미지 다시 불러오기" });
   expect(getImageUrl).toHaveBeenCalledTimes(2);
   fireEvent.click(screen.getByRole("button", { name: "bad.png 이미지 다시 불러오기" }));
+  expect(screen.queryByRole("button", { name: "bad.png 이미지 다시 불러오기" })).not.toBeInTheDocument();
   await waitFor(() => expect(getImageUrl).toHaveBeenCalledTimes(3));
   expect(vi.mocked(getImageUrl).mock.calls.filter(([name]) => name === "good.png")).toHaveLength(1);
   const image = view.container.querySelector("img")!;
