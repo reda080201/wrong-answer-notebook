@@ -504,6 +504,8 @@ export default function AppModals({
           "원본 관측 JSON을 반환하세요.",
           names(problemRefs), signal, staged.sessionId,
         );
+        throwIfAborted();
+        retainedAnalysis = text;
         visionAnalysisText = JSON.stringify(mergeVisionObservations([parseVisionObservation(text, problemRefs)], observationSources));
       }
       retainedAnalysis = visionAnalysisText;

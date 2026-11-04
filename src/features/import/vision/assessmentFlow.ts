@@ -1,5 +1,5 @@
 import { normalizeExamAnswer } from "../../exam/services/examScoring";
-import { parseVisionAnalysis, strictJson, validateStudyAssessment, validateAssessmentStage, type VisionAnalysis, type VisionQuestion } from "./visionSchema";
+import { ANSWER_EXPOSURE_WARNING, parseVisionAnalysis, strictJson, validateStudyAssessment, validateAssessmentStage, type VisionAnalysis, type VisionQuestion } from "./visionSchema";
 import type { StudyAssessment } from "../../../models/studyAssessment";
 import type { VisionProviderReceipt } from "../../../services/api/ai";
 import v2Schema from "../../../../tools/diagram_pipeline/vision-v2.schema.json";
@@ -28,7 +28,8 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
   checkpoint?(analysis: VisionAnalysis, evidence: AssessmentRunEvidence, cache: AssessmentStageCache): Promise<void>;
 }): Promise<{ analysis: VisionAnalysis; evidence: AssessmentRunEvidence }> {
   const result = structuredClone(analysis);
-  const observedAnswer = analysis.entries.some(entry => entry.questions.some(question => Boolean(question.extractedAnswer?.trim() || question.explanationDraft?.trim())));
+  const observedAnswer = analysis.audit.warnings.some(warning => warning.includes(ANSWER_EXPOSURE_WARNING))
+    || analysis.entries.some(entry => entry.questions.some(question => Boolean(question.extractedAnswer?.trim() || question.explanationDraft?.trim())));
   const evidence: AssessmentRunEvidence = { independent: options.independent && !observedAnswer, stages: [] };
   const cache: AssessmentStageCache = { ...options.cache };
   let currentQuestion = 0;
@@ -81,7 +82,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     a.sourceAnswer = { status: "unreadable", value: null, explanation: null };
     for (let offset = 0; offset < options.answerRefs.length; offset += 3) {
       const refs = options.answerRefs.slice(offset, offset + 3);
-      const compared = await call("answer_compared", `Stage D. 이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 자료 제목·회차·문항 내용과 첨부 페이지를 대조하세요. 번호만 같은 다른 자료와 연결하지 마세요. 풀이와 점수를 다시 작성하지 마세요. 명확한 sourceKey/page가 없으면 status:unreadable,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
+      const compared = await call("answer_compared", `Stage D. 이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 자료 제목·회차·문항 내용과 첨부 페이지를 대조하세요. 번호만 같은 다른 자료와 연결하지 마세요. 풀이와 점수를 다시 작성하지 마세요. 판독할 수 없거나 명확한 sourceKey/page가 없으면 status:unreadable,value:null. 답이 제공되지 않은 경우 status:not_provided,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
       keys(compared, ["sourceAnswer"]);
       const answer = compared.sourceAnswer as StudyAssessment["sourceAnswer"];
       if (answer.sourceKey && !refs.some(ref => ref.sourceKey === answer.sourceKey && ref.page === answer.page)) {
@@ -90,7 +91,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
         await options.checkpoint?.(result, evidence, cache);
         throw new Error("정답 출처가 허용한 답안 페이지 밖입니다.");
       }
-      if (answer.value && answer.sourceKey) {
+      if (answer.status !== "unreadable" && answer.status !== "not_provided" && answer.value && answer.sourceKey) {
         answer.status = a.solution.proposedAnswer ? normalizeExamAnswer(answer.value) === normalizeExamAnswer(a.solution.proposedAnswer) ? "matched" : "conflict" : "source_only";
         a.sourceAnswer = answer;
         break;

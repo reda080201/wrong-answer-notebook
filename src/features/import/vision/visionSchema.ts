@@ -2,6 +2,8 @@ import schema from "../../../../tools/diagram_pipeline/vision-v1.schema.json";
 import schemaV2 from "../../../../tools/diagram_pipeline/vision-v2.schema.json";
 import type { StudyAssessment } from "../../../models/studyAssessment";
 
+export const ANSWER_EXPOSURE_WARNING = "ANSWER_VISIBLE_ON_PROBLEM_PAGE";
+
 export interface VisionRect { x: number; y: number; width: number; height: number; }
 export interface VisionSourceRef { sourceKey: string; page: number; questionRect?: VisionRect; }
 export interface VisionQuestion {
@@ -151,7 +153,7 @@ export function validateStudyAssessment(raw: unknown): asserts raw is StudyAsses
 function validateSourceAnswer(answer: StudyAssessment["sourceAnswer"]): void {
   if ((answer.intent?.trim() || answer.notes?.trim() || answer.choiceJudgements?.length) && !["matched", "conflict", "source_only"].includes(answer.status)) fail("$.studyAssessment.sourceAnswer", "printed metadata requires a sourced answer");
   if (["matched", "conflict", "source_only"].includes(answer.status) && (!answer.value?.trim() || !answer.sourceKey || !Number.isInteger(answer.page))) fail("$.studyAssessment.sourceAnswer", "source answer requires value and source reference");
-  if (answer.status === "not_provided" && answer.value !== null) fail("$.studyAssessment.sourceAnswer", "unprovided source answer must be null");
+  if ((answer.status === "not_provided" || answer.status === "unreadable") && answer.value !== null) fail("$.studyAssessment.sourceAnswer", "unreadable or unprovided source answer must be null");
   if ((answer.sourceKey === undefined) !== (answer.page === undefined)) fail("$.studyAssessment.sourceAnswer", "sourceKey and page must be paired");
 }
 
