@@ -200,7 +200,10 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     const backupEntry = backupPayload.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
     expect(backupEntry.structuredQuestions).toHaveLength(30);
     expect(backupEntry.figures).toHaveLength(8);
-    expect(backupEntry).toMatchObject(preserved);
+    // Compare the exact JSON representation stored by backup, including all defined fields.
+    const serialized = JSON.parse(JSON.stringify(preserved));
+    const backedUp = Object.fromEntries(Object.keys(serialized).map(key => [key, backupEntry[key]]));
+    expect(backedUp).toStrictEqual(serialized);
 
     await page.evaluate(async () => {
       const { replaceBrowserImages, listBrowserImageKeys } = await import("/src/services/api/browserImageStore.ts");
@@ -222,6 +225,7 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     await page.reload({ waitUntil: "domcontentloaded" });
     await assertSavedCounts(title);
     expect(await readPreservedFields(title)).toEqual(preserved);
+  };
 
   const originalOnlyZip = new JSZip();
   originalOnlyZip.file("import.json", JSON.stringify(originalOnly.document));
