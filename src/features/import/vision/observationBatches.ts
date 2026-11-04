@@ -25,10 +25,28 @@ export function mergeVisionObservations(parts: VisionAnalysis[], sources: Vision
       if (!previous) merged.figures.push(structuredClone(f));
       else if (JSON.stringify(previous) !== JSON.stringify(f)) throw new Error("그림의 페이지 경계 관측을 확인하세요.");
     }
-    for (const key of Object.keys(merged.audit) as Array<keyof VisionAnalysis["audit"]>) merged.audit[key] = [...new Set([...merged.audit[key], ...part.audit[key]])];
+    for (const key of ["detectedQuestionNumbers", "missingQuestionNumbers", "uncertainQuestionNumbers", "warnings"] as const) {
+      merged.audit[key] = [...new Set([...merged.audit[key], ...part.audit[key]])];
+    }
+    if (part.audit.expectedQuestionNumbers) {
+      merged.audit.expectedQuestionNumbers = [...new Set([...(merged.audit.expectedQuestionNumbers ?? []), ...part.audit.expectedQuestionNumbers])];
+    }
   }
   merged.audit.missingQuestionNumbers = merged.audit.missingQuestionNumbers.filter(number => !merged.audit.detectedQuestionNumbers.includes(number));
   return parseVisionAnalysis(JSON.stringify(merged));
+}
+
+export function parseVisionObservation(text: string, refs: VisionQuestion["source"][]): VisionAnalysis {
+  const part = parseVisionAnalysis(text);
+  if (part.schemaVersion !== "wrong-answer-notebook-vision-v1") throw new Error("관측 단계에는 풀이·평가 이전의 vision-v1 결과만 사용할 수 있습니다.");
+  const returnedRefs = [
+    ...part.entries.flatMap(entry => entry.questions.flatMap(question => [question.source, ...(question.sourceRefs ?? [])])),
+    ...part.figures.map(figure => figure.source),
+  ];
+  if (returnedRefs.some(ref => !refs.some(page => page.sourceKey === ref.sourceKey && page.page === ref.page))) {
+    throw new Error("관측 결과에 이 요청에 첨부하지 않은 페이지가 포함되어 있습니다.");
+  }
+  return part;
 }
 
 export async function observeVisionInBatches(options: {
@@ -40,9 +58,9 @@ export async function observeVisionInBatches(options: {
   for (let offset = parts.length * 3; offset < options.refs.length; offset += 3) {
     options.signal.throwIfAborted();
     const refs = options.refs.slice(offset, offset + 3);
-    const part = parseVisionAnalysis(await options.request(refs, `첨부한 물리 페이지 대응: ${JSON.stringify(refs)}. sources는 앱이 발급한 실제 sourceKey/pageCount만 사용하세요. 문항의 실제 시작 페이지와 인쇄 번호로 안정된 questionKey를 만드세요. 같은 자료의 entryKey는 페이지가 바뀌어도 유지하세요. 다른 sourceKey의 자료를 같은 entry로 합치지 마세요. 첨부되지 않은 페이지의 내용은 생성하지 마세요.`));
+    const text = await options.request(refs, `첨부한 물리 페이지 대응: ${JSON.stringify(refs)}. sources는 앱이 발급한 실제 sourceKey/pageCount만 사용하세요. 문항의 실제 시작 페이지와 인쇄 번호로 안정된 questionKey를 만드세요. 같은 자료의 entryKey는 페이지가 바뀌어도 유지하세요. 다른 sourceKey의 자료를 같은 entry로 합치지 마세요. 첨부되지 않은 페이지의 내용은 생성하지 마세요.`);
     options.signal.throwIfAborted();
-    if (part.schemaVersion !== "wrong-answer-notebook-vision-v1") throw new Error("관측 단계에는 풀이·평가 이전의 vision-v1 결과만 사용할 수 있습니다.");
+    const part = parseVisionObservation(text, refs);
     parts.push(part);
     await options.checkpoint(parts, mergeVisionObservations(parts, options.sources), offset + 3 >= options.refs.length);
   }

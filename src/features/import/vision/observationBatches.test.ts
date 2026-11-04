@@ -14,6 +14,20 @@ function observation(key: string, number: string) {
   return value;
 }
 describe("bounded page observation", () => {
+  it("rejects a source reference to a page that was not sent", async () => {
+    const value = observation("q1", "1");
+    value.sources[0].pageCount = 2;
+    const checkpoint = vi.fn();
+    await expect(observeVisionInBatches({
+      sources: value.sources,
+      refs: [{ sourceKey: value.sources[0].sourceKey, page: 2 }],
+      signal: new AbortController().signal,
+      request: async () => JSON.stringify(value),
+      checkpoint,
+    })).rejects.toThrow("첨부하지 않은 페이지");
+    expect(checkpoint).not.toHaveBeenCalled();
+  });
+
   it("preserves distinct question identities and rejects conflicting observations", () => {
     const first = observation("q1", "1"), second = observation("q2", "2");
     expect(mergeVisionObservations([first, second], first.sources).entries[0].questions.map(q => q.questionKey)).toEqual(["q1", "q2"]);
@@ -23,6 +37,8 @@ describe("bounded page observation", () => {
   it("requests at most three physical pages and resumes completed observation batches", async () => {
     const first = observation("q1", "1"), second = observation("q2", "2");
     first.sources[0].pageCount = 5; second.sources[0].pageCount = 5;
+    second.entries[0].questions[0].source.page = 4;
+    first.audit.expectedQuestionNumbers = ["1", "2"];
     const refs = Array.from({ length: 5 }, (_, index) => ({ sourceKey: first.sources[0].sourceKey, page: index + 1 }));
     const request = vi.fn().mockResolvedValue(JSON.stringify(second));
     const checkpoint = vi.fn().mockResolvedValue(undefined);
@@ -30,6 +46,7 @@ describe("bounded page observation", () => {
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0][0]).toEqual(refs.slice(3));
     expect(value.entries[0].questions).toHaveLength(2);
+    expect(value.audit.expectedQuestionNumbers).toEqual(["1", "2"]);
     expect(checkpoint).toHaveBeenLastCalledWith(expect.any(Array), expect.any(Object), true);
   });
 });

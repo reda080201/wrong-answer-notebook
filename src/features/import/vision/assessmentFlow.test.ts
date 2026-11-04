@@ -64,7 +64,12 @@ describe("pre-package assessment order", () => {
     expect(request).toHaveBeenCalledTimes(3);
     expect(result.evidence.independent).toBe(false);
     expect(JSON.parse(request.mock.calls[0][1])).not.toHaveProperty("sourceAnswer");
+    expect(request.mock.calls[0][0]).toContain("Stage B");
+    expect(request.mock.calls[0][0]).not.toContain("난이도: 추론30");
+    expect(request.mock.calls[1][0]).toContain("Stage C");
+    expect(request.mock.calls[1][0]).not.toContain("sourceAnswer 한 필드");
     expect(request.mock.calls[2][0]).toContain("이제 첨부 답안지");
+    expect(request.mock.calls[2][0]).not.toContain("난이도: 추론30");
     expect(result.analysis.entries[0].questions[0].studyAssessment?.sourceAnswer.status).toBe("conflict");
     expect(progress).toHaveBeenLastCalledWith("prepackage_validated");
   });

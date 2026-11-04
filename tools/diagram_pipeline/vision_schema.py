@@ -9,7 +9,7 @@ SCHEMAS = {
     "wrong-answer-notebook-vision-v1": json.loads(Path(__file__).with_name("vision-v1.schema.json").read_text(encoding="utf-8")),
     "wrong-answer-notebook-vision-v2": json.loads(Path(__file__).with_name("vision-v2.schema.json").read_text(encoding="utf-8")),
 }
-FORBIDDEN = {"confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"}
+FORBIDDEN = {"evaluationSource", "assessmentEvidence", "independent", "providerRequestId", "responseHash", "confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"}
 
 def pairs(items):
     result = {}
