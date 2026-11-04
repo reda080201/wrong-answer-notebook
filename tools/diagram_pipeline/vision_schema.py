@@ -9,7 +9,7 @@ SCHEMAS = {
     "wrong-answer-notebook-vision-v1": json.loads(Path(__file__).with_name("vision-v1.schema.json").read_text(encoding="utf-8")),
     "wrong-answer-notebook-vision-v2": json.loads(Path(__file__).with_name("vision-v2.schema.json").read_text(encoding="utf-8")),
 }
-FORBIDDEN = {"confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"}
+FORBIDDEN = {"evaluationSource", "assessmentEvidence", "independent", "providerRequestId", "responseHash", "confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"}
 
 def pairs(items):
     result = {}
@@ -136,8 +136,8 @@ def validate_vision(value):
                 if "sourceKey" not in source_answer or "page" not in source_answer:
                     raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: source reference required")
                 validate_source({"sourceKey": source_answer["sourceKey"], "page": source_answer["page"]}, sources)
-            elif status == "not_provided" and source_answer["value"] is not None:
-                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: not_provided cannot have a value")
+            elif status in {"not_provided", "unreadable"} and source_answer["value"] is not None:
+                raise PipelineError(f"$.questions[{identity[1]}].studyAssessment.sourceAnswer: unreadable or not_provided cannot have a value")
             if "sourceKey" in source_answer:
                 validate_source({"sourceKey": source_answer["sourceKey"], "page": source_answer["page"]}, sources)
     return value

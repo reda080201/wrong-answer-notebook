@@ -1218,7 +1218,7 @@ function mergeQuestionMetaWithAnswerAnalysis(
   raw: unknown,
   answerKey: SheetAnswerItem[],
 ): NonNullable<EntryFormData["questionMeta"]> {
-  const metas: NonNullable<EntryFormData["questionMeta"]> = normalizeQuestionMeta(raw).map(meta => ({ ...meta, assessmentEvidence: undefined, rating: meta.rating?.evaluationSource === "gpt" ? { ...meta.rating, evaluationSource: "imported" as const } : meta.rating, classification: meta.classification?.difficultySource === "gpt" ? { ...meta.classification, difficultySource: "imported" as const } : meta.classification }));
+  const metas: NonNullable<EntryFormData["questionMeta"]> = normalizeQuestionMeta(raw).map(meta => ({ ...meta, assessmentEvidence: undefined, rating: meta.rating?.evaluationSource ? { ...meta.rating, evaluationSource: "imported" as const } : meta.rating, classification: meta.classification?.difficultySource ? { ...meta.classification, difficultySource: "imported" as const } : meta.classification }));
   const next = [...metas];
   for (const answer of answerKey) {
     if (!answer.mistakeAnalysis?.causes.length) continue;

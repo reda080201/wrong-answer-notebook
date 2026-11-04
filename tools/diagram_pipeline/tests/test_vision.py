@@ -63,6 +63,15 @@ def test_v2_semantics_reject_unreadable_answer_and_invalid_source_answer():
         parse_vision(json.dumps(value))
 
 
+@pytest.mark.parametrize("status", ["unreadable", "not_provided"])
+def test_source_answer_requires_null_value_without_readable_evidence(status):
+    value = synthetic_v2()
+    answer = value["entries"][0]["questions"][0]["studyAssessment"]["sourceAnswer"]
+    answer.update(status=status, value="A")
+    with pytest.raises(PipelineError, match="cannot have a value"):
+        parse_vision(json.dumps(value))
+
+
 def test_v2_mapping_preserves_assessment_and_prefers_source_answer(tmp_path):
     value = synthetic_v2()
     observed_entry = value["entries"][0]

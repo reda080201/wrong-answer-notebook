@@ -2,6 +2,8 @@ import schema from "../../../../tools/diagram_pipeline/vision-v1.schema.json";
 import schemaV2 from "../../../../tools/diagram_pipeline/vision-v2.schema.json";
 import type { StudyAssessment } from "../../../models/studyAssessment";
 
+export const ANSWER_EXPOSURE_WARNING = "ANSWER_VISIBLE_ON_PROBLEM_PAGE";
+
 export interface VisionRect { x: number; y: number; width: number; height: number; }
 export interface VisionSourceRef { sourceKey: string; page: number; questionRect?: VisionRect; }
 export interface VisionQuestion {
@@ -23,10 +25,10 @@ export interface VisionAnalysis {
   sources: Array<{ sourceKey: string; pageCount?: number }>;
   entries: Array<{ entryKey: string; title: string; subject: string; questions: VisionQuestion[]; rejectedNotes?: string[]; importantNotes?: string[] }>;
   figures: VisionFigure[];
-  audit: { detectedQuestionNumbers: string[]; missingQuestionNumbers: string[]; uncertainQuestionNumbers: string[]; warnings: string[] };
+  audit: { expectedQuestionNumbers?: string[]; detectedQuestionNumbers: string[]; missingQuestionNumbers: string[]; uncertainQuestionNumbers: string[]; warnings: string[] };
 }
 type Rule = { type?: string | string[]; const?: unknown; enum?: unknown[]; anyOf?: Rule[]; required?: string[]; properties?: Record<string, Rule>; additionalProperties?: boolean; items?: Rule; minimum?: number; maximum?: number; minLength?: number; maxLength?: number; maxItems?: number; minItems?: number };
-const forbidden = new Set(["confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"]);
+const forbidden = new Set(["evaluationSource", "assessmentEvidence", "independent", "providerRequestId", "responseHash", "confirmed", "userApproved", "userVerified", "preferredRepresentation", "verificationSource", "verifiedBy", "sha256", "sourceImageHash", "path", "code", "python", "script", "svg", "url", "generatedBy"]);
 const fail = (path: string, reason: string): never => { throw new Error(`${path}: ${reason}`); };
 function check(value: unknown, rule: Rule, path = "$", depth = 0): void {
   if (depth > 40) fail(path, "nesting limit");
@@ -151,7 +153,7 @@ export function validateStudyAssessment(raw: unknown): asserts raw is StudyAsses
 function validateSourceAnswer(answer: StudyAssessment["sourceAnswer"]): void {
   if ((answer.intent?.trim() || answer.notes?.trim() || answer.choiceJudgements?.length) && !["matched", "conflict", "source_only"].includes(answer.status)) fail("$.studyAssessment.sourceAnswer", "printed metadata requires a sourced answer");
   if (["matched", "conflict", "source_only"].includes(answer.status) && (!answer.value?.trim() || !answer.sourceKey || !Number.isInteger(answer.page))) fail("$.studyAssessment.sourceAnswer", "source answer requires value and source reference");
-  if (answer.status === "not_provided" && answer.value !== null) fail("$.studyAssessment.sourceAnswer", "unprovided source answer must be null");
+  if ((answer.status === "not_provided" || answer.status === "unreadable") && answer.value !== null) fail("$.studyAssessment.sourceAnswer", "unreadable or unprovided source answer must be null");
   if ((answer.sourceKey === undefined) !== (answer.page === undefined)) fail("$.studyAssessment.sourceAnswer", "sourceKey and page must be paired");
 }
 

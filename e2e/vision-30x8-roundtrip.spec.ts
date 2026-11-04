@@ -129,6 +129,20 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     }, title);
     expect(result).toEqual({ questionCount: 30, title, figureCount: 8, sourceCount: 1, allFigureImagesStored: true, figureSegments: 8 });
   };
+  const readPreservedFields = (title: string) => page.evaluate(async targetTitle => {
+    const { loadEntries } = await import("/src/api.ts");
+    const entry = (await loadEntries()).find(item => item.title === targetTitle);
+    if (!entry) throw new Error("Roundtrip entry is missing");
+    return {
+      questionMeta: entry.questionMeta,
+      learningBlocks: entry.learningBlocks,
+      reviewAttempts: entry.reviewAttempts,
+      questionSolutionHotspots: entry.questionSolutionHotspots,
+      sourcePageImages: entry.sourcePageImages,
+      questionSourceCrops: entry.questionSourceCrops,
+    };
+  }, title);
+
   const roundtrip = async (name: string, buffer: Buffer, title: string) => {
     await page.evaluate(async () => {
       const { replaceBrowserImages } = await import("/src/services/api/browserImageStore.ts");
@@ -147,6 +161,35 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     await page.reload({ waitUntil: "domcontentloaded" });
     await assertSavedCounts(title);
 
+    await page.evaluate(async targetTitle => {
+      const { loadEntries, saveEntries } = await import("/src/api.ts");
+      const entries = await loadEntries();
+      const entry = entries.find(item => item.title === targetTitle);
+      const meta = entry?.questionMeta?.[0];
+      const sourcePageImage = entry?.sourcePageImages?.[0];
+      if (!entry || !meta || !sourcePageImage) throw new Error("Roundtrip fixture is incomplete");
+      meta.difficultyScore = 37;
+      meta.classification = { ...meta.classification, difficultySource: "manual" };
+      meta.rating = { ...meta.rating, importanceScore: 42, evaluationSource: "manual" };
+      meta.important = false;
+      entry.reviewAttempts = [{
+        id: "synthetic-review", entryId: entry.id, questionNumber: "1",
+        reviewedAt: "2026-10-27T00:00:00Z", correct: true, result: "good",
+      }];
+      entry.questionSolutionHotspots = [{
+        id: "synthetic-hotspot", sourcePageImage, questionKey: "1", x: 0.1, y: 0.1,
+      }];
+      await saveEntries(entries);
+    }, title);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    const preserved = await readPreservedFields(title);
+    expect(preserved.questionMeta?.[0]).toMatchObject({
+      difficultyScore: 37, important: false, rating: { importanceScore: 42, evaluationSource: "manual" },
+    });
+    expect(preserved.reviewAttempts).toHaveLength(1);
+    expect(preserved.questionSolutionHotspots).toHaveLength(1);
+    expect(preserved.learningBlocks).toHaveLength(30);
+
     await page.getByRole("button", { name: /설정/ }).first().click();
     await page.getByRole("button", { name: "데이터", exact: true }).click();
     const backupDownload = page.waitForEvent("download");
@@ -157,6 +200,10 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     const backupEntry = backupPayload.entries.find((item: { title: string }) => item.title.includes("30문항·8그림"));
     expect(backupEntry.structuredQuestions).toHaveLength(30);
     expect(backupEntry.figures).toHaveLength(8);
+    // Compare the exact JSON representation stored by backup, including all defined fields.
+    const serialized = JSON.parse(JSON.stringify(preserved));
+    const backedUp = Object.fromEntries(Object.keys(serialized).map(key => [key, backupEntry[key]]));
+    expect(backedUp).toStrictEqual(serialized);
 
     await page.evaluate(async () => {
       const { replaceBrowserImages, listBrowserImageKeys } = await import("/src/services/api/browserImageStore.ts");
@@ -177,6 +224,7 @@ test("30 synthetic questions and 8 original-only figures match CLI crops and sur
     await assertSavedCounts(title);
     await page.reload({ waitUntil: "domcontentloaded" });
     await assertSavedCounts(title);
+    expect(await readPreservedFields(title)).toEqual(preserved);
   };
 
   const originalOnlyZip = new JSZip();

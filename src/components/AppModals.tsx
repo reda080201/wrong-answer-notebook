@@ -1,5 +1,5 @@
 import { resolvePageRoles, type PageRoleReviewer } from "../features/import/vision/pageRoles";
-import { observeVisionInBatches } from "../features/import/vision/observationBatches";
+import { mergeVisionObservations, observeVisionInBatches, parseVisionObservation } from "../features/import/vision/observationBatches";
 import { sourceHashes, readAssessmentCheckpoint, writeAssessmentCheckpoint } from "../features/import/vision/assessmentCheckpoint";
 import { requestVisionAssessment } from "../services/api/ai";
 import { runPrepackageAssessment, type SourceRole } from "../features/import/vision/assessmentFlow";
@@ -455,12 +455,12 @@ export default function AppModals({
     try {
       throwIfAborted();
       onProgress({ phase: "analyze", current: 0, indeterminate: true });
-      const { default: visionPromptV8 } = await import("../features/import/vision/vision-prompt-v8.txt?raw");
+      const { default: observationPrompt } = await import("../features/import/vision/vision-prompt-v8.txt?raw");
       throwIfAborted();
-      const prompt = `${visionPromptV8}\n앱이 발급한 sources: ${JSON.stringify(sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })))}. 첨부 이미지는 source 순서, 각 physical page 1부터 순서대로입니다. extractedAnswer와 explanationDraft는 선택적 문자열만 허용하며 근거가 없으면 생략합니다. 여러 페이지 문항은 sourceRefs 배열에 source와 같은 구조로 명시합니다.`;
+      const observationSources = sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length }));
+      const prompt = `${observationPrompt}\n앱이 발급한 sources: ${JSON.stringify(observationSources)}. 첨부 순서와 물리 페이지는 이 요청에 지정된 대응을 따르세요. 여러 페이지 문항은 sourceRefs 배열에 source와 같은 구조로 명시합니다.`;
       let visionAnalysisText: string;
       let assessmentEvidence: import("../features/import/vision/assessmentFlow").AssessmentRunEvidence | undefined;
-      if (assessmentEnabled) {
       const roleBySource = new Map(sourcePages.map((source,index) => [source.sourceKey, roles?.[index] ?? "problem"]));
       const mixedSources = sourcePages.filter(source => roleBySource.get(source.sourceKey) === "mixed");
       if (mixedSources.length && !reviewPages) throw new Error("혼합 자료의 페이지 역할을 먼저 확인하세요.");
@@ -475,6 +475,7 @@ export default function AppModals({
       }))];
       const problemRefs = pageRoles.filter(row => row.role === "problem" || row.role === "mixed").map(({sourceKey,page}) => ({sourceKey,page}));
       if (!problemRefs.length) throw new Error("문제 자료를 한 개 이상 선택하세요.");
+      if (assessmentEnabled) {
       const hashes = [...await sourceHashes(originals), JSON.stringify(pageRoles)];
       const checkpoint = readAssessmentCheckpoint(hashes, originals.length);
       const initialEvidence = {
@@ -482,7 +483,7 @@ export default function AppModals({
         stages: [],
       };
       const observed = checkpoint && checkpoint.observationComplete !== false ? checkpoint.analysis : await observeVisionInBatches({
-        sources: sourcePages.map(source => ({ sourceKey: source.sourceKey, pageCount: source.pages.length })), refs: problemRefs, previous: checkpoint?.observationParts, signal,
+        sources: observationSources, refs: problemRefs, previous: checkpoint?.observationParts, signal,
         request: async (refs,batchPrompt) => (await requestVisionAssessment(prompt + "\n" + batchPrompt, "문항을 관측하세요. 정답 추출과 풀이는 아직 하지 마세요. 인쇄 원문만 questionText에 넣고 학생 필기는 question.rejectedNotes에 분리하세요. entry.importantNotes에는 인쇄된 전체 공통 주의사항만 기록하세요.", names(refs), staged.sessionId, signal)).text,
         checkpoint: async (parts,partial,completed) => { retainedAnalysis = JSON.stringify(partial); writeAssessmentCheckpoint({ version: 1, sourceHashes: hashes, analysis: partial, evidence: initialEvidence, cache: {}, observationParts: parts, observationComplete: completed }); onProgress({ phase: "analyze", current: Math.min(parts.length * 3, problemRefs.length), total: problemRefs.length, stageLabel: "원본 읽는 중" }); },
       });
@@ -498,7 +499,14 @@ export default function AppModals({
       visionAnalysisText = JSON.stringify(assessed.analysis);
       assessmentEvidence = assessed.evidence;
       } else {
-        visionAnalysisText = await generateImportWithAi(prompt, "원본 관측 JSON을 반환하세요. 풀이·평가를 완료했다고 주장하지 마세요.", Object.values(staged.sourceToStaged), signal, staged.sessionId);
+        const text = await generateImportWithAi(
+          `${prompt}\n첨부한 물리 페이지 대응: ${JSON.stringify(problemRefs)}`,
+          "원본 관측 JSON을 반환하세요.",
+          names(problemRefs), signal, staged.sessionId,
+        );
+        throwIfAborted();
+        retainedAnalysis = text;
+        visionAnalysisText = JSON.stringify(mergeVisionObservations([parseVisionObservation(text, problemRefs)], observationSources));
       }
       retainedAnalysis = visionAnalysisText;
       const analysis = parseVisionAnalysis(visionAnalysisText);

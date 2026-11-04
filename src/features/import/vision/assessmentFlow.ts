@@ -1,5 +1,5 @@
 import { normalizeExamAnswer } from "../../exam/services/examScoring";
-import { parseVisionAnalysis, strictJson, validateStudyAssessment, validateAssessmentStage, type VisionAnalysis, type VisionQuestion } from "./visionSchema";
+import { ANSWER_EXPOSURE_WARNING, parseVisionAnalysis, strictJson, validateStudyAssessment, validateAssessmentStage, type VisionAnalysis, type VisionQuestion } from "./visionSchema";
 import type { StudyAssessment } from "../../../models/studyAssessment";
 import type { VisionProviderReceipt } from "../../../services/api/ai";
 import v2Schema from "../../../../tools/diagram_pipeline/vision-v2.schema.json";
@@ -28,7 +28,8 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
   checkpoint?(analysis: VisionAnalysis, evidence: AssessmentRunEvidence, cache: AssessmentStageCache): Promise<void>;
 }): Promise<{ analysis: VisionAnalysis; evidence: AssessmentRunEvidence }> {
   const result = structuredClone(analysis);
-  const observedAnswer = analysis.entries.some(entry => entry.questions.some(question => Boolean(question.extractedAnswer?.trim() || question.explanationDraft?.trim())));
+  const observedAnswer = analysis.audit.warnings.some(warning => warning.includes(ANSWER_EXPOSURE_WARNING))
+    || analysis.entries.some(entry => entry.questions.some(question => Boolean(question.extractedAnswer?.trim() || question.explanationDraft?.trim())));
   const evidence: AssessmentRunEvidence = { independent: options.independent && !observedAnswer, stages: [] };
   const cache: AssessmentStageCache = { ...options.cache };
   let currentQuestion = 0;
@@ -40,9 +41,10 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     options.signal.throwIfAborted();
     options.progress(stage, currentQuestion, totalQuestions);
     const inputText = JSON.stringify(input);
-    const cacheKey = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([stage, prompt, inputText, refs]))))].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    const stagePrompt = `${assessmentPrompt}\n${prompt}\nJSON 객체만 반환하세요.`;
+    const cacheKey = [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify([stage, stagePrompt, inputText, refs]))))].map(byte => byte.toString(16).padStart(2, "0")).join("");
     stageKeys.set(stage, cacheKey);
-    const response = cache[cacheKey] ?? await request(`${assessmentPrompt}\n${prompt}\nJSON 객체만 반환하세요.`, inputText, refs, stage);
+    const response = cache[cacheKey] ?? await request(stagePrompt, inputText, refs, stage);
     options.signal.throwIfAborted();
     if (response.provider !== "openai" || !response.model.startsWith("gpt-") || !response.providerRequestId) throw new Error("GPT 실행 출처를 확인하지 못했습니다.");
     const { text, ...receipt } = response;
@@ -58,10 +60,10 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     currentQuestion++;
     const refs = [q.source, ...(q.sourceRefs ?? [])];
     const question = { entryKey: entry.entryKey, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, contentSegments: q.contentSegments, choices: q.choices };
-    const solved = await call("solution_attempted", `정답지를 보지 않고 첨부 문제를 직접 풀어 보세요. 반환 필드: assessmentStatus(solved|partially_solved|unsolved|unreadable), solution, warnings. solution 스키마: ${JSON.stringify(rule.properties.solution)}. 읽을 수 없으면 proposedAnswer:null, 미해결 이유를 warnings에 적으세요. 학생에게 보여줄 핵심 풀이·전략·검산 요약만 작성하세요.`, question, refs);
+    const solved = await call("solution_attempted", `Stage B. 첨부 문제와 보기·수식·그림을 바탕으로 직접 풀이를 시도하세요. 객관식 proposedAnswer는 실제 보기 기호, 주관식은 값·식·조건입니다. 수행한 검산만 기록하고 검산하지 못한 경우 명시하세요. 공식 답안 및 평가 점수는 이 단계에서 작성하지 마세요. 반환 필드: assessmentStatus(solved|partially_solved|unsolved|unreadable), solution, warnings. solution 스키마: ${JSON.stringify(rule.properties.solution)}. 읽을 수 없으면 proposedAnswer:null, 미해결 이유를 warnings에 적으세요. 학생에게 보여줄 핵심 풀이·전략·검산 요약만 작성하세요.`, question, refs);
     keys(solved, ["assessmentStatus", "solution", "warnings"]);
     options.progress("solution_attempted");
-    const scored = await call("scores_assessed", `문항과 보존된 풀이를 바탕으로 난이도와 중요도를 독립 평가하세요. 정답을 새로 바꾸지 마세요. 반환 필드: scores, classification, learning. 스키마: ${JSON.stringify({ scores: rule.properties.scores, classification: rule.properties.classification, learning: rule.properties.learning })}. 난이도: 추론30+개념결합25+계산20+아이디어15+조건해석10. 중요도: 핵심개념30+전이25+학습활용20+오개념교정15+복습효율10. 정수1~100, 각 이유2~5개·신뢰도0~100. 판단 불가하면 null과 실제 이유, 임의50점 금지. unreadable은 두 점수 null. learning.candidates에는 실제 풀이에 근거한 개념·공식·풀이법·일반 함정·복습 카드만 최대3개 작성하고 반복 설명은 생략하세요. 불확실하면 빈 배열. 학생 개인의 실제 실수 원인은 추정하지 마세요.`, { question, ...solved }, refs);
+    const scored = await call("scores_assessed", `Stage C. 문항과 보존된 풀이를 바탕으로 난이도와 중요도를 독립 평가하세요. 두 점수를 서로 복제하거나 품질 점수로 사용하지 마세요. 확인되지 않은 교육과정·출제 빈도는 추정하지 마세요. 정답을 새로 바꾸지 마세요. 반환 필드: scores, classification, learning. 스키마: ${JSON.stringify({ scores: rule.properties.scores, classification: rule.properties.classification, learning: rule.properties.learning })}. 난이도: 추론30+개념결합25+계산20+아이디어15+조건해석10. 중요도: 핵심개념30+전이25+학습활용20+오개념교정15+복습효율10. 정수1~100, 각 이유2~5개·신뢰도0~100. 판단 불가하면 null과 실제 이유, 임의50점 금지. unreadable은 두 점수 null. learning.candidates에는 실제 풀이에 근거한 개념·공식·풀이법·일반 함정·복습 카드만 최대3개 작성하고 반복 설명은 생략하세요. 불확실하면 빈 배열. 학생 개인의 실제 실수 원인은 추정하지 마세요.`, { question, ...solved }, refs);
     keys(scored, ["scores", "classification", "learning"]);
     options.progress("scores_assessed");
     const sourceAnswer: StudyAssessment["sourceAnswer"] = { status: "not_provided", value: null, explanation: null };
@@ -80,7 +82,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
     a.sourceAnswer = { status: "unreadable", value: null, explanation: null };
     for (let offset = 0; offset < options.answerRefs.length; offset += 3) {
       const refs = options.answerRefs.slice(offset, offset + 3);
-      const compared = await call("answer_compared", `이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 번호만 같은 다른 자료와 연결하지 마세요. 명확한 sourceKey/page가 없으면 status:unreadable,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
+      const compared = await call("answer_compared", `Stage D. 이제 첨부 답안지에서 해당 문항의 정답을 찾아 보존된 풀이 답과 대조하세요. sourceAnswer 한 필드만 반환. 스키마: ${JSON.stringify(rule.properties.sourceAnswer)}. 자료 제목·회차·문항 내용과 첨부 페이지를 대조하세요. 번호만 같은 다른 자료와 연결하지 마세요. 풀이와 점수를 다시 작성하지 마세요. 판독할 수 없거나 명확한 sourceKey/page가 없으면 status:unreadable,value:null. 답이 제공되지 않은 경우 status:not_provided,value:null. intent는 원문에 인쇄된 출제 의도만, notes는 인쇄된 문항별 메모만, choiceJudgements는 원문 선택지별 설명만 작성하세요. 없는 정보는 생략하며 AI 풀이 전략으로 출제 의도를 만들지 마세요.`, { question: { entryKey: entry.entryKey, title: entry.title, questionKey: q.questionKey, questionNumber: q.questionNumber, questionText: q.questionText, choices: q.choices }, solution: a.solution, allowedSources: refs }, refs);
       keys(compared, ["sourceAnswer"]);
       const answer = compared.sourceAnswer as StudyAssessment["sourceAnswer"];
       if (answer.sourceKey && !refs.some(ref => ref.sourceKey === answer.sourceKey && ref.page === answer.page)) {
@@ -89,7 +91,7 @@ export async function runPrepackageAssessment(analysis: VisionAnalysis, request:
         await options.checkpoint?.(result, evidence, cache);
         throw new Error("정답 출처가 허용한 답안 페이지 밖입니다.");
       }
-      if (answer.value && answer.sourceKey) {
+      if (answer.status !== "unreadable" && answer.status !== "not_provided" && answer.value && answer.sourceKey) {
         answer.status = a.solution.proposedAnswer ? normalizeExamAnswer(answer.value) === normalizeExamAnswer(a.solution.proposedAnswer) ? "matched" : "conflict" : "source_only";
         a.sourceAnswer = answer;
         break;

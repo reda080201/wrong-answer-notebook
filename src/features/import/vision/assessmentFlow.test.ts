@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import cases from "../../../../tools/diagram_pipeline/tests/fixtures/vision-v2-cases.json";
-import { parseVisionAnalysis } from "./visionSchema";
+import { ANSWER_EXPOSURE_WARNING, parseVisionAnalysis } from "./visionSchema";
 import { runPrepackageAssessment, type AssessmentStageCache } from "./assessmentFlow";
 import type { VisionProviderReceipt } from "../../../services/api/ai";
 
@@ -43,6 +43,21 @@ describe("pre-package assessment order", () => {
     expect(retry.mock.calls[0][3]).toBe("answer_compared");
     expect(result.analysis.entries[0].questions[0].studyAssessment?.sourceAnswer.page).toBe(2);
   });
+  it.each(["unreadable", "not_provided"])("rejects a %s answer with a value before packaging", async status => {
+    const value = fixture();
+    const question = value.entries[0].questions[0];
+    const assessment = question.studyAssessment!;
+    delete question.studyAssessment;
+    value.schemaVersion = "wrong-answer-notebook-vision-v1";
+    const ref = { sourceKey: question.source.sourceKey, page: question.source.page };
+    const request = vi.fn()
+      .mockResolvedValueOnce(receipt({ assessmentStatus: assessment.assessmentStatus, solution: assessment.solution, warnings: assessment.warnings }))
+      .mockResolvedValueOnce(receipt({ scores: assessment.scores, classification: assessment.classification, learning: assessment.learning }))
+      .mockResolvedValueOnce(receipt({ sourceAnswer: { status, value: assessment.solution.proposedAnswer, explanation: null, ...ref } }));
+    const progress = vi.fn();
+    await expect(runPrepackageAssessment(value, request, { answerRefs: [ref], independent: false, signal: new AbortController().signal, progress })).rejects.toThrow("source answer must be null");
+    expect(progress).not.toHaveBeenCalledWith("prepackage_validated");
+  });
   it("rejects unsupported printed metadata at the answer stage instead of silently dropping it", async () => {
     const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
     delete value.entries[0].questions[0].studyAssessment;
@@ -54,17 +69,23 @@ describe("pre-package assessment order", () => {
     await expect(runPrepackageAssessment(value, request, { answerRefs: [{ sourceKey: "upload-1", page: 1 }], independent: true, signal: new AbortController().signal, progress })).rejects.toThrow("printed metadata");
     expect(progress).not.toHaveBeenCalledWith("prepackage_validated");
   });
-  it("seals solution and scores before allowing answer-bearing input", async () => {
+  it.each(["answer field", "exposure warning"])("seals solution and scores and respects %s", async exposure => {
     const value = fixture(), a = value.entries[0].questions[0].studyAssessment!;
     delete value.entries[0].questions[0].studyAssessment; value.schemaVersion = "wrong-answer-notebook-vision-v1";
     const request = vi.fn().mockResolvedValueOnce(receipt({ assessmentStatus: a.assessmentStatus, solution: a.solution, warnings: [] })).mockResolvedValueOnce(receipt({ scores: a.scores, classification: a.classification, learning: a.learning })).mockResolvedValueOnce(receipt({ sourceAnswer: a.sourceAnswer }));
-    value.entries[0].questions[0].extractedAnswer = "노출된 답";
+    if (exposure === "answer field") value.entries[0].questions[0].extractedAnswer = "노출된 답";
+    else value.audit.warnings.push(ANSWER_EXPOSURE_WARNING);
     const progress = vi.fn();
     const result = await runPrepackageAssessment(value, request, { answerRefs: [{ sourceKey: "upload-1", page: 1 }], independent: true, signal: new AbortController().signal, progress });
     expect(request).toHaveBeenCalledTimes(3);
     expect(result.evidence.independent).toBe(false);
     expect(JSON.parse(request.mock.calls[0][1])).not.toHaveProperty("sourceAnswer");
+    expect(request.mock.calls[0][0]).toContain("Stage B");
+    expect(request.mock.calls[0][0]).not.toContain("난이도: 추론30");
+    expect(request.mock.calls[1][0]).toContain("Stage C");
+    expect(request.mock.calls[1][0]).not.toContain("sourceAnswer 한 필드");
     expect(request.mock.calls[2][0]).toContain("이제 첨부 답안지");
+    expect(request.mock.calls[2][0]).not.toContain("난이도: 추론30");
     expect(result.analysis.entries[0].questions[0].studyAssessment?.sourceAnswer.status).toBe("conflict");
     expect(progress).toHaveBeenLastCalledWith("prepackage_validated");
   });
