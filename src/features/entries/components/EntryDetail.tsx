@@ -1164,7 +1164,7 @@ export default function EntryDetail({
     ? "정답을 먼저 확인하세요."
     : isSheet && focusedQuestionIndex < questionAnchors.length - 1
       ? "다음 문제로 넘어갈 차례입니다."
-      : "이 문제를 맞음으로 기록할 수 있습니다.";
+      : "정답을 확인한 뒤 복습 결과를 기록하세요.";
 
   const nextStudyAction = isFocusable
     ? getNextStudyAction(entry, {

@@ -7,7 +7,7 @@
 .study-ai-panel button:hover:not(:disabled),.ai-exam-composer button:hover:not(:disabled){background:var(--surface-selected,#e9f0ff);border-color:var(--accent-primary,#356ac3)}
 .study-ai-panel button:disabled,.ai-exam-composer button:disabled{opacity:.45;cursor:default}
 .study-ai-panel button:focus-visible,.ai-exam-composer button:focus-visible{outline:2px solid var(--accent-primary,#356ac3);outline-offset:2px}
-.study-ai-panel button[type=submit],.ai-exam-composer .dialog-footer button:last-child{background:var(--accent-primary,#356ac3);color:var(--accent-on-primary,#fff);border-color:var(--accent-primary,#356ac3)}
+.study-ai-panel button[type=submit],.ai-exam-composer .dialog-footer .ai-primary-action{background:var(--accent-primary,#356ac3);color:var(--accent-on-primary,#fff);border-color:var(--accent-primary,#356ac3)}
 .ai-exam-composer .question-source-reference button{border:0;background:transparent;padding:2px;color:var(--ink-secondary,#5f6368)}
 .ai-exam-composer .dialog-header{display:flex;align-items:center;justify-content:space-between;gap:12px}.ai-exam-composer .dialog-header h2{font-size: var(--text-title);margin:0}
 .ai-exam-composer .ai-proposal-choices{list-style:none;padding-left:0;display:grid;gap:6px}

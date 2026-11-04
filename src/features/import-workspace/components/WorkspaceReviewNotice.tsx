@@ -20,7 +20,7 @@ export default function WorkspaceReviewNotice({ question, issues, disabled, onCo
     {needsReview ? <>
       <strong>{question.displayQuestionNumber}번 검토할 내용</strong>
       {issues.length > 0 && <ul>{issues.map(issue => <li key={issue.id}>{issue.severity === "error" ? "수정 필요: " : "확인 권장: "}{issue.message}</li>)}</ul>}
-      {question.status !== "ready" && !question.warnings.length && <p>가져온 파일에서 검토를 요청했습니다. 구체적인 사유는 제공되지 않았습니다. 원본과 문항 내용을 비교해 주세요.</p>}
+      {question.status !== "ready" && !question.warnings.some(warning => warning.trim()) && !blocked && <p>문항 내용을 원본과 비교한 뒤 검토를 완료하세요.</p>}
       {referenceErrors && <p className="form-hint">내용 편집에서 문항·파일 참조 오류를 수정하세요. 수정할 때 다시 검사합니다.</p>}
       {unconfirmedAnswer && <p className="form-hint">예상 답과 원문 답을 확인하세요. 정답을 확인하기 전에는 검토를 완료할 수 없습니다.</p>}
       {unreviewedFigures && <p className="form-hint">내용 편집의 그림 비교에서 원본과 정리본을 확인하세요. 실패한 그림은 원본을 보존한 채 수정해야 합니다.</p>}
