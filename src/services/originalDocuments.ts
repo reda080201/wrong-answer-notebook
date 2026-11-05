@@ -30,6 +30,7 @@ export function collectOriginalDocuments(value: unknown): OriginalDocument[] {
   if (Array.isArray(value)) return value.flatMap(collectOriginalDocuments);
   return Object.entries(value).flatMap(([key, child]) => {
     if (key !== "originalDocuments") return collectOriginalDocuments(child);
+    if (child === null || child === undefined) return [];
     if (!Array.isArray(child)) throw new Error("원본 문서 목록을 확인할 수 없습니다.");
     return child.map(doc => { validateOriginalDocument(doc); return doc; });
   });
