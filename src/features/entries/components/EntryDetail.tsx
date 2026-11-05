@@ -1867,6 +1867,9 @@ export default function EntryDetail({
           ) : null}
           {isLecture ? (
             <LectureReaderView
+              onImportLecture={onImportLecture}
+              onEditLecture={onEdit}
+              onChecklistChange={onChecklistChange}
               entry={entry}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
@@ -1888,6 +1891,7 @@ export default function EntryDetail({
                   />
                 </div>
                 <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                   entry={entry}
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
@@ -1901,6 +1905,7 @@ export default function EntryDetail({
               <StudyAnalysisView entry={entry} />
             ) : detailViewMode === "learning" ? (
               <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                 entry={entry}
                 variant="main"
                 onWikiLinkClick={onWikiLinkClick}
@@ -1955,6 +1960,7 @@ export default function EntryDetail({
                 </StudyZoomViewport>}
                 {!originalReading && <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                     entry={entry}
                     onWikiLinkClick={onWikiLinkClick}
                     existingTargets={existingTargets}

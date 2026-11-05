@@ -1,14 +1,4 @@
 import type { DiagramSpec, DiagramSpecParamValue, LearningDiagramType } from "../types";
-import AbsoluteValueCornerDiagram from "./diagrams/AbsoluteValueCornerDiagram";
-import CoordinateGraphDiagram from "./diagrams/CoordinateGraphDiagram";
-import DerivativeTangentDiagram from "./diagrams/DerivativeTangentDiagram";
-import GeometryHelperDiagram from "./diagrams/GeometryHelperDiagram";
-import NormalDistributionDiagram from "./diagrams/NormalDistributionDiagram";
-import PiecewiseDifferentiabilityDiagram from "./diagrams/PiecewiseDifferentiabilityDiagram";
-import ProbabilityTreeDiagram from "./diagrams/ProbabilityTreeDiagram";
-import SequenceFlowDiagram from "./diagrams/SequenceFlowDiagram";
-import TrigUnitCircleDiagram from "./diagrams/TrigUnitCircleDiagram";
-import VennDiagram from "./diagrams/VennDiagram";
 import FeatureErrorBoundary from "./FeatureErrorBoundary";
 
 const DIAGRAM_LABELS: Record<LearningDiagramType, string> = {
@@ -83,37 +73,9 @@ export default function DiagramCard({
   return (
     <FeatureErrorBoundary featureName="다이어그램">
     <figure className="learning-diagram-card" aria-label={`${title} 다이어그램`}>
-      {type === "derivative-tangent" && (
-        <DerivativeTangentDiagram spec={spec?.type === "derivative-tangent" ? spec : undefined} />
-      )}
-      {type === "absolute-value-corner" && (
-        <AbsoluteValueCornerDiagram spec={spec?.type === "absolute-value-corner" ? spec : undefined} />
-      )}
-      {type === "piecewise-differentiability" && (
-        <PiecewiseDifferentiabilityDiagram spec={spec?.type === "piecewise-differentiability" ? spec : undefined} />
-      )}
-      {type === "coordinate-graph" && (
-        <CoordinateGraphDiagram spec={spec?.type === "coordinate-graph" ? spec : undefined} />
-      )}
-      {type === "normal-distribution" && (
-        <NormalDistributionDiagram spec={spec?.type === "normal-distribution" ? spec : undefined} />
-      )}
-      {type === "probability-tree" && (
-        <ProbabilityTreeDiagram spec={spec?.type === "probability-tree" ? spec : undefined} />
-      )}
-      {type === "venn-diagram" && (
-        <VennDiagram spec={spec?.type === "venn-diagram" ? spec : undefined} />
-      )}
-      {type === "geometry-helper" && (
-        <GeometryHelperDiagram spec={spec?.type === "geometry-helper" ? spec : undefined} />
-      )}
-      {type === "trig-unit-circle" && (
-        <TrigUnitCircleDiagram spec={spec?.type === "trig-unit-circle" ? spec : undefined} />
-      )}
-      {type === "sequence-flow" && (
-        <SequenceFlowDiagram spec={spec?.type === "sequence-flow" ? spec : undefined} />
-      )}
+      <p className="form-hint" role="status">이 자료의 도형은 원본 이미지에서 확인하세요. 정확한 그림이 연결되면 함께 표시됩니다.</p>
       <figcaption>{title}</figcaption>
+      {spec && <ul>{Object.entries(spec).filter(([key]) => !["type", "title", "highlights", "params"].includes(key)).flatMap(([key, value]) => (Array.isArray(value) ? value : [value]).filter((item): item is string => typeof item === "string").map((item, index) => <li key={key + index}>{item}</li>))}</ul>}
       {spec?.highlights?.length ? (
         <ul className="learning-diagram-highlights">
           {spec.highlights.map((highlight) => (

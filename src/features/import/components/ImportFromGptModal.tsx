@@ -1,3 +1,4 @@
+import { X as CloseIcon } from "lucide-react";
 import { applyNewStudyAssessments, canPreserveAssessmentDraft, sameVisionSourceHashes } from "../vision/preserveAssessmentEdits";
 import OperationError from "../../../shared/ui/OperationError";
 import MixedPageRoleDialog, { type PageRoleSource, type PageRoleSelection } from "../vision/MixedPageRoleDialog";
@@ -1197,9 +1198,7 @@ export default function ImportFromGptModal({
                 설정
               </button>
             )}
-            <button type="button" className="btn-icon" onClick={handleClose} aria-label="닫기">
-              닫기
-            </button>
+            <button type="button" className="btn-icon" onClick={handleClose} aria-label="닫기"><CloseIcon size={18} aria-hidden="true" /></button>
           </div>}
         footer={<div className="import-modal-footer">
           {draft && !canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}

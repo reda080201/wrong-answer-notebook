@@ -76,11 +76,15 @@ export default function SubjectList({
             <span>{s}</span>
             <span className="subject-count">{subjectCounts[s] ?? 0}</span>
           </button>
+          {manageOrder && <div className="subject-order-actions">
+            <button type="button" aria-label={s + " 위로 이동"} aria-disabled={index === 0} onClick={() => { if (index > 0) onReorder(index, index - 1); }}>↑</button>
+            <button type="button" aria-label={s + " 아래로 이동"} aria-disabled={index === subjectOrder.length - 1} onClick={() => { if (index < subjectOrder.length - 1) onReorder(index, index + 1); }}>↓</button>
+          </div>}
         </div>
       ))}
 
       </div>
-      {manageOrder && <p className="subject-hint">과목을 드래그해 순서를 바꿀 수 있습니다</p>}
+      {manageOrder && <p className="subject-hint">드래그하거나 위·아래 버튼으로 순서를 바꿀 수 있습니다</p>}
     </nav>
   );
 }

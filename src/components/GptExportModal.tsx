@@ -1,3 +1,4 @@
+import { X as CloseIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { WrongAnswerEntry } from "../types";
 import {
@@ -99,9 +100,7 @@ export default function GptExportModal({
             <span className="modal-eyebrow">GPT Export</span>
             <h2>GPT에게 보내기</h2>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose}>
-            닫기
-          </button>
+          <button type="button" className="btn-icon" onClick={onClose}><CloseIcon size={18} aria-hidden="true" /></button>
         </header>
 
         <div className="gpt-export-grid">

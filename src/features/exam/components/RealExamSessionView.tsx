@@ -173,7 +173,7 @@ export default function RealExamSessionView({ session, onChange, onUpdateSession
         <div className="real-exam-header-status"><StudyAiButton />
           <strong aria-label="남은 시간">{session.deadlineAt ? (session.showTimer === false ? "타이머 숨김" : formatTime(remaining)) : "시간 제한 없음"}</strong>
           <span>응답 {session.responses.filter((item) => item.response.trim()).length}/{session.questions.length}</span>
-          <button type="button" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>
+          <button type="button" className="btn-primary" onClick={() => setSubmitOpen(true)} disabled={session.status === "submitted" || submitting}>{submitting ? "제출 중..." : "시험 제출"}</button>
           <IconButton className="real-exam-close" label="시험 닫기" title="진행 상태를 저장하고 나중에 이어서 풉니다." onClick={onClose} disabled={closeDisabled || submitting}><X size={20} /></IconButton>
         </div>
       </header>
