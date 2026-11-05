@@ -5,6 +5,7 @@ use crate::images::{
 use crate::notebook_store::{
     parse_versioned_entries_value_with_missing_entries_error, NotebookStore,
 };
+use crate::original_documents::{self, MAX_ORIGINAL_BYTES, ORIGINALS};
 use crate::storage::{
     app_dir, data_file, load_entries_raw, load_settings_raw, settings_file, unix_time_string,
     write_bytes_atomic, write_json_atomic, CURRENT_DATA_SCHEMA_VERSION,
@@ -109,6 +110,12 @@ fn create_backup_zip_with_options(
         &app_dir(app)?.join(crate::exam_submission::EXAM_SUBMISSION_JOURNAL_FILE),
     )?;
     let entries = load_entries_raw(app)?;
+    let root = app_dir(app)?;
+    let mut original_links = Vec::new();
+    original_documents::collect_links(
+        &serde_json::from_str(&entries).map_err(|e| e.to_string())?,
+        &mut original_links,
+    )?;
     let settings = load_settings_raw(app)?;
     if entries.len() as u64 > MAX_BACKUP_JSON_BYTES || settings.len() as u64 > MAX_BACKUP_JSON_BYTES
     {
@@ -203,6 +210,10 @@ fn create_backup_zip_with_options(
         if bytes.len() as u64 > MAX_BACKUP_JSON_BYTES {
             return Err(format!("{filename} 파일이 백업 허용 용량을 초과했습니다."));
         }
+        original_documents::collect_links(
+            &serde_json::from_slice(&bytes).map_err(|e| e.to_string())?,
+            &mut original_links,
+        )?;
         zip.start_file(filename, options)
             .map_err(|e| e.to_string())?;
         zip.write_all(&bytes).map_err(|e| e.to_string())?;
@@ -230,6 +241,26 @@ fn create_backup_zip_with_options(
         included_files.push(format!("images/{filename}"));
     }
 
+    let mut original_ids = std::collections::HashSet::new();
+    let mut original_total = 0u64;
+    for doc in &original_links {
+        let bytes = original_documents::read(&root, &doc.original_asset_id)?;
+        original_documents::check_link(doc, &bytes)?;
+        if original_ids.insert(&doc.original_asset_id) {
+            original_total += bytes.len() as u64;
+            if original_total + total_image_bytes > MAX_BACKUP_ZIP_BYTES
+                || included_files.len() >= MAX_BACKUP_ENTRY_COUNT
+            {
+                return Err(
+                    "원본 문서를 포함한 백업 용량 또는 파일 수가 제한을 초과했습니다.".into(),
+                );
+            }
+            let name = format!("{ORIGINALS}/{}", doc.original_asset_id);
+            zip.start_file(&name, options).map_err(|e| e.to_string())?;
+            zip.write_all(&bytes).map_err(|e| e.to_string())?;
+            included_files.push(name);
+        }
+    }
     let meta = build_backup_meta(&included_files);
     zip.start_file("backup-meta.json", options)
         .map_err(|e| e.to_string())?;
@@ -440,6 +471,8 @@ pub(crate) fn restore_backup_zip(
     let mut optional_files: Vec<(String, Vec<u8>)> = Vec::new();
     let mut images: Vec<(String, Vec<u8>)> = Vec::new();
     let mut workspace_files: Vec<(String, Vec<u8>)> = Vec::new();
+    let mut originals = std::collections::HashMap::<String, Vec<u8>>::new();
+    let mut original_total = 0u64;
     let mut total_image_bytes = 0u64;
 
     for index in 0..archive.len() {
@@ -470,6 +503,21 @@ pub(crate) fn restore_backup_zip(
             file.read_to_end(&mut bytes).map_err(|e| e.to_string())?;
             validate_optional_store_json(&name, &bytes)?;
             optional_files.push((name, bytes));
+        } else if let Some(id) = name.strip_prefix(&format!("{ORIGINALS}/")) {
+            if file.size() > MAX_ORIGINAL_BYTES as u64 || originals.contains_key(id) {
+                return Err("백업의 원본 문서 크기 또는 중복을 확인하세요.".into());
+            }
+            let mut bytes = Vec::new();
+            (&mut file)
+                .take(MAX_ORIGINAL_BYTES as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|e| e.to_string())?;
+            original_documents::check_bytes(id, &bytes)?;
+            original_total += bytes.len() as u64;
+            if original_total > MAX_BACKUP_ZIP_BYTES {
+                return Err("백업의 원본 문서 합계가 너무 큽니다.".into());
+            }
+            originals.insert(id.to_owned(), bytes);
         } else if let Some(filename) = name.strip_prefix("images/") {
             if filename.contains('/') || filename.is_empty() {
                 continue;
@@ -587,6 +635,31 @@ pub(crate) fn restore_backup_zip(
     }
     let restored_entries =
         restored_entries.ok_or_else(|| "백업 ZIP에 entries.json이 없습니다.".to_string())?;
+    if original_total + total_image_bytes > MAX_BACKUP_ZIP_BYTES {
+        return Err("백업의 원본 문서와 이미지 합계가 너무 큽니다.".into());
+    }
+    let mut original_links = Vec::new();
+    original_documents::collect_links(
+        &serde_json::to_value(&restored_entries).map_err(|e| e.to_string())?,
+        &mut original_links,
+    )?;
+    for (_, bytes) in &optional_files {
+        original_documents::collect_links(
+            &serde_json::from_slice(bytes).map_err(|e| e.to_string())?,
+            &mut original_links,
+        )?;
+    }
+    for doc in &original_links {
+        let bytes = originals
+            .get(&doc.original_asset_id)
+            .ok_or_else(|| "백업에 참조된 원본 문서가 없습니다.".to_string())?;
+        original_documents::check_link(doc, bytes)?;
+    }
+    // Write immutable bytes before publishing any references. Other live or Undo
+    // references can still use the previous assets. A failed restore adds no links.
+    for (id, bytes) in &originals {
+        original_documents::put(&app_dir, id, bytes)?;
+    }
     let mut managed_targets = vec![
         data_file(&app)?,
         settings_file(&app)?,

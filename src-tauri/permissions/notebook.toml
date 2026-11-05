@@ -40,6 +40,8 @@ commands.allow = [
   "create_import_asset_session",
   "stage_import_asset_bytes",
   "read_import_asset_preview",
+  "store_original_document",
+  "read_original_document",
   "commit_import_asset_session",
   "commit_import_asset_session_entry",
   "commit_import_asset_session_entries",

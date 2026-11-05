@@ -1,3 +1,4 @@
+import OriginalDocumentControls from "./OriginalDocumentControls";
 import { useMemo, useRef, useState } from "react";
 import type { QuestionSolutionHotspot, WrongAnswerEntry } from "../../types";
 import OriginalPageExamReader from "../exam/components/OriginalPageExamReader";
@@ -81,6 +82,7 @@ export default function OriginalPageStudyView({ entry, hidden, currentQuestionKe
         {!currentQuestionKey && <option value="">문항 선택</option>}
         {questions.map((question, index) => <option key={question.key + index} value={question.key} disabled={questions.filter(other => other.key === question.key).length !== 1}>{question.number}번{question.section ? " · " + question.section : ""}</option>)}
       </select></label>
+      <OriginalDocumentControls documents={entry.originalDocuments ?? []} pageImage={currentPage} />
       <button type="button" className="btn-secondary" aria-pressed={immersive} onClick={onToggleImmersive}>{immersive ? "집중 보기 닫기" : "원본 집중 보기"}</button>
     </div>
     {notice && <p className="original-page-study__notice" role="status">{notice}</p>}

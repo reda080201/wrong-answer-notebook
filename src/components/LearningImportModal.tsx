@@ -27,6 +27,7 @@ export interface LearningImportIssue {
 export interface LearningImportAnalysis {
   title?: string;
   blocks: LearningBlock[];
+  originalDocuments?: import("../models/entry").OriginalDocument[];
   sourcePageImages: string[];
   figures: SheetFigureItem[];
   counts: {
@@ -44,6 +45,7 @@ export interface LearningImportAnalysis {
 export interface LearningImportMeta {
   title: string;
   sourceType: LectureSourceType;
+  originalDocuments?: import("../models/entry").OriginalDocument[];
   sourcePageImages?: string[];
   figures?: SheetFigureItem[];
   issues?: LearningImportIssue[];
@@ -204,6 +206,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
       }
       await onApply(blocks, {
         ...meta,
+        originalDocuments: visualAnalysis?.originalDocuments,
         sourcePageImages: visualAnalysis?.sourcePageImages,
         figures: visualAnalysis?.figures,
         issues: visualAnalysis?.issues,

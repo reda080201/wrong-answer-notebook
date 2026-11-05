@@ -9,6 +9,7 @@ mod integrity;
 mod mcp_bridge;
 mod mcp_bridge_contract;
 mod notebook_store;
+mod original_documents;
 mod storage;
 
 pub use dev_storage_bridge::run_dev_storage_bridge;
@@ -1325,6 +1326,8 @@ pub fn run() {
             import_assets::create_import_asset_session,
             import_assets::stage_import_asset_bytes,
             import_assets::read_import_asset_preview,
+            original_documents::store_original_document,
+            original_documents::read_original_document,
             import_assets::commit_import_asset_session,
             import_assets::commit_import_asset_session_entry,
             import_assets::commit_import_asset_session_entries,

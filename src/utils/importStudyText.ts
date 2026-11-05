@@ -1,3 +1,4 @@
+import { validateOriginalDocument } from "../services/originalDocuments";
 import { normalizeAnswerProvenance } from "./studyAssessment";
 import type { ChecklistItem, Difficulty, EntryFormData, EntryKind, ExplanationPart, ImportRejectedItem, LectureSourceType, QuestionContentSegment, QuestionSourceCrop, SheetAnswerItem, SheetFigureItem, StructuredQuestion, Subject } from "../types";
 import { SUBJECTS } from "../types";
@@ -101,6 +102,7 @@ interface ImportJsonShape {
   questions?: unknown;
   structuredQuestions?: unknown;
   questionSolutionHotspots?: unknown;
+  originalDocuments?: unknown;
   questionImages?: unknown;
   sourcePageImages?: unknown;
   questionSourceCrops?: unknown;
@@ -488,6 +490,11 @@ function parseImportedStudyTextInternal(
       }
     }
 
+    const originalDocuments = parsed.originalDocuments;
+    if (originalDocuments !== undefined) {
+      if (!Array.isArray(originalDocuments)) throw new ImportParseError("Original document list must be an array.");
+      for (const doc of originalDocuments) validateOriginalDocument(doc);
+    }
     const cropNormalization = normalizeExternalQuestionSourceCrops(parsed.questionSourceCrops);
     const externalQuestions = normalizeExternalStructuredQuestions(parsed.questions);
     const storedQuestions = normalizeExternalStructuredQuestions(parsed.structuredQuestions);
@@ -547,6 +554,7 @@ function parseImportedStudyTextInternal(
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
           questionSourceCrops: cropNormalization.crops,
           questionSolutionHotspots: parsed.questionSolutionHotspots as EntryFormData["questionSolutionHotspots"],
+          originalDocuments: originalDocuments as EntryFormData["originalDocuments"],
           difficult: false,
           difficulty: "none",
           difficultyScore: maxAnswerDifficultyScore(answerOnlyKey),
@@ -617,6 +625,7 @@ function parseImportedStudyTextInternal(
           sourcePageImages: normalizeTextList(parsed.sourcePageImages),
           questionSourceCrops: cropNormalization.crops,
           questionSolutionHotspots: parsed.questionSolutionHotspots as EntryFormData["questionSolutionHotspots"],
+          originalDocuments: originalDocuments as EntryFormData["originalDocuments"],
           difficult: false,
           difficulty: "none",
           difficultyScore,

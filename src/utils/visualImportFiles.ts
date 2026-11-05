@@ -33,7 +33,7 @@ function canvasToFile(canvas: HTMLCanvasElement, name: string): Promise<File> {
 /** Converts a PDF into immutable page evidence before it enters AI analysis. */
 export async function rasterizeVisualImportFile(
   file: File,
-  options: { signal?: AbortSignal; onProgress?: (progress: VisualImportProgress) => void } = {},
+  options: { signal?: AbortSignal; onProgress?: (progress: VisualImportProgress) => void; physicalPage?: number; scale?: number } = {},
 ): Promise<File[]> {
   const throwIfAborted = () => {
     if (options.signal?.aborted) throw new DOMException("파일 분석을 취소했습니다.", "AbortError");
@@ -44,14 +44,23 @@ export async function rasterizeVisualImportFile(
     return [file];
   }
   options.onProgress?.({ phase: "rasterize", current: 0, indeterminate: true });
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+  const [pdfjs, worker] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.mjs?url"),
+  ]);
+  pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
   throwIfAborted();
-  const loadingTask = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) });
-  const cancelLoading = () => { void loadingTask.destroy(); };
+  const data = new Uint8Array(await file.arrayBuffer());
+  throwIfAborted();
+  const loadingTask = pdfjs.getDocument({ data, isEvalSupported: false });
+  const cancelLoading = () => { void loadingTask.destroy().catch(() => undefined); };
   options.signal?.addEventListener("abort", cancelLoading, { once: true });
   let pdf: Awaited<typeof loadingTask.promise>;
   try {
     pdf = await loadingTask.promise;
+  } catch (error) {
+    if (!options.signal?.aborted) await loadingTask.destroy().catch(() => undefined);
+    throw error;
   } finally {
     options.signal?.removeEventListener("abort", cancelLoading);
   }
@@ -59,14 +68,17 @@ export async function rasterizeVisualImportFile(
   const pages: File[] = [];
   try {
     throwIfAborted();
-    if (pdf.numPages > MAX_VISUAL_IMPORT_PAGES) throw new Error(`PDF는 한 번에 ${MAX_VISUAL_IMPORT_PAGES}페이지 이하만 분석할 수 있습니다.`);
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+    if (options.physicalPage === undefined && pdf.numPages > MAX_VISUAL_IMPORT_PAGES) throw new Error(`PDF는 한 번에 ${MAX_VISUAL_IMPORT_PAGES}페이지 이하만 분석할 수 있습니다.`);
+    const first = options.physicalPage ?? 1;
+    const last = options.physicalPage ?? pdf.numPages;
+    if (!Number.isInteger(first) || first < 1 || last > pdf.numPages) throw new Error("PDF 물리 페이지가 범위를 벗어났습니다.");
+    for (let pageNumber = first; pageNumber <= last; pageNumber += 1) {
       throwIfAborted();
       options.onProgress?.({ phase: "rasterize", current: pageNumber - 1, total: pdf.numPages });
       const page = await pdf.getPage(pageNumber);
       let canvas: HTMLCanvasElement | undefined;
       try {
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: options.scale ?? 1.5 });
       const size = validatePdfViewport(viewport.width, viewport.height, pageNumber);
       throwIfAborted();
       canvas = document.createElement("canvas");

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { rasterizeVisualImportFile, validatePdfViewport } from "./visualImportFiles";
-const mocks = vi.hoisted(() => ({ getDocument: vi.fn() }));
+const mocks = vi.hoisted(() => ({ getDocument: vi.fn(), GlobalWorkerOptions: { workerSrc: "" } }));
 vi.mock("pdfjs-dist/legacy/build/pdf.mjs", () => mocks);
 afterEach(() => vi.restoreAllMocks());
 
