@@ -267,3 +267,19 @@
 
 /* Short panels retain their maximum viewport bound without a fixed empty body. */
 .modal-card.dialog-fit-content { height: auto; }
+
+.import-analysis-setup { display: grid; gap: var(--space-3); min-width: 0; }
+.import-analysis-setup h4, .import-analysis-setup p { margin: 0; }
+.import-analysis-choice { display: flex; align-items: center; gap: var(--space-2); min-height: 38px; font-size: var(--text-ui); cursor: pointer; }
+.import-analysis-setup .form-field { min-width: 0; overflow-wrap: anywhere; }
+.import-analysis-help { padding-block: var(--space-2); font-size: var(--text-helper); }
+.import-analysis-help summary { cursor: pointer; }
+.import-analysis-help[open] > p { margin-block: var(--space-2); }
+.import-analysis-start { display: grid; justify-items: start; gap: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--line-subtle); }
+
+.import-modal-body > .import-grid--analysis-only { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 880px; margin-inline: auto; }
+.import-grid--analysis-only > .import-preview[hidden] { display: none; }
+
+.import-analysis-footer { flex-wrap: wrap; }
+.import-analysis-footer > .form-hint { flex: 1 1 200px; margin: 0; font-size: var(--text-helper); }
+.import-modal-footer:has(> .import-analysis-footer) { width: 100%; min-width: 0; }

@@ -1254,7 +1254,7 @@ describe("EntryDetail sheet layout", () => {
     openSecondaryAction("집중 보기");
 
     const hints = screen.getByLabelText("집중 보기 학습 힌트");
-    expect(hints).toHaveTextContent("이 문제를 맞음으로 기록할 수 있습니다.");
+    expect(hints).toHaveTextContent("정답을 확인한 뒤 복습 결과를 기록하세요.");
     expect(hints).toHaveTextContent("조건을 먼저 표시");
     expect(hints).toHaveTextContent("보기를 성급히 고름");
     expect(hints).toHaveTextContent("별표 문제");
@@ -1281,7 +1281,7 @@ describe("EntryDetail sheet layout", () => {
     openSecondaryAction("집중 보기");
 
     const hints = screen.getByLabelText("집중 보기 학습 힌트");
-    expect(hints).toHaveTextContent("이 문제를 맞음으로 기록할 수 있습니다.");
+    expect(hints).toHaveTextContent("정답을 확인한 뒤 복습 결과를 기록하세요.");
     expect(hints).toHaveTextContent("짧은 문제는 정답 확인 후 바로 복습 결과를 남겨도 좋습니다.");
   });
 

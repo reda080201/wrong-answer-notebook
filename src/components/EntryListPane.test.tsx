@@ -348,6 +348,11 @@ it("renders thirty entries, preserves the limit on edits and resets it on filter
   expect(container.querySelectorAll(".entry-card")).toHaveLength(30);
   rerender(<EntryListPane {...props} viewKey="search" selectedId="299" />);
   expect(container.querySelectorAll(".entry-card")).toHaveLength(300);
+  rerender(<EntryListPane {...props} selectedId="299" />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(30);
+  rerender(<EntryListPane {...props} selectedId={null} />);
+  rerender(<EntryListPane {...props} selectedId="299" />);
+  expect(container.querySelectorAll(".entry-card")).toHaveLength(300);
 });
 
 it("bounds group chips and sends part navigation through the guarded callback", () => {

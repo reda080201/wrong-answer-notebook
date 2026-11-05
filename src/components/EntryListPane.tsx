@@ -80,7 +80,7 @@ export default function EntryListPane({
 }: EntryListPaneProps) {
   const [expandedGroupIds, setExpandedGroupIds] = useState<Set<string>>(loadExpandedGroups);
   const [importantLimit, setImportantLimit] = useState(8);
-  const [windowState, setWindowState] = useState({ key: "", count: 30 });
+  const [windowState, setWindowState] = useState<{ key: string; count: number; revealedSelection: string | null }>({ key: "", count: 30, revealedSelection: null });
   const [conceptCreateOpen, setConceptCreateOpen] = useState(false);
   const [favoriteSavingId, setFavoriteSavingId] = useState<string | null>(null);
   const [favoriteErrorId, setFavoriteErrorId] = useState<string | null>(null);
@@ -104,18 +104,18 @@ export default function EntryListPane({
     ? groupedSheets.flatMap(item => item.kind === "single" ? [item.entry] : item.entries)
     : filtered;
   const listKey = JSON.stringify([activeSection, viewKey]);
-  if (windowState.key !== listKey) setWindowState({ key: listKey, count: 30 });
-  const visibleCount = windowState.key === listKey ? windowState.count : 30;
+  const baseCount = windowState.key === listKey ? windowState.count : 30;
+  const selectionIndex = selectedId !== windowState.revealedSelection && selectedId
+    ? orderedEntries.findIndex(entry => entry.id === selectedId)
+    : -1;
+  const revealedSelection = selectedId === null ? null : selectionIndex >= 0 ? selectedId : windowState.revealedSelection;
+  const visibleCount = selectionIndex >= 0
+    ? Math.max(baseCount, Math.ceil((selectionIndex + 1) / 30) * 30)
+    : baseCount;
+  if (windowState.key !== listKey || windowState.count !== visibleCount || windowState.revealedSelection !== revealedSelection) {
+    setWindowState({ key: listKey, count: visibleCount, revealedSelection });
+  }
   const visibleIds = new Set(orderedEntries.slice(0, visibleCount).map(entry => entry.id));
-  const revealedSelection = useRef<string | null>(null);
-  useEffect(() => {
-    if (revealedSelection.current === selectedId) return;
-    if (!selectedId) { revealedSelection.current = null; return; }
-    const index = orderedEntries.findIndex(entry => entry.id === selectedId);
-    if (index < 0) return;
-    revealedSelection.current = selectedId;
-    setWindowState(current => ({ key: listKey, count: Math.max(current.key === listKey ? current.count : 30, Math.ceil((index + 1) / 30) * 30) }));
-  }, [selectedId, listKey, orderedEntries]);
 
   const selectEntry = (entryId: string) => {
     if (onSelectEntry) {
@@ -377,7 +377,7 @@ export default function EntryListPane({
       )}
       {!loading && filtered.length > 0 && <div className="entry-list-pagination">
         <span>{Math.min(visibleCount, orderedEntries.length)} / {orderedEntries.length}개 표시</span>
-        {visibleCount < orderedEntries.length && <button type="button" className="btn-secondary" onClick={() => setWindowState({ key: listKey, count: visibleCount + 30 })}>30개 더 보기</button>}
+        {visibleCount < orderedEntries.length && <button type="button" className="btn-secondary" onClick={() => setWindowState({ revealedSelection: windowState.revealedSelection, key: listKey, count: visibleCount + 30 })}>30개 더 보기</button>}
       </div>}
       <div
         className="entry-pane-resizer"

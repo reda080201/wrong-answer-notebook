@@ -21,9 +21,17 @@ describe("WorkspaceReviewNotice", () => {
     const onConfirm = vi.fn();
     render(<WorkspaceReviewNotice question={{ ...question, status: "needs_review" }} issues={[]} disabled={false} onConfirm={onConfirm} />);
     expect(screen.getByText("1번 검토할 내용")).toBeInTheDocument();
-    expect(screen.getByText(/구체적인 사유는 제공되지 않았습니다/)).toBeInTheDocument();
+    expect(screen.getByText("문항 내용을 원본과 비교한 뒤 검토를 완료하세요.")).toBeInTheDocument();
+    expect(screen.queryByText(/가져온 파일에서/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "내용 비교 확인 완료" }));
     expect(onConfirm).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves an explicit review reason without inventing its origin", () => {
+    render(<WorkspaceReviewNotice question={{ ...question, status: "needs_review", warnings: ["원본과 선택지를 비교하세요."] }} issues={[{ id: "review", severity: "warning", message: "원본과 선택지를 비교하세요." }]} disabled={false} onConfirm={vi.fn()} />);
+    expect(screen.getByText("확인 권장: 원본과 선택지를 비교하세요.")).toBeInTheDocument();
+    expect(screen.queryByText(/가져온 파일에서/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "내용 비교 확인 완료" })).toBeEnabled();
   });
 
   it("does not let content confirmation bypass a reference error", () => {
@@ -31,6 +39,7 @@ describe("WorkspaceReviewNotice", () => {
     render(<WorkspaceReviewNotice question={{ ...question, status: "needs_review" }} issues={[{ id: "missing", severity: "error", message: "없는 이미지 자산" }]} disabled={false} onConfirm={onConfirm} />);
     expect(screen.getByText("수정 필요: 없는 이미지 자산")).toBeInTheDocument();
     expect(screen.getByText(/수정할 때 다시 검사/)).toBeInTheDocument();
+    expect(screen.queryByText("문항 내용을 원본과 비교한 뒤 검토를 완료하세요.")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "내용 비교 확인 완료" }));
     expect(onConfirm).not.toHaveBeenCalled();
     expect(screen.getByRole("button", { name: "내용 비교 확인 완료" })).toBeDisabled();
