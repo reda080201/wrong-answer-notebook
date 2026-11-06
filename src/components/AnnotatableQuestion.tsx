@@ -486,10 +486,11 @@ function StructuredQuestionBlock({
             <button
               type="button"
               className={`question-important-btn ${isImportant ? "active" : ""}`}
+              aria-label={`${questionNumber}번 문제 중요 표시${isImportant ? " 해제" : ""}`}
               aria-pressed={isImportant}
               onClick={() => onToggleQuestionImportant(questionNumber)}
             >
-              {isImportant ? "★ 중요" : "☆ 중요"}
+              <span aria-hidden="true">{isImportant ? "★" : "☆"}</span> 중요
             </button>
           )}
           <QuestionDifficultyEditor

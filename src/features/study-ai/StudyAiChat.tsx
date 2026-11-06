@@ -50,7 +50,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const [maintenance, setMaintenance] = useState(false);
     const maintenanceRef = useRef(false);
     const lock = useRef(false);
-    const reloadLock = useRef(false);
+    const reloadLock = useRef<symbol | null>(null);
     const generation = useRef(0);
     const controller = useRef<AbortController | null>(null);
     const connectionRef = useRef(connection);
@@ -97,7 +97,8 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     }, [session, selectedEntryId, available, selection, blockedIds, protection.unavailable]);
     const reload = async (allowDiscard = false) => {
         if (lock.current || reloadLock.current || maintenanceRef.current) return;
-        reloadLock.current = true;
+        const readId = Symbol("chat-read");
+        reloadLock.current = readId;
         const epoch = ++generation.current;
         try {
             if (hasPendingAiStudyWrites() && (!allowDiscard || !(await confirm({ title: "저장된 기록으로 돌아가기", message: "기기에 저장하지 못한 대화가 있습니다. 저장 재시도로 보존할 수 있습니다. 미저장 변경을 버리고 마지막 저장본을 불러올까요?" })))) {
@@ -126,9 +127,14 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             }
         }
         finally {
-            if (epoch === generation.current) {
+            if (reloadLock.current === readId) {
+                reloadLock.current = null;
                 setLoading(false);
-                reloadLock.current = false;
+                if (epoch !== generation.current) {
+                    setLoaded(false);
+                    setErrorKind("record");
+                    setError("자료 보호 상태가 바뀌어 대화 불러오기를 중단했습니다. 기록을 다시 불러오세요.");
+                }
             }
         }
     };
@@ -143,7 +149,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             setMaintenance(blocked);
             if (blocked) {
                 generation.current++;
-                reloadLock.current = false;
+                reloadLock.current = null;
                 controller.current?.abort();
                 setBusy(false);
                 setScopeBusy(false);
@@ -153,7 +159,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 void reloadRef.current();
         };
         window.addEventListener("ai-study-maintenance", handle);
-        return () => { generationRef.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
+        return () => { generationRef.current++; reloadLock.current = null; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
     }, []);
     useEffect(() => {
         if (open)

@@ -313,6 +313,8 @@ export default function QuestionTheaterView({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="문제와 해설 영역 크기 조절"
+                title="드래그하거나 왼쪽·오른쪽 방향키로 조절합니다. Home은 최소, End는 최대입니다."
+                aria-description="왼쪽·오른쪽 방향키로 조절합니다. Home은 최소, End는 최대입니다."
                 aria-valuemin={MIN_SPLIT_RATIO}
                 aria-valuemax={MAX_SPLIT_RATIO}
                 aria-valuenow={splitRatio}
