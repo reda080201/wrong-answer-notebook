@@ -372,7 +372,9 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "☆ 중요" }));
+    const importantButton = screen.getByRole("button", { name: "1번 문제 중요 표시", exact: true });
+    expect(importantButton).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(importantButton);
 
     await waitFor(() => {
       expect(onQuestionMetaChange).toHaveBeenCalledWith(sheetEntry, expect.any(Function));
