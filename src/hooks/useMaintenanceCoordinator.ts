@@ -64,18 +64,14 @@ export function useMaintenanceCoordinator({
     setKnowledgeGraphMaintenanceBlocked(true);
     setReviewSessionsMaintenanceBlocked(true);
     try {
-      await Promise.all([
-        flushEntries(),
-        flushSettings(),
-        flushAiProviderConfig(),
-        flushGeneratedExams(),
-        flushLibraryFolders(),
-        flushGptSolutionDrafts(),
-        flushReviewSessions(),
-        flushPendingDeletions(),
-        flushKnowledgeGraph(),
-        flushActiveExam(),
-      ]);
+      const results = await Promise.allSettled([
+        flushEntries, flushSettings, flushAiProviderConfig, flushGeneratedExams,
+        flushLibraryFolders, flushGptSolutionDrafts, flushReviewSessions,
+        flushPendingDeletions, flushKnowledgeGraph, flushActiveExam,
+      ].map(flush => Promise.resolve().then(flush)));
+      const failures = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (failures.length === 1) throw failures[0].reason;
+      if (failures.length > 1) throw new AggregateError(failures.map(result => result.reason), "여러 저장 작업을 완료하지 못했습니다. 저장 상태를 확인한 뒤 다시 시도하세요.");
       return await task();
     } finally {
       setEntriesMaintenanceBlocked(false);

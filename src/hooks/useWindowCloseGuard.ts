@@ -110,13 +110,20 @@ export function useWindowCloseGuard({
   useEffect(() => {
     if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
+    let disposed = false;
     void getCurrentWindow().onCloseRequested(async (event) => {
-      if (allowCloseRef.current) return;
+      if (disposed || allowCloseRef.current) return;
       event.preventDefault();
       await attemptClose();
-    }).then((cleanup) => { unlisten = cleanup; });
+    }).then((cleanup) => {
+      if (disposed) cleanup();
+      else unlisten = cleanup;
+    }).catch((cause: unknown) => {
+      if (!disposed) setCloseError(getCloseErrorMessage(cause, "창 닫기 보호를 등록하지 못했습니다. 앱을 다시 실행해 주세요."));
+    });
     retryRef.current = attemptClose;
     return () => {
+      disposed = true;
       retryRef.current = null;
       unlisten?.();
     };

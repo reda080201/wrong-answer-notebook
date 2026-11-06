@@ -257,8 +257,11 @@ export async function applyBrowserBackupAtomically(payload: BackupPayload): Prom
   if (v2Payload?.knowledgeGraph !== undefined && !isKnowledgeGraphStore(v2Payload.knowledgeGraph)) {
     throw new Error("백업의 지식 그래프 형식이 올바르지 않습니다.");
   }
-  const retainedReferences = v2Payload ? v2Payload.aiStudy ? new Set<string>() : collectBrowserImageReferences([], { includeStoredEntries: false, onlyKeys: [AI_STUDY_STORAGE_KEY] })
-    : collectBrowserImageReferences([], { includeStoredEntries: false });
+  // Pending Undo records survive restoration, so their images must survive too.
+  const retainedReferences = collectBrowserImageReferences([], {
+    includeStoredEntries: false,
+    ...(v2Payload ? { onlyKeys: ["wrong-answer-pending-deletions", ...(v2Payload.aiStudy ? [] : [AI_STUDY_STORAGE_KEY])] } : {}),
+  });
   const previousImages = await listBrowserImages();
   const restoredImages = { ...payload.browserImages };
   for (const filename of retainedReferences) {

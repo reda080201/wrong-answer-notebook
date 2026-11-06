@@ -63,3 +63,22 @@ describe("v1 backup images used by retained stores", () => {
     expect(localStorage.getItem("img_old-entry.png")).toBeNull();
   });
 });
+
+describe("v2 restore retains pending Undo assets", () => {
+  const v2 = () => ({ ...payload(), meta: { ...payload().meta, version: 2 as const }, examSessions: [], generatedExams: [], libraryFolders: [], gptSolutionDrafts: [], importWorkspaceDraft: null });
+  it("preserves pending records and their images", async () => {
+    const record = JSON.stringify([{ id: "pending", imageReferences: ["undo.png"] }]);
+    localStorage.setItem("wrong-answer-pending-deletions", record);
+    localStorage.setItem("img_undo.png", "original-image");
+    await applyBrowserBackupAtomically(v2());
+    expect(localStorage.getItem("wrong-answer-pending-deletions")).toBe(record);
+    expect(localStorage.getItem("img_undo.png")).toBe("original-image");
+  });
+  it("rejects conflicting images without modifying stores", async () => {
+    localStorage.setItem("wrong-answer-pending-deletions", JSON.stringify([{ id: "pending", imageReferences: ["undo.png"] }]));
+    localStorage.setItem("img_undo.png", "original-image");
+    const before = snapshot();
+    await expect(applyBrowserBackupAtomically({ ...v2(), browserImages: { "img_undo.png": "different" } })).rejects.toThrow("충돌");
+    expect(snapshot()).toEqual(before);
+  });
+});
