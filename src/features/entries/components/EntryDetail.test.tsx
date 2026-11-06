@@ -372,7 +372,7 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    const importantButton = screen.getByRole("button", { name: "1번 문제 중요 표시", exact: true });
+    const importantButton = screen.getByRole("button", { name: "1번 문제 중요 표시" });
     expect(importantButton).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(importantButton);
 
@@ -1071,7 +1071,7 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지 더보기" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toHaveTextContent("메모");
-    expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 맞음" })).toBeEnabled();
 
     openSecondaryAction("해설지");
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();

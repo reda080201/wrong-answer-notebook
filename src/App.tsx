@@ -2,7 +2,7 @@ import { entryAiMaterials } from "./features/study-ai/model";
 import { hydrateSessionSourceReferences } from "./features/exam-builder/services/questionSource";
 import StudyAiChat from "./features/study-ai/StudyAiChat";
 import { SourceNavigationContext } from "./features/exam-builder/components/sourceNavigationContext";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useId } from "react";
 import { useRealExamProtection, assertRealExamSourcesAllowed } from "./features/exam/services/realExamProtection";
 import { useSavedRealExamProtection } from "./hooks/useSavedRealExamProtection";
 import { isTauri } from "@tauri-apps/api/core";
@@ -154,6 +154,7 @@ function AppContent() {
     dismissedUpdateVersion, setDismissedUpdateVersion,
     controller: modalController,
   } = useAppModalController();
+  const resumeSettingsId = useId();
   const [realExamTimePreset, setRealExamTimePreset] = useState<"30" | "50" | "80" | "100" | "custom">("50");
   const [realExamCustomMinutes, setRealExamCustomMinutes] = useState("50");
   const parsedCustomMinutes = Number(realExamCustomMinutes);
@@ -1187,9 +1188,10 @@ function AppContent() {
                 진행 중인 실전 모의고사 · 남은 시간 {Math.floor(getRemainingExamSeconds(selectedRealSession.deadlineAt) / 60).toString().padStart(2, "0")}:{(getRemainingExamSeconds(selectedRealSession.deadlineAt) % 60).toString().padStart(2, "0")}
               </p>
             )}
+            {selectedRealSession && <p id={resumeSettingsId} className="form-hint">이어서 푸는 시험은 시작 당시 설정을 사용합니다.</p>}
             <label className="form-field">
               제한 시간
-              <select value={selectedRealSession ? String(selectedRealSession.timeLimitMinutes ?? 50) : (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
+              <select value={selectedRealSession ? String(selectedRealSession.timeLimitMinutes ?? 50) : (realExamTimePreset === "custom" ? "custom" : realExamTimePreset)} disabled={Boolean(selectedRealSession)} aria-describedby={selectedRealSession ? resumeSettingsId : undefined} onChange={(event) => { const value = event.target.value as typeof realExamTimePreset; setRealExamTimePreset(value); if (value !== "custom") setRealExamMinutes(Number(value)); }}>
                 {["30", "50", "80", "100"].map((minutes) => <option key={minutes} value={minutes}>{minutes}분</option>)}
                 {selectedRealSession && ![30, 50, 80, 100].includes(selectedRealSession.timeLimitMinutes ?? 50) && <option value={String(selectedRealSession.timeLimitMinutes)}>{selectedRealSession.timeLimitMinutes}분 (기존 설정)</option>}
                 <option value="custom">사용자 지정</option>
@@ -1198,12 +1200,12 @@ function AppContent() {
             </label>
             <label className="form-field">
               답안지
-              <select value={selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetLayout(event.target.value as "auto" | "vertical" | "horizontal")}>
+              <select value={selectedRealSession?.answerSheetLayout ?? realExamAnswerSheetLayout} disabled={Boolean(selectedRealSession)} aria-describedby={selectedRealSession ? resumeSettingsId : undefined} onChange={(event) => setRealExamAnswerSheetLayout(event.target.value as "auto" | "vertical" | "horizontal")}>
                 <option value="auto">자동</option><option value="vertical">세로</option><option value="horizontal">가로</option>
               </select>
             </label>
-            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.showTimer ?? realExamShowTimer} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamShowTimer(event.target.checked)} /> 타이머 표시</label>
-            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen} disabled={Boolean(selectedRealSession)} onChange={(event) => setRealExamAnswerSheetOpen(event.target.checked)} /> 답안지 열기</label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.showTimer ?? realExamShowTimer} disabled={Boolean(selectedRealSession)} aria-describedby={selectedRealSession ? resumeSettingsId : undefined} onChange={(event) => setRealExamShowTimer(event.target.checked)} /> 타이머 표시</label>
+            <label className="settings-checkbox"><input type="checkbox" checked={selectedRealSession?.answerSheetOpen ?? realExamAnswerSheetOpen} disabled={Boolean(selectedRealSession)} aria-describedby={selectedRealSession ? resumeSettingsId : undefined} onChange={(event) => setRealExamAnswerSheetOpen(event.target.checked)} /> 답안지 열기</label>
             <p className="form-hint">선택한 설정으로 시험을 시작합니다. 답안지는 시험 중에도 펼치거나 접을 수 있습니다. 시험 중에는 정답과 해설을 표시하지 않습니다.</p>
             <div className="dialog-actions">
               <button type="button" className="btn-secondary" onClick={() => setRealExamStartEntry(null)}>취소</button>

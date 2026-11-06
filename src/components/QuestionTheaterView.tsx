@@ -1,3 +1,4 @@
+import QuestionMoveStatus from "./QuestionMoveStatus";
 import { getEntryCanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { X } from "lucide-react";
@@ -218,6 +219,7 @@ export default function QuestionTheaterView({
 
   return (
     <div ref={dialogRef} className="question-theater" role="dialog" aria-modal="true" aria-label="문제 크게 보기" tabIndex={-1}>
+      <QuestionMoveStatus entryId="theater" label={String(questionBlock.numberLabel || questionBlock.displayNumber)} index={questionIndex} total={questionCount} />
       <div className="question-theater-shell">
         <header className="question-theater-toolbar">
           <div className="question-theater-identity">

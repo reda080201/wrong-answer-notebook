@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReviewResult } from "../types";
 
 type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
@@ -65,6 +65,7 @@ export default function StudyControlBar({
   onQuickMemoSubmit,
   onOpenGptExport,
 }: StudyControlBarProps) {
+  const boundaryId = useId();
   const canMove = isSheet && questionCount > 1;
   const canGoPrevious = canMove && questionIndex > 0;
   const canGoNext = canMove && questionIndex < questionCount - 1;
@@ -95,11 +96,13 @@ export default function StudyControlBar({
             aria-label="하단 이전 문제"
             onClick={onPrevious}
             disabled={!canGoPrevious}
+            aria-describedby={!canGoPrevious ? boundaryId : undefined}
           >
             이전
           </button>
         )}
 
+        {canMove && <span id={boundaryId} className="form-hint">{questionIndex === 0 ? "첫 번째 문항입니다" : questionIndex === questionCount - 1 ? "마지막 문항입니다" : ""}</span>}
         {!isConcept && <span className="study-control-counter">{isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}</span>}
 
         {canMove && (
@@ -109,6 +112,7 @@ export default function StudyControlBar({
             aria-label="하단 다음 문제"
             onClick={onNext}
             disabled={!canGoNext}
+            aria-describedby={!canGoNext ? boundaryId : undefined}
           >
             다음
           </button>

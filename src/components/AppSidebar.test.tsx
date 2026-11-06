@@ -44,7 +44,7 @@ describe("AppSidebar", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("더 보기", { exact: true }));
+    expect(screen.getByText("더 보기", { exact: true })).not.toBeVisible();
     for (const name of ["오답노트", "개념노트", "시험지함", "특강자료", "학습 허브", "문제 은행", "보관함"]) {
       expect(screen.getByRole("button", { name })).toBeVisible();
     }

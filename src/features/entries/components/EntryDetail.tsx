@@ -1,3 +1,4 @@
+import QuestionMoveStatus from "../../../components/QuestionMoveStatus";
 import { getEntryTitle } from "../../../utils/entry";
 import AssessmentCard from "../../import/vision/AssessmentCard";
 import { publishStudySelection } from "../../study-ai/activeSelection";
@@ -1686,6 +1687,7 @@ export default function EntryDetail({
         </div>
       )}
 
+      <QuestionMoveStatus entryId={entry.id} label={questionIdentifier(focusedQuestion) ?? String(focusedQuestion?.displayNumber ?? "")} index={focusedQuestionIndex} total={questionAnchors.length} active={isSheet && !theaterQuestion} />
       {isFocusExpanded && isSheet && (
         <div className="focused-sheet-nav" aria-label="문제 집중 보기 이동">
           {focusedQuestion && chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (

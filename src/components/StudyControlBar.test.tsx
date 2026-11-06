@@ -17,4 +17,13 @@ it("keeps answer reveal separate from grading after repeated clicks on the last 
   fireEvent.click(screen.getByRole("button", { name: "정답 보기" }));
   expect(props.onReview).not.toHaveBeenCalled();
   expect(props.onToggleAnswers).toHaveBeenCalledTimes(1);
+  rerender(<><StudyControlBar {...props} isSheet questionCount={3} /><StudyControlBar {...props} isSheet questionCount={3} /></>);
+  const previous = screen.getAllByRole("button", { name: "하단 이전 문제" });
+  const ids = previous.map(button => button.getAttribute("aria-describedby"));
+  expect(new Set(ids).size).toBe(2);
+  for (const id of ids) expect(document.getElementById(id!)).toHaveTextContent("첫 번째 문항");
+  rerender(<StudyControlBar {...props} isSheet questionCount={3} questionIndex={2} />);
+  const next = screen.getByRole("button", { name: "하단 다음 문제" });
+  expect(next).toBeDisabled();
+  expect(document.getElementById(next.getAttribute("aria-describedby")!)).toHaveTextContent("마지막 문항");
 });
