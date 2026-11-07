@@ -149,6 +149,7 @@ export function ConceptChecklistSection({
         ))}
         <div className="concept-checklist-add">
           <input
+            aria-label="체크리스트 항목 추가"
             value={newItemText}
             onChange={(event) => onNewItemTextChange(event.target.value)}
             placeholder="체크리스트 항목"

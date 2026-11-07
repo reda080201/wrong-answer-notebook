@@ -248,7 +248,7 @@ describe("EntryDetail sheet layout", () => {
     expect(displayExam).toHaveTextContent("텍스트 시험지");
     fireEvent.click(displayExam);
     expect(document.querySelector(".study-paper--exam")).toBeTruthy();
-    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
+    expect(screen.getByText(/^원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다/)).toHaveAttribute("role", "status");
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 보기" }));
     expect(document.querySelector(".structured-problem-sheet-answer")).toHaveTextContent("①");
@@ -256,7 +256,7 @@ describe("EntryDetail sheet layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 숨기기" }));
     expect(document.querySelector(".structured-problem-sheet-answer")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
+    expect(screen.getByText(/^원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다/)).toHaveAttribute("role", "status");
   });
 
   it("persists the selected two-column sheet layout", () => {

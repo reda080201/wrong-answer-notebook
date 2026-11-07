@@ -1,3 +1,4 @@
+import { X as CloseIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRealExamProtection } from "../../exam/services/realExamProtection";
 import type { ChatGptMcpPreferences, ExamPrintPreferences, ExamSession, ExportScopeMode, McpSendOptions, WrongAnswerEntry } from "../../../types";
@@ -160,7 +161,7 @@ export default function ExportHubModal(props: ExportHubModalProps) {
             <p className="modal-eyebrow">공유·내보내기</p>
             <h2>무엇을 하시겠습니까?</h2>
           </div>
-          <button type="button" className="btn-icon" onClick={onClose} aria-label="닫기">✕</button>
+          <button type="button" className="btn-icon" onClick={onClose} aria-label="닫기"><CloseIcon size={18} aria-hidden="true" /></button>
         </header>
         {view === "home" ? (
           <div className="export-hub-home">

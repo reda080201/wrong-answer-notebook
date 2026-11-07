@@ -247,6 +247,7 @@ export default function QuestionTheaterView({
             />
             <input
               type="number"
+              aria-label="현재 문제 난이도 점수 숫자 입력"
               min={1}
               max={100}
               value={draftScore}

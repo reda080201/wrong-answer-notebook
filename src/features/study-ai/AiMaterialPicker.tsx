@@ -37,7 +37,7 @@ export default function AiMaterialPicker({ available, selected, sharing, disable
           <button type="button" disabled={disabled} onClick={() => addMaterials(group.items)}>전체 묶음 추가 ({group.items.length}문항 · 검색과 무관)</button>
         </Menu>
       </> : <button type="button" disabled={disabled} onClick={() => addMaterials(group.items)}>전체 묶음 추가 ({group.items.length})</button>}
-    </div>{group.matches.map(m => <label key={m.id}><input type="checkbox" disabled={disabled} checked={selected.some(s => s.id === m.id)} onChange={e => onChange(e.target.checked ? [...selected, m] : selected.filter(s => s.id !== m.id), sharing)}/><span>{m.source.sourceQuestionNumber}번 · {m.snapshot.question.slice(0, 65)}</span></label>)}</details>)}
+    </div>{group.matches.map(m => <label key={m.id}><input type="checkbox" disabled={disabled} checked={selected.some(s => s.id === m.id)} onChange={e => onChange(e.target.checked ? [...selected, m] : selected.filter(s => s.id !== m.id), sharing)}/><span className="ai-material-preview">{m.source.sourceQuestionNumber}번 · {m.snapshot.question}</span></label>)}</details>)}
     {!!selected.length && <ul className="ai-selected-materials">{selected.map(m => <li key={m.id}>{m.source.sourceEntryTitle} · {m.source.sourceQuestionNumber}번 <button type="button" disabled={disabled} onClick={() => onChange(selected.filter(s => s.id !== m.id), sharing)} aria-label={`${m.source.sourceEntryTitle} ${m.source.sourceQuestionNumber}번 첨부 제거`}>제거</button></li>)}</ul>}
     </div>
   </details>;

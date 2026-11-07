@@ -2626,6 +2626,7 @@ export default function EntryDetail({
             <span>{isSheet && focusedQuestion ? focusedQuestion.body.trim() || entry.title || "현재 문제" : entry.question.trim() || "현재 오답"}</span>
           </button>
           <div className="focus-mini-actions">
+            {isSheet && <><button type="button" aria-label="축소 보기 이전 문제" disabled={focusedQuestionIndex === 0} onClick={() => moveFocusedQuestion(-1)}>이전</button><span>{focusedQuestionIndex + 1} / {questionAnchors.length}</span></>}
             <button type="button" onClick={() => setFocusMode("expanded")}>
               확대
             </button>

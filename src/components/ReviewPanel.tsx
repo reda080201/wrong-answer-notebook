@@ -197,12 +197,21 @@ export default function ReviewPanel({
     [reviewItems.length, index],
   );
 
-  const finishSessionCommit = useCallback((shouldAdvance: boolean) => {
+  const unfinishedIndexes = useCallback((from: number, done: string[]) => {
+    const indexes = reviewItems.map((item, index) => ({ item, index })).filter(({ item }) => !done.includes(reviewItemKey(item)));
+    return [...indexes.filter(item => item.index > from), ...indexes.filter(item => item.index <= from)];
+  }, [reviewItems]);
+  const nextReviewIndex = useCallback((from: number, done: string[]) => {
+    const unfinished = unfinishedIndexes(from, done);
+    return unfinished.find(({ item }) => !protection.unavailable && !protection.sourceIds.has(item.entry.id))?.index
+      ?? unfinished[0]?.index ?? reviewItems.length;
+  }, [unfinishedIndexes, protection, reviewItems.length]);
+  const finishSessionCommit = useCallback((shouldAdvance: boolean, nextIndex: number) => {
     setPendingSessionCommit(null);
     setEditingCompleted(false);
     setRevealed(false);
-    if (shouldAdvance) setIndex((value) => Math.min(value + 1, reviewItems.length));
-  }, [reviewItems.length]);
+    if (shouldAdvance) setIndex(nextIndex);
+  }, []);
 
   const retrySessionCommit = useCallback(async () => {
     const commit = pendingSessionCommit;
@@ -212,7 +221,7 @@ export default function ReviewPanel({
     setSaveError(null);
     try {
       await onSessionSave(commit.session);
-      if (mountedRef.current) finishSessionCommit(commit.shouldAdvance);
+      if (mountedRef.current) finishSessionCommit(commit.shouldAdvance, commit.session.currentIndex);
     } catch (error) {
       if (mountedRef.current) setSaveError(error instanceof Error && error.message ? error.message : "세션 진행 상태를 저장하지 못했습니다.");
     } finally {
@@ -253,8 +262,8 @@ export default function ReviewPanel({
         : [...reviewEvents, nextEvent];
       setReviewEvents(nextReviewEvents);
       const shouldAdvance = !editingCompleted;
+      const nextIndex = editingCompleted ? index : nextReviewIndex(index, nextKeys);
       if (onSessionSave) {
-        const nextIndex = editingCompleted ? index : Math.min(index + 1, reviewItems.length);
         const updatedAt = new Date().toISOString();
         const nextSession: ReviewSession = {
           id: sessionIdRef.current,
@@ -280,10 +289,10 @@ export default function ReviewPanel({
             : "복습 결과는 저장되었지만 진행 상태를 저장하지 못했습니다.");
           return;
         }
-        if (mountedRef.current) finishSessionCommit(commit.shouldAdvance);
+        if (mountedRef.current) finishSessionCommit(commit.shouldAdvance, commit.session.currentIndex);
         return;
       }
-      finishSessionCommit(shouldAdvance);
+      finishSessionCommit(shouldAdvance, nextIndex);
     } catch (error) {
       if (mountedRef.current) {
         setSaveError(error instanceof Error && error.message ? error.message : "복습 결과를 저장하지 못했습니다.");
@@ -292,7 +301,7 @@ export default function ReviewPanel({
       savingRef.current = false;
       if (mountedRef.current) setSaving(false);
     }
-  }, [completedEvent, completedKeys, current, editingCompleted, finishSessionCommit, index, mode, onReview, onSessionSave, pendingSessionCommit, reviewEvents, reviewItems]);
+  }, [completedEvent, completedKeys, current, editingCompleted, finishSessionCommit, index, mode, nextReviewIndex, onReview, onSessionSave, pendingSessionCommit, reviewEvents, reviewItems]);
 
   useEffect(() => {
     const onCommand = (event: KeyboardEvent) => {
@@ -327,6 +336,32 @@ export default function ReviewPanel({
     return () => document.removeEventListener("keydown", onCommand);
   }, [completedEvent, current, editingCompleted, index, reviewItems.length, handleReview]);
 
+  const remaining = unfinishedIndexes(index, completedKeys);
+  const nextAllowed = remaining.find(({ item, index: candidate }) => candidate !== index && !protection.sourceIds.has(item.entry.id));
+  const deferredCount = remaining.filter(({ item }) => protection.sourceIds.has(item.entry.id)).length;
+  const deferProtected = async () => {
+    if (!nextAllowed || protection.unavailable || savingRef.current || pendingSessionCommit) return;
+    savingRef.current = true;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await onSessionSave?.({
+        id: sessionIdRef.current, mode: mode ?? "random", currentIndex: nextAllowed.index,
+        itemRefs: reviewItems.map(item => item.kind === "sheet-question"
+          ? { kind: item.kind, entryId: item.entry.id, questionNumber: normalizeQuestionNumber(item.questionNumber) }
+          : { kind: item.kind, entryId: item.entry.id }),
+        completedItemKeys: completedKeys, reviewEvents, seedFingerprint: reviewSessionFingerprint(mode ?? "random", reviewItems),
+        createdAt: sessionStartedAtRef.current, updatedAt: new Date().toISOString(),
+      });
+      if (mountedRef.current) finishSessionCommit(true, nextAllowed.index);
+    } catch (error) {
+      if (mountedRef.current) setSaveError(error instanceof Error ? error.message : "복습 위치를 저장하지 못했습니다.");
+    } finally {
+      savingRef.current = false;
+      if (mountedRef.current) setSaving(false);
+    }
+  };
+
   const currentEntry = current?.entry;
   const sheetQuestion = useMemo(() =>
     current?.kind === "sheet-question"
@@ -359,7 +394,7 @@ export default function ReviewPanel({
         </div>
       )}
 
-      {currentEntry && (protection.unavailable || protection.sourceIds.has(currentEntry.id)) ? <section role="status"><p>진행 중 실전 시험의 자료는 제출 후 복습할 수 있습니다. 시험을 닫아도 보호는 유지됩니다.</p><button type="button" onClick={requestClose}>복습 닫기</button></section> : !current || !currentEntry ? (
+      {currentEntry && (protection.unavailable || protection.sourceIds.has(currentEntry.id)) ? <section role="status"><p>진행 중 실전 시험의 자료는 제출 후 복습할 수 있습니다. 시험을 닫아도 보호는 유지됩니다.</p>{!protection.unavailable && <><p>보호된 미완료 문항 {deferredCount}개</p>{nextAllowed ? <button type="button" disabled={saving} onClick={() => void deferProtected()}>이 문항 보류하고 계속</button> : <p>시험 제출 후 이 복습을 이어서 진행하세요.</p>}</>}<button type="button" disabled={saving} onClick={requestClose}>복습 닫기</button></section> : !current || !currentEntry ? (
         reviewItems.length > 0 && (reviewStats.again + reviewStats.hard + reviewStats.good) > 0 ? (
           <section className="review-complete" aria-label="복습 완료 요약">
             <h3>복습을 마쳤습니다</h3>

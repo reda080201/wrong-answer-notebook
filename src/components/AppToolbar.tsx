@@ -50,6 +50,7 @@ export default function AppToolbar({
   onOpenExamHistory,
 }: AppToolbarProps) {
   const [filterOpen, setFilterOpen] = useState(false);
+  const [draft, setDraft] = useState({ sortKey, difficultyScoreFilter, listFilter });
   const sortOptions = getSortOptionsForSection(activeSection);
   const listFilterOptions = getListFilterOptionsForSection(activeSection);
   const showDifficultyScoreFilter = isDifficultyScoreFilterVisibleForSection(activeSection);
@@ -69,7 +70,7 @@ export default function AppToolbar({
   return (
     <div className="toolbar">
       <SearchField className="search-input" value={search} onChange={setSearch} placeholder={placeholder} ariaLabel="자료 검색" />
-      <button type="button" className="toolbar-filter-button" aria-expanded={filterOpen} onClick={() => setFilterOpen(true)}>필터{activeChips.length ? ` ${activeChips.length}` : ""}</button>
+      <button type="button" className="toolbar-filter-button" aria-expanded={filterOpen} onClick={() => { setDraft({ sortKey, difficultyScoreFilter, listFilter }); setFilterOpen(true); }}>필터{activeChips.length ? ` ${activeChips.length}` : ""}</button>
       {showReviewLauncher && <Menu label={<>복습 <span className="review-today-count">오늘 {todayReviewCount}개</span><span aria-hidden="true">▾</span></>} triggerAriaLabel="복습 메뉴" className="review-launcher">
         <button type="button" onClick={() => startReview("today")}>오늘 복습 ({todayReviewCount}개)</button>
         <button type="button" onClick={() => startReview(activeSection === "problem_sheet" ? "important" : "random")}>
@@ -84,11 +85,11 @@ export default function AppToolbar({
         <Settings size={18} aria-hidden="true" />
       </button>
       {activeChips.length > 0 && <div className="toolbar-active-chips" aria-label="적용된 필터">{activeChips.map((chip) => <button key={chip.key} type="button" onClick={chip.clear} aria-label={`${chip.label} 제거`}>{chip.label} ×</button>)}</div>}
-      {filterOpen && <Dialog open size="sm" ariaLabel="자료 필터" title="자료 필터" onClose={() => setFilterOpen(false)} footer={<div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => { setSortKey(sortOptions[0]?.value ?? sortKey); setDifficultyScoreFilter("all"); setListFilter("all"); }}>초기화</button><button type="button" className="btn-primary" onClick={() => setFilterOpen(false)}>적용</button></div>}>
+      {filterOpen && <Dialog open size="sm" ariaLabel="자료 필터" title="자료 필터" onClose={() => setFilterOpen(false)} footer={<div className="modal-actions"><button type="button" className="btn-secondary" onClick={() => setFilterOpen(false)}>취소</button><button type="button" className="btn-secondary" onClick={() => { setDraft({ sortKey: sortOptions[0]?.value ?? sortKey, difficultyScoreFilter: "all", listFilter: "all" }); }}>초기화</button><button type="button" className="btn-primary" onClick={() => { setSortKey(draft.sortKey); setDifficultyScoreFilter(draft.difficultyScoreFilter); setListFilter(draft.listFilter); setFilterOpen(false); }}>적용</button></div>}>
         <div className="toolbar-filter-panel">
-          <label>정렬<select value={sortKey} onChange={(event) => setSortKey(event.target.value as SortKey)} aria-label="정렬">{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
-          {showDifficultyScoreFilter && <label>난이도<select value={difficultyScoreFilter} onChange={(event) => { if (isDifficultyScoreFilter(event.target.value)) setDifficultyScoreFilter(event.target.value); }} aria-label="난이도 점수 필터"><option value="all">모든 점수</option><option value="easy">쉬움 1~30</option><option value="normal">보통 31~60</option><option value="hard">어려움 61~85</option><option value="very-hard">매우 어려움 86~100</option></select></label>}
-          <fieldset><legend>상태</legend><div className="filter-toggle filter-toggle--wrap">{listFilterOptions.map(({ value, label }) => <button key={value} type="button" className={listFilter === value ? "active" : ""} onClick={() => setListFilter(value)} aria-pressed={listFilter === value}>{value === "due" ? `${label} ${todayReviewCount}` : label}</button>)}</div></fieldset>
+          <label>정렬<select value={draft.sortKey} onChange={(event) => setDraft(current => ({ ...current, sortKey: event.target.value as SortKey }))} aria-label="정렬">{sortOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+          {showDifficultyScoreFilter && <label>난이도<select value={draft.difficultyScoreFilter} onChange={(event) => { if (isDifficultyScoreFilter(event.target.value)) setDraft(current => ({ ...current, difficultyScoreFilter: event.target.value as DifficultyScoreFilter })); }} aria-label="난이도 점수 필터"><option value="all">모든 점수</option><option value="easy">쉬움 1~30</option><option value="normal">보통 31~60</option><option value="hard">어려움 61~85</option><option value="very-hard">매우 어려움 86~100</option></select></label>}
+          <fieldset><legend>상태</legend><div className="filter-toggle filter-toggle--wrap">{listFilterOptions.map(({ value, label }) => <button key={value} type="button" className={draft.listFilter === value ? "active" : ""} onClick={() => setDraft(current => ({ ...current, listFilter: value }))} aria-pressed={draft.listFilter === value}>{value === "due" ? `${label} ${todayReviewCount}` : label}</button>)}</div></fieldset>
         </div>
       </Dialog>}
     </div>

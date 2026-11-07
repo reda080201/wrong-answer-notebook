@@ -1,6 +1,7 @@
+import { setSavedRealExamProtection } from "../features/exam/services/realExamProtection";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import type { ReviewSession, WrongAnswerEntry } from "../types";
+import type { ExamSession, ReviewSession, WrongAnswerEntry } from "../types";
 import ReviewPanel from "./ReviewPanel";
 
 vi.mock("../api", () => ({
@@ -36,6 +37,22 @@ const entryB: WrongAnswerEntry = {
 };
 
 describe("ReviewPanel", () => {
+  it("defers a protected item without completing or evaluating it", async () => {
+    const protectedExam = { id: "test-real", entryId: entry.id, mode: "real", status: "in_progress", questions: [] } as unknown as ExamSession;
+    setSavedRealExamProtection([protectedExam]);
+    try {
+      const onReview = vi.fn();
+      const onSessionSave = vi.fn<(session: ReviewSession) => Promise<void>>(async () => {});
+      render(<ReviewPanel title="복습" entries={[entry, entryB]} onClose={vi.fn()} onReview={onReview}
+        onOpenEntry={vi.fn()} onWikiLinkClick={vi.fn()} existingTargets={new Set()} onSessionSave={onSessionSave} />);
+      fireEvent.click(screen.getByRole("button", { name: "이 문항 보류하고 계속" }));
+      await waitFor(() => expect(onSessionSave).toHaveBeenLastCalledWith(expect.objectContaining({
+        currentIndex: 1, completedItemKeys: [], reviewEvents: [],
+      })));
+      expect(onSessionSave.mock.lastCall?.[0].completedAt).toBeUndefined();
+      expect(onReview).not.toHaveBeenCalled();
+    } finally { setSavedRealExamProtection([]); }
+  });
   it("reveals answer and submits self review", async () => {
     const onReview = vi.fn().mockResolvedValue(undefined);
     render(
