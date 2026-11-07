@@ -248,7 +248,7 @@ describe("EntryDetail sheet layout", () => {
     expect(displayExam).toHaveTextContent("텍스트 시험지");
     fireEvent.click(displayExam);
     expect(document.querySelector(".study-paper--exam")).toBeTruthy();
-    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
+    expect(screen.getByText(/^원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다/)).toHaveAttribute("role", "status");
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 보기" }));
     expect(document.querySelector(".structured-problem-sheet-answer")).toHaveTextContent("①");
@@ -256,7 +256,7 @@ describe("EntryDetail sheet layout", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "1번 정답 숨기기" }));
     expect(document.querySelector(".structured-problem-sheet-answer")).not.toBeInTheDocument();
-    expect(screen.getByRole("status")).toHaveTextContent("원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다.");
+    expect(screen.getByText(/^원본 PDF 페이지가 연결되지 않아 텍스트를 재배치해 표시합니다/)).toHaveAttribute("role", "status");
   });
 
   it("persists the selected two-column sheet layout", () => {
@@ -372,7 +372,9 @@ describe("EntryDetail sheet layout", () => {
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "☆ 중요" }));
+    const importantButton = screen.getByRole("button", { name: "1번 문제 중요 표시" });
+    expect(importantButton).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(importantButton);
 
     await waitFor(() => {
       expect(onQuestionMetaChange).toHaveBeenCalledWith(sheetEntry, expect.any(Function));
@@ -1069,7 +1071,7 @@ describe("EntryDetail sheet layout", () => {
     expect(within(bar).queryByRole("button", { name: "하단 문제지 모드" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "문제지 더보기" })).toBeInTheDocument();
     expect(within(bar).getByRole("button", { name: "하단 빠른 메모" })).toHaveTextContent("메모");
-    expect(within(bar).queryByRole("button", { name: "하단 맞음" })).not.toBeInTheDocument();
+    expect(within(bar).getByRole("button", { name: "하단 맞음" })).toBeEnabled();
 
     openSecondaryAction("해설지");
     expect(screen.getByText("교재형 해설지")).toBeInTheDocument();

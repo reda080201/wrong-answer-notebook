@@ -250,7 +250,7 @@ export default function LearningImportModal({ onClose, onApply, onApplyEntries, 
         <div className="learning-import-grid">
           <section className="learning-import-input">
             {activeTab === "visual" ? <>
-              <input ref={visualInputRef} className="visually-hidden" type="file" accept=".pdf,image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => void handleVisualFile(event.target.files?.[0])} />
+              <input aria-label="학습 원본 PDF 또는 이미지" ref={visualInputRef} className="visually-hidden" type="file" accept=".pdf,image/png,image/jpeg,image/webp,application/pdf" onChange={(event) => void handleVisualFile(event.target.files?.[0])} />
               <button type="button" className="learning-import-dropzone" onClick={() => visualInputRef.current?.click()} onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); void handleVisualFile(event.dataTransfer.files[0]); }}>
                 <Upload size={22} aria-hidden="true" /><strong>이미지 또는 PDF를 놓거나 선택하세요</strong><span>PNG, JPG, WEBP, PDF · AI가 학습 블록 후보를 추출합니다.</span>
                 {visualFileName && <small>선택됨: {visualFileName}</small>}

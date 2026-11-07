@@ -213,11 +213,13 @@ describe("ImportFromGptModal", () => {
     const onAnalyze = vi.fn().mockResolvedValue({ responseText: JSON.stringify({ schemaVersion: "wrong-answer-notebook-import-v2", importType: "problem_sheet", entries: ["first", "second"].map(name => ({ entryKind: "problem_sheet", title: name, subject: "수학", questions: [{ questionNumber: "1", questionText: "문제", contentSegments: [{ id: "text", type: "text", text: "문제" }], choices: [] }], sourcePageImages: [`${name}.png`] })) }), sourcePageImages: ["first-staged.png", "second-staged.png"], assetSession: session, originalFiles: originals });
     render(<ImportFromGptModal fallbackSubject="수학" onClose={onClose} onApply={vi.fn()} onApplyEntries={onApplyEntries} aiProviderStatus={{ type: "openai", enabled: true, keySource: "env", hasStoredKey: false, hasEnvKey: true, available: true }} onAnalyzeVisualFile={onAnalyze} onAnalyzeVisualFiles={onAnalyze} onOpenWorkspace={onOpenWorkspace} />);
     fireEvent.click(screen.getByRole("button", { name: "PDF / 이미지 분석" }));
-    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: originals } });
+    fireEvent.change(screen.getByLabelText("PDF 또는 이미지 시험지 파일 선택"), { target: { files: [originals[0], new File(["discard"], "extra.pdf"), originals[1]] } });
     expect(onAnalyze).not.toHaveBeenCalled();
     expect(onOpenWorkspace).not.toHaveBeenCalled();
     fireEvent.change(screen.getByLabelText("one.pdf 자료 역할"), { target: { value: "problem" } });
     fireEvent.change(screen.getByLabelText("two.pdf 자료 역할"), { target: { value: "answer" } });
+    fireEvent.click(screen.getByRole("button", { name: "extra.pdf 제거" }));
+    expect(screen.queryByLabelText("extra.pdf 자료 역할")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "GPT 풀이·평가 시작" }));
     await waitFor(() => expect(onAnalyze).toHaveBeenCalledWith(originals, expect.any(AbortSignal), expect.any(Function), ["problem", "answer"], true, expect.any(Function)));
     await waitFor(() => expect(onOpenWorkspace).toHaveBeenCalledOnce());

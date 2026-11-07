@@ -219,10 +219,7 @@ export default function EntryListPane({
       >
         <button type="button" className="entry-card__main" onClick={() => selectEntry(entry.id)} aria-current={selectedId === entry.id ? "page" : undefined}>
         <div className="entry-card-header">
-          {entry.entryKind === "problem_sheet" && (
-            <span className="entry-card-subject">{entry.subject}</span>
-          )}
-          {entry.entryKind !== "problem_sheet" && <span className="entry-card-subject">{entry.subject}</span>}
+          <span className="entry-card-subject">{entry.subject}</span>
           <span className="entry-mini-badge">{entryKindName(entry.entryKind)}</span>
           {entry.mastered ? <span className="entry-mini-badge">복습 완료</span> : entry.difficult ? <span className="entry-mini-badge">어려움</span> : null}
         </div>

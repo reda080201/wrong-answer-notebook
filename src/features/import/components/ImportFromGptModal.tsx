@@ -1,3 +1,4 @@
+import { X as CloseIcon } from "lucide-react";
 import { applyNewStudyAssessments, canPreserveAssessmentDraft, sameVisionSourceHashes } from "../vision/preserveAssessmentEdits";
 import OperationError from "../../../shared/ui/OperationError";
 import MixedPageRoleDialog, { type PageRoleSource, type PageRoleSelection } from "../vision/MixedPageRoleDialog";
@@ -348,10 +349,12 @@ export default function ImportFromGptModal({
   const [applyMode, setApplyMode] = useState<GptSolutionApplyMode>("fill");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [discardAssessmentOpen, setDiscardAssessmentOpen] = useState(false);
-  const [pendingVisualFiles, setPendingVisualFiles] = useState<File[]>([]);
+  const [visualUploads, setVisualUploads] = useState<Array<{ id: string; file: File; role: SourceRole }>>([]);
+  const pendingVisualFiles = visualUploads.map(upload => upload.file);
+  const visualSourceRoles = visualUploads.map(upload => upload.role);
   const [pageReview, setPageReview] = useState<{ sources: PageRoleSource[]; finish(roles: PageRoleSelection[] | null): void } | null>(null);
   const [visualAssessmentEnabled, setVisualAssessmentEnabled] = useState(true);
-  const [visualSourceRoles, setVisualSourceRoles] = useState<SourceRole[]>([]);
+
   const [activePromptId, setActivePromptId] = useState(defaultPromptId);
   const [draft, setDraft] = useState<Partial<EntryFormData> | null>(null);
   const draftRef = useRef(draft);
@@ -1176,6 +1179,8 @@ export default function ImportFromGptModal({
     void discardAndClose();
   };
 
+  const visualStartAction = <button type="button" className="btn-primary" disabled={!pendingVisualFiles.length || aiGenerating || saving || Boolean(visualCleanupSession) || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{aiGenerating ? "분석 중…" : visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button>;
+
   return (
     <>
       {pageReview && <MixedPageRoleDialog sources={pageReview.sources} onConfirm={roles => pageReview.finish(roles)} onCancel={() => pageReview.finish(null)} />}
@@ -1197,17 +1202,16 @@ export default function ImportFromGptModal({
                 설정
               </button>
             )}
-            <button type="button" className="btn-icon" onClick={handleClose} aria-label="닫기">
-              닫기
-            </button>
+            <button type="button" className="btn-icon" onClick={handleClose} aria-label="닫기"><CloseIcon size={18} aria-hidden="true" /></button>
           </div>}
         footer={<div className="import-modal-footer">
           {draft && !canApply && applyBlockReason && <p className="import-apply-reason" role="status">{applyBlockReason}</p>}
+          {importInputMode === "visual" && draft && !commitLocked && pendingVisualFiles.length > 0 && visualStartAction}
           {importInputMode === "visual" && !draft && !commitLocked ? (
             <div className="form-footer import-analysis-footer">
               <p className="form-hint" role="status">{aiGenerating ? "분석 중입니다. 취소하면 진행을 중단합니다." : !pendingVisualFiles.length ? "PDF 또는 이미지를 선택하세요." : !aiProviderStatus?.available ? "AI 설정에서 연결을 확인하세요." : visualSourceRoles.every(role => role === "answer") ? "문제가 포함된 파일을 하나 이상 선택하세요." : `${pendingVisualFiles.length}개 파일 · API 요금이 발생할 수 있습니다.`}</p>
               <button type="button" className="btn-secondary" disabled={saving} onClick={handleClose}>취소</button>
-              <button type="button" className="btn-primary" disabled={!pendingVisualFiles.length || aiGenerating || saving || Boolean(visualCleanupSession) || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{aiGenerating ? "분석 중…" : visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button>
+              {visualStartAction}
             </div>
           ) : (<ImportSaveFooter commitLocked={commitLocked} solutionMode={isSolutionMode} supplementalMode={isSupplementalMode} canApply={canApply} saving={saving || aiGenerating || Boolean(visualCleanupSession)} onClose={handleClose} onOpenWorkspace={onOpenWorkspace && draft ? () => void openWorkspace() : undefined} onQuickSave={draftOverride && onApplyEntries ? () => void quickSave() : undefined} onApply={() => void apply()} />)}
 
@@ -1237,8 +1241,30 @@ export default function ImportFromGptModal({
                     <div><h3>PDF / 이미지 시험지 가져오기</h3><p>원본 페이지를 보존하고 분석 결과를 검토한 뒤 저장합니다. GPT 사전 평가는 페이지를 나누어 진행하며, 기존 원본 관측은 최대 12페이지를 지원합니다.</p></div>
                   </div>
                   <label className="ui-button ui-button--secondary" htmlFor="visual-paper-file">PDF 또는 이미지 선택</label>
-                  <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); setPendingVisualFiles(files); setVisualSourceRoles(files.map(() => "problem")); input.value = ""; }} />
-                  {!!pendingVisualFiles.length && <section className="import-analysis-setup" aria-label="분석할 원본과 역할"><h4>분석 방식과 자료 역할</h4><label className="import-analysis-choice"><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">{visualAssessmentEnabled ? "공식 OpenAI GPT가 문제를 풀고 난이도·중요도를 평가합니다." : "설정한 AI 제공자가 문항을 관측합니다. 사전 풀이·평가는 수행하지 않습니다."}</p><p>각 파일에 문제와 답안 중 어떤 내용이 있는지 선택하세요.</p>{pendingVisualFiles.map((file,index) => <label key={`${index}-${file.name}`} className="form-field">{file.name}<select aria-label={`${file.name} 자료 역할`} value={visualSourceRoles[index]} disabled={aiGenerating} onChange={event => setVisualSourceRoles(current => current.map((role,i) => i === index ? event.target.value as SourceRole : role))}><option value="problem">문제만 있는 자료</option><option value="answer">답안·해설 자료</option><option value="mixed">문제·답안 혼합 / 구분 불명확</option></select></label>)}<details className="import-analysis-help"><summary>혼합 자료·재개·이전 평가 안내</summary><p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button></details><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setOperationError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><div className="import-analysis-start"><p className="form-hint">선택한 파일 {pendingVisualFiles.length}개 · {visualAssessmentEnabled ? "GPT 풀이·평가" : "원본 관측"}<br />설정한 AI 제공자에게 자료를 전송하며 API 요금이 발생할 수 있습니다.</p>{visualSourceRoles.every(role => role === "answer") && <p className="form-hint">문제가 포함된 파일을 하나 이상 선택하세요.</p>}{draft && <button type="button" className="btn-primary" disabled={aiGenerating || saving || Boolean(visualCleanupSession) || !aiProviderStatus?.available || visualSourceRoles.every(role => role === "answer")} onClick={() => void analyzeVisualPaper(pendingVisualFiles)}>{visualAssessmentEnabled ? "GPT 풀이·평가 시작" : "원본 관측 시작"}</button>}</div></section>}
+                  <input ref={visualFileInputRef} id="visual-paper-file" multiple className="import-source-file-input" type="file" accept="application/pdf,.pdf,image/png,image/jpeg,image/webp,.png,.jpg,.jpeg,.webp" aria-label="PDF 또는 이미지 시험지 파일 선택" disabled={aiGenerating || saving || Boolean(visualCleanupSession)} onChange={(event) => { const input = event.currentTarget; const files = Array.from(input.files ?? []); setVisualUploads(files.map(file => ({ id: crypto.randomUUID(), file, role: "problem" }))); input.value = ""; }} />
+                  {!!pendingVisualFiles.length && <section className="import-analysis-setup" aria-label="분석할 원본과 역할"><h4>분석 방식과 자료 역할</h4><label className="import-analysis-choice"><input type="checkbox" checked={visualAssessmentEnabled} disabled={aiGenerating} onChange={event => setVisualAssessmentEnabled(event.target.checked)} />GPT 사전 풀이·평가 사용</label><p className="form-hint">{visualAssessmentEnabled ? "공식 OpenAI GPT가 문제를 풀고 난이도·중요도를 평가합니다." : "설정한 AI 제공자가 문항을 관측합니다. 사전 풀이·평가는 수행하지 않습니다."}</p><p>각 파일에 문제와 답안 중 어떤 내용이 있는지 선택하세요.</p>
+                    {visualUploads.map(({ id, file, role }) => (
+                      <div key={id} className="form-row">
+                        <label className="form-field">
+                          {file.name}
+                          <select aria-label={file.name + " 자료 역할"} value={role} disabled={aiGenerating}
+                            onChange={event => {
+                              const nextRole = event.target.value as SourceRole;
+                              setVisualUploads(current => current.map(upload => upload.id === id ? { ...upload, role: nextRole } : upload));
+                            }}>
+                            <option value="problem">문제만 있는 자료</option>
+                            <option value="answer">답안·해설 자료</option>
+                            <option value="mixed">문제·답안 혼합 / 구분 불명확</option>
+                          </select>
+                        </label>
+                        <button type="button" className="btn-secondary btn-sm" aria-label={file.name + " 제거"}
+                          disabled={aiGenerating || saving || Boolean(visualCleanupSession)}
+                          onClick={() => setVisualUploads(current => current.filter(upload => upload.id !== id))}>
+                          제거
+                        </button>
+                      </div>
+                    ))}
+                    <details className="import-analysis-help"><summary>혼합 자료·재개·이전 평가 안내</summary><p className="form-hint">혼합 자료는 정답 노출을 배제할 수 없어 독립 풀이 여부를 미확인으로 기록합니다. 중단된 평가는 같은 원본과 역할로 재개할 수 있습니다. 앱을 다시 시작하거나 평가 기록을 수정하면 실행 증거를 재사용하지 않아 풀이·평가 API가 다시 호출될 수 있습니다.</p><button type="button" className="btn-link" disabled={aiGenerating} onClick={() => setDiscardAssessmentOpen(true)}>이전 평가 초안 관리</button></details><Dialog open={discardAssessmentOpen} title="이전 평가 초안을 폐기할까요?" onClose={() => setDiscardAssessmentOpen(false)} footer={<div className="dialog-footer-actions"><button type="button" className="btn-secondary" onClick={() => setDiscardAssessmentOpen(false)}>유지하기</button><button type="button" className="btn-danger" onClick={() => { try { clearAssessmentCheckpoint(); setDiscardAssessmentOpen(false); setCopyMessage("평가 초안만 폐기했습니다. 저장된 자료와 원본 파일은 유지됩니다."); } catch { setOperationError("평가 초안을 정리하지 못했습니다. 다시 시도하세요."); } }}>평가 초안만 폐기</button></div>}><p>아직 저장하지 않은 GPT 풀이·점수와 재개 기록이 삭제됩니다. 원본 파일과 이미 저장한 시험지는 유지됩니다.</p></Dialog><div className="import-analysis-start"><p className="form-hint">선택한 파일 {pendingVisualFiles.length}개 · {visualAssessmentEnabled ? "GPT 풀이·평가" : "원본 관측"}<br />설정한 AI 제공자에게 자료를 전송하며 API 요금이 발생할 수 있습니다.</p>{visualSourceRoles.every(role => role === "answer") && <p className="form-hint">문제가 포함된 파일을 하나 이상 선택하세요.</p>}</div></section>}
                   {aiGenerating && <div className="import-visual-progress" role="status" aria-live="polite">
                     <span>{visualProgress?.stageLabel ?? (visualProgress?.phase === "rasterize" ? `페이지 변환 중${visualProgress.total ? ` ${visualProgress.current} / ${visualProgress.total}` : "…"}` : visualProgress?.phase === "stage" ? "원본 페이지 임시 보관 중…" : "AI가 문항을 분석하고 있습니다…")}</span>
                     {visualProgress?.total && !visualProgress.indeterminate ? <progress aria-label="원본 분석 진행" max={visualProgress.total} value={visualProgress.current} /> : <progress aria-label="원본 분석 진행" />}

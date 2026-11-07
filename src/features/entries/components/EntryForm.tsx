@@ -1306,6 +1306,7 @@ export default function EntryForm({
               <div style={{ display: "flex", gap: "0.5rem" }}>
                 <input
                   type="text"
+                  aria-label="태그 추가"
                   value={tagInput}
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={(e) => {

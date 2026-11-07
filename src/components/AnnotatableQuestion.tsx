@@ -486,10 +486,11 @@ function StructuredQuestionBlock({
             <button
               type="button"
               className={`question-important-btn ${isImportant ? "active" : ""}`}
+              aria-label={`${questionNumber}번 문제 중요 표시${isImportant ? " 해제" : ""}`}
               aria-pressed={isImportant}
               onClick={() => onToggleQuestionImportant(questionNumber)}
             >
-              {isImportant ? "★ 중요" : "☆ 중요"}
+              <span aria-hidden="true">{isImportant ? "★" : "☆"}</span> 중요
             </button>
           )}
           <QuestionDifficultyEditor
@@ -1192,6 +1193,7 @@ export default function AnnotatableQuestion({
   onToggleAnswerReveal,
   onOpenQuestionSolution,
 }: AnnotatableQuestionProps) {
+  const annotationListRef = useRef<HTMLDetailsElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const [showOriginalAnnotations, setShowOriginalAnnotations] = useState(false);
   const questionAnns = filterQuestionAnnotations(annotations);
@@ -1259,6 +1261,15 @@ export default function AnnotatableQuestion({
     }
   };
 
+  const removeTextAnnotation = (id: string, index: number) => {
+    onAnnotationsChange(annotations.filter(annotation => annotation.id !== id));
+    requestAnimationFrame(() => {
+      const list = annotationListRef.current;
+      const controls = list?.querySelectorAll<HTMLButtonElement>("button");
+      (controls?.[index] ?? controls?.[index - 1] ?? list?.querySelector("summary"))?.focus();
+    });
+  };
+
   const hasText = Boolean(question.trim() || canonicalSegments?.length);
   const hasImages = questionImages.length > 0;
 
@@ -1266,6 +1277,22 @@ export default function AnnotatableQuestion({
 
   return (
     <div className={`annotatable-question annotatable-question--${presentation} ${memoMode ? "memo-mode" : ""}`}>
+      {memoMode && <details ref={annotationListRef}>
+        <summary>텍스트 필기 ({textAnns.length}개)</summary>
+        {textAnns.length === 0 ? <p className="form-hint">텍스트 필기가 없습니다.</p> : <ul>
+          {textAnns.map((annotation, index) => <li key={annotation.id}>
+            <button type="button" className="btn-secondary btn-sm"
+              onClick={() => removeTextAnnotation(annotation.id, index)}
+              onKeyDown={event => {
+                if (event.key !== "Delete") return;
+                event.preventDefault(); event.stopPropagation();
+                removeTextAnnotation(annotation.id, index);
+              }}>
+              텍스트 필기 {index + 1} 삭제
+            </button>
+          </li>)}
+        </ul>}
+      </details>}
       {hasText && (
         <div
           ref={textRef}

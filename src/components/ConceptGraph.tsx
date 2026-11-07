@@ -47,6 +47,9 @@ export default function ConceptGraph({ entries, focusEntry, onOpenEntry }: Conce
   const positionOf = (id: string) => positioned.find((node) => node.id === id);
 
   return (
+    <section aria-label="개념 연결">
+      <ul>{nodes.map(node => <li key={node.id}>{node.entryId ? <button type="button" onClick={() => onOpenEntry(node.entryId!)}>{node.label} 항목 열기</button> : node.label}<ul>{graph.edges.filter(edge => edge.from === node.id).map(edge => <li key={edge.to}>{graph.nodes.find(target => target.id === edge.to)?.label}</li>)}</ul></li>)}</ul>
+      <details><summary>연결 그래프 보기</summary>
     <svg className="concept-graph" viewBox={`0 0 ${width} ${height}`} role="img" aria-label="개념 연결 그래프">
       {visibleEdges.map((edge) => {
         const from = positionOf(edge.from);
@@ -85,6 +88,6 @@ export default function ConceptGraph({ entries, focusEntry, onOpenEntry }: Conce
           </text>
         </g>
       ))}
-    </svg>
+    </svg></details></section>
   );
 }

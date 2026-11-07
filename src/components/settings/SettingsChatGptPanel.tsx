@@ -1,3 +1,4 @@
+import RemoteMcpUrlField from "./RemoteMcpUrlField";
 import type { ChatGptMcpPreferences } from "../../types";
 import type { McpBridgeRuntimeStatus } from "../../hooks/useMcpBridgeSettings";
 
@@ -20,7 +21,7 @@ export default function SettingsChatGptPanel({ preferences, status, onPatch, onS
       <p><strong>현재 문항 공유</strong> 사용자 동의 후에만 동기화합니다.</p>
     </div>
     <label className="form-field"><span>표시 이름</span><input value={preferences.displayName} maxLength={40} onChange={(event) => void onPatch({ displayName: event.target.value })} /></label>
-    <label className="form-field"><span>외부 HTTPS MCP 기본 URL</span><input defaultValue={preferences.remoteBaseUrl ?? ""} placeholder="https://example-tunnel-domain" onBlur={(event) => void onSaveRemoteBaseUrl(event.target.value)} /><small>자동 tunnel helper가 없는 환경에서는 외부에서 만든 HTTPS 기본 URL을 등록하세요.</small></label>
+    <RemoteMcpUrlField value={preferences.remoteBaseUrl ?? ""} save={onSaveRemoteBaseUrl} />
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareUserResponse} onChange={(event) => void onPatch({ shareUserResponse: event.target.checked })} /> 내 답 공유</label>
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareScratchNote} onChange={(event) => void onPatch({ shareScratchNote: event.target.checked })} /> 풀이 메모 공유</label>
     <label className="settings-checkbox"><input type="checkbox" checked={preferences.shareQuestionImages} onChange={(event) => void onPatch({ shareQuestionImages: event.target.checked })} /> 문항 직접 이미지 공유</label>

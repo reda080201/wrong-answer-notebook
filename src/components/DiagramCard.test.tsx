@@ -15,6 +15,8 @@ describe("DiagramCard", () => {
 
     rerender(<DiagramCard diagramType="coordinate-graph" />);
     expect(screen.getByRole("figure", { name: "좌표 그래프 다이어그램" })).toBeInTheDocument();
+    expect(document.querySelector(".learning-diagram-card svg")).toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("원본 이미지");
 
     rerender(<DiagramCard diagramType="normal-distribution" />);
     expect(screen.getByRole("figure", { name: "정규분포 다이어그램" })).toBeInTheDocument();

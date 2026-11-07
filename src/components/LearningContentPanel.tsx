@@ -1,3 +1,4 @@
+import StudyChecklist from "./StudyChecklist";
 import type { ReactNode } from "react";
 import type { ChecklistItem, LearningBlock, MistakeCause, SheetAnswerItem, WrongAnswerEntry } from "../types";
 import { mistakeCauseLabel } from "../utils/mistakeAnalysis";
@@ -14,6 +15,7 @@ interface LearningContentPanelProps {
   onImportLecture?: () => void;
   onAutoCreateLecture?: () => void;
   onEditLecture?: () => void;
+  onChecklistChange?: (items: ChecklistItem[]) => Promise<void>;
 }
 
 function unique(values: Array<string | undefined>): string[] {
@@ -188,11 +190,13 @@ function ReviewCard({ entry, items }: { entry: WrongAnswerEntry; items: SheetAns
 function ChecklistCard({
   memo,
   checklist,
+  onChecklistChange,
   onWikiLinkClick,
   existingTargets,
 }: {
   memo: string;
   checklist: ChecklistItem[];
+  onChecklistChange?: (items: ChecklistItem[]) => Promise<void>;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
 }) {
@@ -205,15 +209,7 @@ function ChecklistCard({
         </div>
       )}
       {checklist.length > 0 && (
-        <ul className="learning-checklist">
-          {checklist.map((item) => (
-            <li key={item.id} className={item.checked ? "checked" : ""}>
-              <span aria-hidden="true">{item.checked ? "[x]" : "[ ]"}</span>
-              <span className="sr-only">{item.checked ? "완료: " : "미완료: "}</span>
-              <MathText text={item.text} />
-            </li>
-          ))}
-        </ul>
+        <StudyChecklist items={checklist} onChange={onChecklistChange} />
       )}
     </Card>
   );
@@ -271,6 +267,7 @@ export default function LearningContentPanel({
   onImportLecture,
   onAutoCreateLecture,
   onEditLecture,
+  onChecklistChange,
 }: LearningContentPanelProps) {
   const answerItems = (entry.answerKey ?? []).filter(
     (item) =>
@@ -320,6 +317,7 @@ export default function LearningContentPanel({
             existingTargets={existingTargets}
           />
           <ChecklistCard
+            onChecklistChange={onChecklistChange}
             memo={entry.memo}
             checklist={entry.checklist ?? []}
             onWikiLinkClick={onWikiLinkClick}
@@ -330,19 +328,20 @@ export default function LearningContentPanel({
         <div className="learning-content-empty">
           <strong>학습 내용이 아직 없습니다.</strong>
           <p>해설과 개념을 바탕으로 특강 카드를 만들면 복습 흐름이 훨씬 부드러워집니다.</p>
+          {!onGenerateLecture && !onAutoCreateLecture && <p className="form-hint">자료를 가져오거나 직접 작성해 학습 내용을 추가할 수 있습니다.</p>}
           <div className="learning-content-cta">
-            <button type="button" onClick={onGenerateLecture} disabled={!onGenerateLecture}>
+            {onGenerateLecture && <button type="button" onClick={onGenerateLecture}>
               GPT로 특강 만들기
-            </button>
-            <button type="button" onClick={onImportLecture} disabled={!onImportLecture}>
+            </button>}
+            {onImportLecture && <button type="button" onClick={onImportLecture}>
               HTML/JSON 특강 가져오기
-            </button>
-            <button type="button" onClick={onAutoCreateLecture} disabled={!onAutoCreateLecture}>
+            </button>}
+            {onAutoCreateLecture && <button type="button" onClick={onAutoCreateLecture}>
               해설에서 자동 생성
-            </button>
-            <button type="button" onClick={onEditLecture} disabled={!onEditLecture}>
+            </button>}
+            {onEditLecture && <button type="button" onClick={onEditLecture}>
               직접 작성
-            </button>
+            </button>}
           </div>
         </div>
       )}

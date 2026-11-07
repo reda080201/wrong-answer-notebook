@@ -268,7 +268,7 @@ export default function SettingsModal({
                 status={mcpBridgeStatus}
                 onPatch={patchChatGpt}
                 onSaveRemoteBaseUrl={async (raw) => {
-                  try { await saveRemoteBaseUrl(raw); } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."); }
+                  try { await saveRemoteBaseUrl(raw); } catch (error) { setSettingsMessage(error instanceof Error ? error.message : "외부 MCP URL을 저장하지 못했습니다."); throw error; }
                 }}
               /></details>}
               </>

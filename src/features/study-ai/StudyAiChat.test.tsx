@@ -1,3 +1,4 @@
+import * as aiStorage from "./storage";
 import { entryAiMaterials, DEFAULT_AI_SHARING } from "./model";
 import { proposalFromSelection, type AiExamConfig } from "./examProposal";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
@@ -67,6 +68,25 @@ describe("study AI chat integration", () => {
         const failure=vi.spyOn(Storage.prototype,"setItem").mockImplementation(function(this:Storage,key:string,value:string){if(key===AI_STUDY_STORAGE_KEY&&!JSON.parse(value).conversations.some((c:{id:string})=>c.id==="delete-chat"))throw new Error("삭제 저장 실패");write.call(this,key,value);});
         fireEvent.click(screen.getByText("대화 관리"));fireEvent.click(screen.getByRole("button",{name:"삭제"}));await screen.findByText("삭제 저장 실패");
         expect(JSON.parse(localStorage.getItem(AI_STUDY_STORAGE_KEY)!)).toEqual(original);expect(screen.getByRole("combobox",{name:"대화 기록"})).toHaveValue("delete-chat");failure.mockRestore();
+    });
+    it("releases an invalidated reload and allows retry without sending protected material", async () => {
+        const view = render(<StudyAiChat {...props} />); await open();
+        fireEvent.click(screen.getByRole("button", { name: "현재 문항 추가" }));
+        await waitFor(() => expect(screen.getByText(/AI가 볼 자료: 1문항 · 본문/)).toBeInTheDocument());
+        const stored = await aiStorage.loadAiStudyStore();
+        let finish!: (value: typeof stored) => void;
+        const read = vi.spyOn(aiStorage, "loadAiStudyStore").mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+        act(() => window.dispatchEvent(new CustomEvent("ai-study-maintenance", { detail: false })));
+        await waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+        const real = { id: "real", entryId: entry.id, title: entry.title, mode: "real", status: "in_progress", questions: [], currentQuestionIndex: 0, responses: [] } as unknown as ExamSession;
+        view.rerender(<StudyAiChat {...props} session={real} />);
+        await act(async () => finish(stored));
+        fireEvent.change(screen.getByLabelText("메시지"), { target: { value: "보존할 입력" } });
+        expect(screen.getByRole("button", { name: "전송" })).toBeDisabled();
+        fireEvent.click(await screen.findByRole("button", { name: "기록 다시 불러오기" }));
+        await waitFor(() => expect(read).toHaveBeenCalledTimes(2));
+        expect(screen.getByLabelText("메시지")).toHaveValue("보존할 입력");
+        expect(requestStudyAi).not.toHaveBeenCalled();
     });
     it("finishes its initial reload under StrictMode effect replay",async()=>{
         render(<StrictMode><StudyAiChat {...props}/></StrictMode>);await open();

@@ -95,6 +95,9 @@ export default function KnowledgeGraphView({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [retryMutation, setRetryMutation] = useState<(() => Promise<void>) | null>(null);
   const [undoAlias, setUndoAlias] = useState<{ entityId: string; alias: string } | null>(null);
+  const [relationSelection, setRelationSelection] = useState({ sourceId: "", targetId: "" });
+  const [relationBusy, setRelationBusy] = useState(false);
+  const relationLock = useRef(false);
   const [aliasBusy, setAliasBusy] = useState(false);
   const aliasBusyRef = useRef(false);
   const aliasEpoch = useRef(0);
@@ -156,11 +159,22 @@ export default function KnowledgeGraphView({
   };
 
   const saveRelationWithEntities = async (target: KnowledgeEntity) => {
-    if (!selected) return;
+    if (!selected || writeBlocked || relationLock.current) return;
+    const sourceId = selected.id;
+    const targetId = target.id;
     await runMutation(async () => {
-      const source = await onEnsureEntity(selected);
-      const resolvedTarget = await onEnsureEntity(target);
-      await onSaveRelation({ id: `knowledge-relation:${crypto.randomUUID()}`, fromEntityId: source.id, toEntityId: resolvedTarget.id, type: relationType, provenance: "manual" });
+      if (relationLock.current) return;
+      relationLock.current = true;
+      setRelationBusy(true);
+      try {
+        const source = await onEnsureEntity(selected);
+        const resolvedTarget = await onEnsureEntity(target);
+        await onSaveRelation({ id: "knowledge-relation:" + crypto.randomUUID(), fromEntityId: source.id, toEntityId: resolvedTarget.id, type: relationType, provenance: "manual" });
+        setRelationSelection(current => current.sourceId === sourceId && current.targetId === targetId ? { sourceId, targetId: "" } : current);
+      } finally {
+        relationLock.current = false;
+        setRelationBusy(false);
+      }
     });
   };
 
@@ -216,7 +230,7 @@ export default function KnowledgeGraphView({
             />
             <section><h3>별칭</h3><div className="knowledge-graph-question-picker">{selected.aliases.map((alias) => <span className="knowledge-graph-alias" key={alias}><span>{alias}</span><button type="button" aria-label={`${alias} 별칭 삭제`} disabled={aliasBusy} onClick={() => void changeAlias(selected.id, alias, false)}><Unlink size={14} aria-hidden="true" />삭제</button></span>)}<button type="button" disabled={aliasBusy} onClick={() => void (async () => { const alias = await prompt({ title: "별칭 추가", message: "별칭을 입력하세요." }); const next = alias?.trim(); if (!next) return; await runMutation(() => onUpdateEntity(selected.id, current => ({ aliases: current.aliases.some(item => normalizeKnowledgeLabel(item) === normalizeKnowledgeLabel(next)) ? current.aliases : [...current.aliases, next] }))); })()}>별칭 추가</button></div></section>
             <section><h3>관련 개념</h3><div className="knowledge-graph-relations">{relatedEntities.length ? relatedEntities.map(({ relation, entity }) => <div className="knowledge-graph-relation" key={relation.id}><button type="button" onClick={() => setSelectedId(entity.id)}>{entity.name}</button><span>{relationLabels.find(([type]) => type === relation.type)?.[1] ?? relation.type}</span><button type="button" className="ui-icon-button" aria-label={`${entity.name} 연결 해제`} onClick={() => void runMutation(() => onRemoveRelation(relation.id))}><Unlink size={15} /></button></div>) : <p className="knowledge-graph-muted">연결된 개념이 없습니다.</p>}</div>
-              <div className="knowledge-graph-link-controls"><select value={relationType} onChange={(event) => setRelationType(event.target.value as KnowledgeRelationType)} aria-label="관계 유형">{relationLabels.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><select aria-label="연결할 개념" defaultValue="" onChange={(event) => { const target = graph.entities.find((entity) => entity.id === event.target.value); if (target) void saveRelationWithEntities(target); }}><option value="">개념 연결</option>{graph.entities.filter((entity) => entity.id !== selected.id && (!subjectFilter || entity.subject === subjectFilter)).map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}</select></div>
+              <div className="knowledge-graph-link-controls"><select value={relationType} onChange={(event) => setRelationType(event.target.value as KnowledgeRelationType)} aria-label="관계 유형">{relationLabels.map(([type, label]) => <option key={type} value={type}>{label}</option>)}</select><select aria-label="연결할 개념" disabled={relationBusy || writeBlocked} value={relationSelection.sourceId === selected.id ? relationSelection.targetId : ""} onChange={(event) => { const target = graph.entities.find((entity) => entity.id === event.target.value); setRelationSelection({ sourceId: selected.id, targetId: event.target.value }); if (target) void saveRelationWithEntities(target); }}><option value="">개념 연결</option>{graph.entities.filter((entity) => entity.id !== selected.id && (!subjectFilter || entity.subject === subjectFilter)).map((entity) => <option key={entity.id} value={entity.id}>{entity.name}</option>)}</select></div>
             </section>
             <section><div className="knowledge-graph-section-heading"><h3>연결 문항 <span>{linkedItems.length}</span></h3>{linkedItems.length > 0 && <button type="button" className="ui-button ui-button--secondary" onClick={() => onStartReview(linkedItems)}>이 문항 복습</button>}</div><div className="knowledge-graph-questions">{selected && graph.questionLinks.filter((link) => link.entityId === selected.id).map((link) => { const item = questionBankItems.find((candidate) => candidate.entryId === link.entryId && normalizeQuestionNumber(candidate.questionNumber) === normalizeQuestionNumber(link.questionNumber)); return item ? <div key={link.id}><button type="button" onClick={() => onOpenQuestion(item)}><strong>{item.questionNumber}번</strong><span>{item.questionText.slice(0, 90)}</span></button><button type="button" aria-label={`${item.questionNumber}번 연결 해제`} onClick={() => void runMutation(() => onRemoveQuestionLink(link.id))}><Unlink size={14}/></button></div> : null; })}{!linkedItems.length && <p className="knowledge-graph-muted">아직 연결된 문항이 없습니다.</p>}</div></section>
             {questionBankItems.length > 0 && <section><h3>문항 연결</h3><input value={pickerQuery} onChange={(event) => setPickerQuery(event.target.value)} placeholder="문항, 과목, 출처 검색" aria-label="연결할 문항 검색" /><div className="knowledge-graph-question-picker">{questionBankItems.filter((item) => !pickerQuery || `${item.questionText} ${item.entryTitle} ${item.questionNumber} ${item.subject} ${item.source.sourceLabel ?? ""} ${item.source.publisher ?? ""} ${item.source.examName ?? ""} ${item.source.examYear ?? ""} ${item.classification.unit ?? ""}`.toLowerCase().includes(pickerQuery.toLowerCase())).map((item) => <button type="button" key={item.id} onClick={() => void saveQuestionLinkWithEntity(item)}><Link2 size={14} />{item.questionNumber}번 · {item.entryTitle}</button>)}</div></section>}

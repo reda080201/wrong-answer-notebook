@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { ReviewResult } from "../types";
 
 type DetailViewMode = "paper" | "solution" | "learning" | "analysis";
@@ -65,10 +65,11 @@ export default function StudyControlBar({
   onQuickMemoSubmit,
   onOpenGptExport,
 }: StudyControlBarProps) {
+  const boundaryId = useId();
   const canMove = isSheet && questionCount > 1;
   const canGoPrevious = canMove && questionIndex > 0;
   const canGoNext = canMove && questionIndex < questionCount - 1;
-  const showSecondaryGood = !isConcept && (hideAnswers || canGoNext);
+  const showSecondaryGood = !isConcept;
   const [toolsOpen, setToolsOpen] = useState(false);
 
   const renderQuickMemo = () =>
@@ -95,11 +96,13 @@ export default function StudyControlBar({
             aria-label="하단 이전 문제"
             onClick={onPrevious}
             disabled={!canGoPrevious}
+            aria-describedby={!canGoPrevious ? boundaryId : undefined}
           >
             이전
           </button>
         )}
 
+        {canMove && <span id={boundaryId} className="form-hint">{questionIndex === 0 ? "첫 번째 문항입니다" : questionIndex === questionCount - 1 ? "마지막 문항입니다" : ""}</span>}
         {!isConcept && <span className="study-control-counter">{isSheet && questionCount > 0 ? `${questionIndex + 1} / ${questionCount}` : "단일 문제"}</span>}
 
         {canMove && (
@@ -109,12 +112,13 @@ export default function StudyControlBar({
             aria-label="하단 다음 문제"
             onClick={onNext}
             disabled={!canGoNext}
+            aria-describedby={!canGoNext ? boundaryId : undefined}
           >
             다음
           </button>
         )}
 
-        {!isConcept && <button type="button" className="study-control-nav-button" aria-label={hideAnswers ? "정답 보기" : "맞음 기록"} onClick={hideAnswers ? onToggleAnswers : () => onReview("good")} disabled={reviewSaving !== null}>{hideAnswers ? "정답 보기" : "맞음 기록"}{questionLabel && ` · ${questionLabel}번`}</button>}
+        {!isConcept && <button type="button" className="study-control-nav-button" aria-label="정답 보기" onClick={onToggleAnswers} disabled={!hideAnswers || reviewSaving !== null}>{hideAnswers ? "정답 보기" : "정답 공개됨"}{questionLabel && ` · ${questionLabel}번`}</button>}
         {onOpenGptExport && !isConcept && <button type="button" data-testid="question-chatgpt-help" className="study-control-nav-button study-control-gpt-button" onClick={onOpenGptExport}>GPT 질문{questionLabel && ` · ${questionLabel}번`}</button>}
 
         <button type="button" className="study-control-nav-button" aria-label="AI 학습 대화 열기" onClick={event => window.dispatchEvent(new CustomEvent("study-ai:open", { detail: event.currentTarget }))}>AI 대화</button>

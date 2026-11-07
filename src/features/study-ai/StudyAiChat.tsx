@@ -1,3 +1,4 @@
+import { X as CloseIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { ExamSession, GeneratedExam, WrongAnswerEntry } from "../../types";
@@ -50,7 +51,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     const [maintenance, setMaintenance] = useState(false);
     const maintenanceRef = useRef(false);
     const lock = useRef(false);
-    const reloadLock = useRef(false);
+    const reloadLock = useRef<symbol | null>(null);
     const generation = useRef(0);
     const controller = useRef<AbortController | null>(null);
     const connectionRef = useRef(connection);
@@ -97,7 +98,8 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
     }, [session, selectedEntryId, available, selection, blockedIds, protection.unavailable]);
     const reload = async (allowDiscard = false) => {
         if (lock.current || reloadLock.current || maintenanceRef.current) return;
-        reloadLock.current = true;
+        const readId = Symbol("chat-read");
+        reloadLock.current = readId;
         const epoch = ++generation.current;
         try {
             if (hasPendingAiStudyWrites() && (!allowDiscard || !(await confirm({ title: "저장된 기록으로 돌아가기", message: "기기에 저장하지 못한 대화가 있습니다. 저장 재시도로 보존할 수 있습니다. 미저장 변경을 버리고 마지막 저장본을 불러올까요?" })))) {
@@ -126,9 +128,14 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             }
         }
         finally {
-            if (epoch === generation.current) {
+            if (reloadLock.current === readId) {
+                reloadLock.current = null;
                 setLoading(false);
-                reloadLock.current = false;
+                if (epoch !== generation.current) {
+                    setLoaded(false);
+                    setErrorKind("record");
+                    setError("자료 보호 상태가 바뀌어 대화 불러오기를 중단했습니다. 기록을 다시 불러오세요.");
+                }
             }
         }
     };
@@ -143,7 +150,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             setMaintenance(blocked);
             if (blocked) {
                 generation.current++;
-                reloadLock.current = false;
+                reloadLock.current = null;
                 controller.current?.abort();
                 setBusy(false);
                 setScopeBusy(false);
@@ -153,7 +160,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 void reloadRef.current();
         };
         window.addEventListener("ai-study-maintenance", handle);
-        return () => { generationRef.current++; reloadLock.current = false; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
+        return () => { generationRef.current++; reloadLock.current = null; controller.current?.abort(); window.removeEventListener("ai-study-maintenance", handle); };
     }, []);
     useEffect(() => {
         if (open)
@@ -321,11 +328,11 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
             else if (["ArrowLeft", "ArrowRight"].includes(e.key))
                 e.stopPropagation();
         }}>
-    <header><h2>{materialsOpen ? "AI가 볼 자료" : "AI 학습 대화"}</h2>{materialsOpen ? <button type="button" onClick={() => { setMaterialsOpen(false); panelRef.current?.querySelector<HTMLElement>(".ai-material-picker > summary")?.focus(); }}>선택 완료 · 대화로</button> : connection?.available && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정</button>}<button aria-label="AI 대화 닫기" onClick={close}>✕</button></header>
+    <header><h2>{materialsOpen ? "AI가 볼 자료" : "AI 학습 대화"}</h2>{materialsOpen ? <button type="button" onClick={() => { setMaterialsOpen(false); panelRef.current?.querySelector<HTMLElement>(".ai-material-picker > summary")?.focus(); }}>선택 완료 · 대화로</button> : connection?.available && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정</button>}<button type="button" aria-label="AI 대화 닫기" onClick={close}><CloseIcon size={18} aria-hidden="true" /></button></header>
     <div className="ai-context-summary">AI가 볼 자료: {active?.materials.length ?? 0}문항 · {Object.entries(active?.sharing ?? DEFAULT_AI_SHARING).filter(([, value]) => value).map(([key]) => SHARING_LABELS[key as keyof AiSharing]).join(" / ")}{realActive && <p>진행 중 실전 시험의 자료는 첨부할 수 없습니다.</p>}</div>
     <div className="ai-chat-controls">
-    <div className="ai-conversation-tools"><select aria-label="대화 기록" value={activeId} disabled={busy || loading || maintenance} onChange={e => { setActiveId(e.target.value); setError(""); setInput(""); setScopeNotice(""); }}><option value="">자료 없는 새 대화</option>{store.conversations.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select><button disabled={busy || loading || maintenance} onClick={() => run(startNew())}>새 대화</button>
-    <details className="ai-conversation-management"><summary>대화 관리</summary><div className="ai-inline-actions">{active && <><button disabled={busy || maintenance} onClick={() => run((async () => {
+    <div className="ai-conversation-tools"><select aria-label="대화 기록" value={activeId} disabled={busy || loading || maintenance} onChange={e => { setActiveId(e.target.value); setError(""); setInput(""); setScopeNotice(""); }}><option value="">자료 없는 새 대화</option>{store.conversations.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}</select><button type="button" disabled={busy || loading || maintenance} onClick={() => run(startNew())}>새 대화</button>
+    <details className="ai-conversation-management"><summary>대화 관리</summary><div className="ai-inline-actions">{active && <><button type="button" disabled={busy || maintenance} onClick={() => run((async () => {
                 if (lock.current || reloadLock.current || !loaded) return;
                 const epoch = generation.current; lock.current = true;
                 try {
@@ -333,7 +340,7 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                     const latest = storeRef.current.conversations.find(c => c.id === active.id);
                     if (epoch === generation.current && name?.trim() && latest) await updateConversation({ ...latest, title: name.trim() });
                 } finally { if (epoch === generation.current) lock.current = false; }
-            })())}>이름 변경</button><button disabled={busy || maintenance} onClick={() => run((async () => {
+            })())}>이름 변경</button><button type="button" disabled={busy || maintenance} onClick={() => run((async () => {
                 if (lock.current || reloadLock.current || !loaded) return;
                 const epoch = generation.current; lock.current = true;
                 try {
@@ -356,19 +363,19 @@ export default function StudyAiChat({ entries, selectedEntryId, session, onSaveE
                 }
             }}/>수동 백업에 대화·첨부 자료 포함</label></details></div>
     <AiMaterialPicker open={materialsOpen} onOpenChange={setMaterialsOpen} available={available} selected={active?.materials ?? []} sharing={active?.sharing ?? DEFAULT_AI_SHARING} disabled={busy || scopeBusy || !loaded || maintenance} onChange={(m, s) => run(changeScope(m, s))}/>
-    <div className="ai-inline-actions"><button disabled={busy || maintenance || !currentMaterials.length} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...currentMaterials].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>현재 문항 추가</button><button disabled={busy || maintenance || !selection?.selectedNumbers.length || selection.entryId !== selectedEntryId} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...available.filter(m => m.source.sourceEntryId === selection?.entryId && selection.selectedNumbers.map(normalizeQuestionNumber).includes(normalizeQuestionNumber(m.source.sourceQuestionNumber)))].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>선택 문항 추가</button></div>
+    <div className="ai-inline-actions"><button type="button" disabled={busy || maintenance || !currentMaterials.length} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...currentMaterials].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>현재 문항 추가</button><button type="button" disabled={busy || maintenance || !selection?.selectedNumbers.length || selection.entryId !== selectedEntryId} onClick={() => run(changeScope([...new Map([...(active?.materials ?? []), ...available.filter(m => m.source.sourceEntryId === selection?.entryId && selection.selectedNumbers.map(normalizeQuestionNumber).includes(normalizeQuestionNumber(m.source.sourceQuestionNumber)))].map(m => [m.id, m])).values()], active?.sharing ?? DEFAULT_AI_SHARING))}>선택 문항 추가</button></div>
     </div>
     <div className="ai-messages" ref={scroll} aria-live="polite">
     {loading && <p>대화 불러오는 중…</p>}
     {scopeNotice && <p className="ai-scope-notice" role="status">{scopeNotice}</p>}
     {!loading && !active?.messages.length && <p>{active?.materials.length ? `${active.materials.length}문항이 첨부되어 있습니다.` : "자료를 추가하거나 자유롭게 질문하세요."}</p>}{active?.messages.map(m => <article key={m.id} className={`ai-message ai-message--${m.role}`}><strong>{m.role === "user" ? "나" : "AI"}</strong>{m.contextId !== active.contextId && <small>이전 문맥 · 재전송하지 않음</small>}<AiMessageContent text={(protection.unavailable || blockedIds.size > 0) && [...(active?.materials ?? []), ...(active?.contexts?.find(ctx => ctx.id === m.contextId)?.materials ?? [])].some(material => protection.unavailable || blockedIds.has(material.source.sourceEntryId)) ? "진행 중 실전 시험에 연결된 이전 대화는 제출 후 확인할 수 있습니다." : m.text}/>{busy && m.role === "assistant" && m.id === active?.messages.at(-1)?.id ? <small>응답 생성 중…</small> : m.status === "failed" || m.status === "stopped" ? <small>{m.status === "failed" ? "실패" : "중지"} · 다음 요청에 포함하지 않음</small> : null}</article>)}
-    {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
+    {active?.materials.length ? <div className="ai-composition-card"><strong>첨부한 문제로 모의고사 구성</strong><p>조건과 선정 이유를 검토한 뒤 저장합니다.</p><button type="button" disabled={busy || maintenance || active.materials.some(m => blockedIds.has(m.source.sourceEntryId))} onClick={() => { setComposer(true); setOpen(false); }}>{active.proposal?.status==="ready"?"저장한 구성 다시 보기":"AI 구성안 만들기"}{active.proposal && active.proposal.status!=="ready" ? " · 초안 이어서" : ""}</button></div> : null}
     </div>
     <footer className="ai-chat-footer">
     {!busy && (maintenance || loading || scopeBusy || !loaded) && <p role="status">{maintenance ? "백업·복원 중에는 전송할 수 없습니다. 작업이 끝난 뒤 다시 시도하세요." : loading ? "대화 기록을 불러오는 중입니다. 완료 후 전송할 수 있습니다." : scopeBusy ? "AI가 볼 자료 범위를 변경하는 중입니다. 완료 후 전송할 수 있습니다." : "대화 기록을 불러오지 못해 전송을 막았습니다. 기록을 다시 불러오세요."}</p>}
     {busy && feedback.phase !== "idle" && <div role="status" className="ai-request-feedback">{REQUEST_PHASE_LABELS[feedback.phase]}…{feedback.phase === "waiting" && feedback.elapsed >= 10 && <span> {feedback.elapsed}초 경과 · 응답을 기다리고 있습니다. 아래에서 응답을 중지할 수 있습니다.</span>}</div>}
     {!connection?.available && <div className="ai-connection-notice" role="status">{connection?.reason || "AI 연결 상태를 확인할 수 없습니다."}{!connection?.pending && !connection?.unsupported && <button type="button" onClick={() => { close(); onSettings(); }}>AI 연결 설정</button>}</div>}
-    <div className="ai-chat-errors">{error && <div className="form-error">{errorKind === "request" ? <OperationError message={error} /> : <span role="alert">{error}</span>}{errorKind === "record" && <button disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
+    <div className="ai-chat-errors">{error && <div className="form-error">{errorKind === "request" ? <OperationError message={error} /> : <span role="alert">{error}</span>}{errorKind === "record" && <button type="button" disabled={busy || maintenance} onClick={() => run(reload(true))}>기록 다시 불러오기</button>}{errorKind === "request" && /설정|API 키|인증|401|403/.test(error) && <button type="button" onClick={() => { close(); onSettings(); }}>API 설정 확인</button>}</div>}{saveError && <div role="alert" className="form-error">기기에 저장하지 못했습니다: {saveError}<button type="button" disabled={busy || maintenance} onClick={() => run(retrySave())}>저장 재시도</button><button type="button" disabled={busy || maintenance} onClick={() => run(reload(true))}>저장본으로 돌아가기</button></div>}</div>
     <form onSubmit={e => { e.preventDefault(); void send(); }}><label>메시지<textarea ref={inputRef} value={input} disabled={maintenance} onChange={e => setInput(e.target.value)} onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                     e.preventDefault();

@@ -184,7 +184,7 @@ export default function AppSidebar({
             {!collapsed && <span>{label}</span>}
           </button>
         ))}
-        <details className="sidebar-secondary-navigation" open={destination.type !== "section" || destination.section === "lecture" ? true : undefined}><summary>더 보기</summary>
+        <details className="sidebar-secondary-navigation" data-collapsed={collapsed || undefined} open={collapsed || destination.type !== "section" || destination.section === "lecture" ? true : undefined}><summary hidden={collapsed}>더 보기</summary>
         <button type="button" className={`section-tab-btn ${destinationSection === "lecture" ? "active" : ""}`} aria-label="특강자료" title={collapsed ? "특강자료" : undefined} aria-current={destinationSection === "lecture" ? "page" : undefined} onClick={() => handleSectionSelect("lecture")}><GraduationCap size={18} aria-hidden="true" />{!collapsed && <span>특강자료</span>}</button>
         {(
           <button

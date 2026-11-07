@@ -1,3 +1,4 @@
+import QuestionMoveStatus from "./QuestionMoveStatus";
 import { getEntryCanonicalAnnotationContext } from "../utils/canonicalAnnotations";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { X } from "lucide-react";
@@ -218,6 +219,7 @@ export default function QuestionTheaterView({
 
   return (
     <div ref={dialogRef} className="question-theater" role="dialog" aria-modal="true" aria-label="문제 크게 보기" tabIndex={-1}>
+      <QuestionMoveStatus entryId="theater" label={String(questionBlock.numberLabel || questionBlock.displayNumber)} index={questionIndex} total={questionCount} />
       <div className="question-theater-shell">
         <header className="question-theater-toolbar">
           <div className="question-theater-identity">
@@ -245,6 +247,7 @@ export default function QuestionTheaterView({
             />
             <input
               type="number"
+              aria-label="현재 문제 난이도 점수 숫자 입력"
               min={1}
               max={100}
               value={draftScore}
@@ -313,6 +316,8 @@ export default function QuestionTheaterView({
                 role="separator"
                 aria-orientation="vertical"
                 aria-label="문제와 해설 영역 크기 조절"
+                title="드래그하거나 왼쪽·오른쪽 방향키로 조절합니다. Home은 최소, End는 최대입니다."
+                aria-description="왼쪽·오른쪽 방향키로 조절합니다. Home은 최소, End는 최대입니다."
                 aria-valuemin={MIN_SPLIT_RATIO}
                 aria-valuemax={MAX_SPLIT_RATIO}
                 aria-valuenow={splitRatio}

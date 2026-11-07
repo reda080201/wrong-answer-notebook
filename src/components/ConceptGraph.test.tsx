@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { WrongAnswerEntry } from "../types";
 import ConceptGraph from "./ConceptGraph";
@@ -17,7 +17,7 @@ describe("ConceptGraph", () => {
     const onOpenEntry = vi.fn();
     render(<ConceptGraph entries={[conceptEntry("entry-1", "함수"), conceptEntry("entry-2", "문제", "[[함수]]")]} onOpenEntry={onOpenEntry} />);
 
-    const node = screen.getByRole("button", { name: "문제 항목 열기" });
+    const node = within(screen.getByRole("img", { name: "개념 연결 그래프" })).getByRole("button", { name: "문제 항목 열기" });
     fireEvent.keyDown(node, { key: "Enter" });
     fireEvent.keyDown(node, { key: " " });
 

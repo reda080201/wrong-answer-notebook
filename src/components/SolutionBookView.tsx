@@ -94,7 +94,7 @@ function SheetSolutionCard({
         )}
       </SolutionRow>
       <SolutionRow label="풀이 전략">
-        <MathText text={item.strategy?.trim() || item.notes?.trim() || item.sourceNote?.trim() || "조건과 답안 연결을 확인합니다."} />
+        <MathText text={item.strategy?.trim() || item.notes?.trim() || item.sourceNote?.trim() || "풀이 전략 정보 없음"} />
       </SolutionRow>
       <SolutionRow label="풀이 과정">
         {hideAnswers ? (
@@ -139,7 +139,7 @@ function SheetSolutionCard({
         </SolutionRow>
       )}
       <SolutionRow label="다음 복습" muted>
-        <MathText text={item.needsReview ? "번호와 풀이 연결을 다시 확인하세요." : item.reviewPoint?.trim() || item.notes?.trim() || "같은 개념의 유사 문제로 확인하세요."} />
+        <MathText text={item.needsReview ? "번호와 풀이 연결을 다시 확인하세요." : item.reviewPoint?.trim() || item.notes?.trim() || "복습 안내 정보 없음"} />
       </SolutionRow>
     </article>
   );

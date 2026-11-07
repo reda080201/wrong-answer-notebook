@@ -1,3 +1,4 @@
+import QuestionMoveStatus from "../../../components/QuestionMoveStatus";
 import { getEntryTitle } from "../../../utils/entry";
 import AssessmentCard from "../../import/vision/AssessmentCard";
 import { publishStudySelection } from "../../study-ai/activeSelection";
@@ -1686,6 +1687,7 @@ export default function EntryDetail({
         </div>
       )}
 
+      <QuestionMoveStatus entryId={entry.id} label={questionIdentifier(focusedQuestion) ?? String(focusedQuestion?.displayNumber ?? "")} index={focusedQuestionIndex} total={questionAnchors.length} active={isSheet && !theaterQuestion} />
       {isFocusExpanded && isSheet && (
         <div className="focused-sheet-nav" aria-label="문제 집중 보기 이동">
           {focusedQuestion && chatGptPreferences && onChatGptPreferencesChange && onSyncExportContext && (
@@ -1867,6 +1869,9 @@ export default function EntryDetail({
           ) : null}
           {isLecture ? (
             <LectureReaderView
+              onImportLecture={onImportLecture}
+              onEditLecture={onEdit}
+              onChecklistChange={onChecklistChange}
               entry={entry}
               onWikiLinkClick={onWikiLinkClick}
               existingTargets={existingTargets}
@@ -1888,6 +1893,7 @@ export default function EntryDetail({
                   />
                 </div>
                 <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                   entry={entry}
                   onWikiLinkClick={onWikiLinkClick}
                   existingTargets={existingTargets}
@@ -1901,6 +1907,7 @@ export default function EntryDetail({
               <StudyAnalysisView entry={entry} />
             ) : detailViewMode === "learning" ? (
               <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                 entry={entry}
                 variant="main"
                 onWikiLinkClick={onWikiLinkClick}
@@ -1955,6 +1962,7 @@ export default function EntryDetail({
                 </StudyZoomViewport>}
                 {!originalReading && <CollapsibleSection title="학습 내용" defaultOpen={false}>
                   <LearningContentPanel
+                  onChecklistChange={onChecklistChange}
                     entry={entry}
                     onWikiLinkClick={onWikiLinkClick}
                     existingTargets={existingTargets}
@@ -2618,6 +2626,7 @@ export default function EntryDetail({
             <span>{isSheet && focusedQuestion ? focusedQuestion.body.trim() || entry.title || "현재 문제" : entry.question.trim() || "현재 오답"}</span>
           </button>
           <div className="focus-mini-actions">
+            {isSheet && <><button type="button" aria-label="축소 보기 이전 문제" disabled={focusedQuestionIndex === 0} onClick={() => moveFocusedQuestion(-1)}>이전</button><span>{focusedQuestionIndex + 1} / {questionAnchors.length}</span></>}
             <button type="button" onClick={() => setFocusMode("expanded")}>
               확대
             </button>

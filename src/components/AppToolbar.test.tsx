@@ -43,6 +43,9 @@ describe("AppToolbar", () => {
       target: { value: "very-hard" },
     });
     fireEvent.click(screen.getByRole("button", { name: "복습 필요" }));
+    expect(setListFilter).not.toHaveBeenCalled();
+    expect(setSortKey).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "적용" }));
     fireEvent.click(screen.getByRole("button", { name: "복습 메뉴" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "중요 문제 복습" }));
     fireEvent.click(screen.getByRole("button", { name: /설정/ }));

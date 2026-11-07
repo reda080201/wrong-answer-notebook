@@ -1,3 +1,4 @@
+import StudyChecklist from "./StudyChecklist";
 import { useMemo, useState } from "react";
 import type { LectureBlockDefaultState, LectureLayout, SheetFigureItem, WrongAnswerEntry } from "../types";
 import { resolveFigureRepresentation } from "../features/figures/services/figureRepresentation";
@@ -11,6 +12,9 @@ import { normalizeLegacyLectureMathForDisplay } from "../utils/legacyLectureMath
 
 interface LectureReaderViewProps {
   entry: WrongAnswerEntry;
+  onImportLecture?: () => void;
+  onEditLecture?: () => void;
+  onChecklistChange?: (items: NonNullable<WrongAnswerEntry["checklist"]>) => Promise<void>;
   onWikiLinkClick: (target: string) => void;
   existingTargets: Set<string>;
   onOpenLinkedEntry?: (entryId: string) => void;
@@ -59,6 +63,7 @@ function LectureReaderContent({
   onLayoutChange,
   showFullscreen = true,
   onRequestFullscreen,
+  onImportLecture, onEditLecture, onChecklistChange,
   blockDefaultState = "first",
 }: LectureReaderContentProps) {
   const blocks = useMemo(() => entry.learningBlocks ?? [], [entry.learningBlocks]);
@@ -146,11 +151,11 @@ function LectureReaderContent({
           })}
         </div>
       ) : (
-        <LearningContentPanel entry={entry} variant="main" onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
+        <LearningContentPanel onImportLecture={onImportLecture} onEditLecture={onEditLecture} onChecklistChange={onChecklistChange} entry={entry} variant="main" onWikiLinkClick={onWikiLinkClick} existingTargets={existingTargets} />
       )}
 
       {(entry.concepts?.length ?? 0) > 0 && <section className="lecture-support-section"><h3>핵심 개념</h3><p>{entry.concepts?.join(" · ")}</p></section>}
-      {(entry.checklist?.length ?? 0) > 0 && <section className="lecture-support-section"><h3>체크리스트</h3><ul>{entry.checklist?.map((item) => <li key={item.id}>{item.text}</li>)}</ul></section>}
+      {blocks.length > 0 && (entry.checklist?.length ?? 0) > 0 && <section className="lecture-support-section"><h3>체크리스트</h3><StudyChecklist items={entry.checklist ?? []} onChange={onChecklistChange} /></section>}
       {(entry.questionImages?.length || entry.sourcePageImages?.length) ? (
         <section className="lecture-support-section" id="lecture-source-pages">
           <h3>원본 자료</h3>
